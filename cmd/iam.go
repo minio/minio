@@ -1658,18 +1658,18 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	var isGroup bool
 	if r.User != "" {
 		dn, err = sys.LDAPConfig.DoesUsernameExist(r.User)
-		if err != nil {
-			logger.LogIf(ctx, err)
-			return
-		}
-		if dn == "" {
-			// Still attempt to detach if provided user is a DN.
-			if !isAttach && sys.LDAPConfig.IsLDAPUserDN(r.User) {
-				dn = r.User
-			} else {
+		if isAttach || !sys.LDAPConfig.IsLDAPUserDN(r.User) {
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return
+			}
+			if dn == "" {
 				err = errNoSuchUser
 				return
 			}
+		} else {
+			// Still attempt to detach if provided user is a DN.
+			dn = r.User
 		}
 		isGroup = false
 	} else {

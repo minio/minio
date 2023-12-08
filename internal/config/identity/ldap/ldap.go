@@ -95,7 +95,7 @@ func (l *Config) DoesUsernameExist(username string) (string, error) {
 		// BaseDN should not fail to parse.
 		baseDNParsed, _ := ldap.ParseDN(baseDN)
 		if baseDNParsed.AncestorOf(parsedUsernameDN) {
-			searchRequest := ldap.NewSearchRequest(username, ldap.ScopeBaseObject, ldap.NeverDerefAliases,
+			searchRequest := ldap.NewSearchRequest(username, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
 				0, 0, false, "(objectClass=*)", nil, nil)
 			searchResult, err := conn.Search(searchRequest)
 			if err != nil {
@@ -106,9 +106,10 @@ func (l *Config) DoesUsernameExist(username string) (string, error) {
 				}
 				return "", err
 			}
-			for _, entry := range searchResult.Entries {
-				foundDistName = append(foundDistName, entry.DN)
+			if len(searchResult.Entries) > 1 {
+				return "", fmt.Errorf("Ambiguous DN given")
 			}
+			foundDistName = append(foundDistName, searchResult.Entries[0].DN)
 		}
 	}
 
