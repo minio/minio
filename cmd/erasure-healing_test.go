@@ -647,8 +647,8 @@ func TestHealingDanglingObject(t *testing.T) {
 	}
 
 	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
-		func(bucket, object, vid string) error {
-			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+		func(bucket, object, vid string, scanMode madmin.HealScanMode) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{ScanMode: scanMode, Remove: true})
 			return err
 		}); err != nil {
 		t.Fatal(err)
@@ -694,8 +694,8 @@ func TestHealingDanglingObject(t *testing.T) {
 	}
 
 	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
-		func(bucket, object, vid string) error {
-			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+		func(bucket, object, vid string, scanMode madmin.HealScanMode) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{ScanMode: scanMode, Remove: true})
 			return err
 		}); err != nil {
 		t.Fatal(err)
@@ -743,8 +743,8 @@ func TestHealingDanglingObject(t *testing.T) {
 	}
 
 	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
-		func(bucket, object, vid string) error {
-			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{Remove: true})
+		func(bucket, object, vid string, scanMode madmin.HealScanMode) error {
+			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{ScanMode: scanMode, Remove: true})
 			return err
 		}); err != nil {
 		t.Fatal(err)
