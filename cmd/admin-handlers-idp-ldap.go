@@ -338,8 +338,6 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var targetAccount string
-
 	userDN := r.Form.Get("userDN")
 
 	// If listing is requested for a specific user (who is not the request
@@ -356,21 +354,32 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-		userDN, err := globalIAMSys.LDAPConfig.DoesUsernameExist(userDN)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		} else if userDN == "" {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
-			return
-		}
-
-		targetAccount = userDN
 	} else {
-		targetAccount = cred.AccessKey
-		if cred.ParentUser != "" {
-			targetAccount = cred.ParentUser
+		if !globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.ListServiceAccountsAdminAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+			DenyOnly:        true,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
 		}
+		userDN = cred.AccessKey
+		if cred.ParentUser != "" {
+			userDN = cred.ParentUser
+		}
+	}
+
+	targetAccount, err := globalIAMSys.LDAPConfig.DoesUsernameExist(userDN)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	} else if userDN == "" {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
+		return
 	}
 
 	listType := r.Form.Get("listType")
@@ -381,7 +390,6 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 
 	var serviceAccounts []auth.Credentials
 	var stsKeys []auth.Credentials
-	var err error
 
 	if listType == "" || listType == "sts-only" {
 		stsKeys, err = globalIAMSys.ListSTSAccounts(ctx, targetAccount)
