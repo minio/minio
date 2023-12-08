@@ -376,6 +376,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/edit").HandlerFunc(adminMiddleware(adminAPI.SRPeerEdit))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/peer/remove").HandlerFunc(adminMiddleware(adminAPI.SRPeerRemove))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion+"/site-replication/resync/op").HandlerFunc(adminMiddleware(adminAPI.SiteReplicationResyncOp)).Queries("operation", "{operation:.*}")
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/site-replication/state/edit").HandlerFunc(adminMiddleware(adminAPI.SRStateEdit))
 
 		if globalIsDistErasure {
 			// Top locks

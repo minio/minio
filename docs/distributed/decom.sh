@@ -14,6 +14,7 @@ if [ ! -f ./mc ]; then
 fi
 
 export CI=true
+export MINIO_SCANNER_SPEED=fastest
 
 (minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/tmp/decom.log) &
 pid=$!
@@ -64,7 +65,7 @@ export MC_HOST_mytier="http://minioadmin:minioadmin@localhost:9001/"
 ./mc ls -r myminio/bucket2/ >bucket2_ns.txt
 ./mc ls -r --versions myminio/bucket2/ >bucket2_ns_versions.txt
 
-sleep 10
+sleep 30
 
 ./mc ls -r --versions mytier/tiered/ >tiered_ns_versions.txt
 
@@ -101,8 +102,13 @@ fi
 
 ./mc admin decom start myminio/ /tmp/xl/{1...10}/disk{0...1}
 
+count=0
 until $(./mc admin decom status myminio/ | grep -q Complete); do
 	echo "waiting for decom to finish..."
+	count=$((count + 1))
+	if [ ${count} -eq 120 ]; then
+		./mc cat /tmp/expanded.log
+	fi
 	sleep 1
 done
 

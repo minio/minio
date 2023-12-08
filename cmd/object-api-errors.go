@@ -686,6 +686,12 @@ func isErrReadQuorum(err error) bool {
 	return errors.As(err, &rquorum)
 }
 
+// isErrWriteQuorum check if the error type is InsufficentWriteQuorum
+func isErrWriteQuorum(err error) bool {
+	var rquorum InsufficientWriteQuorum
+	return errors.As(err, &rquorum)
+}
+
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	var objNotFound ObjectNotFound

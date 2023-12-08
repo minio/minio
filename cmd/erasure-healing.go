@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -71,7 +72,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, healEntry func(strin
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	disks, _ := er.getOnlineDisksWithHealing()
+	disks, _ := er.getOnlineDisksWithHealing(false)
 	if len(disks) == 0 {
 		return errors.New("listAndHeal: No non-healing drives found")
 	}
@@ -409,7 +410,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	}
 
 	// Re-read when we have lock...
-	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true)
+	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true, true)
 	if isAllNotFound(errs) {
 		err := errFileNotFound
 		if versionID != "" {
@@ -865,7 +866,7 @@ func (er *erasureObjects) healObjectDir(ctx context.Context, bucket, object stri
 					defer wg.Done()
 					_ = disk.Delete(ctx, bucket, object, DeleteOptions{
 						Recursive: false,
-						Force:     false,
+						Immediate: false,
 					})
 				}(index, disk)
 			}
@@ -1162,7 +1163,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 
 	// Perform quick read without lock.
 	// This allows to quickly check if all is ok or all are missing.
-	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false)
+	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false, false)
 	if isAllNotFound(errs) {
 		err := errFileNotFound
 		if versionID != "" {
@@ -1200,6 +1201,10 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object strin
 			"remove":   fmt.Sprint(opts.Remove),
 			"recreate": fmt.Sprint(opts.Recreate),
 			"mode":     fmt.Sprint(opts.ScanMode),
+		}
+		if result != nil {
+			tr.Custom["version-id"] = result.VersionID
+			tr.Custom["disks"] = strconv.Itoa(result.DiskCount)
 		}
 	}
 	if err != nil {

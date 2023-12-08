@@ -54,15 +54,20 @@ func TestCreateServerEndpoints(t *testing.T) {
 		{":9001", []string{"http://localhost:9001/export{01...64}"}, true},
 	}
 
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			_, _, err := createServerEndpoints(testCase.serverAddr, testCase.args...)
+			srvCtxt := serverCtxt{}
+			err := mergeDisksLayoutFromArgs(testCase.args, &srvCtxt)
 			if err != nil && testCase.success {
-				t.Errorf("Expected success but failed instead %s", err)
+				t.Fatalf("Test %d: unexpected error: %v", i+1, err)
+			}
+			_, _, err = createServerEndpoints(testCase.serverAddr, srvCtxt.Layout.pools, srvCtxt.Layout.legacy)
+			if err != nil && testCase.success {
+				t.Errorf("Test %d: Expected success but failed instead %s", i+1, err)
 			}
 			if err == nil && !testCase.success {
-				t.Errorf("Expected failure but passed instead")
+				t.Errorf("Test %d: Expected failure but passed instead", i+1)
 			}
 		})
 	}

@@ -69,6 +69,12 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         apiReplicationMaxWorkers,
+			Description: `set the maximum number of replication workers` + defaultHelpPostfix(apiReplicationMaxWorkers),
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
 			Key:         apiTransitionWorkers,
 			Description: `set the number of transition workers` + defaultHelpPostfix(apiTransitionWorkers),
 			Optional:    true,
@@ -94,7 +100,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiODirect,
-			Description: "set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
+			Description: "set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
 			Optional:    true,
 			Type:        "boolean",
 		},

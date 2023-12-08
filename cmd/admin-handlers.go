@@ -52,6 +52,7 @@ import (
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
@@ -59,11 +60,14 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/policy"
 	"github.com/secure-io/sio-go"
+	"github.com/zeebo/xxh3"
 )
 
 const (
 	maxEConfigJSONSize        = 262272
 	kubernetesVersionEndpoint = "https://kubernetes.default.svc/version"
+	anonymizeParam            = "anonymize"
+	anonymizeStrict           = "strict"
 )
 
 // Only valid query params for mgmt admin APIs.
@@ -754,11 +758,8 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	// read request body
-	io.CopyN(io.Discard, r.Body, 1)
 
 	globalProfilerMu.Lock()
-
 	if globalProfiler == nil {
 		globalProfiler = make(map[string]minioProfiler, 10)
 	}
@@ -1218,7 +1219,7 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 	totalRx := int64(0)
 	connectTime := time.Now()
 	for {
-		n, err := io.CopyN(io.Discard, r.Body, 128*humanize.KiByte)
+		n, err := io.CopyN(xioutil.Discard, r.Body, 128*humanize.KiByte)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			// would mean the network is not stable. Logging here will help in debugging network issues.
 			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
@@ -1400,13 +1401,21 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 }
 
 func makeObjectPerfBucket(ctx context.Context, objectAPI ObjectLayer, bucketName string) (bucketExists bool, err error) {
-	if err = objectAPI.MakeBucket(ctx, bucketName, MakeBucketOptions{}); err != nil {
+	if err = objectAPI.MakeBucket(ctx, bucketName, MakeBucketOptions{VersioningEnabled: globalSiteReplicationSys.isEnabled()}); err != nil {
 		if _, ok := err.(BucketExists); !ok {
 			// Only BucketExists error can be ignored.
 			return false, err
 		}
 		bucketExists = true
 	}
+
+	if globalSiteReplicationSys.isEnabled() {
+		configData := []byte(`<VersioningConfiguration><Status>Enabled</Status><ExcludedPrefixes><Prefix>speedtest/*</Prefix></ExcludedPrefixes></VersioningConfiguration>`)
+		if _, err = globalBucketMetadataSys.Update(ctx, bucketName, bucketVersioningConfig, configData); err != nil {
+			return false, err
+		}
+	}
+
 	return bucketExists, nil
 }
 
@@ -2027,8 +2036,14 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 
 func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *url.Values, healthInfoCh chan madmin.HealthInfo, healthInfo madmin.HealthInfo) {
 	hostAnonymizer := createHostAnonymizer()
-	// anonAddr - Anonymizes hosts in given input string.
+
+	anonParam := query.Get(anonymizeParam)
+	// anonAddr - Anonymizes hosts in given input string
+	// (only if the anonymize param is set to srict).
 	anonAddr := func(addr string) string {
+		if anonParam != anonymizeStrict {
+			return addr
+		}
 		newAddr, found := hostAnonymizer[addr]
 		if found {
 			return newAddr
@@ -2084,6 +2099,20 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 			for _, p := range peerPartitions {
 				anonymizeAddr(&p)
 				healthInfo.Sys.Partitions = append(healthInfo.Sys.Partitions, p)
+			}
+			partialWrite(healthInfo)
+		}
+	}
+
+	getAndWriteNetInfo := func() {
+		if query.Get(string(madmin.HealthDataTypeSysNet)) == "true" {
+			localNetInfo := madmin.GetNetInfo(globalLocalNodeName, globalInternodeInterface)
+			healthInfo.Sys.NetInfo = append(healthInfo.Sys.NetInfo, localNetInfo)
+
+			peerNetInfos := globalNotificationSys.GetNetInfo(healthCtx)
+			for _, n := range peerNetInfos {
+				anonymizeAddr(&n)
+				healthInfo.Sys.NetInfo = append(healthInfo.Sys.NetInfo, n)
 			}
 			partialWrite(healthInfo)
 		}
@@ -2189,6 +2218,10 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 	}
 
 	anonymizeCmdLine := func(cmdLine string) string {
+		if anonParam != anonymizeStrict {
+			return cmdLine
+		}
+
 		if !globalIsDistErasure {
 			// FS mode - single server - hard code to `server1`
 			anonCmdLine := strings.ReplaceAll(cmdLine, globalLocalNodeName, "server1")
@@ -2310,6 +2343,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		getAndWritePlatformInfo()
 		getAndWriteCPUs()
 		getAndWritePartitions()
+		getAndWriteNetInfo()
 		getAndWriteOSInfo()
 		getAndWriteMemInfo()
 		getAndWriteProcInfo()
@@ -2467,11 +2501,27 @@ func getTLSInfo() madmin.TLSInfo {
 
 	if globalIsTLS {
 		for _, c := range globalPublicCerts {
+			check := xxh3.Hash(c.RawIssuer)
+			check ^= xxh3.Hash(c.RawSubjectPublicKeyInfo)
+			// We XOR, so order doesn't matter.
+			for _, v := range c.DNSNames {
+				check ^= xxh3.HashString(v)
+			}
+			for _, v := range c.EmailAddresses {
+				check ^= xxh3.HashString(v)
+			}
+			for _, v := range c.IPAddresses {
+				check ^= xxh3.HashString(v.String())
+			}
+			for _, v := range c.URIs {
+				check ^= xxh3.HashString(v.String())
+			}
 			tlsInfo.Certs = append(tlsInfo.Certs, madmin.TLSCert{
 				PubKeyAlgo:    c.PublicKeyAlgorithm.String(),
 				SignatureAlgo: c.SignatureAlgorithm.String(),
 				NotBefore:     c.NotBefore,
 				NotAfter:      c.NotAfter,
+				Checksum:      strconv.FormatUint(check, 16),
 			})
 		}
 	}
@@ -2522,7 +2572,7 @@ func assignPoolNumbers(servers []madmin.ServerProperties) {
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	lambdaMap := make(map[string][]madmin.TargetIDStatus)
 
-	for _, tgt := range globalNotifyTargetList.Targets() {
+	for _, tgt := range globalEventNotifier.Targets() {
 		targetIDStatus := make(map[string]madmin.Status)
 		active, _ := tgt.IsActive()
 		targetID := tgt.ID()

@@ -985,15 +985,10 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		return ctx.Err()
 	case maxConcurrentScannerSaves <- struct{}{}:
 	}
-	defer func() {
-		select {
-		case <-ctx.Done():
-		case <-maxConcurrentScannerSaves:
-		}
-	}()
 
 	buf := bytebufferpool.Get()
 	defer func() {
+		<-maxConcurrentScannerSaves
 		buf.Reset()
 		bytebufferpool.Put(buf)
 	}()
@@ -1002,12 +997,12 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		return err
 	}
 
-	hr, err := hash.NewReader(ctx, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
-	if err != nil {
-		return err
-	}
-
 	save := func(name string, timeout time.Duration) error {
+		hr, err := hash.NewReader(ctx, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
+		if err != nil {
+			return err
+		}
+
 		// Abandon if more than a minute, so we don't hold up scanner.
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
@@ -1022,7 +1017,7 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 		}
 		return err
 	}
-	defer save(name+".bkp", 30*time.Second) // Keep a backup as well
+	defer save(name+".bkp", 5*time.Second) // Keep a backup as well
 
 	// drive timeout by default is 2 minutes, we do not need to wait longer.
 	return save(name, time.Minute)

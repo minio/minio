@@ -64,7 +64,7 @@ func TestUNCPaths(t *testing.T) {
 			}
 			fs.Delete(context.Background(), "voldir", test.objName, DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 		})
 	}

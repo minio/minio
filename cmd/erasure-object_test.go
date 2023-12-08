@@ -526,7 +526,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			if file != "xl.meta" {
 				disk.Delete(ctx, bucket, pathJoin(object, file), DeleteOptions{
 					Recursive: true,
-					Force:     false,
+					Immediate: false,
 				})
 			}
 		}
@@ -630,7 +630,7 @@ func TestHeadObjectNoQuorum(t *testing.T) {
 			if file != "xl.meta" {
 				disk.Delete(ctx, bucket, pathJoin(object, file), DeleteOptions{
 					Recursive: true,
-					Force:     false,
+					Immediate: false,
 				})
 			}
 		}
@@ -908,7 +908,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts1, errs1 := readAllFileInfo(ctx, erasureDisks, bucket, object1, "", false)
+	parts1, errs1 := readAllFileInfo(ctx, erasureDisks, bucket, object1, "", false, false)
 	parts1SC := globalStorageClass
 
 	// Object for test case 2 - No StorageClass defined, MetaData in PutObject requesting RRS Class
@@ -920,7 +920,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts2, errs2 := readAllFileInfo(ctx, erasureDisks, bucket, object2, "", false)
+	parts2, errs2 := readAllFileInfo(ctx, erasureDisks, bucket, object2, "", false, false)
 	parts2SC := globalStorageClass
 
 	// Object for test case 3 - No StorageClass defined, MetaData in PutObject requesting Standard Storage Class
@@ -932,7 +932,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts3, errs3 := readAllFileInfo(ctx, erasureDisks, bucket, object3, "", false)
+	parts3, errs3 := readAllFileInfo(ctx, erasureDisks, bucket, object3, "", false, false)
 	parts3SC := globalStorageClass
 
 	// Object for test case 4 - Standard StorageClass defined as Parity 6, MetaData in PutObject requesting Standard Storage Class
@@ -950,7 +950,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts4, errs4 := readAllFileInfo(ctx, erasureDisks, bucket, object4, "", false)
+	parts4, errs4 := readAllFileInfo(ctx, erasureDisks, bucket, object4, "", false, false)
 	parts4SC := storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 6,
@@ -973,7 +973,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts5, errs5 := readAllFileInfo(ctx, erasureDisks, bucket, object5, "", false)
+	parts5, errs5 := readAllFileInfo(ctx, erasureDisks, bucket, object5, "", false, false)
 	parts5SC := globalStorageClass
 
 	// Object for test case 6 - RRS StorageClass defined as Parity 2, MetaData in PutObject requesting Standard Storage Class
@@ -994,7 +994,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts6, errs6 := readAllFileInfo(ctx, erasureDisks, bucket, object6, "", false)
+	parts6, errs6 := readAllFileInfo(ctx, erasureDisks, bucket, object6, "", false, false)
 	parts6SC := storageclass.Config{
 		RRS: storageclass.StorageClass{
 			Parity: 2,
@@ -1017,7 +1017,7 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	parts7, errs7 := readAllFileInfo(ctx, erasureDisks, bucket, object7, "", false)
+	parts7, errs7 := readAllFileInfo(ctx, erasureDisks, bucket, object7, "", false, false)
 	parts7SC := storageclass.Config{
 		Standard: storageclass.StorageClass{
 			Parity: 5,

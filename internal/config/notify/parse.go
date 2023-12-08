@@ -249,7 +249,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 
 // FetchEnabledTargets - Returns a set of configured TargetList
 func FetchEnabledTargets(ctx context.Context, cfg config.Config, transport *http.Transport) (_ *event.TargetList, err error) {
-	targetList := event.NewTargetList()
+	targetList := event.NewTargetList(ctx)
 	for _, subSys := range config.NotifySubSystems.ToSlice() {
 		targets, err := fetchSubSysTargets(ctx, cfg, subSys, transport)
 		if err != nil {
@@ -365,6 +365,14 @@ var (
 		config.KV{
 			Key:   target.KafkaBatchSize,
 			Value: "0",
+		},
+		config.KV{
+			Key:   target.KafkaCompressionCodec,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.KafkaCompressionLevel,
+			Value: "",
 		},
 	}
 )
@@ -482,6 +490,19 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 
 		kafkaArgs.TLS.ClientTLSCert = env.Get(tlsClientTLSCertEnv, kv.Get(target.KafkaClientTLSCert))
 		kafkaArgs.TLS.ClientTLSKey = env.Get(tlsClientTLSKeyEnv, kv.Get(target.KafkaClientTLSKey))
+
+		compressionCodecEnv := target.EnvKafkaProducerCompressionCodec
+		if k != config.Default {
+			compressionCodecEnv = compressionCodecEnv + config.Default + k
+		}
+		kafkaArgs.Producer.Compression = env.Get(compressionCodecEnv, kv.Get(target.KafkaCompressionCodec))
+
+		compressionLevelEnv := target.EnvKafkaProducerCompressionLevel
+		if k != config.Default {
+			compressionLevelEnv = compressionLevelEnv + config.Default + k
+		}
+		compressionLevel, _ := strconv.Atoi(env.Get(compressionLevelEnv, kv.Get(target.KafkaCompressionLevel)))
+		kafkaArgs.Producer.CompressionLevel = compressionLevel
 
 		saslEnableEnv := target.EnvKafkaSASLEnable
 		if k != config.Default {

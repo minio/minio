@@ -154,7 +154,6 @@ type BatchJobKeyRotateV1 struct {
 	Flags      BatchJobKeyRotateFlags      `yaml:"flags" json:"flags"`
 	Bucket     string                      `yaml:"bucket" json:"bucket"`
 	Prefix     string                      `yaml:"prefix" json:"prefix"`
-	Endpoint   string                      `yaml:"endpoint" json:"endpoint"`
 	Encryption BatchJobKeyRotateEncryption `yaml:"encryption" json:"encryption"`
 }
 
@@ -261,6 +260,9 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	if err := ri.load(ctx, api, job); err != nil {
 		return err
 	}
+	if ri.Complete {
+		return nil
+	}
 
 	globalBatchJobsMetrics.save(job.ID, ri)
 	lastObject := ri.Object
@@ -356,9 +358,9 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	ctx, cancel := context.WithCancel(ctx)
 
 	results := make(chan ObjectInfo, 100)
-	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, ObjectOptions{
-		WalkMarker: lastObject,
-		WalkFilter: skip,
+	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
+		Marker: lastObject,
+		Filter: skip,
 	}); err != nil {
 		cancel()
 		// Do not need to retry if we can't list objects on source.
@@ -377,14 +379,14 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			defer wk.Give()
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
 				attempts := attempts
-				stopFn := globalBatchJobsMetrics.trace(batchKeyRotationMetricObject, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricKeyRotation, job.ID, attempts)
 				success := true
 				if err := r.KeyRotate(ctx, api, result); err != nil {
-					stopFn(err)
+					stopFn(result, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(result, nil)
 				}
 				ri.trackCurrentBucketObject(r.Bucket, result, success)
 				ri.RetryAttempts = attempts
@@ -397,6 +399,10 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				if delay > 0 {
 					time.Sleep(delay + time.Duration(rnd.Float64()*float64(delay)))
 				}
+			}
+
+			if wait := globalBatchConfig.KeyRotationWait(); wait > 0 {
+				time.Sleep(wait)
 			}
 		}()
 	}

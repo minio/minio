@@ -274,7 +274,12 @@ func (er erasureObjects) LocalStorageInfo(ctx context.Context) StorageInfo {
 	return getStorageInfo(localDisks, localEndpoints)
 }
 
-func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, healing bool) {
+// getOnlineDisksWithHealing - returns online disks and overall healing status.
+// Disks are randomly ordered, but in the following groups:
+// - Non-scanning disks
+// - Non-healing disks
+// - Healing disks (if inclHealing is true)
+func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks []StorageAPI, healing bool) {
 	var wg sync.WaitGroup
 	disks := er.getDisks()
 	infos := make([]DiskInfo, len(disks))
@@ -292,7 +297,7 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 			}
 
 			di, err := disk.DiskInfo(context.Background(), false)
-			if err != nil || di.Healing {
+			if err != nil {
 				// - Do not consume disks which are not reachable
 				//   unformatted or simply not accessible for some reason.
 				//
@@ -303,21 +308,31 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 				}
 				return
 			}
+			if !inclHealing && di.Healing {
+				return
+			}
 
 			infos[i] = di
 		}()
 	}
 	wg.Wait()
 
-	var scanningDisks []StorageAPI
+	var scanningDisks, healingDisks []StorageAPI
 	for i, info := range infos {
 		// Check if one of the drives in the set is being healed.
 		// this information is used by scanner to skip healing
 		// this erasure set while it calculates the usage.
-		if info.Healing || info.Error != "" {
-			healing = true
+		if info.Error != "" || disks[i] == nil {
 			continue
 		}
+		if info.Healing {
+			healing = true
+			if inclHealing {
+				healingDisks = append(healingDisks, disks[i])
+			}
+			continue
+		}
+
 		if !info.Scanning {
 			newDisks = append(newDisks, disks[i])
 		} else {
@@ -325,8 +340,10 @@ func (er erasureObjects) getOnlineDisksWithHealing() (newDisks []StorageAPI, hea
 		}
 	}
 
-	// Prefer new disks over disks which are currently being scanned.
+	// Prefer non-scanning disks over disks which are currently being scanned.
 	newDisks = append(newDisks, scanningDisks...)
+	/// Then add healing disks.
+	newDisks = append(newDisks, healingDisks...)
 
 	return newDisks, healing
 }
@@ -342,7 +359,7 @@ func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
 				defer wg.Done()
 				diskPath := disk.Endpoint().Path
 				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+					w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 					return w.Run(func() error {
 						wait := deletedCleanupSleeper.Timer(ctx)
 						removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
@@ -364,7 +381,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 	}
 
 	// Collect disks we can use.
-	disks, healing := er.getOnlineDisksWithHealing()
+	disks, healing := er.getOnlineDisksWithHealing(false)
 	if len(disks) == 0 {
 		logger.LogIf(ctx, errors.New("data-scanner: all drives are offline or being healed, skipping scanner cycle"))
 		return nil

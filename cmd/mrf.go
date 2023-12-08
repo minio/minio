@@ -97,7 +97,7 @@ func (m *mrfState) healRoutine() {
 				// let recently failed networks to reconnect
 				// making MRF wait for 1s before retrying,
 				// i.e 4 reconnect attempts.
-				time.Sleep(1 * time.Second)
+				time.Sleep(time.Second)
 			}
 
 			// wait on timer per heal

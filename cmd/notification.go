@@ -31,10 +31,11 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/bucket/bandwidth"
-	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/sync/errgroup"
+
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/logger"
 )
 
 // This file contains peer related notifications. For sending notifications to
@@ -98,6 +99,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 			Host: addr,
 		}
 		for i := 0; i < g.retryCount; i++ {
+			g.errs[index].Err = nil
 			if err := f(); err != nil {
 				g.errs[index].Err = err
 				// Last iteration log the error.
@@ -689,6 +691,31 @@ func (sys *NotificationSys) GetCPUs(ctx context.Context) []madmin.CPUs {
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetCPUs(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			sys.addNodeErr(&reply[index], sys.peerClients[index], err)
+		}
+	}
+	return reply
+}
+
+// GetNetInfo - Network information
+func (sys *NotificationSys) GetNetInfo(ctx context.Context) []madmin.NetInfo {
+	reply := make([]madmin.NetInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetNetInfo(ctx)
 			return err
 		}, index)
 	}

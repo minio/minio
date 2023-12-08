@@ -34,6 +34,7 @@ import (
 	elasticsearch7 "github.com/elastic/go-elasticsearch/v7"
 	"github.com/minio/highwayhash"
 	"github.com/minio/minio/internal/event"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
@@ -474,7 +475,7 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 		if err != nil {
 			return err
 		}
-		defer DrainBody(resp.Body)
+		defer xhttp.DrainBody(resp.Body)
 		if resp.IsError() {
 			return fmt.Errorf("Create index err: %v", res)
 		}
@@ -490,7 +491,7 @@ func (c *esClientV7) ping(ctx context.Context, _ ElasticsearchArgs) (bool, error
 	if err != nil {
 		return false, store.ErrNotConnected
 	}
-	DrainBody(resp.Body)
+	xhttp.DrainBody(resp.Body)
 	return !resp.IsError(), nil
 }
 
@@ -503,7 +504,7 @@ func (c *esClientV7) entryExists(ctx context.Context, index string, key string) 
 	if err != nil {
 		return false, err
 	}
-	DrainBody(res.Body)
+	xhttp.DrainBody(res.Body)
 	return !res.IsError(), nil
 }
 
@@ -518,7 +519,7 @@ func (c *esClientV7) removeEntry(ctx context.Context, index string, key string) 
 		if err != nil {
 			return err
 		}
-		defer DrainBody(res.Body)
+		defer xhttp.DrainBody(res.Body)
 		if res.IsError() {
 			return fmt.Errorf("Delete err: %s", res.String())
 		}
@@ -546,7 +547,7 @@ func (c *esClientV7) updateEntry(ctx context.Context, index string, key string, 
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer xhttp.DrainBody(res.Body)
 	if res.IsError() {
 		return fmt.Errorf("Update err: %s", res.String())
 	}
@@ -572,7 +573,7 @@ func (c *esClientV7) addEntry(ctx context.Context, index string, eventData event
 	if err != nil {
 		return err
 	}
-	defer DrainBody(res.Body)
+	defer xhttp.DrainBody(res.Body)
 	if res.IsError() {
 		return fmt.Errorf("Add err: %s", res.String())
 	}

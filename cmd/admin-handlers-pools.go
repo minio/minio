@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio/internal/logger"
@@ -66,16 +67,28 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 
 	vars := mux.Vars(r)
 	v := vars["pool"]
+	byID := vars["by-id"] == "true"
 
 	pools := strings.Split(v, ",")
 	poolIndices := make([]int, 0, len(pools))
 
 	for _, pool := range pools {
-		idx := globalEndpoints.GetPoolIdx(pool)
-		if idx == -1 {
-			// We didn't find any matching pools, invalid input
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
-			return
+		var idx int
+		if byID {
+			var err error
+			idx, err = strconv.Atoi(pool)
+			if err != nil {
+				// We didn't find any matching pools, invalid input
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
+				return
+			}
+		} else {
+			idx = globalEndpoints.GetPoolIdx(pool)
+			if idx == -1 {
+				// We didn't find any matching pools, invalid input
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
+				return
+			}
 		}
 		var pool *erasureSets
 		for pidx := range z.serverPools {
@@ -132,8 +145,17 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 
 	vars := mux.Vars(r)
 	v := vars["pool"]
+	byID := vars["by-id"] == "true"
+	idx := -1
 
-	idx := globalEndpoints.GetPoolIdx(v)
+	if byID {
+		if i, err := strconv.Atoi(v); err == nil && i >= 0 && i < len(globalEndpoints) {
+			idx = i
+		}
+	} else {
+		idx = globalEndpoints.GetPoolIdx(v)
+	}
+
 	if idx == -1 {
 		// We didn't find any matching pools, invalid input
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
@@ -178,8 +200,17 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	v := vars["pool"]
+	byID := vars["by-id"] == "true"
+	idx := -1
 
-	idx := globalEndpoints.GetPoolIdx(v)
+	if byID {
+		if i, err := strconv.Atoi(v); err == nil && i >= 0 && i < len(globalEndpoints) {
+			idx = i
+		}
+	} else {
+		idx = globalEndpoints.GetPoolIdx(v)
+	}
+
 	if idx == -1 {
 		apiErr := toAdminAPIErr(ctx, errInvalidArgument)
 		apiErr.Description = fmt.Sprintf("specified pool '%s' not found, please specify a valid pool", v)

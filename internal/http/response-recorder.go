@@ -18,9 +18,12 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -29,6 +32,7 @@ import (
 // status code and to record the response body
 type ResponseRecorder struct {
 	http.ResponseWriter
+	io.ReaderFrom
 	StatusCode int
 	// Log body of 4xx or 5xx responses
 	LogErrBody bool
@@ -48,14 +52,39 @@ type ResponseRecorder struct {
 	headersLogged bool
 }
 
+// Hijack - hijacks the underlying connection
+func (lrw *ResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := lrw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking. Type is %T", lrw.ResponseWriter)
+	}
+	return hj.Hijack()
+}
+
 // NewResponseRecorder - returns a wrapped response writer to trap
 // http status codes for auditing purposes.
 func NewResponseRecorder(w http.ResponseWriter) *ResponseRecorder {
+	rf, _ := w.(io.ReaderFrom)
 	return &ResponseRecorder{
 		ResponseWriter: w,
+		ReaderFrom:     rf,
 		StatusCode:     http.StatusOK,
 		StartTime:      time.Now().UTC(),
 	}
+}
+
+// ErrNotImplemented when a functionality is not implemented
+var ErrNotImplemented = errors.New("not implemented")
+
+// ReadFrom implements support for calling internal io.ReaderFrom implementations
+// returns an error if the underlying ResponseWriter does not implement io.ReaderFrom
+func (lrw *ResponseRecorder) ReadFrom(r io.Reader) (int64, error) {
+	if lrw.ReaderFrom != nil {
+		n, err := lrw.ReaderFrom.ReadFrom(r)
+		lrw.bytesWritten += int(n)
+		return n, err
+	}
+	return 0, ErrNotImplemented
 }
 
 func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
