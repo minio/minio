@@ -28,7 +28,37 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/disk"
+)
+
+// Block sizes constant.
+const (
+	BlockSizeSmall       = 32 * humanize.KiByte // Default r/w block size for smaller objects.
+	BlockSizeLarge       = 2 * humanize.MiByte  // Default r/w block size for larger objects.
+	BlockSizeReallyLarge = 4 * humanize.MiByte  // Default write block size for objects per shard >= 64MiB
+)
+
+// aligned sync.Pool's
+var (
+	ODirectPoolXLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeReallyLarge)
+			return &b
+		},
+	}
+	ODirectPoolLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeLarge)
+			return &b
+		},
+	}
+	ODirectPoolSmall = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeSmall)
+			return &b
+		},
+	}
 )
 
 // WriteOnCloser implements io.WriteCloser and always
