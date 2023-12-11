@@ -1598,47 +1598,64 @@ func getGoMetrics() *MetricsGroup {
 	return mg
 }
 
+// Read prometheus histogram data from ch and convert it to internal Metric
+// type values
+func promHistogramToMetric(desc MetricDescription, ch <-chan prometheus.Metric) (metrics []Metric) {
+	for promMetric := range ch {
+		dtoMetric := &dto.Metric{}
+		err := promMetric.Write(dtoMetric)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return metrics
+		}
+
+		h := dtoMetric.GetHistogram()
+		for _, b := range h.Bucket {
+			labels := make(map[string]string)
+			for _, lp := range dtoMetric.GetLabel() {
+				labels[*lp.Name] = *lp.Value
+			}
+			labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
+			metric := Metric{
+				Description:    desc,
+				VariableLabels: labels,
+				Value:          float64(b.GetCumulativeCount()),
+			}
+			metrics = append(metrics, metric)
+		}
+	}
+	return metrics
+}
+
+// getHistogramMetrics fetches histogram metrics and returns it in a []Metric
+// Note: Typically used in MetricGroup.RegisterRead
+func getHistogramMetrics(desc MetricDescription, hist *prometheus.HistogramVec) []Metric {
+	var metrics []Metric
+
+	ch := make(chan prometheus.Metric)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Converts metrics received into internal []Metric type
+		metrics = promHistogramToMetric(desc, ch)
+	}()
+
+	// Collects prometheus metrics from hist and sends it over ch
+	hist.Collect(ch)
+
+	close(ch)
+	wg.Wait()
+
+	return metrics
+}
+
 func getBucketTTFBMetric() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		// Read prometheus metric on this channel
-		ch := make(chan prometheus.Metric)
-		var wg sync.WaitGroup
-		wg.Add(1)
-
-		// Read prometheus histogram data and convert it to internal metric data
-		go func() {
-			defer wg.Done()
-			for promMetric := range ch {
-				dtoMetric := &dto.Metric{}
-				err := promMetric.Write(dtoMetric)
-				if err != nil {
-					logger.LogIf(GlobalContext, err)
-					return
-				}
-				h := dtoMetric.GetHistogram()
-				for _, b := range h.Bucket {
-					labels := make(map[string]string)
-					for _, lp := range dtoMetric.GetLabel() {
-						labels[*lp.Name] = *lp.Value
-					}
-					labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
-					metric := Metric{
-						Description:    getBucketTTFBDistributionMD(),
-						VariableLabels: labels,
-						Value:          float64(b.GetCumulativeCount()),
-					}
-					metrics = append(metrics, metric)
-				}
-			}
-		}()
-
-		bucketHTTPRequestsDuration.Collect(ch)
-		close(ch)
-		wg.Wait()
-		return
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramMetrics(getBucketObjectDistributionMD(), bucketHTTPRequestsDuration)
 	})
 	return mg
 }
@@ -1648,42 +1665,7 @@ func getS3TTFBMetric() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		// Read prometheus metric on this channel
-		ch := make(chan prometheus.Metric)
-		var wg sync.WaitGroup
-		wg.Add(1)
-
-		// Read prometheus histogram data and convert it to internal metric data
-		go func() {
-			defer wg.Done()
-			for promMetric := range ch {
-				dtoMetric := &dto.Metric{}
-				err := promMetric.Write(dtoMetric)
-				if err != nil {
-					logger.LogIf(GlobalContext, err)
-					return
-				}
-				h := dtoMetric.GetHistogram()
-				for _, b := range h.Bucket {
-					labels := make(map[string]string)
-					for _, lp := range dtoMetric.GetLabel() {
-						labels[*lp.Name] = *lp.Value
-					}
-					labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
-					metric := Metric{
-						Description:    getS3TTFBDistributionMD(),
-						VariableLabels: labels,
-						Value:          float64(b.GetCumulativeCount()),
-					}
-					metrics = append(metrics, metric)
-				}
-			}
-		}()
-
-		httpRequestsDuration.Collect(ch)
-		close(ch)
-		wg.Wait()
-		return
+		return getHistogramMetrics(getS3TTFBDistributionMD(), httpRequestsDuration)
 	})
 	return mg
 }
