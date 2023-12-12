@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -67,11 +68,19 @@ func TestGetHistogramMetrics(t *testing.T) {
 			label: labels[2],
 		},
 	}
+	ticker := time.NewTicker(1 * time.Millisecond)
+	defer ticker.Stop()
 	for _, obs := range observations {
-		ttfbHist.With(prometheus.Labels{"api": obs.label}).Observe(obs.val)
+		// Send observations once every 1ms, to simulate delay between
+		// observations. This is to test the channel based
+		// synchronization used internally.
+		select {
+		case <-ticker.C:
+			ttfbHist.With(prometheus.Labels{"api": obs.label}).Observe(obs.val)
+		}
 	}
 
-	metrics := getHistogramMetrics(getBucketTTFBDistributionMD(), ttfbHist)
+	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD())
 	if expPoints := len(labels) * len(histBuckets); expPoints != len(metrics) {
 		t.Fatalf("Expected %v data points but got %v", expPoints, len(metrics))
 	}

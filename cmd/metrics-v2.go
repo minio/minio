@@ -1598,15 +1598,26 @@ func getGoMetrics() *MetricsGroup {
 	return mg
 }
 
-// Read prometheus histogram data from ch and convert it to internal Metric
-// type values
-func promHistogramToMetric(desc MetricDescription, ch <-chan prometheus.Metric) (metrics []Metric) {
+// getHistogramMetrics fetches histogram metrics and returns it in a []Metric
+// Note: Typically used in MetricGroup.RegisterRead
+func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) []Metric {
+	ch := make(chan prometheus.Metric)
+	go func() {
+		defer close(ch)
+		// Collects prometheus metrics from hist and sends it over ch
+		hist.Collect(ch)
+	}()
+
+	// Converts metrics received into internal []Metric type
+	var metrics []Metric
 	for promMetric := range ch {
 		dtoMetric := &dto.Metric{}
 		err := promMetric.Write(dtoMetric)
 		if err != nil {
+			// Log error and continue to receive other metric
+			// values
 			logger.LogIf(GlobalContext, err)
-			return metrics
+			continue
 		}
 
 		h := dtoMetric.GetHistogram()
@@ -1627,35 +1638,12 @@ func promHistogramToMetric(desc MetricDescription, ch <-chan prometheus.Metric) 
 	return metrics
 }
 
-// getHistogramMetrics fetches histogram metrics and returns it in a []Metric
-// Note: Typically used in MetricGroup.RegisterRead
-func getHistogramMetrics(desc MetricDescription, hist *prometheus.HistogramVec) []Metric {
-	var metrics []Metric
-
-	ch := make(chan prometheus.Metric)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// Converts metrics received into internal []Metric type
-		metrics = promHistogramToMetric(desc, ch)
-	}()
-
-	// Collects prometheus metrics from hist and sends it over ch
-	hist.Collect(ch)
-
-	close(ch)
-	wg.Wait()
-
-	return metrics
-}
-
 func getBucketTTFBMetric() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getHistogramMetrics(getBucketObjectDistributionMD(), bucketHTTPRequestsDuration)
+		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketObjectDistributionMD())
 	})
 	return mg
 }
@@ -1664,8 +1652,8 @@ func getS3TTFBMetric() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		return getHistogramMetrics(getS3TTFBDistributionMD(), httpRequestsDuration)
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD())
 	})
 	return mg
 }
