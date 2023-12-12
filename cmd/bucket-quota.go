@@ -173,14 +173,25 @@ func enforceBucketThrottle(bucket, api string, qCfg *madmin.BucketQuota) error {
 	}
 
 	// Check the breach of throttle rules
+	validAllowedCount := uint64(0) // set an invalid value
 	for allowedAPI, allowedCount := range s3AllowedReqCountMap {
 		// rules can have exact API names or patterns like `Get*`
-		if matched := wildcard.MatchSimple(strings.ToLower(allowedAPI), strings.ToLower(api)); matched && uint64(currReqCount) > allowedCount {
-			return BucketThrottleQuotaExceeded{
-				Bucket: bucket,
-				Err:    fmt.Errorf("no of requests exceeded the allowed upper limit %d", allowedCount),
-			}
+		// first check exact match for API name, if not found then check wildcard
+		if strings.EqualFold(allowedAPI, api) {
+			validAllowedCount = allowedCount
+			break // exact match found, break
+		}
+		if wildcard.MatchSimple(strings.ToLower(allowedAPI), strings.ToLower(api)) {
+			validAllowedCount = allowedCount
+			break // pattern match found, break
 		}
 	}
+	if validAllowedCount > 0 && uint64(currReqCount) > validAllowedCount {
+		return BucketThrottleQuotaExceeded{
+			Bucket: bucket,
+			Err:    fmt.Errorf("no of requests exceeded the allowed upper limit %d", validAllowedCount),
+		}
+	}
+
 	return nil
 }
