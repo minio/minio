@@ -5,6 +5,8 @@ go 1.19
 require (
 	cloud.google.com/go/storage v1.35.1
 	github.com/Azure/azure-storage-blob-go v0.15.0
+	github.com/Azure/go-autorest/autorest v0.11.29
+	github.com/Azure/go-autorest/autorest/adal v0.9.22
 	github.com/IBM/sarama v1.42.1
 	github.com/alecthomas/participle v0.7.1
 	github.com/bcicen/jstream v1.0.1
@@ -49,7 +51,7 @@ require (
 	github.com/minio/dperf v0.5.2
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
-	github.com/minio/madmin-go/v3 v3.0.36
+	github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9
 	github.com/minio/minio-go/v7 v7.0.65-0.20231122233251-1f7dd6b7e3e1
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.5-0.20231205011044-ec6b8d58893a
@@ -105,6 +107,10 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.5 // indirect
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
+	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
+	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
+	github.com/Azure/go-autorest/logger v0.2.1 // indirect
+	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
@@ -171,7 +177,7 @@ require (
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
-	github.com/lestrrat-go/jwx v1.2.26 // indirect
+	github.com/lestrrat-go/jwx v1.2.27 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20231016141302-07b5767bb0ed // indirect

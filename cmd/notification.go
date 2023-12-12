@@ -975,8 +975,11 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 		for _, ep := range pool.Endpoints {
 			if offlineHost == "" && ep.IsLocal || offlineHost == ep.Host {
 				offlineDisks = append(offlineDisks, madmin.Disk{
-					Endpoint: ep.String(),
-					State:    string(madmin.ItemOffline),
+					Endpoint:  ep.String(),
+					State:     string(madmin.ItemOffline),
+					PoolIndex: ep.PoolIdx,
+					SetIndex:  ep.SetIdx,
+					DiskIndex: ep.DiskIdx,
 				})
 			}
 		}
