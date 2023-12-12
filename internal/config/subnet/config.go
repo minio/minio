@@ -29,6 +29,11 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 )
 
+const (
+	baseURL    = "https://subnet.min.io"
+	baseURLDev = "http://localhost:9000"
+)
+
 // DefaultKVS - default KV config for subnet settings
 var DefaultKVS = config.KVS{
 	config.KV{
@@ -58,6 +63,9 @@ type Config struct {
 
 	// Transport configured with proxy_url if set optionally.
 	transport http.RoundTripper
+
+	// The subnet base URL
+	BaseURL string
 }
 
 var configLock sync.RWMutex
@@ -84,10 +92,11 @@ func (c *Config) ApplyEnv() {
 	if c.Proxy != "" {
 		os.Setenv("CONSOLE_SUBNET_PROXY", c.Proxy)
 	}
+	os.Setenv("CONSOLE_SUBNET_URL", c.BaseURL)
 }
 
 // Update - in-place update with new license and registration information.
-func (c *Config) Update(ncfg Config) {
+func (c *Config) Update(ncfg Config, isDevEnv bool) {
 	configLock.Lock()
 	defer configLock.Unlock()
 
@@ -95,6 +104,14 @@ func (c *Config) Update(ncfg Config) {
 	c.APIKey = ncfg.APIKey
 	c.Proxy = ncfg.Proxy
 	c.transport = ncfg.transport
+	c.BaseURL = baseURL
+
+	if isDevEnv {
+		c.BaseURL = os.Getenv("_MINIO_SUBNET_URL")
+		if c.BaseURL == "" {
+			c.BaseURL = baseURLDev
+		}
+	}
 }
 
 // LookupConfig - lookup config and override with valid environment settings if any.

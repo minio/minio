@@ -225,24 +225,24 @@ func TestCreateEndpoints(t *testing.T) {
 
 	testCases := []struct {
 		serverAddr         string
-		args               [][]string
+		args               []string
 		expectedServerAddr string
 		expectedEndpoints  Endpoints
 		expectedSetupType  SetupType
 		expectedErr        error
 	}{
-		{"localhost", [][]string{}, "", Endpoints{}, -1, fmt.Errorf("address localhost: missing port in address")},
+		{"localhost", []string{}, "", Endpoints{}, -1, fmt.Errorf("address localhost: missing port in address")},
 
 		// Erasure Single Drive
-		{"localhost:9000", [][]string{{"http://localhost/d1"}}, "", Endpoints{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
-		{":443", [][]string{{"/d1"}}, ":443", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, ErasureSDSetupType, nil},
-		{"localhost:10000", [][]string{{"/d1"}}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, ErasureSDSetupType, nil},
-		{"localhost:9000", [][]string{{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}}, "", Endpoints{}, -1, fmt.Errorf("path '/d1' can not be served by different port on same address")},
+		{"localhost:9000", []string{"http://localhost/d1"}, "", Endpoints{}, -1, fmt.Errorf("use path style endpoint for SD setup")},
+		{":443", []string{"/d1"}, ":443", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, ErasureSDSetupType, nil},
+		{"localhost:10000", []string{"/d1"}, "localhost:10000", Endpoints{Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true}}, ErasureSDSetupType, nil},
+		{"localhost:9000", []string{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}, "", Endpoints{}, -1, fmt.Errorf("path '/d1' can not be served by different port on same address")},
 
 		// Erasure Setup with PathEndpointType
 		{
 			":1234",
-			[][]string{{"/d1", "/d2", "/d3", "/d4"}},
+			[]string{"/d1", "/d2", "/d3", "/d4"},
 			":1234",
 			Endpoints{
 				Endpoint{URL: &url.URL{Path: mustAbs("/d1")}, IsLocal: true},
@@ -253,49 +253,49 @@ func TestCreateEndpoints(t *testing.T) {
 			ErasureSetupType, nil,
 		},
 		// DistErasure Setup with URLEndpointType
-		{":9000", [][]string{{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}}, ":9000", Endpoints{
+		{":9000", []string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}, ":9000", Endpoints{
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost:9000", Path: "/d1"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost:9000", Path: "/d2"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost:9000", Path: "/d3"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Scheme: "http", Host: "localhost:9000", Path: "/d4"}, IsLocal: true},
-		}, ErasureSetupType, nil},
+		}, DistErasureSetupType, nil},
 		// DistErasure Setup with URLEndpointType having mixed naming to local host.
-		{"127.0.0.1:10000", [][]string{{"http://localhost/d1", "http://localhost/d2", "http://127.0.0.1/d3", "http://127.0.0.1/d4"}}, "", Endpoints{}, -1, fmt.Errorf("all local endpoints should not have different hostnames/ips")},
+		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://127.0.0.1/d3", "http://127.0.0.1/d4"}, "", Endpoints{}, -1, fmt.Errorf("all local endpoints should not have different hostnames/ips")},
 
-		{":9001", [][]string{{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://" + nonLoopBackIP + ":9001/export", "http://10.0.0.2:9001/export"}}, "", Endpoints{}, -1, fmt.Errorf("path '/export' can not be served by different port on same address")},
+		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://" + nonLoopBackIP + ":9001/export", "http://10.0.0.2:9001/export"}, "", Endpoints{}, -1, fmt.Errorf("path '/export' can not be served by different port on same address")},
 
-		{":9000", [][]string{{"http://127.0.0.1:9000/export", "http://" + nonLoopBackIP + ":9000/export", "http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export"}}, "", Endpoints{}, -1, fmt.Errorf("path '/export' cannot be served by different address on same server")},
+		{":9000", []string{"http://127.0.0.1:9000/export", "http://" + nonLoopBackIP + ":9000/export", "http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export"}, "", Endpoints{}, -1, fmt.Errorf("path '/export' cannot be served by different address on same server")},
 
 		// DistErasure type
-		{"127.0.0.1:10000", [][]string{{case1Endpoint1, case1Endpoint2, "http://example.org/d3", "http://example.com/d4"}}, "127.0.0.1:10000", Endpoints{
+		{"127.0.0.1:10000", []string{case1Endpoint1, case1Endpoint2, "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", Endpoints{
 			Endpoint{URL: case1URLs[0], IsLocal: case1LocalFlags[0]},
 			Endpoint{URL: case1URLs[1], IsLocal: case1LocalFlags[1]},
 			Endpoint{URL: case1URLs[2], IsLocal: case1LocalFlags[2]},
 			Endpoint{URL: case1URLs[3], IsLocal: case1LocalFlags[3]},
 		}, DistErasureSetupType, nil},
 
-		{"127.0.0.1:10000", [][]string{{case2Endpoint1, case2Endpoint2, "http://example.org/d3", "http://example.com/d4"}}, "127.0.0.1:10000", Endpoints{
+		{"127.0.0.1:10000", []string{case2Endpoint1, case2Endpoint2, "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", Endpoints{
 			Endpoint{URL: case2URLs[0], IsLocal: case2LocalFlags[0]},
 			Endpoint{URL: case2URLs[1], IsLocal: case2LocalFlags[1]},
 			Endpoint{URL: case2URLs[2], IsLocal: case2LocalFlags[2]},
 			Endpoint{URL: case2URLs[3], IsLocal: case2LocalFlags[3]},
 		}, DistErasureSetupType, nil},
 
-		{":80", [][]string{{case3Endpoint1, "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}}, ":80", Endpoints{
+		{":80", []string{case3Endpoint1, "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", Endpoints{
 			Endpoint{URL: case3URLs[0], IsLocal: case3LocalFlags[0]},
 			Endpoint{URL: case3URLs[1], IsLocal: case3LocalFlags[1]},
 			Endpoint{URL: case3URLs[2], IsLocal: case3LocalFlags[2]},
 			Endpoint{URL: case3URLs[3], IsLocal: case3LocalFlags[3]},
 		}, DistErasureSetupType, nil},
 
-		{":9000", [][]string{{case4Endpoint1, "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}}, ":9000", Endpoints{
+		{":9000", []string{case4Endpoint1, "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", Endpoints{
 			Endpoint{URL: case4URLs[0], IsLocal: case4LocalFlags[0]},
 			Endpoint{URL: case4URLs[1], IsLocal: case4LocalFlags[1]},
 			Endpoint{URL: case4URLs[2], IsLocal: case4LocalFlags[2]},
 			Endpoint{URL: case4URLs[3], IsLocal: case4LocalFlags[3]},
 		}, DistErasureSetupType, nil},
 
-		{":9000", [][]string{{case5Endpoint1, case5Endpoint2, case5Endpoint3, case5Endpoint4}}, ":9000", Endpoints{
+		{":9000", []string{case5Endpoint1, case5Endpoint2, case5Endpoint3, case5Endpoint4}, ":9000", Endpoints{
 			Endpoint{URL: case5URLs[0], IsLocal: case5LocalFlags[0]},
 			Endpoint{URL: case5URLs[1], IsLocal: case5LocalFlags[1]},
 			Endpoint{URL: case5URLs[2], IsLocal: case5LocalFlags[2]},
@@ -303,7 +303,7 @@ func TestCreateEndpoints(t *testing.T) {
 		}, DistErasureSetupType, nil},
 
 		// DistErasure Setup using only local host.
-		{":9003", [][]string{{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://127.0.0.1:9002/d3", case6Endpoint}}, ":9003", Endpoints{
+		{":9003", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://127.0.0.1:9002/d3", case6Endpoint}, ":9003", Endpoints{
 			Endpoint{URL: case6URLs[0], IsLocal: case6LocalFlags[0]},
 			Endpoint{URL: case6URLs[1], IsLocal: case6LocalFlags[1]},
 			Endpoint{URL: case6URLs[2], IsLocal: case6LocalFlags[2]},
@@ -311,24 +311,32 @@ func TestCreateEndpoints(t *testing.T) {
 		}, DistErasureSetupType, nil},
 	}
 
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
+		i := i
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			endpoints, setupType, err := CreateEndpoints(testCase.serverAddr, testCase.args...)
+			var srvCtxt serverCtxt
+			err := mergeDisksLayoutFromArgs(testCase.args, &srvCtxt)
+			if err != nil && testCase.expectedErr == nil {
+				t.Errorf("Test %d: unexpected error: %v", i+1, err)
+			}
+			pools, setupType, err := CreatePoolEndpoints(testCase.serverAddr, srvCtxt.Layout.pools...)
 			if err == nil && testCase.expectedErr != nil {
-				t.Errorf("error: expected = %v, got = <nil>", testCase.expectedErr)
+				t.Errorf("Test %d: expected = %v, got = <nil>", i+1, testCase.expectedErr)
 			}
 			if err == nil {
 				if setupType != testCase.expectedSetupType {
-					t.Errorf("setupType: expected = %v, got = %v", testCase.expectedSetupType, setupType)
+					t.Errorf("Test %d: setupType: expected = %v, got = %v", i+1, testCase.expectedSetupType, setupType)
 				}
+				endpoints := pools[0]
 				if len(endpoints) != len(testCase.expectedEndpoints) {
-					t.Errorf("endpoints: expected = %d, got = %d", len(testCase.expectedEndpoints),
+					t.Errorf("Test %d: endpoints: expected = %d, got = %d", i+1, len(testCase.expectedEndpoints),
 						len(endpoints))
 				} else {
 					for i, endpoint := range endpoints {
 						if testCase.expectedEndpoints[i].String() != endpoint.String() {
-							t.Errorf("endpoints: expected = %s, got = %s",
+							t.Errorf("Test %d: endpoints: expected = %s, got = %s",
+								i+1,
 								testCase.expectedEndpoints[i],
 								endpoint)
 						}
@@ -336,7 +344,7 @@ func TestCreateEndpoints(t *testing.T) {
 				}
 			}
 			if err != nil && testCase.expectedErr == nil {
-				t.Errorf("error: expected = <nil>, got = %v, testCase: %v", err, testCase)
+				t.Errorf("Test %d: error: expected = <nil>, got = %v, testCase: %v", i+1, err, testCase)
 			}
 		})
 	}

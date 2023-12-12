@@ -18,10 +18,12 @@
 package http
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -50,6 +52,15 @@ type ResponseRecorder struct {
 	headersLogged bool
 }
 
+// Hijack - hijacks the underlying connection
+func (lrw *ResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := lrw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking. Type is %T", lrw.ResponseWriter)
+	}
+	return hj.Hijack()
+}
+
 // NewResponseRecorder - returns a wrapped response writer to trap
 // http status codes for auditing purposes.
 func NewResponseRecorder(w http.ResponseWriter) *ResponseRecorder {
@@ -69,7 +80,9 @@ var ErrNotImplemented = errors.New("not implemented")
 // returns an error if the underlying ResponseWriter does not implement io.ReaderFrom
 func (lrw *ResponseRecorder) ReadFrom(r io.Reader) (int64, error) {
 	if lrw.ReaderFrom != nil {
-		return lrw.ReaderFrom.ReadFrom(r)
+		n, err := lrw.ReaderFrom.ReadFrom(r)
+		lrw.bytesWritten += int(n)
+		return n, err
 	}
 	return 0, ErrNotImplemented
 }

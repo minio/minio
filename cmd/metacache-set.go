@@ -427,7 +427,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					continue
 				}
 				_, err := disk.ReadVersion(ctx, minioMetaBucket,
-					o.objectPath(0), "", false)
+					o.objectPath(0), "", ReadOptions{})
 				if err != nil {
 					time.Sleep(retryDelay250)
 					retries++
@@ -504,7 +504,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 							continue
 						}
 						_, err := disk.ReadVersion(ctx, minioMetaBucket,
-							o.objectPath(partN), "", false)
+							o.objectPath(partN), "", ReadOptions{})
 						if err != nil {
 							time.Sleep(retryDelay250)
 							retries++
@@ -606,8 +606,8 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	defer close(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
-	// get non-healing disks for listing
-	disks, _ := er.getOnlineDisksWithHealing()
+	// get prioritized non-healing disks for listing
+	disks, _ := er.getOnlineDisksWithHealing(true)
 	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
 	var fallbackDisks []StorageAPI
 

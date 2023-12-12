@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/config/batch"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -54,6 +55,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+var globalBatchConfig batch.Config
+
 // BatchJobRequest this is an internal data structure not for external consumption.
 type BatchJobRequest struct {
 	ID        string               `yaml:"-" json:"name"`
@@ -62,6 +65,7 @@ type BatchJobRequest struct {
 	Location  string               `yaml:"-" json:"location"`
 	Replicate *BatchJobReplicateV1 `yaml:"replicate" json:"replicate"`
 	KeyRotate *BatchJobKeyRotateV1 `yaml:"keyrotate" json:"keyrotate"`
+	Expire    *BatchJobExpire      `yaml:"expire" json:"expire"`
 	ctx       context.Context      `msg:"-"`
 }
 
@@ -431,23 +435,27 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 			wk.Take()
 			go func() {
 				defer wk.Give()
-				stopFn := globalBatchJobsMetrics.trace(batchReplicationMetricObject, job.ID, attempts, oi)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts)
 				success := true
 				if err := r.ReplicateFromSource(ctx, api, core, oi, retry); err != nil {
 					// object must be deleted concurrently, allow these failures but do not count them
 					if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
 						return
 					}
-					stopFn(err)
+					stopFn(oi, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(oi, nil)
 				}
 				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+
+				if wait := globalBatchConfig.ReplicationWait(); wait > 0 {
+					time.Sleep(wait)
+				}
 			}()
 		}
 		wk.Wait()
@@ -520,7 +528,66 @@ func toObjectInfo(bucket, object string, objInfo miniogo.ObjectInfo) ObjectInfo 
 		oi.UserDefined[xhttp.AmzStorageClass] = objInfo.StorageClass
 	}
 
+	for k, v := range objInfo.UserMetadata {
+		oi.UserDefined[k] = v
+	}
+
 	return oi
+}
+
+func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLayer, remoteClnt *minio.Client, entries []ObjectInfo) error {
+	input := make(chan minio.SnowballObject, 1)
+	opts := minio.SnowballOptions{
+		Opts:     minio.PutObjectOptions{},
+		InMemory: *r.Source.Snowball.InMemory,
+		Compress: *r.Source.Snowball.Compress,
+		SkipErrs: *r.Source.Snowball.SkipErrs,
+	}
+
+	go func() {
+		defer close(input)
+
+		for _, entry := range entries {
+			gr, err := objAPI.GetObjectNInfo(ctx, r.Source.Bucket,
+				entry.Name, nil, nil, ObjectOptions{
+					VersionID: entry.VersionID,
+				})
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+
+			snowballObj := minio.SnowballObject{
+				// Create path to store objects within the bucket.
+				Key:       entry.Name,
+				Size:      entry.Size,
+				ModTime:   entry.ModTime,
+				VersionID: entry.VersionID,
+				Content:   gr,
+				Headers:   make(http.Header),
+				Close: func() {
+					gr.Close()
+				},
+			}
+
+			opts, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
+			if err != nil {
+				logger.LogIf(ctx, err)
+				continue
+			}
+
+			for k, vals := range opts.Header() {
+				for _, v := range vals {
+					snowballObj.Headers.Add(k, v)
+				}
+			}
+
+			input <- snowballObj
+		}
+	}()
+
+	// Collect and upload all entries.
+	return remoteClnt.PutObjectsSnowball(ctx, r.Target.Bucket, opts, input)
 }
 
 // ReplicateToTarget read from source and replicate to configured target
@@ -666,7 +733,12 @@ func (ri *batchJobInfo) load(ctx context.Context, api ObjectLayer, job BatchJobR
 		fileName = batchKeyRotationName
 		version = batchKeyRotateVersionV1
 		format = batchKeyRotationFormat
-
+	case job.Expire != nil:
+		fileName = batchExpireName
+		version = batchExpireVersionV1
+		format = batchExpireFormat
+	default:
+		return errors.New("no supported batch job request specified")
 	}
 	data, err := readConfig(ctx, api, pathJoin(job.Location, fileName))
 	if err != nil {
@@ -682,6 +754,11 @@ func (ri *batchJobInfo) load(ctx context.Context, api ObjectLayer, job BatchJobR
 				ri.RetryAttempts = batchKeyRotateJobDefaultRetries
 				if job.KeyRotate.Flags.Retry.Attempts > 0 {
 					ri.RetryAttempts = job.KeyRotate.Flags.Retry.Attempts
+				}
+			case job.Expire != nil:
+				ri.RetryAttempts = batchExpireJobDefaultRetries
+				if job.Expire.Retry.Attempts > 0 {
+					ri.RetryAttempts = job.Expire.Retry.Attempts
 				}
 			}
 			return nil
@@ -792,6 +869,12 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 			jobTyp = string(job.Type())
 			fileName = batchKeyRotationName
 			ri.Version = batchKeyRotateVersionV1
+		case madmin.BatchJobExpire:
+			format = batchExpireFormat
+			version = batchExpireVersion
+			jobTyp = string(job.Type())
+			fileName = batchExpireName
+			ri.Version = batchExpireVersionV1
 		default:
 			return errInvalidArgument
 		}
@@ -817,7 +900,18 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 	return nil
 }
 
-func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, failed bool) {
+// Note: to be used only with batch jobs that affect multiple versions through
+// a single action. e.g batch-expire has an option to expire all versions of an
+// object which matches the given filters.
+func (ri *batchJobInfo) trackMultipleObjectVersions(bucket string, info ObjectInfo, success bool) {
+	if success {
+		ri.Objects += int64(info.NumVersions)
+	} else {
+		ri.ObjectsFailed += int64(info.NumVersions)
+	}
+}
+
+func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, success bool) {
 	if ri == nil {
 		return
 	}
@@ -827,7 +921,7 @@ func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo,
 
 	ri.Bucket = bucket
 	ri.Object = info.Name
-	ri.countItem(info.Size, info.DeleteMarker, failed)
+	ri.countItem(info.Size, info.DeleteMarker, success)
 }
 
 // Start start the batch replication job, resumes if there was a pending job via "job.ID"
@@ -913,12 +1007,9 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			// None of the provided metadata filters match skip the object.
 			return false
 		}
-		// if one of source or target is non MinIO, just replicate the top most version like `mc mirror`
-		if (r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3) && !info.IsLatest {
-			return false
-		}
 
-		return true
+		// if one of source or target is non MinIO, just replicate the top most version like `mc mirror`
+		return !((r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3) && !info.IsLatest)
 	}
 
 	u, err := url.Parse(r.Target.Endpoint)
@@ -937,7 +1028,72 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	if err != nil {
 		return err
 	}
+
 	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
+
+	var (
+		walkCh = make(chan ObjectInfo, 100)
+		slowCh = make(chan ObjectInfo, 100)
+	)
+
+	if !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
+		go func() {
+			defer close(slowCh)
+
+			// Snowball currently needs the high level minio-go Client, not the Core one
+			cl, err := miniogo.New(u.Host, &miniogo.Options{
+				Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+				Secure:       u.Scheme == "https",
+				Transport:    getRemoteInstanceTransport,
+				BucketLookup: lookupStyle(r.Target.Path),
+			})
+			if err != nil {
+				logger.LogIf(ctx, err)
+				return
+			}
+
+			// Already validated before arriving here
+			smallerThan, _ := humanize.ParseBytes(*r.Source.Snowball.SmallerThan)
+
+			var (
+				obj   = ObjectInfo{}
+				batch = make([]ObjectInfo, 0, *r.Source.Snowball.Batch)
+				valid = true
+			)
+
+			for valid {
+				obj, valid = <-walkCh
+
+				if !valid {
+					goto write
+				}
+
+				if obj.DeleteMarker || !obj.VersionPurgeStatus.Empty() || obj.Size >= int64(smallerThan) {
+					slowCh <- obj
+					continue
+				}
+
+				batch = append(batch, obj)
+
+				if len(batch) < *r.Source.Snowball.Batch {
+					continue
+				}
+
+			write:
+				if len(batch) > 0 {
+					if err := r.writeAsArchive(ctx, api, cl, batch); err != nil {
+						logger.LogIf(ctx, err)
+						for _, b := range batch {
+							slowCh <- b
+						}
+					}
+					batch = batch[:0]
+				}
+			}
+		}()
+	} else {
+		slowCh = walkCh
+	}
 
 	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_REPLICATION_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
 	if err != nil {
@@ -950,6 +1106,11 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		return err
 	}
 
+	walkQuorum := env.Get("_MINIO_BATCH_REPLICATION_WALK_QUORUM", "strict")
+	if walkQuorum == "" {
+		walkQuorum = "strict"
+	}
+
 	retryAttempts := ri.RetryAttempts
 	retry := false
 	for attempts := 1; attempts <= retryAttempts; attempts++ {
@@ -959,10 +1120,10 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		// one of source/target is s3, skip delete marker and all versions under the same object name.
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 
-		results := make(chan ObjectInfo, 100)
-		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, results, ObjectOptions{
-			WalkMarker: lastObject,
-			WalkFilter: selectObj,
+		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, walkCh, WalkOptions{
+			Marker:   lastObject,
+			Filter:   selectObj,
+			AskDisks: walkQuorum,
 		}); err != nil {
 			cancel()
 			// Do not need to retry if we can't list objects on source.
@@ -972,7 +1133,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		prevObj := ""
 
 		skipReplicate := false
-		for result := range results {
+		for result := range slowCh {
 			result := result
 			if result.Name != prevObj {
 				prevObj = result.Name
@@ -985,7 +1146,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			go func() {
 				defer wk.Give()
 
-				stopFn := globalBatchJobsMetrics.trace(batchReplicationMetricObject, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts)
 				success := true
 				if err := r.ReplicateToTarget(ctx, api, c, result, retry); err != nil {
 					if miniogo.ToErrorResponse(err).Code == "PreconditionFailed" {
@@ -996,16 +1157,20 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 					if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
 						return
 					}
-					stopFn(err)
+					stopFn(result, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(result, nil)
 				}
 				ri.trackCurrentBucketObject(r.Source.Bucket, result, success)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+
+				if wait := globalBatchConfig.ReplicationWait(); wait > 0 {
+					time.Sleep(wait)
+				}
 			}()
 		}
 		wk.Wait()
@@ -1084,6 +1249,9 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	}
 
 	if err := r.Source.Type.Validate(); err != nil {
+		return err
+	}
+	if err := r.Source.Snowball.Validate(); err != nil {
 		return err
 	}
 	if r.Source.Creds.Empty() && r.Target.Creds.Empty() {
@@ -1207,6 +1375,8 @@ func (j BatchJobRequest) Type() madmin.BatchJobType {
 		return madmin.BatchJobReplicate
 	case j.KeyRotate != nil:
 		return madmin.BatchJobKeyRotate
+	case j.Expire != nil:
+		return madmin.BatchJobExpire
 	}
 	return madmin.BatchJobType("unknown")
 }
@@ -1219,6 +1389,8 @@ func (j BatchJobRequest) Validate(ctx context.Context, o ObjectLayer) error {
 		return j.Replicate.Validate(ctx, j, o)
 	case j.KeyRotate != nil:
 		return j.KeyRotate.Validate(ctx, j, o)
+	case j.Expire != nil:
+		return j.Expire.Validate(ctx, j, o)
 	}
 	return errInvalidArgument
 }
@@ -1229,12 +1401,14 @@ func (j BatchJobRequest) delete(ctx context.Context, api ObjectLayer) {
 		deleteConfig(ctx, api, pathJoin(j.Location, batchReplName))
 	case j.KeyRotate != nil:
 		deleteConfig(ctx, api, pathJoin(j.Location, batchKeyRotationName))
+	case j.Expire != nil:
+		deleteConfig(ctx, api, pathJoin(j.Location, batchExpireName))
 	}
 	deleteConfig(ctx, api, j.Location)
 }
 
 func (j *BatchJobRequest) save(ctx context.Context, api ObjectLayer) error {
-	if j.Replicate == nil && j.KeyRotate == nil {
+	if j.Replicate == nil && j.KeyRotate == nil && j.Expire == nil {
 		return errInvalidArgument
 	}
 
@@ -1303,7 +1477,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := objectAPI.Walk(ctx, minioMetaBucket, batchJobPrefix, resultCh, ObjectOptions{}); err != nil {
+	if err := objectAPI.Walk(ctx, minioMetaBucket, batchJobPrefix, resultCh, WalkOptions{}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1391,6 +1565,34 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 
 	job := &BatchJobRequest{}
 	if err = yaml.UnmarshalStrict(buf, job); err != nil {
+		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	// Fill with default values
+	if job.Replicate != nil {
+		if job.Replicate.Source.Snowball.Disable == nil {
+			job.Replicate.Source.Snowball.Disable = ptr(false)
+		}
+		if job.Replicate.Source.Snowball.Batch == nil {
+			job.Replicate.Source.Snowball.Batch = ptr(100)
+		}
+		if job.Replicate.Source.Snowball.InMemory == nil {
+			job.Replicate.Source.Snowball.InMemory = ptr(true)
+		}
+		if job.Replicate.Source.Snowball.Compress == nil {
+			job.Replicate.Source.Snowball.Compress = ptr(false)
+		}
+		if job.Replicate.Source.Snowball.SmallerThan == nil {
+			job.Replicate.Source.Snowball.SmallerThan = ptr("5MiB")
+		}
+		if job.Replicate.Source.Snowball.SkipErrs == nil {
+			job.Replicate.Source.Snowball.SkipErrs = ptr(true)
+		}
+	}
+
+	//  Validate the incoming job request
+	if err := job.Validate(ctx, objectAPI); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1492,7 +1694,7 @@ func (j *BatchJobPool) resume() {
 	results := make(chan ObjectInfo, 100)
 	ctx, cancel := context.WithCancel(j.ctx)
 	defer cancel()
-	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, ObjectOptions{}); err != nil {
+	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, WalkOptions{}); err != nil {
 		logger.LogIf(j.ctx, err)
 		return
 	}
@@ -1531,7 +1733,8 @@ func (j *BatchJobPool) AddWorker() {
 			if !ok {
 				return
 			}
-			if job.Replicate != nil {
+			switch {
+			case job.Replicate != nil:
 				if job.Replicate.RemoteToLocal() {
 					if err := job.Replicate.StartFromSource(job.ctx, j.objLayer, *job); err != nil {
 						if !isErrBucketNotFound(err) {
@@ -1551,9 +1754,15 @@ func (j *BatchJobPool) AddWorker() {
 						// Bucket not found proceed to delete such a job.
 					}
 				}
-			}
-			if job.KeyRotate != nil {
+			case job.KeyRotate != nil:
 				if err := job.KeyRotate.Start(job.ctx, j.objLayer, *job); err != nil {
+					if !isErrBucketNotFound(err) {
+						logger.LogIf(j.ctx, err)
+						continue
+					}
+				}
+			case job.Expire != nil:
+				if err := job.Expire.Start(job.ctx, j.objLayer, *job); err != nil {
 					if !isErrBucketNotFound(err) {
 						logger.LogIf(j.ctx, err)
 						continue
@@ -1636,24 +1845,26 @@ type batchJobMetrics struct {
 type batchJobMetric uint8
 
 const (
-	batchReplicationMetricObject batchJobMetric = iota
-	batchKeyRotationMetricObject
+	batchJobMetricReplication batchJobMetric = iota
+	batchJobMetricKeyRotation
+	batchJobMetricExpire
 )
 
-func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration time.Duration, info ObjectInfo, attempts int, err error) madmin.TraceInfo {
+func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration time.Duration, info objTraceInfoer, attempts int, err error) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
 	}
-	jobKind := "batchReplication"
 	traceType := madmin.TraceBatchReplication
-	if d == batchKeyRotationMetricObject {
-		jobKind = "batchKeyRotation"
+	switch d {
+	case batchJobMetricKeyRotation:
 		traceType = madmin.TraceBatchKeyRotation
+	case batchJobMetricExpire:
+		traceType = madmin.TraceBatchExpire
 	}
-	funcName := fmt.Sprintf("%s.%s (job-name=%s)", jobKind, d.String(), job)
+	funcName := fmt.Sprintf("%s() (job-name=%s)", d.String(), job)
 	if attempts > 0 {
-		funcName = fmt.Sprintf("%s.%s (job-name=%s,attempts=%s)", jobKind, d.String(), job, humanize.Ordinal(attempts))
+		funcName = fmt.Sprintf("%s() (job-name=%s,attempts=%s)", d.String(), job, humanize.Ordinal(attempts))
 	}
 	return madmin.TraceInfo{
 		TraceType: traceType,
@@ -1661,9 +1872,49 @@ func batchJobTrace(d batchJobMetric, job string, startTime time.Time, duration t
 		NodeName:  globalLocalNodeName,
 		FuncName:  funcName,
 		Duration:  duration,
-		Path:      info.Name,
+		Path:      fmt.Sprintf("%s (versionID=%s)", info.TraceObjName(), info.TraceVersionID()),
 		Error:     errStr,
 	}
+}
+
+func (ri *batchJobInfo) metric() madmin.JobMetric {
+	m := madmin.JobMetric{
+		JobID:         ri.JobID,
+		JobType:       ri.JobType,
+		StartTime:     ri.StartTime,
+		LastUpdate:    ri.LastUpdate,
+		RetryAttempts: ri.RetryAttempts,
+		Complete:      ri.Complete,
+		Failed:        ri.Failed,
+	}
+
+	switch ri.JobType {
+	case string(madmin.BatchJobReplicate):
+		m.Replicate = &madmin.ReplicateInfo{
+			Bucket:           ri.Bucket,
+			Object:           ri.Object,
+			Objects:          ri.Objects,
+			ObjectsFailed:    ri.ObjectsFailed,
+			BytesTransferred: ri.BytesTransferred,
+			BytesFailed:      ri.BytesFailed,
+		}
+	case string(madmin.BatchJobKeyRotate):
+		m.KeyRotate = &madmin.KeyRotationInfo{
+			Bucket:        ri.Bucket,
+			Object:        ri.Object,
+			Objects:       ri.Objects,
+			ObjectsFailed: ri.ObjectsFailed,
+		}
+	case string(madmin.BatchJobExpire):
+		m.Expired = &madmin.ExpirationInfo{
+			Bucket:        ri.Bucket,
+			Object:        ri.Object,
+			Objects:       ri.Objects,
+			ObjectsFailed: ri.ObjectsFailed,
+		}
+	}
+
+	return m
 }
 
 func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics) {
@@ -1671,45 +1922,15 @@ func (m *batchJobMetrics) report(jobID string) (metrics *madmin.BatchJobMetrics)
 	m.RLock()
 	defer m.RUnlock()
 
-	match := true
+	if jobID != "" {
+		if job, ok := m.metrics[jobID]; ok {
+			metrics.Jobs[jobID] = job.metric()
+		}
+		return metrics
+	}
+
 	for id, job := range m.metrics {
-		if jobID != "" {
-			match = id == jobID
-		}
-		if !match {
-			continue
-		}
-
-		m := madmin.JobMetric{
-			JobID:         job.JobID,
-			JobType:       job.JobType,
-			StartTime:     job.StartTime,
-			LastUpdate:    job.LastUpdate,
-			RetryAttempts: job.RetryAttempts,
-			Complete:      job.Complete,
-			Failed:        job.Failed,
-		}
-
-		switch job.JobType {
-		case string(madmin.BatchJobReplicate):
-			m.Replicate = &madmin.ReplicateInfo{
-				Bucket:           job.Bucket,
-				Object:           job.Object,
-				Objects:          job.Objects,
-				ObjectsFailed:    job.ObjectsFailed,
-				BytesTransferred: job.BytesTransferred,
-				BytesFailed:      job.BytesFailed,
-			}
-		case string(madmin.BatchJobKeyRotate):
-			m.KeyRotate = &madmin.KeyRotationInfo{
-				Bucket:        job.Bucket,
-				Object:        job.Object,
-				Objects:       job.Objects,
-				ObjectsFailed: job.ObjectsFailed,
-			}
-		}
-
-		metrics.Jobs[id] = m
+		metrics.Jobs[id] = job.metric()
 	}
 	return metrics
 }
@@ -1754,17 +1975,50 @@ func (m *batchJobMetrics) save(jobID string, ri *batchJobInfo) {
 	m.metrics[jobID] = ri.clone()
 }
 
-func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int, info ObjectInfo) func(err error) {
+type objTraceInfoer interface {
+	TraceObjName() string
+	TraceVersionID() string
+}
+
+// TraceObjName returns name of object being traced
+func (td ObjectToDelete) TraceObjName() string {
+	return td.ObjectName
+}
+
+// TraceVersionID returns version-id of object being traced
+func (td ObjectToDelete) TraceVersionID() string {
+	return td.VersionID
+}
+
+// TraceObjName returns name of object being traced
+func (oi ObjectInfo) TraceObjName() string {
+	return oi.Name
+}
+
+// TraceVersionID returns version-id of object being traced
+func (oi ObjectInfo) TraceVersionID() string {
+	return oi.VersionID
+}
+
+func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int) func(info objTraceInfoer, err error) {
 	startTime := time.Now()
-	return func(err error) {
+	return func(info objTraceInfoer, err error) {
 		duration := time.Since(startTime)
+		if globalTrace.NumSubscribers(madmin.TraceBatch) > 0 {
+			globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
+			return
+		}
 		switch d {
-		case batchReplicationMetricObject:
+		case batchJobMetricReplication:
 			if globalTrace.NumSubscribers(madmin.TraceBatchReplication) > 0 {
 				globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
 			}
-		case batchKeyRotationMetricObject:
+		case batchJobMetricKeyRotation:
 			if globalTrace.NumSubscribers(madmin.TraceBatchKeyRotation) > 0 {
+				globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
+			}
+		case batchJobMetricExpire:
+			if globalTrace.NumSubscribers(madmin.TraceBatchExpire) > 0 {
 				globalTrace.Publish(batchJobTrace(d, job, startTime, duration, info, attempts, err))
 			}
 		}

@@ -38,9 +38,11 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/config/drive"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -125,13 +127,46 @@ const (
 	tlsClientSessionCacheSize = 100
 )
 
-var globalCLIContext = struct {
-	JSON, Quiet    bool
-	Anonymous      bool
-	StrictS3Compat bool
-}{}
+type poolDisksLayout struct {
+	cmdline string
+	layout  [][]string
+}
+
+type disksLayout struct {
+	legacy bool
+	pools  []poolDisksLayout
+}
+
+type serverCtxt struct {
+	JSON, Quiet               bool
+	Anonymous                 bool
+	StrictS3Compat            bool
+	Addr, ConsoleAddr         string
+	ConfigDir, CertsDir       string
+	configDirSet, certsDirSet bool
+	Interface                 string
+
+	RootUser, RootPwd string
+
+	FTP  []string
+	SFTP []string
+
+	UserTimeout       time.Duration
+	ConnReadDeadline  time.Duration
+	ConnWriteDeadline time.Duration
+
+	ShutdownTimeout   time.Duration
+	IdleTimeout       time.Duration
+	ReadHeaderTimeout time.Duration
+
+	// The layout of disks as interpreted
+	Layout disksLayout
+}
 
 var (
+	// Global user opts context
+	globalServerCtxt serverCtxt
+
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistErasure = false
 
@@ -241,6 +276,12 @@ var (
 
 	// The global callhome config
 	globalCallhomeConfig callhome.Config
+
+	// The global drive config
+	globalDriveConfig drive.Config
+
+	// The global cache config
+	globalCacheConfig cache.Config
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()

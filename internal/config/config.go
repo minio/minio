@@ -117,6 +117,8 @@ const (
 	CrawlerSubSys        = madmin.CrawlerSubSys
 	SubnetSubSys         = madmin.SubnetSubSys
 	CallhomeSubSys       = madmin.CallhomeSubSys
+	DriveSubSys          = madmin.DriveSubSys
+	BatchSubSys          = madmin.BatchSubSys
 
 	// Add new constants here (similar to above) if you add new fields to config.
 )
@@ -179,10 +181,13 @@ var SubSystemsDynamic = set.CreateStringSet(
 	HealSubSys,
 	SubnetSubSys,
 	CallhomeSubSys,
+	DriveSubSys,
 	LoggerWebhookSubSys,
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
 	StorageClassSubSys,
+	CacheSubSys,
+	BatchSubSys,
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.
@@ -203,6 +208,9 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	ScannerSubSys,
 	SubnetSubSys,
 	CallhomeSubSys,
+	DriveSubSys,
+	CacheSubSys,
+	BatchSubSys,
 )
 
 // Constant separators
@@ -1303,9 +1311,8 @@ func (c Config) getTargetKVS(subSys, target string, redactSecrets bool) KVS {
 			// clonedKV := kv
 			// clonedKV.Value = redactedSecret
 			// resultKVS = append(resultKVS, clonedKV)
-		} else {
-			resultKVS = append(resultKVS, kv)
 		}
+		resultKVS = append(resultKVS, kv)
 	}
 
 	return resultKVS

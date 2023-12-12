@@ -52,7 +52,8 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	status, err := globalSiteReplicationSys.AddPeerClusters(ctx, sites)
+	opts := getSRAddOptions(r)
+	status, err := globalSiteReplicationSys.AddPeerClusters(ctx, sites, opts)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -66,6 +67,11 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeSuccessResponseJSON(w, body)
+}
+
+func getSRAddOptions(r *http.Request) (opts madmin.SRAddOptions) {
+	opts.ReplicateILMExpiry = r.Form.Get("replicateILMExpiry") == "true"
+	return
 }
 
 // SRPeerJoin - PUT /minio/admin/v3/site-replication/join
@@ -192,7 +198,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 	}
 }
 
-// SRPeerReplicateBucketItem - PUT /minio/admin/v3/site-replication/bucket-meta
+// SRPeerReplicateBucketItem - PUT /minio/admin/v3/site-replication/peer/bucket-meta
 func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -253,6 +259,8 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		err = globalSiteReplicationSys.PeerBucketObjectLockConfigHandler(ctx, item.Bucket, item.ObjectLockConfig, item.UpdatedAt)
 	case madmin.SRBucketMetaTypeSSEConfig:
 		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig, item.UpdatedAt)
+	case madmin.SRBucketMetaLCConfig:
+		err = globalSiteReplicationSys.PeerBucketLCConfigHandler(ctx, item.Bucket, item.ExpiryLCConfig, item.UpdatedAt)
 	}
 	if err != nil {
 		logger.LogIf(ctx, err)
@@ -334,6 +342,7 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 		opts.Users = true
 		opts.Policies = true
 		opts.Groups = true
+		opts.ILMExpiryRules = true
 	}
 	info, err := globalSiteReplicationSys.SiteReplicationStatus(ctx, objectAPI, opts)
 	if err != nil {
@@ -383,7 +392,9 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	status, err := globalSiteReplicationSys.EditPeerCluster(ctx, site)
+
+	opts := getSREditOptions(r)
+	status, err := globalSiteReplicationSys.EditPeerCluster(ctx, site, opts)
 	if err != nil {
 		logger.LogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -396,6 +407,12 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 	}
 
 	writeSuccessResponseJSON(w, body)
+}
+
+func getSREditOptions(r *http.Request) (opts madmin.SREditOptions) {
+	opts.DisableILMExpiryReplication = r.Form.Get("disableILMExpiryReplication") == "true"
+	opts.EnableILMExpiryReplication = r.Form.Get("enableILMExpiryReplication") == "true"
+	return
 }
 
 // SRPeerEdit - PUT /minio/admin/v3/site-replication/peer/edit
@@ -422,12 +439,37 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// SRStateEdit - PUT /minio/admin/v3/site-replication/state/edit
+//
+// used internally to tell current cluster to update site replication state
+func (a adminAPIHandlers) SRStateEdit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.SiteReplicationOperationAction)
+	if objectAPI == nil {
+		return
+	}
+
+	var state madmin.SRStateEditReq
+	if err := parseJSONBody(ctx, r.Body, &state, ""); err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if err := globalSiteReplicationSys.PeerStateEditReq(ctx, state); err != nil {
+		logger.LogIf(ctx, err)
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+}
+
 func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 	q := r.Form
 	opts.Buckets = q.Get("buckets") == "true"
 	opts.Policies = q.Get("policies") == "true"
 	opts.Groups = q.Get("groups") == "true"
 	opts.Users = q.Get("users") == "true"
+	opts.ILMExpiryRules = q.Get("ilm-expiry-rules") == "true"
+	opts.PeerState = q.Get("peer-state") == "true"
 	opts.Entity = madmin.GetSREntityType(q.Get("entity"))
 	opts.EntityValue = q.Get("entityvalue")
 	opts.ShowDeleted = q.Get("showDeleted") == "true"

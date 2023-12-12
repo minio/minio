@@ -488,7 +488,12 @@ func (store *IAMStoreSys) PurgeExpiredSTS(ctx context.Context) error {
 
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
-func (store *IAMStoreSys) LoadIAMCache(ctx context.Context) error {
+func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) error {
+	bootstrapTraceMsg := func(s string) {
+		if firstTime {
+			bootstrapTraceMsg(s)
+		}
+	}
 	bootstrapTraceMsg("loading IAM data")
 
 	newCache := newIamCache()
@@ -655,7 +660,7 @@ func (store *IAMStoreSys) GroupNotificationHandler(ctx context.Context, group st
 
 // PolicyDBGet - fetches policies associated with the given user or group, and
 // additional groups if provided.
-func (store *IAMStoreSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
+func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, error) {
 	if name == "" {
 		return nil, errInvalidArgument
 	}
@@ -663,19 +668,17 @@ func (store *IAMStoreSys) PolicyDBGet(name string, isGroup bool, groups ...strin
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, _, err := cache.policyDBGet(store, name, isGroup)
+	policies, _, err := cache.policyDBGet(store, name, false)
 	if err != nil {
 		return nil, err
 	}
 
-	if !isGroup {
-		for _, group := range groups {
-			ps, _, err := cache.policyDBGet(store, group, true)
-			if err != nil {
-				return nil, err
-			}
-			policies = append(policies, ps...)
+	for _, group := range groups {
+		ps, _, err := cache.policyDBGet(store, group, true)
+		if err != nil {
+			return nil, err
 		}
+		policies = append(policies, ps...)
 	}
 
 	return policies, nil
@@ -1218,6 +1221,9 @@ func (store *IAMStoreSys) GetPolicy(name string) (policy.Policy, error) {
 			return v.Policy, errNoSuchPolicy
 		}
 		toMerge = append(toMerge, v.Policy)
+	}
+	if len(toMerge) == 0 {
+		return policy.Policy{}, errNoSuchPolicy
 	}
 	return policy.MergePolicies(toMerge...), nil
 }

@@ -364,7 +364,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	// Purge any existing temporary file, okay to ignore errors here.
 	defer disk.Delete(context.TODO(), minioMetaBucket, tmpFormat, DeleteOptions{
 		Recursive: false,
-		Force:     false,
+		Immediate: false,
 	})
 
 	// write to unique file.
@@ -388,6 +388,12 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 
 // loadFormatErasure - loads format.json from disk.
 func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
+	// Ensure that the grid is online.
+	if _, err := disk.DiskInfo(context.Background(), false); err != nil {
+		if errors.Is(err, errDiskNotFound) {
+			return nil, err
+		}
+	}
 	buf, err := disk.ReadAll(context.TODO(), minioMetaBucket, formatConfigFile)
 	if err != nil {
 		// 'file not found' and 'volume not found' as

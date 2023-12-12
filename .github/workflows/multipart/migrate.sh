@@ -5,11 +5,19 @@ set -x
 ## change working directory
 cd .github/workflows/multipart/
 
-docker-compose -f docker-compose-site1.yaml rm -s -f
-docker-compose -f docker-compose-site2.yaml rm -s -f
-for volume in $(docker volume ls -q | grep minio); do
-	docker volume rm ${volume}
-done
+function cleanup() {
+	docker-compose -f docker-compose-site1.yaml rm -s -f || true
+	docker-compose -f docker-compose-site2.yaml rm -s -f || true
+	for volume in $(docker volume ls -q | grep minio); do
+		docker volume rm ${volume} || true
+	done
+
+	docker system prune -f || true
+	docker volume prune -f || true
+	docker volume rm $(docker volume ls -q -f dangling=true) || true
+}
+
+cleanup
 
 if [ ! -f ./mc ]; then
 	wget --quiet -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
@@ -101,15 +109,7 @@ if [ $failed_count_site2 -ne 0 ]; then
 	exit 1
 fi
 
-docker-compose -f docker-compose-site1.yaml rm -s -f
-docker-compose -f docker-compose-site2.yaml rm -s -f
-for volume in $(docker volume ls -q | grep minio); do
-	docker volume rm ${volume}
-done
-
-docker system prune -f || true
-docker volume prune -f || true
-docker volume rm $(docker volume ls -q -f dangling=true) || true
+cleanup
 
 ## change working directory
 cd ../../../

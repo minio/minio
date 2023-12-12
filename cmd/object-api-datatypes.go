@@ -20,6 +20,7 @@ package cmd
 import (
 	"io"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -149,6 +150,9 @@ type ObjectInfo struct {
 	// Date and time at which the object is no longer able to be cached
 	Expires time.Time
 
+	// Cache-Control - Specifies caching behavior along the request/reply chain
+	CacheControl string
+
 	// Specify object storage class
 	StorageClass string
 
@@ -198,6 +202,15 @@ type ObjectInfo struct {
 
 	DataBlocks   int
 	ParityBlocks int
+}
+
+// ExpiresStr returns a stringified version of Expires header in http.TimeFormat
+func (o ObjectInfo) ExpiresStr() string {
+	var expires string
+	if !o.Expires.IsZero() {
+		expires = o.Expires.UTC().Format(http.TimeFormat)
+	}
+	return expires
 }
 
 // ArchiveInfo returns any saved zip archive meta information.

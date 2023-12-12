@@ -31,10 +31,11 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/bucket/bandwidth"
-	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/sync/errgroup"
+
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/logger"
 )
 
 // This file contains peer related notifications. For sending notifications to
@@ -98,6 +99,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 			Host: addr,
 		}
 		for i := 0; i < g.retryCount; i++ {
+			g.errs[index].Err = nil
 			if err := f(); err != nil {
 				g.errs[index].Err = err
 				// Last iteration log the error.
@@ -973,8 +975,11 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 		for _, ep := range pool.Endpoints {
 			if offlineHost == "" && ep.IsLocal || offlineHost == ep.Host {
 				offlineDisks = append(offlineDisks, madmin.Disk{
-					Endpoint: ep.String(),
-					State:    string(madmin.ItemOffline),
+					Endpoint:  ep.String(),
+					State:     string(madmin.ItemOffline),
+					PoolIndex: ep.PoolIdx,
+					SetIndex:  ep.SetIdx,
+					DiskIndex: ep.DiskIdx,
 				})
 			}
 		}

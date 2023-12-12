@@ -25,6 +25,7 @@ type lcEventSrc uint8
 //revive:disable:var-naming Underscores is used here to indicate where common prefix ends and the enumeration name begins
 const (
 	lcEventSrc_None lcEventSrc = iota
+	lcEventSrc_Heal
 	lcEventSrc_Scanner
 	lcEventSrc_Decom
 	lcEventSrc_Rebal

@@ -9,7 +9,7 @@ ENV CGO_ENABLED 0
 # Install curl and minisign
 RUN apk add -U --no-cache ca-certificates && \
     apk add -U --no-cache curl && \
-    go install aead.dev/minisign/cmd/minisign@v0.2.0
+    go install aead.dev/minisign/cmd/minisign@v0.2.1
 
 # Download minio binary and signature file
 RUN curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.fips -o /go/bin/minio && \
@@ -19,7 +19,7 @@ RUN curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archiv
 # Verify binary signature using public key "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGavRUN"
 RUN minisign -Vqm /go/bin/minio -x /go/bin/minio.minisig -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav
 
-FROM registry.access.redhat.com/ubi9/ubi-micro:9.2
+FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 
 ARG RELEASE
 

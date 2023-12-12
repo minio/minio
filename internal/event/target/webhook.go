@@ -34,7 +34,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/event"
-	xioutil "github.com/minio/minio/internal/ioutil"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
@@ -196,7 +196,7 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	if err != nil {
 		return err
 	}
-	defer xioutil.DiscardReader(resp.Body)
+	defer xhttp.DrainBody(resp.Body)
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("sending event failed with %v", resp.Status)
