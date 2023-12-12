@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -3432,22 +3433,10 @@ func isBktQuotaCfgReplicated(total int, quotaCfgs []*madmin.BucketQuota) bool {
 				sort.Slice(qRule.APIs, func(i, j int) bool {
 					return qRule.APIs[i] < qRule.APIs[j]
 				})
-				if testEqual(rule.APIs, qRule.APIs) && rule.ConcurrentRequestsCount != qRule.ConcurrentRequestsCount {
+				if slices.Equal(rule.APIs, qRule.APIs) && rule.ConcurrentRequestsCount != qRule.ConcurrentRequestsCount {
 					return false
 				}
 			}
-		}
-	}
-	return true
-}
-
-func testEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
 		}
 	}
 	return true

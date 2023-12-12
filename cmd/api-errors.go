@@ -318,6 +318,7 @@ const (
 
 	// Bucket Quota error codes
 	ErrAdminBucketQuotaExceeded
+	ErrAdminBucketThrottleQuotaExceeded
 	ErrAdminNoSuchQuotaConfiguration
 
 	ErrHealNotImplemented
@@ -1432,6 +1433,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Bucket quota exceeded",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminBucketThrottleQuotaExceeded: {
+		Code:           "XMinioAdminBucketThrottleQuotaExceeded",
+		Description:    "Bucket throttle quota exceeded",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminNoSuchQuotaConfiguration: {
 		Code:           "XMinioAdminNoSuchQuotaConfiguration",
 		Description:    "The quota configuration does not exist",
@@ -2306,6 +2312,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrPreconditionFailed
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
+	case BucketThrottleQuotaExceeded:
+		apiErr = ErrAdminBucketThrottleQuotaExceeded
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:

@@ -450,8 +450,6 @@ github.com/minio/highwayhash v1.0.2 h1:Aak5U0nElisjDCfPSG79Tgzkn2gl66NxOMspRrKnA
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/kes-go v0.2.0 h1:HA33arq9s3MErbsj3PAXFVfFo4U4yw7lTKQ5kWFrpCA=
 github.com/minio/kes-go v0.2.0/go.mod h1:VorHLaIYis9/MxAHAtXN4d8PUMNKhIxTIlvFt0hBOEo=
-github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9 h1:Rpz09w+Y9Bcq3MvNbxA/IFynLjVm6L62o5P7oMwNMWc=
-github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9/go.mod h1:4QN2NftLSV7MdlT50dkrenOMmNVHluxTvlqJou3hte8=
 github.com/minio/mc v0.0.0-20231127112613-5e6ae2172e25 h1:8jT9Tz4opgrX6mnyFWW+TQ90AnrJqJ0mzeFXUWDHNGo=
 github.com/minio/mc v0.0.0-20231127112613-5e6ae2172e25/go.mod h1:8kat72LmpzZ2/xykDcq64tcRRJkkWo1Kd/Z5coC6t0w=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
@@ -623,6 +621,8 @@ github.com/shoenig/go-m1cpu v0.1.6 h1:nxdKQNcEB6vzgA2E2bvzKIYRuNj7XNJ4S/aRSwKzFt
 github.com/shoenig/go-m1cpu v0.1.6/go.mod h1:1JJMcUBvfNwpq05QDQVAnx3gUHr9IYF7GNg9SUEw2VQ=
 github.com/shoenig/test v0.6.4 h1:kVTaSd7WLz5WZ2IaoM0RSzRsUD+m8wRR+5qvntpn4LU=
 github.com/shoenig/test v0.6.4/go.mod h1:byHiCGXqrVaflBLAMq/srcZIHynQPQgeyvkvXnjqq0k=
+github.com/shtripat/madmin-go/v3 v3.0.0-20231212054825-249cd39e1cd5 h1:/k3HzxOEjeB6BOwAdZLlViMu6pCT70vLDTpWnmiNBUs=
+github.com/shtripat/madmin-go/v3 v3.0.0-20231212054825-249cd39e1cd5/go.mod h1:4QN2NftLSV7MdlT50dkrenOMmNVHluxTvlqJou3hte8=
 github.com/sirupsen/logrus v1.2.0/go.mod h1:LxeOpSwHxABJmUn/MG1IvRgCAasNZTLOkJPxbbu5VWo=
 github.com/sirupsen/logrus v1.4.2/go.mod h1:tLMulIdttU9McNUspp0xgXVQah82FyeX6MwdIuYE2rE=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=

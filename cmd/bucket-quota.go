@@ -22,12 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/v2/wildcard"
 )
 
 // BucketQuotaSys - map of bucket and quota configuration.
@@ -100,7 +100,7 @@ func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota,
 	return
 }
 
-func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, size int64) error {
+func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket, api string, size int64) error {
 	if size < 0 {
 		return nil
 	}
@@ -133,31 +133,29 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 		}
 	}
 
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
-		return err
-	}
-
-	return nil
+	return enforceBucketThrottle(bucket, api, q)
 }
 
-func enforceBucketQuotaHard(ctx context.Context, bucket string, size int64) error {
+func enforceBucketQuotaHard(ctx context.Context, bucket, api string, size int64) error {
 	if globalBucketQuotaSys == nil {
 		return nil
 	}
-	return globalBucketQuotaSys.enforceQuotaHard(ctx, bucket, size)
+	return globalBucketQuotaSys.enforceQuotaHard(ctx, bucket, api, size)
 }
 
-func enforceBucketThrottle(ctx context.Context, bucket string) error {
-	q, err := globalBucketQuotaSys.Get(ctx, bucket)
-	if err != nil {
-		return err
+func enforceBucketThrottle(bucket, api string, qCfg *madmin.BucketQuota) error {
+	// if throttle rules not set, return
+	if !qCfg.IsBucketThrottled() {
+		return nil
 	}
-	// Check the breach of throttle rules
+
+	// Create map of unique APIs and their allowed no of calls from throttle rules
 	s3AllowedReqCountMap := make(map[string]uint64)
-	for _, rule := range q.ThrottleRules {
+	for _, rule := range qCfg.ThrottleRules {
 		for _, api := range rule.APIs {
 			if count, ok := s3AllowedReqCountMap[api]; ok {
-				if count < rule.ConcurrentRequestsCount {
+				// apply the smaller value for the concurrent request count for the API
+				if count > rule.ConcurrentRequestsCount {
 					s3AllowedReqCountMap[api] = rule.ConcurrentRequestsCount
 				}
 			} else {
@@ -165,12 +163,22 @@ func enforceBucketThrottle(ctx context.Context, bucket string) error {
 			}
 		}
 	}
-	currS3ReqStats := globalHTTPStats.toServerHTTPStats().CurrentS3Requests.APIStats
-	for api, currReqCount := range currS3ReqStats {
-		for allowedAPI, allowedCount := range s3AllowedReqCountMap {
-			// rules can have exact API names or patterns like `Get*`
-			if matched, _ := regexp.MatchString(strings.ToLower(allowedAPI), strings.ToLower(api)); matched && uint64(currReqCount) > allowedCount {
-				return BucketQuotaExceeded{Bucket: bucket}
+
+	// Get the current count for the API from stats
+	currReqCount, ok := globalHTTPStats.toServerHTTPStats().CurrentS3Requests.APIStats[strings.ToLower(api)]
+	if !ok {
+		// return nil as stats for called API not found.
+		// ideally it wont happen ever
+		return nil
+	}
+
+	// Check the breach of throttle rules
+	for allowedAPI, allowedCount := range s3AllowedReqCountMap {
+		// rules can have exact API names or patterns like `Get*`
+		if matched := wildcard.MatchSimple(strings.ToLower(allowedAPI), strings.ToLower(api)); matched && uint64(currReqCount) > allowedCount {
+			return BucketThrottleQuotaExceeded{
+				Bucket: bucket,
+				Err:    fmt.Errorf("no of requests exceeded the allowed upper limit %d", allowedCount),
 			}
 		}
 	}

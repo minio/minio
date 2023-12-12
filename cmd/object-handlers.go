@@ -137,7 +137,12 @@ func (api objectAPIHandlers) SelectObjectContentHandler(w http.ResponseWriter, r
 	}
 
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "SelectObject", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -722,7 +727,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "GetObject", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1077,7 +1087,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "HeadObject", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1375,7 +1390,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	length := actualSize
 
 	if !cpSrcDstSame {
-		if err := enforceBucketQuotaHard(ctx, dstBucket, actualSize); err != nil {
+		if err := enforceBucketQuotaHard(ctx, dstBucket, "CopyObject", actualSize); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
@@ -1941,7 +1956,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
+	if err := enforceBucketQuotaHard(ctx, bucket, "PutObject", size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -2353,7 +2368,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
+	if err := enforceBucketQuotaHard(ctx, bucket, "PutObjectExtract", size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -2636,7 +2651,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "DeleteObject", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -2817,7 +2837,12 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "PutObjectLegalHold", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -2917,7 +2942,12 @@ func (api objectAPIHandlers) GetObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "GetObjectLegalHold", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -2986,7 +3016,12 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 	}
 
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "PutObjectRetention", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3094,7 +3129,12 @@ func (api objectAPIHandlers) GetObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "GetObjectRetention", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3171,7 +3211,12 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "GetObjectTagging", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3246,7 +3291,12 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "PutObjectTagging", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3336,7 +3386,12 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 	}
 
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "DeleteObjectTagging", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3417,7 +3472,12 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 		return
 	}
 	// enforce bucket throttle quota
-	if err := enforceBucketThrottle(ctx, bucket); err != nil {
+	q, err := globalBucketQuotaSys.Get(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	if err := enforceBucketThrottle(bucket, "PostRestoreObject", q); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}

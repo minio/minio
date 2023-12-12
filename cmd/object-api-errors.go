@@ -397,6 +397,13 @@ func (e BucketQuotaExceeded) Error() string {
 	return "Bucket quota exceeded for bucket: " + e.Bucket
 }
 
+// BucketThrottleQuotaExceeded - bucket throttle quota exceeded
+type BucketThrottleQuotaExceeded GenericError
+
+func (e BucketThrottleQuotaExceeded) Error() string {
+	return "Bucket throttle quota exceeded for bucket: " + e.Bucket + ", " + e.Err.Error()
+}
+
 // BucketReplicationConfigNotFound - no bucket replication config found
 type BucketReplicationConfigNotFound GenericError
 

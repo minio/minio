@@ -384,7 +384,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := enforceBucketQuotaHard(ctx, dstBucket, actualPartSize); err != nil {
+	if err := enforceBucketQuotaHard(ctx, dstBucket, "CopyObjectPart", actualPartSize); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -680,7 +680,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	if err := enforceBucketQuotaHard(ctx, bucket, size); err != nil {
+	if err := enforceBucketQuotaHard(ctx, bucket, "PutObjectPart", size); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
