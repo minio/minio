@@ -82,6 +82,15 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
+	createNewRule := r.Form.Get("createNewRule") == "true"
+	update := r.Form.Get("update") == "true"
+	if !createNewRule && !update {
+		if ok, api, id := quotaConfig.HasDuplicateThrottleRules(); ok {
+			writeErrorResponse(ctx, w, toAPIError(ctx, fmt.Errorf("throttle rule already set for API: %s unde rule ID: %s", api, id)), r.URL)
+			return
+		}
+	}
+
 	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)

@@ -398,10 +398,19 @@ func (e BucketQuotaExceeded) Error() string {
 }
 
 // BucketThrottleQuotaExceeded - bucket throttle quota exceeded
-type BucketThrottleQuotaExceeded GenericError
+type BucketThrottleQuotaExceeded struct {
+	Bucket               string
+	ThrottleRuleID       string
+	AllowedRequestsCount uint64
+	CurrentRequestCount  uint64
+	API                  string
+	Err                  error
+}
 
 func (e BucketThrottleQuotaExceeded) Error() string {
-	return "Bucket throttle quota exceeded for bucket: " + e.Bucket + ", " + e.Err.Error()
+	return fmt.Sprintf(
+		"Throttle quota exceeded. Applied RuleID: %s, Allowed Requests Count: %v, Current Requets Count: %v, API: %s",
+		e.ThrottleRuleID, e.AllowedRequestsCount, e.CurrentRequestCount, e.API)
 }
 
 // BucketReplicationConfigNotFound - no bucket replication config found

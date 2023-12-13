@@ -149,21 +149,6 @@ func enforceBucketThrottle(bucket, api string, qCfg *madmin.BucketQuota) error {
 		return nil
 	}
 
-	// Create map of unique APIs and their allowed no of calls from throttle rules
-	s3AllowedReqCountMap := make(map[string]uint64)
-	for _, rule := range qCfg.ThrottleRules {
-		for _, api := range rule.APIs {
-			if count, ok := s3AllowedReqCountMap[api]; ok {
-				// apply the smaller value for the concurrent request count for the API
-				if count > rule.ConcurrentRequestsCount {
-					s3AllowedReqCountMap[api] = rule.ConcurrentRequestsCount
-				}
-			} else {
-				s3AllowedReqCountMap[api] = rule.ConcurrentRequestsCount
-			}
-		}
-	}
-
 	// Get the current count for the API from stats
 	currReqCount, ok := globalHTTPStats.toServerHTTPStats().CurrentS3Requests.APIStats[strings.ToLower(api)]
 	if !ok {
@@ -174,22 +159,28 @@ func enforceBucketThrottle(bucket, api string, qCfg *madmin.BucketQuota) error {
 
 	// Check the breach of throttle rules
 	validAllowedCount := uint64(0) // set an invalid value
-	for allowedAPI, allowedCount := range s3AllowedReqCountMap {
+	var appliedRuleID string
+	for allowedAPI, rule := range qCfg.ThrottleRulesMap() {
 		// rules can have exact API names or patterns like `Get*`
 		// first check exact match for API name, if not found then check wildcard
 		if strings.EqualFold(allowedAPI, api) {
-			validAllowedCount = allowedCount
+			validAllowedCount = rule.ConcurrentRequestsCount
+			appliedRuleID = rule.ID
 			break // exact match found, break
 		}
 		if wildcard.MatchSimple(strings.ToLower(allowedAPI), strings.ToLower(api)) {
-			validAllowedCount = allowedCount
+			validAllowedCount = rule.ConcurrentRequestsCount
+			appliedRuleID = rule.ID
 			break // pattern match found, break
 		}
 	}
 	if validAllowedCount > 0 && uint64(currReqCount) > validAllowedCount {
 		return BucketThrottleQuotaExceeded{
-			Bucket: bucket,
-			Err:    fmt.Errorf("no of requests exceeded the allowed upper limit %d", validAllowedCount),
+			Bucket:               bucket,
+			ThrottleRuleID:       appliedRuleID,
+			AllowedRequestsCount: validAllowedCount,
+			CurrentRequestCount:  uint64(currReqCount),
+			API:                  api,
 		}
 	}
 

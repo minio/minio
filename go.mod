@@ -52,9 +52,9 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
 	github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9
-	github.com/minio/minio-go/v7 v7.0.65-0.20231122233251-1f7dd6b7e3e1
+	github.com/minio/minio-go/v7 v7.0.65-0.20231130060928-54e115c40e66
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg/v2 v2.0.5-0.20231205011044-ec6b8d58893a
+	github.com/minio/pkg/v2 v2.0.5
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5
@@ -254,4 +254,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9 => github.com/shtripat/madmin-go/v3 v3.0.0-20231212054825-249cd39e1cd5
+replace (
+	github.com/minio/console v0.42.1 => github.com/shtripat/minio-console v0.0.0-20231213104356-8fdb34418ba2
+	github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9 => github.com/shtripat/madmin-go/v3 v3.0.0-20231213103602-e8c5c0055b28
+	github.com/minio/mc v0.0.0-20231127112613-5e6ae2172e25 => github.com/shtripat/mc v0.0.0-20231213104014-9da1fe3d3424
+)

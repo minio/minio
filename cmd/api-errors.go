@@ -2312,8 +2312,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrPreconditionFailed
 	case BucketQuotaExceeded:
 		apiErr = ErrAdminBucketQuotaExceeded
-	case BucketThrottleQuotaExceeded:
-		apiErr = ErrAdminBucketThrottleQuotaExceeded
 	case *event.ErrInvalidEventName:
 		apiErr = ErrEventNotification
 	case *event.ErrInvalidARN:
@@ -2501,6 +2499,12 @@ func toAPIError(ctx context.Context, err error) APIError {
 				HTTPStatusCode: e.Response().StatusCode,
 			}
 			// Add more other SDK related errors here if any in future.
+		case BucketThrottleQuotaExceeded:
+			apiErr = APIError{
+				Code:           "XMinioAdminBucketThrottleQuotaExceeded",
+				Description:    e.Error(),
+				HTTPStatusCode: errorCodes[ErrAdminBucketThrottleQuotaExceeded].HTTPStatusCode,
+			}
 		default:
 			//nolint:gocritic
 			if errors.Is(err, errMalformedEncoding) || errors.Is(err, errChunkTooBig) || errors.Is(err, strconv.ErrRange) {
