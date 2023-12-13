@@ -253,7 +253,11 @@ if [ $? -ne 0 ]; then
 	exit_1
 fi
 sleep 5
-
+val=$(./mc tag list minio1/newbucket/README.md --version-id "${vID}" --json | jq -r .tagset.key)
+if [ "${val}" != "val" ]; then
+	echo "expected bucket tag to have replicated, exiting..."
+	exit_1
+fi
 ./mc tag remove --version-id "${vID}" minio2/newbucket/README.md
 if [ $? -ne 0 ]; then
 	echo "expecting tag removal to be successful. exiting.."
