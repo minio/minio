@@ -1547,7 +1547,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		}
 	}
 
-	if !skipAccessChecks(volume) && !opts.Healing && fi.TransitionStatus == "" && !fi.InlineData() && len(fi.Data) == 0 && fi.DataDir != "" && fi.DataDir != emptyUUID {
+	if !skipAccessChecks(volume) && !opts.Healing && fi.TransitionStatus == "" && !fi.InlineData() && len(fi.Data) == 0 && fi.DataDir != "" && fi.DataDir != emptyUUID && fi.VersionPurgeStatus().Empty() {
 		// Verify if the dataDir is present or not when the data
 		// is not inlined to make sure we return correct errors
 		// during HeadObject().
