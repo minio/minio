@@ -31,11 +31,11 @@ require (
 	github.com/gobwas/ws v1.3.1
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/gomodule/redigo v1.8.9
-	github.com/google/uuid v1.4.0
+	github.com/google/uuid v1.5.0
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/inconshreveable/mousetrap v1.1.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.17.3
+	github.com/klauspost/compress v1.17.4
 	github.com/klauspost/cpuid/v2 v2.2.6
 	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.6
@@ -52,7 +52,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kes-go v0.2.0
 	github.com/minio/madmin-go/v3 v3.0.37-0.20231211192618-d20cff0b11d9
-	github.com/minio/minio-go/v7 v7.0.65-0.20231122233251-1f7dd6b7e3e1
+	github.com/minio/minio-go/v7 v7.0.66-0.20231212234720-a5c27bde3e1d
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.5-0.20231205011044-ec6b8d58893a
 	github.com/minio/selfupdate v0.6.0
