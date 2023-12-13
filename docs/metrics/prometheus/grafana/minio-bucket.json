@@ -364,7 +364,7 @@
       "title": "S3 API Request 4xx Error Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -456,7 +456,7 @@
       "title": "Inflight Requests Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -548,7 +548,7 @@
       "title": "Total Requests Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -640,7 +640,7 @@
       "title": "Total Data Sent Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -732,7 +732,7 @@
       "title": "Usage Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -824,7 +824,7 @@
       "title": "Objects Increase Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -916,7 +916,7 @@
       "title": "Versions Increase Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1008,7 +1008,7 @@
       "title": "Delete Markers Increase Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1189,7 +1189,7 @@
       "title": "Total Data Received Rate",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1269,7 +1269,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_replication_received_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (minio_bucket_replication_received_bytes{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Data Received [{{bucket}}]",
@@ -1278,10 +1278,10 @@
       ],
       "thresholds": [],
       "timeRegions": [],
-      "title": "Replication Data Received Rate ",
+      "title": "Replication Data Received",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1361,7 +1361,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_replication_sent_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (minio_bucket_replication_sent_bytes{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Replication Data Sent [{{bucket}}]",
@@ -1370,10 +1370,10 @@
       ],
       "thresholds": [],
       "timeRegions": [],
-      "title": "Replication Data Sent Rate ",
+      "title": "Replication Data Sent",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1557,7 +1557,7 @@
       "title": "Replication Failed Objects",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1649,7 +1649,7 @@
       "title": "Replicated In Objects",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1741,7 +1741,7 @@
       "title": "Replicated Out Objects",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1833,7 +1833,7 @@
       "title": "Last Hour Failed Size",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -1925,7 +1925,7 @@
       "title": "Last Hour Failed Objects",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2017,7 +2017,7 @@
       "title": "Last Minute Failed Size",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
@@ -2109,7 +2109,7 @@
       "title": "Last Minute Failed Objects",
       "tooltip": {
         "shared": true,
-        "sort": 0,
+        "sort": 2,
         "value_type": "individual"
       },
       "type": "graph",
