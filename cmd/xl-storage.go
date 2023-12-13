@@ -2275,6 +2275,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			errDiskNotFound,
 			errUnformattedDisk,
 			errMaxVersionsExceeded,
+			errFileAccessDenied,
 		}
 		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.
@@ -2282,7 +2283,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				s.drivePath,
 				srcVolume, srcPath,
 				dstVolume, dstPath,
-				err), "xl-storage-rename-data-"+srcVolume+"-"+dstVolume)
+				err), "xl-storage-rename-data-"+dstVolume)
 		}
 		if err == nil && s.globalSync {
 			globalSync()
