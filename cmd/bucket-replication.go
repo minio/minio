@@ -3245,7 +3245,11 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 		return r
 	}
 
-	for _, localDrive := range globalLocalDrives {
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	for _, localDrive := range localDrives {
 		r := newReader()
 		err := localDrive.CreateFile(ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
 		r.Close()
@@ -3307,7 +3311,12 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 
 		return re, nil
 	}
-	for _, localDrive := range globalLocalDrives {
+
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	for _, localDrive := range localDrives {
 		rc, err := localDrive.ReadFileStream(p.ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), 0, -1)
 		if err != nil {
 			continue
