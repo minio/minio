@@ -351,6 +351,25 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
+
+	// Check if target is a MinIO server and alive
+	hcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	scheme := "http"
+	if tgt.Secure {
+		scheme = "https"
+	}
+	result := <-sys.hcClient.Alive(hcCtx, madmin.AliveOpts{}, madmin.ServerProperties{
+		Endpoint: tgt.Endpoint,
+		Scheme:   scheme,
+	})
+	cancel()
+	if result.Error != nil {
+		return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: result.Error, AccessKey: tgt.Credentials.AccessKey}
+	}
+	if !result.Online {
+		return BucketRemoteTargetNotAlive{Bucket: tgt.TargetBucket}
+	}
+
 	sys.Lock()
 	defer sys.Unlock()
 
