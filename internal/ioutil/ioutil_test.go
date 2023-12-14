@@ -28,19 +28,6 @@ import (
 	"time"
 )
 
-type sleepReader struct {
-	timeout time.Duration
-}
-
-func (r *sleepReader) Read(p []byte) (n int, err error) {
-	time.Sleep(r.timeout)
-	return len(p), nil
-}
-
-func (r *sleepReader) Close() error {
-	return nil
-}
-
 type sleepWriter struct {
 	timeout time.Duration
 }

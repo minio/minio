@@ -104,13 +104,6 @@ type ioret struct {
 	err error
 }
 
-// DeadlineReader deadline reader with timeout
-type DeadlineReader struct {
-	io.ReadCloser
-	timeout time.Duration
-	err     error
-}
-
 // DeadlineWriter deadline writer with timeout
 type DeadlineWriter struct {
 	io.WriteCloser
