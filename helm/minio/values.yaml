@@ -500,7 +500,7 @@ networkPolicy:
   enabled: false
   # Specifies whether the policies created will be standard Network Policies (flavor: kubernetes)
   # or Cilium Network Policies (flavor: cilium)
-  flavor: cilium
+  flavor: kubernetes
   allowExternal: true
   # only when using flavor: cilium
   egressEntities:
