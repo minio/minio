@@ -1643,7 +1643,7 @@ func getBucketTTFBMetric() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketObjectDistributionMD())
+		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketTTFBDistributionMD())
 	})
 	return mg
 }
