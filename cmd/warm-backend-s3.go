@@ -125,7 +125,8 @@ func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 	case conf.AWSRoleWebIdentityTokenFile != "" && conf.AWSRoleARN != "":
 		sessionName := conf.AWSRoleSessionName
 		if sessionName == "" {
-			sessionName = mustGetUUID()
+			// RoleSessionName has a limited set of characters (https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html)
+			sessionName = "minio-tier-" + mustGetUUID()
 		}
 		s3WebIdentityIAM := credentials.IAM{
 			Client: &http.Client{
