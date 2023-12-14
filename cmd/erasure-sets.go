@@ -262,6 +262,10 @@ func (s *erasureSets) connectDisks() {
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			s.erasureDisks[setIndex][diskIndex] = disk
 			s.erasureDisksMu.Unlock()
+
+			globalLocalDrivesMu.Lock()
+			globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
+			globalLocalDrivesMu.Unlock()
 		}(endpoint)
 	}
 
