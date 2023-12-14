@@ -498,7 +498,13 @@ oidc:
 
 networkPolicy:
   enabled: false
+  # Specifies whether the policies created will be standard Network Policies (flavor: kubernetes)
+  # or Cilium Network Policies (flavor: cilium)
+  flavor: cilium
   allowExternal: true
+  # only when using flavor: cilium
+  egressEntities:
+   - kube-apiserver
 
 ## PodDisruptionBudget settings
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
