@@ -639,17 +639,14 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
 		// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
 		// Windows can lock up with this optimization, so we fall back to regular copy.
-		dr, ok := rc.(*xioutil.DeadlineReader)
+		sr, ok := rc.(*sendFileReader)
 		if ok {
-			sr, ok := dr.ReadCloser.(*sendFileReader)
-			if ok {
-				_, err = rf.ReadFrom(sr.Reader)
-				if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-					logger.LogIf(r.Context(), err)
-				}
-				if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
-					return
-				}
+			_, err = rf.ReadFrom(sr.Reader)
+			if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+				logger.LogIf(r.Context(), err)
+			}
+			if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
+				return
 			}
 		}
 	} // Fallback to regular copy
