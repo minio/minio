@@ -111,46 +111,6 @@ type DeadlineReader struct {
 	err     error
 }
 
-// NewDeadlineReader wraps a writer to make it respect given deadline
-// value per Write(). If there is a blocking write, the returned Reader
-// will return whenever the timer hits (the return values are n=0
-// and err=context.DeadlineExceeded.)
-func NewDeadlineReader(r io.ReadCloser, timeout time.Duration) io.ReadCloser {
-	return &DeadlineReader{ReadCloser: r, timeout: timeout}
-}
-
-func (r *DeadlineReader) Read(buf []byte) (int, error) {
-	if r.err != nil {
-		return 0, r.err
-	}
-
-	c := make(chan ioret, 1)
-	t := time.NewTimer(r.timeout)
-	go func() {
-		n, err := r.ReadCloser.Read(buf)
-		c <- ioret{n, err}
-		close(c)
-	}()
-
-	select {
-	case res := <-c:
-		if !t.Stop() {
-			<-t.C
-		}
-		r.err = res.err
-		return res.n, res.err
-	case <-t.C:
-		r.ReadCloser.Close()
-		r.err = context.DeadlineExceeded
-		return 0, context.DeadlineExceeded
-	}
-}
-
-// Close closer interface to close the underlying closer
-func (r *DeadlineReader) Close() error {
-	return r.ReadCloser.Close()
-}
-
 // DeadlineWriter deadline writer with timeout
 type DeadlineWriter struct {
 	io.WriteCloser
