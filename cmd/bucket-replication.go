@@ -1468,6 +1468,24 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
 			},
 		}
+		if tagTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp]; ok {
+			ondiskTimestamp, err := time.Parse(time.RFC3339, tagTmStr)
+			if err == nil {
+				dstOpts.Internal.TaggingTimestamp = ondiskTimestamp
+			}
+		}
+		if retTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp]; ok {
+			ondiskTimestamp, err := time.Parse(time.RFC3339, retTmStr)
+			if err == nil {
+				dstOpts.Internal.RetentionTimestamp = ondiskTimestamp
+			}
+		}
+		if lholdTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp]; ok {
+			ondiskTimestamp, err := time.Parse(time.RFC3339, lholdTmStr)
+			if err == nil {
+				dstOpts.Internal.LegalholdTimestamp = ondiskTimestamp
+			}
+		}
 		if _, rinfo.Err = c.CopyObject(ctx, tgt.Bucket, object, tgt.Bucket, object, getCopyObjMetadata(objInfo, tgt.StorageClass), srcOpts, dstOpts); rinfo.Err != nil {
 			rinfo.ReplicationStatus = replication.Failed
 			logger.LogIf(ctx, fmt.Errorf("unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err))
@@ -3245,7 +3263,11 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 		return r
 	}
 
-	for _, localDrive := range globalLocalDrives {
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	for _, localDrive := range localDrives {
 		r := newReader()
 		err := localDrive.CreateFile(ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
 		r.Close()
@@ -3307,7 +3329,12 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 
 		return re, nil
 	}
-	for _, localDrive := range globalLocalDrives {
+
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	for _, localDrive := range localDrives {
 		rc, err := localDrive.ReadFileStream(p.ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), 0, -1)
 		if err != nil {
 			continue

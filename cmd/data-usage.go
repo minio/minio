@@ -56,7 +56,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 			attempts = 1
 		}
 		if err = saveConfig(ctx, objAPI, dataUsageObjNamePath, dataUsageJSON); err != nil {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, dataUsageObjNamePath)
 		}
 		attempts++
 	}

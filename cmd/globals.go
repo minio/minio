@@ -146,6 +146,8 @@ type serverCtxt struct {
 	configDirSet, certsDirSet bool
 	Interface                 string
 
+	RootUser, RootPwd string
+
 	FTP  []string
 	SFTP []string
 

@@ -38,6 +38,7 @@ type partialOperation struct {
 	allVersions         bool
 	setIndex, poolIndex int
 	queued              time.Time
+	scanMode            madmin.HealScanMode
 }
 
 // mrfState sncapsulates all the information
@@ -103,13 +104,17 @@ func (m *mrfState) healRoutine() {
 			// wait on timer per heal
 			wait := healSleeper.Timer(context.Background())
 
+			scan := madmin.HealNormalScan
+			if u.scanMode != 0 {
+				scan = u.scanMode
+			}
 			if u.object == "" {
-				healBucket(u.bucket, madmin.HealNormalScan)
+				healBucket(u.bucket, scan)
 			} else {
 				if u.allVersions {
-					m.pools.serverPools[u.poolIndex].sets[u.setIndex].listAndHeal(u.bucket, u.object, healObjectVersionsDisparity)
+					m.pools.serverPools[u.poolIndex].sets[u.setIndex].listAndHeal(u.bucket, u.object, u.scanMode, healObjectVersionsDisparity)
 				} else {
-					healObject(u.bucket, u.object, u.versionID, madmin.HealNormalScan)
+					healObject(u.bucket, u.object, u.versionID, scan)
 				}
 			}
 

@@ -107,12 +107,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, err
 		}
 
-		for _, storageDisk := range storageDisks[i] {
-			if storageDisk != nil && storageDisk.IsLocal() {
-				localDrives = append(localDrives, storageDisk)
-			}
-		}
-
 		if deploymentID == "" {
 			// all pools should have same deployment ID
 			deploymentID = formats[i].ID
@@ -139,6 +133,18 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if distributionAlgo != "" && z.distributionAlgo == "" {
 			z.distributionAlgo = distributionAlgo
 		}
+
+		for _, storageDisk := range storageDisks[i] {
+			if storageDisk != nil && storageDisk.IsLocal() {
+				localDrives = append(localDrives, storageDisk)
+			}
+		}
+	}
+
+	if !globalIsDistErasure {
+		globalLocalDrivesMu.Lock()
+		globalLocalDrives = localDrives
+		globalLocalDrivesMu.Unlock()
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
@@ -166,10 +172,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 		break
 	}
-
-	globalLocalDrivesMu.Lock()
-	globalLocalDrives = localDrives
-	defer globalLocalDrivesMu.Unlock()
 
 	return z, nil
 }
@@ -2108,10 +2110,10 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 }
 
 // HealObjectFn closure function heals the object.
-type HealObjectFn func(bucket, object, versionID string) error
+type HealObjectFn func(bucket, object, versionID string, scanMode madmin.HealScanMode) error
 
 func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObjectFn HealObjectFn) error {
-	healEntry := func(bucket string, entry metaCacheEntry) error {
+	healEntry := func(bucket string, entry metaCacheEntry, scanMode madmin.HealScanMode) error {
 		if entry.isDir() {
 			return nil
 		}
@@ -2134,7 +2136,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		}
 		fivs, err := entry.fileInfoVersions(bucket)
 		if err != nil {
-			return healObjectFn(bucket, entry.name, "")
+			return healObjectFn(bucket, entry.name, "", scanMode)
 		}
 		if opts.Remove && !opts.DryRun {
 			err := z.CheckAbandonedParts(ctx, bucket, entry.name, opts)
@@ -2143,7 +2145,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			}
 		}
 		for _, version := range fivs.Versions {
-			err := healObjectFn(bucket, version.Name, version.VersionID)
+			err := healObjectFn(bucket, version.Name, version.VersionID, scanMode)
 			if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
 				return err
 			}
@@ -2167,7 +2169,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
 
-				errs[idx] = set.listAndHeal(bucket, prefix, healEntry)
+				errs[idx] = set.listAndHeal(bucket, prefix, opts.ScanMode, healEntry)
 			}(idx, set)
 		}
 		wg.Wait()

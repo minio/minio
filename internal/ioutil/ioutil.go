@@ -28,7 +28,37 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/disk"
+)
+
+// Block sizes constant.
+const (
+	BlockSizeSmall       = 32 * humanize.KiByte // Default r/w block size for smaller objects.
+	BlockSizeLarge       = 2 * humanize.MiByte  // Default r/w block size for larger objects.
+	BlockSizeReallyLarge = 4 * humanize.MiByte  // Default write block size for objects per shard >= 64MiB
+)
+
+// aligned sync.Pool's
+var (
+	ODirectPoolXLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeReallyLarge)
+			return &b
+		},
+	}
+	ODirectPoolLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeLarge)
+			return &b
+		},
+	}
+	ODirectPoolSmall = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeSmall)
+			return &b
+		},
+	}
 )
 
 // WriteOnCloser implements io.WriteCloser and always
@@ -72,53 +102,6 @@ func WriteOnClose(w io.Writer) *WriteOnCloser {
 type ioret struct {
 	n   int
 	err error
-}
-
-// DeadlineReader deadline reader with timeout
-type DeadlineReader struct {
-	io.ReadCloser
-	timeout time.Duration
-	err     error
-}
-
-// NewDeadlineReader wraps a writer to make it respect given deadline
-// value per Write(). If there is a blocking write, the returned Reader
-// will return whenever the timer hits (the return values are n=0
-// and err=context.DeadlineExceeded.)
-func NewDeadlineReader(r io.ReadCloser, timeout time.Duration) io.ReadCloser {
-	return &DeadlineReader{ReadCloser: r, timeout: timeout}
-}
-
-func (r *DeadlineReader) Read(buf []byte) (int, error) {
-	if r.err != nil {
-		return 0, r.err
-	}
-
-	c := make(chan ioret, 1)
-	t := time.NewTimer(r.timeout)
-	go func() {
-		n, err := r.ReadCloser.Read(buf)
-		c <- ioret{n, err}
-		close(c)
-	}()
-
-	select {
-	case res := <-c:
-		if !t.Stop() {
-			<-t.C
-		}
-		r.err = res.err
-		return res.n, res.err
-	case <-t.C:
-		r.ReadCloser.Close()
-		r.err = context.DeadlineExceeded
-		return 0, context.DeadlineExceeded
-	}
-}
-
-// Close closer interface to close the underlying closer
-func (r *DeadlineReader) Close() error {
-	return r.ReadCloser.Close()
 }
 
 // DeadlineWriter deadline writer with timeout

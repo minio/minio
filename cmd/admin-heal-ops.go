@@ -810,7 +810,7 @@ func (h *healSequence) healMinioSysMeta(objAPI ObjectLayer, metaPrefix string) f
 		// NOTE: Healing on meta is run regardless
 		// of any bucket being selected, this is to ensure that
 		// meta are always upto date and correct.
-		return objAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket, object, versionID string) error {
+		return objAPI.HealObjects(h.ctx, minioMetaBucket, metaPrefix, h.settings, func(bucket, object, versionID string, scanMode madmin.HealScanMode) error {
 			if h.isQuitting() {
 				return errHealStopSignalled
 			}
@@ -867,7 +867,7 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 
 	if !h.settings.Recursive {
 		if h.object != "" {
-			if err := h.healObject(bucket, h.object, ""); err != nil {
+			if err := h.healObject(bucket, h.object, "", h.settings.ScanMode); err != nil {
 				return err
 			}
 		}
@@ -882,7 +882,7 @@ func (h *healSequence) healBucket(objAPI ObjectLayer, bucket string, bucketsOnly
 }
 
 // healObject - heal the given object and record result
-func (h *healSequence) healObject(bucket, object, versionID string) error {
+func (h *healSequence) healObject(bucket, object, versionID string, scanMode madmin.HealScanMode) error {
 	if h.isQuitting() {
 		return errHealStopSignalled
 	}
