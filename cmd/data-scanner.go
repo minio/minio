@@ -121,13 +121,13 @@ func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundH
 	buf, err := readConfig(ctx, objAPI, backgroundHealInfoPath)
 	if err != nil {
 		if !errors.Is(err, errConfigNotFound) {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, backgroundHealInfoPath)
 		}
 		return backgroundHealInfo{}
 	}
 	var info backgroundHealInfo
 	if err = json.Unmarshal(buf, &info); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, backgroundHealInfoPath)
 	}
 	return info
 }
@@ -203,7 +203,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			err := objAPI.NSScanner(ctx, results, uint32(cycleInfo.current), scanMode)
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "ns-scanner")
 			res := map[string]string{"cycle": strconv.FormatUint(cycleInfo.current, 10)}
 			if err != nil {
 				res["error"] = err.Error()
@@ -223,7 +223,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
 				tmp, _ = cycleInfo.MarshalMsg(tmp)
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, dataUsageBloomNamePath)
 			}
 		}
 	}
@@ -729,7 +729,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 							versionID: "",
 						}, madmin.HealItemObject)
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
+							logger.LogOnceIf(ctx, err, entry.name)
 						}
 						foundObjs = foundObjs || err == nil
 						return
@@ -746,7 +746,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						}, madmin.HealItemObject)
 						stopFn(int(ver.Size))
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
+							logger.LogOnceIf(ctx, err, fiv.Name)
 						}
 						if err == nil {
 							successVersions++
@@ -1133,7 +1133,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 				err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
 				done()
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
+					logger.LogOnceIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err), i.objectPath())
 				}
 			}
 		}
@@ -1199,7 +1199,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, obj.Name)
 		return false
 	}
 	// Notification already sent in *expireTransitionedObject*, just return 'true' here.

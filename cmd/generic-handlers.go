@@ -153,7 +153,7 @@ func setBrowserRedirectMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		read := r.Method == http.MethodGet || r.Method == http.MethodHead
 		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) && read && globalBrowserRedirect {
+		if !guessIsHealthCheckReq(r) && guessIsBrowserReq(r) && read && globalBrowserRedirect {
 			// Fetch the redirect location if any.
 			if u := getRedirectLocation(r); u != nil {
 				// Employ a temporary re-direct.

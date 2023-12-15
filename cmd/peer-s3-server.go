@@ -80,16 +80,16 @@ func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
 	globalLocalDrivesMu.RLock()
-	globalLocalDrives := globalLocalDrives
+	localDrives := globalLocalDrives
 	globalLocalDrivesMu.RUnlock()
 
-	quorum := (len(globalLocalDrives) / 2)
+	quorum := (len(localDrives) / 2)
 
 	buckets = make([]BucketInfo, 0, 32)
 	healBuckets := map[string]VolInfo{}
 
 	// lists all unique buckets across drives.
-	if err := listAllBuckets(ctx, globalLocalDrives, healBuckets, quorum); err != nil {
+	if err := listAllBuckets(ctx, localDrives, healBuckets, quorum); err != nil {
 		return nil, err
 	}
 
@@ -98,7 +98,7 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 
 	if opts.Deleted {
 		// lists all deleted buckets across drives.
-		if err := listDeletedBuckets(ctx, globalLocalDrives, deletedBuckets, quorum); err != nil {
+		if err := listDeletedBuckets(ctx, localDrives, deletedBuckets, quorum); err != nil {
 			return nil, err
 		}
 	}
@@ -128,23 +128,23 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 
 func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
 	globalLocalDrivesMu.RLock()
-	globalLocalDrives := globalLocalDrives
+	localDrives := globalLocalDrives
 	globalLocalDrivesMu.RUnlock()
 
-	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
-	bucketsInfo := make([]BucketInfo, len(globalLocalDrives))
+	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
+	bucketsInfo := make([]BucketInfo, len(localDrives))
 
 	// Make a volume entry on all underlying storage disks.
-	for index := range globalLocalDrives {
+	for index := range localDrives {
 		index := index
 		g.Go(func() error {
-			if globalLocalDrives[index] == nil {
+			if localDrives[index] == nil {
 				return errDiskNotFound
 			}
-			volInfo, err := globalLocalDrives[index].StatVol(ctx, bucket)
+			volInfo, err := localDrives[index].StatVol(ctx, bucket)
 			if err != nil {
 				if opts.Deleted {
-					dvi, derr := globalLocalDrives[index].StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket))
+					dvi, derr := localDrives[index].StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, bucket))
 					if derr != nil {
 						return err
 					}
@@ -160,7 +160,7 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 	}
 
 	errs := g.Wait()
-	if err := reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives) / 2)); err != nil {
+	if err := reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives) / 2)); err != nil {
 		return BucketInfo{}, err
 	}
 
@@ -177,19 +177,19 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 
 func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	globalLocalDrivesMu.RLock()
-	globalLocalDrives := globalLocalDrives
+	localDrives := globalLocalDrives
 	globalLocalDrivesMu.RUnlock()
 
-	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
+	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
 
 	// Make a volume entry on all underlying storage disks.
-	for index := range globalLocalDrives {
+	for index := range localDrives {
 		index := index
 		g.Go(func() error {
-			if globalLocalDrives[index] == nil {
+			if localDrives[index] == nil {
 				return errDiskNotFound
 			}
-			return globalLocalDrives[index].DeleteVol(ctx, bucket, opts.Force)
+			return localDrives[index].DeleteVol(ctx, bucket, opts.Force)
 		}, index)
 	}
 
@@ -201,7 +201,7 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 		}
 		if err == nil && recreate {
 			// ignore any errors
-			globalLocalDrives[index].MakeVol(ctx, bucket)
+			localDrives[index].MakeVol(ctx, bucket)
 		}
 	}
 
@@ -210,24 +210,24 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 		return errVolumeNotEmpty
 	} // for all other errors reduce by write quorum.
 
-	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives)/2)+1)
+	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives)/2)+1)
 }
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	globalLocalDrivesMu.RLock()
-	globalLocalDrives := globalLocalDrives
+	localDrives := globalLocalDrives
 	globalLocalDrivesMu.RUnlock()
 
-	g := errgroup.WithNErrs(len(globalLocalDrives)).WithConcurrency(32)
+	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
 
 	// Make a volume entry on all underlying storage disks.
-	for index := range globalLocalDrives {
+	for index := range localDrives {
 		index := index
 		g.Go(func() error {
-			if globalLocalDrives[index] == nil {
+			if localDrives[index] == nil {
 				return errDiskNotFound
 			}
-			err := globalLocalDrives[index].MakeVol(ctx, bucket)
+			err := localDrives[index].MakeVol(ctx, bucket)
 			if opts.ForceCreate && errors.Is(err, errVolumeExists) {
 				// No need to return error when force create was
 				// requested.
@@ -238,7 +238,7 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 	}
 
 	errs := g.Wait()
-	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(globalLocalDrives)/2)+1)
+	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives)/2)+1)
 }
 
 func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {

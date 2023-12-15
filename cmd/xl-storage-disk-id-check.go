@@ -458,7 +458,7 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path stri
 	}
 	defer done(&err)
 
-	return p.storage.CreateFile(ctx, volume, path, size, xioutil.NewDeadlineReader(io.NopCloser(reader), globalDriveConfig.GetMaxTimeout()))
+	return p.storage.CreateFile(ctx, volume, path, size, io.NopCloser(reader))
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
@@ -480,7 +480,7 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 		return nil, err
 	}
 
-	return xioutil.NewDeadlineReader(rc, globalDriveConfig.GetMaxTimeout()), nil
+	return rc, nil
 }
 
 func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {

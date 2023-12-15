@@ -107,12 +107,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, err
 		}
 
-		for _, storageDisk := range storageDisks[i] {
-			if storageDisk != nil && storageDisk.IsLocal() {
-				localDrives = append(localDrives, storageDisk)
-			}
-		}
-
 		if deploymentID == "" {
 			// all pools should have same deployment ID
 			deploymentID = formats[i].ID
@@ -139,6 +133,18 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if distributionAlgo != "" && z.distributionAlgo == "" {
 			z.distributionAlgo = distributionAlgo
 		}
+
+		for _, storageDisk := range storageDisks[i] {
+			if storageDisk != nil && storageDisk.IsLocal() {
+				localDrives = append(localDrives, storageDisk)
+			}
+		}
+	}
+
+	if !globalIsDistErasure {
+		globalLocalDrivesMu.Lock()
+		globalLocalDrives = localDrives
+		globalLocalDrivesMu.Unlock()
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
@@ -166,10 +172,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 		break
 	}
-
-	globalLocalDrivesMu.Lock()
-	globalLocalDrives = localDrives
-	defer globalLocalDrivesMu.Unlock()
 
 	return z, nil
 }

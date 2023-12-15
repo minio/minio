@@ -131,11 +131,15 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 ## Bucket Notification Metrics
 
-| Name                                    | Description                                                  |
-|:----------------------------------------|:-------------------------------------------------------------|
-| `minio_notify_current_send_in_progress` | Number of concurrent async Send calls active to all targets. |
-| `minio_notify_target_queue_length`      | Number of unsent notifications in queue for target.          |
-|                                         |                                                              |
+| Name                                           | Description                                                                                                                                 |
+|:-----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------|
+| `minio_notify_current_send_in_progress`        | Number of concurrent async Send calls active to all targets (deprecated, please use 'minio_notify_target_current_send_in_progress' instead) |
+| `minio_notify_events_errors_total`             | Events that were failed to be sent to the targets (deprecated, please use 'minio_notify_target_failed_events' instead)                      |
+| `minio_notify_events_sent_total`               | Total number of events sent to the targets (deprecated, please use 'minio_notify_target_total_events' instead)                              |
+| `minio_notify_events_skipped_total`            | Events that were skipped to be sent to the targets due to the in-memory queue being full                                                    |
+| `minio_notify_target_current_send_in_progress` | Number of concurrent async Send calls active to the target                                                                                  |
+| `minio_notify_target_queue_length`             | Number of events currently staged in the queue_dir configured for the target.                                                               |
+| `minio_notify_target_total_events`             | Total number of events sent (or) queued to the target                                                                                       |
 
 ## S3 API Request Metrics
 
