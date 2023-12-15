@@ -300,6 +300,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(adminMiddleware(adminAPI.GetIdentityProviderCfg))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(adminMiddleware(adminAPI.DeleteIdentityProviderCfg))
 
+		// LDAP specific service accounts ops
+		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp/ldap/add-service-account").HandlerFunc(adminMiddleware(adminAPI.AddServiceAccountLDAP))
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/ldap/list-access-keys").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).
+			Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
+
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(adminMiddleware(adminAPI.ListLDAPPolicyMappingEntities))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/ldap/policy/{operation}").HandlerFunc(adminMiddleware(adminAPI.AttachDetachPolicyLDAP))

@@ -2319,6 +2319,27 @@ func (store *IAMStoreSys) ListServiceAccounts(ctx context.Context, accessKey str
 	return serviceAccounts, nil
 }
 
+// ListSTSAccounts - lists only STS accounts from the cache.
+func (store *IAMStoreSys) ListSTSAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	var stsAccounts []auth.Credentials
+	for _, u := range cache.iamSTSAccountsMap {
+		v := u.Credentials
+		if accessKey != "" && v.ParentUser == accessKey {
+			if v.IsTemp() {
+				// Hide secret key & session key here
+				v.SecretKey = ""
+				v.SessionToken = ""
+				stsAccounts = append(stsAccounts, v)
+			}
+		}
+	}
+
+	return stsAccounts, nil
+}
+
 // AddUser - adds/updates long term user account to storage.
 func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (updatedAt time.Time, err error) {
 	cache := store.lock()
