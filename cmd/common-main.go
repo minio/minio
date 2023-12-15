@@ -658,7 +658,7 @@ func loadEnvVarsFromFiles() {
 	}
 }
 
-func handleCommonEnvVars() {
+func serverHandleEnvVars() {
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
@@ -786,6 +786,10 @@ func handleCommonEnvVars() {
 		}
 	}
 
+	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
+}
+
+func loadRootCredentials() {
 	// At this point, either both environment variables
 	// are defined or both are not defined.
 	// Check both cases and authenticate them if correctly defined
@@ -799,6 +803,9 @@ func handleCommonEnvVars() {
 	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 		user = env.Get(config.EnvAccessKey, "")
 		password = env.Get(config.EnvSecretKey, "")
+		hasCredentials = true
+	} else if globalServerCtxt.RootUser != "" && globalServerCtxt.RootPwd != "" {
+		user, password = globalServerCtxt.RootUser, globalServerCtxt.RootPwd
 		hasCredentials = true
 	}
 	if hasCredentials {
@@ -819,8 +826,6 @@ func handleCommonEnvVars() {
 	} else {
 		globalActiveCred = auth.DefaultCredentials
 	}
-
-	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
 }
 
 // Initialize KMS global variable after valiadating and loading the configuration.

@@ -470,13 +470,19 @@ func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
 		t.Fatalf("UpdateIsLocal failed %v", err)
 	}
 
+	endpoint.PoolIdx = 0
+	endpoint.SetIdx = 0
+	endpoint.DiskIdx = 0
+
+	poolEps := []PoolEndpoints{{
+		Endpoints: Endpoints{endpoint},
+	}}
+	poolEps[0].SetCount = 1
+	poolEps[0].DrivesPerSet = 1
+
 	// Register handlers on newly created servers
-	registerStorageRESTHandlers(tg.Mux[0], []PoolEndpoints{{
-		Endpoints: Endpoints{endpoint},
-	}}, tg.Managers[0])
-	registerStorageRESTHandlers(tg.Mux[1], []PoolEndpoints{{
-		Endpoints: Endpoints{endpoint},
-	}}, tg.Managers[1])
+	registerStorageRESTHandlers(tg.Mux[0], poolEps, tg.Managers[0])
+	registerStorageRESTHandlers(tg.Mux[1], poolEps, tg.Managers[1])
 
 	restClient, err := newStorageRESTClient(endpoint, false, tg.Managers[0])
 	if err != nil {

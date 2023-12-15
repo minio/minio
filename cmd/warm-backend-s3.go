@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,14 +115,38 @@ func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 		return nil, err
 	}
 	var creds *credentials.Credentials
-	if conf.AWSRole {
+	switch {
+	case conf.AWSRole:
 		creds = credentials.New(&credentials.IAM{
 			Client: &http.Client{
 				Transport: NewHTTPTransport(),
 			},
 		})
-	} else {
+	case conf.AWSRoleWebIdentityTokenFile != "" && conf.AWSRoleARN != "":
+		sessionName := conf.AWSRoleSessionName
+		if sessionName == "" {
+			// RoleSessionName has a limited set of characters (https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html)
+			sessionName = "minio-tier-" + mustGetUUID()
+		}
+		s3WebIdentityIAM := credentials.IAM{
+			Client: &http.Client{
+				Transport: NewHTTPTransport(),
+			},
+			EKSIdentity: struct {
+				TokenFile       string
+				RoleARN         string
+				RoleSessionName string
+			}{
+				conf.AWSRoleWebIdentityTokenFile,
+				conf.AWSRoleARN,
+				sessionName,
+			},
+		}
+		creds = credentials.New(&s3WebIdentityIAM)
+	case conf.AccessKey != "" && conf.SecretKey != "":
 		creds = credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
+	default:
+		return nil, errors.New("insufficient parameters for S3 backend authentication")
 	}
 	getRemoteTierTargetInstanceTransportOnce.Do(func() {
 		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)
