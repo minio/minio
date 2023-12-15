@@ -1012,7 +1012,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrRemoteTargetNotAliveError: {
 		Code:           "RemoteTargetNotAliveError",
-		Description:    "The remote target is not alive",
+		Description:    "The remote target is not online or is not MinIO bucket",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationSourceNotVersionedError: {
