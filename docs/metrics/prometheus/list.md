@@ -238,7 +238,7 @@ Metrics may include one or more additional labels, such as the server that calcu
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/bucket
+https://HOSTNAME:PORT/minio/v2/metrics/bucket
 ```
 
 Replace ``HOSTNAME:PORT`` with the hostname of your MinIO deployment.
