@@ -89,7 +89,7 @@ func performLicenseUpdate(ctx context.Context, objectAPI ObjectLayer) {
 		return
 	}
 
-	r := gjson.Parse(resp).Get("license")
+	r := gjson.Parse(resp).Get("license_v2")
 	if r.Index == 0 {
 		logger.LogIf(ctx, fmt.Errorf("license not found in response from %s", url))
 		return
