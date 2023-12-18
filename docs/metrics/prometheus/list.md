@@ -200,6 +200,14 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_node_ilm_transition_missed_immediate_tasks` | Number of missed immediate ILM transition tasks.                            |
 | `minio_node_ilm_versions_scanned`                  | Total number of object versions checked for ilm actions since server start. |
 
+## Tier Metrics
+
+| Name                                               | Description                                                                 |
+|:---------------------------------------------------|:----------------------------------------------------------------------------|
+| `minio_node_tier_tier_ttlb_seconds_distribution`   | Distribution of time to last byte for objects downloaded from warm tier     |
+| `minio_node_tier_requests_success`                 | Number of requests to download object from warm tier that were successful   | 
+| `minio_node_tier_requests_failure`                 | Number of requests to download object from warm tier that were failure      | 
+
 ## System Metrics
 
 | Name                                       | Description                                                                                                     |

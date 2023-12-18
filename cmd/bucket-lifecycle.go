@@ -507,9 +507,13 @@ func auditTierActions(ctx context.Context, tier string, bytes int64) func(err er
 		}
 
 		if err == nil {
-			op.TimeToResponseNS = time.Since(startTime).Nanoseconds()
+			since := time.Since(startTime)
+			op.TimeToResponseNS = since.Nanoseconds()
+			globalTierMetrics.Observe(tier, since)
+			globalTierMetrics.logSuccess(tier)
 		} else {
 			op.Error = err.Error()
+			globalTierMetrics.logFailure(tier)
 		}
 
 		logger.GetReqInfo(ctx).AppendTags("tierStats", op)
