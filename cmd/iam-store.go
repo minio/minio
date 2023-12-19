@@ -465,7 +465,7 @@ func (c *iamCache) loadCorrectCase(store *IAMStoreSys, accessKey string, isGroup
 }
 
 // setCorrectCase - sets correct capitalization of user or group name in storage.
-// Only sets value if the input is found in the cache and the lowercased version does not already exist.
+// Only sets value if the lowercased version does not already exist.
 // Does nothing if the users system is not LDAP.
 //
 // Assumes lock is held by caller.
@@ -478,23 +478,20 @@ func (c *iamCache) setCorrectCase(store *IAMStoreSys, accessKey string, isGroup 
 
 	if isGroup {
 		if _, ok := c.iamGroupPolicyMap[accessKey]; ok {
-			if _, ok := c.iamGroupLowercaseMap[lower]; !ok {
-				c.iamGroupLowercaseMap[lower] = accessKey
-				c.updatedAt = time.Now()
-			}
+			c.iamGroupLowercaseMap[lower] = accessKey
+			c.updatedAt = time.Now()
 		}
 	} else {
-		if _, ok := c.iamUsersMap[accessKey]; ok {
-			if _, ok := c.iamUserLowercaseMap[lower]; !ok {
-				c.iamUserLowercaseMap[lower] = accessKey
-				c.updatedAt = time.Now()
-			}
+		if _, ok := c.iamUserLowercaseMap[lower]; !ok {
+			c.iamUserLowercaseMap[lower] = accessKey
+			c.updatedAt = time.Now()
 		}
 	}
 }
 
 // deleteCorrectCase - deletes correct capitalization of user or group name from storage.
 // Does nothing if the users system is not LDAP or if the input is not found.
+// Only deletes if the given accesKey matches the correct case
 //
 // Assumes lock is held by caller.
 func (c *iamCache) deleteCorrectCase(store *IAMStoreSys, accessKey string, isGroup bool) {
@@ -505,11 +502,15 @@ func (c *iamCache) deleteCorrectCase(store *IAMStoreSys, accessKey string, isGro
 	lower := strings.ToLower(accessKey)
 
 	if isGroup {
-		delete(c.iamGroupLowercaseMap, lower)
-		c.updatedAt = time.Now()
+		if accessKey == c.iamGroupLowercaseMap[accessKey] {
+			delete(c.iamGroupLowercaseMap, lower)
+			c.updatedAt = time.Now()
+		}
 	} else {
-		delete(c.iamUserLowercaseMap, lower)
-		c.updatedAt = time.Now()
+		if accessKey == c.iamUserLowercaseMap[accessKey] {
+			delete(c.iamUserLowercaseMap, lower)
+			c.updatedAt = time.Now()
+		}
 	}
 }
 
@@ -613,13 +614,13 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 
 		bootstrapTraceMsg("loading user policy mapping")
 		// load polices mapped to users
-		if err := store.loadMappedPoliciesCase(ctx, regUser, false, newCache.iamUserPolicyMap, newCache.iamUserLowercaseMap); err != nil {
+		if err := store.loadMappedPolicies(ctx, regUser, false, newCache.iamUserPolicyMap); err != nil {
 			return err
 		}
 
 		bootstrapTraceMsg("loading group policy mapping")
 		// load policies mapped to groups
-		if err := store.loadMappedPoliciesCase(ctx, regUser, true, newCache.iamGroupPolicyMap, newCache.iamGroupLowercaseMap); err != nil {
+		if err := store.loadMappedPolicies(ctx, regUser, true, newCache.iamGroupPolicyMap); err != nil {
 			return err
 		}
 
@@ -1043,7 +1044,20 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	cache := store.lock()
 	defer store.unlock()
 
-	name = cache.loadCorrectCase(store, name, isGroup)
+	if isAttach {
+		name = cache.loadCorrectCase(store, name, isGroup)
+	}
+
+	var policyMap map[string]MappedPolicy
+	if !isGroup {
+		if userType == stsUser {
+			policyMap = cache.iamSTSPolicyMap
+		} else {
+			policyMap = cache.iamUserPolicyMap
+		}
+	} else {
+		policyMap = cache.iamGroupPolicyMap
+	}
 
 	// Load existing policy mapping
 	var mp MappedPolicy
@@ -1052,8 +1066,20 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			stsMap := map[string]MappedPolicy{}
 
 			// Attempt to load parent user mapping for STS accounts
-			store.loadMappedPolicy(context.TODO(), name, stsUser, false, stsMap)
-
+			e := store.loadMappedPolicy(context.TODO(), name, stsUser, false, stsMap)
+			if !isAttach {
+				if e != nil {
+					// Retry detach with the correct case
+					name = cache.loadCorrectCase(store, name, isGroup)
+					store.loadMappedPolicy(context.TODO(), name, stsUser, false, stsMap)
+				} else if stsMap[name].policySet().IsEmpty() {
+					// Mapped policy file exists but is empty: should delete
+					store.deleteMappedPolicy(ctx, name, userType, isGroup)
+					delete(cache.iamSTSAccountsMap, name)
+					name = cache.loadCorrectCase(store, name, isGroup)
+					store.loadMappedPolicy(context.TODO(), name, stsUser, false, stsMap)
+				}
+			}
 			mp = stsMap[name]
 		} else {
 			mp = cache.iamUserPolicyMap[name]
@@ -1095,6 +1121,20 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		policiesToUpdate = policiesToUpdate.Intersection(existingPolicySet)
 		newPolicySet = existingPolicySet.Difference(policiesToUpdate)
 	}
+
+	// Delete policy and return if the policy no longer exists
+	if newPolicySet.IsEmpty() {
+		delete(policyMap, name)
+		cache.deleteCorrectCase(store, name, isGroup)
+		store.deleteMappedPolicy(ctx, name, userType, isGroup)
+		if policiesToUpdate.IsEmpty() {
+			err = errNoPolicyToAttachOrDetach
+		}
+		cache.updatedAt = UTCNow()
+		updatedAt = cache.updatedAt
+		return
+	}
+
 	// We return an error if the requested policy update will have no effect.
 	if policiesToUpdate.IsEmpty() {
 		err = errNoPolicyToAttachOrDetach
@@ -1109,21 +1149,10 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	if err = store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
 		return
 	}
-	if !isGroup {
-		if userType == stsUser {
-			cache.iamSTSPolicyMap[name] = newPolicyMapping
-			if len(newPolicies) == 0 {
-				cache.deleteCorrectCase(store, name, false)
-			} else {
-				cache.setCorrectCase(store, name, false)
-			}
-		} else {
-			cache.iamUserPolicyMap[name] = newPolicyMapping
-		}
-	} else {
-		cache.iamGroupPolicyMap[name] = newPolicyMapping
-		cache.setCorrectCase(store, name, true)
-	}
+
+	policyMap[name] = newPolicyMapping
+	cache.setCorrectCase(store, name, isGroup)
+
 	cache.updatedAt = UTCNow()
 	return cache.updatedAt, addedOrRemoved, newPolicies, nil
 }
@@ -1153,16 +1182,15 @@ func (store *IAMStoreSys) PolicyDBSet(ctx context.Context, name, policy string, 
 		if err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return updatedAt, err
 		}
+		cache.deleteCorrectCase(store, name, isGroup)
 		if !isGroup {
 			if userType == stsUser {
 				delete(cache.iamSTSPolicyMap, name)
 			} else {
 				delete(cache.iamUserPolicyMap, name)
-				cache.deleteCorrectCase(store, name, false)
 			}
 		} else {
 			delete(cache.iamGroupPolicyMap, name)
-			cache.deleteCorrectCase(store, name, true)
 		}
 		cache.updatedAt = time.Now()
 		return cache.updatedAt, nil
