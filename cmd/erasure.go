@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -65,13 +64,6 @@ type erasureObjects struct {
 
 	// Locker mutex map.
 	nsMutex *nsLockMap
-
-	// Byte pools used for temporary i/o buffers.
-	bp *bpool.BytePoolCap
-
-	// Byte pools used for temporary i/o buffers,
-	// legacy objects.
-	bpOld *bpool.BytePoolCap
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.

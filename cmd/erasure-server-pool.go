@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
@@ -81,6 +82,21 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			s3Peer:      NewS3PeerSys(endpointServerPools),
 		}
 	)
+
+	// Maximum number of reusable buffers per node at any given point in time.
+	n := 1024 // single node single/multiple drives set this to 1024 entries
+
+	if globalIsDistErasure {
+		n = 2048
+	}
+
+	// Initialize byte pool once for all sets, bpool size is set to
+	// setCount * setDriveCount with each memory upto blockSizeV2.
+	globalBytePoolCap = bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
+
+	if globalServerCtxt.PreAllocate {
+		globalBytePoolCap.Populate()
+	}
 
 	var localDrives []StorageAPI
 	local := endpointServerPools.FirstLocal()
