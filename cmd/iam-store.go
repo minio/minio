@@ -441,7 +441,6 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 //
 // Assumes lock is held by caller.
 func (c *iamCache) loadCorrectCase(store *IAMStoreSys, accessKey string, isGroup bool) string {
-
 	if store.getUsersSysType() != LDAPUsersSysType {
 		return accessKey
 	}
@@ -533,7 +532,6 @@ type IAMStorageAPI interface {
 	loadGroups(ctx context.Context, m map[string]GroupInfo) error
 	loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error
 	loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error
-	loadMappedPoliciesCase(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, capM map[string]string) error
 	saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error
 	loadIAMConfig(ctx context.Context, item interface{}, path string) error
 	deleteIAMConfig(ctx context.Context, path string) error

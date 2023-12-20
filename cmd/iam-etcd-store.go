@@ -383,51 +383,6 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 	return nil
 }
 
-func (ies *IAMEtcdStore) loadMappedPoliciesCase(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, capM map[string]string) error {
-	cctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
-	defer cancel()
-	var basePrefix string
-
-	// Load
-	loadCase := false
-	if isGroup {
-		basePrefix = iamConfigPolicyDBGroupsPrefix
-		if ies.getUsersSysType() == LDAPUsersSysType {
-			loadCase = true
-		}
-	} else {
-		switch userType {
-		case svcUser:
-			basePrefix = iamConfigPolicyDBServiceAccountsPrefix
-		case stsUser:
-			basePrefix = iamConfigPolicyDBSTSUsersPrefix
-		default:
-			basePrefix = iamConfigPolicyDBUsersPrefix
-			if ies.getUsersSysType() == LDAPUsersSysType {
-				loadCase = true
-			}
-		}
-	}
-	// Retrieve all keys and values to avoid too many calls to etcd in case of
-	// a large number of policy mappings
-	r, err := ies.client.Get(cctx, basePrefix, etcd.WithPrefix())
-	if err != nil {
-		return err
-	}
-
-	if loadCase {
-		capM = nil
-	}
-
-	// Parse all policies mapping to create the proper data model
-	for _, kv := range r.Kvs {
-		if err = getMappedPolicy(ctx, kv, userType, isGroup, m, capM, basePrefix); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
-		}
-	}
-	return nil
-}
-
 func (ies *IAMEtcdStore) savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error {
 	return ies.saveIAMConfig(ctx, &p, getPolicyDocPath(policyName))
 }

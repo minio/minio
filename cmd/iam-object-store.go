@@ -333,42 +333,6 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPoliciesCase(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, capM map[string]string) error {
-	var basePath string
-	loadCase := false
-	if isGroup {
-		basePath = iamConfigPolicyDBGroupsPrefix
-		loadCase = true
-	} else {
-		switch userType {
-		case svcUser:
-			basePath = iamConfigPolicyDBServiceAccountsPrefix
-		case stsUser:
-			basePath = iamConfigPolicyDBSTSUsersPrefix
-		default:
-			basePath = iamConfigPolicyDBUsersPrefix
-			loadCase = true
-		}
-	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, basePath) {
-		if item.Err != nil {
-			return item.Err
-		}
-
-		policyFile := item.Item
-		userOrGroupName := strings.TrimSuffix(policyFile, ".json")
-		if err := iamOS.loadMappedPolicy(ctx, userOrGroupName, userType, isGroup, m); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return err
-		}
-		if loadCase {
-			capM[strings.ToLower(userOrGroupName)] = userOrGroupName
-		}
-	}
-	return nil
-}
-
 var (
 	usersListKey                   = "users/"
 	svcAccListKey                  = "service-accounts/"
