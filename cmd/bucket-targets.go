@@ -353,7 +353,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 
 	// Check if target is a MinIO server and alive
-	hcCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	hcCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	scheme := "http"
 	if tgt.Secure {
 		scheme = "https"

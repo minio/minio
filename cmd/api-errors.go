@@ -1012,7 +1012,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrRemoteTargetNotAliveError: {
 		Code:           "RemoteTargetNotAliveError",
-		Description:    "The remote target is not online or is not MinIO bucket",
+		Description:    "The remote target's MinIO health check timed out after 3 seconds",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationSourceNotVersionedError: {
