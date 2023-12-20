@@ -29,6 +29,9 @@ type BytePoolCap struct {
 // NewBytePoolCap creates a new BytePool bounded to the given maxSize, with new
 // byte arrays sized based on width.
 func NewBytePoolCap(maxSize int, width int, capwidth int) (bp *BytePoolCap) {
+	if capwidth > 0 && capwidth < 64 {
+		panic("buffer capped with smaller than 64 bytes is not supported")
+	}
 	if capwidth > 0 && width > capwidth {
 		panic("buffer length cannot be > capacity of the buffer")
 	}
