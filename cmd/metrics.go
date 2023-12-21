@@ -406,7 +406,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 		float64(GetTotalCapacityFree(server.Disks)),
 	)
 
-	sinfo := objLayer.StorageInfo(GlobalContext)
+	sinfo := objLayer.StorageInfo(GlobalContext, true)
 
 	// Report total usable capacity
 	ch <- prometheus.MustNewConstMetric(

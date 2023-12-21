@@ -228,8 +228,8 @@ type ObjectLayer interface {
 	Shutdown(context.Context) error
 	NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, scanMode madmin.HealScanMode) error
 	BackendInfo() madmin.BackendInfo
-	StorageInfo(ctx context.Context) StorageInfo
-	LocalStorageInfo(ctx context.Context) StorageInfo
+	StorageInfo(ctx context.Context, metrics bool) StorageInfo
+	LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo
 
 	// Bucket operations.
 	MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error
