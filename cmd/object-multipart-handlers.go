@@ -728,7 +728,14 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		sha256hex = ""
 	}
 
-	hashReader, err := hash.NewReader(ctx, reader, size, md5hex, sha256hex, actualSize)
+	hashReader, err := hash.NewReaderWithOpts(ctx, reader, hash.Options{
+		Size:       size,
+		MD5Hex:     md5hex,
+		SHA256Hex:  sha256hex,
+		ActualSize: actualSize,
+		DisableMD5: false,
+		ForceMD5:   nil,
+	})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
