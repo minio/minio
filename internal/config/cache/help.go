@@ -29,19 +29,19 @@ var (
 		config.HelpKV{
 			Key:         Enable,
 			Type:        "on|off",
-			Description: "set to enable various caching optimizations" + defaultHelpPostfix(Enable),
+			Description: "set to enable remote cache plugin" + defaultHelpPostfix(Enable),
 			Optional:    true,
 		},
 		config.HelpKV{
 			Key:         Endpoint,
 			Type:        "string",
-			Description: "remote endpoint where MinIO will cache GET/HEAD metadata values such as ETag, ModTime" + defaultHelpPostfix(Endpoint),
+			Description: "remote cache endpoint for GET/HEAD object(s) metadata, data" + defaultHelpPostfix(Endpoint),
 			Optional:    true,
 		},
 		config.HelpKV{
-			Key:         ObjectSize,
+			Key:         BlockSize,
 			Type:        "string",
-			Description: "maximum object size below which data is cached and fetched remotely from DRAM if possible" + defaultHelpPostfix(ObjectSize),
+			Description: "cache all objects below the specified block size" + defaultHelpPostfix(BlockSize),
 			Optional:    true,
 		},
 	}

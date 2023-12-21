@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -35,13 +35,13 @@ import (
 
 // Cache related keys
 const (
-	Enable     = "enable"
-	Endpoint   = "endpoint"
-	ObjectSize = "object_size"
+	Enable    = "enable"
+	Endpoint  = "endpoint"
+	BlockSize = "block_size"
 
-	EnvEnable     = "MINIO_CACHE_ENABLE"
-	EnvEndpoint   = "MINIO_CACHE_ENDPOINT"
-	EnvObjectSize = "MINIO_CACHE_OBJECT_SIZE"
+	EnvEnable    = "MINIO_CACHE_ENABLE"
+	EnvEndpoint  = "MINIO_CACHE_ENDPOINT"
+	EnvBlockSize = "MINIO_CACHE_BLOCK_SIZE"
 )
 
 // DefaultKVS - default KV config for cache settings
@@ -55,7 +55,7 @@ var DefaultKVS = config.KVS{
 		Value: "",
 	},
 	config.KV{
-		Key:   ObjectSize,
+		Key:   BlockSize,
 		Value: "",
 	},
 }
@@ -70,9 +70,9 @@ type Config struct {
 	// Etag and ModTime of an object + version
 	Endpoint string `json:"endpoint"`
 
-	// ObjectSize indicates the maximum object size below which
+	// BlockSize indicates the maximum object size below which
 	// data is cached and fetched remotely from DRAM.
-	ObjectSize int64
+	BlockSize int64
 
 	// Is the HTTP client used for communicating with mcache server
 	clnt *http.Client
@@ -90,7 +90,7 @@ func (c Config) MatchesSize(size int64) bool {
 	configLock.RLock()
 	defer configLock.RUnlock()
 
-	return c.Enable && c.ObjectSize > 0 && size <= c.ObjectSize
+	return c.Enable && c.BlockSize > 0 && size <= c.BlockSize
 }
 
 // Update updates new cache frequency
@@ -100,7 +100,7 @@ func (c *Config) Update(ncfg Config) {
 
 	c.Enable = ncfg.Enable
 	c.Endpoint = ncfg.Endpoint
-	c.ObjectSize = ncfg.ObjectSize
+	c.BlockSize = ncfg.BlockSize
 	c.clnt = ncfg.clnt
 }
 
@@ -223,12 +223,12 @@ func (c Config) Delete(bucket, key string) {
 func LookupConfig(kvs config.KVS, transport http.RoundTripper) (cfg Config, err error) {
 	cfg.Enable = env.Get(EnvEnable, kvs.GetWithDefault(Enable, DefaultKVS)) == config.EnableOn
 
-	if d := env.Get(EnvObjectSize, kvs.GetWithDefault(ObjectSize, DefaultKVS)); d != "" {
+	if d := env.Get(EnvBlockSize, kvs.GetWithDefault(BlockSize, DefaultKVS)); d != "" {
 		objectSize, err := humanize.ParseBytes(d)
 		if err != nil {
 			return cfg, err
 		}
-		cfg.ObjectSize = int64(objectSize)
+		cfg.BlockSize = int64(objectSize)
 	}
 
 	cfg.Endpoint = env.Get(EnvEndpoint, kvs.GetWithDefault(Endpoint, DefaultKVS))
