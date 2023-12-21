@@ -90,6 +90,7 @@ func init() {
 		getNetworkMetrics(),
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
+		getTierMetrics(),
 		getNotificationMetrics(),
 		getDistLockMetrics(),
 		getIAMNodeMetrics(),
@@ -155,6 +156,7 @@ const (
 	usageSubsystem            MetricSubsystem = "usage"
 	quotaSubsystem            MetricSubsystem = "quota"
 	ilmSubsystem              MetricSubsystem = "ilm"
+	tierSubsystem             MetricSubsystem = "tier"
 	scannerSubsystem          MetricSubsystem = "scanner"
 	iamSubsystem              MetricSubsystem = "iam"
 	kmsSubsystem              MetricSubsystem = "kms"
@@ -246,6 +248,7 @@ const (
 	sizeDistribution    = "size_distribution"
 	versionDistribution = "version_distribution"
 	ttfbDistribution    = "seconds_distribution"
+	ttlbDistribution    = "ttlb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
@@ -261,6 +264,9 @@ const (
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
 	transitionedVersions MetricName = "transitioned_versions"
+
+	tierRequestsSuccess MetricName = "requests_success"
+	tierRequestsFailure MetricName = "requests_failure"
 
 	kmsOnline          = "online"
 	kmsRequestsSuccess = "request_success"
@@ -1654,6 +1660,16 @@ func getS3TTFBMetric() *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD())
+	})
+	return mg
+}
+
+func getTierMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return globalTierMetrics.Report()
 	})
 	return mg
 }

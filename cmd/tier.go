@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -27,11 +27,13 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/kms"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 //go:generate msgp -file $GOFILE
@@ -78,6 +80,96 @@ type TierConfigMgr struct {
 	drivercache  map[string]WarmBackend `msg:"-"`
 
 	Tiers map[string]madmin.TierConfig `json:"tiers"`
+}
+
+type tierMetrics struct {
+	sync.RWMutex  // protects requestsCount only
+	requestsCount map[string]struct {
+		success int64
+		failure int64
+	}
+	histogram *prometheus.HistogramVec
+}
+
+var globalTierMetrics = tierMetrics{
+	requestsCount: make(map[string]struct {
+		success int64
+		failure int64
+	}),
+	histogram: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "tier_ttlb_seconds",
+		Help:    "Time taken by requests served by warm tier",
+		Buckets: []float64{0.01, 0.1, 1, 2, 5, 10, 60, 5 * 60, 15 * 60, 30 * 60},
+	}, []string{"tier"}),
+}
+
+func (t *tierMetrics) Observe(tier string, dur time.Duration) {
+	t.histogram.With(prometheus.Labels{"tier": tier}).Observe(dur.Seconds())
+}
+
+func (t *tierMetrics) logSuccess(tier string) {
+	t.Lock()
+	defer t.Unlock()
+
+	stat := t.requestsCount[tier]
+	stat.success++
+	t.requestsCount[tier] = stat
+}
+
+func (t *tierMetrics) logFailure(tier string) {
+	t.Lock()
+	defer t.Unlock()
+
+	stat := t.requestsCount[tier]
+	stat.failure++
+	t.requestsCount[tier] = stat
+}
+
+var (
+	// {minio_node}_{tier}_{ttlb_seconds_distribution}
+	tierTTLBMD = MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: tierSubsystem,
+		Name:      ttlbDistribution,
+		Help:      "Distribution of time to last byte for objects downloaded from warm tier",
+		Type:      gaugeMetric,
+	}
+
+	// {minio_node}_{tier}_{requests_success}
+	tierRequestsSuccessMD = MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: tierSubsystem,
+		Name:      tierRequestsSuccess,
+		Help:      "Number of requests to download object from warm tier that were successful",
+		Type:      counterMetric,
+	}
+	// {minio_node}_{tier}_{requests_failure}
+	tierRequestsFailureMD = MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: tierSubsystem,
+		Name:      tierRequestsFailure,
+		Help:      "Number of requests to download object from warm tier that failed",
+		Type:      counterMetric,
+	}
+)
+
+func (t *tierMetrics) Report() []Metric {
+	metrics := getHistogramMetrics(t.histogram, tierTTLBMD)
+	t.RLock()
+	defer t.RUnlock()
+	for tier, stat := range t.requestsCount {
+		metrics = append(metrics, Metric{
+			Description:    tierRequestsSuccessMD,
+			Value:          float64(stat.success),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+		metrics = append(metrics, Metric{
+			Description:    tierRequestsFailureMD,
+			Value:          float64(stat.failure),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+	}
+	return metrics
 }
 
 // IsTierValid returns true if there exists a remote tier by name tierName,
