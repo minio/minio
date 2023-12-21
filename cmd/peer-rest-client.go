@@ -919,6 +919,7 @@ func (client *peerRESTClient) SpeedTest(ctx context.Context, opts speedTestOpts)
 	values.Set(peerRESTDuration, opts.duration.String())
 	values.Set(peerRESTStorageClass, opts.storageClass)
 	values.Set(peerRESTBucket, opts.bucketName)
+	values.Set(peerRESTDisableSha256, strconv.FormatBool(opts.disableContentSha256))
 
 	respBody, err := client.callWithContext(context.Background(), peerRESTMethodSpeedTest, values, nil, -1)
 	if err != nil {

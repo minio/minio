@@ -1297,6 +1297,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	customBucket := strings.TrimSpace(r.Form.Get(peerRESTBucket))
 	autotune := r.Form.Get("autotune") == "true"
 	noClear := r.Form.Get("noclear") == "true"
+	disableContentSha256 := r.Form.Get("disableContentSha256") == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1360,12 +1361,13 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 
 	enc := json.NewEncoder(w)
 	ch := objectSpeedTest(ctx, speedTestOpts{
-		objectSize:       size,
-		concurrencyStart: concurrent,
-		duration:         duration,
-		autotune:         autotune,
-		storageClass:     storageClass,
-		bucketName:       customBucket,
+		objectSize:           size,
+		concurrencyStart:     concurrent,
+		duration:             duration,
+		autotune:             autotune,
+		storageClass:         storageClass,
+		bucketName:           customBucket,
+		disableContentSha256: disableContentSha256,
 	})
 	var prevResult madmin.SpeedTestResult
 	for {

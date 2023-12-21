@@ -32,13 +32,14 @@ import (
 const speedTest = "speedtest"
 
 type speedTestOpts struct {
-	objectSize       int
-	concurrencyStart int
-	concurrency      int
-	duration         time.Duration
-	autotune         bool
-	storageClass     string
-	bucketName       string
+	objectSize            int
+	concurrencyStart      int
+	concurrency           int
+	duration              time.Duration
+	autotune              bool
+	storageClass          string
+	bucketName            string
+	disableContentSha256  bool
 }
 
 // Get the max throughput and iops numbers.
@@ -158,11 +159,12 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			}
 
 			sopts := speedTestOpts{
-				objectSize:   opts.objectSize,
-				concurrency:  concurrency,
-				duration:     opts.duration,
-				storageClass: opts.storageClass,
-				bucketName:   opts.bucketName,
+				objectSize:           opts.objectSize,
+				concurrency:          concurrency,
+				duration:             opts.duration,
+				storageClass:         opts.storageClass,
+				bucketName:           opts.bucketName,
+				disableContentSha256: opts.disableContentSha256,
 			}
 
 			results := globalNotificationSys.SpeedTest(ctx, sopts)
