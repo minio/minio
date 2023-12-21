@@ -22,8 +22,8 @@ import "testing"
 // Tests - bytePool functionality.
 func TestBytePool(t *testing.T) {
 	size := 4
-	width := 10
-	capWidth := 16
+	width := 1024
+	capWidth := 2048
 
 	bufPool := NewBytePoolCap(size, width, capWidth)
 
@@ -43,7 +43,7 @@ func TestBytePool(t *testing.T) {
 		t.Fatalf("bytepool length invalid: got %v want %v", len(b), width)
 	}
 	if cap(b) != capWidth {
-		t.Fatalf("bytepool length invalid: got %v want %v", cap(b), capWidth)
+		t.Fatalf("bytepool cap invalid: got %v want %v", cap(b), capWidth)
 	}
 
 	bufPool.Put(b)

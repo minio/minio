@@ -74,6 +74,12 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_LISTENERS",
 		Hidden: true,
 	},
+	cli.BoolFlag{
+		Name:   "pre-allocate",
+		Usage:  "Number of 1MiB sized buffers to pre-allocate. Default 2048",
+		EnvVar: "MINIO_PRE_ALLOCATE",
+		Hidden: true,
+	},
 	cli.StringFlag{
 		Name:   "console-address",
 		Usage:  "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",

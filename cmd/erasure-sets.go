@@ -36,7 +36,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
@@ -369,21 +368,6 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 	mutex := newNSLock(globalIsDistErasure)
 
-	// Number of buffers, max 2GB
-	n := (2 * humanize.GiByte) / (blockSizeV2 * 2)
-
-	// Initialize byte pool once for all sets, bpool size is set to
-	// setCount * setDriveCount with each memory upto blockSizeV2.
-	bp := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
-
-	// Initialize byte pool for all sets, bpool size is set to
-	// setCount * setDriveCount with each memory upto blockSizeV1
-	//
-	// Number of buffers, max 10GiB
-	m := (10 * humanize.GiByte) / (blockSizeV1 * 2)
-
-	bpOld := bpool.NewBytePoolCap(m, blockSizeV1, blockSizeV1*2)
-
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
 	}
@@ -459,8 +443,6 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				getLockers:         s.GetLockers(i),
 				getEndpoints:       s.GetEndpoints(i),
 				nsMutex:            mutex,
-				bp:                 bp,
-				bpOld:              bpOld,
 			}
 		}(i)
 	}
