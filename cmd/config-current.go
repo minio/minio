@@ -223,7 +223,7 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.CacheSubSys,
 			Type:        "string",
-			Description: "enable various cache optimizations on MinIO for reads",
+			Description: "enable cache plugin on MinIO for GET/HEAD requests",
 			Optional:    true,
 		},
 	}
