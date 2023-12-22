@@ -97,7 +97,7 @@ func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.Bg
 		return status, true
 	}
 
-	si := o.LocalStorageInfo(ctx)
+	si := o.LocalStorageInfo(ctx, true)
 
 	indexed := make(map[string][]madmin.Disk)
 	for _, disk := range si.Disks {

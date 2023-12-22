@@ -160,7 +160,7 @@ func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDi
 }
 
 // getDisksInfo - fetch disks info across all other storage API.
-func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.Disk) {
+func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disksInfo []madmin.Disk) {
 	disksInfo = make([]madmin.Disk, len(disks))
 
 	g := errgroup.WithNErrs(len(disks))
@@ -178,7 +178,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 				disksInfo[index] = di
 				return nil
 			}
-			info, err := disks[index].DiskInfo(context.TODO(), true)
+			info, err := disks[index].DiskInfo(context.TODO(), metrics)
 			di.DrivePath = info.MountPath
 			di.TotalSpace = info.Total
 			di.UsedSpace = info.Used
@@ -225,8 +225,8 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint) (disksInfo []madmin.
 }
 
 // Get an aggregated storage info across all disks.
-func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
-	disksInfo := getDisksInfo(disks, endpoints)
+func getStorageInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) StorageInfo {
+	disksInfo := getDisksInfo(disks, endpoints, metrics)
 
 	// Sort so that the first element is the smallest.
 	sort.Slice(disksInfo, func(i, j int) bool {
@@ -245,11 +245,11 @@ func getStorageInfo(disks []StorageAPI, endpoints []Endpoint) StorageInfo {
 func (er erasureObjects) StorageInfo(ctx context.Context) StorageInfo {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
-	return getStorageInfo(disks, endpoints)
+	return getStorageInfo(disks, endpoints, true)
 }
 
 // LocalStorageInfo - returns underlying local storage statistics.
-func (er erasureObjects) LocalStorageInfo(ctx context.Context) StorageInfo {
+func (er erasureObjects) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {
 	disks := er.getDisks()
 	endpoints := er.getEndpoints()
 
@@ -263,7 +263,7 @@ func (er erasureObjects) LocalStorageInfo(ctx context.Context) StorageInfo {
 		}
 	}
 
-	return getStorageInfo(localDisks, localEndpoints)
+	return getStorageInfo(localDisks, localEndpoints, metrics)
 }
 
 // getOnlineDisksWithHealing - returns online disks and overall healing status.

@@ -136,7 +136,7 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 		return metrics
 	}
 
-	storageInfo := objLayer.LocalStorageInfo(GlobalContext)
+	storageInfo := objLayer.LocalStorageInfo(GlobalContext, true)
 	for _, d := range storageInfo.Disks {
 		if len(disks) != 0 {
 			_, ok := disks[d.Endpoint]

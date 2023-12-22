@@ -55,7 +55,7 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(GlobalContext))
+		printStorageInfo(objAPI.StorageInfo(GlobalContext, true))
 	}
 
 	// Prints credential, region and browser access.

@@ -613,7 +613,7 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 	return
 }
 
-func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) StorageInfo {
+func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(z.serverPools))
@@ -621,7 +621,7 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) StorageInfo {
 	for index := range z.serverPools {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx)
+			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx, metrics)
 			return nil
 		}, index)
 	}
@@ -637,8 +637,8 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context) StorageInfo {
 	return storageInfo
 }
 
-func (z *erasureServerPools) StorageInfo(ctx context.Context) StorageInfo {
-	return globalNotificationSys.StorageInfo(z)
+func (z *erasureServerPools) StorageInfo(ctx context.Context, metrics bool) StorageInfo {
+	return globalNotificationSys.StorageInfo(z, metrics)
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
@@ -2285,6 +2285,7 @@ type HealthResult struct {
 		Maintenance   bool
 		PoolID, SetID int
 		HealthyDrives int
+		HealingDrives int
 		WriteQuorum   int
 	}
 	WriteQuorum   int
@@ -2331,28 +2332,35 @@ func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
 // can be used to query scenarios if health may be lost
 // if this node is taken down by an external orchestrator.
 func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) HealthResult {
-	erasureSetUpCount := make([][]int, len(z.serverPools))
+	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
+
+	type setInfo struct {
+		online  int
+		healing int
+	}
+
+	var drivesHealing int
+
+	erasureSetUpCount := make([][]setInfo, len(z.serverPools))
 	for i := range z.serverPools {
-		erasureSetUpCount[i] = make([]int, len(z.serverPools[i].sets))
+		erasureSetUpCount[i] = make([]setInfo, len(z.serverPools[i].sets))
 	}
 
-	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
-	if !opts.Maintenance {
-		diskIDs = append(diskIDs, getLocalDiskIDs(z))
-	}
+	storageInfo := z.StorageInfo(ctx, false)
 
-	for _, localDiskIDs := range diskIDs {
-		for _, id := range localDiskIDs {
-			poolIdx, setIdx, _, err := z.getPoolAndSet(id)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
+	for _, disk := range storageInfo.Disks {
+		if disk.PoolIndex > -1 && disk.SetIndex > -1 {
+			if disk.State == madmin.DriveStateOk {
+				si := erasureSetUpCount[disk.PoolIndex][disk.SetIndex]
+				si.online++
+				if disk.Healing {
+					si.healing++
+					drivesHealing++
+				}
+				erasureSetUpCount[disk.PoolIndex][disk.SetIndex] = si
 			}
-			erasureSetUpCount[poolIdx][setIdx]++
 		}
 	}
-
-	reqInfo := (&logger.ReqInfo{}).AppendTags("maintenance", strconv.FormatBool(opts.Maintenance))
 
 	b := z.BackendInfo()
 	poolWriteQuorums := make([]int, len(b.StandardSCData))
@@ -2363,23 +2371,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		}
 	}
 
-	var aggHealStateResult madmin.BgHealState
 	// Check if disks are healing on in-case of VMware vsphere deployments.
 	if opts.Maintenance && opts.DeploymentType == vmware {
-		// check if local disks are being healed, if they are being healed
-		// we need to tell healthy status as 'false' so that this server
-		// is not taken down for maintenance
-		var err error
-		aggHealStateResult, err = getAggregatedBackgroundHealState(ctx, nil)
-		if err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Unable to verify global heal status: %w", err))
-			return HealthResult{
-				Healthy: false,
-			}
-		}
-
-		if len(aggHealStateResult.HealDisks) > 0 {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", len(aggHealStateResult.HealDisks)))
+		if drivesHealing > 0 {
+			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", drivesHealing))
 		}
 	}
 
@@ -2407,18 +2402,19 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
 			result.ESHealth = append(result.ESHealth, struct {
-				Maintenance                bool
-				PoolID, SetID              int
-				HealthyDrives, WriteQuorum int
+				Maintenance                               bool
+				PoolID, SetID                             int
+				HealthyDrives, HealingDrives, WriteQuorum int
 			}{
 				Maintenance:   opts.Maintenance,
 				SetID:         setIdx,
 				PoolID:        poolIdx,
-				HealthyDrives: erasureSetUpCount[poolIdx][setIdx],
+				HealthyDrives: erasureSetUpCount[poolIdx][setIdx].online,
+				HealingDrives: erasureSetUpCount[poolIdx][setIdx].healing,
 				WriteQuorum:   poolWriteQuorums[poolIdx],
 			})
 
-			if erasureSetUpCount[poolIdx][setIdx] < poolWriteQuorums[poolIdx] {
+			if erasureSetUpCount[poolIdx][setIdx].online < poolWriteQuorums[poolIdx] {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
@@ -2428,8 +2424,8 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	}
 
 	if opts.Maintenance {
-		result.Healthy = result.Healthy && len(aggHealStateResult.HealDisks) == 0
-		result.HealingDrives = len(aggHealStateResult.HealDisks)
+		result.Healthy = result.Healthy && drivesHealing == 0
+		result.HealingDrives = drivesHealing
 	}
 
 	return result
