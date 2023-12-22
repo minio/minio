@@ -624,10 +624,12 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 		go func() {
 			defer wg.Done()
 
+			listQuorum := (len(disks) + 1) / 2
+
 			// How to resolve partial results.
 			resolver := metadataResolutionParams{
-				dirQuorum: len(disks) / 2, // make sure to capture all quorum ratios
-				objQuorum: len(disks) / 2, // make sure to capture all quorum ratios
+				dirQuorum: listQuorum, // make sure to capture all quorum ratios
+				objQuorum: listQuorum, // make sure to capture all quorum ratios
 				bucket:    bucket,
 			}
 			err := listPathRaw(ctx, listPathRawOptions{
@@ -635,7 +637,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				bucket:         bucket,
 				recursive:      true,
 				forwardTo:      "",
-				minDisks:       len(disks) / 2, // to capture all quorum ratios
+				minDisks:       listQuorum,
 				reportNotFound: false,
 				agreed: func(entry metaCacheEntry) {
 					workers <- struct{}{}
