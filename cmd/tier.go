@@ -311,22 +311,30 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 	cfg := config.Tiers[tierName]
 	switch tierType {
 	case madmin.S3:
-		if (creds.AccessKey == "" || creds.SecretKey == "") && !creds.AWSRole {
-			return errTierMissingCredentials
-		}
-		switch {
-		case creds.AWSRole:
+		if creds.AWSRole {
 			cfg.S3.AWSRole = true
-		default:
+		}
+		if creds.AWSRoleWebIdentityTokenFile != "" && creds.AWSRoleARN != "" {
+			cfg.S3.AWSRoleARN = creds.AWSRoleARN
+			cfg.S3.AWSRoleWebIdentityTokenFile = creds.AWSRoleWebIdentityTokenFile
+		}
+		if creds.AccessKey != "" && creds.SecretKey != "" {
 			cfg.S3.AccessKey = creds.AccessKey
 			cfg.S3.SecretKey = creds.SecretKey
 		}
 	case madmin.Azure:
-		if creds.SecretKey == "" {
-			return errTierMissingCredentials
+		if creds.SecretKey != "" {
+			cfg.Azure.AccountKey = creds.SecretKey
 		}
-		cfg.Azure.AccountKey = creds.SecretKey
-
+		if creds.AzSP.TenantID != "" {
+			cfg.Azure.SPAuth.TenantID = creds.AzSP.TenantID
+		}
+		if creds.AzSP.ClientID != "" {
+			cfg.Azure.SPAuth.ClientID = creds.AzSP.ClientID
+		}
+		if creds.AzSP.ClientSecret != "" {
+			cfg.Azure.SPAuth.ClientSecret = creds.AzSP.ClientSecret
+		}
 	case madmin.GCS:
 		if creds.CredsJSON == nil {
 			return errTierMissingCredentials
