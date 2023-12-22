@@ -169,6 +169,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 		msg, _, err := wsutil.ReadClientData(conn)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("grid: reading connect: %w", err))
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		if debugPrint {
@@ -182,6 +183,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 				fmt.Println("parse err:", err)
 			}
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing connect: %w", err))
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		if message.Op != OpConnect {
@@ -189,6 +191,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 				fmt.Println("op err:", message.Op)
 			}
 			logger.LogIf(ctx, fmt.Errorf("handler: unexpected op: %v", message.Op))
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		var cReq connectReq
@@ -198,6 +201,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 				fmt.Println("handler: creq err:", err)
 			}
 			logger.LogIf(ctx, fmt.Errorf("handleMessages: parsing ConnectReq: %w", err))
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		remote := m.targets[cReq.Host]
@@ -205,7 +209,7 @@ func (m *Manager) Handler() http.HandlerFunc {
 			if debugPrint {
 				fmt.Printf("%s: handler: unknown host: %v. Have %v\n", m.local, cReq.Host, m.targets)
 			}
-			logger.LogIf(ctx, fmt.Errorf("handler: unknown host: %v", cReq.Host))
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 		if debugPrint {

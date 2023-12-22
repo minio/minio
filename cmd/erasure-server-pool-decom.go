@@ -716,7 +716,7 @@ func (set *erasureObjects) listObjectsToDecommission(ctx context.Context, bi dec
 		path:           bi.Prefix,
 		recursive:      true,
 		forwardTo:      "",
-		minDisks:       len(disks) / 2,
+		minDisks:       listQuorum,
 		reportNotFound: false,
 		agreed:         fn,
 		partial: func(entries metaCacheEntries, _ []error) {

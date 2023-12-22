@@ -202,7 +202,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 				case <-t.C:
 					last := time.Since(time.Unix(atomic.LoadInt64(&m.LastPing), 0))
 					if last > lastPingThreshold {
-						logger.LogIf(m.ctx, fmt.Errorf("canceling remote mux %d not seen for %v", m.ID, last))
+						logger.LogIf(m.ctx, fmt.Errorf("canceling remote connection %s not seen for %v", m.parent, last))
 						m.close()
 						return
 					}
