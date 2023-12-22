@@ -113,16 +113,27 @@ func GetSourceIPFromHeaders(r *http.Request) string {
 	return addr
 }
 
-// GetSourceIP retrieves the IP from the request headers
+// GetSourceIPRaw retrieves the IP from the request headers
 // and falls back to r.RemoteAddr when necessary.
-func GetSourceIP(r *http.Request) string {
+// however returns without bracketing.
+func GetSourceIPRaw(r *http.Request) string {
 	addr := GetSourceIPFromHeaders(r)
-	if addr != "" {
-		return addr
+	if addr == "" {
+		addr = r.RemoteAddr
 	}
 
 	// Default to remote address if headers not set.
-	addr, _, _ = net.SplitHostPort(r.RemoteAddr)
+	raddr, _, _ := net.SplitHostPort(addr)
+	if raddr == "" {
+		return addr
+	}
+	return raddr
+}
+
+// GetSourceIP retrieves the IP from the request headers
+// and falls back to r.RemoteAddr when necessary.
+func GetSourceIP(r *http.Request) string {
+	addr := GetSourceIPRaw(r)
 	if strings.ContainsRune(addr, ':') {
 		return "[" + addr + "]"
 	}

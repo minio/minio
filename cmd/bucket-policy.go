@@ -121,7 +121,7 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 		"CurrentTime":      {currTime.Format(time.RFC3339)},
 		"EpochTime":        {strconv.FormatInt(currTime.Unix(), 10)},
 		"SecureTransport":  {strconv.FormatBool(r.TLS != nil)},
-		"SourceIp":         {handlers.GetSourceIP(r)},
+		"SourceIp":         {handlers.GetSourceIPRaw(r)},
 		"UserAgent":        {r.UserAgent()},
 		"Referer":          {r.Referer()},
 		"principaltype":    {principalType},
