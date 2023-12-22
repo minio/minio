@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger/target/http"
 	"github.com/minio/minio/internal/logger/target/kafka"
 	"github.com/minio/minio/internal/logger/target/types"
@@ -56,18 +55,6 @@ var (
 	// This is always set represent /dev/console target
 	consoleTgt Target
 )
-
-// TargetStatus returns status of the target (online|offline)
-func TargetStatus(ctx context.Context, h Target) madmin.Status {
-	if h.IsOnline(ctx) {
-		return madmin.Status{Status: string(madmin.ItemOnline)}
-	}
-	// Previous initialization had failed. Try again.
-	if e := h.Init(ctx); e == nil {
-		return madmin.Status{Status: string(madmin.ItemOnline)}
-	}
-	return madmin.Status{Status: string(madmin.ItemOffline)}
-}
 
 // SystemTargets returns active targets.
 // Returned slice may not be modified in any way.
