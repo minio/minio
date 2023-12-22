@@ -508,7 +508,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "minio_cluster_usage_total_bytes{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_cluster_usage_total_bytes{job=\"$scrape_jobs\"})",
           "interval": "",
           "legendFormat": "Usage",
           "range": true,
@@ -575,7 +575,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "minio_cluster_objects_size_distribution{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_cluster_objects_size_distribution{job=\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -901,7 +901,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_nodes_online_total{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_cluster_nodes_online_total{job=\"$scrape_jobs\"})",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -984,7 +984,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_drive_online_total{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_cluster_drive_online_total{job=\"$scrape_jobs\"})",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1335,7 +1335,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_nodes_offline_total{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_cluster_nodes_offline_total{job=\"$scrape_jobs\"})",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1418,7 +1418,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_cluster_drive_offline_total{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_cluster_drive_offline_total{job=\"$scrape_jobs\"})",
           "format": "table",
           "hide": false,
           "instant": true,
@@ -1574,12 +1574,12 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_heal_time_last_activity_nano_seconds{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_heal_time_last_activity_nano_seconds{job=\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": true,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{server}}",
+          "legendFormat": "",
           "metric": "process_start_time_seconds",
           "refId": "A",
           "step": 60
@@ -1645,12 +1645,12 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_usage_last_activity_nano_seconds{job=\"$scrape_jobs\"}",
+          "expr": "max(minio_usage_last_activity_nano_seconds{job=\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": true,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{server}}",
+          "legendFormat": "",
           "metric": "process_start_time_seconds",
           "refId": "A",
           "step": 60
