@@ -114,6 +114,20 @@ func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Validation code
+	switch {
+	case conf.AWSRoleWebIdentityTokenFile == "" && conf.AWSRoleARN != "" || conf.AWSRoleWebIdentityTokenFile != "" && conf.AWSRoleARN == "":
+		return nil, errors.New("both the token file and the role ARN are required")
+	case conf.AccessKey == "" && conf.SecretKey != "" || conf.AccessKey != "" && conf.SecretKey == "":
+		return nil, errors.New("both the access and secret keys are required")
+	case conf.AWSRole && (conf.AWSRoleWebIdentityTokenFile != "" || conf.AWSRoleARN != "" || conf.AccessKey != "" || conf.SecretKey != ""):
+		return nil, errors.New("AWS Role cannot be activated with static credentials or the web identity token file")
+	case conf.Bucket == "":
+		return nil, errors.New("no bucket name was provided")
+	}
+
+	// Credentials initialization
 	var creds *credentials.Credentials
 	switch {
 	case conf.AWSRole:

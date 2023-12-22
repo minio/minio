@@ -153,6 +153,19 @@ func newWarmBackendAzure(conf madmin.TierAzure, _ string) (*warmBackendAzure, er
 		err        error
 	)
 
+	switch {
+	case conf.AccountName == "":
+		return nil, errors.New("the account name is required")
+	case conf.AccountKey != "" && (conf.SPAuth.TenantID != "" || conf.SPAuth.ClientID != "" || conf.SPAuth.ClientSecret != ""):
+		return nil, errors.New("multiple authentication mechanisms are provided")
+	case conf.AccountKey == "" && (conf.SPAuth.TenantID == "" || conf.SPAuth.ClientID == "" || conf.SPAuth.ClientSecret == ""):
+		return nil, errors.New("no authentication mechanism was provided")
+	}
+
+	if conf.Bucket == "" {
+		return nil, errors.New("no bucket name was provided")
+	}
+
 	if conf.IsSPEnabled() {
 		credential, err = newCredentialFromSP(conf)
 	} else {
