@@ -3133,7 +3133,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 		}
 
 		metrics = make([]Metric, 0, 50)
-		storageInfo := objLayer.LocalStorageInfo(ctx)
+		storageInfo := objLayer.LocalStorageInfo(ctx, true)
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
 
@@ -3235,12 +3235,32 @@ func getClusterHealthStatusMD() MetricDescription {
 	}
 }
 
-func getClusterErasureSetToleranceMD() MetricDescription {
+func getClusterErasureSetWriteQuorumMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
 		Subsystem: "health",
-		Name:      "erasure_set_tolerance",
-		Help:      "Get erasure set tolerance status",
+		Name:      "erasure_set_write_quorum",
+		Help:      "Get the write quorum for this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterErasureSetOnlineDrivesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_online_drives",
+		Help:      "Get the count of the online drives in this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterErasureSetHealingDrivesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_healing_drives",
+		Help:      "Get the count of healing drives of this erasure set",
 		Type:      gaugeMetric,
 	}
 }
@@ -3256,10 +3276,10 @@ func getClusterHealthMetrics() *MetricsGroup {
 			return
 		}
 
-		metrics = make([]Metric, 0, 2)
-
 		opts := HealthOptions{}
 		result := objLayer.Health(ctx, opts)
+
+		metrics = make([]Metric, 0, 2+3*len(result.ESHealth))
 
 		metrics = append(metrics, Metric{
 			Description: getClusterWriteQuorumMD(),
@@ -3282,9 +3302,19 @@ func getClusterHealthMetrics() *MetricsGroup {
 				"set":  strconv.Itoa(h.SetID),
 			}
 			metrics = append(metrics, Metric{
-				Description:    getClusterErasureSetToleranceMD(),
+				Description:    getClusterErasureSetWriteQuorumMD(),
 				VariableLabels: labels,
-				Value:          float64(h.HealthyDrives - h.WriteQuorum),
+				Value:          float64(h.WriteQuorum),
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetOnlineDrivesMD(),
+				VariableLabels: labels,
+				Value:          float64(h.HealthyDrives),
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetHealingDrivesMD(),
+				VariableLabels: labels,
+				Value:          float64(h.HealingDrives),
 			})
 		}
 
@@ -3378,7 +3408,7 @@ func getClusterStorageMetrics() *MetricsGroup {
 
 		// Fetch disk space info, ignore errors
 		metrics = make([]Metric, 0, 10)
-		storageInfo := objLayer.StorageInfo(ctx)
+		storageInfo := objLayer.StorageInfo(ctx, true)
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
 

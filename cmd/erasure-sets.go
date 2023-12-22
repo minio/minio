@@ -597,7 +597,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context) StorageInfo {
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *erasureSets) LocalStorageInfo(ctx context.Context) StorageInfo {
+func (s *erasureSets) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
@@ -606,7 +606,7 @@ func (s *erasureSets) LocalStorageInfo(ctx context.Context) StorageInfo {
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = s.sets[index].LocalStorageInfo(ctx)
+			storageInfos[index] = s.sets[index].LocalStorageInfo(ctx, metrics)
 			return nil
 		}, index)
 	}

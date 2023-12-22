@@ -988,7 +988,7 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 }
 
 // StorageInfo returns disk information across all peers
-func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
+func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer, metrics bool) StorageInfo {
 	var storageInfo StorageInfo
 	replies := make([]StorageInfo, len(sys.peerClients))
 
@@ -1000,7 +1000,7 @@ func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
-			info, err := client.LocalStorageInfo()
+			info, err := client.LocalStorageInfo(metrics)
 			if err != nil {
 				info.Disks = getOfflineDisks(client.host.String(), globalEndpoints)
 			}
@@ -1010,7 +1010,7 @@ func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
 	wg.Wait()
 
 	// Add local to this server.
-	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext))
+	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext, metrics))
 
 	storageInfo.Backend = objLayer.BackendInfo()
 	for _, sinfo := range replies {

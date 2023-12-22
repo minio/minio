@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v33" // Add SRMetrics
+	peerRESTVersion = "v34" // Add metrics flag to LocalStorageInfo call
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -107,6 +107,7 @@ const (
 	peerRESTJobID          = "job-id"
 	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"
+	peerRESTMetrics        = "metrics"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

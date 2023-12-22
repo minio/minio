@@ -340,7 +340,7 @@ func (a adminAPIHandlers) StorageInfoHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	storageInfo := objectAPI.StorageInfo(ctx)
+	storageInfo := objectAPI.StorageInfo(ctx, true)
 
 	// Collect any disk healing.
 	healing, _ := getAggregatedBackgroundHealState(ctx, nil)
@@ -1314,7 +1314,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		duration = time.Second * 10
 	}
 
-	storageInfo := objectAPI.StorageInfo(ctx)
+	storageInfo := objectAPI.StorageInfo(ctx, true)
 
 	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
 	if !sufficientCapacity {
@@ -2728,7 +2728,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
 		ci.Info.MinioVersion = Version
 
-		si := objectAPI.StorageInfo(ctx)
+		si := objectAPI.StorageInfo(ctx, true)
 
 		ci.Info.NoOfDrives = len(si.Disks)
 		for _, disk := range si.Disks {
