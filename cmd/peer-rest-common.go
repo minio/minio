@@ -100,6 +100,7 @@ const (
 	peerRESTConcurrent     = "concurrent"
 	peerRESTDuration       = "duration"
 	peerRESTStorageClass   = "storage-class"
+	peerRESTEnableSha256   = "enableSha256"
 	peerRESTMetricsTypes   = "types"
 	peerRESTDisk           = "disk"
 	peerRESTHost           = "host"

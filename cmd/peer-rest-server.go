@@ -1304,6 +1304,7 @@ func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request
 	concurrentStr := r.Form.Get(peerRESTConcurrent)
 	storageClass := r.Form.Get(peerRESTStorageClass)
 	bucketName := r.Form.Get(peerRESTBucket)
+	enableSha256 := r.Form.Get(peerRESTEnableSha256) == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1328,6 +1329,7 @@ func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request
 		duration:     duration,
 		storageClass: storageClass,
 		bucketName:   bucketName,
+		enableSha256: enableSha256,
 	})
 	if err != nil {
 		result.Error = err.Error()
