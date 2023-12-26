@@ -476,22 +476,16 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 	auditLogInternal(ctx, opts)
 }
 
-func joinErrors(errs ...error) error {
-	s := make([]string, 0, len(errs))
-	nonNilErrs := make([]any, 0, len(errs))
-	for _, err := range errs {
-		if err == nil {
-			continue
+func joinErrs(errs []error) []string {
+	s := make([]string, len(errs))
+	for i := range s {
+		if errs[i] == nil {
+			s[i] = "<nil>"
+		} else {
+			s[i] = errs[i].Error()
 		}
-		s = append(s, "[%w]")
-		nonNilErrs = append(nonNilErrs, err)
 	}
-	// If all the errors were nil, return nil.
-	if len(nonNilErrs) == 0 {
-		return nil
-	}
-	allErrs := strings.Join(s, "\n")
-	return fmt.Errorf(allErrs, nonNilErrs...)
+	return s
 }
 
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
@@ -502,12 +496,17 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
 		tags["pool"] = er.poolIndex
-		tags["merrs"] = joinErrors(errs...)     // errors.Join(errs...)
-		tags["derrs"] = joinErrors(dataErrs...) // errors.Join(dataErrs...)
+		tags["merrs"] = joinErrs(errs)
+		tags["derrs"] = joinErrs(dataErrs)
 		if m.IsValid() {
 			tags["size"] = m.Size
 			tags["mtime"] = m.ModTime.Format(http.TimeFormat)
+			tags["data"] = m.Erasure.DataBlocks
 			tags["parity"] = m.Erasure.ParityBlocks
+		} else {
+			tags["invalid-meta"] = true
+			tags["data"] = er.setDriveCount - er.defaultParityCount
+			tags["parity"] = er.defaultParityCount
 		}
 
 		if cok {
