@@ -19,7 +19,7 @@ For optimal production setup MinIO recommends Linux kernel version 4.x and later
 
 | Item                                                                            | Specification                                                                   |
 |:--------------------------------------------------------------------------------|:--------------------------------------------------------------------------------|
-| Maximum number of buckets                                                       | unlimited (we recommend not beyond 500000 buckets)                              |
+| Maximum number of buckets                                                       | unlimited (we recommend not beyond 500000 buckets) - see NOTE:                  |
 | Maximum number of objects per bucket                                            | no-limit                                                                        |
 | Maximum object size                                                             | 50 TiB                                                                          |
 | Minimum object size                                                             | 0 B                                                                             |
@@ -33,6 +33,8 @@ For optimal production setup MinIO recommends Linux kernel version 4.x and later
 | Maximum length for object names                                                 | 1024                                                                            |
 | Maximum length for '/' separated object name segment                            | 255                                                                             |
 | Maximum number of versions per object                                           | 10000 (can be configured to higher values but we do not recommend beyond 10000) |
+
+> NOTE: Number of buckets in any cluster is a function of the hardware limits and what kind of workload it would scale for. We advise that you consult us directly via https://min.io/pricing for better sizing guidelines for your use-case.
 
 ## List of Amazon S3 API's not supported on MinIO
 
