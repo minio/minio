@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"github.com/klauspost/compress/gzhttp"
-	"github.com/minio/console/restapi"
+	consoleapi "github.com/minio/console/api"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
@@ -43,13 +43,13 @@ func setHTTPServer(h *xhttp.Server) {
 	globalObjLayerMutex.Unlock()
 }
 
-func newConsoleServerFn() *restapi.Server {
+func newConsoleServerFn() *consoleapi.Server {
 	globalObjLayerMutex.RLock()
 	defer globalObjLayerMutex.RUnlock()
 	return globalConsoleSrv
 }
 
-func setConsoleSrv(srv *restapi.Server) {
+func setConsoleSrv(srv *consoleapi.Server) {
 	globalObjLayerMutex.Lock()
 	globalConsoleSrv = srv
 	globalObjLayerMutex.Unlock()
