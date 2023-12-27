@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -1973,10 +1972,10 @@ func (p *ReplicationPool) ResizeWorkerPriority(pri string, maxWorkers int) {
 		workers = WorkerAutoDefault
 		mrfWorkers = MRFWorkerAutoDefault
 		if len(p.workers) < WorkerAutoDefault {
-			workers = int(math.Min(float64(len(p.workers)+1), WorkerAutoDefault))
+			workers = min(len(p.workers)+1, WorkerAutoDefault)
 		}
 		if p.mrfWorkerSize < MRFWorkerAutoDefault {
-			mrfWorkers = int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerAutoDefault))
+			mrfWorkers = min(p.mrfWorkerSize+1, MRFWorkerAutoDefault)
 		}
 	}
 	if maxWorkers > 0 && workers > maxWorkers {
@@ -2069,18 +2068,18 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		case "slow":
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
 		default:
-			maxWorkers = int(math.Min(float64(maxWorkers), WorkerMaxLimit))
+			maxWorkers = min(maxWorkers, WorkerMaxLimit)
 			if p.ActiveWorkers() < maxWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(len(p.workers)+1), float64(maxWorkers)))
+				workers := min(len(p.workers)+1, maxWorkers)
 				existing := len(p.workers)
 				p.mu.RUnlock()
 				p.ResizeWorkers(workers, existing)
 			}
-			maxMRFWorkers := int(math.Min(float64(maxWorkers), MRFWorkerMaxLimit))
+			maxMRFWorkers := min(maxWorkers, MRFWorkerMaxLimit)
 			if p.ActiveMRFWorkers() < maxMRFWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(p.mrfWorkerSize+1), float64(maxMRFWorkers)))
+				workers := min(p.mrfWorkerSize+1, maxMRFWorkers)
 				p.mu.RUnlock()
 				p.ResizeFailedWorkers(workers)
 			}
@@ -2126,10 +2125,10 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		case "slow":
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
 		default:
-			maxWorkers = int(math.Min(float64(maxWorkers), WorkerMaxLimit))
+			maxWorkers = min(maxWorkers, WorkerMaxLimit)
 			if p.ActiveWorkers() < maxWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(len(p.workers)+1), float64(maxWorkers)))
+				workers := min(len(p.workers)+1, maxWorkers)
 				existing := len(p.workers)
 				p.mu.RUnlock()
 				p.ResizeWorkers(workers, existing)

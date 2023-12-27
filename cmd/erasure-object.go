@@ -489,7 +489,6 @@ func joinErrs(errs []error) []string {
 }
 
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
-	_, file, line, cok := runtime.Caller(1)
 	var err error
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
@@ -509,6 +508,18 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 			tags["parity"] = er.defaultParityCount
 		}
 
+		// count the number of offline disks
+		offline := 0
+		for i := 0; i < max(len(errs), len(dataErrs)); i++ {
+			if i < len(errs) && errs[i] == errDiskNotFound || i < len(dataErrs) && dataErrs[i] == errDiskNotFound {
+				offline++
+			}
+		}
+		if offline > 0 {
+			tags["offline"] = offline
+		}
+
+		_, file, line, cok := runtime.Caller(1)
 		if cok {
 			tags["caller"] = fmt.Sprintf("%s:%d", file, line)
 		}

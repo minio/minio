@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"fmt"
-	"math"
 	"runtime"
 	"strings"
 	"time"
@@ -64,7 +63,7 @@ func colorizeUpdateMessage(updateString string, newerThan string) string {
 	line2InColor := fmt.Sprintf(msgLine2Fmt, color.CyanBold(updateString))
 
 	// calculate the rectangular box size.
-	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
+	maxContentWidth := max(line1Length, line2Length)
 
 	// termWidth is set to a default one to use when we are
 	// not able to calculate terminal width via OS syscalls
