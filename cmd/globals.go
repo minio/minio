@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/console/restapi"
+	consoleapi "github.com/minio/console/api"
 	"github.com/minio/dnscache"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
@@ -395,7 +395,7 @@ var (
 
 	globalTierJournal *TierJournal
 
-	globalConsoleSrv *restapi.Server
+	globalConsoleSrv *consoleapi.Server
 
 	// handles service freeze or un-freeze S3 API calls.
 	globalServiceFreeze atomic.Value
