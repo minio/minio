@@ -1950,8 +1950,6 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 		// map of node wise disk stats
 		diskStats := make(map[string]DiskStat)
 		for _, set := range pool.sets {
-			vis := []VolInfo{}
-			errs := []error{}
 			for _, disk := range set.getDisks() {
 				if disk == OfflineDisk {
 					continue
@@ -1964,8 +1962,8 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 				ds, ok := diskStats[hostName]
 				if !ok {
 					newds := DiskStat{
-						VolInfos: vis,
-						Errs:     errs,
+						VolInfos: []VolInfo{vi},
+						Errs:     []error{err},
 					}
 					diskStats[hostName] = newds
 				} else {
@@ -1982,7 +1980,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 				bktNotFoundCount++
 			}
 		}
-		// if the bucket if not found on more than hslf the no of nodes, its dagling
+		// if the bucket if not found on more than hslf the no of nodes, its dangling
 		if bktNotFoundCount > nodeCount/2 {
 			opts.Remove = true
 		} else {
