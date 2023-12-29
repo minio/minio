@@ -513,7 +513,7 @@ func TestNewFormatSets(t *testing.T) {
 	// 16th disk is unformatted.
 	errs[15] = errUnformattedDisk
 
-	newFormats := newHealFormatSets(quorumFormat, setCount, setDriveCount, formats, errs)
+	newFormats, _ := newHealFormatSets(quorumFormat, setCount, setDriveCount, formats, errs)
 	if newFormats == nil {
 		t.Fatal("Unexpected failure")
 	}

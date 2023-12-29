@@ -370,10 +370,8 @@ func (fi *FileInfo) SetHealing() {
 // Healing returns true if object is being healed (i.e fi is being passed down
 // from healObject)
 func (fi FileInfo) Healing() bool {
-	if _, ok := fi.Metadata[xMinIOHealing]; ok {
-		return true
-	}
-	return false
+	_, ok := fi.Metadata[xMinIOHealing]
+	return ok
 }
 
 // Heals an object by re-writing corrupt/missing erasure blocks.
@@ -760,7 +758,8 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 		// Attempt a rename now from healed data to final location.
 		partsMetadata[i].SetHealing()
-		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object); err != nil {
+
+		if _, err = disk.RenameData(ctx, minioMetaTmpBucket, tmpID, partsMetadata[i], bucket, object, RenameOptions{}); err != nil {
 			return result, err
 		}
 

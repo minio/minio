@@ -546,7 +546,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 				if disks[index] == nil {
 					return errDiskNotFound
 				}
-				return disks[index].DeleteVersion(ctx, bucket, object, fi, false)
+				return disks[index].DeleteVersion(ctx, bucket, object, fi, false, DeleteOptions{})
 			}, index)
 		}
 
@@ -1032,7 +1032,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if !fi.IsValid() {
 				return errFileCorrupt
 			}
-			sign, err := disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry)
+			sign, err := disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry, RenameOptions{})
 			if err != nil {
 				return err
 			}
@@ -1059,7 +1059,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			// caller this dangling object will be now scheduled to be removed
 			// via active healing.
 			dg.Go(func() error {
-				return disks[index].DeleteVersion(context.Background(), dstBucket, dstEntry, metadata[index], false)
+				return disks[index].DeleteVersion(context.Background(), dstBucket, dstEntry, metadata[index], false, DeleteOptions{UndoWrite: true})
 			}, index)
 		}
 		dg.Wait()
@@ -1610,7 +1610,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker)
+			return disks[index].DeleteVersion(ctx, bucket, object, fi, forceDelMarker, DeleteOptions{})
 		}, index)
 	}
 	// return errors if any during deletion
@@ -1723,7 +1723,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				}
 				return
 			}
-			errs := disk.DeleteVersions(ctx, bucket, dedupVersions)
+			errs := disk.DeleteVersions(ctx, bucket, dedupVersions, DeleteOptions{})
 			for i, err := range errs {
 				if err == nil {
 					continue

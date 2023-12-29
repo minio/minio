@@ -94,6 +94,7 @@ func init() {
 		getNotificationMetrics(),
 		getDistLockMetrics(),
 		getIAMNodeMetrics(),
+		getLocalStorageMetrics(),
 	}
 
 	bucketMetricsGroups := []*MetricsGroup{

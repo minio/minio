@@ -253,7 +253,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 
 	listQuorum := env.Get(EnvAPIListQuorum, kvs.GetWithDefault(apiListQuorum, DefaultKVS))
 	switch listQuorum {
-	case "strict", "optimal", "reduced", "disk":
+	case "strict", "optimal", "reduced", "disk", "auto":
 	default:
 		return cfg, fmt.Errorf("invalid value %v for list_quorum: will default to 'strict'", listQuorum)
 	}

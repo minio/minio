@@ -58,7 +58,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiListQuorum,
-			Description: `set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict"` + defaultHelpPostfix(apiListQuorum),
+			Description: `set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict", "auto"` + defaultHelpPostfix(apiListQuorum),
 			Optional:    true,
 			Type:        "string",
 		},

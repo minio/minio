@@ -1985,7 +1985,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				go func() {
 					defer wg.Done()
 
-					disks, _ := set.getOnlineDisksWithHealing(true)
+					disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)
 					if len(disks) == 0 {
 						cancel()
 						return
@@ -2002,7 +2002,17 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 
 					askDisks := getListQuorum(opts.AskDisks, set.setDriveCount)
 					if askDisks == -1 {
-						askDisks = getListQuorum("strict", set.setDriveCount)
+						newDisks := getQuorumDisks(disks, infos, (len(disks)+1)/2)
+						if newDisks != nil {
+							// If we found disks signature in quorum, we proceed to list
+							// from a single drive, shuffling of the drives is subsequently.
+							disks = newDisks
+							askDisks = 1
+						} else {
+							// If we did not find suitable disks, perform strict quorum listing
+							// as no disk agrees on quorum anymore.
+							askDisks = getListQuorum("strict", set.setDriveCount)
+						}
 					}
 
 					// Special case: ask all disks if the drive count is 4

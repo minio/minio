@@ -139,6 +139,7 @@ func toStorageErr(err error) error {
 
 // Abstracts a remote disk.
 type storageRESTClient struct {
+	// Indicate of NSScanner is in progress in this disk
 	scanning int32
 
 	endpoint   Endpoint
@@ -148,9 +149,6 @@ type storageRESTClient struct {
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
-
-	diskInfoCache        timedValue
-	diskInfoCacheMetrics timedValue
 }
 
 // Retrieve location indexes.
@@ -272,36 +270,23 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 		// transport is already down.
 		return info, errDiskNotFound
 	}
-	fetchDI := func(di *timedValue, metrics bool) {
-		di.TTL = time.Second
-		di.Update = func() (interface{}, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			info, err := storageDiskInfoHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
-				storageRESTDiskID: client.diskID,
-				// Always request metrics, since we are caching the result.
-				storageRESTMetrics: strconv.FormatBool(metrics),
-			}))
-			if err != nil {
-				return info, err
-			}
-			if info.Error != "" {
-				return info, toStorageErr(errors.New(info.Error))
-			}
-			return info, nil
-		}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	infop, err := storageDiskInfoHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
+		storageRESTDiskID: client.diskID,
+		// Always request metrics, since we are caching the result.
+		storageRESTMetrics: strconv.FormatBool(metrics),
+	}))
+	if err != nil {
+		return info, err
 	}
-	// Fetch disk info from appropriate cache.
-	dic := &client.diskInfoCache
-	if metrics {
-		dic = &client.diskInfoCacheMetrics
+	info = *infop
+	if info.Error != "" {
+		return info, toStorageErr(errors.New(info.Error))
 	}
-	dic.Once.Do(func() { fetchDI(dic, metrics) })
-	val, err := dic.Get()
-	if di, ok := val.(*DiskInfo); di != nil && ok {
-		info = *di
-	}
-	return info, err
+	info.Scanning = atomic.LoadInt32(&client.scanning) == 1
+	return info, nil
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -406,13 +391,14 @@ func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, pat
 	return toStorageErr(err)
 }
 
-func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error {
-	_, err := storageDeleteVersionHandler.Call(ctx, client.gridConn, &DeleteVersionHandlerParams{
+func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool, opts DeleteOptions) (err error) {
+	_, err = storageDeleteVersionHandler.Call(ctx, client.gridConn, &DeleteVersionHandlerParams{
 		DiskID:         client.diskID,
 		Volume:         volume,
 		FilePath:       path,
 		ForceDelMarker: forceDelMarker,
 		FI:             fi,
+		Opts:           opts,
 	})
 	return toStorageErr(err)
 }
@@ -439,10 +425,11 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
-func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (sign uint64, err error) {
+func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (sign uint64, err error) {
 	// Set a very long timeout for rename data.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
+
 	resp, err := storageRenameDataHandler.Call(ctx, client.gridConn, &RenameDataHandlerParams{
 		DiskID:    client.diskID,
 		SrcVolume: srcVolume,
@@ -450,6 +437,7 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 		DstPath:   dstPath,
 		DstVolume: dstVolume,
 		FI:        fi,
+		Opts:      opts,
 	})
 	if err != nil {
 		return 0, toStorageErr(err)
@@ -627,7 +615,7 @@ func (client *storageRESTClient) Delete(ctx context.Context, volume string, path
 }
 
 // DeleteVersions - deletes list of specified versions if present
-func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []error) {
+func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions, opts DeleteOptions) (errs []error) {
 	if len(versions) == 0 {
 		return errs
 	}
