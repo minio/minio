@@ -574,23 +574,25 @@ func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string
 			var permanentDeletes uint64
 			var deleteMarkers uint64
 
-			for _, nerr := range errs {
+			for i, nerr := range errs {
 				if nerr != nil {
 					continue
 				}
-				for _, version := range versions {
-					for _, fi := range version.Versions {
-						if fi.Deleted {
-							// Delete markers are a write operation not a permanent delete.
-							deleteMarkers++
-							continue
-						}
-						permanentDeletes++
+				for _, fi := range versions[i].Versions {
+					if fi.Deleted {
+						// Delete markers are a write operation not a permanent delete.
+						deleteMarkers++
+						continue
 					}
+					permanentDeletes++
 				}
 			}
-			p.storage.setWriteAttribute(p.totalWrites.Add(deleteMarkers))
-			p.storage.setDeleteAttribute(p.totalDeletes.Add(permanentDeletes))
+			if deleteMarkers > 0 {
+				p.storage.setWriteAttribute(p.totalWrites.Add(deleteMarkers))
+			}
+			if permanentDeletes > 0 {
+				p.storage.setDeleteAttribute(p.totalDeletes.Add(permanentDeletes))
+			}
 		}
 		done(&err)
 	}()

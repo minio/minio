@@ -371,7 +371,6 @@ func (s *storageRESTServer) DeleteVersionHandler(p *DeleteVersionHandlerParams) 
 	forceDelMarker := p.ForceDelMarker
 
 	opts := DeleteOptions{}
-	opts.Remote = true
 	err := s.getStorage().DeleteVersion(context.Background(), volume, filePath, p.FI, forceDelMarker, opts)
 	return np, grid.NewRemoteErr(err)
 }
@@ -729,7 +728,6 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 	done := keepHTTPResponseAlive(w)
 
 	opts := DeleteOptions{}
-	opts.Remote = true
 	errs := s.getStorage().DeleteVersions(r.Context(), volume, versions, opts)
 	done(nil)
 	for idx := range versions {
@@ -751,8 +749,6 @@ func (s *storageRESTServer) RenameDataHandler(p *RenameDataHandlerParams) (*Rena
 	if !s.checkID(p.DiskID) {
 		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
-
-	p.Opts.Remote = true
 
 	sign, err := s.getStorage().RenameData(context.Background(), p.SrcVolume, p.SrcPath, p.FI, p.DstVolume, p.DstPath, p.Opts)
 	resp := &RenameDataResp{

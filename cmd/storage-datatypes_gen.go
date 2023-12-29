@@ -24,12 +24,6 @@ func (z *BaseOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "rm":
-			z.Remote, err = dc.ReadBool()
-			if err != nil {
-				err = msgp.WrapError(err, "Remote")
-				return
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -43,15 +37,9 @@ func (z *BaseOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z BaseOptions) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 1
-	// write "rm"
-	err = en.Append(0x81, 0xa2, 0x72, 0x6d)
+	// map header, size 0
+	err = en.Append(0x80)
 	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.Remote)
-	if err != nil {
-		err = msgp.WrapError(err, "Remote")
 		return
 	}
 	return
@@ -60,10 +48,8 @@ func (z BaseOptions) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z BaseOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 1
-	// string "rm"
-	o = append(o, 0x81, 0xa2, 0x72, 0x6d)
-	o = msgp.AppendBool(o, z.Remote)
+	// map header, size 0
+	o = append(o, 0x80)
 	return
 }
 
@@ -85,12 +71,6 @@ func (z *BaseOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "rm":
-			z.Remote, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Remote")
-				return
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -105,7 +85,7 @@ func (z *BaseOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z BaseOptions) Msgsize() (s int) {
-	s = 1 + 3 + msgp.BoolSize
+	s = 1
 	return
 }
 
@@ -506,12 +486,6 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 				switch msgp.UnsafeString(field) {
-				case "rm":
-					z.BaseOptions.Remote, err = dc.ReadBool()
-					if err != nil {
-						err = msgp.WrapError(err, "BaseOptions", "Remote")
-						return
-					}
 				default:
 					err = dc.Skip()
 					if err != nil {
@@ -557,15 +531,9 @@ func (z *DeleteOptions) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 1
-	// write "rm"
-	err = en.Append(0x81, 0xa2, 0x72, 0x6d)
+	// map header, size 0
+	err = en.Append(0x80)
 	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.BaseOptions.Remote)
-	if err != nil {
-		err = msgp.WrapError(err, "BaseOptions", "Remote")
 		return
 	}
 	// write "r"
@@ -607,10 +575,8 @@ func (z *DeleteOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 4
 	// string "BaseOptions"
 	o = append(o, 0x84, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
-	// map header, size 1
-	// string "rm"
-	o = append(o, 0x81, 0xa2, 0x72, 0x6d)
-	o = msgp.AppendBool(o, z.BaseOptions.Remote)
+	// map header, size 0
+	o = append(o, 0x80)
 	// string "r"
 	o = append(o, 0xa1, 0x72)
 	o = msgp.AppendBool(o, z.Recursive)
@@ -656,12 +622,6 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				switch msgp.UnsafeString(field) {
-				case "rm":
-					z.BaseOptions.Remote, bts, err = msgp.ReadBoolBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "BaseOptions", "Remote")
-						return
-					}
 				default:
 					bts, err = msgp.Skip(bts)
 					if err != nil {
@@ -702,7 +662,7 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DeleteOptions) Msgsize() (s int) {
-	s = 1 + 12 + 1 + 3 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize
+	s = 1 + 12 + 1 + 2 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize
 	return
 }
 
@@ -3794,12 +3754,6 @@ func (z *RenameDataHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
 							return
 						}
 						switch msgp.UnsafeString(field) {
-						case "rm":
-							z.Opts.BaseOptions.Remote, err = dc.ReadBool()
-							if err != nil {
-								err = msgp.WrapError(err, "Opts", "BaseOptions", "Remote")
-								return
-							}
 						default:
 							err = dc.Skip()
 							if err != nil {
@@ -3901,15 +3855,9 @@ func (z *RenameDataHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 1
-	// write "rm"
-	err = en.Append(0x81, 0xa2, 0x72, 0x6d)
+	// map header, size 0
+	err = en.Append(0x80)
 	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.Opts.BaseOptions.Remote)
-	if err != nil {
-		err = msgp.WrapError(err, "Opts", "BaseOptions", "Remote")
 		return
 	}
 	return
@@ -3946,10 +3894,8 @@ func (z *RenameDataHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 1
 	// string "BaseOptions"
 	o = append(o, 0x81, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
-	// map header, size 1
-	// string "rm"
-	o = append(o, 0x81, 0xa2, 0x72, 0x6d)
-	o = msgp.AppendBool(o, z.Opts.BaseOptions.Remote)
+	// map header, size 0
+	o = append(o, 0x80)
 	return
 }
 
@@ -4037,12 +3983,6 @@ func (z *RenameDataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error)
 							return
 						}
 						switch msgp.UnsafeString(field) {
-						case "rm":
-							z.Opts.BaseOptions.Remote, bts, err = msgp.ReadBoolBytes(bts)
-							if err != nil {
-								err = msgp.WrapError(err, "Opts", "BaseOptions", "Remote")
-								return
-							}
 						default:
 							bts, err = msgp.Skip(bts)
 							if err != nil {
@@ -4073,7 +4013,7 @@ func (z *RenameDataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error)
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *RenameDataHandlerParams) Msgsize() (s int) {
-	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 3 + msgp.StringPrefixSize + len(z.SrcVolume) + 3 + msgp.StringPrefixSize + len(z.SrcPath) + 3 + msgp.StringPrefixSize + len(z.DstVolume) + 3 + msgp.StringPrefixSize + len(z.DstPath) + 3 + z.FI.Msgsize() + 3 + 1 + 12 + 1 + 3 + msgp.BoolSize
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 3 + msgp.StringPrefixSize + len(z.SrcVolume) + 3 + msgp.StringPrefixSize + len(z.SrcPath) + 3 + msgp.StringPrefixSize + len(z.DstVolume) + 3 + msgp.StringPrefixSize + len(z.DstPath) + 3 + z.FI.Msgsize() + 3 + 1 + 12 + 1
 	return
 }
 
@@ -4213,12 +4153,6 @@ func (z *RenameOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 				switch msgp.UnsafeString(field) {
-				case "rm":
-					z.BaseOptions.Remote, err = dc.ReadBool()
-					if err != nil {
-						err = msgp.WrapError(err, "BaseOptions", "Remote")
-						return
-					}
 				default:
 					err = dc.Skip()
 					if err != nil {
@@ -4246,15 +4180,9 @@ func (z *RenameOptions) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 1
-	// write "rm"
-	err = en.Append(0x81, 0xa2, 0x72, 0x6d)
+	// map header, size 0
+	err = en.Append(0x80)
 	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.BaseOptions.Remote)
-	if err != nil {
-		err = msgp.WrapError(err, "BaseOptions", "Remote")
 		return
 	}
 	return
@@ -4266,10 +4194,8 @@ func (z *RenameOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 1
 	// string "BaseOptions"
 	o = append(o, 0x81, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
-	// map header, size 1
-	// string "rm"
-	o = append(o, 0x81, 0xa2, 0x72, 0x6d)
-	o = msgp.AppendBool(o, z.BaseOptions.Remote)
+	// map header, size 0
+	o = append(o, 0x80)
 	return
 }
 
@@ -4306,12 +4232,6 @@ func (z *RenameOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				switch msgp.UnsafeString(field) {
-				case "rm":
-					z.BaseOptions.Remote, bts, err = msgp.ReadBoolBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "BaseOptions", "Remote")
-						return
-					}
 				default:
 					bts, err = msgp.Skip(bts)
 					if err != nil {
@@ -4334,7 +4254,7 @@ func (z *RenameOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *RenameOptions) Msgsize() (s int) {
-	s = 1 + 12 + 1 + 3 + msgp.BoolSize
+	s = 1 + 12 + 1
 	return
 }
 

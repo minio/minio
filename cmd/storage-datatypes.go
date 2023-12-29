@@ -31,7 +31,6 @@ type DeleteOptions struct {
 
 // BaseOptions represents common options for all Storage API calls
 type BaseOptions struct {
-	Remote bool `msg:"rm"` // Indicates if the incoming request is for a remote call.
 }
 
 // RenameOptions represents rename API options, currently its same as BaseOptions
