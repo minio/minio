@@ -19,7 +19,7 @@ export MINIO_SCANNER_SPEED=fastest
 (minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/tmp/decom.log) &
 pid=$!
 
-sleep 10
+sleep 30
 
 export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 
@@ -49,7 +49,7 @@ policy_count=$(./mc admin policy list myminio/ | wc -l)
 
 ## create a warm tier instance
 (minio server /tmp/xltier/{1...4}/disk{0...1} --address :9001 2>&1 >/dev/null) &
-sleep 10
+sleep 30
 
 export MC_HOST_mytier="http://minioadmin:minioadmin@localhost:9001/"
 
@@ -117,7 +117,7 @@ kill $pid
 (minio server /tmp/xl/{11...30}/disk{0...3} 2>&1 >/dev/null) &
 pid=$!
 
-sleep 20
+sleep 30
 
 decom_user_count=$(./mc admin user list myminio/ | wc -l)
 decom_policy_count=$(./mc admin policy list myminio/ | wc -l)
