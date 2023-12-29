@@ -262,9 +262,11 @@ func (s *erasureSets) connectDisks() {
 			s.erasureDisks[setIndex][diskIndex] = disk
 			s.erasureDisksMu.Unlock()
 
-			globalLocalDrivesMu.Lock()
-			globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
-			globalLocalDrivesMu.Unlock()
+			if disk.IsLocal() && globalIsDistErasure {
+				globalLocalDrivesMu.Lock()
+				globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
+				globalLocalDrivesMu.Unlock()
+			}
 		}(endpoint)
 	}
 
@@ -403,6 +405,18 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				if disk == nil {
 					continue
 				}
+
+				if disk.IsLocal() && globalIsDistErasure {
+					globalLocalDrivesMu.RLock()
+					ldisk := globalLocalSetDrives[poolIdx][i][j]
+					if ldisk == nil {
+						globalLocalDrivesMu.RUnlock()
+						continue
+					}
+					disk = ldisk
+					globalLocalDrivesMu.RUnlock()
+				}
+
 				innerWg.Add(1)
 				go func(disk StorageAPI, i, j int) {
 					defer innerWg.Done()
