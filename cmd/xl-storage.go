@@ -672,12 +672,8 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	return dataUsageInfo, nil
 }
 
-func (s *xlStorage) getDeleteAttribute(remote bool) uint64 {
+func (s *xlStorage) getDeleteAttribute() uint64 {
 	attr := "user.total_deletes"
-	if remote {
-		attr = "user.total_deletes_remote"
-	}
-
 	buf, err := xattr.LGet(s.formatFile, attr)
 	if err != nil {
 		// We start off with '0' if we can read the attributes
@@ -686,11 +682,8 @@ func (s *xlStorage) getDeleteAttribute(remote bool) uint64 {
 	return binary.LittleEndian.Uint64(buf[:8])
 }
 
-func (s *xlStorage) getWriteAttribute(remote bool) uint64 {
+func (s *xlStorage) getWriteAttribute() uint64 {
 	attr := "user.total_writes"
-	if remote {
-		attr = "user.total_writes_remote"
-	}
 	buf, err := xattr.LGet(s.formatFile, attr)
 	if err != nil {
 		// We start off with '0' if we can read the attributes

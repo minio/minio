@@ -602,31 +602,65 @@ func getListQuorum(quorum string, driveCount int) int {
 	return driveCount
 }
 
-func getQuorumDiskInfos(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI, newInfos []DiskInfo) {
-	calcCommonCounter := func() (commonMutations uint64) {
-		filter := func() (commonCount uint64) {
-			max := 0
-			signatureMap := map[uint64]int{}
-			for _, info := range infos {
-				mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
-				signatureMap[mutations]++
-			}
-			for ops, count := range signatureMap {
-				if max < count && commonCount < ops {
-					max = count
-					commonCount = ops
-				}
-			}
-			if max < readQuorum {
-				return 0
-			}
-			return commonCount
-		}
-		commonMutations = filter()
-		return commonMutations
+func calcCommonWritesDeletes(infos []DiskInfo, readQuorum int) (commonWrite, commonDelete uint64) {
+	deletes := make([]uint64, len(infos))
+	writes := make([]uint64, len(infos))
+	for index, di := range infos {
+		deletes[index] = di.Metrics.TotalDeletes
+		writes[index] = di.Metrics.TotalWrites
 	}
 
-	commonMutations := calcCommonCounter()
+	filter := func(list []uint64) (commonCount uint64) {
+		max := 0
+		signatureMap := map[uint64]int{}
+		for _, v := range list {
+			signatureMap[v]++
+		}
+		for ops, count := range signatureMap {
+			if max < count && commonCount < ops {
+				max = count
+				commonCount = ops
+			}
+		}
+		if max < readQuorum {
+			return 0
+		}
+		return commonCount
+	}
+
+	commonWrite = filter(writes)
+	commonDelete = filter(deletes)
+	return
+}
+
+func calcCommonCounter(infos []DiskInfo, readQuorum int) (commonCount uint64) {
+	filter := func() (commonCount uint64) {
+		max := 0
+		signatureMap := map[uint64]int{}
+		for _, info := range infos {
+			if info.Error != "" {
+				continue
+			}
+			mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
+			signatureMap[mutations]++
+		}
+		for ops, count := range signatureMap {
+			if max < count && commonCount < ops {
+				max = count
+				commonCount = ops
+			}
+		}
+		if max < readQuorum {
+			return 0
+		}
+		return commonCount
+	}
+
+	return filter()
+}
+
+func getQuorumDiskInfos(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI, newInfos []DiskInfo) {
+	commonMutations := calcCommonCounter(infos, readQuorum)
 	for i, info := range infos {
 		mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
 		if mutations >= commonMutations {

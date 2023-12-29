@@ -1110,7 +1110,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	formatOpID := mustGetUUID()
 
 	// Initialize a new set of set formats which will be written to disk.
-	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
+	newFormatSets, currentDisksInfo := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
 
 	if !dryRun {
 		tmpNewFormats := make([]*formatErasureV3, s.setCount*s.setDriveCount)
@@ -1153,9 +1153,27 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				s.erasureDisks[m][n].Close()
 			}
 
-			if storageDisks[index] != nil {
-				storageDisks[index].SetDiskLoc(s.poolIndex, m, n)
-				s.erasureDisks[m][n] = storageDisks[index]
+			if disk := storageDisks[index]; disk != nil {
+				disk.SetDiskLoc(s.poolIndex, m, n)
+
+				if disk.IsLocal() && driveQuorum {
+					commonWrites, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
+					xldisk, ok := disk.(*xlStorageDiskIDCheck)
+					if ok {
+						xldisk.totalWrites.Add(commonWrites)
+						xldisk.totalDeletes.Add(commonDeletes)
+						xldisk.storage.setWriteAttribute(commonWrites)
+						xldisk.storage.setDeleteAttribute(commonDeletes)
+					}
+				}
+
+				s.erasureDisks[m][n] = disk
+
+				if disk.IsLocal() && globalIsDistErasure {
+					globalLocalDrivesMu.Lock()
+					globalLocalSetDrives[s.poolIndex][m][n] = disk
+					globalLocalDrivesMu.Unlock()
+				}
 			}
 		}
 

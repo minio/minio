@@ -79,9 +79,7 @@ const (
 // Detects change in underlying disk.
 type xlStorageDiskIDCheck struct {
 	totalWrites           atomic.Uint64
-	totalWritesRemote     atomic.Uint64
 	totalDeletes          atomic.Uint64
-	totalDeletesRemote    atomic.Uint64
 	totalErrsAvailability atomic.Uint64 // Captures all data availability errors such as permission denied, faulty disk and timeout errors.
 	totalErrsTimeout      atomic.Uint64 // Captures all timeout only errors
 
@@ -229,11 +227,10 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		diskStartChecking: diskStartChecking,
 	}
 
-	xl.totalWrites.Add(xl.storage.getWriteAttribute(false))
-	xl.totalDeletes.Add(xl.storage.getDeleteAttribute(false))
-
-	xl.totalWritesRemote.Add(xl.storage.getWriteAttribute(true))
-	xl.totalDeletesRemote.Add(xl.storage.getDeleteAttribute(true))
+	if driveQuorum {
+		xl.totalWrites.Add(xl.storage.getWriteAttribute())
+		xl.totalDeletes.Add(xl.storage.getDeleteAttribute())
+	}
 
 	xl.diskCtx, xl.cancel = context.WithCancel(context.TODO())
 	for i := range xl.apiLatencies[:] {

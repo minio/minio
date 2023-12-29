@@ -30,8 +30,7 @@ type DeleteOptions struct {
 }
 
 // BaseOptions represents common options for all Storage API calls
-type BaseOptions struct {
-}
+type BaseOptions struct{}
 
 // RenameOptions represents rename API options, currently its same as BaseOptions
 type RenameOptions struct {
