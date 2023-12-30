@@ -95,7 +95,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	userMetadata[globalObjectPerfUserMetadata] = "true" // Bypass S3 API freeze
 	popts := minio.PutObjectOptions{
 		UserMetadata:         userMetadata,
-		DisableContentSha256: true,
+		DisableContentSha256: !opts.enableSha256,
 		DisableMultipart:     true,
 	}
 

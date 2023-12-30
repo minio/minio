@@ -39,6 +39,7 @@ type speedTestOpts struct {
 	autotune         bool
 	storageClass     string
 	bucketName       string
+	enableSha256     bool
 }
 
 // Get the max throughput and iops numbers.
@@ -163,6 +164,7 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				duration:     opts.duration,
 				storageClass: opts.storageClass,
 				bucketName:   opts.bucketName,
+				enableSha256: opts.enableSha256,
 			}
 
 			results := globalNotificationSys.SpeedTest(ctx, sopts)
