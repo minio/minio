@@ -75,10 +75,21 @@ func commonSetDriveCount(divisibleSize uint64, setCounts []uint64) (setSize uint
 		return divisibleSize
 	}
 
-	// Figure out largest value of total_drives_in_erasure_set which results
-	// in least number of total_drives/total_drives_erasure_set ratio.
+	// There is only one setCount return that right away.
+	if len(setCounts) == 1 {
+		return setCounts[0]
+	}
+
+	// Figure out largest value upto 8 drives per erasure set, which results
+	// in fair amount of total_drives/total_drives_erasure_set ratio.
 	prevD := divisibleSize / setCounts[0]
 	for _, cnt := range setCounts {
+		if cnt > 8 {
+			// Anything greater than '8' we can ignore
+			// anything beyond '8' must be specified via
+			// custom set drive count.
+			continue
+		}
 		if divisibleSize%cnt == 0 {
 			d := divisibleSize / cnt
 			if d <= prevD {

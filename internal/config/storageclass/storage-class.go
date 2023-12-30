@@ -266,11 +266,11 @@ func DefaultParityBlocks(drive int) int {
 	switch drive {
 	case 1:
 		return 0
-	case 3, 2:
+	case 2, 3:
 		return 1
-	case 4, 5:
+	case 4, 5, 6:
 		return 2
-	case 6, 7:
+	case 7, 8:
 		return 3
 	default:
 		return 4
