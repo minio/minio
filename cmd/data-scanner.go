@@ -246,7 +246,7 @@ type folderScanner struct {
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
 
-	fullThrottle func() bool
+	weSleep func() bool
 
 	disks       []StorageAPI
 	disksQuorum int
@@ -301,7 +301,7 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, fullThrottle func() bool) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
@@ -318,7 +318,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		dataUsageScannerDebug: false,
 		healObjectSelect:      0,
 		scanMode:              scanMode,
-		fullThrottle:          fullThrottle,
+		weSleep:               weSleep,
 		updates:               cache.Info.updates,
 		updateCurrentPath:     updatePath,
 		disks:                 disks,
@@ -407,7 +407,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			replicationCfg = f.oldCache.Info.replication
 		}
 
-		if !f.fullThrottle() {
+		if f.weSleep() {
 			scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
 		}
 
@@ -461,7 +461,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 
 			wait := noWait
-			if !f.fullThrottle() {
+			if f.weSleep() {
 				// Dynamic time delay.
 				wait = scannerSleeper.Timer(ctx)
 			}
@@ -715,7 +715,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						entry, _ = entries.firstFound()
 					}
 					wait := noWait
-					if !f.fullThrottle() {
+					if f.weSleep() {
 						// wait timer per object.
 						wait = scannerSleeper.Timer(ctx)
 					}
