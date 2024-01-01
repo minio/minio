@@ -212,6 +212,7 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	CallhomeSubSys,
 	DriveSubSys,
 	BatchSubSys,
+	BrowserSubSys,
 )
 
 // Constant separators
