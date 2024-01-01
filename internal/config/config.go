@@ -119,6 +119,7 @@ const (
 	CallhomeSubSys       = madmin.CallhomeSubSys
 	DriveSubSys          = madmin.DriveSubSys
 	BatchSubSys          = madmin.BatchSubSys
+	BrowserSubSys        = madmin.BrowserSubSys
 
 	// Add new constants here (similar to above) if you add new fields to config.
 )
@@ -188,6 +189,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	StorageClassSubSys,
 	CacheSubSys,
 	BatchSubSys,
+	BrowserSubSys,
 )
 
 // SubSystemsSingleTargets - subsystems which only support single target.
@@ -209,8 +211,8 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	SubnetSubSys,
 	CallhomeSubSys,
 	DriveSubSys,
-	CacheSubSys,
 	BatchSubSys,
+	BrowserSubSys,
 )
 
 // Constant separators

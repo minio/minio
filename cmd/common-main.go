@@ -178,6 +178,23 @@ func minioConfigToConsoleFeatures() {
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
+	// This section sets Browser (console) stored config
+	if valueSCP := globalBrowserConfig.GetCSPolicy(); valueSCP != "" {
+		os.Setenv("CONSOLE_SECURE_CONTENT_SECURITY_POLICY", valueSCP)
+	}
+
+	if hstsSeconds := globalBrowserConfig.GetHSTSSeconds(); hstsSeconds > 0 {
+		isubdom := globalBrowserConfig.IsHSTSIncludeSubdomains()
+		isprel := globalBrowserConfig.IsHSTSPreload()
+		os.Setenv("CONSOLE_SECURE_STS_SECONDS", strconv.Itoa(hstsSeconds))
+		os.Setenv("CONSOLE_SECURE_STS_INCLUDE_SUB_DOMAINS", isubdom)
+		os.Setenv("CONSOLE_SECURE_STS_PRELOAD", isprel)
+	}
+
+	if valueRefer := globalBrowserConfig.GetReferPolicy(); valueRefer != "" {
+		os.Setenv("CONSOLE_SECURE_REFERRER_POLICY", valueRefer)
+	}
+
 	globalSubnetConfig.ApplyEnv()
 }
 

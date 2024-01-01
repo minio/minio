@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/internal/config/browser"
+
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
@@ -74,6 +76,7 @@ func initHelp() {
 		config.DriveSubSys:          drive.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.BatchSubSys:          batch.DefaultKVS,
+		config.BrowserSubSys:        browser.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -226,6 +229,11 @@ func initHelp() {
 			Description: "enable cache plugin on MinIO for GET/HEAD requests",
 			Optional:    true,
 		},
+		config.HelpKV{
+			Key:         config.BrowserSubSys,
+			Description: "manage Browser HTTP specific features, such as Security headers, etc.",
+			Optional:    true,
+		},
 	}
 
 	if globalIsErasure {
@@ -273,6 +281,7 @@ func initHelp() {
 		config.CallhomeSubSys:       callhome.HelpCallhome,
 		config.DriveSubSys:          drive.HelpDrive,
 		config.CacheSubSys:          cache.Help,
+		config.BrowserSubSys:        browser.Help,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -406,6 +415,10 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 				NewHTTPTransport(), xhttp.DrainBody); err != nil {
 				return err
 			}
+		}
+	case config.BrowserSubSys:
+		if _, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default]); err != nil {
+			return err
 		}
 	default:
 		if config.LoggerSubSystems.Contains(subSys) {
@@ -689,6 +702,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		} else {
 			globalCacheConfig.Update(cacheCfg)
 		}
+	case config.BrowserSubSys:
+		browserCfg, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply browser config: %w", err)
+		}
+		globalBrowserConfig.Update(browserCfg)
 	}
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
