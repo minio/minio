@@ -430,7 +430,7 @@ const (
 	ErrLambdaARNInvalid
 	ErrLambdaARNNotFound
 
-	// // New Codes for GetObjectAttributes and GetObjectVersionAttributes
+	// New Codes for GetObjectAttributes and GetObjectVersionAttributes
 	ErrInvalidAttributeName
 
 	apiErrCodeEnd // This is used only for the testing code
