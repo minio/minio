@@ -690,13 +690,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 }
 
 // GetObjectAttributes ...
-// https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectAttributes.html#
 func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, objectAPI ObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request) {
-	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
-		return
-	}
-
 	opts, valid := getAndValidateAttributesOpts(ctx, w, r, bucket, object)
 	if !valid {
 		return
@@ -802,21 +796,11 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		}
 	}
 
-	out, err := xml.Marshal(OA)
-	if err != nil {
+	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
+	if err := xml.NewEncoder(w).Encode(OA); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
-
-	writeResponse(
-		w,
-		200,
-		append(
-			[]byte(`<?xml version="1.0" encoding="UTF-8"?>`),
-			out...,
-		),
-		mimeXML,
-	)
 
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedAttributes,
