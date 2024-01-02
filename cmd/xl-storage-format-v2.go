@@ -1410,15 +1410,13 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				err = x.setIdx(i, *ver)
 				return "", err
 			}
-			var err error
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
 			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
 				err = x.addVersion(ventry)
+			} else if fi.Deleted && uv.String() == emptyUUID {
+				return "", x.addVersion(ventry)
 			}
-			// if we remove null version. we should try to add null version to top layer.
-			if uv.String() != emptyUUID {
-				return "", err
-			}
+			return "", err
 		case ObjectType:
 			if updateVersion && !fi.Deleted {
 				ver, err := x.getIdx(i)
