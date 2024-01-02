@@ -1082,6 +1082,30 @@ func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
 	}
 }
 
+// decryptChecksums will attempt to decode checksums and return it/them if set.
+// if part > 0, and we have the checksum for the part that will be returned.
+func (o *ObjectInfo) decryptPartsChecksums() error {
+	data := o.Checksum
+	if len(data) == 0 {
+		return nil
+	}
+	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
+		decrypted, err := o.metadataDecrypter()("object-checksum", data)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return nil
+		}
+		data = decrypted
+	}
+	cs := hash.ReadPartCheckSums(data)
+	if len(cs) == len(o.Parts) {
+		for i := range o.Parts {
+			o.Parts[i].Checksums = cs[i]
+		}
+	}
+	return nil
+}
+
 // metadataEncryptFn provides an encryption function for metadata.
 // Will return nil, nil if unencrypted.
 func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn, error) {

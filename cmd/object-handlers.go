@@ -760,6 +760,12 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		OA.StorageClass = objInfo.StorageClass
 	}
 
+	err = objInfo.decryptPartsChecksums()
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
+	}
+
 	if _, ok := opts.ObjectAttributes[xhttp.ObjectParts]; ok {
 		OA.ObjectParts = new(objectAttributesParts)
 		OA.ObjectParts.PartNumberMarker = opts.PartNumberMarker
@@ -779,7 +785,6 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 				}
 
 				OA.ObjectParts.NextPartNumberMarker = v.Number
-				objInfo.Parts[i].Checksums = objInfo.decryptChecksums(v.Number)
 				OA.ObjectParts.Parts = append(OA.ObjectParts.Parts, &objectAttributesPart{
 					ChecksumSHA1:   objInfo.Parts[i].Checksums["SHA1"],
 					ChecksumSHA256: objInfo.Parts[i].Checksums["SHA256"],

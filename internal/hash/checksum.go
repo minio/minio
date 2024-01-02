@@ -240,6 +240,50 @@ func ReadCheckSums(b []byte, part int) map[string]string {
 	return res
 }
 
+// ReadPartCheckSums will read all part checksums from b and return them.
+func ReadPartCheckSums(b []byte) []map[string]string {
+	var res []map[string]string
+	for len(b) > 0 {
+		t, n := binary.Uvarint(b)
+		if n < 0 {
+			break
+		}
+		b = b[n:]
+
+		typ := ChecksumType(t)
+		length := typ.RawByteLen()
+		if length == 0 || len(b) < length {
+			break
+		}
+		// Skip main checksum
+		b = b[length:]
+		if !typ.Is(ChecksumIncludesMultipart) {
+			continue
+		}
+		parts, n := binary.Uvarint(b)
+		if n < 0 {
+			break
+		}
+		if len(res) < int(parts) {
+			res = make([]map[string]string, parts)
+		}
+		b = b[n:]
+		for part := 0; part < int(parts); part++ {
+			if len(b) < length {
+				break
+			}
+			// Read part checksum
+			cs := base64.StdEncoding.EncodeToString(b[:length])
+			b = b[length:]
+			if res[part] == nil {
+				res[part] = make(map[string]string, 1)
+			}
+			res[part][typ.String()] = cs
+		}
+	}
+	return res
+}
+
 // NewChecksumWithType is similar to NewChecksumString but expects input algo of ChecksumType.
 func NewChecksumWithType(alg ChecksumType, value string) *Checksum {
 	if !alg.IsSet() {
