@@ -747,6 +747,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
 		chkSums := objInfo.decryptChecksums(0)
 		OA.Checksum = new(objectAttributesChecksum)
+		// AWS does not appear to append part number on this API call.
 		OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
 		OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
 		OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
