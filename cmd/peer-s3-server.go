@@ -126,11 +126,6 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 				beforeState[index] = madmin.DriveStateMissing
 				afterState[index] = madmin.DriveStateMissing
 
-				// mutate only if not a dry-run
-				if opts.DryRun {
-					return nil
-				}
-
 				return serr
 			}
 			return nil
@@ -145,6 +140,11 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 		Bucket:    bucket,
 		DiskCount: len(globalLocalDrives),
 		SetCount:  -1, // explicitly set an invalid value -1, for bucket heal scenario
+	}
+
+	// mutate only if not a dry-run
+	if opts.DryRun {
+		return res, nil
 	}
 
 	for i := range beforeState {
