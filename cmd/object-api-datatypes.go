@@ -636,6 +636,7 @@ type objectAttributesParts struct {
 	PartsCount           int
 	Parts                []*objectAttributesPart `xml:"Part"`
 }
+
 type objectAttributesPart struct {
 	PartNumber     int
 	Size           int64
