@@ -776,7 +776,6 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 
 		if opts.MaxParts > -1 {
 			for i, v := range objInfo.Parts {
-
 				if v.Number <= opts.PartNumberMarker {
 					continue
 				}
