@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -102,6 +103,15 @@ func (gcs *warmBackendGCS) InUse(ctx context.Context) (bool, error) {
 }
 
 func newWarmBackendGCS(conf madmin.TierGCS, _ string) (*warmBackendGCS, error) {
+	// Validation code
+	if conf.Creds == "" {
+		return nil, errors.New("empty credentials unsupported")
+	}
+
+	if conf.Bucket == "" {
+		return nil, errors.New("no bucket name was provided")
+	}
+
 	credsJSON, err := conf.GetCredentialJSON()
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -17,6 +17,8 @@
 
 package bpool
 
+import "github.com/klauspost/reedsolomon"
+
 // BytePoolCap implements a leaky pool of []byte in the form of a bounded channel.
 type BytePoolCap struct {
 	c    chan []byte
@@ -27,10 +29,23 @@ type BytePoolCap struct {
 // NewBytePoolCap creates a new BytePool bounded to the given maxSize, with new
 // byte arrays sized based on width.
 func NewBytePoolCap(maxSize int, width int, capwidth int) (bp *BytePoolCap) {
+	if capwidth > 0 && capwidth < 64 {
+		panic("buffer capped with smaller than 64 bytes is not supported")
+	}
+	if capwidth > 0 && width > capwidth {
+		panic("buffer length cannot be > capacity of the buffer")
+	}
 	return &BytePoolCap{
 		c:    make(chan []byte, maxSize),
 		w:    width,
 		wcap: capwidth,
+	}
+}
+
+// Populate - populates and pre-warms the byte pool, this function is non-blocking.
+func (bp *BytePoolCap) Populate() {
+	for _, buf := range reedsolomon.AllocAligned(cap(bp.c), bp.wcap) {
+		bp.Put(buf[:bp.w])
 	}
 }
 
@@ -39,13 +54,13 @@ func NewBytePoolCap(maxSize int, width int, capwidth int) (bp *BytePoolCap) {
 func (bp *BytePoolCap) Get() (b []byte) {
 	select {
 	case b = <-bp.c:
-	// reuse existing buffer
+		// reuse existing buffer
 	default:
-		// create new buffer
+		// create new aligned buffer
 		if bp.wcap > 0 {
-			b = make([]byte, bp.w, bp.wcap)
+			b = reedsolomon.AllocAligned(1, bp.wcap)[0][:bp.w]
 		} else {
-			b = make([]byte, bp.w)
+			b = reedsolomon.AllocAligned(1, bp.w)[0]
 		}
 	}
 	return

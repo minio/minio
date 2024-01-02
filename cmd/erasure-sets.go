@@ -36,7 +36,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
@@ -217,6 +216,10 @@ func (s *erasureSets) connectDisks() {
 				continue
 			}
 		}
+		if cdisk != nil {
+			// Close previous offline disk.
+			cdisk.Close()
+		}
 
 		wg.Add(1)
 		go func(endpoint Endpoint) {
@@ -258,6 +261,12 @@ func (s *erasureSets) connectDisks() {
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			s.erasureDisks[setIndex][diskIndex] = disk
 			s.erasureDisksMu.Unlock()
+
+			if disk.IsLocal() && globalIsDistErasure {
+				globalLocalDrivesMu.Lock()
+				globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
+				globalLocalDrivesMu.Unlock()
+			}
 		}(endpoint)
 	}
 
@@ -361,21 +370,6 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 	mutex := newNSLock(globalIsDistErasure)
 
-	// Number of buffers, max 2GB
-	n := (2 * humanize.GiByte) / (blockSizeV2 * 2)
-
-	// Initialize byte pool once for all sets, bpool size is set to
-	// setCount * setDriveCount with each memory upto blockSizeV2.
-	bp := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
-
-	// Initialize byte pool for all sets, bpool size is set to
-	// setCount * setDriveCount with each memory upto blockSizeV1
-	//
-	// Number of buffers, max 10GiB
-	m := (10 * humanize.GiByte) / (blockSizeV1 * 2)
-
-	bpOld := bpool.NewBytePoolCap(m, blockSizeV1, blockSizeV1*2)
-
 	for i := 0; i < setCount; i++ {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
 	}
@@ -411,6 +405,18 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				if disk == nil {
 					continue
 				}
+
+				if disk.IsLocal() && globalIsDistErasure {
+					globalLocalDrivesMu.RLock()
+					ldisk := globalLocalSetDrives[poolIdx][i][j]
+					if ldisk == nil {
+						globalLocalDrivesMu.RUnlock()
+						continue
+					}
+					disk = ldisk
+					globalLocalDrivesMu.RUnlock()
+				}
+
 				innerWg.Add(1)
 				go func(disk StorageAPI, i, j int) {
 					defer innerWg.Done()
@@ -451,8 +457,6 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 				getLockers:         s.GetLockers(i),
 				getEndpoints:       s.GetEndpoints(i),
 				nsMutex:            mutex,
-				bp:                 bp,
-				bpOld:              bpOld,
 			}
 		}(i)
 	}
@@ -607,7 +611,7 @@ func (s *erasureSets) StorageInfo(ctx context.Context) StorageInfo {
 }
 
 // StorageInfo - combines output of StorageInfo across all erasure coded object sets.
-func (s *erasureSets) LocalStorageInfo(ctx context.Context) StorageInfo {
+func (s *erasureSets) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {
 	var storageInfo StorageInfo
 
 	storageInfos := make([]StorageInfo, len(s.sets))
@@ -616,7 +620,7 @@ func (s *erasureSets) LocalStorageInfo(ctx context.Context) StorageInfo {
 	for index := range s.sets {
 		index := index
 		g.Go(func() error {
-			storageInfos[index] = s.sets[index].LocalStorageInfo(ctx)
+			storageInfos[index] = s.sets[index].LocalStorageInfo(ctx, metrics)
 			return nil
 		}, index)
 	}
@@ -1106,7 +1110,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 	formatOpID := mustGetUUID()
 
 	// Initialize a new set of set formats which will be written to disk.
-	newFormatSets := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
+	newFormatSets, currentDisksInfo := newHealFormatSets(refFormat, s.setCount, s.setDriveCount, formats, sErrs)
 
 	if !dryRun {
 		tmpNewFormats := make([]*formatErasureV3, s.setCount*s.setDriveCount)
@@ -1149,9 +1153,27 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				s.erasureDisks[m][n].Close()
 			}
 
-			if storageDisks[index] != nil {
-				storageDisks[index].SetDiskLoc(s.poolIndex, m, n)
-				s.erasureDisks[m][n] = storageDisks[index]
+			if disk := storageDisks[index]; disk != nil {
+				disk.SetDiskLoc(s.poolIndex, m, n)
+
+				if disk.IsLocal() && driveQuorum {
+					commonWrites, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
+					xldisk, ok := disk.(*xlStorageDiskIDCheck)
+					if ok {
+						xldisk.totalWrites.Add(commonWrites)
+						xldisk.totalDeletes.Add(commonDeletes)
+						xldisk.storage.setWriteAttribute(commonWrites)
+						xldisk.storage.setDeleteAttribute(commonDeletes)
+					}
+				}
+
+				s.erasureDisks[m][n] = disk
+
+				if disk.IsLocal() && globalIsDistErasure {
+					globalLocalDrivesMu.Lock()
+					globalLocalSetDrives[s.poolIndex][m][n] = disk
+					globalLocalDrivesMu.Unlock()
+				}
 			}
 		}
 

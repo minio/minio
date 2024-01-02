@@ -42,9 +42,10 @@ type apiConfig struct {
 	listQuorum       string
 	corsAllowOrigins []string
 	// total drives per erasure set across pools.
-	totalDriveCount     int
-	replicationPriority string
-	transitionWorkers   int
+	totalDriveCount       int
+	replicationPriority   string
+	replicationMaxWorkers int
+	transitionWorkers     int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
@@ -152,10 +153,11 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.listQuorum = listQuorum
 	if globalReplicationPool != nil &&
-		cfg.ReplicationPriority != t.replicationPriority {
-		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority)
+		(cfg.ReplicationPriority != t.replicationPriority || cfg.ReplicationMaxWorkers != t.replicationMaxWorkers) {
+		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority, cfg.ReplicationMaxWorkers)
 	}
 	t.replicationPriority = cfg.ReplicationPriority
+	t.replicationMaxWorkers = cfg.ReplicationMaxWorkers
 	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
@@ -334,15 +336,21 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (t *apiConfig) getReplicationPriority() string {
+func (t *apiConfig) getReplicationOpts() replicationPoolOpts {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if t.replicationPriority == "" {
-		return "auto"
+		return replicationPoolOpts{
+			Priority:   "auto",
+			MaxWorkers: WorkerMaxLimit,
+		}
 	}
 
-	return t.replicationPriority
+	return replicationPoolOpts{
+		Priority:   t.replicationPriority,
+		MaxWorkers: t.replicationMaxWorkers,
+	}
 }
 
 func (t *apiConfig) getTransitionWorkers() int {

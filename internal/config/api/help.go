@@ -58,7 +58,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiListQuorum,
-			Description: `set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict"` + defaultHelpPostfix(apiListQuorum),
+			Description: `set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict", "auto"` + defaultHelpPostfix(apiListQuorum),
 			Optional:    true,
 			Type:        "string",
 		},
@@ -67,6 +67,12 @@ var (
 			Description: `set replication priority` + defaultHelpPostfix(apiReplicationPriority),
 			Optional:    true,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         apiReplicationMaxWorkers,
+			Description: `set the maximum number of replication workers` + defaultHelpPostfix(apiReplicationMaxWorkers),
+			Optional:    true,
+			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         apiTransitionWorkers,
@@ -94,7 +100,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiODirect,
-			Description: "set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
+			Description: "set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing" + defaultHelpPostfix(apiODirect),
 			Optional:    true,
 			Type:        "boolean",
 		},

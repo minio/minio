@@ -42,7 +42,9 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/pkg/v2/env"
+	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/workers"
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -217,17 +219,24 @@ type transitionState struct {
 	numWorkers int
 	killCh     chan struct{}
 
-	activeTasks int32
+	activeTasks          atomic.Int64
+	missedImmediateTasks atomic.Int64
 
 	lastDayMu    sync.RWMutex
 	lastDayStats map[string]*lastDayTierStats
 }
 
 func (t *transitionState) queueTransitionTask(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
+	task := transitionTask{objInfo: oi, event: event, src: src}
 	select {
 	case <-t.ctx.Done():
-	case t.transitionCh <- transitionTask{objInfo: oi, event: event, src: src}:
+	case t.transitionCh <- task:
 	default:
+		switch src {
+		case lcEventSrc_s3PutObject, lcEventSrc_s3CopyObject, lcEventSrc_s3CompleteMultipartUpload:
+			// Update missed immediate tasks only for incoming requests.
+			t.missedImmediateTasks.Add(1)
+		}
 	}
 }
 
@@ -237,7 +246,7 @@ var globalTransitionState *transitionState
 // via its Init method.
 func newTransitionState(ctx context.Context) *transitionState {
 	return &transitionState{
-		transitionCh: make(chan transitionTask, 10000),
+		transitionCh: make(chan transitionTask, 100000),
 		ctx:          ctx,
 		killCh:       make(chan struct{}),
 		lastDayStats: make(map[string]*lastDayTierStats),
@@ -262,8 +271,14 @@ func (t *transitionState) PendingTasks() int {
 }
 
 // ActiveTasks returns the number of active (ongoing) ILM transition tasks.
-func (t *transitionState) ActiveTasks() int {
-	return int(atomic.LoadInt32(&t.activeTasks))
+func (t *transitionState) ActiveTasks() int64 {
+	return t.activeTasks.Load()
+}
+
+// MissedImmediateTasks returns the number of tasks - deferred to scanner due
+// to tasks channel being backlogged.
+func (t *transitionState) MissedImmediateTasks() int64 {
+	return t.missedImmediateTasks.Load()
 }
 
 // worker waits for transition tasks
@@ -278,11 +293,13 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 			if !ok {
 				return
 			}
-			atomic.AddInt32(&t.activeTasks, 1)
+			t.activeTasks.Add(1)
 			if err := transitionObject(t.ctx, objectAPI, task.objInfo, newLifecycleAuditEvent(task.src, task.event)); err != nil {
-				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
-					logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
-						task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
+				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !xnet.IsNetworkOrHostDown(err, false) {
+					if !strings.Contains(err.Error(), "use of closed network connection") {
+						logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
+							task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
+					}
 				}
 			} else {
 				ts := tierStats{
@@ -294,7 +311,7 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 				}
 				t.addLastDayStats(task.event.StorageClass, ts)
 			}
-			atomic.AddInt32(&t.activeTasks, -1)
+			t.activeTasks.Add(-1)
 		}
 	}
 }
@@ -444,7 +461,8 @@ func genTransitionObjName(bucket string) (string, error) {
 		return "", err
 	}
 	us := u.String()
-	obj := fmt.Sprintf("%s/%s/%s/%s/%s", globalDeploymentID(), bucket, us[0:2], us[2:4], us)
+	hash := xxh3.HashString(pathJoin(globalDeploymentID(), bucket))
+	obj := fmt.Sprintf("%s/%s/%s/%s", strconv.FormatUint(hash, 16), us[0:2], us[2:4], us)
 	return obj, nil
 }
 
@@ -489,9 +507,13 @@ func auditTierActions(ctx context.Context, tier string, bytes int64) func(err er
 		}
 
 		if err == nil {
-			op.TimeToResponseNS = time.Since(startTime).Nanoseconds()
+			since := time.Since(startTime)
+			op.TimeToResponseNS = since.Nanoseconds()
+			globalTierMetrics.Observe(tier, since)
+			globalTierMetrics.logSuccess(tier)
 		} else {
 			op.Error = err.Error()
+			globalTierMetrics.logFailure(tier)
 		}
 
 		logger.GetReqInfo(ctx).AppendTags("tierStats", op)
@@ -862,6 +884,7 @@ func (oi ObjectInfo) ToLifecycleOpts() lifecycle.ObjectOpts {
 		UserTags:         oi.UserTags,
 		VersionID:        oi.VersionID,
 		ModTime:          oi.ModTime,
+		Size:             oi.Size,
 		IsLatest:         oi.IsLatest,
 		NumVersions:      oi.NumVersions,
 		DeleteMarker:     oi.DeleteMarker,

@@ -72,7 +72,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, minioMetaMultipartBucket,
-		uploadIDPath, "", false)
+		uploadIDPath, "", false, false)
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, partsMetadata, errs, er.defaultParityCount)
 	if err != nil {
@@ -118,7 +118,7 @@ func (er erasureObjects) removePartMeta(bucket, object, uploadID, dataDir string
 		g.Go(func() error {
 			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".meta", DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 
 			return nil
@@ -145,11 +145,11 @@ func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir stri
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
 			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath, DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 			_ = storageDisks[index].Delete(context.TODO(), minioMetaMultipartBucket, curpartPath+".meta", DeleteOptions{
 				Recursive: false,
-				Force:     false,
+				Immediate: false,
 			})
 
 			return nil
@@ -185,7 +185,7 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 			defer wg.Done()
 			disk.Delete(ctx, bucket, prefix, DeleteOptions{
 				Recursive: true,
-				Force:     false,
+				Immediate: false,
 			})
 		}(disk)
 	}
@@ -200,11 +200,11 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 	readDirFn(pathJoin(diskPath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
 		readDirFn(pathJoin(diskPath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
-			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", false)
+			fi, err := disk.ReadVersion(ctx, minioMetaMultipartBucket, uploadIDPath, "", ReadOptions{})
 			if err != nil {
 				return nil
 			}
-			w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+			w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 			return w.Run(func() error {
 				wait := deletedCleanupSleeper.Timer(ctx)
 				if now.Sub(fi.ModTime) > expiry {
@@ -218,7 +218,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		if err != nil {
 			return nil
 		}
-		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		return w.Run(func() error {
 			wait := deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(vi.Created) > expiry {
@@ -239,7 +239,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		if err != nil {
 			return nil
 		}
-		w := xioutil.NewDeadlineWorker(diskMaxTimeout)
+		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		return w.Run(func() error {
 			wait := deletedCleanupSleeper.Timer(ctx)
 			if now.Sub(vi.Created) > expiry {
@@ -564,7 +564,7 @@ func writeAllDisks(ctx context.Context, disks []StorageAPI, dstBucket, dstEntry 
 			}
 			index := index
 			g.Go(func() error {
-				return disks[index].Delete(ctx, dstBucket, dstEntry, DeleteOptions{Force: true})
+				return disks[index].Delete(ctx, dstBucket, dstEntry, DeleteOptions{Immediate: true})
 			}, index)
 		}
 		// Ignore these errors.
@@ -662,12 +662,12 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 			// Account for padding and forced compression overhead and encryption.
 			buffer = make([]byte, data.ActualSize()+256+32+32, data.ActualSize()*2+512)
 		} else {
-			buffer = er.bp.Get()
-			defer er.bp.Put(buffer)
+			buffer = globalBytePoolCap.Get()
+			defer globalBytePoolCap.Put(buffer)
 		}
 	case size >= fi.Erasure.BlockSize:
-		buffer = er.bp.Get()
-		defer er.bp.Put(buffer)
+		buffer = globalBytePoolCap.Get()
+		defer globalBytePoolCap.Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully fi.Erasure.BlockSize buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
@@ -688,10 +688,10 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	if data.Size() > bigFileThreshold {
 		// Add input readahead.
 		// We use 2 buffers, so we always have a full buffer of input.
-		bufA := er.bp.Get()
-		bufB := er.bp.Get()
-		defer er.bp.Put(bufA)
-		defer er.bp.Put(bufB)
+		bufA := globalBytePoolCap.Get()
+		bufB := globalBytePoolCap.Get()
+		defer globalBytePoolCap.Put(bufA)
+		defer globalBytePoolCap.Put(bufB)
 		ra, err := readahead.NewReaderBuffer(data, [][]byte{bufA[:fi.Erasure.BlockSize], bufB[:fi.Erasure.BlockSize]})
 		if err == nil {
 			toEncode = ra
@@ -1290,13 +1290,15 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		})
 	}
 
-	// Check if there is any offline disk and add it to the MRF list
-	for _, disk := range onlineDisks {
-		if disk != nil && disk.IsOnline() {
-			continue
+	if !opts.Speedtest && !versionsDisparity {
+		// Check if there is any offline disk and add it to the MRF list
+		for _, disk := range onlineDisks {
+			if disk != nil && disk.IsOnline() {
+				continue
+			}
+			er.addPartial(bucket, object, fi.VersionID)
+			break
 		}
-		er.addPartial(bucket, object, fi.VersionID)
-		break
 	}
 
 	for i := 0; i < len(onlineDisks); i++ {

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -373,15 +372,14 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			if oi.DeleteMarker && (validReplStatus || replicate) {
 				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
 				continue
-			} else {
-				// can be the case that other cluster is down and duplicate `mc rm --vid`
-				// is issued - this still needs to be replicated back to the other target
-				if !oi.VersionPurgeStatus.Empty() {
-					replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
-					dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
-				}
-				continue
 			}
+			// can be the case that other cluster is down and duplicate `mc rm --vid`
+			// is issued - this still needs to be replicated back to the other target
+			if !oi.VersionPurgeStatus.Empty() {
+				replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
+				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
+			}
+			continue
 		}
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		// the target online status should not be used here while deciding
@@ -639,19 +637,23 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 				IsReplicationReadyForDeleteMarker: true,
 			},
 		})
+		serr := ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName, dobj.VersionID)
 		switch {
-		case isErrMethodNotAllowed(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)):
+		case isErrMethodNotAllowed(serr):
 			// delete marker already replicated
 			if dobj.VersionID == "" && rinfo.VersionPurgeStatus.Empty() {
 				rinfo.ReplicationStatus = replication.Completed
 				return
 			}
-		case isErrObjectNotFound(ErrorRespToObjectError(err, dobj.Bucket, dobj.ObjectName)):
+		case isErrObjectNotFound(serr), isErrVersionNotFound(serr):
 			// version being purged is already not found on target.
 			if !rinfo.VersionPurgeStatus.Empty() {
 				rinfo.VersionPurgeStatus = Complete
 				return
 			}
+		case isErrReadQuorum(serr), isErrWriteQuorum(serr):
+			// destination has some quorum issues, perform removeObject() anyways
+			// to complete the operation.
 		default:
 			if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 				globalBucketTargetSys.markOffline(tgt.EndpointURL())
@@ -777,6 +779,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		UserMetadata:    meta,
 		ContentType:     objInfo.ContentType,
 		ContentEncoding: objInfo.ContentEncoding,
+		Expires:         objInfo.Expires,
 		StorageClass:    sc,
 		Internal: minio.AdvancedPutOptions{
 			SourceVersionID:    objInfo.VersionID,
@@ -1382,7 +1385,6 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		rinfo.Duration = time.Since(startTime)
 	}()
 
-	rAction = replicateAll
 	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, minio.StatObjectOptions{
 		VersionID: objInfo.VersionID,
 		Internal: minio.AdvancedGetOptions{
@@ -1419,16 +1421,19 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			}
 			return
 		}
-	}
-	// if target returns error other than NoSuchKey, defer replication attempt
-	if cerr != nil {
+	} else {
+		// if target returns error other than NoSuchKey, defer replication attempt
 		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
 
-		errResp := minio.ToErrorResponse(cerr)
-		switch errResp.Code {
-		case "NoSuchKey", "NoSuchVersion", "SlowDownRead":
+		serr := ErrorRespToObjectError(cerr, bucket, object, objInfo.VersionID)
+		switch {
+		case isErrMethodNotAllowed(serr):
+			rAction = replicateAll
+		case isErrObjectNotFound(serr), isErrVersionNotFound(serr):
+			rAction = replicateAll
+		case isErrReadQuorum(serr), isErrWriteQuorum(serr):
 			rAction = replicateAll
 		default:
 			rinfo.Err = cerr
@@ -1461,6 +1466,24 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				SourceVersionID:    objInfo.VersionID,
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
 			},
+		}
+		if tagTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp]; ok {
+			ondiskTimestamp, err := time.Parse(time.RFC3339, tagTmStr)
+			if err == nil {
+				dstOpts.Internal.TaggingTimestamp = ondiskTimestamp
+			}
+		}
+		if retTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp]; ok {
+			ondiskTimestamp, err := time.Parse(time.RFC3339, retTmStr)
+			if err == nil {
+				dstOpts.Internal.RetentionTimestamp = ondiskTimestamp
+			}
+		}
+		if lholdTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp]; ok {
+			ondiskTimestamp, err := time.Parse(time.RFC3339, lholdTmStr)
+			if err == nil {
+				dstOpts.Internal.LegalholdTimestamp = ondiskTimestamp
+			}
 		}
 		if _, rinfo.Err = c.CopyObject(ctx, tgt.Bucket, object, tgt.Bucket, object, getCopyObjMetadata(objInfo, tgt.StorageClass), srcOpts, dstOpts); rinfo.Err != nil {
 			rinfo.ReplicationStatus = replication.Failed
@@ -1691,12 +1714,13 @@ type ReplicationPool struct {
 	activeWorkers    int32
 	activeMRFWorkers int32
 
-	objLayer ObjectLayer
-	ctx      context.Context
-	priority string
-	mu       sync.RWMutex
-	mrfMU    sync.Mutex
-	resyncer *replicationResyncer
+	objLayer   ObjectLayer
+	ctx        context.Context
+	priority   string
+	maxWorkers int
+	mu         sync.RWMutex
+	mrfMU      sync.Mutex
+	resyncer   *replicationResyncer
 
 	// workers:
 	workers    []chan ReplicationWorkerOperation
@@ -1742,8 +1766,12 @@ const (
 func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPoolOpts) *ReplicationPool {
 	var workers, failedWorkers int
 	priority := "auto"
+	maxWorkers := WorkerMaxLimit
 	if opts.Priority != "" {
 		priority = opts.Priority
+	}
+	if opts.MaxWorkers > 0 {
+		maxWorkers = opts.MaxWorkers
 	}
 	switch priority {
 	case "fast":
@@ -1756,7 +1784,13 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		workers = WorkerAutoDefault
 		failedWorkers = MRFWorkerAutoDefault
 	}
+	if maxWorkers > 0 && workers > maxWorkers {
+		workers = maxWorkers
+	}
 
+	if maxWorkers > 0 && failedWorkers > maxWorkers {
+		failedWorkers = maxWorkers
+	}
 	pool := &ReplicationPool{
 		workers:         make([]chan ReplicationWorkerOperation, 0, workers),
 		lrgworkers:      make([]chan ReplicationWorkerOperation, 0, LargeWorkerCount),
@@ -1768,6 +1802,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		ctx:             ctx,
 		objLayer:        o,
 		priority:        priority,
+		maxWorkers:      maxWorkers,
 	}
 
 	pool.AddLargeWorkers()
@@ -1923,7 +1958,7 @@ func (p *ReplicationPool) ResizeWorkers(n, checkOld int) {
 }
 
 // ResizeWorkerPriority sets replication failed workers pool size
-func (p *ReplicationPool) ResizeWorkerPriority(pri string) {
+func (p *ReplicationPool) ResizeWorkerPriority(pri string, maxWorkers int) {
 	var workers, mrfWorkers int
 	p.mu.Lock()
 	switch pri {
@@ -1937,13 +1972,21 @@ func (p *ReplicationPool) ResizeWorkerPriority(pri string) {
 		workers = WorkerAutoDefault
 		mrfWorkers = MRFWorkerAutoDefault
 		if len(p.workers) < WorkerAutoDefault {
-			workers = int(math.Min(float64(len(p.workers)+1), WorkerAutoDefault))
+			workers = min(len(p.workers)+1, WorkerAutoDefault)
 		}
 		if p.mrfWorkerSize < MRFWorkerAutoDefault {
-			mrfWorkers = int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerAutoDefault))
+			mrfWorkers = min(p.mrfWorkerSize+1, MRFWorkerAutoDefault)
 		}
 	}
+	if maxWorkers > 0 && workers > maxWorkers {
+		workers = maxWorkers
+	}
+
+	if maxWorkers > 0 && mrfWorkers > maxWorkers {
+		mrfWorkers = maxWorkers
+	}
 	p.priority = pri
+	p.maxWorkers = maxWorkers
 	p.mu.Unlock()
 	p.ResizeWorkers(workers, 0)
 	p.ResizeFailedWorkers(mrfWorkers)
@@ -2017,6 +2060,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
 		p.mu.RLock()
 		prio := p.priority
+		maxWorkers := p.maxWorkers
 		p.mu.RUnlock()
 		switch prio {
 		case "fast":
@@ -2024,16 +2068,18 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		case "slow":
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
 		default:
-			if p.ActiveWorkers() < WorkerMaxLimit {
+			maxWorkers = min(maxWorkers, WorkerMaxLimit)
+			if p.ActiveWorkers() < maxWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(len(p.workers)+1), WorkerMaxLimit))
+				workers := min(len(p.workers)+1, maxWorkers)
 				existing := len(p.workers)
 				p.mu.RUnlock()
 				p.ResizeWorkers(workers, existing)
 			}
-			if p.ActiveMRFWorkers() < MRFWorkerMaxLimit {
+			maxMRFWorkers := min(maxWorkers, MRFWorkerMaxLimit)
+			if p.ActiveMRFWorkers() < maxMRFWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(p.mrfWorkerSize+1), MRFWorkerMaxLimit))
+				workers := min(p.mrfWorkerSize+1, maxMRFWorkers)
 				p.mu.RUnlock()
 				p.ResizeFailedWorkers(workers)
 			}
@@ -2071,6 +2117,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		globalReplicationPool.queueMRFSave(doi.ToMRFEntry())
 		p.mu.RLock()
 		prio := p.priority
+		maxWorkers := p.maxWorkers
 		p.mu.RUnlock()
 		switch prio {
 		case "fast":
@@ -2078,9 +2125,10 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		case "slow":
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
 		default:
-			if p.ActiveWorkers() < WorkerMaxLimit {
+			maxWorkers = min(maxWorkers, WorkerMaxLimit)
+			if p.ActiveWorkers() < maxWorkers {
 				p.mu.RLock()
-				workers := int(math.Min(float64(len(p.workers)+1), WorkerMaxLimit))
+				workers := min(len(p.workers)+1, maxWorkers)
 				existing := len(p.workers)
 				p.mu.RUnlock()
 				p.ResizeWorkers(workers, existing)
@@ -2090,13 +2138,12 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 }
 
 type replicationPoolOpts struct {
-	Priority string
+	Priority   string
+	MaxWorkers int
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
-	globalReplicationPool = NewReplicationPool(ctx, objectAPI, replicationPoolOpts{
-		Priority: globalAPIConfig.getReplicationPriority(),
-	})
+	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationOpts())
 	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
 	go globalReplicationStats.trackEWMA()
 }
@@ -2572,7 +2619,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 
 	// Walk through all object versions - Walk() is always in ascending order needed to ensure
 	// delete marker replicated to target after object version is first created.
-	if err := objectAPI.Walk(ctx, opts.bucket, "", objInfoCh, ObjectOptions{}); err != nil {
+	if err := objectAPI.Walk(ctx, opts.bucket, "", objInfoCh, WalkOptions{}); err != nil {
 		logger.LogIf(ctx, err)
 		return
 	}
@@ -2945,7 +2992,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	}
 
 	objInfoCh := make(chan ObjectInfo, 10)
-	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, ObjectOptions{}); err != nil {
+	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, WalkOptions{}); err != nil {
 		logger.LogIf(ctx, err)
 		return nil, err
 	}
@@ -3156,10 +3203,11 @@ func (p *ReplicationPool) persistMRF() {
 			if !ok {
 				return
 			}
+			entries[e.versionID] = e
+
 			if len(entries) >= mrfMaxEntries {
 				saveMRFToDisk()
 			}
-			entries[e.versionID] = e
 		}
 	}
 }
@@ -3183,16 +3231,22 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 		select {
 		case p.mrfSaveCh <- entry:
 		default:
+			atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedCount, 1)
+			atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
 		}
 	}
 }
 
-func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntries, data []byte) {
+func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntries) {
 	newReader := func() io.ReadCloser {
 		r, w := io.Pipe()
 		go func() {
+			// Initialize MRF meta header.
+			var data [4]byte
+			binary.LittleEndian.PutUint16(data[0:2], mrfMetaFormat)
+			binary.LittleEndian.PutUint16(data[2:4], mrfMetaVersion)
 			mw := msgp.NewWriter(w)
-			n, err := mw.Write(data)
+			n, err := mw.Write(data[:])
 			if err != nil {
 				w.CloseWithError(err)
 				return
@@ -3208,7 +3262,11 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 		return r
 	}
 
-	for _, localDrive := range globalLocalDrives {
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	for _, localDrive := range localDrives {
 		r := newReader()
 		err := localDrive.CreateFile(ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
 		r.Close()
@@ -3230,15 +3288,10 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 
 	v := MRFReplicateEntries{
 		Entries: entries,
-		Version: mrfMetaVersionV1,
+		Version: mrfMetaVersion,
 	}
-	data := make([]byte, 4, v.Msgsize()+4)
 
-	// Initialize the resync meta header.
-	binary.LittleEndian.PutUint16(data[0:2], mrfMetaFormat)
-	binary.LittleEndian.PutUint16(data[2:4], mrfMetaVersion)
-
-	p.persistToDrive(ctx, v, data)
+	p.persistToDrive(ctx, v)
 }
 
 // load mrf entries from disk
@@ -3249,8 +3302,8 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 		if !p.initialized() {
 			return re, nil
 		}
-		data := make([]byte, 4)
-		n, err := rc.Read(data)
+		var data [4]byte
+		n, err := rc.Read(data[:])
 		if err != nil {
 			return re, err
 		}
@@ -3275,7 +3328,12 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 
 		return re, nil
 	}
-	for _, localDrive := range globalLocalDrives {
+
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	for _, localDrive := range localDrives {
 		rc, err := localDrive.ReadFileStream(p.ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), 0, -1)
 		if err != nil {
 			continue
@@ -3364,7 +3422,7 @@ func (p *ReplicationPool) initialized() bool {
 }
 
 // getMRF returns MRF entries for this node.
-func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch chan madmin.ReplicationMRF, err error) {
+func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch <-chan madmin.ReplicationMRF, err error) {
 	mrfRec, err := p.loadMRF()
 	if err != nil {
 		return nil, err
@@ -3374,7 +3432,7 @@ func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch chan ma
 	go func() {
 		defer close(mrfCh)
 		for vID, e := range mrfRec.Entries {
-			if e.Bucket != bucket && bucket != "" {
+			if bucket != "" && e.Bucket != bucket {
 				continue
 			}
 			select {

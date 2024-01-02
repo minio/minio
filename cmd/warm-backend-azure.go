@@ -26,8 +26,11 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/minio/madmin-go/v3"
 )
 
@@ -108,8 +111,66 @@ func (az *warmBackendAzure) InUse(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
+func newCredentialFromSP(conf madmin.TierAzure) (azblob.Credential, error) {
+	oauthConfig, err := adal.NewOAuthConfig(azure.PublicCloud.ActiveDirectoryEndpoint, conf.SPAuth.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	spt, err := adal.NewServicePrincipalToken(*oauthConfig, conf.SPAuth.ClientID, conf.SPAuth.ClientSecret, azure.PublicCloud.ResourceIdentifiers.Storage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Refresh obtains a fresh token
+	err = spt.Refresh()
+	if err != nil {
+		return nil, err
+	}
+
+	tc := azblob.NewTokenCredential(spt.Token().AccessToken, func(tc azblob.TokenCredential) time.Duration {
+		err := spt.Refresh()
+		if err != nil {
+			return 0
+		}
+		// set the new token value
+		tc.SetToken(spt.Token().AccessToken)
+
+		// get the next token before the current one expires
+		nextRenewal := float64(time.Until(spt.Token().Expires())) * 0.8
+		if nextRenewal <= 0 {
+			nextRenewal = float64(time.Second)
+		}
+
+		return time.Duration(nextRenewal)
+	})
+
+	return tc, nil
+}
+
 func newWarmBackendAzure(conf madmin.TierAzure, _ string) (*warmBackendAzure, error) {
-	credential, err := azblob.NewSharedKeyCredential(conf.AccountName, conf.AccountKey)
+	var (
+		credential azblob.Credential
+		err        error
+	)
+
+	switch {
+	case conf.AccountName == "":
+		return nil, errors.New("the account name is required")
+	case conf.AccountKey != "" && (conf.SPAuth.TenantID != "" || conf.SPAuth.ClientID != "" || conf.SPAuth.ClientSecret != ""):
+		return nil, errors.New("multiple authentication mechanisms are provided")
+	case conf.AccountKey == "" && (conf.SPAuth.TenantID == "" || conf.SPAuth.ClientID == "" || conf.SPAuth.ClientSecret == ""):
+		return nil, errors.New("no authentication mechanism was provided")
+	}
+
+	if conf.Bucket == "" {
+		return nil, errors.New("no bucket name was provided")
+	}
+
+	if conf.IsSPEnabled() {
+		credential, err = newCredentialFromSP(conf)
+	} else {
+		credential, err = azblob.NewSharedKeyCredential(conf.AccountName, conf.AccountKey)
+	}
 	if err != nil {
 		if _, ok := err.(base64.CorruptInputError); ok {
 			return nil, errors.New("invalid Azure credentials")

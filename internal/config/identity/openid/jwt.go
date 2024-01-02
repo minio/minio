@@ -114,8 +114,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 		return nil
 	}
 
-	expAt, err := auth.ExpToInt64(expStr)
-	if err != nil {
+	if _, err := auth.ExpToInt64(expStr); err != nil {
 		return err
 	}
 
@@ -123,13 +122,6 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-
-	// Verify if JWT expiry is lesser than default expiry duration,
-	// if that is the case then set the default expiration to be
-	// from the JWT expiry claim.
-	if time.Unix(expAt, 0).UTC().Sub(time.Now().UTC()) < defaultExpiryDuration {
-		defaultExpiryDuration = time.Unix(expAt, 0).UTC().Sub(time.Now().UTC())
-	} // else honor the specified expiry duration.
 
 	claims["exp"] = time.Now().UTC().Add(defaultExpiryDuration).Unix() // update with new expiry.
 	return nil

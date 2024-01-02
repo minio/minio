@@ -90,21 +90,15 @@ func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
-// ReadinessCheckHandler Checks if the process is up. Always returns success.
+// ReadinessCheckHandler checks whether MinIO is up and ready to serve requests.
+// It also checks whether the KMS is available and whether etcd is reachable,
+// if configured.
 func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	LivenessCheckHandler(w, r)
-}
-
-// LivenessCheckHandler - Checks if the process is up. Always returns success.
-func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		// Service not initialized yet
-		w.Header().Set(xhttp.MinIOServerStatus, unavailable)
+	if objLayer := newObjectLayerFn(); objLayer == nil {
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable) // Service not initialized yet
 	}
-
-	peerCall := r.Header.Get(xhttp.MinIOPeerCall) != ""
-	if peerCall {
+	if r.Header.Get(xhttp.MinIOPeerCall) != "" {
+		writeResponse(w, http.StatusOK, nil, mimeNone)
 		return
 	}
 
@@ -120,7 +114,7 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify if KMS is reachable if its configured
-	if GlobalKMS != nil && !peerCall {
+	if GlobalKMS != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 
@@ -153,6 +147,30 @@ func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	writeResponse(w, http.StatusOK, nil, mimeNone)
+}
 
+// LivenessCheckHandler checks whether MinIO is up. It differs from the
+// readiness handler since a failing liveness check causes pod restarts
+// in K8S enviromnents. Therefore, it does not contact external systems.
+func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
+	if objLayer := newObjectLayerFn(); objLayer == nil {
+		w.Header().Set(xhttp.MinIOServerStatus, unavailable) // Service not initialized yet
+	}
+	if r.Header.Get(xhttp.MinIOPeerCall) != "" {
+		writeResponse(w, http.StatusOK, nil, mimeNone)
+		return
+	}
+
+	if int(globalHTTPStats.loadRequestsInQueue()) > globalAPIConfig.getRequestsPoolCapacity() {
+		apiErr := getAPIError(ErrBusy)
+		switch r.Method {
+		case http.MethodHead:
+			writeResponse(w, apiErr.HTTPStatusCode, nil, mimeNone)
+		case http.MethodGet:
+			writeErrorResponse(r.Context(), w, apiErr, r.URL)
+		}
+		return
+	}
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }

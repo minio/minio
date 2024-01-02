@@ -93,55 +93,66 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		return nil, errNoSuchUser
 	}
 	if !ok && globalIAMSys.LDAPConfig.Enabled() {
-		targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
-		if err != nil {
+		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), f.AccessKey())
+		if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 			return nil, err
 		}
-		expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
-		if err != nil {
-			return nil, err
+		var mcreds *credentials.Credentials
+		if errors.Is(err, errNoSuchServiceAccount) {
+			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
+			if err != nil {
+				return nil, err
+			}
+			expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
+			if err != nil {
+				return nil, err
+			}
+			claims := make(map[string]interface{})
+			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
+			for k, v := range f.permissions.CriticalOptions {
+				claims[k] = v
+			}
+
+			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+			if err != nil {
+				return nil, err
+			}
+
+			// Set the parent of the temporary access key, this is useful
+			// in obtaining service accounts by this cred.
+			cred.ParentUser = targetUser
+
+			// Set this value to LDAP groups, LDAP user can be part
+			// of large number of groups
+			cred.Groups = targetGroups
+
+			// Set the newly generated credentials, policyName is empty on purpose
+			// LDAP policies are applied automatically using their ldapUser, ldapGroups
+			// mapping.
+			updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
+			if err != nil {
+				return nil, err
+			}
+
+			// Call hook for site replication.
+			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+				Type: madmin.SRIAMItemSTSAcc,
+				STSCredential: &madmin.SRSTSCredential{
+					AccessKey:    cred.AccessKey,
+					SecretKey:    cred.SecretKey,
+					SessionToken: cred.SessionToken,
+					ParentUser:   cred.ParentUser,
+				},
+				UpdatedAt: updatedAt,
+			}))
+
+			mcreds = credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken)
+		} else {
+			mcreds = credentials.NewStaticV4(sa.Credentials.AccessKey, sa.Credentials.SecretKey, "")
 		}
-		claims := make(map[string]interface{})
-		claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-		for k, v := range f.permissions.CriticalOptions {
-			claims[k] = v
-		}
-
-		cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
-		if err != nil {
-			return nil, err
-		}
-
-		// Set the parent of the temporary access key, this is useful
-		// in obtaining service accounts by this cred.
-		cred.ParentUser = targetUser
-
-		// Set this value to LDAP groups, LDAP user can be part
-		// of large number of groups
-		cred.Groups = targetGroups
-
-		// Set the newly generated credentials, policyName is empty on purpose
-		// LDAP policies are applied automatically using their ldapUser, ldapGroups
-		// mapping.
-		updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
-		if err != nil {
-			return nil, err
-		}
-
-		// Call hook for site replication.
-		logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSTSAcc,
-			STSCredential: &madmin.SRSTSCredential{
-				AccessKey:    cred.AccessKey,
-				SecretKey:    cred.SecretKey,
-				SessionToken: cred.SessionToken,
-				ParentUser:   cred.ParentUser,
-			},
-			UpdatedAt: updatedAt,
-		}))
 
 		return minio.New(f.endpoint, &minio.Options{
-			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+			Creds:     mcreds,
 			Secure:    globalIsTLS,
 			Transport: globalRemoteFTPClientTransport,
 		})
@@ -201,19 +212,74 @@ func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
 	return obj, nil
 }
 
-type writerAt struct {
-	w  *io.PipeWriter
-	wg *sync.WaitGroup
+// TransferError will catch network errors during transfer.
+// When TransferError() is called Close() will also
+// be called, so we do not need to Wait() here.
+func (w *writerAt) TransferError(err error) {
+	_ = w.w.CloseWithError(err)
+	_ = w.r.CloseWithError(err)
+	w.err = err
 }
 
-func (w *writerAt) Close() error {
-	err := w.w.Close()
+func (w *writerAt) Close() (err error) {
+	switch {
+	case len(w.buffer) > 0:
+		err = errors.New("some file segments were not flushed from the queue")
+		_ = w.w.CloseWithError(err)
+	case w.err != nil:
+		// No need to close here since both pipes were
+		// closing inside TransferError()
+		err = w.err
+	default:
+		err = w.w.Close()
+	}
+	for i := range w.buffer {
+		delete(w.buffer, i)
+	}
 	w.wg.Wait()
 	return err
 }
 
+type writerAt struct {
+	w      *io.PipeWriter
+	r      *io.PipeReader
+	wg     *sync.WaitGroup
+	buffer map[int64][]byte
+	err    error
+
+	nextOffset int64
+	m          sync.Mutex
+}
+
 func (w *writerAt) WriteAt(b []byte, offset int64) (n int, err error) {
-	return w.w.Write(b)
+	w.m.Lock()
+	defer w.m.Unlock()
+
+	if w.nextOffset == offset {
+		n, err = w.w.Write(b)
+		w.nextOffset += int64(n)
+	} else {
+		w.buffer[offset] = make([]byte, len(b))
+		copy(w.buffer[offset], b)
+		n = len(b)
+	}
+
+again:
+	nextOut, ok := w.buffer[w.nextOffset]
+	if ok {
+		n, err = w.w.Write(nextOut)
+		delete(w.buffer, w.nextOffset)
+		w.nextOffset += int64(n)
+		if n != len(nextOut) {
+			return 0, fmt.Errorf("expected write size %d but wrote %d bytes", len(nextOut), n)
+		}
+		if err != nil {
+			return 0, err
+		}
+		goto again
+	}
+
+	return len(b), nil
 }
 
 func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
@@ -235,10 +301,22 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	if err != nil {
 		return nil, err
 	}
+	ok, err := clnt.BucketExists(r.Context(), bucket)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, os.ErrNotExist
+	}
 
 	pr, pw := io.Pipe()
 
-	wa := &writerAt{w: pw, wg: &sync.WaitGroup{}}
+	wa := &writerAt{
+		buffer: make(map[int64][]byte),
+		w:      pw,
+		r:      pr,
+		wg:     &sync.WaitGroup{},
+	}
 	wa.wg.Add(1)
 	go func() {
 		_, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{SendContentMd5: true})
@@ -298,6 +376,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 				return err.Err
 			}
 		}
+		return err
 
 	case "Remove":
 		bucket, object := path2BucketObject(r.Filepath)

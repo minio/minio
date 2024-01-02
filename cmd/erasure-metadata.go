@@ -158,6 +158,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		ContentEncoding:  fi.Metadata["content-encoding"],
 		NumVersions:      fi.NumVersions,
 		SuccessorModTime: fi.SuccessorModTime,
+		CacheControl:     fi.Metadata["cache-control"],
 	}
 
 	if exp, ok := fi.Metadata["expires"]; ok {

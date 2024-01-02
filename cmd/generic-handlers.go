@@ -31,6 +31,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/grid"
 	xnet "github.com/minio/pkg/v2/net"
 
 	"github.com/minio/minio/internal/amztime"
@@ -152,7 +153,7 @@ func setBrowserRedirectMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		read := r.Method == http.MethodGet || r.Method == http.MethodHead
 		// Re-direction is handled specifically for browser requests.
-		if guessIsBrowserReq(r) && read && globalBrowserRedirect {
+		if !guessIsHealthCheckReq(r) && guessIsBrowserReq(r) && read && globalBrowserRedirect {
 			// Fetch the redirect location if any.
 			if u := getRedirectLocation(r); u != nil {
 				// Employ a temporary re-direct.
@@ -240,6 +241,10 @@ func guessIsRPCReq(req *http.Request) bool {
 	if req == nil {
 		return false
 	}
+	if req.Method == http.MethodGet && req.URL != nil && req.URL.Path == grid.RoutePath {
+		return true
+	}
+
 	return req.Method == http.MethodPost &&
 		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+SlashSeparator)
 }

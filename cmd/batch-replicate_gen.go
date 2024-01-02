@@ -469,6 +469,12 @@ func (z *BatchJobReplicateSource) DecodeMsg(dc *msgp.Reader) (err error) {
 					}
 				}
 			}
+		case "Snowball":
+			err = z.Snowball.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Snowball")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -482,9 +488,9 @@ func (z *BatchJobReplicateSource) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobReplicateSource) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
+	// map header, size 7
 	// write "Type"
-	err = en.Append(0x86, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	err = en.Append(0x87, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	if err != nil {
 		return
 	}
@@ -569,15 +575,25 @@ func (z *BatchJobReplicateSource) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Creds", "SessionToken")
 		return
 	}
+	// write "Snowball"
+	err = en.Append(0xa8, 0x53, 0x6e, 0x6f, 0x77, 0x62, 0x61, 0x6c, 0x6c)
+	if err != nil {
+		return
+	}
+	err = z.Snowball.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Snowball")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobReplicateSource) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 7
 	// string "Type"
-	o = append(o, 0x86, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	o = append(o, 0x87, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendString(o, string(z.Type))
 	// string "Bucket"
 	o = append(o, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
@@ -603,6 +619,13 @@ func (z *BatchJobReplicateSource) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "SessionToken"
 	o = append(o, 0xac, 0x53, 0x65, 0x73, 0x73, 0x69, 0x6f, 0x6e, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
 	o = msgp.AppendString(o, z.Creds.SessionToken)
+	// string "Snowball"
+	o = append(o, 0xa8, 0x53, 0x6e, 0x6f, 0x77, 0x62, 0x61, 0x6c, 0x6c)
+	o, err = z.Snowball.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Snowball")
+		return
+	}
 	return
 }
 
@@ -699,6 +722,12 @@ func (z *BatchJobReplicateSource) UnmarshalMsg(bts []byte) (o []byte, err error)
 					}
 				}
 			}
+		case "Snowball":
+			bts, err = z.Snowball.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Snowball")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -713,7 +742,7 @@ func (z *BatchJobReplicateSource) UnmarshalMsg(bts []byte) (o []byte, err error)
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobReplicateSource) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 5 + msgp.StringPrefixSize + len(z.Path) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken)
+	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 5 + msgp.StringPrefixSize + len(z.Path) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken) + 9 + z.Snowball.Msgsize()
 	return
 }
 

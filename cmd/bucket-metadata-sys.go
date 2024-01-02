@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"sync"
@@ -177,6 +178,40 @@ func (sys *BucketMetadataSys) save(ctx context.Context, meta BucketMetadata) err
 // Delete delete the bucket metadata for the specified bucket.
 // must be used by all callers instead of using Update() with nil configData.
 func (sys *BucketMetadataSys) Delete(ctx context.Context, bucket string, configFile string) (updatedAt time.Time, err error) {
+	if configFile == bucketLifecycleConfig {
+		// Get bucket config from current site
+		meta, e := globalBucketMetadataSys.GetConfigFromDisk(ctx, bucket)
+		if e != nil && !errors.Is(e, errConfigNotFound) {
+			return updatedAt, e
+		}
+		var expiryRuleRemoved bool
+		if len(meta.LifecycleConfigXML) > 0 {
+			var lcCfg lifecycle.Lifecycle
+			if err := xml.Unmarshal(meta.LifecycleConfigXML, &lcCfg); err != nil {
+				return updatedAt, err
+			}
+			// find a single expiry rule set the flag
+			for _, rl := range lcCfg.Rules {
+				if !rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull() {
+					expiryRuleRemoved = true
+					break
+				}
+			}
+		}
+
+		// Form empty ILM details with `ExpiryUpdatedAt` field and save
+		var cfgData []byte
+		if expiryRuleRemoved {
+			var lcCfg lifecycle.Lifecycle
+			currtime := time.Now()
+			lcCfg.ExpiryUpdatedAt = &currtime
+			cfgData, err = xml.Marshal(lcCfg)
+			if err != nil {
+				return updatedAt, err
+			}
+		}
+		return sys.updateAndParse(ctx, bucket, configFile, cfgData, false)
+	}
 	return sys.updateAndParse(ctx, bucket, configFile, nil, false)
 }
 
@@ -267,7 +302,10 @@ func (sys *BucketMetadataSys) GetLifecycleConfig(bucket string) (*lifecycle.Life
 		}
 		return nil, time.Time{}, err
 	}
-	if meta.lifecycleConfig == nil {
+	// there could be just `ExpiryUpdatedAt` field populated as part
+	// of last delete all. Treat this situation as not lifecycle configuration
+	// available
+	if meta.lifecycleConfig == nil || len(meta.lifecycleConfig.Rules) == 0 {
 		return nil, time.Time{}, BucketLifecycleNotFound{Bucket: bucket}
 	}
 	return meta.lifecycleConfig, meta.LifecycleConfigUpdatedAt, nil
@@ -437,21 +475,8 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 	return nil
 }
 
-func (sys *BucketMetadataSys) loadBucketMetadata(ctx context.Context, bucket BucketInfo) error {
-	meta, err := loadBucketMetadata(ctx, sys.objAPI, bucket.Name)
-	if err != nil {
-		return err
-	}
-
-	sys.Lock()
-	sys.metadataMap[bucket.Name] = meta
-	sys.Unlock()
-
-	return nil
-}
-
 // concurrently load bucket metadata to speed up loading bucket metadata.
-func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []BucketInfo) {
+func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []BucketInfo, failedBuckets map[string]struct{}) {
 	g := errgroup.WithNErrs(len(buckets))
 	bucketMetas := make([]BucketMetadata, len(buckets))
 	for index := range buckets {
@@ -491,6 +516,10 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 
 	for i, meta := range bucketMetas {
 		if errs[i] != nil {
+			if failedBuckets == nil {
+				failedBuckets = make(map[string]struct{})
+			}
+			failedBuckets[buckets[i].Name] = struct{}{}
 			continue
 		}
 		globalEventNotifier.set(buckets[i], meta)   // set notification targets
@@ -498,7 +527,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	}
 }
 
-func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
+func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, failedBuckets map[string]struct{}) {
 	const bucketMetadataRefresh = 15 * time.Minute
 
 	sleeper := newDynamicSleeper(2, 150*time.Millisecond, false)
@@ -513,7 +542,7 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 			buckets, err := sys.objAPI.ListBuckets(ctx, BucketOptions{})
 			if err != nil {
 				logger.LogIf(ctx, err)
-				continue
+				break
 			}
 
 			// Handle if we have some buckets in-memory those are stale.
@@ -525,38 +554,49 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 			}
 			sys.RemoveStaleBuckets(diskBuckets)
 
-			for _, bucket := range buckets {
+			for i := range buckets {
 				wait := sleeper.Timer(ctx)
 
-				err := sys.loadBucketMetadata(ctx, bucket)
+				meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[i].Name)
 				if err != nil {
 					logger.LogIf(ctx, err)
 					wait() // wait to proceed to next entry.
 					continue
 				}
 
+				sys.Lock()
+				sys.metadataMap[buckets[i].Name] = meta
+				sys.Unlock()
+
+				// Initialize the failed buckets
+				if _, ok := failedBuckets[buckets[i].Name]; ok {
+					globalEventNotifier.set(buckets[i], meta)
+					globalBucketTargetSys.set(buckets[i], meta)
+					delete(failedBuckets, buckets[i].Name)
+				}
+
 				wait() // wait to proceed to next entry.
 			}
-
-			t.Reset(bucketMetadataRefresh)
 		}
+		t.Reset(bucketMetadataRefresh)
 	}
 }
 
 // Loads bucket metadata for all buckets into BucketMetadataSys.
 func (sys *BucketMetadataSys) init(ctx context.Context, buckets []BucketInfo) {
 	count := 100 // load 100 bucket metadata at a time.
+	failedBuckets := make(map[string]struct{})
 	for {
 		if len(buckets) < count {
-			sys.concurrentLoad(ctx, buckets)
+			sys.concurrentLoad(ctx, buckets, failedBuckets)
 			break
 		}
-		sys.concurrentLoad(ctx, buckets[:count])
+		sys.concurrentLoad(ctx, buckets[:count], failedBuckets)
 		buckets = buckets[count:]
 	}
 
 	if globalIsDistErasure {
-		go sys.refreshBucketsMetadataLoop(ctx)
+		go sys.refreshBucketsMetadataLoop(ctx, failedBuckets)
 	}
 }
 

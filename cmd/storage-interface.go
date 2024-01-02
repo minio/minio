@@ -66,7 +66,7 @@ type StorageAPI interface {
 	// has never been replaced.
 	Healing() *healingTracker
 	DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error)
-	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error)
+	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, shouldSleep func() bool) (dataUsageCache, error)
 
 	// Volume operations.
 	MakeVol(ctx context.Context, volume string) (err error)
@@ -79,13 +79,13 @@ type StorageAPI interface {
 	WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error
 
 	// Metadata operations
-	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) error
-	DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error
+	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool, opts DeleteOptions) error
+	DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions, opts DeleteOptions) []error
 	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo, opts UpdateMetadataOpts) error
-	ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (FileInfo, error)
+	ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (FileInfo, error)
 	ReadXL(ctx context.Context, volume, path string, readData bool) (RawFileInfo, error)
-	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (uint64, error)
+	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (uint64, error)
 
 	// File operations.
 	ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error)
@@ -95,7 +95,7 @@ type StorageAPI interface {
 	ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
 	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error
-	Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error)
+	Delete(ctx context.Context, volume string, path string, opts DeleteOptions) (err error)
 	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
 	StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error)
 	ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error
@@ -147,7 +147,7 @@ func (p *unrecognizedDisk) Healing() *healingTracker {
 	return nil
 }
 
-func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, shouldSleep func() bool) (dataUsageCache, error) {
 	return dataUsageCache{}, errDiskNotFound
 }
 
@@ -217,7 +217,7 @@ func (p *unrecognizedDisk) RenameFile(ctx context.Context, srcVolume, srcPath, d
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (uint64, error) {
+func (p *unrecognizedDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (uint64, error) {
 	return 0, errDiskNotFound
 }
 
@@ -225,13 +225,12 @@ func (p *unrecognizedDisk) CheckParts(ctx context.Context, volume string, path s
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
+func (p *unrecognizedDisk) Delete(ctx context.Context, volume string, path string, opts DeleteOptions) (err error) {
 	return errDiskNotFound
 }
 
-// DeleteVersions deletes slice of versions, it can be same object
-// or multiple objects.
-func (p *unrecognizedDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) (errs []error) {
+// DeleteVersions deletes slice of versions, it can be same object or multiple objects.
+func (p *unrecognizedDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions, opts DeleteOptions) (errs []error) {
 	errs = make([]error, len(versions))
 
 	for i := range errs {
@@ -248,7 +247,7 @@ func (p *unrecognizedDisk) WriteAll(ctx context.Context, volume string, path str
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
+func (p *unrecognizedDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool, opts DeleteOptions) (err error) {
 	return errDiskNotFound
 }
 
@@ -260,7 +259,7 @@ func (p *unrecognizedDisk) WriteMetadata(ctx context.Context, volume, path strin
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (p *unrecognizedDisk) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	return fi, errDiskNotFound
 }
 

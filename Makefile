@@ -8,7 +8,6 @@ GOOS := $(shell go env GOOS)
 VERSION ?= $(shell git describe --tags)
 TAG ?= "quay.io/minio/minio:$(VERSION)"
 
-GOLANGCI_VERSION = v1.51.2
 GOLANGCI_DIR = .bin/golangci/$(GOLANGCI_VERSION)
 GOLANGCI = $(GOLANGCI_DIR)/golangci-lint
 
@@ -23,8 +22,8 @@ help: ## print this help
 
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
-	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_DIR) $(GOLANGCI_VERSION)
-	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.7
+	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_DIR)
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@6ac204f0b4d48d17ab4fa442134c7fba13127a4e
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
 crosscompile: ## cross compile minio
@@ -59,6 +58,9 @@ test-decom: install-race
 	@env bash $(PWD)/docs/distributed/decom-encrypted.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
 	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
+
+test-configfile: install-race
+	@env bash $(PWD)/docs/distributed/distributed-from-config-file.sh
 
 test-upgrade: install-race
 	@echo "Running minio upgrade tests"
@@ -141,14 +143,23 @@ hotfix-vars:
 	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
 	$(eval TAG := "minio/minio:$(VERSION)")
 
-hotfix: hotfix-vars install ## builds minio binary with hotfix tags
-	@mv -f ./minio ./minio.$(VERSION)
-	@minisign -qQSm ./minio.$(VERSION) -s "${CRED_DIR}/minisign.key" < "${CRED_DIR}/minisign-passphrase"
-	@sha256sum < ./minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio.$(VERSION).sha256sum
+hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
+	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.0/pkger_2.2.0_linux_amd64.deb
+	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.0/linux-systemd/distributed/minio.service
+	@sudo apt install ./pkger_2.2.0_linux_amd64.deb --yes
+	@mkdir -p minio-release/$(GOOS)-$(GOARCH)/archive
+	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio
+	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)
+	@minisign -qQSm minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION) -s "${CRED_DIR}/minisign.key" < "${CRED_DIR}/minisign-passphrase"
+	@sha256sum < minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION) | sed 's, -,minio.$(VERSION),g' > minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION).sha256sum
+	@cp -af minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)* minio-release/$(GOOS)-$(GOARCH)/archive/
+	@pkger -r $(VERSION) --ignore
 
 hotfix-push: hotfix
-	@scp -q -r minio.$(VERSION)* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
-	@scp -q -r minio.$(VERSION)* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive
 	@echo "Published new hotfix binaries at https://dl.min.io/server/minio/hotfixes/linux-amd64/archive/minio.$(VERSION)"
 
 docker-hotfix-push: docker-hotfix
@@ -183,3 +194,6 @@ clean: ## cleanup all generated assets
 	@rm -rvf build
 	@rm -rvf release
 	@rm -rvf .verify*
+	@rm -rvf minio-release
+	@rm -rvf minio.RELEASE*.hotfix.*
+	@rm -rvf pkger_*.deb

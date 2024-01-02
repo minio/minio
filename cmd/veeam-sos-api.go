@@ -163,7 +163,7 @@ func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRa
 		}
 
 		if quotaSize == 0 {
-			info := objAPI.StorageInfo(ctx)
+			info := objAPI.StorageInfo(ctx, true)
 			info.Backend = objAPI.BackendInfo()
 
 			ci.Capacity = int64(GetTotalUsableCapacity(info.Disks, info))

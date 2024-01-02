@@ -19,7 +19,7 @@ For optimal production setup MinIO recommends Linux kernel version 4.x and later
 
 | Item                                                                            | Specification                                                                   |
 |:--------------------------------------------------------------------------------|:--------------------------------------------------------------------------------|
-| Maximum number of buckets                                                       | unlimited (we recommend not beyond 500000 buckets)                              |
+| Maximum number of buckets                                                       | unlimited (we recommend not beyond 500000 buckets) - see NOTE:                  |
 | Maximum number of objects per bucket                                            | no-limit                                                                        |
 | Maximum object size                                                             | 50 TiB                                                                          |
 | Minimum object size                                                             | 0 B                                                                             |
@@ -33,6 +33,8 @@ For optimal production setup MinIO recommends Linux kernel version 4.x and later
 | Maximum length for object names                                                 | 1024                                                                            |
 | Maximum length for '/' separated object name segment                            | 255                                                                             |
 | Maximum number of versions per object                                           | 10000 (can be configured to higher values but we do not recommend beyond 10000) |
+
+> NOTE:  While MinIO does not implement an upper boundary on buckets, your cluster's hardware has natural limits that depend on the workload and its scaling patterns. We strongly recommend [MinIO SUBNET](https://min.io/pricing) for architecture and sizing guidance for your production use case.
 
 ## List of Amazon S3 API's not supported on MinIO
 

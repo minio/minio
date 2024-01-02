@@ -189,7 +189,7 @@ func (sys *IAMSys) Initialized() bool {
 // Load - loads all credentials, policies and policy mappings.
 func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	loadStartTime := time.Now()
-	err := sys.store.LoadIAMCache(ctx)
+	err := sys.store.LoadIAMCache(ctx, firstTime)
 	if err != nil {
 		atomic.AddUint64(&sys.TotalRefreshFailures, 1)
 		return err
@@ -1041,7 +1041,7 @@ func (sys *IAMSys) UpdateServiceAccount(ctx context.Context, accessKey string, o
 	return updatedAt, nil
 }
 
-// ListServiceAccounts - lists all services accounts associated to a specific user
+// ListServiceAccounts - lists all service accounts associated to a specific user
 func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
@@ -1055,7 +1055,7 @@ func (sys *IAMSys) ListServiceAccounts(ctx context.Context, accessKey string) ([
 	}
 }
 
-// ListTempAccounts - lists all services accounts associated to a specific user
+// ListTempAccounts - lists all temporary service accounts associated to a specific user
 func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]UserIdentity, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
@@ -1064,6 +1064,20 @@ func (sys *IAMSys) ListTempAccounts(ctx context.Context, accessKey string) ([]Us
 	select {
 	case <-sys.configLoaded:
 		return sys.store.ListTempAccounts(ctx, accessKey)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// ListSTSAccounts - lists all STS accounts associated to a specific user
+func (sys *IAMSys) ListSTSAccounts(ctx context.Context, accessKey string) ([]auth.Credentials, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListSTSAccounts(ctx, accessKey)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -1663,18 +1677,25 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 			return
 		}
 		if dn == "" {
-			err = errNoSuchUser
-			return
+			// Still attempt to detach if provided user is a DN.
+			if !isAttach && sys.LDAPConfig.IsLDAPUserDN(r.User) {
+				dn = r.User
+			} else {
+				err = errNoSuchUser
+				return
+			}
 		}
 		isGroup = false
 	} else {
-		var exists bool
-		if exists, err = sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
-			logger.LogIf(ctx, err)
-			return
-		} else if !exists {
-			err = errNoSuchGroup
-			return
+		if isAttach {
+			var exists bool
+			if exists, err = sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+				logger.LogIf(ctx, err)
+				return
+			} else if !exists {
+				err = errNoSuchGroup
+				return
+			}
 		}
 		dn = r.Group
 		isGroup = true
@@ -1713,12 +1734,12 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 
 // PolicyDBGet - gets policy set on a user or group. If a list of groups is
 // given, policies associated with them are included as well.
-func (sys *IAMSys) PolicyDBGet(name string, isGroup bool, groups ...string) ([]string, error) {
+func (sys *IAMSys) PolicyDBGet(name string, groups ...string) ([]string, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
-	return sys.store.PolicyDBGet(name, isGroup, groups...)
+	return sys.store.PolicyDBGet(name, groups...)
 }
 
 const sessionPolicyNameExtracted = policy.SessionPolicyName + "-extracted"
@@ -1767,7 +1788,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args policy.Args, parentUser string) 
 
 	default:
 		// Check policy for parent user of service account.
-		svcPolicies, err = sys.PolicyDBGet(parentUser, false, args.Groups...)
+		svcPolicies, err = sys.PolicyDBGet(parentUser, args.Groups...)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			return false
@@ -1875,7 +1896,7 @@ func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 	default:
 		// Otherwise, inherit parent user's policy
 		var err error
-		policies, err = sys.store.PolicyDBGet(parentUser, false, args.Groups...)
+		policies, err = sys.store.PolicyDBGet(parentUser, args.Groups...)
 		if err != nil {
 			logger.LogIf(GlobalContext, fmt.Errorf("error fetching policies on %s: %v", parentUser, err))
 			return false
@@ -2012,7 +2033,7 @@ func (sys *IAMSys) IsAllowed(args policy.Args) bool {
 	}
 
 	// Continue with the assumption of a regular user
-	policies, err := sys.PolicyDBGet(args.AccountName, false, args.Groups...)
+	policies, err := sys.PolicyDBGet(args.AccountName, args.Groups...)
 	if err != nil {
 		return false
 	}

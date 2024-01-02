@@ -46,10 +46,10 @@ import (
 	"github.com/inconshreveable/mousetrap"
 	dns2 "github.com/miekg/dns"
 	"github.com/minio/cli"
+	consoleapi "github.com/minio/console/api"
+	"github.com/minio/console/api/operations"
 	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
 	consoleCerts "github.com/minio/console/pkg/certs"
-	"github.com/minio/console/restapi"
-	"github.com/minio/console/restapi/operations"
 	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
@@ -178,6 +178,23 @@ func minioConfigToConsoleFeatures() {
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
+	// This section sets Browser (console) stored config
+	if valueSCP := globalBrowserConfig.GetCSPolicy(); valueSCP != "" {
+		os.Setenv("CONSOLE_SECURE_CONTENT_SECURITY_POLICY", valueSCP)
+	}
+
+	if hstsSeconds := globalBrowserConfig.GetHSTSSeconds(); hstsSeconds > 0 {
+		isubdom := globalBrowserConfig.IsHSTSIncludeSubdomains()
+		isprel := globalBrowserConfig.IsHSTSPreload()
+		os.Setenv("CONSOLE_SECURE_STS_SECONDS", strconv.Itoa(hstsSeconds))
+		os.Setenv("CONSOLE_SECURE_STS_INCLUDE_SUB_DOMAINS", isubdom)
+		os.Setenv("CONSOLE_SECURE_STS_PRELOAD", isprel)
+	}
+
+	if valueRefer := globalBrowserConfig.GetReferPolicy(); valueRefer != "" {
+		os.Setenv("CONSOLE_SECURE_REFERRER_POLICY", valueRefer)
+	}
+
 	globalSubnetConfig.ApplyEnv()
 }
 
@@ -207,7 +224,7 @@ func buildOpenIDConsoleConfig() consoleoauth2.OpenIDPCfg {
 	return m
 }
 
-func initConsoleServer() (*restapi.Server, error) {
+func initConsoleServer() (*consoleapi.Server, error) {
 	// unset all console_ environment variables.
 	for _, cenv := range env.List(consolePrefix) {
 		os.Unsetenv(cenv)
@@ -225,9 +242,9 @@ func initConsoleServer() (*restapi.Server, error) {
 	}
 
 	// set certs before other console initialization
-	restapi.GlobalRootCAs, restapi.GlobalPublicCerts, restapi.GlobalTLSCertsManager = globalRootCAs, globalPublicCerts, globalTLSCerts
+	consoleapi.GlobalRootCAs, consoleapi.GlobalPublicCerts, consoleapi.GlobalTLSCertsManager = globalRootCAs, globalPublicCerts, globalTLSCerts
 
-	swaggerSpec, err := loads.Embedded(restapi.SwaggerJSON, restapi.FlatSwaggerJSON)
+	swaggerSpec, err := loads.Embedded(consoleapi.SwaggerJSON, consoleapi.FlatSwaggerJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -238,18 +255,18 @@ func initConsoleServer() (*restapi.Server, error) {
 		// Disable console logging if server debug log is not enabled
 		noLog := func(string, ...interface{}) {}
 
-		restapi.LogInfo = noLog
-		restapi.LogError = noLog
+		consoleapi.LogInfo = noLog
+		consoleapi.LogError = noLog
 		api.Logger = noLog
 	}
 
 	// Pass in console application config. This needs to happen before the
 	// ConfigureAPI() call.
-	restapi.GlobalMinIOConfig = restapi.MinIOConfig{
+	consoleapi.GlobalMinIOConfig = consoleapi.MinIOConfig{
 		OpenIDProviders: buildOpenIDConsoleConfig(),
 	}
 
-	server := restapi.NewServer(api)
+	server := consoleapi.NewServer(api)
 	// register all APIs
 	server.ConfigureAPI()
 
@@ -257,16 +274,16 @@ func initConsoleServer() (*restapi.Server, error) {
 
 	server.Host = globalMinioConsoleHost
 	server.Port = consolePort
-	restapi.Port = globalMinioConsolePort
-	restapi.Hostname = globalMinioConsoleHost
+	consoleapi.Port = globalMinioConsolePort
+	consoleapi.Hostname = globalMinioConsoleHost
 
 	if globalIsTLS {
 		// If TLS certificates are provided enforce the HTTPS.
 		server.EnabledListeners = []string{"https"}
 		server.TLSPort = consolePort
 		// Need to store tls-port, tls-host un config variables so secure.middleware can read from there
-		restapi.TLSPort = globalMinioConsolePort
-		restapi.Hostname = globalMinioConsoleHost
+		consoleapi.TLSPort = globalMinioConsolePort
+		consoleapi.Hostname = globalMinioConsoleHost
 	}
 
 	return server, nil
@@ -310,83 +327,120 @@ func checkUpdate(mode string) {
 	logger.Info(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
 }
 
-func newConfigDirFromCtx(ctx *cli.Context, option string, getDefaultDir func() string) (*ConfigDir, bool) {
-	var dir string
-	var dirSet bool
-
-	switch {
-	case ctx.IsSet(option):
-		dir = ctx.String(option)
-		dirSet = true
-	case ctx.GlobalIsSet(option):
-		dir = ctx.GlobalString(option)
-		dirSet = true
-		// cli package does not expose parent's option option.  Below code is workaround.
-		if dir == "" || dir == getDefaultDir() {
-			dirSet = false // Unset to false since GlobalIsSet() true is a false positive.
-			if ctx.Parent().GlobalIsSet(option) {
-				dir = ctx.Parent().GlobalString(option)
-				dirSet = true
-			}
-		}
-	default:
-		// Neither local nor global option is provided.  In this case, try to use
-		// default directory.
+func newConfigDir(dir string, dirSet bool, getDefaultDir func() string) (*ConfigDir, error) {
+	if dir == "" {
 		dir = getDefaultDir()
-		if dir == "" {
-			logger.FatalIf(errInvalidArgument, "%s option must be provided", option)
-		}
 	}
 
 	if dir == "" {
-		logger.FatalIf(errors.New("empty directory"), "%s directory cannot be empty", option)
+		if !dirSet {
+			return nil, fmt.Errorf("missing option must be provided")
+		}
+		return nil, fmt.Errorf("provided option cannot be empty")
 	}
 
 	// Disallow relative paths, figure out absolute paths.
 	dirAbs, err := filepath.Abs(dir)
-	logger.FatalIf(err, "Unable to fetch absolute path for %s=%s", option, dir)
+	if err != nil {
+		return nil, err
+	}
+	err = mkdirAllIgnorePerm(dirAbs)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create the directory `%s`: %w", dirAbs, err)
+	}
 
-	logger.FatalIf(mkdirAllIgnorePerm(dirAbs), "Unable to create directory specified %s=%s", option, dir)
-
-	return &ConfigDir{path: dirAbs}, dirSet
+	return &ConfigDir{path: dirAbs}, nil
 }
 
-func handleCommonCmdArgs(ctx *cli.Context) {
+func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	// Get "json" flag from command line argument and
-	// enable json and quite modes if json flag is turned on.
-	globalCLIContext.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
-	if globalCLIContext.JSON {
-		logger.EnableJSON()
-	}
-
+	ctxt.JSON = ctx.IsSet("json") || ctx.GlobalIsSet("json")
 	// Get quiet flag from command line argument.
-	globalCLIContext.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
-	if globalCLIContext.Quiet {
-		logger.EnableQuiet()
-	}
-
+	ctxt.Quiet = ctx.IsSet("quiet") || ctx.GlobalIsSet("quiet")
 	// Get anonymous flag from command line argument.
-	globalCLIContext.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
-	if globalCLIContext.Anonymous {
-		logger.EnableAnonymous()
-	}
-
+	ctxt.Anonymous = ctx.IsSet("anonymous") || ctx.GlobalIsSet("anonymous")
 	// Fetch address option
-	addr := ctx.GlobalString("address")
-	if addr == "" || addr == ":"+GlobalMinioDefaultPort {
-		addr = ctx.String("address")
+	ctxt.Addr = ctx.GlobalString("address")
+	if ctxt.Addr == "" || ctxt.Addr == ":"+GlobalMinioDefaultPort {
+		ctxt.Addr = ctx.String("address")
 	}
 
 	// Fetch console address option
-	consoleAddr := ctx.GlobalString("console-address")
-	if consoleAddr == "" {
-		consoleAddr = ctx.String("console-address")
+	ctxt.ConsoleAddr = ctx.GlobalString("console-address")
+	if ctxt.ConsoleAddr == "" {
+		ctxt.ConsoleAddr = ctx.String("console-address")
 	}
+
+	// Check "no-compat" flag from command line argument.
+	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
+	ctxt.PreAllocate = ctx.IsSet("pre-allocate") || ctx.GlobalIsSet("pre-allocate")
+
+	switch {
+	case ctx.IsSet("config-dir"):
+		ctxt.ConfigDir = ctx.String("config-dir")
+		ctxt.configDirSet = true
+	case ctx.GlobalIsSet("config-dir"):
+		ctxt.ConfigDir = ctx.GlobalString("config-dir")
+		ctxt.configDirSet = true
+	}
+
+	switch {
+	case ctx.IsSet("certs-dir"):
+		ctxt.CertsDir = ctx.String("certs-dir")
+		ctxt.certsDirSet = true
+	case ctx.GlobalIsSet("certs-dir"):
+		ctxt.CertsDir = ctx.GlobalString("certs-dir")
+		ctxt.certsDirSet = true
+	}
+
+	ctxt.FTP = ctx.StringSlice("ftp")
+	ctxt.SFTP = ctx.StringSlice("sftp")
+
+	ctxt.Interface = ctx.String("interface")
+	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
+	ctxt.ConnReadDeadline = ctx.Duration("conn-read-deadline")
+	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
+
+	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
+	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
+	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
+
+	if conf := ctx.String("config"); len(conf) > 0 {
+		err = mergeServerCtxtFromConfigFile(conf, ctxt)
+	} else {
+		err = mergeDisksLayoutFromArgs(serverCmdArgs(ctx), ctxt)
+	}
+
+	return err
+}
+
+func handleCommonArgs(ctxt serverCtxt) {
+	if ctxt.JSON {
+		logger.EnableJSON()
+	}
+	if ctxt.Quiet {
+		logger.EnableQuiet()
+	}
+	if ctxt.Anonymous {
+		logger.EnableAnonymous()
+	}
+
+	consoleAddr := ctxt.ConsoleAddr
+	addr := ctxt.Addr
+	configDir := ctxt.ConfigDir
+	configSet := ctxt.configDirSet
+	certsDir := ctxt.CertsDir
+	certsSet := ctxt.certsDirSet
 
 	if consoleAddr == "" {
 		p, err := xnet.GetFreePort()
 		if err != nil {
 			logger.FatalIf(err, "Unable to get free port for Console UI on the host")
+		}
+		// hold the port
+		l, err := net.Listen("TCP", fmt.Sprintf(":%s", p.String()))
+		if err == nil {
+			defer l.Close()
 		}
 		consoleAddr = net.JoinHostPort("", p.String())
 	}
@@ -417,16 +471,12 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 
 	globalMinioAddr = addr
 
-	// Check "no-compat" flag from command line argument.
-	globalCLIContext.StrictS3Compat = true
-	if ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat") {
-		globalCLIContext.StrictS3Compat = false
-	}
-
 	// Set all config, certs and CAs directories.
-	var configSet, certsSet bool
-	globalConfigDir, configSet = newConfigDirFromCtx(ctx, "config-dir", defaultConfigDir.Get)
-	globalCertsDir, certsSet = newConfigDirFromCtx(ctx, "certs-dir", defaultCertsDir.Get)
+	var err error
+	globalConfigDir, err = newConfigDir(configDir, configSet, defaultConfigDir.Get)
+	logger.FatalIf(err, "Unable to initialize the (deprecated) config directory")
+	globalCertsDir, err = newConfigDir(certsDir, certsSet, defaultCertsDir.Get)
+	logger.FatalIf(err, "Unable to initialize the certs directory")
 
 	// Remove this code when we deprecate and remove config-dir.
 	// This code is to make sure we inherit from the config-dir
@@ -438,9 +488,11 @@ func handleCommonCmdArgs(ctx *cli.Context) {
 	globalCertsCADir = &ConfigDir{path: filepath.Join(globalCertsDir.Get(), certsCADir)}
 
 	logger.FatalIf(mkdirAllIgnorePerm(globalCertsCADir.Get()), "Unable to create certs CA directory at %s", globalCertsCADir.Get())
+}
 
-	// Check if we have configured a custom DNS cache TTL.
+func runDNSCache(ctx *cli.Context) {
 	dnsTTL := ctx.Duration("dns-cache-ttl")
+	// Check if we have configured a custom DNS cache TTL.
 	if dnsTTL <= 0 {
 		dnsTTL = 10 * time.Minute
 	}
@@ -621,7 +673,7 @@ func loadEnvVarsFromFiles() {
 	}
 }
 
-func handleCommonEnvVars() {
+func serverHandleEnvVars() {
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
@@ -749,6 +801,10 @@ func handleCommonEnvVars() {
 		}
 	}
 
+	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
+}
+
+func loadRootCredentials() {
 	// At this point, either both environment variables
 	// are defined or both are not defined.
 	// Check both cases and authenticate them if correctly defined
@@ -762,6 +818,9 @@ func handleCommonEnvVars() {
 	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 		user = env.Get(config.EnvAccessKey, "")
 		password = env.Get(config.EnvSecretKey, "")
+		hasCredentials = true
+	} else if globalServerCtxt.RootUser != "" && globalServerCtxt.RootPwd != "" {
+		user, password = globalServerCtxt.RootUser, globalServerCtxt.RootPwd
 		hasCredentials = true
 	}
 	if hasCredentials {
@@ -782,8 +841,6 @@ func handleCommonEnvVars() {
 	} else {
 		globalActiveCred = auth.DefaultCredentials
 	}
-
-	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
 }
 
 // Initialize KMS global variable after valiadating and loading the configuration.

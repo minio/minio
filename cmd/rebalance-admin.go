@@ -55,7 +55,7 @@ func rebalanceStatus(ctx context.Context, z *erasureServerPools) (r rebalanceAdm
 	}
 
 	// Compute disk usage percentage
-	si := z.StorageInfo(ctx)
+	si := z.StorageInfo(ctx, true)
 	diskStats := make([]struct {
 		AvailableSpace uint64
 		TotalSpace     uint64

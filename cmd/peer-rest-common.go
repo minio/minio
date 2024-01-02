@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v33" // Add SRMetrics
+	peerRESTVersion = "v34" // Add metrics flag to LocalStorageInfo call
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -31,6 +31,7 @@ const (
 	peerRESTMethodLocalStorageInfo            = "/localstorageinfo"
 	peerRESTMethodCPUInfo                     = "/cpuinfo"
 	peerRESTMethodDiskHwInfo                  = "/diskhwinfo"
+	peerRESTMethodNetHwInfo                   = "/nethwinfo"
 	peerRESTMethodOsInfo                      = "/osinfo"
 	peerRESTMethodMemInfo                     = "/meminfo"
 	peerRESTMethodProcInfo                    = "/procinfo"
@@ -99,12 +100,14 @@ const (
 	peerRESTConcurrent     = "concurrent"
 	peerRESTDuration       = "duration"
 	peerRESTStorageClass   = "storage-class"
+	peerRESTEnableSha256   = "enableSha256"
 	peerRESTMetricsTypes   = "types"
 	peerRESTDisk           = "disk"
 	peerRESTHost           = "host"
 	peerRESTJobID          = "job-id"
 	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"
+	peerRESTMetrics        = "metrics"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

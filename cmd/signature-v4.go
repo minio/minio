@@ -334,6 +334,9 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	if !compareSignatureV4(req.Form.Get(xhttp.AmzSignature), newSignature) {
 		return ErrSignatureDoesNotMatch
 	}
+
+	r.Header.Set("x-amz-signature-age", strconv.FormatInt(UTCNow().Sub(pSignValues.Date).Milliseconds(), 10))
+
 	return ErrNone
 }
 

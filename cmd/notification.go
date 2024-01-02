@@ -31,10 +31,11 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/bucket/bandwidth"
-	"github.com/minio/minio/internal/logger"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/sync/errgroup"
+
+	"github.com/minio/minio/internal/bucket/bandwidth"
+	"github.com/minio/minio/internal/logger"
 )
 
 // This file contains peer related notifications. For sending notifications to
@@ -98,6 +99,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 			Host: addr,
 		}
 		for i := 0; i < g.retryCount; i++ {
+			g.errs[index].Err = nil
 			if err := f(); err != nil {
 				g.errs[index].Err = err
 				// Last iteration log the error.
@@ -701,6 +703,31 @@ func (sys *NotificationSys) GetCPUs(ctx context.Context) []madmin.CPUs {
 	return reply
 }
 
+// GetNetInfo - Network information
+func (sys *NotificationSys) GetNetInfo(ctx context.Context) []madmin.NetInfo {
+	reply := make([]madmin.NetInfo, len(sys.peerClients))
+
+	g := errgroup.WithNErrs(len(sys.peerClients))
+	for index, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		index := index
+		g.Go(func() error {
+			var err error
+			reply[index], err = sys.peerClients[index].GetNetInfo(ctx)
+			return err
+		}, index)
+	}
+
+	for index, err := range g.Wait() {
+		if err != nil {
+			sys.addNodeErr(&reply[index], sys.peerClients[index], err)
+		}
+	}
+	return reply
+}
+
 // GetPartitions - Disk partition information
 func (sys *NotificationSys) GetPartitions(ctx context.Context) []madmin.Partitions {
 	reply := make([]madmin.Partitions, len(sys.peerClients))
@@ -948,8 +975,11 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 		for _, ep := range pool.Endpoints {
 			if offlineHost == "" && ep.IsLocal || offlineHost == ep.Host {
 				offlineDisks = append(offlineDisks, madmin.Disk{
-					Endpoint: ep.String(),
-					State:    string(madmin.ItemOffline),
+					Endpoint:  ep.String(),
+					State:     string(madmin.ItemOffline),
+					PoolIndex: ep.PoolIdx,
+					SetIndex:  ep.SetIdx,
+					DiskIndex: ep.DiskIdx,
 				})
 			}
 		}
@@ -958,7 +988,7 @@ func getOfflineDisks(offlineHost string, endpoints EndpointServerPools) []madmin
 }
 
 // StorageInfo returns disk information across all peers
-func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
+func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer, metrics bool) StorageInfo {
 	var storageInfo StorageInfo
 	replies := make([]StorageInfo, len(sys.peerClients))
 
@@ -970,7 +1000,7 @@ func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
-			info, err := client.LocalStorageInfo()
+			info, err := client.LocalStorageInfo(metrics)
 			if err != nil {
 				info.Disks = getOfflineDisks(client.host.String(), globalEndpoints)
 			}
@@ -980,7 +1010,7 @@ func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer) StorageInfo {
 	wg.Wait()
 
 	// Add local to this server.
-	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext))
+	replies = append(replies, objLayer.LocalStorageInfo(GlobalContext, metrics))
 
 	storageInfo.Backend = objLayer.BackendInfo()
 	for _, sinfo := range replies {

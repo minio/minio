@@ -82,4 +82,13 @@ const (
 	EnvWorm       = "MINIO_WORM"        // legacy
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
+
+)
+
+// Expiration Token durations
+// These values are used to validate the expiration time range from
+// either the exp claim or MINI_STS_DURATION value
+const (
+	MinExpiration = 900
+	MaxExpiration = 31536000
 )

@@ -229,6 +229,19 @@ if [ "${expected_checksum}" != "${actual_checksum}" ]; then
 fi
 rm ./lrgfile
 
+./mc rm -r --versions --force minio1/newbucket/lrgfile
+if [ $? -ne 0 ]; then
+	echo "expected object to be present, exiting.."
+	exit_1
+fi
+
+sleep 5
+./mc stat minio1/newbucket/lrgfile
+if [ $? -eq 0 ]; then
+	echo "expected object to be deleted permanently after replication, exiting.."
+	exit_1
+fi
+
 vID=$(./mc stat minio2/newbucket/README.md --json | jq .versionID)
 if [ $? -ne 0 ]; then
 	echo "expecting object to be present. exiting.."
@@ -240,7 +253,11 @@ if [ $? -ne 0 ]; then
 	exit_1
 fi
 sleep 5
-
+val=$(./mc tag list minio1/newbucket/README.md --version-id "${vID}" --json | jq -r .tagset.key)
+if [ "${val}" != "val" ]; then
+	echo "expected bucket tag to have replicated, exiting..."
+	exit_1
+fi
 ./mc tag remove --version-id "${vID}" minio2/newbucket/README.md
 if [ $? -ne 0 ]; then
 	echo "expecting tag removal to be successful. exiting.."

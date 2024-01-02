@@ -232,7 +232,7 @@ func (h *healingTracker) delete(ctx context.Context) error {
 		pathJoin(bucketMetaPrefix, healingTrackerFilename),
 		DeleteOptions{
 			Recursive: false,
-			Force:     false,
+			Immediate: false,
 		},
 	)
 }
@@ -345,18 +345,17 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 
 	initBackgroundHealing(ctx, objAPI) // start quick background healing
 
-	globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
-
 	if env.Get("_MINIO_AUTO_DRIVE_HEALING", config.EnableOn) == config.EnableOn || env.Get("_MINIO_AUTO_DISK_HEALING", config.EnableOn) == config.EnableOn {
+		globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
 		go monitorLocalDisksAndHeal(ctx, z)
 	}
 }
 
 func getLocalDisksToHeal() (disksToHeal Endpoints) {
 	globalLocalDrivesMu.RLock()
-	globalLocalDrives := globalLocalDrives
+	localDrives := globalLocalDrives
 	globalLocalDrivesMu.RUnlock()
-	for _, disk := range globalLocalDrives {
+	for _, disk := range localDrives {
 		_, err := disk.GetDiskID()
 		if errors.Is(err, errUnformattedDisk) {
 			disksToHeal = append(disksToHeal, disk.Endpoint())

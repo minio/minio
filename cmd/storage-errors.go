@@ -51,6 +51,8 @@ var errDiskNotDir = StorageErr("drive is not directory or mountpoint")
 // errDiskNotFound - cannot find the underlying configured disk anymore.
 var errDiskNotFound = StorageErr("drive not found")
 
+var errDiskOngoingReq = StorageErr("drive still did not complete the request")
+
 // errFaultyRemoteDisk - remote disk is faulty.
 var errFaultyRemoteDisk = StorageErr("remote drive is faulty")
 
@@ -115,6 +117,8 @@ var errDoneForNow = errors.New("done for now")
 // errSkipFile returned by the fn() for readDirFn() when it needs
 // to proceed to next entry.
 var errSkipFile = errors.New("skip this file")
+
+var errIgnoreFileContrib = errors.New("ignore this file's contribution toward data-usage")
 
 // errXLBackend XL drive mode requires fresh deployment.
 var errXLBackend = errors.New("XL backend requires fresh drive")

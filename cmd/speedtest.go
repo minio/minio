@@ -39,6 +39,7 @@ type speedTestOpts struct {
 	autotune         bool
 	storageClass     string
 	bucketName       string
+	enableSha256     bool
 }
 
 // Get the max throughput and iops numbers.
@@ -163,6 +164,7 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 				duration:     opts.duration,
 				storageClass: opts.storageClass,
 				bucketName:   opts.bucketName,
+				enableSha256: opts.enableSha256,
 			}
 
 			results := globalNotificationSys.SpeedTest(ctx, sopts)
@@ -238,9 +240,15 @@ func driveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) madmin.
 	}
 
 	localPaths := globalEndpoints.LocalDisksPaths()
+	var ignoredPaths []string
 	paths := func() (tmpPaths []string) {
 		for _, lp := range localPaths {
-			tmpPaths = append(tmpPaths, pathJoin(lp, minioMetaTmpBucket))
+			if _, err := Lstat(pathJoin(lp, minioMetaBucket, formatConfigFile)); err == nil {
+				tmpPaths = append(tmpPaths, pathJoin(lp, minioMetaTmpBucket))
+			} else {
+				// Use dperf on only formatted drives.
+				ignoredPaths = append(ignoredPaths, lp)
+			}
 		}
 		return tmpPaths
 	}()
@@ -273,6 +281,12 @@ func driveSpeedTest(ctx context.Context, opts madmin.DriveSpeedTestOpts) madmin.
 					}(),
 				}
 				results = append(results, result)
+			}
+			for _, inp := range ignoredPaths {
+				results = append(results, madmin.DrivePerf{
+					Path:  inp,
+					Error: errFaultyDisk.Error(),
+				})
 			}
 			return results
 		}(),

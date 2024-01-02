@@ -536,6 +536,10 @@ func (j xlMetaV2Object) InlineData() bool {
 	return ok
 }
 
+func (j *xlMetaV2Object) ResetInlineData() {
+	delete(j.MetaSys, ReservedMetadataPrefixLower+"inline-data")
+}
+
 const (
 	metaTierStatus    = ReservedMetadataPrefixLower + TransitionStatus
 	metaTierObjName   = ReservedMetadataPrefixLower + TransitionedObjectName
@@ -1182,6 +1186,8 @@ func (x *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	return append(dst, x.data...), nil
 }
 
+const emptyUUID = "00000000-0000-0000-0000-000000000000"
+
 func (x *xlMetaV2) findVersionStr(key string) (idx int, ver *xlMetaV2Version, err error) {
 	if key == nullVersionID {
 		key = ""
@@ -1409,7 +1415,10 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
 				err = x.addVersion(ventry)
 			}
-			return "", err
+			// if we remove null version. we should try to add null version to top layer.
+			if uv.String() != emptyUUID {
+				return "", err
+			}
 		case ObjectType:
 			if updateVersion && !fi.Deleted {
 				ver, err := x.getIdx(i)
@@ -1440,6 +1449,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 			err = x.setIdx(i, *ver)
 		case fi.TransitionStatus == lifecycle.TransitionComplete:
 			ver.ObjectV2.SetTransition(fi)
+			ver.ObjectV2.ResetInlineData()
 			err = x.setIdx(i, *ver)
 		default:
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)

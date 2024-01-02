@@ -229,6 +229,19 @@ if [ "${expected_checksum}" != "${actual_checksum}" ]; then
 fi
 rm ./lrgfile
 
+./mc rm -r --versions --force minio1/newbucket/lrgfile
+if [ $? -ne 0 ]; then
+	echo "expected object to be present, exiting.."
+	exit_1
+fi
+
+sleep 5
+./mc stat minio1/newbucket/lrgfile
+if [ $? -eq 0 ]; then
+	echo "expected object to be deleted permanently after replication, exiting.."
+	exit_1
+fi
+
 ./mc mb --with-lock minio3/newbucket-olock
 sleep 5
 

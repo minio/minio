@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -36,16 +37,14 @@ import (
 type EventNotifier struct {
 	sync.RWMutex
 	targetList     *event.TargetList
-	targetResCh    chan event.TargetIDResult
 	bucketRulesMap map[string]event.RulesMap
 }
 
 // NewEventNotifier - creates new event notification object.
-func NewEventNotifier() *EventNotifier {
+func NewEventNotifier(ctx context.Context) *EventNotifier {
 	// targetList/bucketRulesMap/bucketRemoteTargetRulesMap are populated by NotificationSys.InitBucketTargets()
 	return &EventNotifier{
-		targetList:     event.NewTargetList(),
-		targetResCh:    make(chan event.TargetIDResult),
+		targetList:     event.NewTargetList(ctx),
 		bucketRulesMap: make(map[string]event.RulesMap),
 	}
 }
@@ -90,6 +89,11 @@ func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
 	evnot.AddRulesMap(bucket.Name, config.ToRulesMap())
 }
 
+// Targets returns all the registered targets
+func (evnot *EventNotifier) Targets() []event.Target {
+	return evnot.targetList.Targets()
+}
+
 // InitBucketTargets - initializes event notification system from notification.xml of all buckets.
 func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI ObjectLayer) error {
 	if objAPI == nil {
@@ -99,17 +103,7 @@ func (evnot *EventNotifier) InitBucketTargets(ctx context.Context, objAPI Object
 	if err := evnot.targetList.Add(globalNotifyTargetList.Targets()...); err != nil {
 		return err
 	}
-
-	go func() {
-		for res := range evnot.targetResCh {
-			if res.Err != nil {
-				reqInfo := &logger.ReqInfo{}
-				reqInfo.AppendTags("targetID", res.ID.String())
-				logger.LogOnceIf(logger.SetReqInfo(GlobalContext, reqInfo), res.Err, res.ID.String())
-			}
-		}
-	}()
-
+	evnot.targetList = evnot.targetList.Init(runtime.GOMAXPROCS(0)) // TODO: make this configurable (y4m4)
 	return nil
 }
 
@@ -126,40 +120,6 @@ func (evnot *EventNotifier) AddRulesMap(bucketName string, rulesMap event.RulesM
 	} else {
 		evnot.bucketRulesMap[bucketName] = rulesMap
 	}
-}
-
-// RemoveRulesMap - removes rules map for bucket name.
-func (evnot *EventNotifier) RemoveRulesMap(bucketName string, rulesMap event.RulesMap) {
-	evnot.Lock()
-	defer evnot.Unlock()
-
-	evnot.bucketRulesMap[bucketName].Remove(rulesMap)
-	if len(evnot.bucketRulesMap[bucketName]) == 0 {
-		delete(evnot.bucketRulesMap, bucketName)
-	}
-}
-
-// ConfiguredTargetIDs - returns list of configured target id's
-func (evnot *EventNotifier) ConfiguredTargetIDs() []event.TargetID {
-	if evnot == nil {
-		return nil
-	}
-
-	evnot.RLock()
-	defer evnot.RUnlock()
-
-	var targetIDs []event.TargetID
-	for _, rmap := range evnot.bucketRulesMap {
-		for _, rules := range rmap {
-			for _, targetSet := range rules {
-				for id := range targetSet {
-					targetIDs = append(targetIDs, id)
-				}
-			}
-		}
-	}
-
-	return targetIDs
 }
 
 // RemoveNotification - removes all notification configuration for bucket name.
@@ -193,7 +153,7 @@ func (evnot *EventNotifier) Send(args eventArgs) {
 	}
 
 	// If MINIO_API_SYNC_EVENTS is set, send events synchronously.
-	evnot.targetList.Send(args.ToEvent(true), targetIDSet, evnot.targetResCh, globalAPIConfig.isSyncEventsEnabled())
+	evnot.targetList.Send(args.ToEvent(true), targetIDSet, globalAPIConfig.isSyncEventsEnabled())
 }
 
 type eventArgs struct {

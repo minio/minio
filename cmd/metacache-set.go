@@ -427,7 +427,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					continue
 				}
 				_, err := disk.ReadVersion(ctx, minioMetaBucket,
-					o.objectPath(0), "", false)
+					o.objectPath(0), "", ReadOptions{})
 				if err != nil {
 					time.Sleep(retryDelay250)
 					retries++
@@ -504,7 +504,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 							continue
 						}
 						_, err := disk.ReadVersion(ctx, minioMetaBucket,
-							o.objectPath(partN), "", false)
+							o.objectPath(partN), "", ReadOptions{})
 						if err != nil {
 							time.Sleep(retryDelay250)
 							retries++
@@ -590,15 +590,91 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 func getListQuorum(quorum string, driveCount int) int {
 	switch quorum {
 	case "disk":
-		// smallest possible value, generally meant for testing.
 		return 1
 	case "reduced":
 		return 2
 	case "optimal":
 		return (driveCount + 1) / 2
+	case "auto":
+		return -1
 	}
 	// defaults to 'strict'
 	return driveCount
+}
+
+func calcCommonWritesDeletes(infos []DiskInfo, readQuorum int) (commonWrite, commonDelete uint64) {
+	deletes := make([]uint64, len(infos))
+	writes := make([]uint64, len(infos))
+	for index, di := range infos {
+		deletes[index] = di.Metrics.TotalDeletes
+		writes[index] = di.Metrics.TotalWrites
+	}
+
+	filter := func(list []uint64) (commonCount uint64) {
+		max := 0
+		signatureMap := map[uint64]int{}
+		for _, v := range list {
+			signatureMap[v]++
+		}
+		for ops, count := range signatureMap {
+			if max < count && commonCount < ops {
+				max = count
+				commonCount = ops
+			}
+		}
+		if max < readQuorum {
+			return 0
+		}
+		return commonCount
+	}
+
+	commonWrite = filter(writes)
+	commonDelete = filter(deletes)
+	return
+}
+
+func calcCommonCounter(infos []DiskInfo, readQuorum int) (commonCount uint64) {
+	filter := func() (commonCount uint64) {
+		max := 0
+		signatureMap := map[uint64]int{}
+		for _, info := range infos {
+			if info.Error != "" {
+				continue
+			}
+			mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
+			signatureMap[mutations]++
+		}
+		for ops, count := range signatureMap {
+			if max < count && commonCount < ops {
+				max = count
+				commonCount = ops
+			}
+		}
+		if max < readQuorum {
+			return 0
+		}
+		return commonCount
+	}
+
+	return filter()
+}
+
+func getQuorumDiskInfos(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI, newInfos []DiskInfo) {
+	commonMutations := calcCommonCounter(infos, readQuorum)
+	for i, info := range infos {
+		mutations := info.Metrics.TotalDeletes + info.Metrics.TotalWrites
+		if mutations >= commonMutations {
+			newDisks = append(newDisks, disks[i])
+			newInfos = append(newInfos, infos[i])
+		}
+	}
+
+	return newDisks, newInfos
+}
+
+func getQuorumDisks(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDisks []StorageAPI) {
+	newDisks, _ = getQuorumDiskInfos(disks, infos, readQuorum)
+	return newDisks
 }
 
 // Will return io.EOF if continuing would not yield more results.
@@ -606,9 +682,23 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	defer close(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
-	// get non-healing disks for listing
-	disks, _ := er.getOnlineDisksWithHealing()
+	// get prioritized non-healing disks for listing
+	disks, infos, _ := er.getOnlineDisksWithHealingAndInfo(true)
 	askDisks := getListQuorum(o.AskDisks, er.setDriveCount)
+	if askDisks == -1 {
+		newDisks := getQuorumDisks(disks, infos, (len(disks)+1)/2)
+		if newDisks != nil {
+			// If we found disks signature in quorum, we proceed to list
+			// from a single drive, shuffling of the drives is subsequently.
+			disks = newDisks
+			askDisks = 1
+		} else {
+			// If we did not find suitable disks, perform strict quorum listing
+			// as no disk agrees on quorum anymore.
+			askDisks = getListQuorum("strict", er.setDriveCount)
+		}
+	}
+
 	var fallbackDisks []StorageAPI
 
 	// Special case: ask all disks if the drive count is 4
