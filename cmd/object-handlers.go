@@ -858,7 +858,7 @@ func detectAndHandleNotFoundError(ctx context.Context, r *http.Request, w http.R
 	}) {
 		writeErrorResponse(ctx, w, toAPIError(ctx, outErr), r.URL)
 		return true
-	} 
+	}
 	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 	return true
 }
