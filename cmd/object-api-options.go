@@ -140,6 +140,26 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 	var err error
 	valid = true
 
+	defer func() {
+		if valid {
+			return
+		}
+
+		errResp := objectAttributesErrorResponse{
+			ArgumentName:  &argumentName,
+			ArgumentValue: &argumentValue,
+			APIErrorResponse: getAPIErrorResponse(
+				ctx,
+				apiErr,
+				r.URL.Path,
+				w.Header().Get(xhttp.AmzRequestID),
+				w.Header().Get(xhttp.AmzRequestHostID),
+			),
+		}
+
+		writeResponse(w, apiErr.HTTPStatusCode, encodeResponse(errResp), mimeXML)
+	}()
+
 	opts, err = getOpts(ctx, r, bucket, object)
 	if err != nil {
 		switch vErr := err.(type) {
@@ -151,7 +171,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 			apiErr = toAPIError(ctx, vErr)
 		}
 		valid = false
-		goto DONE
+		return
 	}
 
 	opts.MaxParts, err = parseIntHeader(bucket, object, r.Header, xhttp.AmzMaxParts)
@@ -159,7 +179,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 		apiErr = toAPIError(ctx, err)
 		argumentName = strings.ToLower(xhttp.AmzMaxParts)
 		valid = false
-		goto DONE
+		return
 	}
 
 	if opts.MaxParts == 0 {
@@ -171,7 +191,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 		apiErr = toAPIError(ctx, err)
 		argumentName = strings.ToLower(xhttp.AmzPartNumberMarker)
 		valid = false
-		goto DONE
+		return
 	}
 
 	opts.ObjectAttributes = parseObjectAttributes(r.Header)
@@ -179,7 +199,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 		apiErr = errorCodes.ToAPIErr(ErrInvalidAttributeName)
 		argumentName = strings.ToLower(xhttp.AmzObjectAttributes)
 		valid = false
-		goto DONE
+		return
 	}
 
 	for tag := range opts.ObjectAttributes {
@@ -194,20 +214,8 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 			argumentName = strings.ToLower(xhttp.AmzObjectAttributes)
 			argumentValue = tag
 			valid = false
-			goto DONE
+			return
 		}
-	}
-
-DONE:
-	if !valid {
-		writeXMLErrorWithArgumentNameAndValue(
-			ctx,
-			w,
-			r,
-			apiErr,
-			argumentName,
-			argumentValue,
-		)
 	}
 
 	return

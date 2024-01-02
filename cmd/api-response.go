@@ -905,29 +905,6 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	}
 }
 
-func writeXMLErrorWithArgumentNameAndValue(
-	ctx context.Context,
-	w http.ResponseWriter,
-	r *http.Request,
-	err APIError,
-	argumentName string,
-	argumentValue string,
-) {
-	errResp := objectAttributesErrorResponse{
-		ArgumentName:  &argumentName,
-		ArgumentValue: &argumentValue,
-		APIErrorResponse: getAPIErrorResponse(
-			ctx,
-			err,
-			r.URL.Path,
-			w.Header().Get(xhttp.AmzRequestID),
-			w.Header().Get(xhttp.AmzRequestHostID),
-		),
-	}
-	writeResponse(w, err.HTTPStatusCode, encodeResponse(errResp), mimeXML)
-	return
-}
-
 // mimeType represents various MIME type used API responses.
 type mimeType string
 
