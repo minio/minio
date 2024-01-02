@@ -612,3 +612,41 @@ type NewMultipartUploadResult struct {
 	UploadID     string
 	ChecksumAlgo string
 }
+
+type getObjectAttributesResponse struct {
+	ETag         string                    `xml:",omitempty"`
+	Checksum     *objectAttributesChecksum `xml:",omitempty"`
+	ObjectParts  *objectAttributesParts    `xml:",omitempty"`
+	StorageClass string                    `xml:",omitempty"`
+	ObjectSize   int64                     `xml:",omitempty"`
+}
+
+type objectAttributesChecksum struct {
+	ChecksumCRC32  string `xml:",omitempty"`
+	ChecksumCRC32C string `xml:",omitempty"`
+	ChecksumSHA1   string `xml:",omitempty"`
+	ChecksumSHA256 string `xml:",omitempty"`
+}
+
+type objectAttributesParts struct {
+	IsTruncated          bool
+	MaxParts             int
+	NextPartNumberMarker int
+	PartNumberMarker     int
+	PartsCount           int
+	Parts                []*objectAttributesPart `xml:"Part"`
+}
+type objectAttributesPart struct {
+	PartNumber     int
+	Size           int64
+	ChecksumCRC32  string `xml:",omitempty"`
+	ChecksumCRC32C string `xml:",omitempty"`
+	ChecksumSHA1   string `xml:",omitempty"`
+	ChecksumSHA256 string `xml:",omitempty"`
+}
+
+type objectAttributesErrorResponse struct {
+	ArgumentValue *string `xml:"ArgumentValue,omitempty"`
+	ArgumentName  *string `xml:"ArgumentName"`
+	APIErrorResponse
+}

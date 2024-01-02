@@ -689,6 +689,197 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	})
 }
 
+// GetObjectAttributes ...
+// https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObjectAttributes.html#
+func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, objectAPI ObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request) {
+	if crypto.S3.IsRequested(r.Header) || crypto.S3KMS.IsRequested(r.Header) { // If SSE-S3 or SSE-KMS present -> AWS fails with undefined error
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+		return
+	}
+
+	opts, valid := getAndValidateAttributesOpts(ctx, w, r, bucket, object)
+	if !valid {
+		return
+	}
+
+	var s3Error APIErrorCode
+	if opts.Versioned {
+		s3Error = checkRequestAuthType(ctx, r, policy.GetObjectVersionAttributesAction, bucket, object)
+		if s3Error == ErrNone {
+			s3Error = checkRequestAuthType(ctx, r, policy.GetObjectVersionAction, bucket, object)
+		}
+	} else {
+		s3Error = checkRequestAuthType(ctx, r, policy.GetObjectAttributesAction, bucket, object)
+		if s3Error == ErrNone {
+			s3Error = checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object)
+		}
+
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts)
+	if detectAndHandleNotFoundError(ctx, r, w, bucket, object, opts.VersionID, err) {
+		return
+	}
+
+	if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
+	}
+
+	if checkPreconditions(ctx, w, r, objInfo, opts) {
+		return
+	}
+
+	OA := new(getObjectAttributesResponse)
+
+	if opts.Versioned {
+		w.Header().Set(xhttp.AmzVersionID, objInfo.VersionID)
+	}
+
+	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
+	w.Header().Set(xhttp.LastModified, lastModified)
+	w.Header().Del(xhttp.ContentType)
+
+	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
+		chkSums := objInfo.decryptChecksums(0)
+		OA.Checksum = new(objectAttributesChecksum)
+		OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
+		OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
+		OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
+		OA.Checksum.ChecksumSHA256 = strings.Split(chkSums["SHA256"], "-")[0]
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.ETag]; ok {
+		OA.ETag = objInfo.ETag
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.ObjectSize]; ok {
+		OA.ObjectSize, _ = objInfo.GetActualSize()
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.StorageClass]; ok {
+		OA.StorageClass = objInfo.StorageClass
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.ObjectParts]; ok {
+		OA.ObjectParts = new(objectAttributesParts)
+		OA.ObjectParts.PartNumberMarker = opts.PartNumberMarker
+
+		OA.ObjectParts.MaxParts = opts.MaxParts
+		partsLength := len(objInfo.Parts)
+		OA.ObjectParts.PartsCount = partsLength
+
+		if opts.MaxParts > -1 {
+			for i, v := range objInfo.Parts {
+
+				if v.Number <= opts.PartNumberMarker {
+					continue
+				}
+
+				if len(OA.ObjectParts.Parts) == opts.MaxParts {
+					break
+				}
+
+				OA.ObjectParts.NextPartNumberMarker = v.Number
+				objInfo.Parts[i].Checksums = objInfo.decryptChecksums(v.Number)
+				OA.ObjectParts.Parts = append(OA.ObjectParts.Parts, &objectAttributesPart{
+					ChecksumSHA1:   objInfo.Parts[i].Checksums["SHA1"],
+					ChecksumSHA256: objInfo.Parts[i].Checksums["SHA256"],
+					ChecksumCRC32:  objInfo.Parts[i].Checksums["CRC32"],
+					ChecksumCRC32C: objInfo.Parts[i].Checksums["CRC32C"],
+					PartNumber:     objInfo.Parts[i].Number,
+					Size:           objInfo.Parts[i].Size,
+				})
+			}
+		}
+
+		if OA.ObjectParts.NextPartNumberMarker != partsLength {
+			OA.ObjectParts.IsTruncated = true
+		}
+	}
+
+	out, err := xml.Marshal(OA)
+	if err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
+	}
+
+	writeResponse(
+		w,
+		200,
+		append(
+			[]byte(`<?xml version="1.0" encoding="UTF-8"?>`),
+			out...,
+		),
+		mimeXML,
+	)
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectAccessedAttributes,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+
+	return
+}
+
+func detectAndHandleNotFoundError(ctx context.Context, r *http.Request, w http.ResponseWriter, bucket, object, versionID string, err error) (hasError bool) {
+	var outErr error
+	if isErrObjectNotFound(err) {
+		outErr = ObjectNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: versionID,
+			Err:       err,
+		}
+		hasError = true
+	} else if isErrVersionNotFound(err) {
+		outErr = VersionNotFound{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: versionID,
+			Err:       err,
+		}
+		hasError = true
+	}
+
+	if !hasError {
+		return false
+	}
+
+	reqInfo := logger.GetReqInfo(ctx)
+
+	if reqInfo == nil {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return true
+	}
+
+	if globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     reqInfo.Cred.AccessKey,
+		Groups:          reqInfo.Cred.Groups,
+		Action:          policy.ListBucketAction,
+		BucketName:      bucket,
+		ConditionValues: getConditionValues(r, "", reqInfo.Cred),
+		ObjectName:      object,
+		IsOwner:         reqInfo.Owner,
+		Claims:          reqInfo.Cred.Claims,
+	}) {
+		writeErrorResponse(ctx, w, toAPIError(ctx, outErr), r.URL)
+	} else {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+	}
+
+	return true
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
@@ -1041,6 +1232,30 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
+}
+
+// GetObjectAttributesHandles - GET Object
+// -----------
+// This operation retrieves metadata and part metadata from an object without returning the object itself.
+func (api objectAPIHandlers) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetObjectAttributes")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrServerNotInitialized))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := unescapePath(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	api.getObjectAttributesHandler(ctx, objectAPI, bucket, object, w, r)
 }
 
 // HeadObjectHandler - HEAD Object
