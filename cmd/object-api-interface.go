@@ -71,7 +71,7 @@ type ObjectOptions struct {
 	UserDefined         map[string]string   // only set in case of POST/PUT operations
 	ObjectAttributes    map[string]struct{} // Attribute tags defined by the users for the GetObjectAttributes request
 	MaxParts            int                 // used in GetObjectAttributes. Signals how many parts we should return
-	PartNumberMarker    int                 // used in GetObjectAttributes. Signals which
+	PartNumberMarker    int                 // used in GetObjectAttributes. Signals the part number after which results should be returned
 	PartNumber          int                 // only useful in case of GetObject/HeadObject
 	CheckPrecondFn      CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
 	EvalMetadataFn      EvalMetadataFn      // only set for retention settings, meant to be used only when updating metadata in-place.
