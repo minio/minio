@@ -286,8 +286,7 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	}
 
 	weSleep := func() bool {
-		// Entire queue is full, so we sleep.
-		return cap(p.health.tokens) == len(p.health.tokens)
+		return scannerIdleMode.Load() == 0
 	}
 
 	return p.storage.NSScanner(ctx, cache, updates, scanMode, weSleep)
