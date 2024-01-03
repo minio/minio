@@ -550,7 +550,13 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 			}, index)
 		}
 
-		g.Wait()
+		removedFromDrivesCount := 0
+		for _, err := range g.Wait() {
+			if err == nil {
+				removedFromDrivesCount++
+			}
+		}
+		tags["removedFromDrivesCount"] = removedFromDrivesCount
 	}
 	return m, err
 }
