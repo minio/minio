@@ -715,7 +715,28 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts)
-	if detectAndHandleNotFoundError(ctx, r, w, bucket, object, opts.VersionID, err) {
+	if err != nil {
+
+		reqInfo := logger.GetReqInfo(ctx)
+		if reqInfo == nil {
+			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrAccessDenied))
+			return
+		}
+
+		if globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     reqInfo.Cred.AccessKey,
+			Groups:          reqInfo.Cred.Groups,
+			Action:          policy.ListBucketAction,
+			BucketName:      bucket,
+			ConditionValues: getConditionValues(r, "", reqInfo.Cred),
+			ObjectName:      object,
+			IsOwner:         reqInfo.Owner,
+			Claims:          reqInfo.Cred.Claims,
+		}) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 		return
 	}
 
@@ -801,11 +822,20 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		}
 	}
 
-	_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>`))
-	if err := xml.NewEncoder(w).Encode(OA); err != nil {
+	outBytes, err := xml.Marshal(OA)
+	if err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-		return
 	}
+
+	writeResponse(
+		w,
+		200,
+		append(
+			[]byte(`<?xml version="1.0" encoding="UTF-8"?>`),
+			outBytes...,
+		),
+		mimeXML,
+	)
 
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedAttributes,
@@ -818,54 +848,6 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	})
 
 	return
-}
-
-func detectAndHandleNotFoundError(ctx context.Context, r *http.Request, w http.ResponseWriter, bucket, object, versionID string, err error) (hasError bool) {
-	var outErr error
-	if isErrObjectNotFound(err) {
-		outErr = ObjectNotFound{
-			Bucket:    bucket,
-			Object:    object,
-			VersionID: versionID,
-			Err:       err,
-		}
-		hasError = true
-	} else if isErrVersionNotFound(err) {
-		outErr = VersionNotFound{
-			Bucket:    bucket,
-			Object:    object,
-			VersionID: versionID,
-			Err:       err,
-		}
-		hasError = true
-	}
-
-	if !hasError {
-		return false
-	}
-
-	reqInfo := logger.GetReqInfo(ctx)
-
-	if reqInfo == nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-		return true
-	}
-
-	if globalIAMSys.IsAllowed(policy.Args{
-		AccountName:     reqInfo.Cred.AccessKey,
-		Groups:          reqInfo.Cred.Groups,
-		Action:          policy.ListBucketAction,
-		BucketName:      bucket,
-		ConditionValues: getConditionValues(r, "", reqInfo.Cred),
-		ObjectName:      object,
-		IsOwner:         reqInfo.Owner,
-		Claims:          reqInfo.Cred.Claims,
-	}) {
-		writeErrorResponse(ctx, w, toAPIError(ctx, outErr), r.URL)
-		return true
-	}
-	writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-	return true
 }
 
 // GetObjectHandler - GET Object
