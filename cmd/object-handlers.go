@@ -697,7 +697,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	}
 
 	var s3Error APIErrorCode
-	if opts.Versioned {
+	if opts.VersionID != "" {
 		s3Error = checkRequestAuthType(ctx, r, policy.GetObjectVersionAttributesAction, bucket, object)
 		if s3Error == ErrNone {
 			s3Error = checkRequestAuthType(ctx, r, policy.GetObjectVersionAction, bucket, object)
@@ -707,8 +707,8 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		if s3Error == ErrNone {
 			s3Error = checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object)
 		}
-
 	}
+
 	if s3Error != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 		return
