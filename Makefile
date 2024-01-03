@@ -59,6 +59,10 @@ test-decom: install-race
 	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
 	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
 
+test-versioning: install-race
+	@echo "Running minio versioning tests"
+	@env bash $(PWD)/docs/bucket/versioning/versioning-tests.sh
+
 test-configfile: install-race
 	@env bash $(PWD)/docs/distributed/distributed-from-config-file.sh
 

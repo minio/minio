@@ -241,7 +241,7 @@ func (s *storageRESTServer) NSScannerHandler(ctx context.Context, params *nsScan
 			out <- resp
 		}
 	}()
-	ui, err := s.getStorage().NSScanner(ctx, *params.Cache, updates, madmin.HealScanMode(params.ScanMode))
+	ui, err := s.getStorage().NSScanner(ctx, *params.Cache, updates, madmin.HealScanMode(params.ScanMode), nil)
 	wg.Wait()
 	if err != nil {
 		return grid.NewRemoteErr(err)

@@ -213,7 +213,7 @@ func (client *storageRESTClient) Healing() *healingTracker {
 	return nil
 }
 
-func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, _ func() bool) (dataUsageCache, error) {
 	atomic.AddInt32(&client.scanning, 1)
 	defer atomic.AddInt32(&client.scanning, -1)
 	defer close(updates)

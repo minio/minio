@@ -192,13 +192,20 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 ## Information Lifecycle Management (ILM) Metrics
 
-| Name                                               | Description                                                                 |
-|:---------------------------------------------------|:----------------------------------------------------------------------------|
-| `minio_node_ilm_expiry_pending_tasks`              | Number of pending ILM expiry tasks in the queue.                            |
-| `minio_node_ilm_transition_active_tasks`           | Number of active ILM transition tasks.                                      |
-| `minio_node_ilm_transition_pending_tasks`          | Number of pending ILM transition tasks in the queue.                        |
-| `minio_node_ilm_transition_missed_immediate_tasks` | Number of missed immediate ILM transition tasks.                            |
-| `minio_node_ilm_versions_scanned`                  | Total number of object versions checked for ilm actions since server start. |
+| Name                                                         | Description                                                                                                |
+|:-------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------|
+| `minio_node_ilm_expiry_pending_tasks`                        | Number of pending ILM expiry tasks in the queue.                                                           |
+| `minio_node_ilm_transition_active_tasks`                     | Number of active ILM transition tasks.                                                                     |
+| `minio_node_ilm_transition_pending_tasks`                    | Number of pending ILM transition tasks in the queue.                                                       |
+| `minio_node_ilm_transition_missed_immediate_tasks`           | Number of missed immediate ILM transition tasks.                                                           |
+| `minio_node_ilm_versions_scanned`                            | Total number of object versions checked for ilm actions since server start.                                |
+| `minio_node_ilm_action_count_delete_action`                  | Total action outcome of lifecycle checks since server start for deleting object                            |
+| `minio_node_ilm_action_count_delete_version_action`          | Total action outcome of lifecycle checks since server start for deleting a version                         |
+| `minio_node_ilm_action_count_transition_action`              | Total action outcome of lifecycle checks since server start for transition of an object                    |
+| `minio_node_ilm_action_count_transition_version_action`      | Total action outcome of lifecycle checks since server start for transition of a particular object version  |
+| `minio_node_ilm_action_count_delete_restored_action`         | Total action outcome of lifecycle checks since server start for deletion of temporarily restored object    |
+| `minio_node_ilm_action_count_delete_restored_version_action` | Total action outcome of lifecycle checks since server start for deletion of a temporarily restored version |
+| `minio_node_ilm_action_count_delete_all_versions_action`     | Total action outcome of lifecycle checks since server start for deletion of all versions                   |
 
 ## Tier Metrics
 

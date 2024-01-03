@@ -522,7 +522,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				// Calc usage
 				before := cache.Info.LastUpdate
 				var err error
-				cache, err = disk.NSScanner(ctx, cache, updates, healScanMode)
+				cache, err = disk.NSScanner(ctx, cache, updates, healScanMode, nil)
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
 						logger.LogIf(ctx, cache.save(ctx, er, cacheName))
