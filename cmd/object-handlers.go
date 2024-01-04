@@ -716,23 +716,8 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 
 	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
-
-		reqInfo := logger.GetReqInfo(ctx)
-		if reqInfo == nil {
-			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrAccessDenied))
-			return
-		}
-
-		if globalIAMSys.IsAllowed(policy.Args{
-			AccountName:     reqInfo.Cred.AccessKey,
-			Groups:          reqInfo.Cred.Groups,
-			Action:          policy.ListBucketAction,
-			BucketName:      bucket,
-			ConditionValues: getConditionValues(r, "", reqInfo.Cred),
-			ObjectName:      object,
-			IsOwner:         reqInfo.Owner,
-			Claims:          reqInfo.Cred.Claims,
-		}) {
+		s3Error = checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, object)
+		if s3Error == ErrNone {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
@@ -761,12 +746,22 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 
 	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
 		chkSums := objInfo.decryptChecksums(0)
-		OA.Checksum = new(objectAttributesChecksum)
 		// AWS does not appear to append part number on this API call.
-		OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
-		OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
-		OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
-		OA.Checksum.ChecksumSHA256 = strings.Split(chkSums["SHA256"], "-")[0]
+		switch {
+		case chkSums["CRC32"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
+		case chkSums["CRC32C"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
+		case chkSums["SHA256"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
+		case chkSums["SHA1"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumSHA256 = strings.Split(chkSums["SHA256"], "-")[0]
+		}
+
 	}
 
 	if _, ok := opts.ObjectAttributes[xhttp.ETag]; ok {
@@ -781,11 +776,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		OA.StorageClass = objInfo.StorageClass
 	}
 
-	err = objInfo.decryptPartsChecksums()
-	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-		return
-	}
+	objInfo.decryptPartsChecksums()
 
 	if _, ok := opts.ObjectAttributes[xhttp.ObjectParts]; ok {
 		OA.ObjectParts = new(objectAttributesParts)
@@ -830,10 +821,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	writeResponse(
 		w,
 		200,
-		append(
-			[]byte(`<?xml version="1.0" encoding="UTF-8"?>`),
-			outBytes...,
-		),
+		append([]byte(`<?xml version="1.0" encoding="UTF-8"?>`), outBytes...),
 		mimeXML,
 	)
 
