@@ -456,6 +456,10 @@ var (
 
 	// Indicates if server was started as `--address ":0"`
 	globalDynamicAPIPort bool
+
+	globalEnvMaxSVCTTL     time.Duration
+	globalEnvDefaultSVCTTL time.Duration
+
 	// Add new variable global values here.
 )
 

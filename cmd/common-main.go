@@ -802,6 +802,34 @@ func serverHandleEnvVars() {
 	}
 
 	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
+
+	// Validate and save service accounts related env variables
+	for _, envVar := range []struct {
+		name string
+		val  *time.Duration
+	}{
+		{"MINIO_IAM_SERVICE_ACCOUNTS_MAX_TTL", &globalEnvMaxSVCTTL},
+		{"MINIO_IAM_SERVICE_ACCOUNTS_DEFAULT_TTL", &globalEnvDefaultSVCTTL},
+	} {
+		d := env.Get(envVar.name, "")
+		if d == "" {
+			continue
+		}
+		*envVar.val, err = time.ParseDuration(d)
+		if err == nil {
+			switch {
+			case *envVar.val < minServiceAccountExpiry:
+				err = fmt.Errorf("value less than %s", minServiceAccountExpiry)
+			case *envVar.val > maxServiceAccountExpiry:
+				err = fmt.Errorf("value greater than %s", maxServiceAccountExpiry)
+			}
+		}
+		logger.FatalIf(err, "Unable to parse "+envVar.name)
+	}
+
+	if globalEnvMaxSVCTTL > 0 && globalEnvDefaultSVCTTL > globalEnvMaxSVCTTL {
+		logger.Fatal(errors.New("TTL cannot be greated than MINIO_IAM_SERVICE_ACCOUNTS_MAX_TTL"), "Unexpected MINIO_IAM_SERVICE_ACCOUNTS_DEFAULT_TTL value")
+	}
 }
 
 func loadRootCredentials() {

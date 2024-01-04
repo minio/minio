@@ -1002,11 +1002,20 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	cred.Description = opts.description
 
 	if opts.expiration != nil {
+		now := time.Now().UTC()
 		expirationInUTC := opts.expiration.UTC()
-		if err := validateSvcExpirationInUTC(expirationInUTC); err != nil {
-			return auth.Credentials{}, time.Time{}, err
+		if globalEnvMaxSVCTTL > 0 && expirationInUTC.Sub(now) > globalEnvMaxSVCTTL {
+			expirationInUTC = now.Add(globalEnvMaxSVCTTL)
 		}
 		cred.Expiration = expirationInUTC
+	} else if globalEnvDefaultSVCTTL > 0 {
+		cred.Expiration = time.Now().UTC().Add(globalEnvDefaultSVCTTL)
+	}
+
+	if !cred.Expiration.IsZero() {
+		if err := validateSvcExpirationInUTC(cred.Expiration); err != nil {
+			return auth.Credentials{}, time.Time{}, err
+		}
 	}
 
 	updatedAt, err := sys.store.AddServiceAccount(ctx, cred)
