@@ -274,7 +274,7 @@ type KV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 
-	Deprecated bool `json:"-"`
+	HiddenIfEmpty bool `json:"-"`
 }
 
 func (kv KV) String() string {
@@ -1447,7 +1447,7 @@ func (cs *SubsysInfo) WriteTo(b *strings.Builder, off bool) {
 			continue
 		}
 		// Ignore empty and deprecated values
-		if dkv.Deprecated && kv.Value == "" {
+		if dkv.HiddenIfEmpty && kv.Value == "" {
 			continue
 		}
 		// Do not need to print if state is on
