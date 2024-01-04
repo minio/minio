@@ -3236,6 +3236,16 @@ func getClusterHealthStatusMD() MetricDescription {
 	}
 }
 
+func getClusterErasureSetReadQuorumMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_read_quorum",
+		Help:      "Get the read quorum for this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
 func getClusterErasureSetWriteQuorumMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
@@ -3280,7 +3290,7 @@ func getClusterHealthMetrics() *MetricsGroup {
 		opts := HealthOptions{}
 		result := objLayer.Health(ctx, opts)
 
-		metrics = make([]Metric, 0, 2+3*len(result.ESHealth))
+		metrics = make([]Metric, 0, 2+4*len(result.ESHealth))
 
 		metrics = append(metrics, Metric{
 			Description: getClusterWriteQuorumMD(),
@@ -3302,6 +3312,11 @@ func getClusterHealthMetrics() *MetricsGroup {
 				"pool": strconv.Itoa(h.PoolID),
 				"set":  strconv.Itoa(h.SetID),
 			}
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetReadQuorumMD(),
+				VariableLabels: labels,
+				Value:          float64(h.ReadQuorum),
+			})
 			metrics = append(metrics, Metric{
 				Description:    getClusterErasureSetWriteQuorumMD(),
 				VariableLabels: labels,

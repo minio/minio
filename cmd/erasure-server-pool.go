@@ -2296,6 +2296,7 @@ type HealthResult struct {
 		PoolID, SetID int
 		HealthyDrives int
 		HealingDrives int
+		ReadQuorum    int
 		WriteQuorum   int
 	}
 	WriteQuorum   int
@@ -2373,8 +2374,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	}
 
 	b := z.BackendInfo()
+	poolReadQuorums := make([]int, len(b.StandardSCData))
 	poolWriteQuorums := make([]int, len(b.StandardSCData))
 	for i, data := range b.StandardSCData {
+		poolReadQuorums[i] = data
 		poolWriteQuorums[i] = data
 		if data == b.StandardSCParity {
 			poolWriteQuorums[i] = data + 1
@@ -2412,15 +2415,17 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	for poolIdx := range erasureSetUpCount {
 		for setIdx := range erasureSetUpCount[poolIdx] {
 			result.ESHealth = append(result.ESHealth, struct {
-				Maintenance                               bool
-				PoolID, SetID                             int
-				HealthyDrives, HealingDrives, WriteQuorum int
+				Maintenance                  bool
+				PoolID, SetID                int
+				HealthyDrives, HealingDrives int
+				ReadQuorum, WriteQuorum      int
 			}{
 				Maintenance:   opts.Maintenance,
 				SetID:         setIdx,
 				PoolID:        poolIdx,
 				HealthyDrives: erasureSetUpCount[poolIdx][setIdx].online,
 				HealingDrives: erasureSetUpCount[poolIdx][setIdx].healing,
+				ReadQuorum:    poolReadQuorums[poolIdx],
 				WriteQuorum:   poolWriteQuorums[poolIdx],
 			})
 
