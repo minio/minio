@@ -132,7 +132,6 @@ const (
 	ErrBucketRemoteArnInvalid
 	ErrBucketRemoteRemoveDisallowed
 	ErrRemoteTargetNotVersionedError
-	ErrRemoteTargetNotAliveError
 	ErrReplicationSourceNotVersionedError
 	ErrReplicationNeedsVersioningError
 	ErrReplicationBucketNeedsVersioningError
@@ -1008,11 +1007,6 @@ var errorCodes = errorCodeMap{
 	ErrRemoteTargetNotVersionedError: {
 		Code:           "RemoteTargetNotVersionedError",
 		Description:    "The remote target does not have versioning enabled",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrRemoteTargetNotAliveError: {
-		Code:           "RemoteTargetNotAliveError",
-		Description:    "The remote target's MinIO health check timed out after 3 seconds",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationSourceNotVersionedError: {
@@ -2302,8 +2296,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketRemoteRemoveDisallowed
 	case BucketRemoteTargetNotVersioned:
 		apiErr = ErrRemoteTargetNotVersionedError
-	case BucketRemoteTargetNotAlive:
-		apiErr = ErrRemoteTargetNotAliveError
 	case BucketReplicationSourceNotVersioned:
 		apiErr = ErrReplicationSourceNotVersionedError
 	case TransitionStorageClassNotFound:

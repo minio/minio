@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"sync"
@@ -362,12 +363,14 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 		Endpoint: tgt.Endpoint,
 		Scheme:   scheme,
 	})
+
 	cancel()
 	if result.Error != nil {
 		return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: result.Error, AccessKey: tgt.Credentials.AccessKey}
 	}
 	if !result.Online {
-		return BucketRemoteTargetNotAlive{Bucket: tgt.TargetBucket}
+		err := errors.New("Health check timed out after 3 seconds")
+		return RemoteTargetConnectionErr{Err: err}
 	}
 
 	sys.Lock()

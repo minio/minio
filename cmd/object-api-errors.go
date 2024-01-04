@@ -492,13 +492,6 @@ func (e BucketReplicationSourceNotVersioned) Error() string {
 	return "Replication source does not have versioning enabled: " + e.Bucket
 }
 
-// BucketRemoteTargetNotAlive remote target is not alive or not a MinIO server.
-type BucketRemoteTargetNotAlive GenericError
-
-func (e BucketRemoteTargetNotAlive) Error() string {
-	return "Remote target health check timed out after 3 seconds: " + e.Bucket
-}
-
 // TransitionStorageClassNotFound remote tier not configured.
 type TransitionStorageClassNotFound GenericError
 
