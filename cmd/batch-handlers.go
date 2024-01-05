@@ -52,7 +52,7 @@ import (
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/policy"
 	"github.com/minio/pkg/v2/workers"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var globalBatchConfig batch.Config
@@ -1564,7 +1564,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 	}
 
 	job := &BatchJobRequest{}
-	if err = yaml.UnmarshalStrict(buf, job); err != nil {
+	if err = yaml.Unmarshal(buf, job); err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
