@@ -550,7 +550,22 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 			}, index)
 		}
 
-		g.Wait()
+		rmDisks := make(map[string]string, len(disks))
+		for index, err := range g.Wait() {
+			var errStr, diskName string
+			if err != nil {
+				errStr = err.Error()
+			} else {
+				errStr = "<nil>"
+			}
+			if disks[index] != nil {
+				diskName = disks[index].String()
+			} else {
+				diskName = fmt.Sprintf("disk-%d", index)
+			}
+			rmDisks[diskName] = errStr
+		}
+		tags["cleanupResult"] = rmDisks
 	}
 	return m, err
 }
