@@ -254,6 +254,30 @@ podAnnotations: {}
 # Additional pod labels
 podLabels: {}
 
+# cf docs/metrics/healthcheck/README.md
+readinessProbe:
+  httpGet:
+    path: /minio/health/ready
+    port: 9000
+    scheme: HTTP
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+
+# cf docs/metrics/healthcheck/README.md
+livenessProbe:
+  httpGet:
+    path: /minio/health/live
+    port: 9000
+    scheme: HTTP
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+
 ## Configure resource requests and limits
 ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
 ##
