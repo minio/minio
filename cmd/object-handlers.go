@@ -813,17 +813,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		}
 	}
 
-	outBytes, err := xml.Marshal(OA)
-	if err != nil {
-		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
-	}
-
-	writeResponse(
-		w,
-		200,
-		append([]byte(`<?xml version="1.0" encoding="UTF-8"?>`), outBytes...),
-		mimeXML,
-	)
+	writeSuccessResponseXML(w, encodeResponse(OA))
 
 	sendEvent(eventArgs{
 		EventName:    event.ObjectAccessedAttributes,
