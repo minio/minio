@@ -241,11 +241,10 @@ func ReadCheckSums(b []byte, part int) map[string]string {
 }
 
 // ReadPartCheckSums will read all part checksums from b and return them.
-func ReadPartCheckSums(b []byte) []map[string]string {
-	var res []map[string]string
+func ReadPartCheckSums(b []byte) (res []map[string]string) {
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n < 0 {
+		if n <= 0 {
 			break
 		}
 		b = b[n:]
@@ -261,10 +260,10 @@ func ReadPartCheckSums(b []byte) []map[string]string {
 			continue
 		}
 		parts, n := binary.Uvarint(b)
-		if n < 0 {
+		if n <= 0 {
 			break
 		}
-		if len(res) < int(parts) {
+		if len(res) == 0 {
 			res = make([]map[string]string, parts)
 		}
 		b = b[n:]
