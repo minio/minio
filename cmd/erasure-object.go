@@ -550,13 +550,22 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 			}, index)
 		}
 
-		removedFromDrivesCount := 0
-		for _, err := range g.Wait() {
-			if err == nil {
-				removedFromDrivesCount++
+		rmDisks := make(map[string]string, len(disks))
+		for index, err := range g.Wait() {
+			var errStr, diskName string
+			if err != nil {
+				errStr = err.Error()
+			} else {
+				errStr = "<nil>"
 			}
+			if disks[index] != nil {
+				diskName = disks[index].String()
+			} else {
+				diskName = fmt.Sprintf("disk-%d", index)
+			}
+			rmDisks[diskName] = errStr
 		}
-		tags["removedFromDrivesCount"] = removedFromDrivesCount
+		tags["cleanupResult"] = rmDisks
 	}
 	return m, err
 }
