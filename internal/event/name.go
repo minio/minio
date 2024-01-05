@@ -36,6 +36,7 @@ const (
 	ObjectAccessedGetRetention
 	ObjectAccessedGetLegalHold
 	ObjectAccessedHead
+	ObjectAccessedAttributes
 	ObjectCreatedCompleteMultipartUpload
 	ObjectCreatedCopy
 	ObjectCreatedPost
@@ -84,7 +85,7 @@ func (name Name) Expand() []Name {
 	case ObjectAccessedAll:
 		return []Name{
 			ObjectAccessedGet, ObjectAccessedHead,
-			ObjectAccessedGetRetention, ObjectAccessedGetLegalHold,
+			ObjectAccessedGetRetention, ObjectAccessedGetLegalHold, ObjectAccessedAttributes,
 		}
 	case ObjectCreatedAll:
 		return []Name{
@@ -162,6 +163,8 @@ func (name Name) String() string {
 		return "s3:ObjectAccessed:GetLegalHold"
 	case ObjectAccessedHead:
 		return "s3:ObjectAccessed:Head"
+	case ObjectAccessedAttributes:
+		return "s3:ObjectAccessed:Attributes"
 	case ObjectCreatedAll:
 		return "s3:ObjectCreated:*"
 	case ObjectCreatedCompleteMultipartUpload:
@@ -278,6 +281,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectAccessedGetLegalHold, nil
 	case "s3:ObjectAccessed:Head":
 		return ObjectAccessedHead, nil
+	case "s3:ObjectAccessed:Attributes":
+		return ObjectAccessedAttributes, nil
 	case "s3:ObjectCreated:*":
 		return ObjectCreatedAll, nil
 	case "s3:ObjectCreated:CompleteMultipartUpload":

@@ -430,6 +430,9 @@ const (
 	ErrLambdaARNInvalid
 	ErrLambdaARNNotFound
 
+	// New Codes for GetObjectAttributes and GetObjectVersionAttributes
+	ErrInvalidAttributeName
+
 	apiErrCodeEnd // This is used only for the testing code
 )
 
@@ -2062,6 +2065,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioPolicyNotAttached",
 		Description:    "The specified policy is not found.",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrInvalidAttributeName: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid attribute name specified.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
 }
