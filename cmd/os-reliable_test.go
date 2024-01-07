@@ -29,15 +29,15 @@ func TestOSMkdirAll(t *testing.T) {
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 
-	if err = mkdirAll("", 0o777, ""); err != errInvalidArgument {
+	if err = mkdirAll("", 0o750, ""); err != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if err = mkdirAll(pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"), 0o777, ""); err != errFileNameTooLong {
+	if err = mkdirAll(pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"), 0o750, ""); err != errFileNameTooLong {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if err = mkdirAll(pathJoin(path, "success-vol", "success-object"), 0o777, ""); err != nil {
+	if err = mkdirAll(pathJoin(path, "success-vol", "success-object"), 0o750, ""); err != nil {
 		t.Fatal("Unexpected error", err)
 	}
 }
@@ -50,7 +50,7 @@ func TestOSRenameAll(t *testing.T) {
 		t.Fatalf("Unable to create xlStorage test setup, %s", err)
 	}
 
-	if err = mkdirAll(pathJoin(path, "testvolume1"), 0o777, ""); err != nil {
+	if err = mkdirAll(pathJoin(path, "testvolume1"), 0o750, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err = renameAll("", "foo", ""); err != errInvalidArgument {

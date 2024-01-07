@@ -85,7 +85,7 @@ func newRLockedFile(lkFile *LockedFile) (*RLockedFile, error) {
 // RLockedOpenFile - returns a wrapped read locked file, if the file
 // doesn't exist at path returns an error.
 func RLockedOpenFile(path string) (*RLockedFile, error) {
-	lkFile, err := LockedOpenFile(path, os.O_RDONLY, 0o666)
+	lkFile, err := LockedOpenFile(path, os.O_RDONLY, 0o640)
 	if err != nil {
 		return nil, err
 	}

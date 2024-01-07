@@ -196,7 +196,7 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 
 	// Should give false for not-a-directory.
 	dir2 := slashpath.Join(tmp, "file")
-	err := os.WriteFile(dir2, []byte("hello"), 0o777)
+	err := os.WriteFile(dir2, []byte("hello"), 0o750)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 
 	// Should give true for a real empty directory.
 	dir3 := slashpath.Join(tmp, "empty")
-	err = os.Mkdir(dir3, 0o777)
+	err = os.Mkdir(dir3, 0o750)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +479,7 @@ func TestXLStorageMakeVol(t *testing.T) {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 	// Create a directory.
-	if err := os.Mkdir(slashpath.Join(path, "existing-vol"), 0o777); err != nil {
+	if err := os.Mkdir(slashpath.Join(path, "existing-vol"), 0o750); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
@@ -566,7 +566,7 @@ func TestXLStorageDeleteVol(t *testing.T) {
 
 	// TestXLStorage failure cases.
 	vol := slashpath.Join(path, "nonempty-vol")
-	if err = os.Mkdir(vol, 0o777); err != nil {
+	if err = os.Mkdir(vol, 0o750); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 	if err = os.WriteFile(slashpath.Join(vol, "test-file"), []byte{}, os.ModePerm); err != nil {
@@ -1058,7 +1058,7 @@ func TestXLStorageReadFile(t *testing.T) {
 	}
 
 	// Create directory to make errIsNotRegular
-	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0o777); err != nil {
+	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0o750); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 
@@ -1348,7 +1348,7 @@ func TestXLStorageAppendFile(t *testing.T) {
 	}
 
 	// Create directory to make errIsNotRegular
-	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0o777); err != nil {
+	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0o750); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
 	}
 

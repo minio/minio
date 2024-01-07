@@ -163,7 +163,7 @@ func renameAll(srcFilePath, dstFilePath, baseDir string) (err error) {
 // Reliably retries os.RenameAll if for some reason os.RenameAll returns
 // syscall.ENOENT (parent does not exist).
 func reliableRename(srcFilePath, dstFilePath, baseDir string) (err error) {
-	if err = reliableMkdirAll(path.Dir(dstFilePath), 0o777, baseDir); err != nil {
+	if err = reliableMkdirAll(path.Dir(dstFilePath), 0o750, baseDir); err != nil {
 		return err
 	}
 

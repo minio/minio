@@ -66,7 +66,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 	}
 
 	// Get umask of the bits stored.
-	currentUmask := 0o777 - uint32(st.Mode().Perm())
+	currentUmask := 0o750 - uint32(st.Mode().Perm())
 
 	// Verify if umask is correct.
 	if int(currentUmask) != testCase.expectedUmask {

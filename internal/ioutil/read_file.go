@@ -39,7 +39,7 @@ var (
 // Because ReadFile reads the whole file, it does not treat an EOF from Read
 // as an error to be reported.
 func ReadFileWithFileInfo(name string) ([]byte, fs.FileInfo, error) {
-	f, err := OsOpenFile(name, readMode, 0o666)
+	f, err := OsOpenFile(name, readMode, 0o640)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -64,7 +64,7 @@ func ReadFileWithFileInfo(name string) ([]byte, fs.FileInfo, error) {
 func ReadFile(name string) ([]byte, error) {
 	// Don't wrap with un-needed buffer.
 	// Don't use os.ReadFile, since it doesn't pass NO_ATIME when present.
-	f, err := OsOpenFile(name, readMode, 0o666)
+	f, err := OsOpenFile(name, readMode, 0o640)
 	if err != nil {
 		return nil, err
 	}

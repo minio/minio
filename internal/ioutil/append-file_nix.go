@@ -31,7 +31,7 @@ func AppendFile(dst string, src string, osync bool) error {
 	if osync {
 		flags |= os.O_SYNC
 	}
-	appendFile, err := os.OpenFile(dst, flags, 0o666)
+	appendFile, err := os.OpenFile(dst, flags, 0o640)
 	if err != nil {
 		return err
 	}

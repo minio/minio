@@ -92,7 +92,7 @@ func bgFormatErasureCleanupTmp(diskPath string) {
 			osErrToFileErr(err)))
 	}
 
-	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777, diskPath); err != nil {
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o750, diskPath); err != nil {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			err))

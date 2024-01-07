@@ -26,13 +26,13 @@ import (
 
 // AppendFile - appends the file "src" to the file "dst"
 func AppendFile(dst string, src string, osync bool) error {
-	appendFile, err := lock.Open(dst, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o666)
+	appendFile, err := lock.Open(dst, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o640)
 	if err != nil {
 		return err
 	}
 	defer appendFile.Close()
 
-	srcFile, err := lock.Open(src, os.O_RDONLY, 0o666)
+	srcFile, err := lock.Open(src, os.O_RDONLY, 0o640)
 	if err != nil {
 		return err
 	}

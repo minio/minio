@@ -39,7 +39,7 @@ func TestCrossDeviceMountPaths(t *testing.T) {
 	var err error
 	dir := t.TempDir()
 	mountsPath := filepath.Join(dir, "mounts")
-	if err = os.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
+	if err = os.WriteFile(mountsPath, []byte(successCase), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	// Failure case where we detected successfully cross device mounts.
@@ -88,7 +88,7 @@ func TestCrossDeviceMount(t *testing.T) {
 	var err error
 	dir := t.TempDir()
 	mountsPath := filepath.Join(dir, "mounts")
-	if err = os.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
+	if err = os.WriteFile(mountsPath, []byte(successCase), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	mounts, err := readProcMounts(mountsPath)
@@ -137,7 +137,7 @@ func TestReadProcmountInfos(t *testing.T) {
 	dir := t.TempDir()
 
 	mountsPath := filepath.Join(dir, "mounts")
-	if err = os.WriteFile(mountsPath, []byte(successCase), 0o666); err != nil {
+	if err = os.WriteFile(mountsPath, []byte(successCase), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	// Verifies if reading each line worked properly.

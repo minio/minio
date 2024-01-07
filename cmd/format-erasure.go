@@ -204,7 +204,7 @@ func formatErasureMigrate(export string) ([]byte, fs.FileInfo, error) {
 	}
 
 	migrate := func(formatPath string, formatData []byte) ([]byte, fs.FileInfo, error) {
-		if err = os.WriteFile(formatPath, formatData, 0o666); err != nil {
+		if err = os.WriteFile(formatPath, formatData, 0o640); err != nil {
 			return nil, nil, err
 		}
 		formatFi, err := Lstat(formatPath)
