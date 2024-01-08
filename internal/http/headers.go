@@ -55,6 +55,12 @@ const (
 	IfMatch           = "If-Match"
 	IfNoneMatch       = "If-None-Match"
 
+	// Request tags used in GetObjectAttributes
+	Checksum     = "Checksum"
+	StorageClass = "StorageClass"
+	ObjectSize   = "ObjectSize"
+	ObjectParts  = "ObjectParts"
+
 	// S3 storage class
 	AmzStorageClass = "x-amz-storage-class"
 
@@ -123,6 +129,11 @@ const (
 	AmzSecurityToken        = "X-Amz-Security-Token"
 	AmzDecodedContentLength = "X-Amz-Decoded-Content-Length"
 	AmzTrailer              = "X-Amz-Trailer"
+	AmzMaxParts             = "X-Amz-Max-Parts"
+	AmzPartNumberMarker     = "X-Amz-Part-Number-Marker"
+
+	// Constants used for GetObjectAttributes and GetObjectVersionAttributes
+	AmzObjectAttributes = "X-Amz-Object-Attributes"
 
 	AmzMetaUnencryptedContentLength = "X-Amz-Meta-X-Amz-Unencrypted-Content-Length"
 	AmzMetaUnencryptedContentMD5    = "X-Amz-Meta-X-Amz-Unencrypted-Content-Md5"

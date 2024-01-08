@@ -130,9 +130,9 @@ var (
 			Value: "5m",
 		},
 		config.KV{
-			Key:        apiDisableODirect,
-			Value:      "",
-			Deprecated: true,
+			Key:           apiDisableODirect,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 		config.KV{
 			Key:   apiODirect,
