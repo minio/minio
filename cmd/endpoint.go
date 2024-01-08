@@ -1030,28 +1030,6 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 		}
 	}
 
-	//  ensure that each pool has at least two nodes in a distributed setup
-	if setupType == DistErasureSetupType {
-		endpointIsLocalMap := make(map[int]bool)
-		for _, endpoints := range poolEndpoints {
-			for _, endpoint := range endpoints {
-				if !endpoint.IsLocal {
-					endpointIsLocalMap[endpoint.PoolIdx] = false
-				} else {
-					// isLocal, init to true or do nothing
-					if _, ok := endpointIsLocalMap[endpoint.PoolIdx]; !ok {
-						endpointIsLocalMap[endpoint.PoolIdx] = true
-					}
-				}
-			}
-		}
-		for _, isLocal := range endpointIsLocalMap {
-			if isLocal {
-				return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg("all pool should have two nodes in a distributed setup")
-			}
-		}
-	}
-
 	return poolEndpoints, setupType, nil
 }
 
