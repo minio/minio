@@ -2021,6 +2021,11 @@ func getReplicationClusterMetrics() *MetricsGroup {
 
 	mg.RegisterRead(func(_ context.Context) []Metric {
 		var ml []Metric
+		objLayer := newObjectLayerFn()
+		// Service not initialized yet
+		if objLayer == nil {
+			return ml
+		}
 		// common operational metrics for bucket replication and site replication - published
 		// at cluster level
 		if globalReplicationStats != nil {
