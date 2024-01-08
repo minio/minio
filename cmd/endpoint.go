@@ -1015,8 +1015,6 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 		poolEndpoints[i] = endpoints
 	}
 
-	// TODO: ensure that each pool has at least two nodes in a distributed setup
-
 	publicIPs := env.Get(config.EnvPublicIPs, "")
 	if len(publicIPs) == 0 {
 		updateDomainIPs(uniqueArgs)
