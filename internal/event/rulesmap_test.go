@@ -154,12 +154,12 @@ func TestRulesMapMatch(t *testing.T) {
 
 func TestNewRulesMap(t *testing.T) {
 	rulesMapCase1 := make(RulesMap)
-	rulesMapCase1.add([]Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold},
+	rulesMapCase1.add([]Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold, ObjectAccessedAttributes},
 		"*", TargetID{"1", "webhook"})
 
 	rulesMapCase2 := make(RulesMap)
 	rulesMapCase2.add([]Name{
-		ObjectAccessedGet, ObjectAccessedHead,
+		ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedAttributes,
 		ObjectCreatedPut, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold,
 	}, "*", TargetID{"1", "webhook"})
 

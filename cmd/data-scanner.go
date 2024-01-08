@@ -65,8 +65,9 @@ var (
 	globalHealConfig heal.Config
 
 	// Sleeper values are updated when config is loaded.
-	scannerSleeper = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
-	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
+	scannerSleeper  = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
+	scannerCycle    = uatomic.NewDuration(dataScannerStartDelay)
+	scannerIdleMode = uatomic.NewInt32(0) // default is throttled when idle
 )
 
 // initDataScanner will start the scanner in the background.
