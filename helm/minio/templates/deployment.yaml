@@ -118,7 +118,14 @@ spec:
             - name: MINIO_IDENTITY_OPENID_CONFIG_URL
               value: {{ .Values.oidc.configUrl }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_ID
+            {{- if and .Values.oidc.existingClientSecretName .Values.oidc.existingClientIdKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.existingClientSecretName }}
+                  key: {{ .Values.oidc.existingClientIdKey }}
+            {{- else }}
               value: {{ .Values.oidc.clientId }}
+            {{- end }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
             {{- if and .Values.oidc.existingClientSecretName .Values.oidc.existingClientSecretKey }}
               valueFrom:
