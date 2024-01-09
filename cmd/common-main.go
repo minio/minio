@@ -406,7 +406,11 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
-		err = mergeServerCtxtFromConfigFile(conf, ctxt)
+		if os.Getenv(config.EnvArgs) != "" {
+			err = mergeServerCtxtFromConfigFile(serverCmdArgs(ctx), conf, ctxt)
+		} else {
+			err = mergeServerCtxtFromConfigFile(nil, conf, ctxt)
+		}
 	} else {
 		err = mergeDisksLayoutFromArgs(serverCmdArgs(ctx), ctxt)
 	}

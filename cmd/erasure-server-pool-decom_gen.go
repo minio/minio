@@ -786,6 +786,289 @@ func (z *PoolStatus) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *SelfPoolExpand) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "FileMD5":
+			z.FileMD5, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FileMD5")
+				return
+			}
+		case "BeforePools":
+			var zb0002 uint32
+			zb0002, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "BeforePools")
+				return
+			}
+			if cap(z.BeforePools) >= int(zb0002) {
+				z.BeforePools = (z.BeforePools)[:zb0002]
+			} else {
+				z.BeforePools = make([]string, zb0002)
+			}
+			for za0001 := range z.BeforePools {
+				z.BeforePools[za0001], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "BeforePools", za0001)
+					return
+				}
+			}
+		case "AfterPools":
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "AfterPools")
+				return
+			}
+			if cap(z.AfterPools) >= int(zb0003) {
+				z.AfterPools = (z.AfterPools)[:zb0003]
+			} else {
+				z.AfterPools = make([]string, zb0003)
+			}
+			for za0002 := range z.AfterPools {
+				z.AfterPools[za0002], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "AfterPools", za0002)
+					return
+				}
+			}
+		case "Status":
+			z.Status, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Status")
+				return
+			}
+		case "DirHaveRenamed":
+			z.DirHaveRenamed, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "DirHaveRenamed")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *SelfPoolExpand) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 5
+	// write "FileMD5"
+	err = en.Append(0x85, 0xa7, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x44, 0x35)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FileMD5)
+	if err != nil {
+		err = msgp.WrapError(err, "FileMD5")
+		return
+	}
+	// write "BeforePools"
+	err = en.Append(0xab, 0x42, 0x65, 0x66, 0x6f, 0x72, 0x65, 0x50, 0x6f, 0x6f, 0x6c, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.BeforePools)))
+	if err != nil {
+		err = msgp.WrapError(err, "BeforePools")
+		return
+	}
+	for za0001 := range z.BeforePools {
+		err = en.WriteString(z.BeforePools[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "BeforePools", za0001)
+			return
+		}
+	}
+	// write "AfterPools"
+	err = en.Append(0xaa, 0x41, 0x66, 0x74, 0x65, 0x72, 0x50, 0x6f, 0x6f, 0x6c, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.AfterPools)))
+	if err != nil {
+		err = msgp.WrapError(err, "AfterPools")
+		return
+	}
+	for za0002 := range z.AfterPools {
+		err = en.WriteString(z.AfterPools[za0002])
+		if err != nil {
+			err = msgp.WrapError(err, "AfterPools", za0002)
+			return
+		}
+	}
+	// write "Status"
+	err = en.Append(0xa6, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Status)
+	if err != nil {
+		err = msgp.WrapError(err, "Status")
+		return
+	}
+	// write "DirHaveRenamed"
+	err = en.Append(0xae, 0x44, 0x69, 0x72, 0x48, 0x61, 0x76, 0x65, 0x52, 0x65, 0x6e, 0x61, 0x6d, 0x65, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.DirHaveRenamed)
+	if err != nil {
+		err = msgp.WrapError(err, "DirHaveRenamed")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *SelfPoolExpand) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 5
+	// string "FileMD5"
+	o = append(o, 0x85, 0xa7, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x44, 0x35)
+	o = msgp.AppendString(o, z.FileMD5)
+	// string "BeforePools"
+	o = append(o, 0xab, 0x42, 0x65, 0x66, 0x6f, 0x72, 0x65, 0x50, 0x6f, 0x6f, 0x6c, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.BeforePools)))
+	for za0001 := range z.BeforePools {
+		o = msgp.AppendString(o, z.BeforePools[za0001])
+	}
+	// string "AfterPools"
+	o = append(o, 0xaa, 0x41, 0x66, 0x74, 0x65, 0x72, 0x50, 0x6f, 0x6f, 0x6c, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.AfterPools)))
+	for za0002 := range z.AfterPools {
+		o = msgp.AppendString(o, z.AfterPools[za0002])
+	}
+	// string "Status"
+	o = append(o, 0xa6, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73)
+	o = msgp.AppendString(o, z.Status)
+	// string "DirHaveRenamed"
+	o = append(o, 0xae, 0x44, 0x69, 0x72, 0x48, 0x61, 0x76, 0x65, 0x52, 0x65, 0x6e, 0x61, 0x6d, 0x65, 0x64)
+	o = msgp.AppendBool(o, z.DirHaveRenamed)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *SelfPoolExpand) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "FileMD5":
+			z.FileMD5, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FileMD5")
+				return
+			}
+		case "BeforePools":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BeforePools")
+				return
+			}
+			if cap(z.BeforePools) >= int(zb0002) {
+				z.BeforePools = (z.BeforePools)[:zb0002]
+			} else {
+				z.BeforePools = make([]string, zb0002)
+			}
+			for za0001 := range z.BeforePools {
+				z.BeforePools[za0001], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BeforePools", za0001)
+					return
+				}
+			}
+		case "AfterPools":
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "AfterPools")
+				return
+			}
+			if cap(z.AfterPools) >= int(zb0003) {
+				z.AfterPools = (z.AfterPools)[:zb0003]
+			} else {
+				z.AfterPools = make([]string, zb0003)
+			}
+			for za0002 := range z.AfterPools {
+				z.AfterPools[za0002], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "AfterPools", za0002)
+					return
+				}
+			}
+		case "Status":
+			z.Status, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Status")
+				return
+			}
+		case "DirHaveRenamed":
+			z.DirHaveRenamed, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DirHaveRenamed")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *SelfPoolExpand) Msgsize() (s int) {
+	s = 1 + 8 + msgp.StringPrefixSize + len(z.FileMD5) + 12 + msgp.ArrayHeaderSize
+	for za0001 := range z.BeforePools {
+		s += msgp.StringPrefixSize + len(z.BeforePools[za0001])
+	}
+	s += 11 + msgp.ArrayHeaderSize
+	for za0002 := range z.AfterPools {
+		s += msgp.StringPrefixSize + len(z.AfterPools[za0002])
+	}
+	s += 7 + msgp.StringPrefixSize + len(z.Status) + 15 + msgp.BoolSize
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *decomError) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
@@ -931,6 +1214,12 @@ func (z *poolMeta) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "spe":
+			err = z.SelfPoolExpand.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "SelfPoolExpand")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -944,9 +1233,9 @@ func (z *poolMeta) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *poolMeta) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+	// map header, size 3
 	// write "v"
-	err = en.Append(0x82, 0xa1, 0x76)
+	err = en.Append(0x83, 0xa1, 0x76)
 	if err != nil {
 		return
 	}
@@ -972,15 +1261,25 @@ func (z *poolMeta) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "spe"
+	err = en.Append(0xa3, 0x73, 0x70, 0x65)
+	if err != nil {
+		return
+	}
+	err = z.SelfPoolExpand.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "SelfPoolExpand")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *poolMeta) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
 	// string "v"
-	o = append(o, 0x82, 0xa1, 0x76)
+	o = append(o, 0x83, 0xa1, 0x76)
 	o = msgp.AppendInt(o, z.Version)
 	// string "pls"
 	o = append(o, 0xa3, 0x70, 0x6c, 0x73)
@@ -991,6 +1290,13 @@ func (z *poolMeta) MarshalMsg(b []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Pools", za0001)
 			return
 		}
+	}
+	// string "spe"
+	o = append(o, 0xa3, 0x73, 0x70, 0x65)
+	o, err = z.SelfPoolExpand.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "SelfPoolExpand")
+		return
 	}
 	return
 }
@@ -1038,6 +1344,12 @@ func (z *poolMeta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "spe":
+			bts, err = z.SelfPoolExpand.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "SelfPoolExpand")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1056,6 +1368,7 @@ func (z *poolMeta) Msgsize() (s int) {
 	for za0001 := range z.Pools {
 		s += z.Pools[za0001].Msgsize()
 	}
+	s += 4 + z.SelfPoolExpand.Msgsize()
 	return
 }
 

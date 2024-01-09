@@ -31,12 +31,13 @@ type Opts struct {
 
 // ServerConfig represents a MinIO configuration file
 type ServerConfig struct {
-	Version     string     `yaml:"version"`
-	RootUser    string     `yaml:"rootUser"`
-	RootPwd     string     `yaml:"rootPassword"`
-	Addr        string     `yaml:"address"`
-	ConsoleAddr string     `yaml:"console-address"`
-	CertsDir    string     `yaml:"certs-dir"`
-	Pools       [][]string `yaml:"pools"`
-	Options     Opts       `yaml:"options"`
+	Version           string     `yaml:"version"`
+	RootUser          string     `yaml:"rootUser"`
+	RootPwd           string     `yaml:"rootPassword"`
+	Addr              string     `yaml:"address"`
+	ConsoleAddr       string     `yaml:"console-address"`
+	CertsDir          string     `yaml:"certs-dir"`
+	EnableExpandPools bool       `yaml:"enableExpandPools"`
+	Pools             [][]string `yaml:"pools"`
+	Options           Opts       `yaml:"options"`
 }

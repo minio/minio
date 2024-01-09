@@ -160,9 +160,9 @@ func (ps PoolStatus) Clone() PoolStatus {
 type poolMeta struct {
 	Version int          `msg:"v"`
 	Pools   []PoolStatus `msg:"pls"`
-
 	// Value should not be saved when we have not loaded anything yet.
-	dontSave bool `msg:"-"`
+	dontSave       bool           `msg:"-"`
+	SelfPoolExpand SelfPoolExpand `msg:"spe"`
 }
 
 // A decommission resumable tells us if decommission is worth
@@ -583,6 +583,8 @@ func newPoolMeta(z *erasureServerPools, prevMeta poolMeta) poolMeta {
 			ID:         idx,
 			LastUpdate: UTCNow(),
 		})
+		// keep the self pool expand status when initializing
+		newMeta.SelfPoolExpand = prevMeta.SelfPoolExpand
 	}
 	return newMeta
 }
@@ -1414,6 +1416,9 @@ func (z *erasureServerPools) StartDecommission(ctx context.Context, indices ...i
 
 	for _, bucket := range decomBuckets {
 		z.HealBucket(ctx, bucket.Name, madmin.HealOpts{})
+		// do not care if create is successful
+		// self expand pool can't make buckets successfully
+		z.MakeBucket(ctx, bucket.Name, MakeBucketOptions{})
 	}
 
 	// Create .minio.sys/config, .minio.sys/buckets paths if missing,
@@ -1469,4 +1474,38 @@ func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID strin
 		VersionID: versionID,
 		Error:     errStr,
 	})
+}
+
+// SelfPoolExpand - self pool expand info
+type SelfPoolExpand struct {
+	FileMD5     string   `json:"fileMD5"`
+	BeforePools []string `json:"beforePools"`
+	AfterPools  []string `json:"afterPools"`
+	// Status is the current status of the pool expand operation
+	// empty means the pool is not expanded
+	// PoolExpandStatusComplete means the pool is expanded and ready for another expand
+	Status         string `json:"status"`
+	DirHaveRenamed bool   `json:"dirHaveRenamed"`
+}
+
+// LoadSelfPoolExpand loads the self pool expand info
+func (z *erasureServerPools) LoadSelfPoolExpand(ctx context.Context) (status SelfPoolExpand, err error) {
+	meta := poolMeta{}
+	if err = meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {
+		return SelfPoolExpand{}, err
+	}
+	return meta.SelfPoolExpand, nil
+}
+
+// SaveSelfPoolExpand saves the self pool expand info
+func (z *erasureServerPools) SaveSelfPoolExpand(ctx context.Context, status SelfPoolExpand) (err error) {
+	z.poolMetaMutex.Lock()
+	defer z.poolMetaMutex.Unlock()
+	meta := poolMeta{}
+	if err = meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {
+		return err
+	}
+	meta.SelfPoolExpand = status
+	z.poolMeta = meta
+	return z.poolMeta.save(ctx, z.serverPools)
 }

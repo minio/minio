@@ -161,9 +161,11 @@ type serverCtxt struct {
 	ShutdownTimeout   time.Duration
 	IdleTimeout       time.Duration
 	ReadHeaderTimeout time.Duration
-
 	// The layout of disks as interpreted
 	Layout disksLayout
+	// runtime param
+	ExpandPools bool
+	ConfigPath  string
 }
 
 var (

@@ -238,7 +238,7 @@ func serverCmdArgs(ctx *cli.Context) []string {
 	return strings.Fields(v)
 }
 
-func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
+func mergeServerCtxtFromConfigFile(args []string, configFile string, ctxt *serverCtxt) error {
 	rd, err := Open(configFile)
 	if err != nil {
 		return err
@@ -257,6 +257,9 @@ func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 
 	ctxt.RootUser = cf.RootUser
 	ctxt.RootPwd = cf.RootPwd
+
+	ctxt.ExpandPools = cf.EnableExpandPools
+	ctxt.ConfigPath = configFile
 
 	if cf.Addr != "" {
 		ctxt.Addr = cf.Addr
@@ -283,7 +286,28 @@ func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("ssh-private-key=%s", cf.Options.SFTP.SSHPrivateKey))
 	}
 
-	ctxt.Layout, err = buildDisksLayoutFromConfFile(cf.Pools)
+	if cf.EnableExpandPools && len(cf.Pools) != 1 {
+		return fmt.Errorf("only one pool is supported for expansion")
+	}
+	if len(args) == 2 {
+		// restart now
+		pools := strings.Split(args[0], ",")
+		ctxt.Layout, err = buildDisksLayoutFromConfFile(cf.EnableExpandPools, [][]string{pools}, false)
+		if err != nil {
+			return err
+		}
+		pools = strings.Split(args[1], ",")
+		layout, err := buildDisksLayoutFromConfFile(cf.EnableExpandPools, [][]string{pools}, true)
+		if err != nil {
+			return err
+		}
+		ctxt.Layout.pools = append(ctxt.Layout.pools, layout.pools...)
+	} else {
+		ctxt.Layout, err = buildDisksLayoutFromConfFile(cf.EnableExpandPools, cf.Pools, false)
+	}
+
+	initExpandPool(configFile, ctxt, cf.Pools)
+
 	return err
 }
 

@@ -367,7 +367,7 @@ func (el *endpointsList) add(arg string) error {
 }
 
 // buildDisksLayoutFromConfFile supports with and without ellipses transparently.
-func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err error) {
+func buildDisksLayoutFromConfFile(enableExpandPools bool, pools [][]string, temporary bool) (layout disksLayout, err error) {
 	if len(pools) == 0 {
 		return layout, errInvalidArgument
 	}
@@ -442,8 +442,16 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 		}
 
 		h := xxhash.New()
-		for _, s := range setArgs {
-			for _, d := range s {
+		for i, s := range setArgs {
+			for j, d := range s {
+				if enableExpandPools {
+					if !temporary {
+						d += "/0/"
+					} else {
+						d += "/1/"
+					}
+					setArgs[i][j] = d
+				}
 				h.WriteString(d)
 			}
 		}
