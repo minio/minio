@@ -13,8 +13,8 @@ clusterDomain: cluster.local
 ## Set default image, imageTag, and imagePullPolicy. mode is used to indicate the
 ##
 image:
-  repository: quay.io/minio/minio
-  tag: RELEASE.2022-10-24T18-35-07Z
+  repository: registry.services.ubble.ai/public/minio
+  tag: RELEASE.2022-10-24T18-35-07Z-ubble-v1.0.5
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -266,12 +266,9 @@ readinessProbe:
   successThreshold: 1
   failureThreshold: 5
 
-# cf docs/metrics/healthcheck/README.md
 livenessProbe:
-  httpGet:
-    path: /minio/health/live
-    port: 9000
-    scheme: HTTP
+  exec:
+    command: ["/usr/local/bin/liveness.sh"]
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
