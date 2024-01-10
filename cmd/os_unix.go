@@ -48,7 +48,7 @@ func openFileWithFD(name string, flag int, perm os.FileMode) (fd int, err error)
 		defer updateOSMetrics(osMetricOpenFileRFd, name)(err)
 	}
 	var e error
-	fd, e = syscall.Open(name, flag, uint32(perm))
+	fd, e = syscall.Open(name, flag|syscall.O_CLOEXEC, uint32(perm))
 	if e != nil {
 		return -1, &os.PathError{Op: "open", Path: name, Err: e}
 	}
