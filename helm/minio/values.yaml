@@ -256,15 +256,13 @@ podLabels: {}
 
 # cf docs/metrics/healthcheck/README.md
 readinessProbe:
-  httpGet:
-    path: /minio/health/ready
-    port: 9000
-    scheme: HTTP
+  exec:
+    command: ["/usr/local/bin/liveness.sh"]
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
   successThreshold: 1
-  failureThreshold: 5
+  failureThreshold: 3
 
 livenessProbe:
   exec:
