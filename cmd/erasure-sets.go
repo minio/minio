@@ -128,9 +128,11 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 		if errors.Is(err, errUnformattedDisk) {
 			info, derr := disk.DiskInfo(context.TODO(), false)
 			if derr != nil && info.RootDisk {
+				disk.Close()
 				return nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
 			}
 		}
+		disk.Close()
 		return nil, nil, fmt.Errorf("Drive: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
 
@@ -413,6 +415,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 						globalLocalDrivesMu.RUnlock()
 						continue
 					}
+					disk.Close()
 					disk = ldisk
 					globalLocalDrivesMu.RUnlock()
 				}
@@ -1053,6 +1056,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 			// We should not heal on root disk. i.e in a situation where the minio-administrator has unmounted a
 			// defective drive we should not heal a path on the root disk.
 			logger.LogIf(GlobalContext, fmt.Errorf("Drive `%s` is part of root drive, will not be used", storageDisks[i]))
+			storageDisks[i].Close()
 			storageDisks[i] = nil
 		}
 	}
@@ -1062,7 +1066,7 @@ func markRootDisksAsDown(storageDisks []StorageAPI, errs []error) {
 func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.HealResultItem, err error) {
 	storageDisks, _ := initStorageDisksWithErrors(s.endpoints.Endpoints, storageOpts{
 		cleanUp:     true,
-		healthCheck: true,
+		healthCheck: false,
 	})
 
 	defer func(storageDisks []StorageAPI) {
@@ -1132,6 +1136,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			}
 			if err := saveFormatErasure(storageDisks[index], format, formatOpID); err != nil {
 				logger.LogIf(ctx, fmt.Errorf("Drive %s failed to write updated 'format.json': %v", storageDisks[index], err))
+				storageDisks[index].Close()
 				tmpNewFormats[index] = nil // this disk failed to write new format
 			}
 		}
@@ -1154,17 +1159,27 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 			}
 
 			if disk := storageDisks[index]; disk != nil {
-				disk.SetDiskLoc(s.poolIndex, m, n)
+				if disk.IsLocal() {
+					disk.SetDiskLoc(s.poolIndex, m, n)
 
-				if disk.IsLocal() && driveQuorum {
-					commonWrites, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
 					xldisk, ok := disk.(*xlStorageDiskIDCheck)
 					if ok {
-						xldisk.totalWrites.Add(commonWrites)
-						xldisk.totalDeletes.Add(commonDeletes)
-						xldisk.storage.setWriteAttribute(commonWrites)
-						xldisk.storage.setDeleteAttribute(commonDeletes)
+						if driveQuorum {
+							commonWrites, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
+							xldisk.totalWrites.Store(commonWrites)
+							xldisk.totalDeletes.Store(commonDeletes)
+							xldisk.storage.setWriteAttribute(commonWrites)
+							xldisk.storage.setDeleteAttribute(commonDeletes)
+						}
+						go xldisk.monitorDiskWritable(xldisk.diskCtx)
 					}
+				} else {
+					disk.Close() // Close the remote storage client, re-initialize with healthchecks.
+					disk, err = newStorageRESTClient(disk.Endpoint(), true, globalGrid.Load())
+					if err != nil {
+						continue
+					}
+					disk.SetDiskLoc(s.poolIndex, m, n)
 				}
 
 				s.erasureDisks[m][n] = disk
