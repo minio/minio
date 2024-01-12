@@ -1039,15 +1039,15 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 	return nil
 }
 
+// Make sure we do not write O_DIRECT aligned I/O because WrIteAll() ends
+// up using O_DIRECT codepath which internally utilizes p.health.tokens
+// we need to avoid using incoming I/O tokens as part of the healthcheck
+// monitoring I/O.
+var toWrite = []byte{2048: 42}
+
 // monitorDiskStatus should be called once when a drive has been marked offline.
 // Once the disk has been deemed ok, it will return to online status.
 func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string) {
-	// Make sure we do not write O_DIRECT aligned I/O because WrIteAll() ends
-	// up using O_DIRECT codepath which internally utilizes p.health.tokens
-	// we need to avoid using incoming I/O tokens as part of the healthcheck
-	// monitoring I/O.
-	toWrite := []byte{2048: 42}
-
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 
@@ -1164,12 +1164,6 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 
 		func() {
 			defer dcancel()
-
-			// Make sure we do not write O_DIRECT aligned I/O because WrIteAll() ends
-			// up using O_DIRECT codepath which internally utilizes p.health.tokens
-			// we need to avoid using incoming I/O tokens as part of the healthcheck
-			// monitoring I/O.
-			toWrite := []byte{2048: 42}
 
 			err := p.storage.WriteAll(ctx, minioMetaTmpBucket, fn, toWrite)
 			if err != nil {
