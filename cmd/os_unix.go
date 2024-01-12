@@ -39,6 +39,22 @@ func access(name string) error {
 	return nil
 }
 
+// openFileWithFD return 'fd' based file descriptor
+func openFileWithFD(name string, flag int, perm os.FileMode) (fd int, err error) {
+	switch flag & writeMode {
+	case writeMode:
+		defer updateOSMetrics(osMetricOpenFileWFd, name)(err)
+	default:
+		defer updateOSMetrics(osMetricOpenFileRFd, name)(err)
+	}
+	var e error
+	fd, e = syscall.Open(name, flag|syscall.O_CLOEXEC, uint32(perm))
+	if e != nil {
+		return -1, &os.PathError{Op: "open", Path: name, Err: e}
+	}
+	return fd, nil
+}
+
 // Forked from Golang but chooses to avoid performing lookup
 //
 // osMkdirAll creates a directory named path,
@@ -149,7 +165,7 @@ func parseDirEnt(buf []byte) (consumed int, name []byte, typ os.FileMode, err er
 // the directory itself, if the dirPath doesn't exist this function doesn't return
 // an error.
 func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) error {
-	f, err := OpenFile(dirPath, readMode, 0o666)
+	fd, err := openFileWithFD(dirPath, readMode, 0o666)
 	if err != nil {
 		if osErrToFileErr(err) == errFileNotFound {
 			return nil
@@ -160,15 +176,16 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 		// There may be permission error when dirPath
 		// is at the root of the disk mount that may
 		// not have the permissions to avoid 'noatime'
-		f, err = Open(dirPath)
+		fd, err = openFileWithFD(dirPath, os.O_RDONLY, 0o666)
 		if err != nil {
 			if osErrToFileErr(err) == errFileNotFound {
 				return nil
 			}
 			return osErrToFileErr(err)
 		}
+
 	}
-	defer f.Close()
+	defer syscall.Close(fd)
 
 	bufp := direntPool.Get().(*[]byte)
 	defer direntPool.Put(bufp)
@@ -181,7 +198,7 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 		if boff >= nbuf {
 			boff = 0
 			stop := globalOSMetrics.time(osMetricReadDirent)
-			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
+			nbuf, err = syscall.ReadDirent(fd, buf)
 			stop()
 			if err != nil {
 				if isSysErrNotDir(err) {
@@ -241,7 +258,7 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 // Return count entries at the directory dirPath and all entries
 // if count is set to -1
 func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err error) {
-	f, err := OpenFile(dirPath, readMode, 0o666)
+	fd, err := openFileWithFD(dirPath, readMode, 0o666)
 	if err != nil {
 		if !osIsPermission(err) {
 			return nil, osErrToFileErr(err)
@@ -249,12 +266,12 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		// There may be permission error when dirPath
 		// is at the root of the disk mount that may
 		// not have the permissions to avoid 'noatime'
-		f, err = Open(dirPath)
+		fd, err = openFileWithFD(dirPath, os.O_RDONLY, 0o666)
 		if err != nil {
 			return nil, osErrToFileErr(err)
 		}
 	}
-	defer f.Close()
+	defer syscall.Close(fd)
 
 	bufp := direntPool.Get().(*[]byte)
 	defer direntPool.Put(bufp)
@@ -273,7 +290,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		if boff >= nbuf {
 			boff = 0
 			stop := globalOSMetrics.time(osMetricReadDirent)
-			nbuf, err = syscall.ReadDirent(int(f.Fd()), buf)
+			nbuf, err = syscall.ReadDirent(fd, buf)
 			stop()
 			if err != nil {
 				if isSysErrNotDir(err) {
