@@ -200,8 +200,6 @@ type ObjectInfo struct {
 
 	Legacy bool // indicates object on disk is in legacy data format
 
-	// backendType indicates which backend filled this structure
-	backendType BackendType
 	// internal representation of version purge status
 	VersionPurgeStatusInternal string
 	VersionPurgeStatus         VersionPurgeStatusType
@@ -282,7 +280,6 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		metadataOnly:               o.metadataOnly,
 		versionOnly:                o.versionOnly,
 		keyRotation:                o.keyRotation,
-		backendType:                o.backendType,
 		AccTime:                    o.AccTime,
 		Legacy:                     o.Legacy,
 		VersionPurgeStatus:         o.VersionPurgeStatus,

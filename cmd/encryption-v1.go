@@ -209,9 +209,6 @@ func DecryptETags(ctx context.Context, k kms.KMS, objects []ObjectInfo) error {
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
 func (o *ObjectInfo) isMultipart() bool {
-	if len(o.Parts) == 0 {
-		return false
-	}
 	_, encrypted := crypto.IsEncrypted(o.UserDefined)
 	if encrypted {
 		if !crypto.IsMultiPart(o.UserDefined) {
@@ -228,7 +225,7 @@ func (o *ObjectInfo) isMultipart() bool {
 	// Further check if this object is uploaded using multipart mechanism
 	// by the user and it is not about Erasure internally splitting the
 	// object into parts in PutObject()
-	return !(o.backendType == BackendErasure && len(o.ETag) == 32)
+	return len(o.ETag) != 32
 }
 
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
