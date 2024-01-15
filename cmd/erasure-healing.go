@@ -334,7 +334,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			erasure.ShardFileSize(latestMeta.Parts[0].ActualSize) < smallFileThreshold)
 	}
 
-	result.ObjectSize, err = latestMeta.GetActualSize()
+	result.ObjectSize, err = latestMeta.ToObjectInfo(bucket, object, true).GetActualSize()
 	if err != nil {
 		return result, err
 	}
