@@ -779,12 +779,12 @@ func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 				return nil, errDiskAccessDenied
 			}
 			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-			return nil, errCorruptedFormat
+			return nil, errCorruptedBackend
 		} else if osIsPermission(err) {
 			return nil, errDiskAccessDenied
 		}
 		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-		return nil, errCorruptedFormat
+		return nil, errCorruptedBackend
 	}
 	return fi, nil
 }
@@ -830,12 +830,12 @@ func (s *xlStorage) GetDiskID() (string, error) {
 				return "", errDiskAccessDenied
 			}
 			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-			return "", errCorruptedFormat
+			return "", errCorruptedBackend
 		} else if osIsPermission(err) {
 			return "", errDiskAccessDenied
 		}
 		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-		return "", errCorruptedFormat
+		return "", errCorruptedBackend
 	}
 
 	format := &formatErasureV3{}
