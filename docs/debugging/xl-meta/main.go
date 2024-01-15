@@ -348,7 +348,7 @@ FLAGS:
 				b = bytes.TrimSpace(b)
 				if !ndjson {
 					b = bytes.TrimFunc(b, func(r rune) bool {
-						return r == '{' || r == '}'
+						return r == '{' || r == '}' || r == '\n' || r == '\r'
 					})
 				}
 
