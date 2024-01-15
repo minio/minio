@@ -3318,6 +3318,9 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 				} // overlay tags from peer site.
 				ot = tags
 				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"} // indicate that the request was proxied.
+			} else {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
 			}
 		} else {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
