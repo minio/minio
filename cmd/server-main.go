@@ -385,6 +385,10 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 
 	globalConnReadDeadline = ctxt.ConnReadDeadline
 	globalConnWriteDeadline = ctxt.ConnWriteDeadline
+	// depend on globalEndpoints. Avoid the data race.
+	if globalServerCtxt.ExpandPoolHandler != nil {
+		globalServerCtxt.ExpandPoolHandler()
+	}
 }
 
 var globalHealStateLK sync.RWMutex

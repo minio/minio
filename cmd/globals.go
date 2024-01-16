@@ -164,8 +164,9 @@ type serverCtxt struct {
 	// The layout of disks as interpreted
 	Layout disksLayout
 	// runtime param
-	ExpandPools bool
-	ConfigPath  string
+	ExpandPools       bool
+	ConfigPath        string
+	ExpandPoolHandler func()
 }
 
 var (

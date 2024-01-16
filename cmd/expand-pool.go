@@ -253,236 +253,219 @@ func initExpandPool(configFile string, ctxt *serverCtxt, pools [][]string) error
 		return err
 	}
 	ltime := stat.ModTime()
-	go func() {
-		timer := time.NewTimer(time.Second * 10)
-		defer timer.Stop()
-		for range timer.C {
-			// use first endpoint which is local
-			if len(globalEndpoints) != 0 {
-				if globalEndpoints.FirstLocal() {
-					break
-				}
-				return
-			}
+	ctxt.ExpandPoolHandler = func() {
+		if !globalEndpoints.FirstLocal() {
+			return
 		}
 		if serverDebugLog {
 			log.Infof("[Expand pool]: Starting pool expansion")
 		}
-		ticker := time.NewTicker(time.Second * 10)
-		defer ticker.Stop()
-		for {
-		loop:
-			select {
-			case <-ticker.C:
-				stats, err := loadPoolExpandStats()
-				if err != nil {
-					continue
-				}
-				if serverDebugLog {
-					log.Infof("[Expand pool]: Load expansion status: %v", stats)
-				}
-				if len(stats.AfterPools) == 0 || len(stats.BeforePools) == 0 {
-					continue
-				}
-				switch stats.Status {
-				case "":
-					if stats.FileMD5 != "" || len(stats.AfterPools) != 0 || len(stats.BeforePools) != 0 {
-						// wait for new config file change
-						_ = writePoolExpandStats(&SelfPoolExpand{})
-					}
-					continue
-				case PoolExpandStatusWaitForFileChange:
-					err := stats.syncExpandPoolsStatusToPeer()
+		go func() {
+			ticker := time.NewTicker(time.Second * 10)
+			defer ticker.Stop()
+			for {
+			loop:
+				select {
+				case <-ticker.C:
+					stats, err := loadPoolExpandStats()
 					if err != nil {
 						continue
 					}
-					_ = stats.saveNextStatus(false)
-				case PoolExpandStatusSetEnvToRestart:
-					err := stats.syncExpandPoolsStatusToPeer()
-					if err != nil {
+					if serverDebugLog {
+						log.Infof("[Expand pool]: Load expansion status: %v", stats)
+					}
+					if len(stats.AfterPools) == 0 || len(stats.BeforePools) == 0 {
 						continue
 					}
-					err = stats.saveNextStatus(false)
-					if err != nil {
-						continue
-					}
-					setEnvToMinioArgs(fmt.Sprintf("%s %s",
-						strings.Join(stats.BeforePools, ","),
-						strings.Join(stats.AfterPools, ","),
-					))
-					errs := globalNotificationSys.SignalService(serviceRestart)
-					for _, err := range errs {
-						if err.Err != nil {
-							log.Error("[Expand pool]: SignalService to restart error:", err.Err)
-							goto loop
+					switch stats.Status {
+					case "":
+						if stats.FileMD5 != "" || len(stats.AfterPools) != 0 || len(stats.BeforePools) != 0 {
+							// wait for new config file change
+							_ = writePoolExpandStats(&SelfPoolExpand{})
 						}
-					}
-					// restart self
-					globalServiceSignalCh <- serviceRestart
-					return
-				case PoolExpandStatusStartDecommission:
-					objectAPI := newObjectLayerFn()
-					if objectAPI == nil {
 						continue
-					}
-					z, ok := objectAPI.(*erasureServerPools)
-					if !ok {
-						continue
-					}
-					err := z.Decommission(context.Background(), 0)
-					if err != nil {
-						log.Error("[Expand pool]: Decommission error:", err)
-						continue
-					}
-					_ = stats.saveNextStatus(false)
-				case PoolExpandStatusWaitForDecommissionComplete:
-					objectAPI := newObjectLayerFn()
-					if objectAPI == nil {
-						continue
-					}
-					z, ok := objectAPI.(*erasureServerPools)
-					if !ok {
-						continue
-					}
-					dstatus, err := z.Status(GlobalContext, 0)
-					if err != nil {
-						log.Error("[Expand pool]: Decommission Status error:", err)
-						continue
-					}
-					if dstatus.Decommission == nil || !dstatus.Decommission.Complete {
-						continue
-					}
-					_ = stats.saveNextStatus(false)
-					// rename dir right now
-					fallthrough
-				case PoolExpandStatusWaitForRenameDataDir:
-					// load pre status
-					// if not renamed, rename now
-					preStats, err := loadPoolExpandStats()
-					if err != nil {
-						continue
-					}
-					// if already renamed, skip
-					if preStats.DirHaveRenamed {
-						continue
-					}
-					err = preStats.saveNextStatus(true)
-					if err != nil {
-						continue
-					}
-					errRemote := stats.syncExpandPoolsStatusToPeer()
-					errLocal := preStats.renameDataDir()
-					// if both success, restart minio cluster
-					// or if one of them failed, manual processing is required
-					if errRemote == nil && errLocal == nil {
-						setEnvToMinioArgs("\"\"")
+					case PoolExpandStatusWaitForFileChange:
+						err := stats.syncExpandPoolsStatusToPeer()
+						if err != nil {
+							continue
+						}
+						_ = stats.saveNextStatus(false)
+					case PoolExpandStatusSetEnvToRestart:
+						err := stats.syncExpandPoolsStatusToPeer()
+						if err != nil {
+							continue
+						}
+						err = stats.saveNextStatus(false)
+						if err != nil {
+							continue
+						}
+						setEnvToMinioArgs(fmt.Sprintf("%s %s",
+							strings.Join(stats.BeforePools, ","),
+							strings.Join(stats.AfterPools, ","),
+						))
 						errs := globalNotificationSys.SignalService(serviceRestart)
 						for _, err := range errs {
 							if err.Err != nil {
-								if serverDebugLog {
-									log.Error("[Expand pool]: SignalService to restart error:", err.Err)
-								}
+								log.Error("[Expand pool]: SignalService to restart error:", err.Err)
 								goto loop
 							}
 						}
 						// restart self
-						select {
-						case globalServiceSignalCh <- serviceRestart:
-						}
+						globalServiceSignalCh <- serviceRestart
 						return
-					}
-					log.Errorf(`[Expand pool]: Manual processing is required here, error %v,%v
+					case PoolExpandStatusStartDecommission:
+						objectAPI := newObjectLayerFn()
+						if objectAPI == nil {
+							continue
+						}
+						z, ok := objectAPI.(*erasureServerPools)
+						if !ok {
+							continue
+						}
+						err := z.Decommission(context.Background(), 0)
+						if err != nil {
+							log.Error("[Expand pool]: Decommission error:", err)
+							continue
+						}
+						_ = stats.saveNextStatus(false)
+					case PoolExpandStatusWaitForDecommissionComplete:
+						objectAPI := newObjectLayerFn()
+						if objectAPI == nil {
+							continue
+						}
+						z, ok := objectAPI.(*erasureServerPools)
+						if !ok {
+							continue
+						}
+						dstatus, err := z.Status(GlobalContext, 0)
+						if err != nil {
+							log.Error("[Expand pool]: Decommission Status error:", err)
+							continue
+						}
+						if dstatus.Decommission == nil || !dstatus.Decommission.Complete {
+							continue
+						}
+						_ = stats.saveNextStatus(false)
+						// rename dir right now
+						fallthrough
+					case PoolExpandStatusWaitForRenameDataDir:
+						// load pre status
+						// if not renamed, rename now
+						preStats, err := loadPoolExpandStats()
+						if err != nil {
+							continue
+						}
+						// if already renamed, skip
+						if preStats.DirHaveRenamed {
+							continue
+						}
+						err = preStats.saveNextStatus(true)
+						if err != nil {
+							continue
+						}
+						errRemote := stats.syncExpandPoolsStatusToPeer()
+						errLocal := preStats.renameDataDir()
+						// if both success, restart minio cluster
+						// or if one of them failed, manual processing is required
+						if errRemote == nil && errLocal == nil {
+							setEnvToMinioArgs("\"\"")
+							errs := globalNotificationSys.SignalService(serviceRestart)
+							for _, err := range errs {
+								if err.Err != nil {
+									if serverDebugLog {
+										log.Error("[Expand pool]: SignalService to restart error:", err.Err)
+									}
+									goto loop
+								}
+							}
+							// restart self
+							select {
+							case globalServiceSignalCh <- serviceRestart:
+							}
+							return
+						}
+						log.Errorf(`[Expand pool]: Manual processing is required here, error %v,%v
 Step1: Stop every node.
 Step2: Rename path/0 -> path/2
 Step3: Rename path/1 -> path/0")
 Step4: Remove path/2
 Step5: Restart every node. `, errRemote, errLocal)
-				}
-			case <-GlobalContext.Done():
-				return
-			}
-		}
-	}()
-	go func() {
-		timer := time.NewTimer(time.Second * 10)
-		defer timer.Stop()
-		for range timer.C {
-			// use first endpoint which is local
-			if len(globalEndpoints) != 0 {
-				if globalEndpoints.FirstLocal() {
-					break
-				}
-				return
-			}
-		}
-		ticker := time.NewTicker(time.Second * 10)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				lstat, err := os.Stat(configFile)
-				if err != nil {
-					continue
-				}
-				if !lstat.ModTime().After(ltime) {
-					continue
-				}
-				rd, err := Open(configFile)
-				if err != nil {
-					continue
-				}
-				cf := &config.ServerConfig{}
-				dec := yaml.NewDecoder(rd)
-				dec.SetStrict(true)
-				if err = dec.Decode(cf); err != nil {
-					_ = rd.Close()
-					continue
-				}
-				_ = rd.Close()
-				layout, err := buildDisksLayoutFromConfFile(true, cf.Pools, true)
-				if err != nil {
-					continue
-				}
-				if reflect.DeepEqual(layout, ctxt.Layout) || len(layout.pools) != 1 {
-					continue
-				}
-				// found the config.yaml has been changed
-				if !cf.EnableExpandPools || len(cf.Pools) != 1 {
-					// we only support one pool expand now
-					continue
-				}
-				// delay 5s to make sure the config.yaml has been loaded
-				time.Sleep(time.Second * 5)
-				fileMd5, _, err := getConfigFileInfo()
-				if err != nil {
-					continue
-				}
-				if len(ctxt.Layout.pools) != 1 {
-					continue
-				}
-				nowStatus, err := loadPoolExpandStats()
-				if err != nil {
-					continue
-				}
-				// before the change, the status should be empty or PoolExpandStatusComplete
-				if nowStatus.Status == "" && len(pools) == 1 && len(cf.Pools) == 1 && !reflect.DeepEqual(cf.Pools[0], pools[0]) {
-					err = writePoolExpandStats(&SelfPoolExpand{
-						Status:         nextPoolExpandStatus(""),
-						BeforePools:    pools[0],
-						AfterPools:     cf.Pools[0],
-						FileMD5:        fileMd5,
-						DirHaveRenamed: false,
-					})
-					if err == nil {
-						// exit the watcher
-						return
 					}
+				case <-GlobalContext.Done():
+					return
 				}
-			case <-GlobalContext.Done():
-				return
 			}
-		}
-	}()
+		}()
+		go func() {
+			ticker := time.NewTicker(time.Second * 10)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					lstat, err := os.Stat(configFile)
+					if err != nil {
+						continue
+					}
+					if !lstat.ModTime().After(ltime) {
+						continue
+					}
+					rd, err := Open(configFile)
+					if err != nil {
+						continue
+					}
+					cf := &config.ServerConfig{}
+					dec := yaml.NewDecoder(rd)
+					dec.SetStrict(true)
+					if err = dec.Decode(cf); err != nil {
+						_ = rd.Close()
+						continue
+					}
+					_ = rd.Close()
+					layout, err := buildDisksLayoutFromConfFile(true, cf.Pools, true)
+					if err != nil {
+						continue
+					}
+					if reflect.DeepEqual(layout, ctxt.Layout) || len(layout.pools) != 1 {
+						continue
+					}
+					// found the config.yaml has been changed
+					if !cf.EnableExpandPools || len(cf.Pools) != 1 {
+						// we only support one pool expand now
+						continue
+					}
+					// delay 5s to make sure the config.yaml has been loaded
+					time.Sleep(time.Second * 5)
+					fileMd5, _, err := getConfigFileInfo()
+					if err != nil {
+						continue
+					}
+					if len(ctxt.Layout.pools) != 1 {
+						continue
+					}
+					nowStatus, err := loadPoolExpandStats()
+					if err != nil {
+						continue
+					}
+					// before the change, the status should be empty or PoolExpandStatusComplete
+					if nowStatus.Status == "" && len(pools) == 1 && len(cf.Pools) == 1 && !reflect.DeepEqual(cf.Pools[0], pools[0]) {
+						err = writePoolExpandStats(&SelfPoolExpand{
+							Status:         nextPoolExpandStatus(""),
+							BeforePools:    pools[0],
+							AfterPools:     cf.Pools[0],
+							FileMD5:        fileMd5,
+							DirHaveRenamed: false,
+						})
+						if err == nil {
+							// exit the watcher
+							return
+						}
+					}
+				case <-GlobalContext.Done():
+					return
+				}
+			}
+		}()
+	}
 	return nil
 }
 
