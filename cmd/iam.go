@@ -1358,9 +1358,15 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	// DN to ldap username mapping for each LDAP user
 	parentUserToLDAPUsernameMap := make(map[string]string)
 	for _, cred := range allCreds {
+		// Expired credentials don't need parent user updates.
+		if cred.IsExpired() {
+			continue
+		}
+
 		if !sys.LDAPConfig.IsLDAPUserDN(cred.ParentUser) {
 			continue
 		}
+
 		// Check if this is the first time we are
 		// encountering this LDAP user.
 		if _, ok := parentUserToCredsMap[cred.ParentUser]; !ok {
@@ -1422,6 +1428,11 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 			if gSet.Equals(currGroupsSet) {
 				// No change to groups memberships for this
 				// credential.
+				continue
+			}
+
+			// Expired credentials don't need group membership updates.
+			if cred.IsExpired() {
 				continue
 			}
 

@@ -112,6 +112,14 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 
 	// Set table alias
 	stmt.tableAlias = selectAST.From.As
+	// Remove quotes from column aliases
+	if selectAST.Expression != nil {
+		for _, exp := range selectAST.Expression.Expressions {
+			if strings.HasSuffix(exp.As, "'") && strings.HasPrefix(exp.As, "'") && len(exp.As) >= 2 {
+				exp.As = exp.As[1 : len(exp.As)-1]
+			}
+		}
+	}
 	return
 }
 

@@ -39,6 +39,8 @@ const (
 	osMetricRename
 	osMetricOpenFileW
 	osMetricOpenFileR
+	osMetricOpenFileWFd
+	osMetricOpenFileRFd
 	osMetricOpen
 	osMetricOpenFileDirectIO
 	osMetricLstat

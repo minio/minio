@@ -228,8 +228,8 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 	}
 
 	if driveQuorum {
-		xl.totalWrites.Add(xl.storage.getWriteAttribute())
-		xl.totalDeletes.Add(xl.storage.getDeleteAttribute())
+		xl.totalWrites.Store(xl.storage.getWriteAttribute())
+		xl.totalDeletes.Store(xl.storage.getDeleteAttribute())
 	}
 
 	xl.diskCtx, xl.cancel = context.WithCancel(context.TODO())
@@ -1032,37 +1032,50 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 	if t > maxTimeSinceLastSuccess {
 		if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
 			logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline, time since last response %v", globalLocalNodeName, p.storage.String(), t.Round(time.Millisecond)))
-			go p.monitorDiskStatus(t)
+			go p.monitorDiskStatus(0, mustGetUUID())
 		}
 		return errFaultyDisk
 	}
 	return nil
 }
 
+// Make sure we do not write O_DIRECT aligned I/O because WrIteAll() ends
+// up using O_DIRECT codepath which internally utilizes p.health.tokens
+// we need to avoid using incoming I/O tokens as part of the healthcheck
+// monitoring I/O.
+var toWrite = []byte{2048: 42}
+
 // monitorDiskStatus should be called once when a drive has been marked offline.
 // Once the disk has been deemed ok, it will return to online status.
-func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration) {
+func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string) {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 
-	fn := mustGetUUID()
 	for range t.C {
+		if contextCanceled(p.diskCtx) {
+			return
+		}
+
 		if len(p.health.tokens) == 0 {
 			// Queue is still full, no need to check.
 			continue
 		}
-		err := p.storage.WriteAll(context.Background(), minioMetaTmpBucket, fn, []byte{10000: 42})
+
+		err := p.storage.WriteAll(context.Background(), minioMetaTmpBucket, fn, toWrite)
 		if err != nil {
 			continue
 		}
+
 		b, err := p.storage.ReadAll(context.Background(), minioMetaTmpBucket, fn)
-		if err != nil || len(b) != 10001 {
+		if err != nil || len(b) != len(toWrite) {
 			continue
 		}
+
 		err = p.storage.Delete(context.Background(), minioMetaTmpBucket, fn, DeleteOptions{
 			Recursive: false,
 			Immediate: false,
 		})
+
 		if err == nil {
 			t := time.Unix(0, atomic.LoadInt64(&p.health.lastSuccess))
 			if spent > 0 {
@@ -1108,8 +1121,6 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 	defer t.Stop()
 	fn := mustGetUUID()
 
-	// Be just above directio size.
-	toWrite := []byte{xioutil.DirectioAlignSize + 1: 42}
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	monitor := func() bool {
@@ -1129,7 +1140,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 		goOffline := func(err error, spent time.Duration) {
 			if atomic.CompareAndSwapInt32(&p.health.status, diskHealthOK, diskHealthFaulty) {
 				logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
-				go p.monitorDiskStatus(spent)
+				go p.monitorDiskStatus(spent, fn)
 			}
 		}
 

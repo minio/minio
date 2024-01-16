@@ -128,7 +128,7 @@ type JSONPath struct {
 // AliasedExpression is an expression that can be optionally named
 type AliasedExpression struct {
 	Expression *Expression `parser:"@@"`
-	As         string      `parser:"[ \"AS\" @Ident ]"`
+	As         string      `parser:"[ \"AS\" @Ident | \"AS\" @LitString ]"`
 }
 
 // Grammar for Expression

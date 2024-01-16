@@ -3304,8 +3304,28 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 
 	ot, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
+		// if object/version is not found locally, but exists on peer site - proxy
+		// the tagging request to peer site. The response to client will
+		// return tags from peer site.
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				// proxy to replication target if site replication is in place.
+				tags, gerr := proxyGetTaggingToRepTarget(ctx, bucket, object, opts, proxytgts)
+				if gerr.Err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, gerr.Err), r.URL)
+					return
+				} // overlay tags from peer site.
+				ot = tags
+				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"} // indicate that the request was proxied.
+			} else {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	// Set this such that authorization policies can be applied on the object tags.
@@ -3385,6 +3405,33 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 
 	objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
+		// if object is not found locally, but exists on peer site - proxy
+		// the tagging request to peer site. The response to client will
+		// be 200 with extra header indicating that the request was proxied.
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				// proxy to replication target if site replication is in place.
+				perr := proxyTaggingToRepTarget(ctx, bucket, object, tags, opts, proxytgts)
+				if perr.Err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, perr.Err), r.URL)
+					return
+				}
+				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"}
+				writeSuccessResponseHeadersOnly(w)
+				// when tagging is proxied, the object version is not available to return
+				// as header in the response, or ObjectInfo in the notification event.
+				sendEvent(eventArgs{
+					EventName:    event.ObjectCreatedPutTagging,
+					BucketName:   bucket,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent(),
+					Host:         handlers.GetSourceIP(r),
+				})
+				return
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3453,6 +3500,34 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 
 	oi, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
+		// if object is not found locally, but exists on peer site - proxy
+		// the tagging request to peer site. The response to client will
+		// be 200 OK with extra header indicating that the request was proxied.
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				// proxy to replication target if active-active replication is in place.
+				perr := proxyTaggingToRepTarget(ctx, bucket, object, nil, opts, proxytgts)
+				if perr.Err != nil {
+					writeErrorResponse(ctx, w, toAPIError(ctx, perr.Err), r.URL)
+					return
+				}
+				// when delete tagging is proxied, the object version/tags are not available to return
+				// as header in the response, nor ObjectInfo in the notification event.
+				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"}
+				writeSuccessNoContent(w)
+				sendEvent(eventArgs{
+					EventName:    event.ObjectCreatedDeleteTagging,
+					BucketName:   bucket,
+					Object:       oi,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent(),
+					Host:         handlers.GetSourceIP(r),
+				})
+				return
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
