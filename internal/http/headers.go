@@ -227,6 +227,10 @@ const (
 	MinIOSourceObjectRetentionTimestamp = "X-Minio-Source-Replication-Retention-Timestamp"
 	// Header indiicates last rtention update time on source
 	MinIOSourceObjectLegalHoldTimestamp = "X-Minio-Source-Replication-LegalHold-Timestamp"
+	// Header indicates a Tag operation was performed on one/more peers successfully, though the
+	// current cluster does not have the object yet. This is in a site/bucket replication scenario.
+	MinIOTaggingProxied = "X-Minio-Tagging-Proxied"
+
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"
 	MinIOLifecycleCfgUpdatedAt = "X-Minio-LifecycleConfig-UpdatedAt"

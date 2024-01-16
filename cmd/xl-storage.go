@@ -715,11 +715,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
-			dcinfo := DiskInfo{
-				RootDisk:  s.rootDisk,
-				MountPath: s.drivePath,
-				Endpoint:  s.endpoint.String(),
-			}
+			dcinfo := DiskInfo{}
 			di, err := getDiskInfo(s.drivePath)
 			if err != nil {
 				return dcinfo, err
@@ -748,6 +744,10 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 	if v != nil {
 		info = v.(DiskInfo)
 	}
+
+	info.RootDisk = s.rootDisk
+	info.MountPath = s.drivePath
+	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1
 	return info, err
 }
@@ -779,12 +779,12 @@ func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 				return nil, errDiskAccessDenied
 			}
 			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-			return nil, errCorruptedFormat
+			return nil, errCorruptedBackend
 		} else if osIsPermission(err) {
 			return nil, errDiskAccessDenied
 		}
 		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-		return nil, errCorruptedFormat
+		return nil, errCorruptedBackend
 	}
 	return fi, nil
 }
@@ -830,12 +830,12 @@ func (s *xlStorage) GetDiskID() (string, error) {
 				return "", errDiskAccessDenied
 			}
 			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-			return "", errCorruptedFormat
+			return "", errCorruptedBackend
 		} else if osIsPermission(err) {
 			return "", errDiskAccessDenied
 		}
 		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-		return "", errCorruptedFormat
+		return "", errCorruptedBackend
 	}
 
 	format := &formatErasureV3{}

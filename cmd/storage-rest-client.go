@@ -115,6 +115,8 @@ func toStorageErr(err error) error {
 		return errVolumeAccessDenied
 	case errCorruptedFormat.Error():
 		return errCorruptedFormat
+	case errCorruptedBackend.Error():
+		return errCorruptedBackend
 	case errUnformattedDisk.Error():
 		return errUnformattedDisk
 	case errInvalidAccessKeyID.Error():
