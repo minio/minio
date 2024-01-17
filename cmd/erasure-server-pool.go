@@ -1936,11 +1936,6 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 	hopts.Recreate = false
 	defer z.HealObject(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, bucket, bucketMetadataFile), "", hopts)
 
-	_, err := z.s3Peer.GetBucketInfo(ctx, bucket, BucketOptions{})
-	err = toObjectErr(err, bucket)
-	opts.Remove = isErrBucketNotFound(err)
-	opts.Recreate = !isErrBucketNotFound(err)
-
 	return z.s3Peer.HealBucket(ctx, bucket, opts)
 }
 
