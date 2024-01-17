@@ -273,10 +273,13 @@ const (
 	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
-	expiryPendingTasks     MetricName = "expiry_pending_tasks"
-	transitionPendingTasks MetricName = "transition_pending_tasks"
-	transitionActiveTasks  MetricName = "transition_active_tasks"
-	transitionMissedTasks  MetricName = "transition_missed_immediate_tasks"
+	expiryPendingTasks       MetricName = "expiry_pending_tasks"
+	expiryMissedTasks        MetricName = "expiry_missed_tasks"
+	expiryMissedFreeVersions MetricName = "expiry_missed_freeversions"
+	expiryNumWorkers         MetricName = "expiry_num_workers"
+	transitionPendingTasks   MetricName = "transition_pending_tasks"
+	transitionActiveTasks    MetricName = "transition_active_tasks"
+	transitionMissedTasks    MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
@@ -2000,6 +2003,33 @@ func getILMNodeMetrics() *MetricsGroup {
 		expPendingTasks := Metric{
 			Description: getExpiryPendingTasksMD(),
 		}
+		expMissedTasks := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryMissedTasks,
+				Help:      "Number of object version expiry missed due to busy system",
+				Type:      gaugeMetric,
+			},
+		}
+		expMissedFreeVersions := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryMissedFreeVersions,
+				Help:      "Number of free versions expiry missed due to busy system",
+				Type:      gaugeMetric,
+			},
+		}
+		expNumWorkers := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryNumWorkers,
+				Help:      "Number of workers expiring object versions currently",
+				Type:      gaugeMetric,
+			},
+		}
 		trPendingTasks := Metric{
 			Description: getTransitionPendingTasksMD(),
 		}
@@ -2011,6 +2041,9 @@ func getILMNodeMetrics() *MetricsGroup {
 		}
 		if globalExpiryState != nil {
 			expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
+			expMissedTasks.Value = float64(globalExpiryState.stats.MissedTasks())
+			expMissedFreeVersions.Value = float64(globalExpiryState.stats.MissedFreeVersTasks())
+			expNumWorkers.Value = float64(globalExpiryState.stats.NumWorkers())
 		}
 		if globalTransitionState != nil {
 			trPendingTasks.Value = float64(globalTransitionState.PendingTasks())
@@ -2019,6 +2052,9 @@ func getILMNodeMetrics() *MetricsGroup {
 		}
 		return []Metric{
 			expPendingTasks,
+			expMissedTasks,
+			expMissedFreeVersions,
+			expNumWorkers,
 			trPendingTasks,
 			trActiveTasks,
 			trMissedTasks,

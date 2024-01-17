@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -105,10 +104,46 @@ type expiryTask struct {
 	src     lcEventSrc
 }
 
+// expiryStats records metrics related to ILM expiry activities
+type expiryStats struct {
+	missedExpiryTasks      atomic.Int64
+	missedFreeVersTasks    atomic.Int64
+	missedTierJournalTasks atomic.Int64
+	workers                atomic.Int32
+}
+
+// MissedTasks returns the number of ILM expiry tasks that were missed since
+// there were no available workers.
+func (e *expiryStats) MissedTasks() int64 {
+	return e.missedExpiryTasks.Load()
+}
+
+// MissedFreeVersTasks returns the number of free version collection tasks that
+// were missed since there were no available workers.
+func (e *expiryStats) MissedFreeVersTasks() int64 {
+	return e.missedFreeVersTasks.Load()
+}
+
+// MissedTierJournalTasks returns the number of tasks to remove tiered objects
+// that were missed since there were no available workers.
+func (e *expiryStats) MissedTierJournalTasks() int64 {
+	return e.missedTierJournalTasks.Load()
+}
+
+// NumWorkers returns the number of active workers executing one of ILM expiry
+// tasks or free version collection tasks.
+func (e *expiryStats) NumWorkers() int32 {
+	return e.workers.Load()
+}
+
+// expiryState manages all ILM related expiration activities.
 type expiryState struct {
 	once                sync.Once
 	byDaysCh            chan expiryTask
 	byNewerNoncurrentCh chan newerNoncurrentTask
+	freeVersionCh       chan ObjectInfo
+	tierJournalCh       chan jentry
+	stats               expiryStats
 }
 
 // PendingTasks returns the number of pending ILM expiry tasks.
@@ -124,6 +159,30 @@ func (es *expiryState) close() {
 	})
 }
 
+// enqueueTierJournalEntry enqueues a tier journal entry referring to a remote
+// object corresponding to a 'replaced' object versions. This applies only to
+// non-versioned or version suspended buckets.
+func (es *expiryState) enqueueTierJournalEntry(je jentry) {
+	select {
+	case <-GlobalContext.Done():
+		es.close()
+	case es.tierJournalCh <- je:
+	default:
+		es.stats.missedTierJournalTasks.Add(1)
+	}
+}
+
+// enqueueFreeVersion enqueues a free version to be deleted
+func (es *expiryState) enqueueFreeVersion(oi ObjectInfo) {
+	select {
+	case <-GlobalContext.Done():
+		es.close()
+	case es.freeVersionCh <- oi:
+	default:
+		es.stats.missedFreeVersTasks.Add(1)
+	}
+}
+
 // enqueueByDays enqueues object versions expired by days for expiry.
 func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
 	select {
@@ -131,6 +190,7 @@ func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src l
 		es.close()
 	case es.byDaysCh <- expiryTask{objInfo: oi, event: event, src: src}:
 	default:
+		es.stats.missedExpiryTasks.Add(1)
 	}
 }
 
@@ -142,58 +202,142 @@ func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []Object
 		es.close()
 	case es.byNewerNoncurrentCh <- newerNoncurrentTask{bucket: bucket, versions: versions, event: lcEvent}:
 	default:
+		es.stats.missedFreeVersTasks.Add(1)
 	}
 }
 
-var globalExpiryState = newExpiryState()
+// globalExpiryState is the per-node instance which manages all ILM expiry tasks.
+var globalExpiryState *expiryState
 
+// newExpiryState creates an expiryState with buffered channels allocated for
+// each ILM expiry task type.
 func newExpiryState() *expiryState {
 	return &expiryState{
-		byDaysCh:            make(chan expiryTask, 100000),
-		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 100000),
+		byDaysCh:            make(chan expiryTask, 100_000),
+		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 100_000),
+		freeVersionCh:       make(chan ObjectInfo, 100_000),
+		tierJournalCh:       make(chan jentry, 100_000),
 	}
 }
 
-func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
-	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", strconv.Itoa((runtime.GOMAXPROCS(0)+1)/2)))
+// handleTasks handles 4 types of expiration tasks.
+// 1. Expiry of objects, includes regular and transitioned objects
+// 2. Expiry of noncurrent versions due to NewerNoncurrentVersions
+// 3. Expiry of free-versions, for remote objects of transitioned object which have been expired since.
+// 4. Expiry of remote objects corresponding to objects in a
+// non-versioned/version suspended buckets
+func (es *expiryState) handleTasks(ctx context.Context, objectAPI ObjectLayer) {
+	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", "100"))
 	if workerSize == 0 {
-		workerSize = 4
+		workerSize = 100
 	}
-	ewk, err := workers.New(workerSize)
+	wk, err := workers.New(workerSize)
 	if err != nil {
 		logger.LogIf(ctx, err)
 	}
+	defer wk.Wait()
 
-	nwk, err := workers.New(workerSize)
-	if err != nil {
-		logger.LogIf(ctx, err)
-	}
-
-	go func() {
-		for t := range globalExpiryState.byDaysCh {
-			ewk.Take()
+	for {
+		var (
+			et *expiryTask
+			nt *newerNoncurrentTask
+			ft *ObjectInfo
+			je *jentry
+		)
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-es.byDaysCh:
+			et = &t
+		case t := <-es.byNewerNoncurrentCh:
+			nt = &t
+		case t := <-es.freeVersionCh:
+			ft = &t
+		case t := <-es.tierJournalCh:
+			je = &t
+		}
+		switch {
+		case et != nil:
+			wk.Take()
+			es.stats.workers.Add(1)
 			go func(t expiryTask) {
-				defer ewk.Give()
+				defer func() {
+					es.stats.workers.Add(-1)
+					wk.Give()
+				}()
 				if t.objInfo.TransitionedObject.Status != "" {
 					applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.event, t.src)
 				} else {
 					applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.event, t.src)
 				}
-			}(t)
-		}
-		ewk.Wait()
-	}()
-
-	go func() {
-		for t := range globalExpiryState.byNewerNoncurrentCh {
-			nwk.Take()
+			}(*et)
+		case nt != nil:
+			wk.Take()
+			es.stats.workers.Add(1)
 			go func(t newerNoncurrentTask) {
-				defer nwk.Give()
+				defer func() {
+					wk.Give()
+					es.stats.workers.Add(-1)
+				}()
 				deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions, t.event)
-			}(t)
+			}(*nt)
+		case je != nil:
+			wk.Take()
+			es.stats.workers.Add(1)
+			go func(t jentry) {
+				defer func() {
+					wk.Give()
+					es.stats.workers.Add(-1)
+				}()
+				logger.LogIf(ctx, deleteObjectFromRemoteTier(ctx, je.ObjName, je.VersionID, je.TierName))
+			}(*je)
+		case ft != nil:
+			wk.Take()
+			es.stats.workers.Add(1)
+			go func(oi ObjectInfo) {
+				defer func() {
+					wk.Give()
+					es.stats.workers.Add(-1)
+				}()
+				traceFn := globalLifecycleSys.trace(oi)
+				if !oi.TransitionedObject.FreeVersion {
+					// nothing to be done
+					return
+				}
+
+				ignoreNotFoundErr := func(err error) error {
+					switch {
+					case isErrVersionNotFound(err), isErrObjectNotFound(err):
+						return nil
+					}
+					return err
+				}
+				// Remove the remote object
+				err := deleteObjectFromRemoteTier(ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
+				if ignoreNotFoundErr(err) != nil {
+					logger.LogIf(ctx, err)
+					return
+				}
+
+				// Remove this free version
+				_, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, ObjectOptions{
+					VersionID:        oi.VersionID,
+					InclFreeVersions: true,
+				})
+				if err == nil {
+					auditLogLifecycle(ctx, oi, ILMFreeVersionDelete, nil, traceFn)
+				}
+				if ignoreNotFoundErr(err) != nil {
+					logger.LogIf(ctx, err)
+				}
+			}(*ft)
 		}
-		nwk.Wait()
-	}()
+	}
+}
+
+func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
+	globalExpiryState = newExpiryState()
+	go globalExpiryState.handleTasks(ctx, objectAPI)
 }
 
 // newerNoncurrentTask encapsulates arguments required by worker to expire objects
@@ -417,18 +561,18 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		}
 		return err
 	}
-	// When an object is past expiry or when a transitioned object is being
-	// deleted, 'mark' the data in the remote tier for delete.
-	entry := jentry{
-		ObjName:   oi.TransitionedObject.Name,
-		VersionID: oi.TransitionedObject.VersionID,
-		TierName:  oi.TransitionedObject.Tier,
+
+	// Delete remote object from warm-tier
+	err := deleteObjectFromRemoteTier(ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
+	if err == nil {
+		// Skip adding free version since we successfully deleted the
+		// remote object
+		opts.SkipFreeVersion = true
+	} else {
+		logger.LogIf(ctx, err)
 	}
-	if err := globalTierJournal.AddEntry(entry); err != nil {
-		return err
-	}
-	// Delete metadata on source, now that data in remote tier has been
-	// marked for deletion.
+
+	// Now, delete object from hot-tier namespace
 	if _, err := objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, opts); err != nil {
 		return err
 	}
