@@ -899,7 +899,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					}
 					continue
 				}
-
 				if int64(cap(dst)) < hdr.Length+1 {
 					dst = make([]byte, 0, hdr.Length+hdr.Length>>3)
 				}
@@ -913,6 +912,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 				cancel(ErrDisconnected)
 				return
+			}
+			if cap(msg) > readBufferSize*8 {
+				// Don't keep too much memory around.
+				msg = nil
 			}
 
 			var err error
