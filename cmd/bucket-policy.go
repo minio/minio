@@ -66,6 +66,14 @@ func NewPolicySys() *PolicySys {
 	return &PolicySys{}
 }
 
+func getSTSConditionValues(r *http.Request, lc string, cred auth.Credentials) map[string][]string {
+	m := make(map[string][]string)
+	if d := r.Form.Get("DurationSeconds"); d != "" {
+		m["DurationSeconds"] = []string{d}
+	}
+	return m
+}
+
 func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[string][]string {
 	currTime := UTCNow()
 

@@ -493,6 +493,30 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		cred.ParentUser = base64.RawURLEncoding.EncodeToString(bs)
 	}
 
+	// Deny this assume role request if the policy that the user intends to bind
+	// has a sts:DurationSeconds condition, which is not satisfied as well
+	{
+		p := policyName
+		if p == "" {
+			var err error
+			_, p, err = globalIAMSys.GetRolePolicy(roleArnStr)
+			if err != nil {
+				writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, err)
+				return
+			}
+		}
+
+		if !globalIAMSys.doesPolicyAllow(p, policy.Args{
+			DenyOnly:        true,
+			Action:          policy.AssumeRoleWithWebIdentityAction,
+			ConditionValues: getSTSConditionValues(r, "", cred),
+			Claims:          cred.Claims,
+		}) {
+			writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, errors.New("this user does not have enough permission"))
+			return
+		}
+	}
+
 	// Set the newly generated credentials.
 	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName)
 	if err != nil {
