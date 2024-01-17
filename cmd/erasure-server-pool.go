@@ -1980,10 +1980,12 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 				bktNotFoundCount++
 			}
 		}
-		// if the bucket if not found on more than hslf the no of nodes, its dangling
+		// if the bucket is not found on more than half the no of nodes, its dangling
 		if bktNotFoundCount > nodeCount/2 {
 			opts.Remove = true
 		} else {
+			// explicitly set remove flag as false
+			opts.Remove = false
 			opts.Recreate = true
 		}
 
