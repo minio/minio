@@ -1931,76 +1931,12 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 }
 
 func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
-	r := madmin.HealResultItem{
-		Type:   madmin.HealItemBucket,
-		Bucket: bucket,
-	}
-
 	// Attempt heal on the bucket metadata, ignore any failures
 	hopts := opts
 	hopts.Recreate = false
 	defer z.HealObject(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, bucket, bucketMetadataFile), "", hopts)
 
-	type DiskStat struct {
-		VolInfos []VolInfo
-		Errs     []error
-	}
-
-	for _, pool := range z.serverPools {
-		// map of node wise disk stats
-		diskStats := make(map[string]DiskStat)
-		for _, set := range pool.sets {
-			for _, disk := range set.getDisks() {
-				if disk == OfflineDisk {
-					continue
-				}
-				vi, err := disk.StatVol(ctx, bucket)
-				hostName := disk.Hostname()
-				if disk.IsLocal() {
-					hostName = "local"
-				}
-				ds, ok := diskStats[hostName]
-				if !ok {
-					newds := DiskStat{
-						VolInfos: []VolInfo{vi},
-						Errs:     []error{err},
-					}
-					diskStats[hostName] = newds
-				} else {
-					ds.VolInfos = append(ds.VolInfos, vi)
-					ds.Errs = append(ds.Errs, err)
-					diskStats[hostName] = ds
-				}
-			}
-		}
-		nodeCount := len(diskStats)
-		bktNotFoundCount := 0
-		for _, ds := range diskStats {
-			if isAllBucketsNotFound(ds.Errs) {
-				bktNotFoundCount++
-			}
-		}
-		// if the bucket if not found on more than hslf the no of nodes, its dangling
-		if bktNotFoundCount > nodeCount/2 {
-			opts.Remove = true
-		} else {
-			opts.Recreate = true
-		}
-
-		result, err := z.s3Peer.HealBucket(ctx, bucket, opts)
-		if err != nil {
-			if _, ok := err.(BucketNotFound); ok {
-				continue
-			}
-			return result, err
-		}
-		r.DiskCount += result.DiskCount
-		r.SetCount += result.SetCount
-		r.Before.Drives = append(r.Before.Drives, result.Before.Drives...)
-		r.After.Drives = append(r.After.Drives, result.After.Drives...)
-	}
-
-	return r, nil
+	return z.s3Peer.HealBucket(ctx, bucket, opts)
 }
 
 // Walk a bucket, optionally prefix recursively, until we have returned
