@@ -287,7 +287,7 @@ func mergeServerCtxtFromConfigFile(args []string, configFile string, ctxt *serve
 	}
 
 	if cf.EnableExpandPools && len(cf.Pools) != 1 {
-		return fmt.Errorf("only one pool is supported for expansion")
+		return fmt.Errorf("only one pool should be expanded at a time")
 	}
 	if len(args) == 2 {
 		// restart now
