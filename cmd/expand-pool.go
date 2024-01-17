@@ -523,7 +523,7 @@ func (s *peerRESTServer) SyncExpandPoolsStatus(w http.ResponseWriter, r *http.Re
 		resp.Success = true
 	case PoolExpandStatusSetEnvToRestart:
 		if !reflect.DeepEqual(after, pools) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after not match")), r.URL)
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
 			return
 		}
 		setEnvToMinioArgs(fmt.Sprintf("%s %s",
