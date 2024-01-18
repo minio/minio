@@ -165,7 +165,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 					return errDiskNotFound
 				}
 				err := globalLocalDrives[index].DeleteVol(ctx, bucket, false)
-				if errors.Is(err, errVolumeNotEmpty) {
+				if !errors.Is(err, errVolumeNotEmpty) {
 					logger.LogOnceIf(ctx, fmt.Errorf("While deleting dangling Bucket (%s), Drive %s:%s returned an error (%w)",
 						bucket, globalLocalDrives[index].Hostname(), globalLocalDrives[index], err), "delete-dangling-bucket-"+bucket)
 				}
