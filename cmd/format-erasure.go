@@ -353,12 +353,6 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 		return errDiskNotFound
 	}
 
-	diskID := format.Erasure.This
-
-	if err := makeFormatErasureMetaVolumes(disk); err != nil {
-		return err
-	}
-
 	// Marshal and write to disk.
 	formatBytes, err := json.Marshal(format)
 	if err != nil {
@@ -383,7 +377,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 		return err
 	}
 
-	disk.SetDiskID(diskID)
+	disk.SetDiskID(format.Erasure.This)
 	if healID != "" {
 		ctx := context.Background()
 		ht := initHealingTracker(disk, healID)
@@ -812,21 +806,6 @@ func ecDrivesNoConfig(setDriveCount int) (int, error) {
 		return 0, err
 	}
 	return sc.GetParityForSC(storageclass.STANDARD), nil
-}
-
-// Make Erasure backend meta volumes.
-func makeFormatErasureMetaVolumes(disk StorageAPI) error {
-	if disk == nil {
-		return errDiskNotFound
-	}
-	volumes := []string{
-		minioMetaTmpDeletedBucket, // creates .minio.sys/tmp as well as .minio.sys/tmp/.trash
-		minioMetaMultipartBucket,  // creates .minio.sys/multipart
-		dataUsageBucket,           // creates .minio.sys/buckets
-		minioConfigBucket,         // creates .minio.sys/config
-	}
-	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(context.TODO(), volumes...)
 }
 
 // Initialize a new set of set formats which will be written to all disks.

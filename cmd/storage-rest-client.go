@@ -293,32 +293,17 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
 func (client *storageRESTClient) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolumes, strings.Join(volumes, ","))
-	respBody, err := client.call(ctx, storageRESTMethodMakeVolBulk, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	return errInvalidArgument
 }
 
 // MakeVol - create a volume on a remote disk.
 func (client *storageRESTClient) MakeVol(ctx context.Context, volume string) (err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	respBody, err := client.call(ctx, storageRESTMethodMakeVol, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	return errInvalidArgument
 }
 
 // ListVols - List all volumes on a remote disk.
 func (client *storageRESTClient) ListVols(ctx context.Context) (vols []VolInfo, err error) {
-	respBody, err := client.call(ctx, storageRESTMethodListVols, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer xhttp.DrainBody(respBody)
-	vinfos := VolsInfo(vols)
-	err = msgp.Decode(respBody, &vinfos)
-	return vinfos, err
+	return nil, errInvalidArgument
 }
 
 // StatVol - get volume info over the network.
@@ -337,14 +322,7 @@ func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vo
 
 // DeleteVol - Deletes a volume over the network.
 func (client *storageRESTClient) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	if forceDelete {
-		values.Set(storageRESTForceDelete, "true")
-	}
-	respBody, err := client.call(ctx, storageRESTMethodDeleteVol, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	return errInvalidArgument
 }
 
 // AppendFile - append to a file.

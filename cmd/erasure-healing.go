@@ -614,7 +614,10 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		// - Remove any remaining parts from outdated disks from before transition.
 		if recreate || partsMetadata[i].IsRemote() {
 			rmDataDir := partsMetadata[i].DataDir
-			disk.DeleteVol(ctx, pathJoin(bucket, encodeDirObject(object), rmDataDir), true)
+			disk.Delete(ctx, bucket, pathJoin(encodeDirObject(object), rmDataDir), DeleteOptions{
+				Immediate: true,
+				Recursive: true,
+			})
 		}
 
 		for i, v := range result.Before.Drives {
