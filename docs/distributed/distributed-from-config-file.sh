@@ -80,7 +80,7 @@ if [ "${expected_checksum}" != "${actual_checksum}" ]; then
 	exit
 fi
 
-# Compare the difference of the list of disks and their location, with the below exected output
+# Compare the difference of the list of disks and their location, with the below expected output
 diff <(./mc admin info minio1 --json | jq -r '.info.servers[].drives[] | "\(.pool_index),\(.set_index),\(.disk_index) \(.endpoint)"' | sort) <(
 	cat <<EOF
 0,0,0 http://localhost:9001/tmp/xl/node9001/mnt/disk1

@@ -723,7 +723,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// We have to establish a TLS connection and the
 	// client must provide exactly one client certificate.
 	// Otherwise, we don't have a certificate to verify or
-	// the policy lookup would ambigious.
+	// the policy lookup would ambiguous.
 	if r.TLS == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInsecureConnection, errors.New("No TLS connection attempt"))
 		return
@@ -732,7 +732,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// A client may send a certificate chain such that we end up
 	// with multiple peer certificates. However, we can only accept
 	// a single client certificate. Otherwise, the certificate to
-	// policy mapping would be ambigious.
+	// policy mapping would be ambiguous.
 	// However, we can filter all CA certificates and only check
 	// whether they client has sent exactly one (non-CA) leaf certificate.
 	peerCertificates := make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))

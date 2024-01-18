@@ -249,7 +249,7 @@ func (f Filter) TestTags(userTags string) bool {
 	return false
 }
 
-// BySize returns true if sz satisifies one of ObjectSizeGreaterThan,
+// BySize returns true if sz satisfies one of ObjectSizeGreaterThan,
 // ObjectSizeLessThan predicates or a combination of them via And.
 func (f Filter) BySize(sz int64) bool {
 	if f.ObjectSizeGreaterThan > 0 &&

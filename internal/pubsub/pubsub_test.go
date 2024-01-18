@@ -194,7 +194,7 @@ func TestMultiPubSubMask(t *testing.T) {
 
 	select {
 	case msg := <-ch3:
-		t.Fatalf(fmt.Sprintf("unexpect msg, f got %s", msg))
+		t.Fatalf(fmt.Sprintf("unexpected msg, f got %s", msg))
 	default:
 	}
 }

@@ -295,7 +295,7 @@ var copyBufPool = sync.Pool{
 	},
 }
 
-// Copy is exactly like io.Copy but with re-usable buffers.
+// Copy is exactly like io.Copy but with reusable buffers.
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
 	bufp := copyBufPool.Get().(*[]byte)
 	buf := *bufp

@@ -108,7 +108,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.Heal
 		partial: func(entries metaCacheEntries, _ []error) {
 			entry, ok := entries.resolve(&resolver)
 			if !ok {
-				// check if we can get one entry atleast
+				// check if we can get one entry at least
 				// proceed to heal nonetheless.
 				entry, _ = entries.firstFound()
 			}

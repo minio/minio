@@ -58,7 +58,7 @@ func (ssec) IsRequested(h http.Header) bool {
 }
 
 // IsEncrypted returns true if the metadata contains an SSE-C
-// entry inidicating that the object has been encrypted using
+// entry indicating that the object has been encrypted using
 // SSE-C.
 func (ssec) IsEncrypted(metadata map[string]string) bool {
 	if _, ok := metadata[MetaSealedKeySSEC]; ok {
