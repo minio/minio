@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v34" // Add metrics flag to LocalStorageInfo call
+	peerRESTVersion = "v35" // Add new service restart behavior
 
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
@@ -108,6 +108,8 @@ const (
 	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"
 	peerRESTMetrics        = "metrics"
+	peerRESTDryRun         = "dry-run"
+	peerRESTForce          = "force"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

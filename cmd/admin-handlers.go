@@ -227,8 +227,6 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 // ServiceHandler - POST /minio/admin/v3/service?action={action}
 // ----------
 // Supports following actions:
-// - restart (restarts all the MinIO instances in a setup)
-// - stop (stops all the MinIO instances in a setup)
 // - freeze (freezes all incoming S3 API calls)
 // - unfreeze (unfreezes previously frozen S3 API calls)
 func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +236,85 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	action := vars["action"]
 
 	var serviceSig serviceSignal
-	switch madmin.ServiceAction(action) {
+	switch act := madmin.ServiceAction(action); act {
+	case madmin.ServiceActionFreeze:
+		serviceSig = serviceFreeze
+	case madmin.ServiceActionUnfreeze:
+		serviceSig = serviceUnFreeze
+	default:
+		process := act == madmin.ServiceActionRestart || act == madmin.ServiceActionStop
+		if process {
+			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
+			apiErr.Description = "process actions are not supported via this API anymore, please upgrade 'mc' or madmin-go to use ServiceV2() API"
+			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+			return
+		}
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		return
+	}
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServiceFreezeAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	// Notify all other MinIO peers signal service.
+	for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
+		if nerr.Err != nil {
+			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
+			logger.LogIf(ctx, nerr.Err)
+		}
+	}
+
+	// Reply to the client before restarting, stopping MinIO server.
+	writeSuccessResponseHeadersOnly(w)
+
+	switch serviceSig {
+	case serviceFreeze:
+		freezeServices()
+	case serviceUnFreeze:
+		unfreezeServices()
+	}
+}
+
+type servicePeerResult struct {
+	Host          string                 `json:"host"`
+	Err           string                 `json:"err,omitempty"`
+	WaitingDrives map[string]DiskMetrics `json:"waitingDrives,omitempty"`
+}
+
+type serviceResult struct {
+	Action  madmin.ServiceAction `json:"action"`
+	Forced  bool                 `json:"forced"`
+	DryRun  bool                 `json:"dryRun"`
+	Results []servicePeerResult  `json:"results,omitempty"`
+}
+
+// ServiceV2Handler - POST /minio/admin/v3/service?action={action}&type=2
+// ----------
+// Supports following actions:
+// - restart (restarts all the MinIO instances in a setup)
+// - stop (stops all the MinIO instances in a setup)
+// - freeze (freezes all incoming S3 API calls)
+// - unfreeze (unfreezes previously frozen S3 API calls)
+//
+// This newer API now returns back status per remote peer and local regarding
+// if a "restart/stop" was successful or not. Service signal now supports
+// a dry-run that helps skip the nodes that may have hung drives. By default
+// restart/stop will ignore the servers that are hung on drives. You can use
+// 'force' param to force restart even with hung drives if needed.
+func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	vars := mux.Vars(r)
+	action := vars["action"]
+	dryRun := r.Form.Get("dry-run") == "true"
+	force := r.Form.Get("force") == "true"
+
+	var serviceSig serviceSignal
+	act := madmin.ServiceAction(action)
+	switch act {
 	case madmin.ServiceActionRestart:
 		serviceSig = serviceRestart
 	case madmin.ServiceActionStop:
@@ -267,15 +343,57 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Notify all other MinIO peers signal service.
-	for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
-		if nerr.Err != nil {
-			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+	nerrs := globalNotificationSys.SignalServiceV2(serviceSig, dryRun, force)
+	srvResult := serviceResult{Action: act, Results: make([]servicePeerResult, 0, len(nerrs))}
+
+	process := act == madmin.ServiceActionRestart || act == madmin.ServiceActionStop
+	var trigger bool
+	if process {
+		localhost := globalLocalNodeName
+		if globalLocalNodeName == "" {
+			localhost = "127.0.0.1"
 		}
+		waitingDrives := canWeRestartNode()
+		srvResult.Results = append(srvResult.Results, servicePeerResult{
+			Host:          localhost,
+			WaitingDrives: waitingDrives,
+		})
+		trigger = len(waitingDrives) == 0 || force
+	}
+
+	for _, nerr := range nerrs {
+		if nerr.Err != nil && process {
+			waitingDrives := map[string]DiskMetrics{}
+			jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
+			if jerr == nil {
+				srvResult.Results = append(srvResult.Results, servicePeerResult{
+					Host:          nerr.Host.String(),
+					WaitingDrives: waitingDrives,
+				})
+				continue
+			}
+		}
+		errStr := ""
+		if nerr.Err != nil {
+			errStr = nerr.Err.Error()
+		}
+		srvResult.Results = append(srvResult.Results, servicePeerResult{
+			Host: nerr.Host.String(),
+			Err:  errStr,
+		})
+	}
+
+	srvResult.Forced = force
+	srvResult.DryRun = dryRun
+
+	buf, err := json.Marshal(srvResult)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
 	}
 
 	// Reply to the client before restarting, stopping MinIO server.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessResponseJSON(w, buf)
 
 	switch serviceSig {
 	case serviceFreeze:
@@ -283,7 +401,9 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	case serviceUnFreeze:
 		unfreezeServices()
 	case serviceRestart, serviceStop:
-		globalServiceSignalCh <- serviceSig
+		if !dryRun && trigger {
+			globalServiceSignalCh <- serviceSig
+		}
 	}
 }
 
