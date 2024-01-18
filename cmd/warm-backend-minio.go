@@ -38,7 +38,7 @@ var _ WarmBackend = (*warmBackendMinIO)(nil)
 func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO, error) {
 	// Validation of credentials
 	if conf.AccessKey == "" || conf.SecretKey == "" {
-		return nil, errors.New("both access and secret keys are requied")
+		return nil, errors.New("both access and secret keys are required")
 	}
 
 	if conf.Bucket == "" {

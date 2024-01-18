@@ -2260,7 +2260,7 @@ const (
 	vmware = "VMWare"
 )
 
-// HealthOptions takes input options to return sepcific information
+// HealthOptions takes input options to return specific information
 type HealthOptions struct {
 	Maintenance    bool
 	DeploymentType string
@@ -2435,7 +2435,7 @@ func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, obje
 	}
 
 	opts.MetadataChg = true
-	// We don't know the size here set 1GiB atleast.
+	// We don't know the size here set 1GiB at least.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2453,7 +2453,7 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 
 	opts.MetadataChg = true
 
-	// We don't know the size here set 1GiB atleast.
+	// We don't know the size here set 1GiB at least.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err

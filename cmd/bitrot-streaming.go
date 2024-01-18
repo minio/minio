@@ -134,7 +134,7 @@ func (b *streamingBitrotReader) Close() error {
 		return nil
 	}
 	if closer, ok := b.rc.(io.Closer); ok {
-		// drain the body for connection re-use at network layer.
+		// drain the body for connection reuse at network layer.
 		xhttp.DrainBody(struct {
 			io.Reader
 			io.Closer

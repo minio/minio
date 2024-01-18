@@ -89,7 +89,7 @@ func (a And) ContainsDuplicateTag() bool {
 }
 
 // BySize returns true when sz satisfies a
-// ObjectSizeLessThan/ObjectSizeGreaterthan or a logial AND of these predicates
+// ObjectSizeLessThan/ObjectSizeGreaterthan or a logical AND of these predicates
 // Note: And combines size and other predicates like Tags, Prefix, etc. This
 // method applies exclusively to size predicates only.
 func (a And) BySize(sz int64) bool {

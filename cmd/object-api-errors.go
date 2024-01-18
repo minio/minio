@@ -539,7 +539,7 @@ func (e ObjectNameTooLong) Error() string {
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNamePrefixAsSlash) Error() string {
-	return "Object name contains forward slash as pefix: " + e.Bucket + "/" + e.Object
+	return "Object name contains forward slash as prefix: " + e.Bucket + "/" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled

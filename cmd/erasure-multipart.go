@@ -103,7 +103,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	return fi, partsMetadata, err
 }
 
-// Removes part.meta given by partName belonging to a mulitpart upload from minioMetaBucket
+// Removes part.meta given by partName belonging to a multipart upload from minioMetaBucket
 func (er erasureObjects) removePartMeta(bucket, object, uploadID, dataDir string, partNumber int) {
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 	curpartPath := pathJoin(uploadIDPath, dataDir, fmt.Sprintf("part.%d", partNumber))
@@ -127,7 +127,7 @@ func (er erasureObjects) removePartMeta(bucket, object, uploadID, dataDir string
 	g.Wait()
 }
 
-// Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
+// Removes part given by partName belonging to a multipart upload from minioMetaBucket
 func (er erasureObjects) removeObjectPart(bucket, object, uploadID, dataDir string, partNumber int) {
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 	curpartPath := pathJoin(uploadIDPath, dataDir, fmt.Sprintf("part.%d", partNumber))
@@ -656,7 +656,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	var buffer []byte
 	switch size := data.Size(); {
 	case size == 0:
-		buffer = make([]byte, 1) // Allocate atleast a byte to reach EOF
+		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
 	case size == -1:
 		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
 			// Account for padding and forced compression overhead and encryption.

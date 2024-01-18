@@ -74,7 +74,7 @@ func GenerateIV(random io.Reader) (iv [32]byte) {
 // SealedKey represents a sealed object key. It can be stored
 // at an untrusted location.
 type SealedKey struct {
-	Key       [64]byte // The encrypted and authenticted object-key.
+	Key       [64]byte // The encrypted and authenticated object-key.
 	IV        [32]byte // The random IV used to encrypt the object-key.
 	Algorithm string   // The sealing algorithm used to encrypt the object key.
 }
