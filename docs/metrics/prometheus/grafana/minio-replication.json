@@ -1150,7 +1150,7 @@
             "uid": "Prometheus"
           },
           "exemplar": true,
-          "expr": "sum by (server,enpoint) (minio_cluster_replication_link_offline_duration_seconds{job=\"$scrape_jobs\"})",
+          "expr": "sum by (server,endpoint) (minio_cluster_replication_link_offline_duration_seconds{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "legendFormat": "{{server,endpoint}}",
           "refId": "A"

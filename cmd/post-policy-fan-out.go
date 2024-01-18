@@ -40,7 +40,7 @@ type fanOutOptions struct {
 }
 
 // fanOutPutObject takes an input source reader and fans out multiple PUT operations
-// based on the incoming fan-out request, a context cancelation by the caller
+// based on the incoming fan-out request, a context cancellation by the caller
 // would ensure all fan-out operations are canceled.
 func fanOutPutObject(ctx context.Context, bucket string, objectAPI ObjectLayer, fanOutEntries []minio.PutObjectFanOutEntry, fanOutBuf []byte, opts fanOutOptions) ([]ObjectInfo, []error) {
 	errs := make([]error, len(fanOutEntries))

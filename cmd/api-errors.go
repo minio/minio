@@ -959,7 +959,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationBandwidthLimitError: {
 		Code:           "XMinioAdminReplicationBandwidthLimitError",
-		Description:    "Bandwidth limit for remote target must be atleast 100MBps",
+		Description:    "Bandwidth limit for remote target must be at least 100MBps",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationNoExistingObjects: {

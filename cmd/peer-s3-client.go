@@ -164,6 +164,7 @@ func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin
 	opts.Remove = isAllBucketsNotFound(poolErrs)
 	opts.Recreate = !opts.Remove
 
+	g = errgroup.WithNErrs(len(sys.peerClients))
 	healBucketResults := make([]madmin.HealResultItem, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		idx := idx

@@ -44,7 +44,7 @@ import (
 //   bucket: mybucket # Bucket where this batch job will expire matching objects from
 //   prefix: myprefix # (Optional) Prefix under which this job will expire objects matching the rules below.
 //   rules:
-//     - type: object  # regular objects with zero ore more older versions
+//     - type: object  # regular objects with zero or more older versions
 //       name: NAME # match object names that satisfy the wildcard expression.
 //       olderThan: 70h # match objects older than this value
 //       createdBefore: "2006-01-02T15:04:05.00Z" # match objects created before "date"
@@ -558,7 +558,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
 			case <-ctx.Done():
-				// persist in-memory state immediately before exiting due to context cancelation.
+				// persist in-memory state immediately before exiting due to context cancellation.
 				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
 

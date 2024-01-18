@@ -664,7 +664,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
-	// Limit the reader, so the decryptor doesnt receive bytes
+	// Limit the reader, so the decryptor doesn't receive bytes
 	// from the next part (different DARE stream)
 	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
 	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum)
@@ -751,7 +751,7 @@ func (o ObjectInfo) DecryptedSize() (int64, error) {
 // However, DecryptETag does not try to decrypt the ETag if
 // it consists of a 128 bit hex value (32 hex chars) and exactly
 // one '-' followed by a 32-bit number.
-// This special case adresses randomly-generated ETags generated
+// This special case addresses randomly-generated ETags generated
 // by the MinIO server when running in non-compat mode. These
 // random ETags are not encrypt.
 //

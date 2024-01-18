@@ -30,7 +30,7 @@ expire: # Expire objects that match a condition
   bucket: mybucket # Bucket where this batch job will expire matching objects from
   prefix: myprefix # (Optional) Prefix under which this job will expire objects matching the rules below.
   rules:
-    - type: object  # regular objects with zero ore more older versions
+    - type: object  # regular objects with zero or more older versions
       name: NAME # match object names that satisfy the wildcard expression.
       olderThan: 70h # match objects older than this value
       createdBefore: "2006-01-02T15:04:05.00Z" # match objects created before "date"

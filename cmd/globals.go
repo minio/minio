@@ -296,7 +296,7 @@ var (
 	// Global server's network statistics
 	globalConnStats = newConnStats()
 
-	// Global HTTP request statisitics
+	// Global HTTP request statistics
 	globalHTTPStats = newHTTPStats()
 
 	// Global bucket network and API statistics

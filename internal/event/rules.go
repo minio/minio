@@ -99,7 +99,7 @@ func (rules Rules) Union(rules2 Rules) Rules {
 	return nrules
 }
 
-// Difference - returns diffrence with given rules as new rules.
+// Difference - returns difference with given rules as new rules.
 func (rules Rules) Difference(rules2 Rules) Rules {
 	nrules := make(Rules)
 

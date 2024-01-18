@@ -72,7 +72,7 @@ type ManagerOptions struct {
 	Hosts        []string                    // All hosts, including local in the grid.
 	AddAuth      AuthFn                      // Add authentication to the given audience.
 	AuthRequest  func(r *http.Request) error // Validate incoming requests.
-	TLSConfig    *tls.Config                 // TLS to apply to the connnections.
+	TLSConfig    *tls.Config                 // TLS to apply to the connections.
 	Incoming     func(n int64)               // Record incoming bytes.
 	Outgoing     func(n int64)               // Record outgoing bytes.
 	BlockConnect chan struct{}               // If set, incoming and outgoing connections will be blocked until closed.

@@ -483,7 +483,7 @@ func TestGetErasureID(t *testing.T) {
 
 	formats[2].ID = "bad-id"
 	if _, err = formatErasureGetDeploymentID(quorumFormat, formats); !errors.Is(err, errCorruptedFormat) {
-		t.Fatalf("Unexpect error %s", err)
+		t.Fatalf("Unexpected error %s", err)
 	}
 }
 

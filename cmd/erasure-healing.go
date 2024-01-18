@@ -108,7 +108,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.Heal
 		partial: func(entries metaCacheEntries, _ []error) {
 			entry, ok := entries.resolve(&resolver)
 			if !ok {
-				// check if we can get one entry atleast
+				// check if we can get one entry at least
 				// proceed to heal nonetheless.
 				entry, _ = entries.firstFound()
 			}
@@ -614,7 +614,10 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		// - Remove any remaining parts from outdated disks from before transition.
 		if recreate || partsMetadata[i].IsRemote() {
 			rmDataDir := partsMetadata[i].DataDir
-			disk.DeleteVol(ctx, pathJoin(bucket, encodeDirObject(object), rmDataDir), true)
+			disk.Delete(ctx, bucket, pathJoin(encodeDirObject(object), rmDataDir), DeleteOptions{
+				Immediate: true,
+				Recursive: true,
+			})
 		}
 
 		for i, v := range result.Before.Drives {

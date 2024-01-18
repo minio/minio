@@ -31,7 +31,7 @@ export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl
 ```
 
 > You can choose an arbitrary name for the key - instead of `my-minio-key`.
-> Please note that loosing the `MINIO_KMS_SECRET_KEY` will cause data loss
+> Please note that losing the `MINIO_KMS_SECRET_KEY` will cause data loss
 > since you will not be able to decrypt the IAM/configuration data anymore.
 For distributed MinIO deployments, specify the *same* `MINIO_KMS_SECRET_KEY` for each MinIO server process.
 

@@ -107,7 +107,7 @@ The returned user's DN and their password are then verified with the LDAP server
 
 ### Group membership search
 
-MinIO can be optionally configured to find the groups of a user from AD/LDAP by specifying the folllowing variables:
+MinIO can be optionally configured to find the groups of a user from AD/LDAP by specifying the following variables:
 
 ```
 MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"

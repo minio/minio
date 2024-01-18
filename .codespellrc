@@ -1,0 +1,8 @@
+
+[codespell]
+# certs_test.go - has lots of ceritificates.
+skip = go.mod,go.sum,*.txt,LICENSE,*.zip,.git,*.pdf,*.svg,.codespellrc,CREDITS,certs_test.go
+check-hidden = true
+ignore-regex = \b(newfolder/afile|filterIn|HelpES)\b
+ignore-words-list = inout,bui,to,bu,te,ot,toi,ist,parms,flate
+
