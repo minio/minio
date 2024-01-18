@@ -1715,18 +1715,18 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) 
 				Value:          float64(b.GetCumulativeCount()),
 			}
 			metrics = append(metrics, metric)
-			// add metrics with +Inf label
-			labels1 := make(map[string]string)
-			for _, lp := range dtoMetric.GetLabel() {
-				labels1[*lp.Name] = *lp.Value
-			}
-			labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
-			metrics = append(metrics, Metric{
-				Description:    desc,
-				VariableLabels: labels1,
-				Value:          float64(b.GetCumulativeCount()),
-			})
 		}
+		// add metrics with +Inf label
+		labels1 := make(map[string]string)
+		for _, lp := range dtoMetric.GetLabel() {
+			labels1[*lp.Name] = *lp.Value
+		}
+		labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
+		metrics = append(metrics, Metric{
+			Description:    desc,
+			VariableLabels: labels1,
+			Value:          dtoMetric.Counter.GetValue(),
+		})
 	}
 	return metrics
 }
