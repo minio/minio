@@ -1681,8 +1681,8 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 29 {
-		err = msgp.ArrayError{Wanted: 29, Got: zb0001}
+	if zb0001 != 30 {
+		err = msgp.ArrayError{Wanted: 30, Got: zb0001}
 		return
 	}
 	z.Volume, err = dc.ReadString()
@@ -1709,6 +1709,42 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	if err != nil {
 		err = msgp.WrapError(err, "Deleted")
 		return
+	}
+	var field []byte
+	_ = field
+	var zb0002 uint32
+	zb0002, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err, "PurgeState")
+		return
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err, "PurgeState")
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "status":
+			err = z.PurgeState.Status.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "PurgeState", "Status")
+				return
+			}
+		case "deletedAt":
+			z.PurgeState.DeletedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "PurgeState", "DeletedAt")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err, "PurgeState")
+				return
+			}
+		}
 	}
 	z.TransitionStatus, err = dc.ReadString()
 	if err != nil {
@@ -1765,21 +1801,21 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "WrittenByVersion")
 		return
 	}
-	var zb0002 uint32
-	zb0002, err = dc.ReadMapHeader()
+	var zb0003 uint32
+	zb0003, err = dc.ReadMapHeader()
 	if err != nil {
 		err = msgp.WrapError(err, "Metadata")
 		return
 	}
 	if z.Metadata == nil {
-		z.Metadata = make(map[string]string, zb0002)
+		z.Metadata = make(map[string]string, zb0003)
 	} else if len(z.Metadata) > 0 {
 		for key := range z.Metadata {
 			delete(z.Metadata, key)
 		}
 	}
-	for zb0002 > 0 {
-		zb0002--
+	for zb0003 > 0 {
+		zb0003--
 		var za0001 string
 		var za0002 string
 		za0001, err = dc.ReadString()
@@ -1794,16 +1830,16 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		z.Metadata[za0001] = za0002
 	}
-	var zb0003 uint32
-	zb0003, err = dc.ReadArrayHeader()
+	var zb0004 uint32
+	zb0004, err = dc.ReadArrayHeader()
 	if err != nil {
 		err = msgp.WrapError(err, "Parts")
 		return
 	}
-	if cap(z.Parts) >= int(zb0003) {
-		z.Parts = (z.Parts)[:zb0003]
+	if cap(z.Parts) >= int(zb0004) {
+		z.Parts = (z.Parts)[:zb0004]
 	} else {
-		z.Parts = make([]ObjectPartInfo, zb0003)
+		z.Parts = make([]ObjectPartInfo, zb0004)
 	}
 	for za0003 := range z.Parts {
 		err = z.Parts[za0003].DecodeMsg(dc)
@@ -1890,8 +1926,8 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 29
-	err = en.Append(0xdc, 0x0, 0x1d)
+	// array header, size 30
+	err = en.Append(0xdc, 0x0, 0x1e)
 	if err != nil {
 		return
 	}
@@ -1918,6 +1954,27 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteBool(z.Deleted)
 	if err != nil {
 		err = msgp.WrapError(err, "Deleted")
+		return
+	}
+	// map header, size 2
+	// write "status"
+	err = en.Append(0x82, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73)
+	if err != nil {
+		return
+	}
+	err = z.PurgeState.Status.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "PurgeState", "Status")
+		return
+	}
+	// write "deletedAt"
+	err = en.Append(0xa9, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.PurgeState.DeletedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "PurgeState", "DeletedAt")
 		return
 	}
 	err = en.WriteString(z.TransitionStatus)
@@ -2079,13 +2136,24 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 29
-	o = append(o, 0xdc, 0x0, 0x1d)
+	// array header, size 30
+	o = append(o, 0xdc, 0x0, 0x1e)
 	o = msgp.AppendString(o, z.Volume)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendString(o, z.VersionID)
 	o = msgp.AppendBool(o, z.IsLatest)
 	o = msgp.AppendBool(o, z.Deleted)
+	// map header, size 2
+	// string "status"
+	o = append(o, 0x82, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73)
+	o, err = z.PurgeState.Status.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "PurgeState", "Status")
+		return
+	}
+	// string "deletedAt"
+	o = append(o, 0xa9, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.PurgeState.DeletedAt)
 	o = msgp.AppendString(o, z.TransitionStatus)
 	o = msgp.AppendString(o, z.TransitionedObjName)
 	o = msgp.AppendString(o, z.TransitionTier)
@@ -2148,8 +2216,8 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 29 {
-		err = msgp.ArrayError{Wanted: 29, Got: zb0001}
+	if zb0001 != 30 {
+		err = msgp.ArrayError{Wanted: 30, Got: zb0001}
 		return
 	}
 	z.Volume, bts, err = msgp.ReadStringBytes(bts)
@@ -2176,6 +2244,42 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	if err != nil {
 		err = msgp.WrapError(err, "Deleted")
 		return
+	}
+	var field []byte
+	_ = field
+	var zb0002 uint32
+	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "PurgeState")
+		return
+	}
+	for zb0002 > 0 {
+		zb0002--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "PurgeState")
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "status":
+			bts, err = z.PurgeState.Status.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PurgeState", "Status")
+				return
+			}
+		case "deletedAt":
+			z.PurgeState.DeletedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PurgeState", "DeletedAt")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PurgeState")
+				return
+			}
+		}
 	}
 	z.TransitionStatus, bts, err = msgp.ReadStringBytes(bts)
 	if err != nil {
@@ -2232,23 +2336,23 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "WrittenByVersion")
 		return
 	}
-	var zb0002 uint32
-	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 uint32
+	zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Metadata")
 		return
 	}
 	if z.Metadata == nil {
-		z.Metadata = make(map[string]string, zb0002)
+		z.Metadata = make(map[string]string, zb0003)
 	} else if len(z.Metadata) > 0 {
 		for key := range z.Metadata {
 			delete(z.Metadata, key)
 		}
 	}
-	for zb0002 > 0 {
+	for zb0003 > 0 {
 		var za0001 string
 		var za0002 string
-		zb0002--
+		zb0003--
 		za0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Metadata")
@@ -2261,16 +2365,16 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		z.Metadata[za0001] = za0002
 	}
-	var zb0003 uint32
-	zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	var zb0004 uint32
+	zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Parts")
 		return
 	}
-	if cap(z.Parts) >= int(zb0003) {
-		z.Parts = (z.Parts)[:zb0003]
+	if cap(z.Parts) >= int(zb0004) {
+		z.Parts = (z.Parts)[:zb0004]
 	} else {
-		z.Parts = make([]ObjectPartInfo, zb0003)
+		z.Parts = make([]ObjectPartInfo, zb0004)
 	}
 	for za0003 := range z.Parts {
 		bts, err = z.Parts[za0003].UnmarshalMsg(bts)
@@ -2350,7 +2454,7 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *FileInfo) Msgsize() (s int) {
-	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.StringPrefixSize + len(z.TransitionVersionID) + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.Uint64Size + msgp.MapHeaderSize
+	s = 3 + msgp.StringPrefixSize + len(z.Volume) + msgp.StringPrefixSize + len(z.Name) + msgp.StringPrefixSize + len(z.VersionID) + msgp.BoolSize + msgp.BoolSize + 1 + 7 + z.PurgeState.Status.Msgsize() + 10 + msgp.TimeSize + msgp.StringPrefixSize + len(z.TransitionStatus) + msgp.StringPrefixSize + len(z.TransitionedObjName) + msgp.StringPrefixSize + len(z.TransitionTier) + msgp.StringPrefixSize + len(z.TransitionVersionID) + msgp.BoolSize + msgp.StringPrefixSize + len(z.DataDir) + msgp.BoolSize + msgp.TimeSize + msgp.Int64Size + msgp.Uint32Size + msgp.Uint64Size + msgp.MapHeaderSize
 	if z.Metadata != nil {
 		for za0001, za0002 := range z.Metadata {
 			_ = za0002
@@ -3018,6 +3122,138 @@ func (z *MetadataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MetadataHandlerParams) Msgsize() (s int) {
 	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 3 + 1 + 3 + msgp.BoolSize + 3 + z.FI.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *PurgeState) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "status":
+			err = z.Status.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Status")
+				return
+			}
+		case "deletedAt":
+			z.DeletedAt, err = dc.ReadTime()
+			if err != nil {
+				err = msgp.WrapError(err, "DeletedAt")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *PurgeState) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 2
+	// write "status"
+	err = en.Append(0x82, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73)
+	if err != nil {
+		return
+	}
+	err = z.Status.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Status")
+		return
+	}
+	// write "deletedAt"
+	err = en.Append(0xa9, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x41, 0x74)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.DeletedAt)
+	if err != nil {
+		err = msgp.WrapError(err, "DeletedAt")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *PurgeState) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "status"
+	o = append(o, 0x82, 0xa6, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73)
+	o, err = z.Status.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Status")
+		return
+	}
+	// string "deletedAt"
+	o = append(o, 0xa9, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64, 0x41, 0x74)
+	o = msgp.AppendTime(o, z.DeletedAt)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *PurgeState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "status":
+			bts, err = z.Status.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Status")
+				return
+			}
+		case "deletedAt":
+			z.DeletedAt, bts, err = msgp.ReadTimeBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DeletedAt")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *PurgeState) Msgsize() (s int) {
+	s = 1 + 7 + z.Status.Msgsize() + 10 + msgp.TimeSize
 	return
 }
 

@@ -81,7 +81,8 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 
 		// Prefer `nil` over other error values with the same
 		// number of occurrences.
-		case max == count && err == nil:
+		// treat errPurgePending as nil, applicable only to permanent deletes
+		case max == count && (err == nil || errors.Is(err, errPurgePending)):
 			maxErr = err
 		}
 	}

@@ -60,15 +60,17 @@ type versionsHistogram [dataUsageVersionLen]uint64
 type dataUsageEntry struct {
 	Children dataUsageHashMap `msg:"ch"`
 	// These fields do no include any children.
-	Size             int64                `msg:"sz"`
-	Objects          uint64               `msg:"os"`
-	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
-	DeleteMarkers    uint64               `msg:"dms"`
-	ObjSizes         sizeHistogram        `msg:"szs"`
-	ObjVersions      versionsHistogram    `msg:"vh"`
-	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
-	AllTierStats     *allTierStats        `msg:"ats,omitempty"`
-	Compacted        bool                 `msg:"c"`
+	Size                int64                `msg:"sz"`
+	Objects             uint64               `msg:"os"`
+	Versions            uint64               `msg:"vs"` // Versions that are not delete markers.
+	DeleteMarkers       uint64               `msg:"dms"`
+	ObjSizes            sizeHistogram        `msg:"szs"`
+	ObjVersions         versionsHistogram    `msg:"vh"`
+	ReplicationStats    *replicationAllStats `msg:"rs,omitempty"`
+	AllTierStats        *allTierStats        `msg:"ats,omitempty"`
+	Compacted           bool                 `msg:"c"`
+	PendingCleanupCount int64                `msg:"pc"`
+	PendingCleanupSize  int64                `msg:"ps"`
 }
 
 // allTierStats is a collection of per-tier stats across all configured remote
@@ -282,14 +284,30 @@ type dataUsageEntryV7 struct {
 	Compacted        bool                 `msg:"c"`
 }
 
+type dataUsageEntryV8 struct {
+	Children dataUsageHashMap `msg:"ch"`
+	// These fields do no include any children.
+	Size                int64                `msg:"sz"`
+	Objects             uint64               `msg:"os"`
+	Versions            uint64               `msg:"vs"` // Versions that are not delete markers.
+	DeleteMarkers       uint64               `msg:"dms"`
+	ObjSizes            sizeHistogramV1      `msg:"szs"`
+	ObjVersions         versionsHistogram    `msg:"vh"`
+	ReplicationStats    *replicationAllStats `msg:"rs,omitempty"`
+	AllTierStats        *allTierStats        `msg:"ats,omitempty"`
+	Compacted           bool                 `msg:"c"`
+	PendingCleanupCount int64                `msg:"pc"`
+	PendingCleanupSize  int64                `msg:"ps"`
+}
+
 // dataUsageCache contains a cache of data usage entries latest version.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
 	Cache map[string]dataUsageEntry
 }
 
-//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6 dataUsageCacheV7
-//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6 dataUsageCacheV7
+//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6 dataUsageCacheV7 dataUsageCacheV8
+//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6 dataUsageCacheV7 dataUsageCacheV8
 
 // dataUsageCacheV2 contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
@@ -325,6 +343,12 @@ type dataUsageCacheV6 struct {
 type dataUsageCacheV7 struct {
 	Info  dataUsageCacheInfo
 	Cache map[string]dataUsageEntryV7
+}
+
+// dataUsageCacheV8 contains a cache of data usage entries version 8.
+type dataUsageCacheV8 struct {
+	Info  dataUsageCacheInfo
+	Cache map[string]dataUsageEntryV8
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -389,6 +413,8 @@ func (e *dataUsageEntry) addSizes(summary sizeSummary) {
 		}
 		e.AllTierStats.addSizes(summary.tiers)
 	}
+	e.PendingCleanupCount += summary.pendingCleanupCount
+	e.PendingCleanupSize += summary.pendingCleanupSize
 }
 
 // merge other data usage entry into this, excluding children.
@@ -432,6 +458,8 @@ func (e *dataUsageEntry) merge(other dataUsageEntry) {
 		}
 		e.AllTierStats.merge(other.AllTierStats)
 	}
+	e.PendingCleanupCount += other.PendingCleanupCount
+	e.PendingCleanupSize += other.PendingCleanupSize
 }
 
 // mod returns true if the hash mod cycles == cycle.
@@ -872,6 +900,8 @@ func (d *dataUsageCache) bucketsUsageInfo(buckets []BucketInfo) map[string]Bucke
 			DeleteMarkersCount:      flat.DeleteMarkers,
 			ObjectSizesHistogram:    flat.ObjSizes.toMap(),
 			ObjectVersionsHistogram: flat.ObjVersions.toMap(),
+			PendingCleanupCount:     flat.PendingCleanupCount,
+			PendingCleanupSize:      flat.PendingCleanupSize,
 		}
 		if flat.ReplicationStats != nil {
 			bui.ReplicaSize = flat.ReplicationStats.ReplicaSize
@@ -1083,7 +1113,8 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
 const (
-	dataUsageCacheVerCurrent = 8
+	dataUsageCacheVerCurrent = 9
+	dataUsageCacheVerV8      = 8
 	dataUsageCacheVerV7      = 7
 	dataUsageCacheVerV6      = 6
 	dataUsageCacheVerV5      = 5
@@ -1360,6 +1391,33 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			}
 		}
 
+		return nil
+	case dataUsageCacheVerV8:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
+		dold := &dataUsageCacheV8{}
+		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
+			return err
+		}
+		d.Info = dold.Info
+		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
+		for k, v := range dold.Cache {
+			var szHist sizeHistogram
+			szHist.mergeV1(v.ObjSizes)
+			d.Cache[k] = dataUsageEntry{
+				Children:         v.Children,
+				Size:             v.Size,
+				Objects:          v.Objects,
+				Versions:         v.Versions,
+				ObjSizes:         szHist,
+				ReplicationStats: v.ReplicationStats,
+				Compacted:        v.Compacted,
+			}
+		}
 		return nil
 	case dataUsageCacheVerCurrent:
 		// Zstd compressed.

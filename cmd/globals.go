@@ -456,6 +456,9 @@ var (
 
 	// Indicates if server was started as `--address ":0"`
 	globalDynamicAPIPort bool
+
+	// globalCleanup of deleted objects that are marked for purge
+	globalBackgroundCleanup backgroundCleanupSys
 	// Add new variable global values here.
 )
 

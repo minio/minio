@@ -978,7 +978,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
-	if err != nil {
+	if err != nil && !errors.Is(err, errPurgePending) {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
 	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
@@ -996,14 +996,14 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 // getObjectInfoAndQuroum - wrapper for reading object metadata and constructs ObjectInfo, additionally returns write quorum for the object.
 func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, wquorum int, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
-	if err != nil {
+	if err != nil && !errors.Is(err, errPurgePending) {
 		return objInfo, er.defaultWQuorum(), toObjectErr(err, bucket, object)
 	}
 
 	wquorum = fi.WriteQuorum(er.defaultWQuorum())
 
 	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
-	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
+	if (!fi.VersionPurgeStatus().Empty() || !fi.PurgeState.Empty()) && opts.VersionID != "" {
 		// Make sure to return object info to provide extra information.
 		return objInfo, wquorum, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
@@ -1668,13 +1668,14 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 		vr.SetTierFreeVersionID(mustGetUUID())
 		// VersionID is not set means delete is not specific about
 		// any version, look for if the bucket is versioned or not.
+		suspended := opts.VersionSuspended
+		versioned := opts.Versioned
+		if opts.PrefixEnabledFn != nil {
+			versioned = opts.PrefixEnabledFn(objects[i].ObjectName)
+		}
+
 		if objects[i].VersionID == "" {
 			// MinIO extension to bucket version configuration
-			suspended := opts.VersionSuspended
-			versioned := opts.Versioned
-			if opts.PrefixEnabledFn != nil {
-				versioned = opts.PrefixEnabledFn(objects[i].ObjectName)
-			}
 			if versioned || suspended {
 				// Bucket is versioned and no version was explicitly
 				// mentioned for deletes, create a delete marker instead.
@@ -1688,6 +1689,14 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				}
 			}
 		}
+		// if versioning is not enabled on the bucket OR permanent delete is being attempted
+		// track the object/version as purge pending.
+		if !versioned || objects[i].VersionID != "" {
+			if objects[i].VersionPurgeStatus.Empty() || objects[i].VersionPurgeStatus == Pending {
+				vr.PurgeState.SetStatus(Pending)
+			}
+		}
+
 		// De-dup same object name to collect multiple versions for same object.
 		v, ok := versionsMap[objects[i].ObjectName]
 		if ok {
@@ -1705,12 +1714,14 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 				DeleteMarkerMTime:     DeleteMarkerMTime{vr.ModTime},
 				ObjectName:            vr.Name,
 				ReplicationState:      vr.ReplicationState,
+				PurgeState:            vr.PurgeState,
 			}
 		} else {
 			dobjects[i] = DeletedObject{
 				ObjectName:       vr.Name,
 				VersionID:        vr.VersionID,
 				ReplicationState: vr.ReplicationState,
+				PurgeState:       vr.PurgeState,
 			}
 		}
 		versionsMap[objects[i].ObjectName] = v
@@ -1779,12 +1790,16 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	for i, dobj := range dobjects {
 		// This object errored, we should attempt a heal just in case.
 		if errs[i] != nil && !isErrVersionNotFound(errs[i]) && !isErrObjectNotFound(errs[i]) {
+			// TODO: undo the purge metadata set in xl-meta - will need to batch this outside for efficiency
 			// all other direct versionId references we should
 			// ensure no dangling file is left over.
 			er.addPartial(bucket, dobj.ObjectName, dobj.VersionID)
 			continue
 		}
-
+		vpurgStatus := dobj.ReplicationState.CompositeVersionPurgeStatus()
+		if (vpurgStatus.Empty() && dobj.PurgeState.Status == Pending) || vpurgStatus == Complete {
+			globalBackgroundCleanup.enqueue(dobj.PurgeTask(bucket))
+		}
 		// Check if there is any offline disk and add it to the MRF list
 		for _, disk := range storageDisks {
 			if disk != nil && disk.IsOnline() {
@@ -1982,7 +1997,10 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			break
 		}
 	}()
-
+	versioned := opts.Versioned || opts.VersionSuspended
+	if opts.PrefixEnabledFn != nil {
+		versioned = opts.PrefixEnabledFn(object)
+	}
 	if markDelete && (opts.Versioned || opts.VersionSuspended) {
 		if !deleteMarker {
 			// versioning suspended means we add `null` version as
@@ -2004,13 +2022,35 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		} else if opts.Versioned {
 			fi.VersionID = mustGetUUID()
 		}
+
+		// if  permanent delete is being attempted
+		// track the object/version as purge pending.
+		if opts.VersionID != "" && !opts.DeleteReplication.CompositeVersionPurgeStatus().Empty() {
+			if opts.PurgeCleanup {
+				fi.PurgeState.SetStatus(Complete)
+			} else {
+				fi.PurgeState.SetStatus(Pending)
+			}
+		}
 		// versioning suspended means we add `null` version as
 		// delete marker. Add delete marker, since we don't have
 		// any version specified explicitly. Or if a particular
 		// version id needs to be replicated.
 		if err = er.deleteObjectVersion(ctx, bucket, object, fi, opts.DeleteMarker); err != nil {
+			// TODO: undo delete
 			return objInfo, toObjectErr(err, bucket, object)
 		}
+		vpurgStatus := opts.DeleteReplication.CompositeVersionPurgeStatus()
+		if (vpurgStatus.Empty() && fi.PurgeState.Status == Pending) || vpurgStatus == Complete {
+			globalBackgroundCleanup.enqueue(PurgeTask{
+				Bucket:       bucket,
+				Object:       object,
+				VersionID:    fi.VersionID,
+				DeleteMarker: fi.Deleted,
+				Size:         fi.Size,
+			})
+		}
+
 		oi := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
 		oi.replicationDecision = goi.replicationDecision
 		return oi, nil
@@ -2027,11 +2067,33 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		TransitionStatus: opts.Transition.Status,
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
+	// if versioning is not enabled on the bucket OR permanent delete is being attempted
+	// track the object/version as purge pending.
+	if !versioned || opts.VersionID != "" {
+		switch {
+		case opts.PurgeCleanup || opts.DeleteReplication.CompositeVersionPurgeStatus() == Complete:
+			dfi.PurgeState.SetStatus(Complete)
+		case opts.ReplicationRequest && opts.DeleteMarkerReplicationStatus() == replication.Replica:
+			// do nothing - this is a replication request creating a replica delete marker
+		default:
+			dfi.PurgeState.SetStatus(Pending)
+		}
+	}
 	dfi.SetTierFreeVersionID(fvID)
 	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
+		// TODO: undo delete
 		return objInfo, toObjectErr(err, bucket, object)
 	}
-
+	vpurgStatus := opts.DeleteReplication.CompositeVersionPurgeStatus()
+	if (vpurgStatus.Empty() && dfi.PurgeState.Status == Pending) || vpurgStatus == Complete {
+		globalBackgroundCleanup.enqueue(PurgeTask{
+			Bucket:       bucket,
+			Object:       object,
+			VersionID:    dfi.VersionID,
+			DeleteMarker: dfi.Deleted,
+			Size:         dfi.Size,
+		})
+	}
 	return dfi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 

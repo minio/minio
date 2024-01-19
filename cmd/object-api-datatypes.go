@@ -148,7 +148,8 @@ type ObjectInfo struct {
 	// DeleteMarker indicates if the versionId corresponds
 	// to a delete marker on an object.
 	DeleteMarker bool
-
+	// PurgeStatus indicates if object or version is marked for permanent delete
+	PurgeState PurgeState
 	// Transitioned object information
 	TransitionedObject TransitionedObject
 
@@ -287,6 +288,7 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		SuccessorModTime:           o.SuccessorModTime,
 		ReplicationStatusInternal:  o.ReplicationStatusInternal,
 		VersionPurgeStatusInternal: o.VersionPurgeStatusInternal,
+		PurgeState:                 o.PurgeState,
 	}
 	cinfo.UserDefined = make(map[string]string, len(o.UserDefined))
 	for k, v := range o.UserDefined {
@@ -344,6 +346,7 @@ type ReplicateObjectInfo struct {
 	VersionPurgeStatusInternal string
 	VersionPurgeStatus         VersionPurgeStatusType
 	ReplicationState           ReplicationState
+	PurgeState                 PurgeState
 	DeleteMarker               bool
 
 	OpType               replication.Type

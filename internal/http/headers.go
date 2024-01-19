@@ -230,6 +230,10 @@ const (
 	// Header indicates a Tag operation was performed on one/more peers successfully, though the
 	// current cluster does not have the object yet. This is in a site/bucket replication scenario.
 	MinIOTaggingProxied = "X-Minio-Tagging-Proxied"
+	// Header indicates delete pending cleanup.
+	MinIODeleteCleanupPending = "X-Minio-Delete-Cleanup-Status"
+	// Header indicates delete pending cleanup.
+	MinIODeleteCleanupPendingTimestamp = "X-Minio-Delete-Cleanup-Pending-Timestamp"
 
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"

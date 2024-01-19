@@ -525,7 +525,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 				if !gr.ObjInfo.ReplicationStatus.Empty() && gr.ObjInfo.DeleteMarker {
 					w.Header()[xhttp.MinIODeleteMarkerReplicationStatus] = []string{string(gr.ObjInfo.ReplicationStatus)}
 				}
-
 				// Versioning enabled quite possibly object is deleted might be delete-marker
 				// if present set the headers, no idea why AWS S3 sets these headers.
 				if gr.ObjInfo.VersionID != "" && gr.ObjInfo.DeleteMarker {
@@ -1041,6 +1040,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	if err != nil && !proxy.Proxy {
+		if !objInfo.PurgeState.Empty() {
+			w.Header()[xhttp.MinIODeleteCleanupPending] = []string{string(objInfo.PurgeState.Status)}
+			w.Header()[xhttp.MinIODeleteCleanupPendingTimestamp] = []string{objInfo.PurgeState.DeletedAt.Format(time.RFC3339)}
+		}
 		switch {
 		case !objInfo.VersionPurgeStatus.Empty():
 			w.Header()[xhttp.MinIODeleteReplicationStatus] = []string{string(objInfo.VersionPurgeStatus)}
@@ -2927,6 +2930,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				DeleteMarkerMTime:     DeleteMarkerMTime{objInfo.ModTime},
 				DeleteMarker:          objInfo.DeleteMarker,
 				ReplicationState:      objInfo.ReplicationState(),
+				PurgeState:            objInfo.PurgeState,
 			},
 			Bucket:    bucket,
 			EventType: ReplicateIncomingDelete,

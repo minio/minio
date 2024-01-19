@@ -160,7 +160,6 @@ func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin
 		quorum := len(perPoolErrs) / 2
 		poolErrs = append(poolErrs, reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum))
 	}
-
 	opts.Remove = isAllBucketsNotFound(poolErrs)
 	opts.Recreate = !opts.Remove
 

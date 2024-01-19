@@ -67,6 +67,8 @@ type BucketUsageInfo struct {
 	ReplicaSize             uint64                           `json:"objectReplicaTotalSize"`
 	ReplicaCount            uint64                           `json:"objectReplicaCount"`
 	ReplicationInfo         map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
+	PendingCleanupCount     int64                            `json:"pendingCleanupCount"`
+	PendingCleanupSize      int64                            `json:"pendingCleanupSize"`
 }
 
 // DataUsageInfo represents data usage stats of the underlying Object API
@@ -100,6 +102,10 @@ type DataUsageInfo struct {
 
 	// TierStats contains per-tier stats of all configured remote tiers
 	TierStats *allTierStats `json:"tierStats,omitempty"`
+	// PendingCleanupCount is the total number of objects pending delete cleanup
+	PendingCleanupCount int64 `json:"pendingCleanupCount"`
+	// PendingCleanupSize is the total size  pending delete cleanup
+	PendingCleanupSize int64 `json:"pendingCleanupSize"`
 }
 
 func (dui DataUsageInfo) tierStats() []madmin.TierInfo {

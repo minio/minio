@@ -866,19 +866,21 @@ type scannerItem struct {
 }
 
 type sizeSummary struct {
-	totalSize       int64
-	versions        uint64
-	deleteMarkers   uint64
-	replicatedSize  int64
-	replicatedCount int64
-	pendingSize     int64
-	failedSize      int64
-	replicaSize     int64
-	replicaCount    int64
-	pendingCount    uint64
-	failedCount     uint64
-	replTargetStats map[string]replTargetSizeSummary
-	tiers           map[string]tierStats
+	totalSize           int64
+	versions            uint64
+	deleteMarkers       uint64
+	replicatedSize      int64
+	replicatedCount     int64
+	pendingSize         int64
+	failedSize          int64
+	replicaSize         int64
+	replicaCount        int64
+	pendingCount        uint64
+	failedCount         uint64
+	replTargetStats     map[string]replTargetSizeSummary
+	tiers               map[string]tierStats
+	pendingCleanupCount int64
+	pendingCleanupSize  int64
 }
 
 // replTargetSizeSummary holds summary of replication stats by target

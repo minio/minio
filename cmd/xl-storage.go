@@ -590,6 +590,21 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		for _, oi := range objInfos {
 			done = globalScannerMetrics.time(scannerMetricApplyVersion)
 			var sz int64
+			if !oi.PurgeState.Empty() { // account sizes separately for objects pending cleanup
+				sizeS.pendingCleanupCount++
+				sizeS.pendingCleanupSize += oi.Size
+				if oi.VersionPurgeStatus.Empty() || oi.VersionPurgeStatus == Complete {
+					globalBackgroundCleanup.enqueue(PurgeTask{
+						Bucket:       item.bucket,
+						Object:       item.objectPath(),
+						VersionID:    oi.VersionID,
+						DeleteMarker: oi.DeleteMarker,
+						Size:         oi.Size,
+					})
+					done()
+					continue
+				}
+			}
 			objDeleted, sz = item.applyActions(ctx, objAPI, oi, &sizeS)
 			done()
 
@@ -1093,13 +1108,13 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	}
 
 	for _, fi := range fis {
-		dataDir, err := xlMeta.DeleteVersion(fi)
-		if err != nil {
-			if !fi.Deleted && (err == errFileNotFound || err == errFileVersionNotFound) {
+		dataDir, derr := xlMeta.DeleteVersion(fi)
+		if derr != nil && !errors.Is(derr, errPurgePending) {
+			if !fi.Deleted && (derr == errFileNotFound || derr == errFileVersionNotFound) {
 				// Ignore these since they do not exist
 				continue
 			}
-			return err
+			return derr
 		}
 		if dataDir != "" {
 			versionID := fi.VersionID
@@ -1117,12 +1132,14 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 			// inlined the data incorrectly, to avoid a situation
 			// where we potentially leave "DataDir"
 			filePath := pathJoin(volumeDir, path, dataDir)
-			if err = checkPathLength(filePath); err != nil {
+			if err := checkPathLength(filePath); err != nil {
 				return err
 			}
-			if err = s.moveToTrash(filePath, true, false); err != nil {
-				if err != errFileNotFound {
-					return err
+			if derr == nil { // will be nil when purge is complete
+				if err = s.moveToTrash(filePath, true, false); err != nil {
+					if err != errFileNotFound {
+						return err
+					}
 				}
 			}
 		}
@@ -1135,7 +1152,6 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		if err != nil {
 			return err
 		}
-
 		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
 	}
 
@@ -1260,9 +1276,9 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		return err
 	}
 
-	dataDir, err := xlMeta.DeleteVersion(fi)
-	if err != nil {
-		return err
+	dataDir, derr := xlMeta.DeleteVersion(fi)
+	if derr != nil && !errors.Is(derr, errPurgePending) {
+		return derr
 	}
 	if dataDir != "" {
 		versionID := fi.VersionID
@@ -1282,9 +1298,11 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		if err = checkPathLength(filePath); err != nil {
 			return err
 		}
-		if err = s.moveToTrash(filePath, true, false); err != nil {
-			if err != errFileNotFound {
-				return err
+		if derr == nil { // will be nil when purge is complete
+			if err = s.moveToTrash(filePath, true, false); err != nil {
+				if err != errFileNotFound {
+					return err
+				}
 			}
 		}
 	}
@@ -1598,7 +1616,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID str
 		}
 	}
 
-	if !skipAccessChecks(volume) && !opts.Healing && fi.TransitionStatus == "" && !fi.InlineData() && len(fi.Data) == 0 && fi.DataDir != "" && fi.DataDir != emptyUUID && fi.VersionPurgeStatus().Empty() {
+	if !skipAccessChecks(volume) && !opts.Healing && fi.TransitionStatus == "" && !fi.InlineData() && len(fi.Data) == 0 && fi.DataDir != "" && fi.DataDir != emptyUUID && fi.VersionPurgeStatus().Empty() && fi.PurgeState.Empty() {
 		// Verify if the dataDir is present or not when the data
 		// is not inlined to make sure we return correct errors
 		// during HeadObject().

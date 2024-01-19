@@ -825,7 +825,9 @@ func serverMain(ctx *cli.Context) {
 	bootstrapTrace("initBackgroundExpiry", func() {
 		initBackgroundExpiry(GlobalContext, newObject)
 	})
-
+	bootstrapTrace("initBackgroundCleanup", func() {
+		initBackgroundCleanup(GlobalContext, newObject)
+	})
 	var err error
 	bootstrapTrace("initServerConfig", func() {
 		if err = initServerConfig(GlobalContext, newObject); err != nil {

@@ -80,3 +80,6 @@ func ParseReplicationTS(str string) (time.Time, error) {
 	}
 	return tm, err
 }
+
+// ParseTS is an alias for ParseReplicationTS
+var ParseTS = ParseReplicationTS

@@ -524,6 +524,9 @@ func (m *metaCacheEntriesSorted) fileInfoVersions(bucket, prefix, delimiter, aft
 			}
 
 			for _, version := range fiVersions {
+				if !version.PurgeState.Empty() {
+					continue
+				}
 				versioned := vcfg != nil && vcfg.Versioned(entry.name)
 				versions = append(versions, version.ToObjectInfo(bucket, entry.name, versioned))
 			}

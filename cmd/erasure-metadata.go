@@ -137,7 +137,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		}
 	}
 	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus()
-
+	objInfo.PurgeState = fi.PurgeState
 	objInfo.TransitionedObject = TransitionedObject{
 		Name:        fi.TransitionedObjName,
 		VersionID:   fi.TransitionVersionID,
@@ -311,6 +311,9 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 			fmt.Fprint(h, meta.Metadata[string(meta.ReplicationState.ReplicaStatus)])
 			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicationStatusInternal])
 			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.VersionPurgeStatusInternal])
+
+			// Delete purge state
+			fmt.Fprint(h, meta.PurgeState.Status)
 
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 			h.Reset()

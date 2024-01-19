@@ -33,6 +33,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
@@ -493,8 +494,18 @@ func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) 
 		fi.TransitionedObjName = string(j.MetaSys[metaTierObjName])
 		fi.TransitionVersionID = string(j.MetaSys[metaTierVersionID])
 	}
-
+	fi.PurgeState = j.getPurgeState()
 	return fi, nil
+}
+
+func (j *xlMetaV2DeleteMarker) getPurgeState() (p PurgeState) {
+	if st, ok := j.MetaSys[DeletePurgeStatus]; ok {
+		p.Status = VersionPurgeStatusType(st)
+	}
+	if tm, ok := j.MetaSys[DeletePurgeTimestamp]; ok {
+		p.DeletedAt, _ = amztime.ParseTS(string(tm))
+	}
+	return
 }
 
 // Signature will return a signature that is expected to be the same across all disks.
@@ -538,6 +549,16 @@ func (j xlMetaV2Object) InlineData() bool {
 
 func (j *xlMetaV2Object) ResetInlineData() {
 	delete(j.MetaSys, ReservedMetadataPrefixLower+"inline-data")
+}
+
+func (j *xlMetaV2Object) getPurgeState() (p PurgeState) {
+	if st, ok := j.MetaSys[DeletePurgeStatus]; ok {
+		p.Status = VersionPurgeStatusType(st)
+	}
+	if tm, ok := j.MetaSys[DeletePurgeTimestamp]; ok {
+		p.DeletedAt, _ = amztime.ParseTS(string(tm))
+	}
+	return
 }
 
 const (
@@ -666,6 +687,7 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo
 	if replStatus != "" {
 		fi.Metadata[xhttp.AmzBucketReplicationStatus] = string(replStatus)
 	}
+	fi.PurgeState = j.getPurgeState()
 	fi.Erasure.Algorithm = j.ErasureAlgorithm.String()
 	fi.Erasure.Index = j.ErasureIndex
 	fi.Erasure.BlockSize = j.ErasureBlockSize
@@ -1347,6 +1369,10 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 			updateVersion = true
 		}
 	}
+	// for permanent deletes of unversioned objects OR versioned deletes.
+	if !fi.PurgeState.Empty() && fi.PurgeState.Status != Complete {
+		updateVersion = true
+	}
 
 	if fi.Deleted {
 		if !fi.DeleteMarkerReplicationStatus().Empty() {
@@ -1361,6 +1387,10 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 		}
 		if !fi.VersionPurgeStatus().Empty() {
 			ventry.DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
+		}
+		if !fi.PurgeState.Empty() {
+			ventry.DeleteMarker.MetaSys[DeletePurgeStatus] = []byte(fi.PurgeState.Status)
+			ventry.DeleteMarker.MetaSys[DeletePurgeTimestamp] = []byte(fi.PurgeState.DeletedAt.UTC().Format(time.RFC3339Nano))
 		}
 		for k, v := range fi.ReplicationState.ResetStatusesMap {
 			ventry.DeleteMarker.MetaSys[k] = []byte(v)
@@ -1404,10 +1434,18 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				if !fi.VersionPurgeStatus().Empty() {
 					ver.DeleteMarker.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
 				}
+				if !fi.PurgeState.Empty() {
+					ver.DeleteMarker.MetaSys[DeletePurgeStatus] = []byte(fi.PurgeState.Status)
+					ver.DeleteMarker.MetaSys[DeletePurgeTimestamp] = []byte(fi.PurgeState.DeletedAt.UTC().Format(time.RFC3339Nano))
+				}
 				for k, v := range fi.ReplicationState.ResetStatusesMap {
 					ver.DeleteMarker.MetaSys[k] = []byte(v)
 				}
 				err = x.setIdx(i, *ver)
+
+				if !fi.PurgeState.Empty() && fi.PurgeState.Status != Complete && err == nil { // don't delete right away - mark for purge.
+					err = errPurgePending
+				}
 				return "", err
 			}
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
@@ -1423,16 +1461,28 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				if err != nil {
 					return "", err
 				}
-				ver.ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
+				if !fi.VersionPurgeStatus().Empty() {
+					ver.ObjectV2.MetaSys[VersionPurgeStatusKey] = []byte(fi.ReplicationState.VersionPurgeStatusInternal)
+				}
 				for k, v := range fi.ReplicationState.ResetStatusesMap {
 					ver.ObjectV2.MetaSys[k] = []byte(v)
 				}
+				if !fi.PurgeState.Empty() {
+					ver.ObjectV2.MetaSys[DeletePurgeStatus] = []byte(fi.PurgeState.Status)
+					ver.ObjectV2.MetaSys[DeletePurgeTimestamp] = []byte(fi.PurgeState.DeletedAt.UTC().Format(time.RFC3339Nano))
+				}
 				err = x.setIdx(i, *ver)
-				return uuid.UUID(ver.ObjectV2.DataDir).String(), err
+				ddir := uuid.UUID(ver.ObjectV2.DataDir).String()
+				if !fi.PurgeState.Empty() && fi.PurgeState.Status != Complete { // don't delete right away - mark for purge.
+					ddir = ""
+					if err == nil { // interpret this as a purge pending.
+						err = errPurgePending
+					}
+				}
+				return ddir, err
 			}
 		}
 	}
-
 	for i, version := range x.versions {
 		if version.header.Type != ObjectType || version.header.VersionID != uv {
 			continue

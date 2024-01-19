@@ -32,6 +32,25 @@ type DeletedObject struct {
 	DeleteMarkerMTime DeleteMarkerMTime `xml:"-"`
 	// MinIO extensions to support delete marker replication
 	ReplicationState ReplicationState `xml:"-"`
+	PurgeState       PurgeState       `xml:"-"`
+}
+
+// PurgeTask - returns purge task for the deleted object
+func (d DeletedObject) PurgeTask(bucket string) PurgeTask {
+	if d.PurgeState.Empty() {
+		return PurgeTask{}
+	}
+
+	vid := d.DeleteMarkerVersionID
+	if vid == "" {
+		vid = d.VersionID
+	}
+	return PurgeTask{
+		Bucket:       bucket,
+		Object:       d.ObjectName,
+		VersionID:    vid,
+		DeleteMarker: d.DeleteMarker,
+	}
 }
 
 // DeleteMarkerMTime is an embedded type containing time.Time for XML marshal

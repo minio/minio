@@ -182,7 +182,9 @@ type FileInfo struct {
 	// Deleted is set when this FileInfo represents
 	// a deleted marker for a versioned bucket.
 	Deleted bool `msg:"del"`
-
+	// DeleteStatus is set when this FileInfo represents a delete on
+	// a non-versioned bucket. Valid values are "pending" and "complete".
+	PurgeState PurgeState `msg:"ps"`
 	// TransitionStatus is set to Pending/Complete for transitioned
 	// entries based on state of transition
 	TransitionStatus string `msg:"ts"`
@@ -297,6 +299,9 @@ func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
 	if !fi.ModTime.Equal(ofi.ModTime) {
 		return false
 	}
+	if fi.PurgeState.Status != ofi.PurgeState.Status {
+		return false
+	}
 	return fi.Erasure.Equal(ofi.Erasure)
 }
 
@@ -333,9 +338,37 @@ func (fi *FileInfo) SetInlineData() {
 	fi.Metadata[ReservedMetadataPrefixLower+"inline-data"] = "true"
 }
 
+// PurgeState denotes status of a versioned or unversioned delete.
+type PurgeState struct {
+	Status    VersionPurgeStatusType `msg:"status"`
+	DeletedAt time.Time              `msg:"deletedAt"`
+}
+
+// Empty returns true if object or version is not in the process of permanent deletion.
+func (p *PurgeState) Empty() bool {
+	return p.Status.Empty()
+}
+
+// SetStatus marks object or version purge status
+func (p *PurgeState) SetStatus(st VersionPurgeStatusType) {
+	p.Status = st
+	p.DeletedAt = UTCNow()
+}
+
+// IsDeleted returns true if object or version is in the process of permanent deletion.
+func (p *PurgeState) IsDeleted() bool {
+	return !p.Status.Empty()
+}
+
+// func (p *PurgeState) Complete() bool {
+// 	return p.Status == Complete
+// }
+
 // VersionPurgeStatusKey denotes purge status in metadata
 const (
 	VersionPurgeStatusKey = ReservedMetadataPrefixLower + "purgestatus"
+	DeletePurgeStatus     = ReservedMetadataPrefixLower + "delete-purgestatus"
+	DeletePurgeTimestamp  = ReservedMetadataPrefixLower + "delete-purge-timestamp"
 )
 
 // newFileInfo - initializes new FileInfo, allocates a fresh erasure info.
