@@ -106,7 +106,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 				if i == g.retryCount-1 {
 					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
 					ctx := logger.SetReqInfo(ctx, reqInfo)
-					logger.LogIf(ctx, err)
+					logger.LogOnceIf(ctx, err, addr.String())
 				}
 				// Wait for a minimum of 100ms and dynamically increase this based on number of attempts.
 				if i < g.retryCount-1 {
@@ -376,7 +376,7 @@ func (sys *NotificationSys) SignalConfigReload(subSys string) []NotificationPeer
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(serviceReloadDynamic, subSys)
+			return client.SignalService(serviceReloadDynamic, subSys, false, true)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -391,7 +391,23 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(sig, "")
+			// force == true preserves the current behavior
+			return client.SignalService(sig, "", false, true)
+		}, idx, *client.host)
+	}
+	return ng.Wait()
+}
+
+// SignalServiceV2 - calls signal service RPC call on all peers with v2 API
+func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun, force bool) []NotificationPeerErr {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(GlobalContext, func() error {
+			return client.SignalService(sig, "", dryRun, force)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -1275,7 +1291,7 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(serviceSig, "")
+			return client.SignalService(serviceSig, "", false, true)
 		}, idx, *client.host)
 	}
 	nerrs := ng.Wait()

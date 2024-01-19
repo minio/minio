@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -863,6 +864,21 @@ func (s *peerRESTServer) CommitBinaryHandler(w http.ResponseWriter, r *http.Requ
 
 var errUnsupportedSignal = fmt.Errorf("unsupported signal")
 
+func canWeRestartNode() map[string]DiskMetrics {
+	errs := make([]error, len(globalLocalDrives))
+	infos := make([]DiskInfo, len(globalLocalDrives))
+	for i, drive := range globalLocalDrives {
+		infos[i], errs[i] = drive.DiskInfo(GlobalContext, false)
+	}
+	infoMaps := make(map[string]DiskMetrics)
+	for i := range infos {
+		if infos[i].Metrics.TotalWaiting >= 1 && errors.Is(errs[i], errFaultyDisk) {
+			infoMaps[infos[i].Endpoint] = infos[i].Metrics
+		}
+	}
+	return infoMaps
+}
+
 // SignalServiceHandler - signal service handler.
 func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -883,10 +899,26 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	}
 	signal := serviceSignal(si)
 	switch signal {
-	case serviceRestart:
-		globalServiceSignalCh <- signal
-	case serviceStop:
-		globalServiceSignalCh <- signal
+	case serviceRestart, serviceStop:
+		dryRun := r.Form.Get("dry-run") == "true" // This is only supported for `restart/stop`
+		force := r.Form.Get("force") == "true"
+
+		waitingDisks := canWeRestartNode()
+		if len(waitingDisks) > 0 {
+			buf, err := json.Marshal(waitingDisks)
+			if err != nil {
+				s.writeErrorResponse(w, err)
+				return
+			}
+			s.writeErrorResponse(w, errors.New(string(buf)))
+			// if its forced we signal the process anyway.
+			if !force {
+				return
+			}
+		}
+		if !dryRun {
+			globalServiceSignalCh <- signal
+		}
 	case serviceFreeze:
 		freezeServices()
 	case serviceUnFreeze:
