@@ -325,7 +325,7 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 			if storageDisks[index] == nil {
 				return errDiskNotFound
 			}
-			format, err := loadFormatErasure(storageDisks[index])
+			format, formatData, err := loadFormatErasureWithData(storageDisks[index])
 			if err != nil {
 				return err
 			}
@@ -339,6 +339,7 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 				// If no healing required, make the disks valid and
 				// online.
 				storageDisks[index].SetDiskID(format.Erasure.This)
+				storageDisks[index].SetFormatData(formatData)
 			}
 			return nil
 		}, index)
@@ -354,7 +355,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	}
 
 	// Marshal and write to disk.
-	formatBytes, err := json.Marshal(format)
+	formatData, err := json.Marshal(format)
 	if err != nil {
 		return err
 	}
@@ -368,7 +369,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	})
 
 	// write to unique file.
-	if err = disk.WriteAll(context.TODO(), minioMetaBucket, tmpFormat, formatBytes); err != nil {
+	if err = disk.WriteAll(context.TODO(), minioMetaBucket, tmpFormat, formatData); err != nil {
 		return err
 	}
 
@@ -378,12 +379,42 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	}
 
 	disk.SetDiskID(format.Erasure.This)
+	disk.SetFormatData(formatData)
 	if healID != "" {
 		ctx := context.Background()
 		ht := initHealingTracker(disk, healID)
 		return ht.save(ctx)
 	}
 	return nil
+}
+
+// loadFormatErasureWithData - loads format.json from disk.
+func loadFormatErasureWithData(disk StorageAPI) (format *formatErasureV3, data []byte, err error) {
+	// Ensure that the grid is online.
+	if _, err := disk.DiskInfo(context.Background(), false); err != nil {
+		if errors.Is(err, errDiskNotFound) {
+			return nil, nil, err
+		}
+	}
+
+	data, err = disk.ReadAll(context.TODO(), minioMetaBucket, formatConfigFile)
+	if err != nil {
+		// 'file not found' and 'volume not found' as
+		// same. 'volume not found' usually means its a fresh disk.
+		if errors.Is(err, errFileNotFound) || errors.Is(err, errVolumeNotFound) {
+			return nil, nil, errUnformattedDisk
+		}
+		return nil, nil, err
+	}
+
+	// Try to decode format json into formatConfigV1 struct.
+	format = &formatErasureV3{}
+	if err = json.Unmarshal(data, format); err != nil {
+		return nil, nil, err
+	}
+
+	// Success.
+	return format, data, nil
 }
 
 // loadFormatErasure - loads format.json from disk.
@@ -480,9 +511,7 @@ func formatErasureGetDeploymentID(refFormat *formatErasureV3, formats []*formatE
 }
 
 // formatErasureFixDeploymentID - Add deployment id if it is not present.
-func formatErasureFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, refFormat *formatErasureV3) (err error) {
-	// Attempt to load all `format.json` from all disks.
-	formats, _ := loadFormatErasureAll(storageDisks, false)
+func formatErasureFixDeploymentID(endpoints Endpoints, storageDisks []StorageAPI, refFormat *formatErasureV3, formats []*formatErasureV3) (err error) {
 	for index := range formats {
 		// If the Erasure sets do not match, set those formats to nil,
 		// We do not have to update the ID on those format.json file.

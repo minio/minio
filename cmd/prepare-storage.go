@@ -260,7 +260,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		if !firstDisk {
 			return nil, nil, errNotFirstDisk
 		}
-		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format); err != nil {
+		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format, formatConfigs); err != nil {
 			logger.LogIf(GlobalContext, err)
 			return nil, nil, err
 		}
