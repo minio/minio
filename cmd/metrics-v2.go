@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -256,6 +256,7 @@ const (
 	startTime        = "starttime_seconds"
 	upTime           = "uptime_seconds"
 	memory           = "resident_memory_bytes"
+	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
@@ -519,7 +520,7 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_timeout",
-		Help:      "Total number of timeout errors since server start",
+		Help:      "Total number of drive timeout errors since server start",
 		Type:      counterMetric,
 	}
 }
@@ -529,7 +530,27 @@ func getNodeDriveAvailablityErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_availability",
-		Help:      "Total number of I/O errors, permission denied and timeouts since server start",
+		Help:      "Total number of drive I/O errors, permission denied and timeouts since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveWaitingIOMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "io_waiting",
+		Help:      "Total number I/O operations waiting on drive",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveTokensIOMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "io_tokens",
+		Help:      "Total number concurrent I/O operations configured on drive",
 		Type:      counterMetric,
 	}
 }
@@ -1532,6 +1553,16 @@ func getMinIOProcessResidentMemory() MetricDescription {
 	}
 }
 
+func getMinIOProcessVirtualMemory() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      memory,
+		Help:      "Virtual memory size in bytes",
+		Type:      gaugeMetric,
+	}
+}
+
 func getMinIOProcessCPUTime() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -1651,6 +1682,14 @@ func getMinioProcMetrics() *MetricsGroup {
 				Metric{
 					Description: getMinIOProcessResidentMemory(),
 					Value:       float64(stat.ResidentMemory()),
+				})
+		}
+
+		if stat.VirtualMemory() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessVirtualMemory(),
+					Value:       float64(stat.VirtualMemory()),
 				})
 		}
 
@@ -2900,6 +2939,9 @@ func getClusterUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
+		if objLayer == nil {
+			return
+		}
 
 		metrics = make([]Metric, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
@@ -3257,6 +3299,18 @@ func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDriveAvailablityErrorsMD(),
 					Value:          float64(disk.Metrics.TotalErrorsAvailability),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveWaitingIOMD(),
+					Value:          float64(disk.Metrics.TotalWaiting),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveTokensIOMD(),
+					Value:          float64(disk.Metrics.TotalTokens),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
 				})
 
