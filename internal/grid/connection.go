@@ -786,7 +786,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		if debugPrint {
 			fmt.Println("expected to be client side, not server side")
 		}
-		return errors.New("expected to be client side, not server side")
+		return errors.New("grid: expected to be client side, not server side")
 	}
 	msg := message{
 		Op: OpConnectResponse,
