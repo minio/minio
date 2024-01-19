@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"crypto"
 	"crypto/tls"
 	"encoding/hex"
@@ -508,10 +507,10 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 	return resp.Body, nil
 }
 
-var updateInProgress uint32
+var updateInProgress atomic.Uint32
 
 // Function to get the reader from an architecture
-func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
+func downloadBinary(u *url.URL, mode string) (bin []byte, err error) {
 	transport := getUpdateTransport(30 * time.Second)
 	var reader io.ReadCloser
 	if u.Scheme == "https" || u.Scheme == "http" {
@@ -523,13 +522,8 @@ func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
 		return nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
 	}
 	defer xhttp.DrainBody(reader)
-	// convert a Reader to bytes
-	binaryFile, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
 
-	return binaryFile, nil
+	return io.ReadAll(reader)
 }
 
 const (
@@ -537,11 +531,11 @@ const (
 	defaultMinisignPubkey = "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
 )
 
-func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader []byte) (err error) {
-	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader io.Reader) (err error) {
+	if !updateInProgress.CompareAndSwap(0, 1) {
 		return errors.New("update already in progress")
 	}
-	defer atomic.StoreUint32(&updateInProgress, 0)
+	defer updateInProgress.Store(0)
 
 	transport := getUpdateTransport(30 * time.Second)
 	opts := selfupdate.Options{
@@ -571,7 +565,7 @@ func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader
 		opts.Verifier = v
 	}
 
-	if err = selfupdate.PrepareAndCheckBinary(bytes.NewReader(reader), opts); err != nil {
+	if err = selfupdate.PrepareAndCheckBinary(reader, opts); err != nil {
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
 			return AdminError{
@@ -592,10 +586,10 @@ func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader
 }
 
 func commitBinary() (err error) {
-	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+	if !updateInProgress.CompareAndSwap(0, 1) {
 		return errors.New("update already in progress")
 	}
-	defer atomic.StoreUint32(&updateInProgress, 0)
+	defer updateInProgress.Store(0)
 
 	opts := selfupdate.Options{}
 

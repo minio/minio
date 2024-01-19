@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -338,7 +339,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 }
 
 // VerifyBinary - asks remote peers to verify the checksum
-func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, reader []byte) []NotificationPeerErr {
+func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, bin []byte) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -346,7 +347,7 @@ func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256
 		}
 		client := client
 		ng.Go(ctx, func() error {
-			return client.VerifyBinary(ctx, u, sha256Sum, releaseInfo, reader)
+			return client.VerifyBinary(ctx, u, sha256Sum, releaseInfo, bytes.NewReader(bin))
 		}, idx, *client.host)
 	}
 	return ng.Wait()

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,8 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v35" // Add new service restart behavior
-
+	peerRESTVersion       = "v36" // Rewrite VerifyBinaryHandler()
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -42,7 +41,7 @@ const (
 	peerRESTMethodLoadBucketMetadata          = "/loadbucketmetadata"
 	peerRESTMethodGetBucketStats              = "/getbucketstats"
 	peerRESTMethodGetAllBucketStats           = "/getallbucketstats"
-	peerRESTMethodDownloadBinary              = "/downloadbinary"
+	peerRESTMethodVerifyBinary                = "/verifybinary"
 	peerRESTMethodCommitBinary                = "/commitbinary"
 	peerRESTMethodSignalService               = "/signalservice"
 	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
@@ -110,6 +109,10 @@ const (
 	peerRESTMetrics        = "metrics"
 	peerRESTDryRun         = "dry-run"
 	peerRESTForce          = "force"
+
+	peerRESTURL         = "url"
+	peerRESTSha256Sum   = "sha256sum"
+	peerRESTReleaseInfo = "releaseinfo"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"
