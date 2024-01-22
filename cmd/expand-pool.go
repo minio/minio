@@ -22,11 +22,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -34,7 +30,6 @@ import (
 
 	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/minio/minio/internal/config"
-	xhttp "github.com/minio/minio/internal/http"
 	"gopkg.in/yaml.v2"
 )
 
@@ -467,127 +462,6 @@ Step5: Restart every node. `, errRemote, errLocal)
 		}()
 	}
 	return nil
-}
-
-// SelfPoolExpandResponse - peer client api response
-type SelfPoolExpandResponse struct {
-	SelfPoolExpand
-	Success bool `json:"success"`
-}
-
-func (s *peerRESTServer) SyncExpandPoolsStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return
-	}
-
-	// Legacy args style such as non-ellipses style is not supported with this API.
-	if globalEndpoints.Legacy() {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	z, ok := objectAPI.(*erasureServerPools)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	if z.IsRebalanceStarted() {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
-		return
-	}
-
-	resp := SelfPoolExpandResponse{}
-	status := r.Form.Get("poolExpandStatus")
-	_, pools, err := getConfigFileInfo()
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	before := strings.Split(r.Form.Get("before"), ",")
-	after := strings.Split(r.Form.Get("after"), ",")
-	if len(before) == 0 || len(after) == 0 {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("empty pool")), r.URL)
-		return
-	}
-	switch status {
-	case "":
-	case PoolExpandStatusWaitForFileChange:
-		if !reflect.DeepEqual(pools, after) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
-			return
-		}
-		resp.Success = true
-	case PoolExpandStatusSetEnvToRestart:
-		if !reflect.DeepEqual(after, pools) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
-			return
-		}
-		setEnvToMinioArgs(fmt.Sprintf("%s %s",
-			strings.Join(before, ","),
-			strings.Join(after, ","),
-		))
-		resp.Success = true
-	case PoolExpandStatusWaitForRenameDataDir:
-		_ = (&SelfPoolExpand{}).renameDataDir()
-		setEnvToMinioArgs("\"\"")
-		resp.Success = true
-	}
-	data, err := json.Marshal(resp)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseJSON(w, data)
-}
-
-// SyncExpandPoolsStatus - sync expand pool status on a remote peer dynamically.
-func (client *peerRESTClient) SyncExpandPoolsStatus(before, after []string, poolExpandStatus string) (rsl SelfPoolExpandResponse, err error) {
-	values := make(url.Values)
-	values.Set("poolExpandStatus", poolExpandStatus)
-	if len(before) != 0 {
-		values.Set("before", strings.Join(before, ","))
-	}
-	if len(after) != 0 {
-		values.Set("after", strings.Join(after, ","))
-	}
-	respBody, err := client.call(peerRESTMethodSyncExpandPoolStatus, values, nil, -1)
-	if err != nil {
-		return rsl, err
-	}
-	defer xhttp.DrainBody(respBody)
-	body, err := io.ReadAll(respBody)
-	if err != nil {
-		return rsl, err
-	} else if err = json.Unmarshal(body, &rsl); err != nil {
-		return rsl, err
-	} else if !rsl.Success {
-		return rsl, fmt.Errorf("failed to sync expand pool status")
-	}
-	return rsl, err
-}
-
-// SyncExpandPoolsStatus sync expand pool status on a remote peer dynamically.
-func (sys *NotificationSys) SyncExpandPoolsStatus(before, after []string, poolExpandStatus string) (rsl []SelfPoolExpandResponse, errs []NotificationPeerErr) {
-	ng := WithNPeers(len(sys.peerClients))
-	rsl = make([]SelfPoolExpandResponse, len(sys.peerClients))
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		client := client
-		idx := idx
-		ng.Go(GlobalContext, func() error {
-			rs, err := client.SyncExpandPoolsStatus(before, after, poolExpandStatus)
-			rsl[idx] = rs
-			return err
-		}, idx, *client.host)
-	}
-	errs = ng.Wait()
-	return rsl, errs
 }
 
 func logExpandPoolError(err error) {

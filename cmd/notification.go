@@ -1583,3 +1583,23 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 	}(&wg)
 	return mrfCh, nil
 }
+
+// SyncExpandPoolsStatus sync expand pool status on a remote peer dynamically.
+func (sys *NotificationSys) SyncExpandPoolsStatus(before, after []string, poolExpandStatus string) (rsl []SelfPoolExpandResponse, errs []NotificationPeerErr) {
+	ng := WithNPeers(len(sys.peerClients))
+	rsl = make([]SelfPoolExpandResponse, len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		idx := idx
+		ng.Go(GlobalContext, func() error {
+			rs, err := client.SyncExpandPoolsStatus(before, after, poolExpandStatus)
+			rsl[idx] = rs
+			return err
+		}, idx, *client.host)
+	}
+	errs = ng.Wait()
+	return rsl, errs
+}

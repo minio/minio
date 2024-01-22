@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1041,4 +1042,30 @@ func (client *peerRESTClient) GetReplicationMRF(ctx context.Context, bucket stri
 		}
 	}(ch)
 	return ch, nil
+}
+
+// SyncExpandPoolsStatus - sync expand pool status on a remote peer dynamically.
+func (client *peerRESTClient) SyncExpandPoolsStatus(before, after []string, poolExpandStatus string) (rsl SelfPoolExpandResponse, err error) {
+	values := make(url.Values)
+	values.Set("poolExpandStatus", poolExpandStatus)
+	if len(before) != 0 {
+		values.Set("before", strings.Join(before, ","))
+	}
+	if len(after) != 0 {
+		values.Set("after", strings.Join(after, ","))
+	}
+	respBody, err := client.call(peerRESTMethodSyncExpandPoolStatus, values, nil, -1)
+	if err != nil {
+		return rsl, err
+	}
+	defer xhttp.DrainBody(respBody)
+	body, err := io.ReadAll(respBody)
+	if err != nil {
+		return rsl, err
+	} else if err = json.Unmarshal(body, &rsl); err != nil {
+		return rsl, err
+	} else if !rsl.Success {
+		return rsl, fmt.Errorf("failed to sync expand pool status")
+	}
+	return rsl, err
 }
