@@ -831,7 +831,9 @@ func (c *Connection) reconnected() {
 	c.outgoing.Clear()
 
 	// Wait for existing to exit
+	c.connMu.Lock()
 	c.handleMsgWg.Wait()
+	c.connMu.Unlock()
 }
 
 func (c *Connection) updateState(s State) {
@@ -855,7 +857,9 @@ func (c *Connection) updateState(s State) {
 
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Read goroutine
+	c.connMu.Lock()
 	c.handleMsgWg.Add(2)
+	c.connMu.Unlock()
 	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
 		defer func() {
@@ -1534,7 +1538,9 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 			c.debugInConn.Close()
 		}
 	case debugWaitForExit:
+		c.connMu.Lock()
 		c.handleMsgWg.Wait()
+		c.connMu.Unlock()
 	case debugSetConnPingDuration:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
