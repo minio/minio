@@ -2430,9 +2430,9 @@ func toAPIError(ctx context.Context, err error) APIError {
 		switch e := err.(type) {
 		case kms.Error:
 			apiErr = APIError{
-				Description:    e.Err.Error(),
 				Code:           e.APICode,
-				HTTPStatusCode: e.HTTPStatusCode,
+				Description:    e.Err,
+				HTTPStatusCode: e.Code,
 			}
 		case batchReplicationJobError:
 			apiErr = APIError{

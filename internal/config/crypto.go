@@ -38,7 +38,7 @@ import (
 //
 // The same context must be provided when decrypting the
 // ciphertext.
-func EncryptBytes(k kms.KMS, plaintext []byte, context kms.Context) ([]byte, error) {
+func EncryptBytes(k *kms.KMS, plaintext []byte, context kms.Context) ([]byte, error) {
 	ciphertext, err := Encrypt(k, bytes.NewReader(plaintext), context)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func EncryptBytes(k kms.KMS, plaintext []byte, context kms.Context) ([]byte, err
 // DecryptBytes decrypts the ciphertext using a key managed by the KMS.
 // The same context that have been used during encryption must be
 // provided.
-func DecryptBytes(k kms.KMS, ciphertext []byte, context kms.Context) ([]byte, error) {
+func DecryptBytes(k *kms.KMS, ciphertext []byte, context kms.Context) ([]byte, error) {
 	plaintext, err := Decrypt(k, bytes.NewReader(ciphertext), context)
 	if err != nil {
 		return nil, err
@@ -62,13 +62,13 @@ func DecryptBytes(k kms.KMS, ciphertext []byte, context kms.Context) ([]byte, er
 //
 // The same context must be provided when decrypting the
 // ciphertext.
-func Encrypt(k kms.KMS, plaintext io.Reader, ctx kms.Context) (io.Reader, error) {
+func Encrypt(k *kms.KMS, plaintext io.Reader, ctx kms.Context) (io.Reader, error) {
 	algorithm := sio.AES_256_GCM
 	if !fips.Enabled && !sioutil.NativeAES() {
 		algorithm = sio.ChaCha20Poly1305
 	}
 
-	key, err := k.GenerateKey(context.Background(), "", ctx)
+	key, err := k.GenerateKey(context.Background(), &kms.GenerateKeyRequest{AssociatedData: ctx})
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func Encrypt(k kms.KMS, plaintext io.Reader, ctx kms.Context) (io.Reader, error)
 // Decrypt decrypts the ciphertext using a key managed by the KMS.
 // The same context that have been used during encryption must be
 // provided.
-func Decrypt(k kms.KMS, ciphertext io.Reader, context kms.Context) (io.Reader, error) {
+func Decrypt(k *kms.KMS, ciphertext io.Reader, associatedData kms.Context) (io.Reader, error) {
 	const (
 		MaxMetadataSize = 1 << 20 // max. size of the metadata
 		Version         = 1
@@ -149,7 +149,11 @@ func Decrypt(k kms.KMS, ciphertext io.Reader, context kms.Context) (io.Reader, e
 		return nil, fmt.Errorf("config: unsupported encryption algorithm: %q is not supported in FIPS mode", metadata.Algorithm)
 	}
 
-	key, err := k.DecryptKey(metadata.KeyID, metadata.KMSKey, context)
+	key, err := k.Decrypt(context.TODO(), &kms.DecryptRequest{
+		Name:           metadata.KeyID,
+		Ciphertext:     metadata.KMSKey,
+		AssociatedData: associatedData,
+	})
 	if err != nil {
 		return nil, err
 	}

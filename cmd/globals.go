@@ -349,7 +349,7 @@ var (
 	globalDNSConfig dns.Store
 
 	// GlobalKMS initialized KMS configuration
-	GlobalKMS kms.KMS
+	GlobalKMS *kms.KMS
 
 	// Common lock for various subsystems performing the leader tasks
 	globalLeaderLock *sharedLock

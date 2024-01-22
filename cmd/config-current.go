@@ -753,41 +753,33 @@ func autoGenerateRootCredentials() {
 		return
 	}
 
-	if manager, ok := GlobalKMS.(kms.KeyManager); ok {
-		stat, err := GlobalKMS.Stat(GlobalContext)
-		if err != nil {
-			kmsLogIf(GlobalContext, err, "Unable to generate root credentials using KMS")
-			return
-		}
+	aKey, err := GlobalKMS.MAC(GlobalContext, &kms.MACRequest{Message: []byte("root access key")})
+	if errors.Is(err, kes.ErrNotAllowed) || errors.Is(err, errors.ErrUnsupported) {
+		return // If we don't have permission to compute the HMAC, don't change the cred.
+	}
+	if err != nil {
+		logger.Fatal(err, "Unable to generate root access key using KMS")
+	}
 
-		aKey, err := manager.HMAC(GlobalContext, stat.DefaultKey, []byte("root access key"))
-		if errors.Is(err, kes.ErrNotAllowed) {
-			return // If we don't have permission to compute the HMAC, don't change the cred.
-		}
-		if err != nil {
-			logger.Fatal(err, "Unable to generate root access key using KMS")
-		}
+	sKey, err := GlobalKMS.MAC(GlobalContext, &kms.MACRequest{Message: []byte("root secret key")})
+	if err != nil {
+		// Here, we must have permission. Otherwise, we would have failed earlier.
+		logger.Fatal(err, "Unable to generate root secret key using KMS")
+	}
 
-		sKey, err := manager.HMAC(GlobalContext, stat.DefaultKey, []byte("root secret key"))
-		if err != nil {
-			// Here, we must have permission. Otherwise, we would have failed earlier.
-			logger.Fatal(err, "Unable to generate root secret key using KMS")
-		}
+	accessKey, err := auth.GenerateAccessKey(20, bytes.NewReader(aKey))
+	if err != nil {
+		logger.Fatal(err, "Unable to generate root access key")
+	}
+	secretKey, err := auth.GenerateSecretKey(32, bytes.NewReader(sKey))
+	if err != nil {
+		logger.Fatal(err, "Unable to generate root secret key")
+	}
 
-		accessKey, err := auth.GenerateAccessKey(20, bytes.NewReader(aKey))
-		if err != nil {
-			logger.Fatal(err, "Unable to generate root access key")
-		}
-		secretKey, err := auth.GenerateSecretKey(32, bytes.NewReader(sKey))
-		if err != nil {
-			logger.Fatal(err, "Unable to generate root secret key")
-		}
-
-		logger.Info("Automatically generated root access key and secret key with the KMS")
-		globalActiveCred = auth.Credentials{
-			AccessKey: accessKey,
-			SecretKey: secretKey,
-		}
+	logger.Info("Automatically generated root access key and secret key with the KMS")
+	globalActiveCred = auth.Credentials{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
 	}
 }
 

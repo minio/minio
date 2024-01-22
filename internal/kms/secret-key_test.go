@@ -25,16 +25,19 @@ import (
 )
 
 func TestSingleKeyRoundtrip(t *testing.T) {
-	KMS, err := Parse("my-key:eEm+JI9/q4JhH8QwKvf3LKo4DEBl6QbfvAl1CAbMIv8=")
+	KMS, err := ParseSecretKey("my-key:eEm+JI9/q4JhH8QwKvf3LKo4DEBl6QbfvAl1CAbMIv8=")
 	if err != nil {
 		t.Fatalf("Failed to initialize KMS: %v", err)
 	}
 
-	key, err := KMS.GenerateKey(context.Background(), "my-key", Context{})
+	key, err := KMS.GenerateKey(context.Background(), &GenerateKeyRequest{Name: "my-key"})
 	if err != nil {
 		t.Fatalf("Failed to generate key: %v", err)
 	}
-	plaintext, err := KMS.DecryptKey(key.KeyID, key.Ciphertext, Context{})
+	plaintext, err := KMS.Decrypt(context.TODO(), &DecryptRequest{
+		Name:       key.KeyID,
+		Ciphertext: key.Ciphertext,
+	})
 	if err != nil {
 		t.Fatalf("Failed to decrypt key: %v", err)
 	}
@@ -44,7 +47,7 @@ func TestSingleKeyRoundtrip(t *testing.T) {
 }
 
 func TestDecryptKey(t *testing.T) {
-	KMS, err := Parse("my-key:eEm+JI9/q4JhH8QwKvf3LKo4DEBl6QbfvAl1CAbMIv8=")
+	KMS, err := ParseSecretKey("my-key:eEm+JI9/q4JhH8QwKvf3LKo4DEBl6QbfvAl1CAbMIv8=")
 	if err != nil {
 		t.Fatalf("Failed to initialize KMS: %v", err)
 	}
@@ -54,11 +57,11 @@ func TestDecryptKey(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to decode plaintext key: %v", i, err)
 		}
-		ciphertext, err := base64.StdEncoding.DecodeString(test.Ciphertext)
-		if err != nil {
-			t.Fatalf("Test %d: failed to decode ciphertext key: %v", i, err)
-		}
-		plaintext, err := KMS.DecryptKey(test.KeyID, ciphertext, test.Context)
+		plaintext, err := KMS.Decrypt(context.TODO(), &DecryptRequest{
+			Name:           test.KeyID,
+			Ciphertext:     []byte(test.Ciphertext),
+			AssociatedData: test.Context,
+		})
 		if err != nil {
 			t.Fatalf("Test %d: failed to decrypt key: %v", i, err)
 		}
@@ -77,12 +80,12 @@ var decryptKeyTests = []struct {
 	{
 		KeyID:      "my-key",
 		Plaintext:  "zmS7NrG765UZ0ZN85oPjybelxqVvpz01vxsSpOISy2M=",
-		Ciphertext: "eyJhZWFkIjoiQ2hhQ2hhMjBQb2x5MTMwNSIsIml2IjoiSmJJK3Z3dll3dzFsQ2I1VnBrQUZ1UT09Iiwibm9uY2UiOiJBUmpJakp4QlNENTQxR3o4IiwiYnl0ZXMiOiJLQ2JFYzJzQTBUTHZBN2FXVFdhMjNBZGNjVmZKTXBPeHdnRzhobSs0UGFOcnhZZnkxeEZXWmcyZ0VlblZyT2d2In0=",
+		Ciphertext: `{"aead":"ChaCha20Poly1305","iv":"JbI+vwvYww1lCb5VpkAFuQ==","nonce":"ARjIjJxBSD541Gz8","bytes":"KCbEc2sA0TLvA7aWTWa23AdccVfJMpOxwgG8hm+4PaNrxYfy1xFWZg2gEenVrOgv"}`,
 	},
 	{
 		KeyID:      "my-key",
 		Plaintext:  "UnPWsZgVI+T4L9WGNzFlP1PsP1Z6hn2Fx8ISeZfDGnA=",
-		Ciphertext: "eyJhZWFkIjoiQ2hhQ2hhMjBQb2x5MTMwNSIsIml2IjoicjQreWZpVmJWSVlSMFoySTlGcSs2Zz09Iiwibm9uY2UiOiIyWXB3R3dFNTlHY1ZyYUkzIiwiYnl0ZXMiOiJrL3N2TWdsT1U3L0tnd3Y3M2hlRzM4TldXNTc1WExjRnAzU2F4UUhETWpKR1l5UkkzRml5Z3UyT2V1dEdQWE5MIn0=",
+		Ciphertext: `{"aead":"ChaCha20Poly1305","iv":"r4+yfiVbVIYR0Z2I9Fq+6g==","nonce":"2YpwGwE59GcVraI3","bytes":"k/svMglOU7/Kgwv73heG38NWW575XLcFp3SaxQHDMjJGYyRI3Fiygu2OeutGPXNL"}`,
 		Context:    Context{"key": "value"},
 	},
 }
