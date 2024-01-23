@@ -35,12 +35,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/selfupdate"
 	gopsutilcpu "github.com/shirou/gopsutil/v3/cpu"
+	"github.com/valyala/bytebufferpool"
 )
 
 const (
@@ -510,20 +512,40 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 var updateInProgress atomic.Uint32
 
 // Function to get the reader from an architecture
-func downloadBinary(u *url.URL, mode string) (bin []byte, err error) {
+func downloadBinary(u *url.URL, mode string) (binCompressed []byte, bin []byte, err error) {
 	transport := getUpdateTransport(30 * time.Second)
 	var reader io.ReadCloser
 	if u.Scheme == "https" || u.Scheme == "http" {
 		reader, err = getUpdateReaderFromURL(u, transport, mode)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
-		return nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
+		return nil, nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
 	}
 	defer xhttp.DrainBody(reader)
 
-	return io.ReadAll(reader)
+	b := bytebufferpool.Get()
+	bc := bytebufferpool.Get()
+	defer func() {
+		b.Reset()
+		bc.Reset()
+
+		bytebufferpool.Put(b)
+		bytebufferpool.Put(bc)
+	}()
+
+	w, err := zstd.NewWriter(bc)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if _, err = io.Copy(w, io.TeeReader(reader, b)); err != nil {
+		return nil, nil, err
+	}
+
+	w.Close()
+	return bc.Bytes(), b.Bytes(), nil
 }
 
 const (
