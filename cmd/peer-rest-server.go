@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/klauspost/compress/zstd"
 	"github.com/minio/madmin-go/v3"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
@@ -851,7 +852,14 @@ func (s *peerRESTServer) VerifyBinaryHandler(w http.ResponseWriter, r *http.Requ
 	}
 	releaseInfo := r.Form.Get(peerRESTReleaseInfo)
 
-	if err = verifyBinary(u, sha256Sum, releaseInfo, getMinioMode(), r.Body); err != nil {
+	zr, err := zstd.NewReader(r.Body)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+	defer zr.Close()
+
+	if err = verifyBinary(u, sha256Sum, releaseInfo, getMinioMode(), zr); err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}

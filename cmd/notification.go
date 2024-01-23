@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"runtime"
 	"sync"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v2/workers"
 
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/logger"
@@ -59,7 +61,7 @@ type NotificationPeerErr struct {
 //
 // A zero NotificationGroup is valid and does not cancel on error.
 type NotificationGroup struct {
-	wg         sync.WaitGroup
+	workers    *workers.Workers
 	errs       []NotificationPeerErr
 	retryCount int
 }
@@ -67,7 +69,11 @@ type NotificationGroup struct {
 // WithNPeers returns a new NotificationGroup with length of errs slice upto nerrs,
 // upon Wait() errors are returned collected from all tasks.
 func WithNPeers(nerrs int) *NotificationGroup {
-	return &NotificationGroup{errs: make([]NotificationPeerErr, nerrs), retryCount: 3}
+	if nerrs <= 0 {
+		nerrs = 1
+	}
+	wk, _ := workers.New(nerrs)
+	return &NotificationGroup{errs: make([]NotificationPeerErr, nerrs), workers: wk, retryCount: 3}
 }
 
 // WithRetries sets the retry count for all function calls from the Go method.
@@ -81,7 +87,7 @@ func (g *NotificationGroup) WithRetries(retryCount int) *NotificationGroup {
 // Wait blocks until all function calls from the Go method have returned, then
 // returns the slice of errors from all function calls.
 func (g *NotificationGroup) Wait() []NotificationPeerErr {
-	g.wg.Wait()
+	g.workers.Wait()
 	return g.errs
 }
 
@@ -92,10 +98,11 @@ func (g *NotificationGroup) Wait() []NotificationPeerErr {
 func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, addr xnet.Host) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	g.wg.Add(1)
+	g.workers.Take()
 
 	go func() {
-		defer g.wg.Done()
+		defer g.workers.Give()
+
 		g.errs[index] = NotificationPeerErr{
 			Host: addr,
 		}
@@ -340,7 +347,26 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 
 // VerifyBinary - asks remote peers to verify the checksum
 func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, bin []byte) []NotificationPeerErr {
-	ng := WithNPeers(len(sys.peerClients))
+	// FIXME: network calls made in this manner such as one goroutine per node,
+	// can easily eat into the internode bandwidth. This function would be mostly
+	// TX saturating, however there are situations where a RX might also saturate.
+	// To avoid these problems we must split the work at scale. With 1000 node
+	// setup becoming a reality we must try to shard the work properly such as
+	// pick 10 nodes that precisely can send those 100 requests the first node
+	// in the 10 node shard would coordinate between other 9 shards to get the
+	// rest of the `99*9` requests.
+	//
+	// This essentially splits the workload properly and also allows for network
+	// utilization to be optimal, instead of blindly throttling the way we are
+	// doing below. However the changes that are needed here are a bit involved,
+	// further discussion advised. Remove this comment and remove the worker model
+	// for this function in future.
+	maxWorkers := runtime.GOMAXPROCS(0) / 2
+	if maxWorkers > len(sys.peerClients) {
+		maxWorkers = len(sys.peerClients)
+	}
+
+	ng := WithNPeers(maxWorkers)
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue

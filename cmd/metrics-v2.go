@@ -3174,20 +3174,20 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 						}
 					}
 				}
-				metrics = append(metrics, Metric{
-					Description:          getBucketObjectDistributionMD(),
-					Histogram:            usage.ObjectSizesHistogram,
-					HistogramBucketLabel: "range",
-					VariableLabels:       map[string]string{"bucket": bucket},
-				})
-
-				metrics = append(metrics, Metric{
-					Description:          getBucketObjectVersionsMD(),
-					Histogram:            usage.ObjectVersionsHistogram,
-					HistogramBucketLabel: "range",
-					VariableLabels:       map[string]string{"bucket": bucket},
-				})
 			}
+			metrics = append(metrics, Metric{
+				Description:          getBucketObjectDistributionMD(),
+				Histogram:            usage.ObjectSizesHistogram,
+				HistogramBucketLabel: "range",
+				VariableLabels:       map[string]string{"bucket": bucket},
+			})
+
+			metrics = append(metrics, Metric{
+				Description:          getBucketObjectVersionsMD(),
+				Histogram:            usage.ObjectVersionsHistogram,
+				HistogramBucketLabel: "range",
+				VariableLabels:       map[string]string{"bucket": bucket},
+			})
 		}
 		return
 	})
