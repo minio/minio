@@ -100,7 +100,7 @@ type xlStorageDiskIDCheck struct {
 
 	metricsCache timedValue
 	diskCtx      context.Context
-	cancel       context.CancelFunc
+	diskCancel   context.CancelFunc
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
@@ -235,7 +235,7 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		xl.totalDeletes.Store(xl.storage.getDeleteAttribute())
 	}
 
-	xl.diskCtx, xl.cancel = context.WithCancel(context.TODO())
+	xl.diskCtx, xl.diskCancel = context.WithCancel(context.TODO())
 	for i := range xl.apiLatencies[:] {
 		xl.apiLatencies[i] = &lockedLastMinuteLatency{}
 	}
@@ -295,6 +295,10 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	return p.storage.NSScanner(ctx, cache, updates, scanMode, weSleep)
 }
 
+func (p *xlStorageDiskIDCheck) SetFormatData(b []byte) {
+	p.storage.SetFormatData(b)
+}
+
 func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return p.storage.GetDiskLoc()
 }
@@ -304,7 +308,7 @@ func (p *xlStorageDiskIDCheck) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 }
 
 func (p *xlStorageDiskIDCheck) Close() error {
-	p.cancel()
+	p.diskCancel()
 	return p.storage.Close()
 }
 

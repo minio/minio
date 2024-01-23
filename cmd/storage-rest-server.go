@@ -1390,6 +1390,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				}
 				storage := newXLStorageDiskIDCheck(xl, true)
 				storage.SetDiskID(xl.diskID)
+				// We do not have to do SetFormatData() since 'xl'
+				// already captures formatData cached.
 
 				globalLocalDrivesMu.Lock()
 				defer globalLocalDrivesMu.Unlock()
