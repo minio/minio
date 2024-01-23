@@ -373,7 +373,6 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 
 	// Check "no-compat" flag from command line argument.
 	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
-	ctxt.PreAllocate = ctx.IsSet("pre-allocate") || ctx.GlobalIsSet("pre-allocate")
 
 	switch {
 	case ctx.IsSet("config-dir"):
