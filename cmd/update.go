@@ -364,6 +364,25 @@ func downloadReleaseURL(u *url.URL, timeout time.Duration, mode string) (content
 	return string(contentBytes), nil
 }
 
+func releaseInfoToReleaseTime(releaseInfo string) (releaseTime time.Time, err error) {
+	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
+	nfields := strings.SplitN(releaseInfo, ".", 2)
+	if len(nfields) != 2 {
+		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
+		return releaseTime, err
+	}
+	if nfields[0] != "minio" {
+		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
+		return releaseTime, err
+	}
+
+	releaseTime, err = releaseTagToReleaseTime(nfields[1])
+	if err != nil {
+		err = fmt.Errorf("Unknown release tag format. %w", err)
+	}
+	return releaseTime, err
+}
+
 // parseReleaseData - parses release info file content fetched from
 // official minio download server.
 //
@@ -396,22 +415,7 @@ func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, rel
 
 	releaseInfo = fields[1]
 
-	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
-	nfields := strings.SplitN(releaseInfo, ".", 2)
-	if len(nfields) != 2 {
-		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
-		return sha256Sum, releaseTime, releaseInfo, err
-	}
-	if nfields[0] != "minio" {
-		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
-		return sha256Sum, releaseTime, releaseInfo, err
-	}
-
-	releaseTime, err = releaseTagToReleaseTime(nfields[1])
-	if err != nil {
-		err = fmt.Errorf("Unknown release tag format. %w", err)
-	}
-
+	releaseTime, err = releaseInfoToReleaseTime(releaseInfo)
 	return sha256Sum, releaseTime, releaseInfo, err
 }
 

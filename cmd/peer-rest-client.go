@@ -502,11 +502,10 @@ func (client *peerRESTClient) CommitBinary(ctx context.Context) error {
 }
 
 // SignalService - sends signal to peer nodes.
-func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string, dryRun, force bool) error {
+func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string, dryRun bool) error {
 	values := make(url.Values)
 	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
 	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
-	values.Set(peerRESTForce, strconv.FormatBool(force))
 	values.Set(peerRESTSubSys, subSys)
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
