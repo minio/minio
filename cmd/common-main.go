@@ -69,8 +69,6 @@ import (
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
-var shardDiskTimeDelta time.Duration
-
 func init() {
 	if runtime.GOOS == "windows" {
 		if mousetrap.StartedByExplorer() {
@@ -106,12 +104,6 @@ func init() {
 	gob.Register(madmin.TimeInfo{})
 	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
-
-	var err error
-	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
-	if err != nil {
-		shardDiskTimeDelta = 1 * time.Minute
-	}
 
 	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
