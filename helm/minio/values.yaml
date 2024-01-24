@@ -84,7 +84,7 @@ priorityClassName: ""
 runtimeClassName: ""
 
 ## Set default rootUser, rootPassword
-## AccessKey and secretKey is generated when not set
+## rootUser and rootPassword is generated when not set
 ## Distributed MinIO ref: https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html
 ##
 rootUser: ""
