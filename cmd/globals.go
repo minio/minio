@@ -143,7 +143,6 @@ type serverCtxt struct {
 	JSON, Quiet               bool
 	Anonymous                 bool
 	StrictS3Compat            bool
-	PreAllocate               bool
 	Addr, ConsoleAddr         string
 	ConfigDir, CertsDir       string
 	configDirSet, certsDirSet bool
