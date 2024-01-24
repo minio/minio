@@ -54,7 +54,11 @@ var errDiskNotDir = StorageErr("drive is not directory or mountpoint")
 // errDiskNotFound - cannot find the underlying configured disk anymore.
 var errDiskNotFound = StorageErr("drive not found")
 
+// errDiskOngoingReq - indicates if the disk has an on-going request in progress.
 var errDiskOngoingReq = StorageErr("drive still did not complete the request")
+
+// errDriveIsRoot - cannot use the disk since its a root disk.
+var errDriveIsRoot = StorageErr("drive is part of root drive, will not be used")
 
 // errFaultyRemoteDisk - remote disk is faulty.
 var errFaultyRemoteDisk = StorageErr("remote drive is faulty")

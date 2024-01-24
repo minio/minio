@@ -133,8 +133,8 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		}
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
-		if len(globalEndpoints.Hostnames()) > 0 {
-			apiRequestsMaxPerNode /= len(globalEndpoints.Hostnames())
+		if n := totalNodeCount(); n > 0 {
+			apiRequestsMaxPerNode /= n
 		}
 	}
 

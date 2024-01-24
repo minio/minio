@@ -2852,7 +2852,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 
 		ci := madmin.ClusterRegistrationInfo{}
 		ci.Info.NoOfServerPools = len(globalEndpoints)
-		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
+		ci.Info.NoOfServers = totalNodeCount()
 		ci.Info.MinioVersion = Version
 
 		si := objectAPI.StorageInfo(ctx, true)

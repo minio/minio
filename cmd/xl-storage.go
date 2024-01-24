@@ -101,7 +101,6 @@ type xlStorage struct {
 
 	globalSync bool
 	oDirect    bool // indicates if this disk supports ODirect
-	rootDisk   bool
 
 	diskID string
 
@@ -240,18 +239,21 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return nil, err
 	}
 
-	var rootDisk bool
 	if !globalIsCICD && !globalIsErasureSD {
+		var rootDrive bool
 		if globalRootDiskThreshold > 0 {
 			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
 			// this disk is a root disk. treat those disks with
-			// size less than or equal to the threshold as rootDisks.
-			rootDisk = info.Total <= globalRootDiskThreshold
+			// size less than or equal to the threshold as rootDrives.
+			rootDrive = info.Total <= globalRootDiskThreshold
 		} else {
-			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
+			rootDrive, err = disk.IsRootDisk(path, SlashSeparator)
 			if err != nil {
 				return nil, err
 			}
+		}
+		if rootDrive {
+			return nil, errDriveIsRoot
 		}
 	}
 
@@ -259,7 +261,6 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		drivePath:  path,
 		endpoint:   ep,
 		globalSync: globalFSOSync,
-		rootDisk:   rootDisk,
 		poolIndex:  -1,
 		setIndex:   -1,
 		diskIndex:  -1,
@@ -761,7 +762,6 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 		info = v.(DiskInfo)
 	}
 
-	info.RootDisk = s.rootDisk
 	info.MountPath = s.drivePath
 	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1
