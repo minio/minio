@@ -787,8 +787,14 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 						logger.Info("   - Drive: %s", disk.String())
 					}
 				})
-				logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
-					"A host failure will result in data becoming unavailable.", host, wantAtMost)
+				var warning string
+				if wantAtMost == 0 {
+					warning = fmt.Sprintf("Host %v has all drives of set. ", host)
+				} else {
+					warning = fmt.Sprintf("Host %v has more than %v drives of set. ", host, wantAtMost)
+				}
+				logger.Info(color.Yellow("WARNING: ") + warning +
+					"A host failure will result in data becoming unavailable.")
 			}
 		}
 	}
