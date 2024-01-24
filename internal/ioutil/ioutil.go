@@ -118,14 +118,10 @@ func WithDeadline[V any](ctx context.Context, timeout time.Duration, work func(c
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	c := make(chan ioret[V])
+	c := make(chan ioret[V], 1)
 	go func() {
 		v, err := work(ctx)
-		select {
-		case c <- ioret[V]{val: v, err: err}:
-		default:
-			// Ignore if caller returned.
-		}
+		c <- ioret[V]{val: v, err: err}
 	}()
 
 	select {
@@ -156,13 +152,10 @@ func NewDeadlineWorker(timeout time.Duration) *DeadlineWorker {
 // channel so that the work function can attempt to exit gracefully.
 // Multiple calls to Run will run independently of each other.
 func (d *DeadlineWorker) Run(work func() error) error {
-	c := make(chan ioret[struct{}])
+	c := make(chan ioret[struct{}], 1)
 	t := time.NewTimer(d.timeout)
 	go func() {
-		select {
-		case c <- ioret[struct{}]{val: struct{}{}, err: work()}:
-		default:
-		}
+		c <- ioret[struct{}]{val: struct{}{}, err: work()}
 	}()
 
 	select {
