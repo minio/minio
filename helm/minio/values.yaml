@@ -495,6 +495,7 @@ oidc:
   # Can leave empty
   claimPrefix: ""
   comment: ""
+  displayName: ""
 
 networkPolicy:
   enabled: false
