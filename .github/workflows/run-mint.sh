@@ -16,7 +16,7 @@ docker volume rm $(docker volume ls -f dangling=true) || true
 cd .github/workflows/mint
 
 docker-compose -f minio-${MODE}.yaml up -d
-sleep 5m
+sleep 30s
 
 docker system prune -f || true
 docker volume prune -f || true

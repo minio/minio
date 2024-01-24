@@ -20,6 +20,7 @@ package logger
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"go/build"
 	"path/filepath"
@@ -32,7 +33,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/logger/message/log"
+	"github.com/minio/pkg/v2/logger/message/log"
 )
 
 // HighwayHash key for logging in anonymous mode
@@ -256,6 +257,20 @@ func LogIf(ctx context.Context, err error, errKind ...interface{}) {
 		return
 	}
 	logIf(ctx, err, errKind...)
+}
+
+// LogIfNot prints a detailed error message during
+// the execution of the server, if it is not an ignored error (either internal or given).
+func LogIfNot(ctx context.Context, err error, ignored ...error) {
+	if logIgnoreError(err) {
+		return
+	}
+	for _, ignore := range ignored {
+		if errors.Is(err, ignore) {
+			return
+		}
+	}
+	logIf(ctx, err)
 }
 
 func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entry {

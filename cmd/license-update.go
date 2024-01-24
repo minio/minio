@@ -29,8 +29,7 @@ import (
 
 const (
 	licUpdateCycle = 24 * time.Hour * 30
-	licRenewURL    = "https://subnet.min.io/api/cluster/renew-license"
-	licRenewURLDev = "http://localhost:9000/api/cluster/renew-license"
+	licRenewPath   = "/api/cluster/renew-license"
 )
 
 // initlicenseUpdateJob start the periodic license update job in the background.
@@ -48,7 +47,7 @@ func initLicenseUpdateJob(ctx context.Context, objAPI ObjectLayer) {
 			// sleep for some time and try again.
 			duration := time.Duration(r.Float64() * float64(time.Hour))
 			if duration < time.Second {
-				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				// Make sure to sleep at least a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
@@ -82,10 +81,7 @@ func licenceUpdaterLoop(ctx context.Context, objAPI ObjectLayer) {
 func performLicenseUpdate(ctx context.Context, objectAPI ObjectLayer) {
 	// the subnet license renewal api renews the license only
 	// if required e.g. when it is expiring soon
-	url := licRenewURL
-	if globalIsCICD {
-		url = licRenewURLDev
-	}
+	url := globalSubnetConfig.BaseURL + licRenewPath
 
 	resp, err := globalSubnetConfig.Post(url, nil)
 	if err != nil {
@@ -93,7 +89,7 @@ func performLicenseUpdate(ctx context.Context, objectAPI ObjectLayer) {
 		return
 	}
 
-	r := gjson.Parse(resp).Get("license")
+	r := gjson.Parse(resp).Get("license_v2")
 	if r.Index == 0 {
 		logger.LogIf(ctx, fmt.Errorf("license not found in response from %s", url))
 		return

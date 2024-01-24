@@ -2,7 +2,7 @@ version: '3.7'
 
 # Settings and configurations that are common for all containers
 x-minio-common: &minio-common
-  image: minio/minio:${JOB_NAME}
+  image: quay.io/minio/minio:${JOB_NAME}
   command: server --console-address ":9001" http://minio{1...4}/pdata{1...2} http://minio{5...8}/pdata{1...2}
   expose:
     - "9000"
@@ -13,10 +13,10 @@ x-minio-common: &minio-common
     MINIO_ROOT_PASSWORD: "minio123"
     MINIO_KMS_SECRET_KEY: "my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw="
   healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-    interval: 30s
-    timeout: 20s
-    retries: 3
+    test: ["CMD", "mc", "ready", "local"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
 
 # starts 4 docker containers running minio server instances.
 # using nginx reverse proxy, load balancing, you can access

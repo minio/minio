@@ -38,7 +38,7 @@ func renameAllBucketMetacache(epPath string) error {
 		if typ == os.ModeDir {
 			tmpMetacacheOld := pathutil.Join(epPath, minioMetaTmpDeletedBucket, mustGetUUID())
 			if err := renameAll(pathJoin(epPath, minioMetaBucket, metacachePrefixForID(name, slashSeparator)),
-				tmpMetacacheOld); err != nil && err != errFileNotFound {
+				tmpMetacacheOld, epPath); err != nil && err != errFileNotFound {
 				return fmt.Errorf("unable to rename (%s -> %s) %w",
 					pathJoin(epPath, minioMetaBucket+metacachePrefixForID(minioMetaBucket, slashSeparator)),
 					tmpMetacacheOld,
@@ -59,6 +59,10 @@ func renameAllBucketMetacache(epPath string) error {
 func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (entries metaCacheEntriesSorted, err error) {
 	if err := checkListObjsArgs(ctx, o.Bucket, o.Prefix, o.Marker, z); err != nil {
 		return entries, err
+	}
+	// Marker points to before the prefix, just ignore it.
+	if o.Marker < o.Prefix {
+		o.Marker = ""
 	}
 
 	// Marker is set validate pre-condition.
@@ -366,7 +370,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 
 			objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
 			if o.Lifecycle != nil {
-				act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo).Action
+				act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo).Action
 				skip = act.Delete()
 				if act.DeleteRestored() {
 					// do not skip DeleteRestored* actions
@@ -394,7 +398,7 @@ func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCa
 			objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
 
 			if o.Lifecycle != nil {
-				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, objInfo)
+				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo)
 				if evt.Action.Delete() {
 					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
 					if !evt.Action.DeleteRestored() {

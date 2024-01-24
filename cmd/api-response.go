@@ -35,7 +35,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 	xxml "github.com/minio/xxml"
 )
 
@@ -502,6 +502,47 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	return data
 }
 
+func cleanReservedKeys(metadata map[string]string) map[string]string {
+	m := cloneMSS(metadata)
+
+	switch kind, _ := crypto.IsEncrypted(metadata); kind {
+	case crypto.S3:
+		m[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionAES
+	case crypto.S3KMS:
+		m[xhttp.AmzServerSideEncryption] = xhttp.AmzEncryptionKMS
+		m[xhttp.AmzServerSideEncryptionKmsID] = kmsKeyIDFromMetadata(metadata)
+		if kmsCtx, ok := metadata[crypto.MetaContext]; ok {
+			m[xhttp.AmzServerSideEncryptionKmsContext] = kmsCtx
+		}
+	case crypto.SSEC:
+		m[xhttp.AmzServerSideEncryptionCustomerAlgorithm] = xhttp.AmzEncryptionAES
+
+	}
+
+	var toRemove []string
+	for k := range cleanMinioInternalMetadataKeys(m) {
+		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
+			// Do not need to send any internal metadata
+			// values to client.
+			toRemove = append(toRemove, k)
+			continue
+		}
+
+		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
+		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
+			toRemove = append(toRemove, k)
+			continue
+		}
+	}
+
+	for _, k := range toRemove {
+		delete(m, k)
+		delete(m, strings.ToLower(k))
+	}
+
+	return m
+}
+
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
 func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata metaCheckFn) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
@@ -549,18 +590,11 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 			case crypto.SSEC:
 				content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
 			}
-			for k, v := range cleanMinioInternalMetadataKeys(object.UserDefined) {
-				if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-					// Do not need to send any internal metadata
-					// values to client.
-					continue
-				}
-				// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-				if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
-					continue
-				}
+			for k, v := range cleanReservedKeys(object.UserDefined) {
 				content.UserMetadata.Set(k, v)
 			}
+
+			content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
 			content.Internal = &ObjectInternalInfo{
 				K: object.DataBlocks,
 				M: object.ParityBlocks,
@@ -692,18 +726,10 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 				case crypto.SSEC:
 					content.UserMetadata.Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, xhttp.AmzEncryptionAES)
 				}
-				for k, v := range cleanMinioInternalMetadataKeys(object.UserDefined) {
-					if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-						// Do not need to send any internal metadata
-						// values to client.
-						continue
-					}
-					// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
-					if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
-						continue
-					}
+				for k, v := range cleanReservedKeys(object.UserDefined) {
 					content.UserMetadata.Set(k, v)
 				}
+				content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
 				content.Internal = &ObjectInternalInfo{
 					K: object.DataBlocks,
 					M: object.ParityBlocks,
@@ -978,7 +1004,7 @@ func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, er
 		BucketName: reqInfo.BucketName,
 		Key:        reqInfo.ObjectName,
 		RequestID:  w.Header().Get(xhttp.AmzRequestID),
-		HostID:     globalDeploymentID,
+		HostID:     globalDeploymentID(),
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)

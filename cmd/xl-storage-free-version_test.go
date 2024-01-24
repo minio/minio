@@ -26,7 +26,7 @@ import (
 )
 
 func (x xlMetaV2) listFreeVersions(volume, path string) ([]FileInfo, error) {
-	fivs, err := x.ListVersions(volume, path)
+	fivs, err := x.ListVersions(volume, path, true)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +179,7 @@ func TestFreeVersion(t *testing.T) {
 	}
 
 	for _, ft := range freeVersionsTests {
-		fi, err := xl.ToFileInfo(ft.vol, ft.name, "", ft.inclFreeVers)
+		fi, err := xl.ToFileInfo(ft.vol, ft.name, "", ft.inclFreeVers, true)
 		if err != nil && !errors.Is(err, ft.expectedErr) {
 			t.Fatalf("ToFileInfo failed due to %v", err)
 		}

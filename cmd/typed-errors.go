@@ -99,7 +99,7 @@ var errNoSuchPolicy = errors.New("Specified canned policy does not exist")
 var errPolicyInUse = errors.New("Specified policy is in use and cannot be deleted.")
 
 // error returned when more than a single policy is specified when only one is
-// expectd.
+// expected.
 var errTooManyPolicies = errors.New("Only a single policy may be specified here.")
 
 // error returned in IAM subsystem when an external users systems is configured.

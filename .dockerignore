@@ -1,6 +1,5 @@
 .git
 .github
-docs
 default.etcd
 *.gz
 *.tar.gz
@@ -8,3 +7,11 @@ default.etcd
 *.zip
 browser/node_modules
 node_modules
+docs/debugging/s3-verify/s3-verify
+docs/debugging/xl-meta/xl-meta
+docs/debugging/s3-check-md5/s3-check-md5
+docs/debugging/hash-set/hash-set
+docs/debugging/healing-bin/healing-bin
+docs/debugging/inspect/inspect
+docs/debugging/pprofgoparser/pprofgoparser
+docs/debugging/reorder-disks/reorder-disks

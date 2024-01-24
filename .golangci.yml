@@ -13,7 +13,6 @@ linters:
   enable:
     - durationcheck
     - gocritic
-    - gofmt
     - gofumpt
     - goimports
     - gomodguard
@@ -30,5 +29,8 @@ linters:
 issues:
   exclude-use-default: false
   exclude:
+    - "empty-block:"
+    - "unused-parameter:"
+    - "dot-imports:"
     - should have a package comment
     - error strings should not be capitalized or end with punctuation or a newline

@@ -21,14 +21,12 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"runtime"
 	"strings"
 
-	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
-	color "github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // generates format string depending on the string length and padding.
@@ -53,16 +51,11 @@ func printStartupMessage(apiEndpoints []string, err error) {
 	}
 
 	strippedAPIEndpoints := stripStandardPorts(apiEndpoints, globalMinioHost)
-	// If cache layer is enabled, print cache capacity.
-	cachedObjAPI := newCachedObjectLayerFn()
-	if cachedObjAPI != nil {
-		printCacheStorageInfo(cachedObjAPI.StorageInfo(GlobalContext))
-	}
 
 	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
-		printStorageInfo(objAPI.StorageInfo(GlobalContext))
+		printStorageInfo(objAPI.StorageInfo(GlobalContext, true))
 	}
 
 	// Prints credential, region and browser access.
@@ -128,20 +121,20 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 	// Colorize the message and print.
 	logger.Info(color.Blue("S3-API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
-	if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
-		logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-		logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s \n", cred.SecretKey)))
+	if color.IsTerminal() && (!globalServerCtxt.Anonymous && !globalServerCtxt.JSON) {
+		logger.Info(color.Blue("RootUser: ") + color.Bold("%s ", cred.AccessKey))
+		logger.Info(color.Blue("RootPass: ") + color.Bold("%s \n", cred.SecretKey))
 		if region != "" {
-			logger.Info(color.Blue("Region: ") + color.Bold(fmt.Sprintf(getFormatStr(len(region), 2), region)))
+			logger.Info(color.Blue("Region: ") + color.Bold("%s", fmt.Sprintf(getFormatStr(len(region), 2), region)))
 		}
 	}
 
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
 		logger.Info(color.Blue("Console: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
-		if color.IsTerminal() && (!globalCLIContext.Anonymous && !globalCLIContext.JSON) {
-			logger.Info(color.Blue("RootUser: ") + color.Bold(fmt.Sprintf("%s ", cred.AccessKey)))
-			logger.Info(color.Blue("RootPass: ") + color.Bold(fmt.Sprintf("%s ", cred.SecretKey)))
+		if color.IsTerminal() && (!globalServerCtxt.Anonymous && !globalServerCtxt.JSON) {
+			logger.Info(color.Blue("RootUser: ") + color.Bold("%s ", cred.AccessKey))
+			logger.Info(color.Blue("RootPass: ") + color.Bold("%s ", cred.SecretKey))
 		}
 	}
 
@@ -194,17 +187,11 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	const mcQuickStartGuide = "https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart"
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	if color.IsTerminal() && !globalCLIContext.Anonymous {
+	if color.IsTerminal() && !globalServerCtxt.Anonymous {
 		logger.Info(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
-		if runtime.GOOS == globalWindowsOSName {
-			mcMessage := fmt.Sprintf("$ mc.exe alias set %s %s %s %s", alias,
-				endPoint, cred.AccessKey, cred.SecretKey)
-			logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-		} else {
-			mcMessage := fmt.Sprintf("$ mc alias set %s %s %s %s", alias,
-				endPoint, cred.AccessKey, cred.SecretKey)
-			logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-		}
+		mcMessage := fmt.Sprintf("$ mc alias set '%s' '%s' '%s' '%s'", alias,
+			endPoint, cred.AccessKey, cred.SecretKey)
+		logger.Info(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }
 
@@ -232,11 +219,4 @@ func printStorageInfo(storageInfo StorageInfo) {
 	if msg := getStorageInfoMsg(storageInfo); msg != "" {
 		logger.Info(msg)
 	}
-}
-
-func printCacheStorageInfo(storageInfo CacheStorageInfo) {
-	msg := fmt.Sprintf("%s %s Free, %s Total", color.Blue("Cache Capacity:"),
-		humanize.IBytes(storageInfo.Free),
-		humanize.IBytes(storageInfo.Total))
-	logger.Info(msg)
 }

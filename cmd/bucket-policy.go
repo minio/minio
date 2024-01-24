@@ -32,20 +32,20 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // PolicySys - policy subsystem.
 type PolicySys struct{}
 
 // Get returns stored bucket policy
-func (sys *PolicySys) Get(bucket string) (*policy.Policy, error) {
+func (sys *PolicySys) Get(bucket string) (*policy.BucketPolicy, error) {
 	policy, _, err := globalBucketMetadataSys.GetPolicyConfig(bucket)
 	return policy, err
 }
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
-func (sys *PolicySys) IsAllowed(args policy.Args) bool {
+func (sys *PolicySys) IsAllowed(args policy.BucketPolicyArgs) bool {
 	p, err := sys.Get(args.BucketName)
 	if err == nil {
 		return p.IsAllowed(args)
@@ -121,7 +121,7 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 		"CurrentTime":      {currTime.Format(time.RFC3339)},
 		"EpochTime":        {strconv.FormatInt(currTime.Unix(), 10)},
 		"SecureTransport":  {strconv.FormatBool(r.TLS != nil)},
-		"SourceIp":         {handlers.GetSourceIP(r)},
+		"SourceIp":         {handlers.GetSourceIPRaw(r)},
 		"UserAgent":        {r.UserAgent()},
 		"Referer":          {r.Referer()},
 		"principaltype":    {principalType},
@@ -137,6 +137,10 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 	}
 
 	cloneHeader := r.Header.Clone()
+	if v := cloneHeader.Get("x-amz-signature-age"); v != "" {
+		args["signatureAge"] = []string{v}
+		cloneHeader.Del("x-amz-signature-age")
+	}
 
 	if userTags := cloneHeader.Get(xhttp.AmzObjectTagging); userTags != "" {
 		tag, _ := tags.ParseObjectTags(userTags)
@@ -236,7 +240,7 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 }
 
 // PolicyToBucketAccessPolicy converts a MinIO policy into a minio-go policy data structure.
-func PolicyToBucketAccessPolicy(bucketPolicy *policy.Policy) (*miniogopolicy.BucketAccessPolicy, error) {
+func PolicyToBucketAccessPolicy(bucketPolicy *policy.BucketPolicy) (*miniogopolicy.BucketAccessPolicy, error) {
 	// Return empty BucketAccessPolicy for empty bucket policy.
 	if bucketPolicy == nil {
 		return &miniogopolicy.BucketAccessPolicy{Version: policy.DefaultVersion}, nil
@@ -258,15 +262,15 @@ func PolicyToBucketAccessPolicy(bucketPolicy *policy.Policy) (*miniogopolicy.Buc
 	return &policyInfo, nil
 }
 
-// BucketAccessPolicyToPolicy - converts minio-go/policy.BucketAccessPolicy to policy.Policy.
-func BucketAccessPolicyToPolicy(policyInfo *miniogopolicy.BucketAccessPolicy) (*policy.Policy, error) {
+// BucketAccessPolicyToPolicy - converts minio-go/policy.BucketAccessPolicy to policy.BucketPolicy.
+func BucketAccessPolicyToPolicy(policyInfo *miniogopolicy.BucketAccessPolicy) (*policy.BucketPolicy, error) {
 	data, err := json.Marshal(policyInfo)
 	if err != nil {
 		// This should not happen because policyInfo is valid to convert to JSON data.
 		return nil, err
 	}
 
-	var bucketPolicy policy.Policy
+	var bucketPolicy policy.BucketPolicy
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(data, &bucketPolicy); err != nil {
 		// This should not happen because data is valid to JSON data.

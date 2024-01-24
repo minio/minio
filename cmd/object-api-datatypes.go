@@ -20,6 +20,7 @@ package cmd
 import (
 	"io"
 	"math"
+	"net/http"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -53,16 +54,35 @@ type objectHistogramInterval struct {
 }
 
 const (
+	// dataUsageBucketLenV1 must be length of ObjectsHistogramIntervalsV1
+	dataUsageBucketLenV1 = 7
 	// dataUsageBucketLen must be length of ObjectsHistogramIntervals
-	dataUsageBucketLen  = 7
+	dataUsageBucketLen  = 11
 	dataUsageVersionLen = 7
 )
 
+// ObjectsHistogramIntervalsV1 is the list of all intervals
+// of object sizes to be included in objects histogram(V1).
+var ObjectsHistogramIntervalsV1 = [dataUsageBucketLenV1]objectHistogramInterval{
+	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
+	{"BETWEEN_1024B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
+	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", humanize.MiByte * 10, humanize.MiByte*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", humanize.MiByte * 128, humanize.MiByte*512 - 1},
+	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
+}
+
 // ObjectsHistogramIntervals is the list of all intervals
 // of object sizes to be included in objects histogram.
+// Note: this histogram expands 1024B-1MB to incl. 1024B-64KB, 64KB-256KB, 256KB-512KB and 512KB-1MiB
 var ObjectsHistogramIntervals = [dataUsageBucketLen]objectHistogramInterval{
 	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
-	{"BETWEEN_1024_B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
+	{"BETWEEN_1024_B_AND_64_KB", humanize.KiByte, 64*humanize.KiByte - 1},         // not exported, for support use only
+	{"BETWEEN_64_KB_AND_256_KB", 64 * humanize.KiByte, 256*humanize.KiByte - 1},   // not exported, for support use only
+	{"BETWEEN_256_KB_AND_512_KB", 256 * humanize.KiByte, 512*humanize.KiByte - 1}, // not exported, for support use only
+	{"BETWEEN_512_KB_AND_1_MB", 512 * humanize.KiByte, humanize.MiByte - 1},       // not exported, for support use only
+	{"BETWEEN_1024B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
 	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
 	{"BETWEEN_10_MB_AND_64_MB", humanize.MiByte * 10, humanize.MiByte*64 - 1},
 	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
@@ -109,6 +129,9 @@ type ObjectInfo struct {
 	// Total object size.
 	Size int64
 
+	// Actual size is the real size of the object uploaded by client.
+	ActualSize *int64
+
 	// IsDir indicates if the object is prefix.
 	IsDir bool
 
@@ -146,10 +169,8 @@ type ObjectInfo struct {
 	// Date and time at which the object is no longer able to be cached
 	Expires time.Time
 
-	// CacheStatus sets status of whether this is a cache hit/miss
-	CacheStatus CacheStatusType
-	// CacheLookupStatus sets whether a cacheable response is present in the cache
-	CacheLookupStatus CacheStatusType
+	// Cache-Control - Specifies caching behavior along the request/reply chain
+	CacheControl string
 
 	// Specify object storage class
 	StorageClass string
@@ -179,8 +200,6 @@ type ObjectInfo struct {
 
 	Legacy bool // indicates object on disk is in legacy data format
 
-	// backendType indicates which backend filled this structure
-	backendType BackendType
 	// internal representation of version purge status
 	VersionPurgeStatusInternal string
 	VersionPurgeStatus         VersionPurgeStatusType
@@ -200,6 +219,15 @@ type ObjectInfo struct {
 
 	DataBlocks   int
 	ParityBlocks int
+}
+
+// ExpiresStr returns a stringified version of Expires header in http.TimeFormat
+func (o ObjectInfo) ExpiresStr() string {
+	var expires string
+	if !o.Expires.IsZero() {
+		expires = o.Expires.UTC().Format(http.TimeFormat)
+	}
+	return expires
 }
 
 // ArchiveInfo returns any saved zip archive meta information.
@@ -242,8 +270,6 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		ContentType:                o.ContentType,
 		ContentEncoding:            o.ContentEncoding,
 		Expires:                    o.Expires,
-		CacheStatus:                o.CacheStatus,
-		CacheLookupStatus:          o.CacheLookupStatus,
 		StorageClass:               o.StorageClass,
 		ReplicationStatus:          o.ReplicationStatus,
 		UserTags:                   o.UserTags,
@@ -254,7 +280,6 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		metadataOnly:               o.metadataOnly,
 		versionOnly:                o.versionOnly,
 		keyRotation:                o.keyRotation,
-		backendType:                o.backendType,
 		AccTime:                    o.AccTime,
 		Legacy:                     o.Legacy,
 		VersionPurgeStatus:         o.VersionPurgeStatus,
@@ -282,9 +307,45 @@ func (o ObjectInfo) tierStats() tierStats {
 	return ts
 }
 
+// ToObjectInfo converts a replication object info to a partial ObjectInfo
+// do not rely on this function to give you correct ObjectInfo, this
+// function is merely and optimization.
+func (ri ReplicateObjectInfo) ToObjectInfo() ObjectInfo {
+	return ObjectInfo{
+		Name:                       ri.Name,
+		Bucket:                     ri.Bucket,
+		VersionID:                  ri.VersionID,
+		ModTime:                    ri.ModTime,
+		UserTags:                   ri.UserTags,
+		Size:                       ri.Size,
+		ActualSize:                 &ri.ActualSize,
+		ReplicationStatus:          ri.ReplicationStatus,
+		ReplicationStatusInternal:  ri.ReplicationStatusInternal,
+		VersionPurgeStatus:         ri.VersionPurgeStatus,
+		VersionPurgeStatusInternal: ri.VersionPurgeStatusInternal,
+		DeleteMarker:               true,
+		UserDefined:                map[string]string{},
+	}
+}
+
 // ReplicateObjectInfo represents object info to be replicated
 type ReplicateObjectInfo struct {
-	ObjectInfo
+	Name                       string
+	Bucket                     string
+	VersionID                  string
+	ETag                       string
+	Size                       int64
+	ActualSize                 int64
+	ModTime                    time.Time
+	UserTags                   string
+	SSEC                       bool
+	ReplicationStatus          replication.StatusType
+	ReplicationStatusInternal  string
+	VersionPurgeStatusInternal string
+	VersionPurgeStatus         VersionPurgeStatusType
+	ReplicationState           ReplicationState
+	DeleteMarker               bool
+
 	OpType               replication.Type
 	EventType            string
 	RetryCount           uint32
@@ -367,7 +428,7 @@ func (lm ListMultipartsInfo) Lookup(uploadID string) bool {
 	return false
 }
 
-// ListMultipartsInfo - represnets bucket resources for incomplete multipart uploads.
+// ListMultipartsInfo - represents bucket resources for incomplete multipart uploads.
 type ListMultipartsInfo struct {
 	// Together with upload-id-marker, this parameter specifies the multipart upload
 	// after which listing should begin.
@@ -529,7 +590,7 @@ type PartInfo struct {
 	// Size in bytes of the part.
 	Size int64
 
-	// Decompressed Size.
+	// Real size of the object uploaded by client.
 	ActualSize int64
 
 	// Checksum values
@@ -566,4 +627,43 @@ type CompleteMultipartUpload struct {
 type NewMultipartUploadResult struct {
 	UploadID     string
 	ChecksumAlgo string
+}
+
+type getObjectAttributesResponse struct {
+	ETag         string                    `xml:",omitempty"`
+	Checksum     *objectAttributesChecksum `xml:",omitempty"`
+	ObjectParts  *objectAttributesParts    `xml:",omitempty"`
+	StorageClass string                    `xml:",omitempty"`
+	ObjectSize   int64                     `xml:",omitempty"`
+}
+
+type objectAttributesChecksum struct {
+	ChecksumCRC32  string `xml:",omitempty"`
+	ChecksumCRC32C string `xml:",omitempty"`
+	ChecksumSHA1   string `xml:",omitempty"`
+	ChecksumSHA256 string `xml:",omitempty"`
+}
+
+type objectAttributesParts struct {
+	IsTruncated          bool
+	MaxParts             int
+	NextPartNumberMarker int
+	PartNumberMarker     int
+	PartsCount           int
+	Parts                []*objectAttributesPart `xml:"Part"`
+}
+
+type objectAttributesPart struct {
+	PartNumber     int
+	Size           int64
+	ChecksumCRC32  string `xml:",omitempty"`
+	ChecksumCRC32C string `xml:",omitempty"`
+	ChecksumSHA1   string `xml:",omitempty"`
+	ChecksumSHA256 string `xml:",omitempty"`
+}
+
+type objectAttributesErrorResponse struct {
+	ArgumentValue *string `xml:"ArgumentValue,omitempty"`
+	ArgumentName  *string `xml:"ArgumentName"`
+	APIErrorResponse
 }

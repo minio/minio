@@ -66,7 +66,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // TestMain to set up global env.
@@ -162,7 +162,7 @@ func calculateSignedChunkLength(chunkDataSize int64) int64 {
 }
 
 func mustGetPutObjReader(t TestErrHandler, data io.Reader, size int64, md5hex, sha256hex string) *PutObjReader {
-	hr, err := hash.NewReader(data, size, md5hex, sha256hex, size)
+	hr, err := hash.NewReader(context.Background(), data, size, md5hex, sha256hex, size)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1509,19 +1509,9 @@ func removeRoots(roots []string) {
 	}
 }
 
-// removeDiskN - removes N disks from supplied disk slice.
-func removeDiskN(disks []string, n int) {
-	if n > len(disks) {
-		n = len(disks)
-	}
-	for _, disk := range disks[:n] {
-		os.RemoveAll(disk)
-	}
-}
-
 // creates a bucket for the tests and returns the bucket name.
 // initializes the specified API endpoints for the tests.
-// initialies the root and returns its path.
+// initializes the root and returns its path.
 // return credentials.
 func initAPIHandlerTest(ctx context.Context, obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
 	initAllSubsystems(ctx)
@@ -1583,7 +1573,7 @@ func prepareTestBackend(ctx context.Context, instanceType string) (ObjectLayer, 
 //
 //	STEP 1: Call the handler with the unsigned HTTP request (anonReq), assert for the `ErrAccessDenied` error response.
 func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
-	anonReq *http.Request, bucketPolicy *policy.Policy,
+	anonReq *http.Request, bucketPolicy *policy.BucketPolicy,
 ) {
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
@@ -1670,7 +1660,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	// expected error response when the unsigned HTTP request is not permitted.
 	unsupportedSignature := getAPIError(ErrSignatureVersionNotSupported).HTTPStatusCode
 	if rec.Code != unsupportedSignature {
-		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, unsupportedSignature, rec.Code)))
+		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknown auth test for \"%s\", expected to fail with %d, but failed with %d", testName, unsupportedSignature, rec.Code)))
 	}
 }
 
@@ -1684,7 +1674,7 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
 
-	// The  API handler gets the referece to the object layer via the global object Layer,
+	// The  API handler gets the reference to the object layer via the global object Layer,
 	// setting it to `nil` in order test for handlers response for uninitialized object layer.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = nil
@@ -1767,7 +1757,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 
 	bucketErasure, erAPIRouter, err := initAPIHandlerTest(ctx, objLayer, endpoints)
 	if err != nil {
-		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
+		t.Fatalf("Initialization of API handler tests failed: <ERROR> %s", err)
 	}
 
 	// initialize the server and obtain the credentials and root.
@@ -2048,9 +2038,6 @@ func registerAPIFunctions(muxRouter *mux.Router, objLayer ObjectLayer, apiFuncti
 	api := objectAPIHandlers{
 		ObjectAPI: func() ObjectLayer {
 			return globalObjectAPI
-		},
-		CacheAPI: func() CacheObjectLayer {
-			return globalCacheObjectAPI
 		},
 	}
 

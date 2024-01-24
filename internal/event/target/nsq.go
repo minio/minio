@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // NSQ constants
@@ -178,7 +178,7 @@ func (target *NSQTarget) send(eventData event.Event) error {
 }
 
 // SendFromStore - reads an event from store and sends it to NSQ.
-func (target *NSQTarget) SendFromStore(eventKey string) error {
+func (target *NSQTarget) SendFromStore(key store.Key) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -188,7 +188,7 @@ func (target *NSQTarget) SendFromStore(eventKey string) error {
 		return err
 	}
 
-	eventData, eErr := target.store.Get(eventKey)
+	eventData, eErr := target.store.Get(key.Name)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -203,7 +203,7 @@ func (target *NSQTarget) SendFromStore(eventKey string) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(eventKey)
+	return target.store.Del(key.Name)
 }
 
 // Close - closes underneath connections to NSQD server.

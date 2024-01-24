@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -26,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/klauspost/reedsolomon"
-	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -74,34 +72,34 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 			// Decrement offset.
 			offset -= int64(len(block))
 			continue
-		} else {
-			// Skip until offset.
-			block = block[offset:]
-
-			// Reset the offset for next iteration to read everything
-			// from subsequent blocks.
-			offset = 0
 		}
+
+		// Skip until offset.
+		block = block[offset:]
+
+		// Reset the offset for next iteration to read everything
+		// from subsequent blocks.
+		offset = 0
 
 		// We have written all the blocks, write the last remaining block.
 		if write < int64(len(block)) {
-			n, err := xioutil.Copy(dst, bytes.NewReader(block[:write]))
+			n, err := dst.Write(block[:write])
 			if err != nil {
-				// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
+				// The writer will be closed in case of range queries, which will emit ErrClosedPipe.
 				// The reader pipe might be closed at ListObjects io.EOF ignore it.
 				if err != io.ErrClosedPipe && err != io.EOF {
 					logger.LogIf(ctx, err)
 				}
 				return 0, err
 			}
-			totalWritten += n
+			totalWritten += int64(n)
 			break
 		}
 
 		// Copy the block.
-		n, err := xioutil.Copy(dst, bytes.NewReader(block))
+		n, err := dst.Write(block)
 		if err != nil {
-			// The writer will be closed incase of range queries, which will emit ErrClosedPipe.
+			// The writer will be closed in case of range queries, which will emit ErrClosedPipe.
 			// The reader pipe might be closed at ListObjects io.EOF ignore it.
 			if err != io.ErrClosedPipe && err != io.EOF {
 				logger.LogIf(ctx, err)
@@ -110,10 +108,10 @@ func writeDataBlocks(ctx context.Context, dst io.Writer, enBlocks [][]byte, data
 		}
 
 		// Decrement output size.
-		write -= n
+		write -= int64(n)
 
 		// Increment written.
-		totalWritten += n
+		totalWritten += int64(n)
 	}
 
 	// Success.

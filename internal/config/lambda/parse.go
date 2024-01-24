@@ -27,8 +27,8 @@ import (
 	"github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/config/lambda/target"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/env"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // ErrTargetsOffline - Indicates single/multiple target failures.

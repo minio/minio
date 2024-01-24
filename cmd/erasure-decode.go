@@ -158,7 +158,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			bufIdx := p.readerToBuf[i]
 			if p.buf[bufIdx] == nil {
 				// Reading first time on this disk, hence the buffer needs to be allocated.
-				// Subsequent reads will re-use this buffer.
+				// Subsequent reads will reuse this buffer.
 				p.buf[bufIdx] = make([]byte, p.shardSize)
 			}
 			// For the last shard, the shardsize might be less than previous shard sizes.

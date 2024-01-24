@@ -28,7 +28,6 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/etcd"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
@@ -38,14 +37,14 @@ import (
 	"github.com/minio/minio/internal/config/subnet"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // DelConfigKVHandler - DELETE /minio/admin/v3/del-config-kv
 func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -149,7 +148,7 @@ type setConfigResult struct {
 func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -242,7 +241,7 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -288,7 +287,7 @@ func (a adminAPIHandlers) GetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -321,7 +320,7 @@ func (a adminAPIHandlers) ClearConfigHistoryKVHandler(w http.ResponseWriter, r *
 func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -367,7 +366,7 @@ func (a adminAPIHandlers) RestoreConfigHistoryKVHandler(w http.ResponseWriter, r
 func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -405,7 +404,7 @@ func (a adminAPIHandlers) ListConfigHistoryKVHandler(w http.ResponseWriter, r *h
 func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -430,7 +429,7 @@ func (a adminAPIHandlers) HelpConfigKVHandler(w http.ResponseWriter, r *http.Req
 func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -482,7 +481,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, cred := validateAdminReq(ctx, w, r, iampolicy.ConfigUpdateAdminAction)
+	objectAPI, cred := validateAdminReq(ctx, w, r, policy.ConfigUpdateAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -500,8 +499,6 @@ func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Reques
 			switch hkv.Key {
 			case config.EtcdSubSys:
 				off = !etcd.Enabled(item.Config)
-			case config.CacheSubSys:
-				off = !cache.Enabled(item.Config)
 			case config.StorageClassSubSys:
 				off = !storageclass.Enabled(item.Config)
 			case config.PolicyPluginSubSys:

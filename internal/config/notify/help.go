@@ -143,7 +143,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.AmqpPublisherConfirms,
-			Description: "enable consumer acknowlegement and publisher confirms, use this along with queue_dir for guaranteed delivery of all events",
+			Description: "enable consumer acknowledgement and publisher confirms, use this along with queue_dir for guaranteed delivery of all events",
 			Optional:    true,
 			Type:        "on|off",
 		},
@@ -261,6 +261,18 @@ var (
 			Description: config.DefaultComment,
 			Optional:    true,
 			Type:        "sentence",
+		},
+		config.HelpKV{
+			Key:         target.KafkaCompressionCodec,
+			Description: "specify compression_codec of the Kafka cluster",
+			Optional:    true,
+			Type:        "none|snappy|gzip|lz4|zstd",
+		},
+		config.HelpKV{
+			Key:         target.KafkaCompressionLevel,
+			Description: "specify compression level of the Kafka cluster",
+			Optional:    true,
+			Type:        "number",
 		},
 	}
 

@@ -485,7 +485,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 						b.Fatal(err)
 					}
 					// List...
-					_, err = xl.ToFileInfo("volume", "path", ids[rng.Intn(size)], false)
+					_, err = xl.ToFileInfo("volume", "path", ids[rng.Intn(size)], false, true)
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -503,7 +503,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 						b.Fatal(err)
 					}
 					// List...
-					_, err = xl.ListVersions("volume", "path")
+					_, err = xl.ListVersions("volume", "path", true)
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -518,7 +518,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					if buf == nil {
 						b.Fatal("buf == nil")
 					}
-					_, err = buf.ToFileInfo("volume", "path", ids[rng.Intn(size)])
+					_, err = buf.ToFileInfo("volume", "path", ids[rng.Intn(size)], true)
 					if err != nil {
 						b.Fatal(err)
 					}
@@ -533,7 +533,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 					if buf == nil {
 						b.Fatal("buf == nil")
 					}
-					_, err = buf.ListVersions("volume", "path")
+					_, err = buf.ListVersions("volume", "path", true)
 					if err != nil {
 						b.Fatal(err)
 					}

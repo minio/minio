@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,7 +65,10 @@ func (s3 *warmBackendS3) getDest(object string) string {
 }
 
 func (s3 *warmBackendS3) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
-	res, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{StorageClass: s3.StorageClass})
+	res, err := s3.client.PutObject(ctx, s3.Bucket, s3.getDest(object), r, length, minio.PutObjectOptions{
+		SendContentMd5: true,
+		StorageClass:   s3.StorageClass,
+	})
 	return remoteVersionID(res.VersionID), s3.ToObjectError(err, object)
 }
 
@@ -110,11 +114,53 @@ func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Validation code
+	switch {
+	case conf.AWSRoleWebIdentityTokenFile == "" && conf.AWSRoleARN != "" || conf.AWSRoleWebIdentityTokenFile != "" && conf.AWSRoleARN == "":
+		return nil, errors.New("both the token file and the role ARN are required")
+	case conf.AccessKey == "" && conf.SecretKey != "" || conf.AccessKey != "" && conf.SecretKey == "":
+		return nil, errors.New("both the access and secret keys are required")
+	case conf.AWSRole && (conf.AWSRoleWebIdentityTokenFile != "" || conf.AWSRoleARN != "" || conf.AccessKey != "" || conf.SecretKey != ""):
+		return nil, errors.New("AWS Role cannot be activated with static credentials or the web identity token file")
+	case conf.Bucket == "":
+		return nil, errors.New("no bucket name was provided")
+	}
+
+	// Credentials initialization
 	var creds *credentials.Credentials
-	if conf.AWSRole {
-		creds = credentials.NewChainCredentials(defaultAWSCredProvider)
-	} else {
+	switch {
+	case conf.AWSRole:
+		creds = credentials.New(&credentials.IAM{
+			Client: &http.Client{
+				Transport: NewHTTPTransport(),
+			},
+		})
+	case conf.AWSRoleWebIdentityTokenFile != "" && conf.AWSRoleARN != "":
+		sessionName := conf.AWSRoleSessionName
+		if sessionName == "" {
+			// RoleSessionName has a limited set of characters (https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html)
+			sessionName = "minio-tier-" + mustGetUUID()
+		}
+		s3WebIdentityIAM := credentials.IAM{
+			Client: &http.Client{
+				Transport: NewHTTPTransport(),
+			},
+			EKSIdentity: struct {
+				TokenFile       string
+				RoleARN         string
+				RoleSessionName string
+			}{
+				conf.AWSRoleWebIdentityTokenFile,
+				conf.AWSRoleARN,
+				sessionName,
+			},
+		}
+		creds = credentials.New(&s3WebIdentityIAM)
+	case conf.AccessKey != "" && conf.SecretKey != "":
 		creds = credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
+	default:
+		return nil, errors.New("insufficient parameters for S3 backend authentication")
 	}
 	getRemoteTierTargetInstanceTransportOnce.Do(func() {
 		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)

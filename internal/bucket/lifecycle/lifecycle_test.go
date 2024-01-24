@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	xhttp "github.com/minio/minio/internal/http"
 )
@@ -575,7 +576,7 @@ func TestHasActiveRules(t *testing.T) {
 			want:        true,
 		},
 		{ // empty prefix
-			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Expiration><Days>5</Days></Expiration></Rule></LifecycleConfiguration>`,
 			prefix:      "foodir/foobject/foo.txt",
 			want:        true,
 		},
@@ -600,13 +601,23 @@ func TestHasActiveRules(t *testing.T) {
 			want:        false,
 		},
 		{
-			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Transition><StorageClass>S3TIER-1</StorageClass></Transition></Rule></LifecycleConfiguration>`,
 			prefix:      "foodir/foobject/foo.txt",
 			want:        true,
 		},
 		{
-			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><NoncurrentVersionTransition><StorageClass>S3TIER-1</StorageClass></NoncurrentVersionTransition></Rule></LifecycleConfiguration>`,
 			prefix:      "foodir/foobject/foo.txt",
+			want:        true,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Expiration><ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "",
+			want:        true,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration><Rule><Status>Enabled</Status><Filter></Filter><Expiration><Days>42</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration></Rule></LifecycleConfiguration>`,
+			prefix:      "",
 			want:        true,
 		},
 	}
@@ -618,8 +629,12 @@ func TestHasActiveRules(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
+			// To ensure input lifecycle configurations are valid
+			if err := lc.Validate(); err != nil {
+				t.Fatalf("Invalid test case: %d %v", i+1, err)
+			}
 			if got := lc.HasActiveRules(tc.prefix); got != tc.want {
-				t.Fatalf("Expected result with recursive set to false: `%v`, got: `%v`", tc.want, got)
+				t.Fatalf("Expected result: `%v`, got: `%v`", tc.want, got)
 			}
 		})
 	}
@@ -998,6 +1013,218 @@ func TestFilterAndSetPredictionHeaders(t *testing.T) {
 				t.Fatalf("Expected no rule to match but found x-amz-expiration header set: %v", expHdr)
 			case !ok && tc.want > 0:
 				t.Fatal("Expected x-amz-expiration header to be set but not found")
+			}
+		})
+	}
+}
+
+func TestFilterRules(t *testing.T) {
+	rules := []Rule{
+		{
+			ID:     "rule-1",
+			Status: "Enabled",
+			Filter: Filter{
+				set: true,
+				Tag: Tag{
+					Key:   "key1",
+					Value: "val1",
+				},
+			},
+			Expiration: Expiration{
+				set:  true,
+				Days: 1,
+			},
+		},
+		{
+			ID:     "rule-with-sz-lt",
+			Status: "Enabled",
+			Filter: Filter{
+				set:                true,
+				ObjectSizeLessThan: 100 * humanize.MiByte,
+			},
+			Expiration: Expiration{
+				set:  true,
+				Days: 1,
+			},
+		},
+		{
+			ID:     "rule-with-sz-gt",
+			Status: "Enabled",
+			Filter: Filter{
+				set:                   true,
+				ObjectSizeGreaterThan: 1 * humanize.MiByte,
+			},
+			Expiration: Expiration{
+				set:  true,
+				Days: 1,
+			},
+		},
+		{
+			ID:     "rule-with-sz-lt-and-tag",
+			Status: "Enabled",
+			Filter: Filter{
+				set: true,
+				And: And{
+					ObjectSizeLessThan: 100 * humanize.MiByte,
+					Tags: []Tag{
+						{
+							Key:   "key1",
+							Value: "val1",
+						},
+					},
+				},
+			},
+			Expiration: Expiration{
+				set:  true,
+				Days: 1,
+			},
+		},
+		{
+			ID:     "rule-with-sz-gt-and-tag",
+			Status: "Enabled",
+			Filter: Filter{
+				set: true,
+				And: And{
+					ObjectSizeGreaterThan: 1 * humanize.MiByte,
+					Tags: []Tag{
+						{
+							Key:   "key1",
+							Value: "val1",
+						},
+					},
+				},
+			},
+			Expiration: Expiration{
+				set:  true,
+				Days: 1,
+			},
+		},
+		{
+			ID:     "rule-with-sz-lt-and-gt",
+			Status: "Enabled",
+			Filter: Filter{
+				set: true,
+				And: And{
+					ObjectSizeGreaterThan: 101 * humanize.MiByte,
+					ObjectSizeLessThan:    200 * humanize.MiByte,
+				},
+			},
+			Expiration: Expiration{
+				set:  true,
+				Days: 1,
+			},
+		},
+	}
+	tests := []struct {
+		lc       Lifecycle
+		opts     ObjectOpts
+		hasRules bool
+	}{
+		{ // Delete marker should match filter without tags
+			lc: Lifecycle{
+				Rules: []Rule{
+					rules[0],
+				},
+			},
+			opts: ObjectOpts{
+				DeleteMarker: true,
+				IsLatest:     true,
+				Name:         "obj-1",
+			},
+			hasRules: true,
+		},
+		{ // PUT version with no matching tags
+			lc: Lifecycle{
+				Rules: []Rule{
+					rules[0],
+				},
+			},
+			opts: ObjectOpts{
+				IsLatest: true,
+				Name:     "obj-1",
+				Size:     1 * humanize.MiByte,
+			},
+			hasRules: false,
+		},
+		{ // PUT version with matching tags
+			lc: Lifecycle{
+				Rules: []Rule{
+					rules[0],
+				},
+			},
+			opts: ObjectOpts{
+				IsLatest: true,
+				UserTags: "key1=val1",
+				Name:     "obj-1",
+				Size:     2 * humanize.MiByte,
+			},
+			hasRules: true,
+		},
+		{ // PUT version with size based filters
+			lc: Lifecycle{
+				Rules: []Rule{
+					rules[1],
+					rules[2],
+					rules[3],
+					rules[4],
+					rules[5],
+				},
+			},
+			opts: ObjectOpts{
+				IsLatest: true,
+				UserTags: "key1=val1",
+				Name:     "obj-1",
+				Size:     1*humanize.MiByte - 1,
+			},
+			hasRules: true,
+		},
+		{ // PUT version with size based filters
+			lc: Lifecycle{
+				Rules: []Rule{
+					rules[1],
+					rules[2],
+					rules[3],
+					rules[4],
+					rules[5],
+				},
+			},
+			opts: ObjectOpts{
+				IsLatest: true,
+				Name:     "obj-1",
+				Size:     1*humanize.MiByte + 1,
+			},
+			hasRules: true,
+		},
+		{ // DEL version with size based filters
+			lc: Lifecycle{
+				Rules: []Rule{
+					rules[1],
+					rules[2],
+					rules[3],
+					rules[4],
+					rules[5],
+				},
+			},
+			opts: ObjectOpts{
+				DeleteMarker: true,
+				IsLatest:     true,
+				Name:         "obj-1",
+			},
+			hasRules: true,
+		},
+	}
+
+	for i, tc := range tests {
+		t.Run(fmt.Sprintf("test-%d", i+1), func(t *testing.T) {
+			if err := tc.lc.Validate(); err != nil {
+				t.Fatalf("Lifecycle validation failed - %v", err)
+			}
+			rules := tc.lc.FilterRules(tc.opts)
+			if tc.hasRules && len(rules) == 0 {
+				t.Fatalf("%d: Expected at least one rule to match but none matched", i+1)
+			}
+			if !tc.hasRules && len(rules) > 0 {
+				t.Fatalf("%d: Expected no rules to match but got matches %v", i+1, rules)
 			}
 		})
 	}

@@ -22,12 +22,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 const (
@@ -86,6 +87,41 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	// Create a map of updated set of rules in request
+	updatedRules := make(map[string]lifecycle.Rule, len(bucketLifecycle.Rules))
+	for _, rule := range bucketLifecycle.Rules {
+		updatedRules[rule.ID] = rule
+	}
+
+	// Get list of rules for the bucket from disk
+	meta, err := globalBucketMetadataSys.GetConfigFromDisk(ctx, bucket)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+	expiryRuleRemoved := false
+	if len(meta.LifecycleConfigXML) > 0 {
+		var lcCfg lifecycle.Lifecycle
+		if err := xml.Unmarshal(meta.LifecycleConfigXML, &lcCfg); err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		for _, rl := range lcCfg.Rules {
+			updRule, ok := updatedRules[rl.ID]
+			// original rule had expiry that is no longer in the new config,
+			// or rule is present but missing expiration flags
+			if (!rl.Expiration.IsNull() || !rl.NoncurrentVersionExpiration.IsNull()) &&
+				(!ok || (updRule.Expiration.IsNull() && updRule.NoncurrentVersionExpiration.IsNull())) {
+				expiryRuleRemoved = true
+			}
+		}
+	}
+
+	if bucketLifecycle.HasExpiry() || expiryRuleRemoved {
+		currtime := time.Now()
+		bucketLifecycle.ExpiryUpdatedAt = &currtime
+	}
+
 	configData, err := xml.Marshal(bucketLifecycle)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -142,6 +178,8 @@ func (api objectAPIHandlers) GetBucketLifecycleHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
+	// explicitly set ExpiryUpdatedAt nil as its meant for internal consumption only
+	config.ExpiryUpdatedAt = nil
 
 	configData, err := xml.Marshal(config)
 	if err != nil {

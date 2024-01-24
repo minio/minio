@@ -26,7 +26,7 @@ import (
 
 	internalAudit "github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/mcontext"
-	"github.com/minio/pkg/logger/message/audit"
+	"github.com/minio/pkg/v2/logger/message/audit"
 
 	xhttp "github.com/minio/minio/internal/http"
 )

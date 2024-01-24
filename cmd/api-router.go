@@ -23,11 +23,11 @@ import (
 	"net/http"
 
 	"github.com/klauspost/compress/gzhttp"
-	"github.com/minio/console/restapi"
+	consoleapi "github.com/minio/console/api"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/wildcard"
 	"github.com/rs/cors"
 )
 
@@ -43,13 +43,13 @@ func setHTTPServer(h *xhttp.Server) {
 	globalObjLayerMutex.Unlock()
 }
 
-func newConsoleServerFn() *restapi.Server {
+func newConsoleServerFn() *consoleapi.Server {
 	globalObjLayerMutex.RLock()
 	defer globalObjLayerMutex.RUnlock()
 	return globalConsoleSrv
 }
 
-func setConsoleSrv(srv *restapi.Server) {
+func setConsoleSrv(srv *consoleapi.Server) {
 	globalObjLayerMutex.Lock()
 	globalConsoleSrv = srv
 	globalObjLayerMutex.Unlock()
@@ -61,18 +61,6 @@ func newObjectLayerFn() ObjectLayer {
 	return globalObjectAPI
 }
 
-func newCachedObjectLayerFn() CacheObjectLayer {
-	globalObjLayerMutex.RLock()
-	defer globalObjLayerMutex.RUnlock()
-	return globalCacheObjectAPI
-}
-
-func setCacheObjectLayer(c CacheObjectLayer) {
-	globalObjLayerMutex.Lock()
-	globalCacheObjectAPI = c
-	globalObjLayerMutex.Unlock()
-}
-
 func setObjectLayer(o ObjectLayer) {
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = o
@@ -82,7 +70,6 @@ func setObjectLayer(o ObjectLayer) {
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
-	CacheAPI  func() CacheObjectLayer
 }
 
 // getHost tries its best to return the request host.
@@ -189,7 +176,6 @@ func registerAPIRouter(router *mux.Router) {
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
-		CacheAPI:  newCachedObjectLayerFn,
 	}
 
 	// API Router
@@ -241,6 +227,9 @@ func registerAPIRouter(router *mux.Router) {
 		// HeadObject
 		router.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("headobject", maxClients(gz(httpTraceAll(api.HeadObjectHandler)))))
+		// GetObjectAttribytes
+		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
+			collectAPIStats("getobjectattributes", maxClients(gz(httpTraceHdrs(api.GetObjectAttributesHandler))))).Queries("attributes", "")
 		// CopyObjectPart
 		router.Methods(http.MethodPut).Path("/{object:.+}").
 			HeadersRegexp(xhttp.AmzCopySource, ".*?(\\/|%2F).*?").
@@ -461,9 +450,12 @@ func registerAPIRouter(router *mux.Router) {
 
 		// MinIO extension API for replication.
 		//
-		// GetBucketReplicationMetrics
+		router.Methods(http.MethodGet).HandlerFunc(
+			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsV2Handler))))).Queries("replication-metrics", "2")
+		// deprecated handler
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsHandler))))).Queries("replication-metrics", "")
+
 		// ValidateBucketReplicationCreds
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("checkbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.ValidateBucketReplicationCredsHandler))))).Queries("replication-check", "")

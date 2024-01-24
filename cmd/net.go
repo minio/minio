@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // IPv4 addresses of local host.
@@ -111,9 +111,9 @@ func getHostIP(host string) (ipList set.StringSet, err error) {
 	return ipList, err
 }
 
-// sortIPs - sort ips based on higher octects.
+// sortIPs - sort ips based on higher octets.
 // The logic to sort by last octet is implemented to
-// prefer CIDRs with higher octects, this in-turn skips the
+// prefer CIDRs with higher octets, this in-turn skips the
 // localhost/loopback address to be not preferred as the
 // first ip on the list. Subsequently this list helps us print
 // a user friendly message with appropriate values.

@@ -191,19 +191,6 @@ func filterOnlineDisksInplace(fi FileInfo, partsMetadata []FileInfo, onlineDisks
 	}
 }
 
-// Extracts list of disk mtimes from FileInfo slice and returns, skips
-// slice elements that have errors.
-func listObjectDiskMtimes(partsMetadata []FileInfo) (diskMTimes []time.Time) {
-	diskMTimes = bootModtimes(len(partsMetadata))
-	for index, metadata := range partsMetadata {
-		if metadata.IsValid() {
-			// Once the file is found, save the disk mtime saved on disk.
-			diskMTimes[index] = metadata.DiskMTime
-		}
-	}
-	return diskMTimes
-}
-
 // Notes:
 // There are 5 possible states a disk could be in,
 // 1. __online__             - has the latest copy of xl.meta - returned by listOnlineDisks
@@ -277,15 +264,9 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 	errs []error, latestMeta FileInfo, bucket, object string,
 	scanMode madmin.HealScanMode) ([]StorageAPI, []error, time.Time,
 ) {
-	var diskMTime time.Time
-	var shardFix bool
-	if !latestMeta.DataShardFixed() {
-		diskMTime = pickValidDiskTimeWithQuorum(partsMetadata,
-			latestMeta.Erasure.DataBlocks)
-	}
-
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	dataErrs := make([]error, len(onlineDisks))
+
 	inconsistent := 0
 	for i, meta := range partsMetadata {
 		if !meta.IsValid() {
@@ -347,30 +328,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 					dataErrs[i] = errFileCorrupt
 					continue
 				}
-
-				// Since erasure.Distribution is trustable we can fix the mismatching erasure.Index
-				if meta.Erasure.Distribution[i] != meta.Erasure.Index {
-					partsMetadata[i] = FileInfo{}
-					dataErrs[i] = errFileCorrupt
-					continue
-				}
-			}
-		}
-
-		if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
-			if !partsMetadata[i].AcceptableDelta(diskMTime, shardDiskTimeDelta) {
-				// not with in acceptable delta, skip.
-				// If disk mTime mismatches it is considered outdated
-				// https://github.com/minio/minio/pull/13803
-				//
-				// This check only is active if we could find maximally
-				// occurring disk mtimes that are somewhat same across
-				// the quorum. Allowing to skip those shards which we
-				// might think are wrong.
-				shardFix = true
-				partsMetadata[i] = FileInfo{}
-				dataErrs[i] = errFileCorrupt
-				continue
 			}
 		}
 
@@ -415,11 +372,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			partsMetadata[i] = FileInfo{}
 		}
 	}
-
-	if shardFix {
-		// Only when shard is fixed return an appropriate disk mtime value.
-		return availableDisks, dataErrs, diskMTime
-	} // else return timeSentinel for disk mtime
 
 	return availableDisks, dataErrs, timeSentinel
 }

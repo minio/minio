@@ -158,7 +158,7 @@ func TestObjectToPartOffset(t *testing.T) {
 }
 
 func TestFindFileInfoInQuorum(t *testing.T) {
-	getNFInfo := func(n int, quorum int, t int64, dataDir string) []FileInfo {
+	getNFInfo := func(n int, quorum int, t int64, dataDir string, succModTimes []time.Time) []FileInfo {
 		fi := newFileInfo("test", 8, 8)
 		fi.AddObjectPart(1, "etag", 100, 100, UTCNow(), nil, nil)
 		fi.ModTime = time.Unix(t, 0)
@@ -167,6 +167,10 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 		for i := range fis {
 			fis[i] = fi
 			fis[i].Erasure.Index = i + 1
+			if succModTimes != nil {
+				fis[i].SuccessorModTime = succModTimes[i]
+				fis[i].IsLatest = succModTimes[i].IsZero()
+			}
 			quorum--
 			if quorum == 0 {
 				break
@@ -175,38 +179,78 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 		return fis
 	}
 
+	commonSuccModTime := time.Date(2023, time.August, 25, 0, 0, 0, 0, time.UTC)
+	succModTimesInQuorum := make([]time.Time, 16)
+	succModTimesNoQuorum := make([]time.Time, 16)
+	for i := 0; i < 16; i++ {
+		if i < 4 {
+			continue
+		}
+		succModTimesInQuorum[i] = commonSuccModTime
+		if i < 9 {
+			continue
+		}
+		succModTimesNoQuorum[i] = commonSuccModTime
+	}
 	tests := []struct {
-		fis            []FileInfo
-		modTime        time.Time
-		expectedErr    error
-		expectedQuorum int
+		fis                 []FileInfo
+		modTime             time.Time
+		succmodTimes        []time.Time
+		expectedErr         error
+		expectedQuorum      int
+		expectedSuccModTime time.Time
+		expectedIsLatest    bool
 	}{
 		{
-			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
+			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
 			modTime:        time.Unix(1603863445, 0),
 			expectedErr:    nil,
 			expectedQuorum: 8,
 		},
 		{
-			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
+			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
 			modTime:        time.Unix(1603863445, 0),
 			expectedErr:    errErasureReadQuorum,
 			expectedQuorum: 8,
 		},
 		{
-			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21"),
+			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
 			modTime:        time.Unix(1603863445, 0),
 			expectedErr:    errErasureReadQuorum,
 			expectedQuorum: 0,
+		},
+		{
+			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", succModTimesInQuorum),
+			modTime:             time.Unix(1603863445, 0),
+			expectedErr:         nil,
+			expectedQuorum:      12,
+			expectedSuccModTime: commonSuccModTime,
+			expectedIsLatest:    false,
+		},
+		{
+			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", succModTimesNoQuorum),
+			modTime:             time.Unix(1603863445, 0),
+			expectedErr:         nil,
+			expectedQuorum:      12,
+			expectedSuccModTime: time.Time{},
+			expectedIsLatest:    true,
 		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run("", func(t *testing.T) {
-			_, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, "", test.expectedQuorum)
+			fi, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, "", test.expectedQuorum)
 			if err != test.expectedErr {
 				t.Errorf("Expected %s, got %s", test.expectedErr, err)
+			}
+			if test.succmodTimes != nil {
+				if !test.expectedSuccModTime.Equal(fi.SuccessorModTime) {
+					t.Errorf("Expected successor mod time to be %v but got %v", test.expectedSuccModTime, fi.SuccessorModTime)
+				}
+				if test.expectedIsLatest != fi.IsLatest {
+					t.Errorf("Expected IsLatest to be %v but got %v", test.expectedIsLatest, fi.IsLatest)
+				}
 			}
 		})
 	}

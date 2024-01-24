@@ -166,7 +166,7 @@ func (c ChecksumType) Hasher() hash.Hash {
 	return nil
 }
 
-// Trailing return whether the checksum is traling.
+// Trailing return whether the checksum is trailing.
 func (c ChecksumType) Trailing() bool {
 	return c.Is(ChecksumTrailing)
 }
@@ -236,6 +236,49 @@ func ReadCheckSums(b []byte, part int) map[string]string {
 	}
 	if len(res) == 0 {
 		res = nil
+	}
+	return res
+}
+
+// ReadPartCheckSums will read all part checksums from b and return them.
+func ReadPartCheckSums(b []byte) (res []map[string]string) {
+	for len(b) > 0 {
+		t, n := binary.Uvarint(b)
+		if n <= 0 {
+			break
+		}
+		b = b[n:]
+
+		typ := ChecksumType(t)
+		length := typ.RawByteLen()
+		if length == 0 || len(b) < length {
+			break
+		}
+		// Skip main checksum
+		b = b[length:]
+		if !typ.Is(ChecksumIncludesMultipart) {
+			continue
+		}
+		parts, n := binary.Uvarint(b)
+		if n <= 0 {
+			break
+		}
+		if len(res) == 0 {
+			res = make([]map[string]string, parts)
+		}
+		b = b[n:]
+		for part := 0; part < int(parts); part++ {
+			if len(b) < length {
+				break
+			}
+			// Read part checksum
+			cs := base64.StdEncoding.EncodeToString(b[:length])
+			b = b[length:]
+			if res[part] == nil {
+				res[part] = make(map[string]string, 1)
+			}
+			res[part][typ.String()] = cs
+		}
 	}
 	return res
 }

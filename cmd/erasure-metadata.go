@@ -22,35 +22,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/sync/errgroup"
-	"github.com/minio/sio"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // Object was stored with additional erasure codes due to degraded system at upload time
 const minIOErasureUpgraded = "x-minio-internal-erasure-upgraded"
 
 const erasureAlgorithm = "rs-vandermonde"
-
-// AddChecksumInfo adds a checksum of a part.
-func (e *ErasureInfo) AddChecksumInfo(ckSumInfo ChecksumInfo) {
-	for i, sum := range e.Checksums {
-		if sum.PartNumber == ckSumInfo.PartNumber {
-			e.Checksums[i] = ckSumInfo
-			return
-		}
-	}
-	e.Checksums = append(e.Checksums, ckSumInfo)
-}
 
 // GetChecksumInfo - get checksum of a part.
 func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
@@ -60,7 +46,7 @@ func (e ErasureInfo) GetChecksumInfo(partNumber int) (ckSum ChecksumInfo) {
 			return sum
 		}
 	}
-	return ChecksumInfo{}
+	return ChecksumInfo{Algorithm: DefaultBitrotAlgorithm}
 }
 
 // ShardFileSize - returns final erasure size from original size.
@@ -99,52 +85,6 @@ func (fi FileInfo) IsValid() bool {
 		correctIndexes)
 }
 
-func (fi FileInfo) checkMultipart() (int64, bool) {
-	if len(fi.Parts) == 0 {
-		return 0, false
-	}
-	if !crypto.IsMultiPart(fi.Metadata) {
-		return 0, false
-	}
-	var size int64
-	for _, part := range fi.Parts {
-		psize, err := sio.DecryptedSize(uint64(part.Size))
-		if err != nil {
-			return 0, false
-		}
-		size += int64(psize)
-	}
-
-	return size, len(extractETag(fi.Metadata)) != 32
-}
-
-// GetActualSize - returns the actual size of the stored object
-func (fi FileInfo) GetActualSize() (int64, error) {
-	if _, ok := fi.Metadata[ReservedMetadataPrefix+"compression"]; ok {
-		sizeStr, ok := fi.Metadata[ReservedMetadataPrefix+"actual-size"]
-		if !ok {
-			return -1, errInvalidDecompressedSize
-		}
-		size, err := strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil {
-			return -1, errInvalidDecompressedSize
-		}
-		return size, nil
-	}
-	if _, ok := crypto.IsEncrypted(fi.Metadata); ok {
-		size, ok := fi.checkMultipart()
-		if !ok {
-			size, err := sio.DecryptedSize(uint64(fi.Size))
-			if err != nil {
-				err = errObjectTampered // assign correct error type
-			}
-			return int64(size), err
-		}
-		return size, nil
-	}
-	return fi.Size, nil
-}
-
 // ToObjectInfo - Converts metadata to object info.
 func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInfo {
 	object = decodeDirObject(object)
@@ -169,6 +109,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		ContentEncoding:  fi.Metadata["content-encoding"],
 		NumVersions:      fi.NumVersions,
 		SuccessorModTime: fi.SuccessorModTime,
+		CacheControl:     fi.Metadata["cache-control"],
 	}
 
 	if exp, ok := fi.Metadata["expires"]; ok {
@@ -176,7 +117,6 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 			objInfo.Expires = t.UTC()
 		}
 	}
-	objInfo.backendType = BackendErasure
 
 	// Extract etag from metadata.
 	objInfo.ETag = extractETag(fi.Metadata)
@@ -191,6 +131,11 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 	objInfo.ReplicationStatusInternal = fi.ReplicationState.ReplicationStatusInternal
 	objInfo.VersionPurgeStatusInternal = fi.ReplicationState.VersionPurgeStatusInternal
 	objInfo.ReplicationStatus = fi.ReplicationStatus()
+	if objInfo.ReplicationStatus.Empty() { // overlay x-amx-replication-status if present for replicas
+		if st, ok := fi.Metadata[xhttp.AmzBucketReplicationStatus]; ok && st == string(replication.Replica) {
+			objInfo.ReplicationStatus = replication.StatusType(st)
+		}
+	}
 	objInfo.VersionPurgeStatus = fi.VersionPurgeStatus()
 
 	objInfo.TransitionedObject = TransitionedObject{
@@ -393,26 +338,40 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		return FileInfo{}, errErasureReadQuorum
 	}
 
+	// Find the successor mod time in quorum, otherwise leave the
+	// candidate's successor modTime as found
+	succModTimeMap := make(map[time.Time]int)
+	var candidate FileInfo
+	var found bool
 	for i, hash := range metaHashes {
 		if hash == maxHash {
 			if metaArr[i].IsValid() {
-				return metaArr[i], nil
+				if !found {
+					candidate = metaArr[i]
+					found = true
+				}
+				succModTimeMap[metaArr[i].SuccessorModTime]++
 			}
 		}
 	}
-
-	return FileInfo{}, errErasureReadQuorum
-}
-
-func pickValidDiskTimeWithQuorum(metaArr []FileInfo, quorum int) time.Time {
-	diskMTimes := listObjectDiskMtimes(metaArr)
-
-	diskMTime, diskMaxima := commonTimeAndOccurence(diskMTimes, shardDiskTimeDelta)
-	if diskMaxima >= quorum {
-		return diskMTime
+	var succModTime time.Time
+	var smodTimeQuorum bool
+	for smodTime, count := range succModTimeMap {
+		if count >= quorum {
+			smodTimeQuorum = true
+			succModTime = smodTime
+			break
+		}
 	}
 
-	return timeSentinel
+	if found {
+		if smodTimeQuorum {
+			candidate.SuccessorModTime = succModTime
+			candidate.IsLatest = succModTime.IsZero()
+		}
+		return candidate, nil
+	}
+	return FileInfo{}, errErasureReadQuorum
 }
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
@@ -513,7 +472,7 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
-	// There should be atleast half correct entries, if not return failure
+	// There should be at least half correct entries, if not return failure
 	expectedRQuorum := len(partsMetaData) / 2
 	if defaultParityCount == 0 {
 		// if parity count is '0', we expected all entries to be present.

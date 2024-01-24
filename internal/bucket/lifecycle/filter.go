@@ -33,6 +33,9 @@ type Filter struct {
 
 	Prefix Prefix
 
+	ObjectSizeGreaterThan int64 `xml:"ObjectSizeGreaterThan,omitempty"`
+	ObjectSizeLessThan    int64 `xml:"ObjectSizeLessThan,omitempty"`
+
 	And    And
 	andSet bool
 
@@ -63,6 +66,17 @@ func (f Filter) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		// Always print Prefix field when both And & Tag are empty
 		if err := e.EncodeElement(f.Prefix, xml.StartElement{Name: xml.Name{Local: "Prefix"}}); err != nil {
 			return err
+		}
+
+		if f.ObjectSizeLessThan > 0 {
+			if err := e.EncodeElement(f.ObjectSizeLessThan, xml.StartElement{Name: xml.Name{Local: "ObjectSizeLessThan"}}); err != nil {
+				return err
+			}
+		}
+		if f.ObjectSizeGreaterThan > 0 {
+			if err := e.EncodeElement(f.ObjectSizeGreaterThan, xml.StartElement{Name: xml.Name{Local: "ObjectSizeGreaterThan"}}); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -104,6 +118,18 @@ func (f *Filter) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err error
 				}
 				f.Tag = tag
 				f.tagSet = true
+			case "ObjectSizeLessThan":
+				var sz int64
+				if err = d.DecodeElement(&sz, &se); err != nil {
+					return err
+				}
+				f.ObjectSizeLessThan = sz
+			case "ObjectSizeGreaterThan":
+				var sz int64
+				if err = d.DecodeElement(&sz, &se); err != nil {
+					return err
+				}
+				f.ObjectSizeGreaterThan = sz
 			default:
 				return errUnknownXMLTag
 			}
@@ -122,32 +148,64 @@ func (f Filter) Validate() error {
 	if f.IsEmpty() {
 		return errXMLNotWellFormed
 	}
-	// A Filter must have exactly one of Prefix, Tag, or And specified.
+	// A Filter must have exactly one of Prefix, Tag,
+	// ObjectSize{LessThan,GreaterThan} or And specified.
+	type predType uint8
+	const (
+		nonePred predType = iota
+		prefixPred
+		andPred
+		tagPred
+		sizeLtPred
+		sizeGtPred
+	)
+	var predCount int
+	var pType predType
 	if !f.And.isEmpty() {
-		if f.Prefix.set {
-			return errInvalidFilter
-		}
-		if !f.Tag.IsEmpty() {
-			return errInvalidFilter
-		}
-		if err := f.And.Validate(); err != nil {
-			return err
-		}
+		pType = andPred
+		predCount++
 	}
 	if f.Prefix.set {
-		if !f.Tag.IsEmpty() {
-			return errInvalidFilter
-		}
+		pType = prefixPred
+		predCount++
 	}
 	if !f.Tag.IsEmpty() {
-		if f.Prefix.set {
-			return errInvalidFilter
+		pType = tagPred
+		predCount++
+	}
+	if f.ObjectSizeGreaterThan != 0 {
+		pType = sizeGtPred
+		predCount++
+	}
+	if f.ObjectSizeLessThan != 0 {
+		pType = sizeLtPred
+		predCount++
+	}
+	// Note: S3 supports empty <Filter></Filter>, so predCount == 0 is
+	// valid.
+	if predCount > 1 {
+		return errInvalidFilter
+	}
+
+	var err error
+	switch pType {
+	case nonePred:
+	// S3 supports empty <Filter></Filter>
+	case prefixPred:
+	case andPred:
+		err = f.And.Validate()
+	case tagPred:
+		err = f.Tag.Validate()
+	case sizeLtPred:
+		if f.ObjectSizeLessThan < 0 {
+			err = errXMLNotWellFormed
 		}
-		if err := f.Tag.Validate(); err != nil {
-			return err
+	case sizeGtPred:
+		if f.ObjectSizeGreaterThan < 0 {
+			err = errXMLNotWellFormed
 		}
 	}
-	return nil
+	return err
 }
 
 // TestTags tests if the object tags satisfy the Filter tags requirement,
@@ -189,4 +247,21 @@ func (f Filter) TestTags(userTags string) bool {
 		}
 	}
 	return false
+}
+
+// BySize returns true if sz satisfies one of ObjectSizeGreaterThan,
+// ObjectSizeLessThan predicates or a combination of them via And.
+func (f Filter) BySize(sz int64) bool {
+	if f.ObjectSizeGreaterThan > 0 &&
+		sz <= f.ObjectSizeGreaterThan {
+		return false
+	}
+	if f.ObjectSizeLessThan > 0 &&
+		sz >= f.ObjectSizeLessThan {
+		return false
+	}
+	if !f.And.isEmpty() {
+		return f.And.BySize(sz)
+	}
+	return true
 }

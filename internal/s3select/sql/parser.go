@@ -128,7 +128,7 @@ type JSONPath struct {
 // AliasedExpression is an expression that can be optionally named
 type AliasedExpression struct {
 	Expression *Expression `parser:"@@"`
-	As         string      `parser:"[ \"AS\" @Ident ]"`
+	As         string      `parser:"[ \"AS\" @Ident | \"AS\" @LitString ]"`
 }
 
 // Grammar for Expression
@@ -166,8 +166,7 @@ type Condition struct {
 	Not     *Condition        `parser:"| \"NOT\" @@"`
 }
 
-// ConditionOperand is a operand followed by an an optional operation
-// expression
+// ConditionOperand is a operand followed by an optional operation expression.
 type ConditionOperand struct {
 	Operand      *Operand      `parser:"@@"`
 	ConditionRHS *ConditionRHS `parser:"@@?"`
@@ -202,9 +201,13 @@ type Between struct {
 	End   *Operand `parser:" \"AND\" @@ "`
 }
 
-// In represents the RHS of an IN expression
+// In represents the RHS of an IN expression. The RHS can be a list-literal
+// (i.e. enclosed in parentheses like `IN (1,2,4)`) or it could be a JSON path
+// expression (as in `8.5 IN s.nested[*][*]`). Specifically, it cannot be an
+// `Expression` as an expression can never evaluate to a list.
 type In struct {
-	ListExpression *Expression `parser:"@@ "`
+	JPathExpr *JSONPath `parser:"@@"`
+	ListExpr  *ListExpr `parser:"| @@"`
 }
 
 // Grammar for Operand:

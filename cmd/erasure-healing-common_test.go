@@ -31,7 +31,7 @@ import (
 
 // Returns the latest updated FileInfo files and error in case of failure.
 func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultParityCount int, errs []error) (FileInfo, error) {
-	// There should be atleast half correct entries, if not return failure
+	// There should be at least half correct entries, if not return failure
 	expectedRQuorum := len(partsMetadata) / 2
 	if defaultParityCount == 0 {
 		// if parity count is '0', we expected all entries to be present.
@@ -57,7 +57,7 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultPar
 		return FileInfo{}, errErasureReadQuorum
 	}
 
-	// Interate through all the modTimes and count the FileInfo(s) with latest time.
+	// Iterate through all the modTimes and count the FileInfo(s) with latest time.
 	for index, t := range modTimes {
 		if partsMetadata[index].IsValid() && t.Equal(modTime) {
 			latestFileInfo = partsMetadata[index]
@@ -246,7 +246,7 @@ func TestListOnlineDisks(t *testing.T) {
 				t.Fatalf("Failed to putObject %v", err)
 			}
 
-			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false, true)
 			fi, err := getLatestFileInfo(ctx, partsMetadata, z.serverPools[0].sets[0].defaultParityCount, errs)
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
@@ -273,7 +273,7 @@ func TestListOnlineDisks(t *testing.T) {
 					tamperedIndex = index
 					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
 						Recursive: false,
-						Force:     false,
+						Immediate: false,
 					})
 					if dErr != nil {
 						t.Fatalf("Failed to delete %s - %v", filepath.Join(object, "part.1"), dErr)
@@ -424,7 +424,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 				t.Fatalf("Failed to putObject %v", err)
 			}
 
-			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", true)
+			partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", true, true)
 			fi, err := getLatestFileInfo(ctx, partsMetadata, z.serverPools[0].sets[0].defaultParityCount, errs)
 			if err != nil {
 				t.Fatalf("Failed to getLatestFileInfo %v", err)
@@ -455,7 +455,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					tamperedIndex = index
 					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
 						Recursive: false,
-						Force:     false,
+						Immediate: false,
 					})
 					if dErr != nil {
 						t.Fatalf("Failed to delete %s - %v", pathJoin(object, xlStorageFormatFile), dErr)
@@ -534,7 +534,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
-	_, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+	_, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false, true)
 	readQuorum := len(erasureDisks) / 2
 	if reducedErr := reduceReadQuorumErrs(ctx, errs, objectOpIgnoredErrs, readQuorum); reducedErr != nil {
 		t.Fatalf("Failed to read xl meta data %v", reducedErr)
@@ -542,7 +542,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	// Test 1: Test that all disks are returned without any failures with
 	// unmodified meta data
-	partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false)
+	partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, bucket, object, "", false, true)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
@@ -620,7 +620,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	diskFailures[15] = "part.1"
 
 	for diskIndex, partName := range diskFailures {
-		for i := range partsMetadata[diskIndex].Erasure.Checksums {
+		for i := range partsMetadata[diskIndex].Parts {
 			if fmt.Sprintf("part.%d", i+1) == partName {
 				filePath := pathJoin(erasureDisks[diskIndex].String(), bucket, object, partsMetadata[diskIndex].DataDir, partName)
 				f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_SYNC, 0)

@@ -22,11 +22,19 @@ import (
 )
 
 // DeleteOptions represents the disk level delete options available for the APIs
-//
-//msgp:ignore DeleteOptions
 type DeleteOptions struct {
-	Recursive bool
-	Force     bool
+	BaseOptions
+	Recursive bool `msg:"r"`
+	Immediate bool `msg:"i"`
+	UndoWrite bool `msg:"u"`
+}
+
+// BaseOptions represents common options for all Storage API calls
+type BaseOptions struct{}
+
+// RenameOptions represents rename API options, currently its same as BaseOptions
+type RenameOptions struct {
+	BaseOptions
 }
 
 //go:generate msgp -file=$GOFILE
@@ -46,6 +54,7 @@ type DiskInfo struct {
 	FreeInodes uint64
 	Major      uint32
 	Minor      uint32
+	NRRequests uint64
 	FSType     string
 	RootDisk   bool
 	Healing    bool
@@ -64,8 +73,12 @@ type DiskInfo struct {
 type DiskMetrics struct {
 	LastMinute              map[string]AccElem `json:"apiLatencies,omitempty"`
 	APICalls                map[string]uint64  `json:"apiCalls,omitempty"`
+	TotalTokens             uint32             `json:"totalTokens,omitempty"`
+	TotalWaiting            uint32             `json:"totalWaiting,omitempty"`
 	TotalErrorsAvailability uint64             `json:"totalErrsAvailability"`
 	TotalErrorsTimeout      uint64             `json:"totalErrsTimeout"`
+	TotalWrites             uint64             `json:"totalWrites"`
+	TotalDeletes            uint64             `json:"totalDeletes"`
 }
 
 // VolsInfo is a collection of volume(bucket) information
@@ -142,7 +155,7 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 // Make sure to bump the internode version at storage-rest-common.go
 type RawFileInfo struct {
 	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
-	Buf []byte `msg:"b"`
+	Buf []byte `msg:"b,allownil"`
 
 	// DiskMTime indicates the mtime of the xl.meta on disk
 	// This is mainly used for detecting a particular issue
@@ -240,6 +253,16 @@ type FileInfo struct {
 	Versioned bool `msg:"vs"`
 }
 
+// ShallowCopy - copies minimal information for READ MRF checks.
+func (fi FileInfo) ShallowCopy() (n FileInfo) {
+	n.Volume = fi.Volume
+	n.Name = fi.Name
+	n.VersionID = fi.VersionID
+	n.Deleted = fi.Deleted
+	n.Erasure = fi.Erasure
+	return
+}
+
 // WriteQuorum returns expected write quorum for this FileInfo
 func (fi FileInfo) WriteQuorum(dquorum int) int {
 	if fi.Deleted {
@@ -295,7 +318,11 @@ func (fi FileInfo) GetDataDir() string {
 // InlineData returns true if object contents are inlined alongside its metadata.
 func (fi FileInfo) InlineData() bool {
 	_, ok := fi.Metadata[ReservedMetadataPrefixLower+"inline-data"]
-	return ok
+	// Earlier MinIO versions didn't reset "x-minio-internal-inline-data"
+	// from fi.Metadata when the object was tiered. So, tiered objects
+	// would return true for InlineData() in these versions even though the
+	// object isn't inlined in xl.meta
+	return ok && !fi.IsRemote()
 }
 
 // SetInlineData marks object (version) as inline.
@@ -343,4 +370,60 @@ type ReadMultipleResp struct {
 	Error   string    // Returns any error when reading.
 	Data    []byte    // Contains all data of file.
 	Modtime time.Time // Modtime of file on disk.
+}
+
+// DeleteVersionHandlerParams are parameters for DeleteVersionHandler
+type DeleteVersionHandlerParams struct {
+	DiskID         string        `msg:"id"`
+	Volume         string        `msg:"v"`
+	FilePath       string        `msg:"fp"`
+	ForceDelMarker bool          `msg:"fdm"`
+	Opts           DeleteOptions `msg:"do"`
+	FI             FileInfo      `msg:"fi"`
+}
+
+// MetadataHandlerParams is request info for UpdateMetadataHandle and WriteMetadataHandler.
+type MetadataHandlerParams struct {
+	DiskID     string             `msg:"id"`
+	Volume     string             `msg:"v"`
+	FilePath   string             `msg:"fp"`
+	UpdateOpts UpdateMetadataOpts `msg:"uo"`
+	FI         FileInfo           `msg:"fi"`
+}
+
+// UpdateMetadataOpts provides an optional input to indicate if xl.meta updates need to be fully synced to disk.
+type UpdateMetadataOpts struct {
+	NoPersistence bool `msg:"np"`
+}
+
+// CheckPartsHandlerParams are parameters for CheckPartsHandler
+type CheckPartsHandlerParams struct {
+	DiskID   string   `msg:"id"`
+	Volume   string   `msg:"v"`
+	FilePath string   `msg:"fp"`
+	FI       FileInfo `msg:"fi"`
+}
+
+// DeleteFileHandlerParams are parameters for DeleteFileHandler
+type DeleteFileHandlerParams struct {
+	DiskID   string        `msg:"id"`
+	Volume   string        `msg:"v"`
+	FilePath string        `msg:"fp"`
+	Opts     DeleteOptions `msg:"do"`
+}
+
+// RenameDataHandlerParams are parameters for RenameDataHandler.
+type RenameDataHandlerParams struct {
+	DiskID    string        `msg:"id"`
+	SrcVolume string        `msg:"sv"`
+	SrcPath   string        `msg:"sp"`
+	DstVolume string        `msg:"dv"`
+	DstPath   string        `msg:"dp"`
+	FI        FileInfo      `msg:"fi"`
+	Opts      RenameOptions `msg:"ro"`
+}
+
+// RenameDataResp - RenameData()'s response.
+type RenameDataResp struct {
+	Signature uint64 `msg:"sig"`
 }

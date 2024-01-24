@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -20,24 +20,13 @@ package ioutil
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
-
-type sleepReader struct {
-	timeout time.Duration
-}
-
-func (r *sleepReader) Read(p []byte) (n int, err error) {
-	time.Sleep(r.timeout)
-	return len(p), nil
-}
-
-func (r *sleepReader) Close() error {
-	return nil
-}
 
 type sleepWriter struct {
 	timeout time.Duration
@@ -50,29 +39,6 @@ func (w *sleepWriter) Write(p []byte) (n int, err error) {
 
 func (w *sleepWriter) Close() error {
 	return nil
-}
-
-func TestDeadlineReader(t *testing.T) {
-	r := NewDeadlineReader(&sleepReader{timeout: 500 * time.Millisecond}, 450*time.Millisecond)
-	buf := make([]byte, 4)
-	_, err := r.Read(buf)
-	r.Close()
-	if err != context.DeadlineExceeded {
-		t.Errorf("DeadlineReader shouldn't be successful %v - should return context.DeadlineExceeded", err)
-	}
-	_, err = r.Read(buf)
-	if err != context.DeadlineExceeded {
-		t.Errorf("DeadlineReader shouldn't be successful %v - should return context.DeadlineExceeded", err)
-	}
-	r = NewDeadlineReader(&sleepReader{timeout: 100 * time.Millisecond}, 600*time.Millisecond)
-	n, err := r.Read(buf)
-	r.Close()
-	if err != nil {
-		t.Errorf("DeadlineReader should succeed but failed with %s", err)
-	}
-	if n != 4 {
-		t.Errorf("DeadlineReader should succeed but should have only read 4 bytes, but returned %d instead", n)
-	}
 }
 
 func TestDeadlineWriter(t *testing.T) {
@@ -203,5 +169,38 @@ func TestSameFile(t *testing.T) {
 	}
 	if SameFile(fi1, fi2) {
 		t.Fatal("Expected the files not to be same")
+	}
+}
+
+func TestCopyAligned(t *testing.T) {
+	f, err := os.CreateTemp("", "")
+	if err != nil {
+		t.Errorf("Error creating tmp file: %v", err)
+	}
+	defer f.Close()
+	defer os.Remove(f.Name())
+
+	r := strings.NewReader("hello world")
+
+	bufp := ODirectPoolSmall.Get().(*[]byte)
+	defer ODirectPoolSmall.Put(bufp)
+
+	written, err := CopyAligned(f, io.LimitReader(r, 5), *bufp, r.Size(), f)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("Expected io.ErrUnexpectedEOF, but got %v", err)
+	}
+	if written != 5 {
+		t.Errorf("Expected written to be '5', but got %v", written)
+	}
+
+	f.Seek(0, io.SeekStart)
+	r.Seek(0, io.SeekStart)
+
+	written, err = CopyAligned(f, r, *bufp, r.Size(), f)
+	if !errors.Is(err, nil) {
+		t.Errorf("Expected nil, but got %v", err)
+	}
+	if written != r.Size() {
+		t.Errorf("Expected written to be '%v', but got %v", r.Size(), written)
 	}
 }

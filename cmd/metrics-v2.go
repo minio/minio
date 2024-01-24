@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -20,14 +20,17 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/minio/kes-go"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
@@ -48,31 +51,32 @@ var (
 
 func init() {
 	clusterMetricsGroups := []*MetricsGroup{
-		getNodeHealthMetrics(),
-		getClusterStorageMetrics(),
-		getClusterTierMetrics(),
-		getClusterUsageMetrics(),
-		getKMSMetrics(),
-		getClusterHealthMetrics(),
-		getIAMNodeMetrics(),
+		getNodeHealthMetrics(MetricsGroupOpts{dependGlobalNotificationSys: true}),
+		getClusterStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getClusterTierMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getClusterUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getKMSMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependGlobalKMS: true}),
+		getClusterHealthMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
+		getReplicationSiteMetrics(MetricsGroupOpts{dependGlobalSiteReplicationSys: true}),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
-		getCacheMetrics(),
 		getGoMetrics(),
-		getHTTPMetrics(false),
-		getNotificationMetrics(),
-		getLocalStorageMetrics(),
+		getHTTPMetrics(MetricsGroupOpts{}),
+		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
+		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 		getMinioProcMetrics(),
 		getMinioVersionMetrics(),
 		getNetworkMetrics(),
 		getS3TTFBMetric(),
 		getILMNodeMetrics(),
 		getScannerNodeMetrics(),
-		getIAMNodeMetrics(),
-		getKMSNodeMetrics(),
-		getMinioHealingMetrics(),
+		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
+		getKMSNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependGlobalKMS: true}),
+		getMinioHealingMetrics(MetricsGroupOpts{dependGlobalBackgroundHealState: true}),
 		getWebhookMetrics(),
+		getReplicationClusterMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -82,25 +86,27 @@ func init() {
 	}()
 
 	nodeGroups := []*MetricsGroup{
-		getNodeHealthMetrics(),
-		getCacheMetrics(),
-		getHTTPMetrics(false),
+		getNodeHealthMetrics(MetricsGroupOpts{dependGlobalNotificationSys: true}),
+		getHTTPMetrics(MetricsGroupOpts{}),
 		getNetworkMetrics(),
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
-		getNotificationMetrics(),
-		getDistLockMetrics(),
-		getIAMNodeMetrics(),
+		getTierMetrics(),
+		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
+		getDistLockMetrics(MetricsGroupOpts{dependGlobalIsDistErasure: true, dependGlobalLockServer: true}),
+		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
+		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 	}
 
 	bucketMetricsGroups := []*MetricsGroup{
-		getBucketUsageMetrics(),
-		getHTTPMetrics(true),
+		getBucketUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
+		getBatchJobsMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
-		getHTTPMetrics(true),
+		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
 	}
 
@@ -130,6 +136,9 @@ const (
 	capacityRawSubsystem      MetricSubsystem = "capacity_raw"
 	capacityUsableSubsystem   MetricSubsystem = "capacity_usable"
 	driveSubsystem            MetricSubsystem = "drive"
+	interfaceSubsystem        MetricSubsystem = "if"
+	memSubsystem              MetricSubsystem = "mem"
+	cpuSubsystem              MetricSubsystem = "cpu_avg"
 	storageClassSubsystem     MetricSubsystem = "storage_class"
 	fileDescriptorSubsystem   MetricSubsystem = "file_descriptor"
 	goRoutines                MetricSubsystem = "go_routine"
@@ -149,6 +158,7 @@ const (
 	usageSubsystem            MetricSubsystem = "usage"
 	quotaSubsystem            MetricSubsystem = "quota"
 	ilmSubsystem              MetricSubsystem = "ilm"
+	tierSubsystem             MetricSubsystem = "tier"
 	scannerSubsystem          MetricSubsystem = "scanner"
 	iamSubsystem              MetricSubsystem = "iam"
 	kmsSubsystem              MetricSubsystem = "kms"
@@ -186,8 +196,39 @@ const (
 	total             MetricName = "total"
 	freeInodes        MetricName = "free_inodes"
 
-	failedCount     MetricName = "failed_count"
-	failedBytes     MetricName = "failed_bytes"
+	lastMinFailedCount  MetricName = "last_minute_failed_count"
+	lastMinFailedBytes  MetricName = "last_minute_failed_bytes"
+	lastHourFailedCount MetricName = "last_hour_failed_count"
+	lastHourFailedBytes MetricName = "last_hour_failed_bytes"
+	totalFailedCount    MetricName = "total_failed_count"
+	totalFailedBytes    MetricName = "total_failed_bytes"
+
+	currActiveWorkers  MetricName = "current_active_workers"
+	avgActiveWorkers   MetricName = "average_active_workers"
+	maxActiveWorkers   MetricName = "max_active_workers"
+	recentBacklogCount MetricName = "recent_backlog_count"
+	currInQueueCount   MetricName = "last_minute_queued_count"
+	currInQueueBytes   MetricName = "last_minute_queued_bytes"
+	receivedCount      MetricName = "received_count"
+	sentCount          MetricName = "sent_count"
+	currTransferRate   MetricName = "current_transfer_rate"
+	avgTransferRate    MetricName = "average_transfer_rate"
+	maxTransferRate    MetricName = "max_transfer_rate"
+	credentialErrors   MetricName = "credential_errors"
+
+	currLinkLatency MetricName = "current_link_latency_ms"
+	avgLinkLatency  MetricName = "average_link_latency_ms"
+	maxLinkLatency  MetricName = "max_link_latency_ms"
+
+	linkOnline                MetricName = "link_online"
+	linkOfflineDuration       MetricName = "link_offline_duration_seconds"
+	linkDowntimeTotalDuration MetricName = "link_downtime_duration_seconds"
+
+	avgInQueueCount MetricName = "average_queued_count"
+	avgInQueueBytes MetricName = "average_queued_bytes"
+	maxInQueueCount MetricName = "max_queued_count"
+	maxInQueueBytes MetricName = "max_queued_bytes"
+
 	freeBytes       MetricName = "free_bytes"
 	readBytes       MetricName = "read_bytes"
 	rcharBytes      MetricName = "rchar_bytes"
@@ -202,8 +243,6 @@ const (
 	latencyMicroSec MetricName = "latency_us"
 	latencyNanoSec  MetricName = "latency_ns"
 
-	usagePercent MetricName = "update_percent"
-
 	commitInfo  MetricName = "commit_info"
 	usageInfo   MetricName = "usage_info"
 	versionInfo MetricName = "version_info"
@@ -211,20 +250,26 @@ const (
 	sizeDistribution    = "size_distribution"
 	versionDistribution = "version_distribution"
 	ttfbDistribution    = "seconds_distribution"
+	ttlbDistribution    = "ttlb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
 	upTime           = "uptime_seconds"
 	memory           = "resident_memory_bytes"
+	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
 	transitionPendingTasks MetricName = "transition_pending_tasks"
 	transitionActiveTasks  MetricName = "transition_active_tasks"
+	transitionMissedTasks  MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
 	transitionedVersions MetricName = "transitioned_versions"
+
+	tierRequestsSuccess MetricName = "requests_success"
+	tierRequestsFailure MetricName = "requests_failure"
 
 	kmsOnline          = "online"
 	kmsRequestsSuccess = "request_success"
@@ -272,8 +317,25 @@ type Metric struct {
 
 // MetricsGroup are a group of metrics that are initialized together.
 type MetricsGroup struct {
-	metricsCache  timedValue
-	cacheInterval time.Duration
+	metricsCache     timedValue
+	cacheInterval    time.Duration
+	metricsGroupOpts MetricsGroupOpts
+}
+
+// MetricsGroupOpts are a group of metrics opts to be used to initialize the metrics group.
+type MetricsGroupOpts struct {
+	dependGlobalObjectAPI           bool
+	dependGlobalAuthNPlugin         bool
+	dependGlobalSiteReplicationSys  bool
+	dependGlobalNotificationSys     bool
+	dependGlobalKMS                 bool
+	bucketOnly                      bool
+	dependGlobalLambdaTargetList    bool
+	dependGlobalIAMSys              bool
+	dependGlobalLockServer          bool
+	dependGlobalIsDistErasure       bool
+	dependGlobalBackgroundHealState bool
+	dependBucketTargetSys           bool
 }
 
 // RegisterRead register the metrics populator function to be used
@@ -283,6 +345,63 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 		g.metricsCache.Relax = true
 		g.metricsCache.TTL = g.cacheInterval
 		g.metricsCache.Update = func() (interface{}, error) {
+			if g.metricsGroupOpts.dependGlobalObjectAPI {
+				objLayer := newObjectLayerFn()
+				// Service not initialized yet
+				if objLayer == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalAuthNPlugin {
+				if globalAuthNPlugin == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalSiteReplicationSys {
+				if !globalSiteReplicationSys.isEnabled() {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalNotificationSys {
+				if globalNotificationSys == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalKMS {
+				if GlobalKMS == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalLambdaTargetList {
+				if globalLambdaTargetList == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalIAMSys {
+				if globalIAMSys == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalLockServer {
+				if globalLockServer == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalIsDistErasure {
+				if !globalIsDistErasure {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalBackgroundHealState {
+				if globalBackgroundHealState == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependBucketTargetSys {
+				if globalBucketTargetSys == nil {
+					return []Metric{}, nil
+				}
+			}
 			return read(GlobalContext), nil
 		}
 	})
@@ -401,7 +520,7 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_timeout",
-		Help:      "Total number of timeout errors since server start",
+		Help:      "Total number of drive timeout errors since server start",
 		Type:      counterMetric,
 	}
 }
@@ -411,7 +530,27 @@ func getNodeDriveAvailablityErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_availability",
-		Help:      "Total number of I/O errors, permission denied and timeouts since server start",
+		Help:      "Total number of drive I/O errors, permission denied and timeouts since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveWaitingIOMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "io_waiting",
+		Help:      "Total number I/O operations waiting on drive",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveTokensIOMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "io_tokens",
+		Help:      "Total number concurrent I/O operations configured on drive",
 		Type:      counterMetric,
 	}
 }
@@ -506,12 +645,12 @@ func getNodeRRSParityMD() MetricDescription {
 	}
 }
 
-func getNodeDrivesFreeInodes() MetricDescription {
+func getNodeDrivesFreeInodesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      freeInodes,
-		Help:      "Total free inodes",
+		Help:      "Free inodes on a drive",
 		Type:      gaugeMetric,
 	}
 }
@@ -646,56 +785,6 @@ func getBucketUsageDeleteMarkersTotalMD() MetricDescription {
 	}
 }
 
-func getBucketRepLatencyMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      latencyMilliSec,
-		Help:      "Replication latency in milliseconds",
-		Type:      histogramMetric,
-	}
-}
-
-func getBucketRepFailedBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      failedBytes,
-		Help:      "Total number of bytes failed at least once to replicate",
-		Type:      gaugeMetric,
-	}
-}
-
-func getBucketRepSentBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      sentBytes,
-		Help:      "Total number of bytes replicated to the target bucket",
-		Type:      gaugeMetric,
-	}
-}
-
-func getBucketRepReceivedBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      receivedBytes,
-		Help:      "Total number of bytes replicated to this bucket from another source bucket",
-		Type:      gaugeMetric,
-	}
-}
-
-func getBucketRepFailedOperationsMD() MetricDescription {
-	return MetricDescription{
-		Namespace: bucketMetricNamespace,
-		Subsystem: replicationSubsystem,
-		Name:      failedCount,
-		Help:      "Total number of objects which failed replication",
-		Type:      gaugeMetric,
-	}
-}
-
 func getClusterObjectDistributionMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
@@ -711,8 +800,326 @@ func getClusterObjectVersionsMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      versionDistribution,
-		Help:      "Distribution of object sizes across a cluster",
+		Help:      "Distribution of object versions across a cluster",
 		Type:      histogramMetric,
+	}
+}
+
+func getClusterRepLinkLatencyCurrMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currLinkLatency,
+		Help:      "Replication current link latency in milliseconds",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkOnlineMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      linkOnline,
+		Help:      "Reports whether replication link is online (1) or offline(0)",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkCurrOfflineDurationMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      linkOfflineDuration,
+		Help:      "Duration of replication link being offline in seconds since last offline event",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkTotalOfflineDurationMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      linkDowntimeTotalDuration,
+		Help:      "Total downtime of replication link in seconds since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketRepLatencyMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      latencyMilliSec,
+		Help:      "Replication latency in milliseconds",
+		Type:      histogramMetric,
+	}
+}
+
+func getRepFailedBytesLastMinuteMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastMinFailedBytes,
+		Help:      "Total number of bytes failed at least once to replicate in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedOperationsLastMinuteMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastMinFailedCount,
+		Help:      "Total number of objects which failed replication in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedBytesLastHourMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastHourFailedBytes,
+		Help:      "Total number of bytes failed at least once to replicate in the last hour",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedOperationsLastHourMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      lastHourFailedCount,
+		Help:      "Total number of objects which failed replication in the last hour",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedBytesTotalMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      totalFailedBytes,
+		Help:      "Total number of bytes failed at least once to replicate since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepFailedOperationsTotalMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      totalFailedCount,
+		Help:      "Total number of objects which failed replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepSentBytesMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      sentBytes,
+		Help:      "Total number of bytes replicated to the target",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepSentOperationsMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      sentCount,
+		Help:      "Total number of objects replicated to the target",
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepReceivedBytesMD(namespace MetricNamespace) MetricDescription {
+	helpText := "Total number of bytes replicated to this bucket from another source bucket"
+	if namespace == clusterMetricNamespace {
+		helpText = "Total number of bytes replicated to this cluster from site replication peer"
+	}
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      receivedBytes,
+		Help:      helpText,
+		Type:      gaugeMetric,
+	}
+}
+
+func getRepReceivedOperationsMD(namespace MetricNamespace) MetricDescription {
+	help := "Total number of objects received by this cluster"
+	if namespace == bucketMetricNamespace {
+		help = "Total number of objects received by this bucket from another source bucket"
+	}
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      receivedCount,
+		Help:      help,
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMRFFailedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      recentBacklogCount,
+		Help:      "Total number of objects seen in replication backlog in the last 5 minutes",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepCredentialErrorsMD(namespace MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: namespace,
+		Subsystem: replicationSubsystem,
+		Name:      credentialErrors,
+		Help:      "Total number of replication credential errors since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplCurrQueuedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currInQueueCount,
+		Help:      "Total number of objects queued for replication in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplCurrQueuedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currInQueueBytes,
+		Help:      "Total number of bytes queued for replication in the last full minute",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplActiveWorkersCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currActiveWorkers,
+		Help:      "Total number of active replication workers",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgActiveWorkersCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgActiveWorkers,
+		Help:      "Average number of active replication workers",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxActiveWorkers,
+		Help:      "Maximum number of active replication workers seen since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplCurrentTransferRateMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      currTransferRate,
+		Help:      "Current replication transfer rate in bytes/sec",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkLatencyMaxMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxLinkLatency,
+		Help:      "Maximum replication link latency in milliseconds seen since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterRepLinkLatencyAvgMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgLinkLatency,
+		Help:      "Average replication link latency in milliseconds",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgQueuedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgInQueueCount,
+		Help:      "Average number of objects queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgQueuedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgInQueueBytes,
+		Help:      "Average number of bytes queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxQueuedOperationsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxInQueueCount,
+		Help:      "Maximum number of objects queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxQueuedBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxInQueueBytes,
+		Help:      "Maximum number of bytes queued for replication since server start",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplAvgTransferRateMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      avgTransferRate,
+		Help:      "Average replication transfer rate in bytes/sec",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplMaxTransferRateMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: replicationSubsystem,
+		Name:      maxTransferRate,
+		Help:      "Maximum replication transfer rate in bytes/sec seen since server start",
+		Type:      gaugeMetric,
 	}
 }
 
@@ -922,76 +1329,6 @@ func getS3RejectedInvalidRequestsTotalMD() MetricDescription {
 		Subsystem: requestsRejectedSubsystem,
 		Name:      invalidTotal,
 		Help:      "Total number of invalid S3 requests",
-		Type:      counterMetric,
-	}
-}
-
-func getCacheHitsTotalMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      hitsTotal,
-		Help:      "Total number of drive cache hits",
-		Type:      counterMetric,
-	}
-}
-
-func getCacheHitsMissedTotalMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      missedTotal,
-		Help:      "Total number of drive cache misses",
-		Type:      counterMetric,
-	}
-}
-
-func getCacheUsagePercentMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: minioNamespace,
-		Name:      usagePercent,
-		Help:      "Total percentage cache usage",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheUsageInfoMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      usageInfo,
-		Help:      "Total percentage cache usage, value of 1 indicates high and 0 low, label level is set as well",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheUsedBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      usedBytes,
-		Help:      "Current cache usage in bytes",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheTotalBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      totalBytes,
-		Help:      "Total size of cache drive in bytes",
-		Type:      gaugeMetric,
-	}
-}
-
-func getCacheSentBytesMD() MetricDescription {
-	return MetricDescription{
-		Namespace: minioNamespace,
-		Subsystem: cacheSubsystem,
-		Name:      sentBytes,
-		Help:      "Total number of bytes served from cache",
 		Type:      counterMetric,
 	}
 }
@@ -1216,6 +1553,16 @@ func getMinIOProcessResidentMemory() MetricDescription {
 	}
 }
 
+func getMinIOProcessVirtualMemory() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      memory,
+		Help:      "Virtual memory size in bytes",
+		Type:      gaugeMetric,
+	}
+}
+
 func getMinIOProcessCPUTime() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -1338,6 +1685,14 @@ func getMinioProcMetrics() *MetricsGroup {
 				})
 		}
 
+		if stat.VirtualMemory() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessVirtualMemory(),
+					Value:       float64(stat.VirtualMemory()),
+				})
+		}
+
 		if stat.CPUTime() > 0 {
 			metrics = append(metrics,
 				Metric{
@@ -1364,47 +1719,63 @@ func getGoMetrics() *MetricsGroup {
 	return mg
 }
 
+// getHistogramMetrics fetches histogram metrics and returns it in a []Metric
+// Note: Typically used in MetricGroup.RegisterRead
+func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) []Metric {
+	ch := make(chan prometheus.Metric)
+	go func() {
+		defer close(ch)
+		// Collects prometheus metrics from hist and sends it over ch
+		hist.Collect(ch)
+	}()
+
+	// Converts metrics received into internal []Metric type
+	var metrics []Metric
+	for promMetric := range ch {
+		dtoMetric := &dto.Metric{}
+		err := promMetric.Write(dtoMetric)
+		if err != nil {
+			// Log error and continue to receive other metric
+			// values
+			logger.LogIf(GlobalContext, err)
+			continue
+		}
+
+		h := dtoMetric.GetHistogram()
+		for _, b := range h.Bucket {
+			labels := make(map[string]string)
+			for _, lp := range dtoMetric.GetLabel() {
+				labels[*lp.Name] = *lp.Value
+			}
+			labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
+			metric := Metric{
+				Description:    desc,
+				VariableLabels: labels,
+				Value:          float64(b.GetCumulativeCount()),
+			}
+			metrics = append(metrics, metric)
+		}
+		// add metrics with +Inf label
+		labels1 := make(map[string]string)
+		for _, lp := range dtoMetric.GetLabel() {
+			labels1[*lp.Name] = *lp.Value
+		}
+		labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
+		metrics = append(metrics, Metric{
+			Description:    desc,
+			VariableLabels: labels1,
+			Value:          dtoMetric.Counter.GetValue(),
+		})
+	}
+	return metrics
+}
+
 func getBucketTTFBMetric() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		// Read prometheus metric on this channel
-		ch := make(chan prometheus.Metric)
-		var wg sync.WaitGroup
-		wg.Add(1)
-
-		// Read prometheus histogram data and convert it to internal metric data
-		go func() {
-			defer wg.Done()
-			for promMetric := range ch {
-				dtoMetric := &dto.Metric{}
-				err := promMetric.Write(dtoMetric)
-				if err != nil {
-					logger.LogIf(GlobalContext, err)
-					return
-				}
-				h := dtoMetric.GetHistogram()
-				for _, b := range h.Bucket {
-					labels := make(map[string]string)
-					for _, lp := range dtoMetric.GetLabel() {
-						labels[*lp.Name] = *lp.Value
-					}
-					labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
-					metric := Metric{
-						Description:    getBucketTTFBDistributionMD(),
-						VariableLabels: labels,
-						Value:          float64(b.GetCumulativeCount()),
-					}
-					metrics = append(metrics, metric)
-				}
-			}
-		}()
-
-		bucketHTTPRequestsDuration.Collect(ch)
-		close(ch)
-		wg.Wait()
-		return
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketTTFBDistributionMD())
 	})
 	return mg
 }
@@ -1413,43 +1784,18 @@ func getS3TTFBMetric() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		// Read prometheus metric on this channel
-		ch := make(chan prometheus.Metric)
-		var wg sync.WaitGroup
-		wg.Add(1)
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD())
+	})
+	return mg
+}
 
-		// Read prometheus histogram data and convert it to internal metric data
-		go func() {
-			defer wg.Done()
-			for promMetric := range ch {
-				dtoMetric := &dto.Metric{}
-				err := promMetric.Write(dtoMetric)
-				if err != nil {
-					logger.LogIf(GlobalContext, err)
-					return
-				}
-				h := dtoMetric.GetHistogram()
-				for _, b := range h.Bucket {
-					labels := make(map[string]string)
-					for _, lp := range dtoMetric.GetLabel() {
-						labels[*lp.Name] = *lp.Value
-					}
-					labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
-					metric := Metric{
-						Description:    getS3TTFBDistributionMD(),
-						VariableLabels: labels,
-						Value:          float64(b.GetCumulativeCount()),
-					}
-					metrics = append(metrics, metric)
-				}
-			}
-		}()
-
-		httpRequestsDuration.Collect(ch)
-		close(ch)
-		wg.Wait()
-		return
+func getTierMetrics() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return globalTierMetrics.Report()
 	})
 	return mg
 }
@@ -1470,6 +1816,16 @@ func getTransitionActiveTasksMD() MetricDescription {
 		Subsystem: ilmSubsystem,
 		Name:      transitionActiveTasks,
 		Help:      "Number of active ILM transition tasks",
+		Type:      gaugeMetric,
+	}
+}
+
+func getTransitionMissedTasksMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: ilmSubsystem,
+		Name:      transitionMissedTasks,
+		Help:      "Number of missed immediate ILM transition tasks",
 		Type:      gaugeMetric,
 	}
 }
@@ -1548,17 +1904,22 @@ func getILMNodeMetrics() *MetricsGroup {
 		trActiveTasks := Metric{
 			Description: getTransitionActiveTasksMD(),
 		}
+		trMissedTasks := Metric{
+			Description: getTransitionMissedTasksMD(),
+		}
 		if globalExpiryState != nil {
 			expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
 		}
 		if globalTransitionState != nil {
 			trPendingTasks.Value = float64(globalTransitionState.PendingTasks())
 			trActiveTasks.Value = float64(globalTransitionState.ActiveTasks())
+			trMissedTasks.Value = float64(globalTransitionState.MissedImmediateTasks())
 		}
 		return []Metric{
 			expPendingTasks,
 			trPendingTasks,
 			trActiveTasks,
+			trMissedTasks,
 		}
 	})
 	return mg
@@ -1653,9 +2014,10 @@ func getScannerNodeMetrics() *MetricsGroup {
 	return mg
 }
 
-func getIAMNodeMetrics() *MetricsGroup {
+func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		lastSyncTime := atomic.LoadUint64(&globalIAMSys.LastRefreshTimeUnixNano)
@@ -1773,6 +2135,277 @@ func getIAMNodeMetrics() *MetricsGroup {
 	return mg
 }
 
+// replication metrics for each node - published to the cluster endpoint with nodename as label
+func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
+	}
+	const (
+		Online  = 1
+		Offline = 0
+	)
+
+	mg.RegisterRead(func(_ context.Context) []Metric {
+		var ml []Metric
+		// common operational metrics for bucket replication and site replication - published
+		// at cluster level
+		if globalReplicationStats != nil {
+			qs := globalReplicationStats.getNodeQueueStatsSummary()
+			activeWorkersCount := Metric{
+				Description:    getClusterReplActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgActiveWorkersCount := Metric{
+				Description:    getClusterReplAvgActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxActiveWorkersCount := Metric{
+				Description:    getClusterReplMaxActiveWorkersCountMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			currInQueueCount := Metric{
+				Description:    getClusterReplCurrQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			currInQueueBytes := Metric{
+				Description:    getClusterReplCurrQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+
+			currTransferRate := Metric{
+				Description:    getClusterReplCurrentTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgQueueCount := Metric{
+				Description:    getClusterReplAvgQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgQueueBytes := Metric{
+				Description:    getClusterReplAvgQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxQueueCount := Metric{
+				Description:    getClusterReplMaxQueuedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxQueueBytes := Metric{
+				Description:    getClusterReplMaxQueuedBytesMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			avgTransferRate := Metric{
+				Description:    getClusterReplAvgTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			maxTransferRate := Metric{
+				Description:    getClusterReplMaxTransferRateMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+			}
+			mrfCount := Metric{
+				Description:    getClusterReplMRFFailedOperationsMD(),
+				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Value:          float64(qs.MRFStats.LastFailedCount),
+			}
+
+			if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
+				qt := qs.QStats
+				currInQueueBytes.Value = qt.Curr.Bytes
+				currInQueueCount.Value = qt.Curr.Count
+				avgQueueBytes.Value = qt.Avg.Bytes
+				avgQueueCount.Value = qt.Avg.Count
+				maxQueueBytes.Value = qt.Max.Bytes
+				maxQueueCount.Value = qt.Max.Count
+			}
+			activeWorkersCount.Value = float64(qs.ActiveWorkers.Curr)
+			avgActiveWorkersCount.Value = float64(qs.ActiveWorkers.Avg)
+			maxActiveWorkersCount.Value = float64(qs.ActiveWorkers.Max)
+
+			if len(qs.XferStats) > 0 {
+				tots := qs.XferStats[Total]
+				currTransferRate.Value = tots.Curr
+				avgTransferRate.Value = tots.Avg
+				maxTransferRate.Value = tots.Peak
+			}
+			ml = []Metric{
+				activeWorkersCount,
+				avgActiveWorkersCount,
+				maxActiveWorkersCount,
+				currInQueueCount,
+				currInQueueBytes,
+				avgQueueCount,
+				avgQueueBytes,
+				maxQueueCount,
+				maxQueueBytes,
+				currTransferRate,
+				avgTransferRate,
+				maxTransferRate,
+				mrfCount,
+			}
+		}
+		for ep, health := range globalBucketTargetSys.healthStats() {
+			// link latency current
+			m := Metric{
+				Description: getClusterRepLinkLatencyCurrMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			m.Value = float64(health.latency.curr / time.Millisecond)
+			ml = append(ml, m)
+
+			// link latency average
+			m = Metric{
+				Description: getClusterRepLinkLatencyAvgMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			m.Value = float64(health.latency.avg / time.Millisecond)
+			ml = append(ml, m)
+
+			// link latency max
+			m = Metric{
+				Description: getClusterRepLinkLatencyMaxMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			m.Value = float64(health.latency.peak / time.Millisecond)
+			ml = append(ml, m)
+
+			linkOnline := Metric{
+				Description: getClusterRepLinkOnlineMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			online := Offline
+			if health.Online {
+				online = Online
+			}
+			linkOnline.Value = float64(online)
+			ml = append(ml, linkOnline)
+			offlineDuration := Metric{
+				Description: getClusterRepLinkCurrOfflineDurationMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			currDowntime := time.Duration(0)
+			if !health.Online && !health.lastOnline.IsZero() {
+				currDowntime = UTCNow().Sub(health.lastOnline)
+			}
+			offlineDuration.Value = float64(currDowntime / time.Second)
+			ml = append(ml, offlineDuration)
+
+			downtimeDuration := Metric{
+				Description: getClusterRepLinkTotalOfflineDurationMD(),
+				VariableLabels: map[string]string{
+					"endpoint": ep,
+					serverName: globalLocalNodeName,
+				},
+			}
+			dwntime := currDowntime
+			if health.offlineDuration > currDowntime {
+				dwntime = health.offlineDuration
+			}
+			downtimeDuration.Value = float64(dwntime / time.Second)
+			ml = append(ml, downtimeDuration)
+
+		}
+		return ml
+	})
+	return mg
+}
+
+// replication metrics for site replication
+func getReplicationSiteMetrics(opts MetricsGroupOpts) *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
+	}
+	mg.RegisterRead(func(_ context.Context) []Metric {
+		ml := []Metric{}
+
+		// metrics pertinent to site replication - overall roll up.
+		if globalSiteReplicationSys.isEnabled() {
+			m, err := globalSiteReplicationSys.getSiteMetrics(GlobalContext)
+			if err != nil {
+				logger.LogIf(GlobalContext, err)
+				return ml
+			}
+			ml = append(ml, Metric{
+				Description: getRepReceivedBytesMD(clusterMetricNamespace),
+				Value:       float64(m.ReplicaSize),
+			})
+			ml = append(ml, Metric{
+				Description: getRepReceivedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.ReplicaCount),
+			})
+
+			for _, stat := range m.Metrics {
+				ml = append(ml, Metric{
+					Description:    getRepFailedBytesLastMinuteMD(clusterMetricNamespace),
+					Value:          float64(stat.Failed.LastMinute.Bytes),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedOperationsLastMinuteMD(clusterMetricNamespace),
+					Value:          stat.Failed.LastMinute.Count,
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedBytesLastHourMD(clusterMetricNamespace),
+					Value:          float64(stat.Failed.LastHour.Bytes),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedOperationsLastHourMD(clusterMetricNamespace),
+					Value:          stat.Failed.LastHour.Count,
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedBytesTotalMD(clusterMetricNamespace),
+					Value:          float64(stat.Failed.Totals.Bytes),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepFailedOperationsTotalMD(clusterMetricNamespace),
+					Value:          stat.Failed.Totals.Count,
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+
+				ml = append(ml, Metric{
+					Description:    getRepSentBytesMD(clusterMetricNamespace),
+					Value:          float64(stat.ReplicatedSize),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+				ml = append(ml, Metric{
+					Description:    getRepSentOperationsMD(clusterMetricNamespace),
+					Value:          float64(stat.ReplicatedCount),
+					VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+				})
+
+				if c, ok := stat.Failed.ErrCounts["AccessDenied"]; ok {
+					ml = append(ml, Metric{
+						Description:    getClusterRepCredentialErrorsMD(clusterMetricNamespace),
+						Value:          float64(c),
+						VariableLabels: map[string]string{"endpoint": stat.Endpoint},
+					})
+				}
+			}
+		}
+
+		return ml
+	})
+	return mg
+}
+
 func getMinioVersionMetrics() *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
@@ -1791,9 +2424,10 @@ func getMinioVersionMetrics() *MetricsGroup {
 	return mg
 }
 
-func getNodeHealthMetrics() *MetricsGroup {
+func getNodeHealthMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 16)
@@ -1811,9 +2445,10 @@ func getNodeHealthMetrics() *MetricsGroup {
 	return mg
 }
 
-func getMinioHealingMetrics() *MetricsGroup {
+func getMinioHealingMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
@@ -1881,59 +2516,10 @@ func getObjectsScanned(seq *healSequence) (m []Metric) {
 	return
 }
 
-func getCacheMetrics() *MetricsGroup {
+func getDistLockMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
-	}
-	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		cacheObjLayer := newCachedObjectLayerFn()
-		// Service not initialized yet
-		if cacheObjLayer == nil {
-			return
-		}
-		metrics = make([]Metric, 0, 20)
-		metrics = append(metrics, Metric{
-			Description: getCacheHitsTotalMD(),
-			Value:       float64(cacheObjLayer.CacheStats().getHits()),
-		})
-		metrics = append(metrics, Metric{
-			Description: getCacheHitsMissedTotalMD(),
-			Value:       float64(cacheObjLayer.CacheStats().getMisses()),
-		})
-		metrics = append(metrics, Metric{
-			Description: getCacheSentBytesMD(),
-			Value:       float64(cacheObjLayer.CacheStats().getBytesServed()),
-		})
-		for _, cdStats := range cacheObjLayer.CacheStats().GetDiskStats() {
-			metrics = append(metrics, Metric{
-				Description:    getCacheUsagePercentMD(),
-				Value:          float64(cdStats.UsagePercent),
-				VariableLabels: map[string]string{"drive": cdStats.Dir},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getCacheUsageInfoMD(),
-				Value:          float64(cdStats.UsageState),
-				VariableLabels: map[string]string{"drive": cdStats.Dir, "level": cdStats.GetUsageLevelString()},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getCacheUsedBytesMD(),
-				Value:          float64(cdStats.UsageSize),
-				VariableLabels: map[string]string{"drive": cdStats.Dir},
-			})
-			metrics = append(metrics, Metric{
-				Description:    getCacheTotalBytesMD(),
-				Value:          float64(cdStats.TotalCapacity),
-				VariableLabels: map[string]string{"drive": cdStats.Dir},
-			})
-		}
-		return
-	})
-	return mg
-}
-
-func getDistLockMetrics() *MetricsGroup {
-	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Second,
+		cacheInterval:    1 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		if !globalIsDistErasure {
@@ -1978,35 +2564,102 @@ func getDistLockMetrics() *MetricsGroup {
 	return mg
 }
 
-func getNotificationMetrics() *MetricsGroup {
+func getNotificationMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		nstats := globalNotifyTargetList.Stats()
-		metrics := make([]Metric, 0, 1+len(nstats.TargetStats))
-		metrics = append(metrics, Metric{
-			Description: MetricDescription{
-				Namespace: minioNamespace,
-				Subsystem: notifySubsystem,
-				Name:      "current_send_in_progress",
-				Help:      "Number of concurrent async Send calls active to all targets",
-				Type:      gaugeMetric,
-			},
-			Value: float64(nstats.CurrentSendCalls),
-		})
-		for _, st := range nstats.TargetStats {
+		metrics := make([]Metric, 0, 3)
+
+		if globalEventNotifier != nil {
+			nstats := globalEventNotifier.targetList.Stats()
 			metrics = append(metrics, Metric{
 				Description: MetricDescription{
 					Namespace: minioNamespace,
 					Subsystem: notifySubsystem,
-					Name:      "target_queue_length",
-					Help:      "Number of unsent notifications in queue for target",
+					Name:      "current_send_in_progress",
+					Help:      "Number of concurrent async Send calls active to all targets (deprecated, please use 'minio_notify_target_current_send_in_progress' instead)",
 					Type:      gaugeMetric,
 				},
-				VariableLabels: map[string]string{"target_id": st.ID.ID, "target_name": st.ID.Name},
-				Value:          float64(st.CurrentQueue),
+				Value: float64(nstats.CurrentSendCalls),
 			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_skipped_total",
+					Help:      "Events that were skipped to be sent to the targets due to the in-memory queue being full",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.EventsSkipped),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_errors_total",
+					Help:      "Events that were failed to be sent to the targets (deprecated, please use 'minio_notify_target_failed_events' instead)",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.EventsErrorsTotal),
+			})
+			metrics = append(metrics, Metric{
+				Description: MetricDescription{
+					Namespace: minioNamespace,
+					Subsystem: notifySubsystem,
+					Name:      "events_sent_total",
+					Help:      "Total number of events sent to the targets (deprecated, please use 'minio_notify_target_total_events' instead)",
+					Type:      counterMetric,
+				},
+				Value: float64(nstats.TotalEvents),
+			})
+			for id, st := range nstats.TargetStats {
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_total_events",
+						Help:      "Total number of events sent (or) queued to the target",
+						Type:      counterMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.TotalEvents),
+				})
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_failed_events",
+						Help:      "Number of events failed to be sent (or) queued to the target",
+						Type:      counterMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.FailedEvents),
+				})
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_current_send_in_progress",
+						Help:      "Number of concurrent async Send calls active to the target",
+						Type:      gaugeMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.CurrentSendCalls),
+				})
+				metrics = append(metrics, Metric{
+					Description: MetricDescription{
+						Namespace: minioNamespace,
+						Subsystem: notifySubsystem,
+						Name:      "target_queue_length",
+						Help:      "Number of events currently staged in the queue_dir configured for the target",
+						Type:      gaugeMetric,
+					},
+					VariableLabels: map[string]string{"target_id": id.ID, "target_name": id.Name},
+					Value:          float64(st.CurrentQueue),
+				})
+			}
 		}
 
 		lstats := globalLambdaTargetList.Stats()
@@ -2087,12 +2740,13 @@ func getNotificationMetrics() *MetricsGroup {
 	return mg
 }
 
-func getHTTPMetrics(bucketOnly bool) *MetricsGroup {
+func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		if !bucketOnly {
+		if !mg.metricsGroupOpts.bucketOnly {
 			httpStats := globalHTTPStats.toServerHTTPStats()
 			metrics = make([]Metric, 0, 3+
 				len(httpStats.CurrentS3Requests.APIStats)+
@@ -2278,13 +2932,13 @@ func getNetworkMetrics() *MetricsGroup {
 	return mg
 }
 
-func getClusterUsageMetrics() *MetricsGroup {
+func getClusterUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
 		if objLayer == nil {
 			return
 		}
@@ -2384,16 +3038,13 @@ func getClusterUsageMetrics() *MetricsGroup {
 	return mg
 }
 
-func getBucketUsageMetrics() *MetricsGroup {
+func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
 
 		metrics = make([]Metric, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
@@ -2412,10 +3063,11 @@ func getBucketUsageMetrics() *MetricsGroup {
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
-		bucketReplStats := globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+		var bucketReplStats map[string]BucketStats
+		if !globalSiteReplicationSys.isEnabled() {
+			bucketReplStats = globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+		}
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
-			stats := bucketReplStats[bucket]
-
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
 			metrics = append(metrics, Metric{
@@ -2442,12 +3094,6 @@ func getBucketUsageMetrics() *MetricsGroup {
 				VariableLabels: map[string]string{"bucket": bucket},
 			})
 
-			metrics = append(metrics, Metric{
-				Description:    getBucketRepReceivedBytesMD(),
-				Value:          float64(stats.ReplicaSize),
-				VariableLabels: map[string]string{"bucket": bucket},
-			})
-
 			if quota != nil && quota.Quota > 0 {
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageQuotaTotalBytesMD(),
@@ -2455,34 +3101,80 @@ func getBucketUsageMetrics() *MetricsGroup {
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 			}
-
-			if stats.hasReplicationUsage() {
-				for arn, stat := range stats.Stats {
+			if !globalSiteReplicationSys.isEnabled() {
+				var stats BucketReplicationStats
+				s, ok := bucketReplStats[bucket]
+				if ok {
+					stats = s.ReplicationStats
 					metrics = append(metrics, Metric{
-						Description:    getBucketRepFailedBytesMD(),
-						Value:          float64(stat.FailedSize),
-						VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						Description:    getRepReceivedBytesMD(bucketMetricNamespace),
+						Value:          float64(stats.ReplicaSize),
+						VariableLabels: map[string]string{"bucket": bucket},
 					})
 					metrics = append(metrics, Metric{
-						Description:    getBucketRepSentBytesMD(),
-						Value:          float64(stat.ReplicatedSize),
-						VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
+						Value:          float64(stats.ReplicaCount),
+						VariableLabels: map[string]string{"bucket": bucket},
 					})
-					metrics = append(metrics, Metric{
-						Description:    getBucketRepFailedOperationsMD(),
-						Value:          float64(stat.FailedCount),
-						VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
-					})
-					metrics = append(metrics, Metric{
-						Description:          getBucketRepLatencyMD(),
-						HistogramBucketLabel: "range",
-						Histogram:            stat.Latency.getUploadLatency(),
-						VariableLabels:       map[string]string{"bucket": bucket, "operation": "upload", "targetArn": arn},
-					})
-
+				}
+				if stats.hasReplicationUsage() {
+					for arn, stat := range stats.Stats {
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedBytesLastMinuteMD(bucketMetricNamespace),
+							Value:          float64(stat.Failed.LastMinute.Bytes),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedOperationsLastMinuteMD(bucketMetricNamespace),
+							Value:          stat.Failed.LastMinute.Count,
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedBytesLastHourMD(bucketMetricNamespace),
+							Value:          float64(stat.Failed.LastHour.Bytes),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedOperationsLastHourMD(bucketMetricNamespace),
+							Value:          stat.Failed.LastHour.Count,
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedBytesTotalMD(bucketMetricNamespace),
+							Value:          float64(stat.Failed.Totals.Bytes),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepFailedOperationsTotalMD(bucketMetricNamespace),
+							Value:          stat.Failed.Totals.Count,
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepSentBytesMD(bucketMetricNamespace),
+							Value:          float64(stat.ReplicatedSize),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:    getRepSentOperationsMD(bucketMetricNamespace),
+							Value:          float64(stat.ReplicatedCount),
+							VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+						})
+						metrics = append(metrics, Metric{
+							Description:          getBucketRepLatencyMD(),
+							HistogramBucketLabel: "range",
+							Histogram:            stat.Latency.getUploadLatency(),
+							VariableLabels:       map[string]string{"bucket": bucket, "operation": "upload", "targetArn": arn},
+						})
+						if c, ok := stat.Failed.ErrCounts["AccessDenied"]; ok {
+							metrics = append(metrics, Metric{
+								Description:    getClusterRepCredentialErrorsMD(bucketMetricNamespace),
+								Value:          float64(c),
+								VariableLabels: map[string]string{"bucket": bucket, "targetArn": arn},
+							})
+						}
+					}
 				}
 			}
-
 			metrics = append(metrics, Metric{
 				Description:          getBucketObjectDistributionMD(),
 				Histogram:            usage.ObjectSizesHistogram,
@@ -2532,15 +3224,14 @@ func getClusterTransitionedVersionsMD() MetricDescription {
 	}
 }
 
-func getClusterTierMetrics() *MetricsGroup {
+func getClusterTierMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		if objLayer == nil {
-			return
-		}
+
 		if globalTierConfigMgr.Empty() {
 			return
 		}
@@ -2560,19 +3251,16 @@ func getClusterTierMetrics() *MetricsGroup {
 	return mg
 }
 
-func getLocalStorageMetrics() *MetricsGroup {
+func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
 
 		metrics = make([]Metric, 0, 50)
-		storageInfo := objLayer.LocalStorageInfo(ctx)
+		storageInfo := objLayer.LocalStorageInfo(ctx, true)
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
 
@@ -2596,7 +3284,7 @@ func getLocalStorageMetrics() *MetricsGroup {
 			})
 
 			metrics = append(metrics, Metric{
-				Description:    getNodeDrivesFreeInodes(),
+				Description:    getNodeDrivesFreeInodesMD(),
 				Value:          float64(disk.FreeInodes),
 				VariableLabels: map[string]string{"drive": disk.DrivePath},
 			})
@@ -2611,6 +3299,18 @@ func getLocalStorageMetrics() *MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDriveAvailablityErrorsMD(),
 					Value:          float64(disk.Metrics.TotalErrorsAvailability),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveWaitingIOMD(),
+					Value:          float64(disk.Metrics.TotalWaiting),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveTokensIOMD(),
+					Value:          float64(disk.Metrics.TotalTokens),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
 				})
 
@@ -2674,21 +3374,58 @@ func getClusterHealthStatusMD() MetricDescription {
 	}
 }
 
-func getClusterHealthMetrics() *MetricsGroup {
+func getClusterErasureSetReadQuorumMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_read_quorum",
+		Help:      "Get the read quorum for this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterErasureSetWriteQuorumMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_write_quorum",
+		Help:      "Get the write quorum for this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterErasureSetOnlineDrivesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_online_drives",
+		Help:      "Get the count of the online drives in this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterErasureSetHealingDrivesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_healing_drives",
+		Help:      "Get the count of healing drives of this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
+func getClusterHealthMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
-
-		metrics = make([]Metric, 0, 2)
 
 		opts := HealthOptions{}
 		result := objLayer.Health(ctx, opts)
+
+		metrics = make([]Metric, 0, 2+4*len(result.ESHealth))
 
 		metrics = append(metrics, Metric{
 			Description: getClusterWriteQuorumMD(),
@@ -2705,26 +3442,116 @@ func getClusterHealthMetrics() *MetricsGroup {
 			Value:       float64(health),
 		})
 
+		for _, h := range result.ESHealth {
+			labels := map[string]string{
+				"pool": strconv.Itoa(h.PoolID),
+				"set":  strconv.Itoa(h.SetID),
+			}
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetReadQuorumMD(),
+				VariableLabels: labels,
+				Value:          float64(h.ReadQuorum),
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetWriteQuorumMD(),
+				VariableLabels: labels,
+				Value:          float64(h.WriteQuorum),
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetOnlineDrivesMD(),
+				VariableLabels: labels,
+				Value:          float64(h.HealthyDrives),
+			})
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetHealingDrivesMD(),
+				VariableLabels: labels,
+				Value:          float64(h.HealingDrives),
+			})
+		}
+
 		return
 	})
 
 	return mg
 }
 
-func getClusterStorageMetrics() *MetricsGroup {
+func getBatchJobsMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
+
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
+		var m madmin.RealtimeMetrics
+		mLocal := collectLocalMetrics(madmin.MetricsBatchJobs, collectMetricsOpts{})
+		m.Merge(&mLocal)
+
+		mRemote := collectRemoteMetrics(ctx, madmin.MetricsBatchJobs, collectMetricsOpts{})
+		m.Merge(&mRemote)
+
+		if m.Aggregated.BatchJobs == nil {
 			return
 		}
 
+		for _, mj := range m.Aggregated.BatchJobs.Jobs {
+			jtype := toSnake(mj.JobType)
+			var objects, objectsFailed float64
+			var bucket string
+			switch madmin.BatchJobType(mj.JobType) {
+			case madmin.BatchJobReplicate:
+				objects = float64(mj.Replicate.Objects)
+				objectsFailed = float64(mj.Replicate.ObjectsFailed)
+				bucket = mj.Replicate.Bucket
+			case madmin.BatchJobKeyRotate:
+				objects = float64(mj.KeyRotate.Objects)
+				objectsFailed = float64(mj.KeyRotate.ObjectsFailed)
+				bucket = mj.KeyRotate.Bucket
+			case madmin.BatchJobExpire:
+				objects = float64(mj.Expired.Objects)
+				objectsFailed = float64(mj.Expired.ObjectsFailed)
+				bucket = mj.Expired.Bucket
+			}
+			metrics = append(metrics,
+				Metric{
+					Description: MetricDescription{
+						Namespace: bucketMetricNamespace,
+						Subsystem: "batch",
+						Name:      MetricName(jtype + "_objects"),
+						Help:      "Get successfully completed batch job " + jtype + "objects",
+						Type:      counterMetric,
+					},
+					Value:          objects,
+					VariableLabels: map[string]string{"bucket": bucket, "jobId": mj.JobID},
+				},
+				Metric{
+					Description: MetricDescription{
+						Namespace: bucketMetricNamespace,
+						Subsystem: "batch",
+						Name:      MetricName(jtype + "_objects_failed"),
+						Help:      "Get failed batch job " + jtype + "objects",
+						Type:      counterMetric,
+					},
+					Value:          objectsFailed,
+					VariableLabels: map[string]string{"bucket": bucket, "jobId": mj.JobID},
+				},
+			)
+		}
+		return
+	})
+	return mg
+}
+
+func getClusterStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
+	}
+	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
+		objLayer := newObjectLayerFn()
+
 		// Fetch disk space info, ignore errors
 		metrics = make([]Metric, 0, 10)
-		storageInfo := objLayer.StorageInfo(ctx)
+		storageInfo := objLayer.StorageInfo(ctx, true)
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
 
@@ -2767,18 +3594,13 @@ func getClusterStorageMetrics() *MetricsGroup {
 	return mg
 }
 
-func getKMSNodeMetrics() *MetricsGroup {
+func getKMSNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil || GlobalKMS == nil {
-			return
-		}
-
 		const (
 			Online  = 1
 			Offline = 0
@@ -2872,18 +3694,13 @@ func getWebhookMetrics() *MetricsGroup {
 	return mg
 }
 
-func getKMSMetrics() *MetricsGroup {
+func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil || GlobalKMS == nil {
-			return []Metric{}
-		}
-
 		metrics := make([]Metric, 0, 4)
 		metric, err := GlobalKMS.Metrics(ctx)
 		if err != nil {
@@ -2935,6 +3752,61 @@ func getKMSMetrics() *MetricsGroup {
 	return mg
 }
 
+func collectMetric(metric Metric, labels []string, values []string, metricName string, out chan<- prometheus.Metric) {
+	if metric.Description.Type == histogramMetric {
+		if metric.Histogram == nil {
+			return
+		}
+		for k, v := range metric.Histogram {
+			pmetric, err := prometheus.NewConstMetric(
+				prometheus.NewDesc(
+					prometheus.BuildFQName(string(metric.Description.Namespace),
+						string(metric.Description.Subsystem),
+						string(metric.Description.Name)),
+					metric.Description.Help,
+					append(labels, metric.HistogramBucketLabel),
+					metric.StaticLabels,
+				),
+				prometheus.GaugeValue,
+				float64(v),
+				append(values, k)...)
+			if err != nil {
+				// Enable for debugging
+				if serverDebugLog {
+					logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), metricName+"-metrics-histogram")
+				}
+			} else {
+				out <- pmetric
+			}
+		}
+		return
+	}
+	metricType := prometheus.GaugeValue
+	if metric.Description.Type == counterMetric {
+		metricType = prometheus.CounterValue
+	}
+	pmetric, err := prometheus.NewConstMetric(
+		prometheus.NewDesc(
+			prometheus.BuildFQName(string(metric.Description.Namespace),
+				string(metric.Description.Subsystem),
+				string(metric.Description.Name)),
+			metric.Description.Help,
+			labels,
+			metric.StaticLabels,
+		),
+		metricType,
+		metric.Value,
+		values...)
+	if err != nil {
+		// Enable for debugging
+		if serverDebugLog {
+			logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), metricName+"-metrics")
+		}
+	} else {
+		out <- pmetric
+	}
+}
+
 type minioBucketCollector struct {
 	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc
@@ -2959,52 +3831,7 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 		defer wg.Done()
 		for metric := range in {
 			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
-			if metric.Description.Type == histogramMetric {
-				if metric.Histogram == nil {
-					continue
-				}
-				for k, v := range metric.Histogram {
-					pmetric, err := prometheus.NewConstMetric(
-						prometheus.NewDesc(
-							prometheus.BuildFQName(string(metric.Description.Namespace),
-								string(metric.Description.Subsystem),
-								string(metric.Description.Name)),
-							metric.Description.Help,
-							append(labels, metric.HistogramBucketLabel),
-							metric.StaticLabels,
-						),
-						prometheus.GaugeValue,
-						float64(v),
-						append(values, k)...)
-					if err != nil {
-						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), "bucket-metrics-histogram")
-					} else {
-						out <- pmetric
-					}
-				}
-				continue
-			}
-			metricType := prometheus.GaugeValue
-			if metric.Description.Type == counterMetric {
-				metricType = prometheus.CounterValue
-			}
-			pmetric, err := prometheus.NewConstMetric(
-				prometheus.NewDesc(
-					prometheus.BuildFQName(string(metric.Description.Namespace),
-						string(metric.Description.Subsystem),
-						string(metric.Description.Name)),
-					metric.Description.Help,
-					labels,
-					metric.StaticLabels,
-				),
-				metricType,
-				metric.Value,
-				values...)
-			if err != nil {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "bucket-metrics")
-			} else {
-				out <- pmetric
-			}
+			collectMetric(metric, labels, values, "bucket", out)
 		}
 	}
 
@@ -3039,52 +3866,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 		defer wg.Done()
 		for metric := range in {
 			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
-			if metric.Description.Type == histogramMetric {
-				if metric.Histogram == nil {
-					continue
-				}
-				for k, v := range metric.Histogram {
-					pmetric, err := prometheus.NewConstMetric(
-						prometheus.NewDesc(
-							prometheus.BuildFQName(string(metric.Description.Namespace),
-								string(metric.Description.Subsystem),
-								string(metric.Description.Name)),
-							metric.Description.Help,
-							append(labels, metric.HistogramBucketLabel),
-							metric.StaticLabels,
-						),
-						prometheus.GaugeValue,
-						float64(v),
-						append(values, k)...)
-					if err != nil {
-						logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v:%v", err, values, metric.Histogram), "cluster-metrics-histogram")
-					} else {
-						out <- pmetric
-					}
-				}
-				continue
-			}
-			metricType := prometheus.GaugeValue
-			if metric.Description.Type == counterMetric {
-				metricType = prometheus.CounterValue
-			}
-			pmetric, err := prometheus.NewConstMetric(
-				prometheus.NewDesc(
-					prometheus.BuildFQName(string(metric.Description.Namespace),
-						string(metric.Description.Subsystem),
-						string(metric.Description.Name)),
-					metric.Description.Help,
-					labels,
-					metric.StaticLabels,
-				),
-				metricType,
-				metric.Value,
-				values...)
-			if err != nil {
-				logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), "cluster-metrics")
-			} else {
-				out <- pmetric
-			}
+			collectMetric(metric, labels, values, "cluster", out)
 		}
 	}
 
@@ -3217,11 +3999,11 @@ func newMinioCollectorNode(metricsGroups []*MetricsGroup) *minioNodeCollector {
 	}
 }
 
-func metricsBucketHandler() http.Handler {
+func metricsHTTPHandler(c prometheus.Collector, funcName string) http.Handler {
 	registry := prometheus.NewRegistry()
 
 	// Report all other metrics
-	logger.CriticalIf(GlobalContext, registry.Register(bucketCollector))
+	logger.CriticalIf(GlobalContext, registry.Register(c))
 
 	// DefaultGatherers include golang metrics and process metrics.
 	gatherers := prometheus.Gatherers{
@@ -3231,16 +4013,14 @@ func metricsBucketHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if ok {
-			tc.FuncName = "handler.MetricsBucket"
+			tc.FuncName = funcName
 			tc.ResponseRecorder.LogErrBody = true
 		}
 
 		mfs, err := gatherers.Gather()
-		if err != nil {
-			if len(mfs) == 0 {
-				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
-				return
-			}
+		if err != nil && len(mfs) == 0 {
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+			return
 		}
 
 		contentType := expfmt.Negotiate(r.Header)
@@ -3258,6 +4038,10 @@ func metricsBucketHandler() http.Handler {
 			closer.Close()
 		}
 	})
+}
+
+func metricsBucketHandler() http.Handler {
+	return metricsHTTPHandler(bucketCollector, "handler.MetricsBucket")
 }
 
 func metricsServerHandler() http.Handler {
@@ -3279,11 +4063,9 @@ func metricsServerHandler() http.Handler {
 		}
 
 		mfs, err := gatherers.Gather()
-		if err != nil {
-			if len(mfs) == 0 {
-				writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
-				return
-			}
+		if err != nil && len(mfs) == 0 {
+			writeErrorResponseJSON(r.Context(), w, toAdminAPIErr(r.Context(), err), r.URL)
+			return
 		}
 
 		contentType := expfmt.Negotiate(r.Header)

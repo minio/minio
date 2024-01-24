@@ -192,74 +192,16 @@ func (z *BatchJobKeyRotateFlags) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Notify":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			err = z.Notify.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "Notify")
 				return
 			}
-			for zb0002 > 0 {
-				zb0002--
-				field, err = dc.ReadMapKeyPtr()
-				if err != nil {
-					err = msgp.WrapError(err, "Notify")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "Endpoint":
-					z.Notify.Endpoint, err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "Notify", "Endpoint")
-						return
-					}
-				case "Token":
-					z.Notify.Token, err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "Notify", "Token")
-						return
-					}
-				default:
-					err = dc.Skip()
-					if err != nil {
-						err = msgp.WrapError(err, "Notify")
-						return
-					}
-				}
-			}
 		case "Retry":
-			var zb0003 uint32
-			zb0003, err = dc.ReadMapHeader()
+			err = z.Retry.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "Retry")
 				return
-			}
-			for zb0003 > 0 {
-				zb0003--
-				field, err = dc.ReadMapKeyPtr()
-				if err != nil {
-					err = msgp.WrapError(err, "Retry")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "Attempts":
-					z.Retry.Attempts, err = dc.ReadInt()
-					if err != nil {
-						err = msgp.WrapError(err, "Retry", "Attempts")
-						return
-					}
-				case "Delay":
-					z.Retry.Delay, err = dc.ReadDuration()
-					if err != nil {
-						err = msgp.WrapError(err, "Retry", "Delay")
-						return
-					}
-				default:
-					err = dc.Skip()
-					if err != nil {
-						err = msgp.WrapError(err, "Retry")
-						return
-					}
-				}
 			}
 		default:
 			err = dc.Skip()
@@ -290,25 +232,9 @@ func (z *BatchJobKeyRotateFlags) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 2
-	// write "Endpoint"
-	err = en.Append(0x82, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
+	err = z.Notify.EncodeMsg(en)
 	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Notify.Endpoint)
-	if err != nil {
-		err = msgp.WrapError(err, "Notify", "Endpoint")
-		return
-	}
-	// write "Token"
-	err = en.Append(0xa5, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Notify.Token)
-	if err != nil {
-		err = msgp.WrapError(err, "Notify", "Token")
+		err = msgp.WrapError(err, "Notify")
 		return
 	}
 	// write "Retry"
@@ -316,25 +242,9 @@ func (z *BatchJobKeyRotateFlags) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	// map header, size 2
-	// write "Attempts"
-	err = en.Append(0x82, 0xa8, 0x41, 0x74, 0x74, 0x65, 0x6d, 0x70, 0x74, 0x73)
+	err = z.Retry.EncodeMsg(en)
 	if err != nil {
-		return
-	}
-	err = en.WriteInt(z.Retry.Attempts)
-	if err != nil {
-		err = msgp.WrapError(err, "Retry", "Attempts")
-		return
-	}
-	// write "Delay"
-	err = en.Append(0xa5, 0x44, 0x65, 0x6c, 0x61, 0x79)
-	if err != nil {
-		return
-	}
-	err = en.WriteDuration(z.Retry.Delay)
-	if err != nil {
-		err = msgp.WrapError(err, "Retry", "Delay")
+		err = msgp.WrapError(err, "Retry")
 		return
 	}
 	return
@@ -353,22 +263,18 @@ func (z *BatchJobKeyRotateFlags) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// string "Notify"
 	o = append(o, 0xa6, 0x4e, 0x6f, 0x74, 0x69, 0x66, 0x79)
-	// map header, size 2
-	// string "Endpoint"
-	o = append(o, 0x82, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
-	o = msgp.AppendString(o, z.Notify.Endpoint)
-	// string "Token"
-	o = append(o, 0xa5, 0x54, 0x6f, 0x6b, 0x65, 0x6e)
-	o = msgp.AppendString(o, z.Notify.Token)
+	o, err = z.Notify.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Notify")
+		return
+	}
 	// string "Retry"
 	o = append(o, 0xa5, 0x52, 0x65, 0x74, 0x72, 0x79)
-	// map header, size 2
-	// string "Attempts"
-	o = append(o, 0x82, 0xa8, 0x41, 0x74, 0x74, 0x65, 0x6d, 0x70, 0x74, 0x73)
-	o = msgp.AppendInt(o, z.Retry.Attempts)
-	// string "Delay"
-	o = append(o, 0xa5, 0x44, 0x65, 0x6c, 0x61, 0x79)
-	o = msgp.AppendDuration(o, z.Retry.Delay)
+	o, err = z.Retry.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Retry")
+		return
+	}
 	return
 }
 
@@ -397,74 +303,16 @@ func (z *BatchJobKeyRotateFlags) UnmarshalMsg(bts []byte) (o []byte, err error) 
 				return
 			}
 		case "Notify":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			bts, err = z.Notify.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Notify")
 				return
 			}
-			for zb0002 > 0 {
-				zb0002--
-				field, bts, err = msgp.ReadMapKeyZC(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Notify")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "Endpoint":
-					z.Notify.Endpoint, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Notify", "Endpoint")
-						return
-					}
-				case "Token":
-					z.Notify.Token, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Notify", "Token")
-						return
-					}
-				default:
-					bts, err = msgp.Skip(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Notify")
-						return
-					}
-				}
-			}
 		case "Retry":
-			var zb0003 uint32
-			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+			bts, err = z.Retry.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Retry")
 				return
-			}
-			for zb0003 > 0 {
-				zb0003--
-				field, bts, err = msgp.ReadMapKeyZC(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Retry")
-					return
-				}
-				switch msgp.UnsafeString(field) {
-				case "Attempts":
-					z.Retry.Attempts, bts, err = msgp.ReadIntBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Retry", "Attempts")
-						return
-					}
-				case "Delay":
-					z.Retry.Delay, bts, err = msgp.ReadDurationBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Retry", "Delay")
-						return
-					}
-				default:
-					bts, err = msgp.Skip(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Retry")
-						return
-					}
-				}
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -480,7 +328,7 @@ func (z *BatchJobKeyRotateFlags) UnmarshalMsg(bts []byte) (o []byte, err error) 
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobKeyRotateFlags) Msgsize() (s int) {
-	s = 1 + 7 + z.Filter.Msgsize() + 7 + 1 + 9 + msgp.StringPrefixSize + len(z.Notify.Endpoint) + 6 + msgp.StringPrefixSize + len(z.Notify.Token) + 6 + 1 + 9 + msgp.IntSize + 6 + msgp.DurationSize
+	s = 1 + 7 + z.Filter.Msgsize() + 7 + z.Notify.Msgsize() + 6 + z.Retry.Msgsize()
 	return
 }
 
@@ -509,10 +357,45 @@ func (z *BatchJobKeyRotateV1) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Flags":
-			err = z.Flags.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Flags")
 				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Flags")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Filter":
+					err = z.Flags.Filter.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags", "Filter")
+						return
+					}
+				case "Notify":
+					err = z.Flags.Notify.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags", "Notify")
+						return
+					}
+				case "Retry":
+					err = z.Flags.Retry.DecodeMsg(dc)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags", "Retry")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Flags")
+						return
+					}
+				}
 			}
 		case "Bucket":
 			z.Bucket, err = dc.ReadString()
@@ -524,12 +407,6 @@ func (z *BatchJobKeyRotateV1) DecodeMsg(dc *msgp.Reader) (err error) {
 			z.Prefix, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Prefix")
-				return
-			}
-		case "Endpoint":
-			z.Endpoint, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Endpoint")
 				return
 			}
 		case "Encryption":
@@ -551,9 +428,9 @@ func (z *BatchJobKeyRotateV1) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
+	// map header, size 5
 	// write "APIVersion"
-	err = en.Append(0x86, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+	err = en.Append(0x85, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 	if err != nil {
 		return
 	}
@@ -567,9 +444,35 @@ func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = z.Flags.EncodeMsg(en)
+	// map header, size 3
+	// write "Filter"
+	err = en.Append(0x83, 0xa6, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72)
 	if err != nil {
-		err = msgp.WrapError(err, "Flags")
+		return
+	}
+	err = z.Flags.Filter.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags", "Filter")
+		return
+	}
+	// write "Notify"
+	err = en.Append(0xa6, 0x4e, 0x6f, 0x74, 0x69, 0x66, 0x79)
+	if err != nil {
+		return
+	}
+	err = z.Flags.Notify.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags", "Notify")
+		return
+	}
+	// write "Retry"
+	err = en.Append(0xa5, 0x52, 0x65, 0x74, 0x72, 0x79)
+	if err != nil {
+		return
+	}
+	err = z.Flags.Retry.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags", "Retry")
 		return
 	}
 	// write "Bucket"
@@ -592,16 +495,6 @@ func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Prefix")
 		return
 	}
-	// write "Endpoint"
-	err = en.Append(0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Endpoint)
-	if err != nil {
-		err = msgp.WrapError(err, "Endpoint")
-		return
-	}
 	// write "Encryption"
 	err = en.Append(0xaa, 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6f, 0x6e)
 	if err != nil {
@@ -618,15 +511,32 @@ func (z *BatchJobKeyRotateV1) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *BatchJobKeyRotateV1) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 5
 	// string "APIVersion"
-	o = append(o, 0x86, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+	o = append(o, 0x85, 0xaa, 0x41, 0x50, 0x49, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 	o = msgp.AppendString(o, z.APIVersion)
 	// string "Flags"
 	o = append(o, 0xa5, 0x46, 0x6c, 0x61, 0x67, 0x73)
-	o, err = z.Flags.MarshalMsg(o)
+	// map header, size 3
+	// string "Filter"
+	o = append(o, 0x83, 0xa6, 0x46, 0x69, 0x6c, 0x74, 0x65, 0x72)
+	o, err = z.Flags.Filter.MarshalMsg(o)
 	if err != nil {
-		err = msgp.WrapError(err, "Flags")
+		err = msgp.WrapError(err, "Flags", "Filter")
+		return
+	}
+	// string "Notify"
+	o = append(o, 0xa6, 0x4e, 0x6f, 0x74, 0x69, 0x66, 0x79)
+	o, err = z.Flags.Notify.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags", "Notify")
+		return
+	}
+	// string "Retry"
+	o = append(o, 0xa5, 0x52, 0x65, 0x74, 0x72, 0x79)
+	o, err = z.Flags.Retry.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Flags", "Retry")
 		return
 	}
 	// string "Bucket"
@@ -635,9 +545,6 @@ func (z *BatchJobKeyRotateV1) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Prefix"
 	o = append(o, 0xa6, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78)
 	o = msgp.AppendString(o, z.Prefix)
-	// string "Endpoint"
-	o = append(o, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
-	o = msgp.AppendString(o, z.Endpoint)
 	// string "Encryption"
 	o = append(o, 0xaa, 0x45, 0x6e, 0x63, 0x72, 0x79, 0x70, 0x74, 0x69, 0x6f, 0x6e)
 	o, err = z.Encryption.MarshalMsg(o)
@@ -673,10 +580,45 @@ func (z *BatchJobKeyRotateV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Flags":
-			bts, err = z.Flags.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Flags")
 				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Flags")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Filter":
+					bts, err = z.Flags.Filter.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags", "Filter")
+						return
+					}
+				case "Notify":
+					bts, err = z.Flags.Notify.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags", "Notify")
+						return
+					}
+				case "Retry":
+					bts, err = z.Flags.Retry.UnmarshalMsg(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags", "Retry")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Flags")
+						return
+					}
+				}
 			}
 		case "Bucket":
 			z.Bucket, bts, err = msgp.ReadStringBytes(bts)
@@ -688,12 +630,6 @@ func (z *BatchJobKeyRotateV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.Prefix, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Prefix")
-				return
-			}
-		case "Endpoint":
-			z.Endpoint, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Endpoint")
 				return
 			}
 		case "Encryption":
@@ -716,7 +652,7 @@ func (z *BatchJobKeyRotateV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobKeyRotateV1) Msgsize() (s int) {
-	s = 1 + 11 + msgp.StringPrefixSize + len(z.APIVersion) + 6 + z.Flags.Msgsize() + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 11 + z.Encryption.Msgsize()
+	s = 1 + 11 + msgp.StringPrefixSize + len(z.APIVersion) + 6 + 1 + 7 + z.Flags.Filter.Msgsize() + 7 + z.Flags.Notify.Msgsize() + 6 + z.Flags.Retry.Msgsize() + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 11 + z.Encryption.Msgsize()
 	return
 }
 
@@ -772,90 +708,32 @@ func (z *BatchKeyRotateFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 			if cap(z.Tags) >= int(zb0002) {
 				z.Tags = (z.Tags)[:zb0002]
 			} else {
-				z.Tags = make([]BatchKeyRotateKV, zb0002)
+				z.Tags = make([]BatchJobKV, zb0002)
 			}
 			for za0001 := range z.Tags {
-				var zb0003 uint32
-				zb0003, err = dc.ReadMapHeader()
+				err = z.Tags[za0001].DecodeMsg(dc)
 				if err != nil {
 					err = msgp.WrapError(err, "Tags", za0001)
 					return
 				}
-				for zb0003 > 0 {
-					zb0003--
-					field, err = dc.ReadMapKeyPtr()
-					if err != nil {
-						err = msgp.WrapError(err, "Tags", za0001)
-						return
-					}
-					switch msgp.UnsafeString(field) {
-					case "Key":
-						z.Tags[za0001].Key, err = dc.ReadString()
-						if err != nil {
-							err = msgp.WrapError(err, "Tags", za0001, "Key")
-							return
-						}
-					case "Value":
-						z.Tags[za0001].Value, err = dc.ReadString()
-						if err != nil {
-							err = msgp.WrapError(err, "Tags", za0001, "Value")
-							return
-						}
-					default:
-						err = dc.Skip()
-						if err != nil {
-							err = msgp.WrapError(err, "Tags", za0001)
-							return
-						}
-					}
-				}
 			}
 		case "Metadata":
-			var zb0004 uint32
-			zb0004, err = dc.ReadArrayHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadArrayHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Metadata")
 				return
 			}
-			if cap(z.Metadata) >= int(zb0004) {
-				z.Metadata = (z.Metadata)[:zb0004]
+			if cap(z.Metadata) >= int(zb0003) {
+				z.Metadata = (z.Metadata)[:zb0003]
 			} else {
-				z.Metadata = make([]BatchKeyRotateKV, zb0004)
+				z.Metadata = make([]BatchJobKV, zb0003)
 			}
 			for za0002 := range z.Metadata {
-				var zb0005 uint32
-				zb0005, err = dc.ReadMapHeader()
+				err = z.Metadata[za0002].DecodeMsg(dc)
 				if err != nil {
 					err = msgp.WrapError(err, "Metadata", za0002)
 					return
-				}
-				for zb0005 > 0 {
-					zb0005--
-					field, err = dc.ReadMapKeyPtr()
-					if err != nil {
-						err = msgp.WrapError(err, "Metadata", za0002)
-						return
-					}
-					switch msgp.UnsafeString(field) {
-					case "Key":
-						z.Metadata[za0002].Key, err = dc.ReadString()
-						if err != nil {
-							err = msgp.WrapError(err, "Metadata", za0002, "Key")
-							return
-						}
-					case "Value":
-						z.Metadata[za0002].Value, err = dc.ReadString()
-						if err != nil {
-							err = msgp.WrapError(err, "Metadata", za0002, "Value")
-							return
-						}
-					default:
-						err = dc.Skip()
-						if err != nil {
-							err = msgp.WrapError(err, "Metadata", za0002)
-							return
-						}
-					}
 				}
 			}
 		case "KMSKeyID":
@@ -929,25 +807,9 @@ func (z *BatchKeyRotateFilter) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for za0001 := range z.Tags {
-		// map header, size 2
-		// write "Key"
-		err = en.Append(0x82, 0xa3, 0x4b, 0x65, 0x79)
+		err = z.Tags[za0001].EncodeMsg(en)
 		if err != nil {
-			return
-		}
-		err = en.WriteString(z.Tags[za0001].Key)
-		if err != nil {
-			err = msgp.WrapError(err, "Tags", za0001, "Key")
-			return
-		}
-		// write "Value"
-		err = en.Append(0xa5, 0x56, 0x61, 0x6c, 0x75, 0x65)
-		if err != nil {
-			return
-		}
-		err = en.WriteString(z.Tags[za0001].Value)
-		if err != nil {
-			err = msgp.WrapError(err, "Tags", za0001, "Value")
+			err = msgp.WrapError(err, "Tags", za0001)
 			return
 		}
 	}
@@ -962,25 +824,9 @@ func (z *BatchKeyRotateFilter) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for za0002 := range z.Metadata {
-		// map header, size 2
-		// write "Key"
-		err = en.Append(0x82, 0xa3, 0x4b, 0x65, 0x79)
+		err = z.Metadata[za0002].EncodeMsg(en)
 		if err != nil {
-			return
-		}
-		err = en.WriteString(z.Metadata[za0002].Key)
-		if err != nil {
-			err = msgp.WrapError(err, "Metadata", za0002, "Key")
-			return
-		}
-		// write "Value"
-		err = en.Append(0xa5, 0x56, 0x61, 0x6c, 0x75, 0x65)
-		if err != nil {
-			return
-		}
-		err = en.WriteString(z.Metadata[za0002].Value)
-		if err != nil {
-			err = msgp.WrapError(err, "Metadata", za0002, "Value")
+			err = msgp.WrapError(err, "Metadata", za0002)
 			return
 		}
 	}
@@ -1017,25 +863,21 @@ func (z *BatchKeyRotateFilter) MarshalMsg(b []byte) (o []byte, err error) {
 	o = append(o, 0xa4, 0x54, 0x61, 0x67, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.Tags)))
 	for za0001 := range z.Tags {
-		// map header, size 2
-		// string "Key"
-		o = append(o, 0x82, 0xa3, 0x4b, 0x65, 0x79)
-		o = msgp.AppendString(o, z.Tags[za0001].Key)
-		// string "Value"
-		o = append(o, 0xa5, 0x56, 0x61, 0x6c, 0x75, 0x65)
-		o = msgp.AppendString(o, z.Tags[za0001].Value)
+		o, err = z.Tags[za0001].MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Tags", za0001)
+			return
+		}
 	}
 	// string "Metadata"
 	o = append(o, 0xa8, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.Metadata)))
 	for za0002 := range z.Metadata {
-		// map header, size 2
-		// string "Key"
-		o = append(o, 0x82, 0xa3, 0x4b, 0x65, 0x79)
-		o = msgp.AppendString(o, z.Metadata[za0002].Key)
-		// string "Value"
-		o = append(o, 0xa5, 0x56, 0x61, 0x6c, 0x75, 0x65)
-		o = msgp.AppendString(o, z.Metadata[za0002].Value)
+		o, err = z.Metadata[za0002].MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Metadata", za0002)
+			return
+		}
 	}
 	// string "KMSKeyID"
 	o = append(o, 0xa8, 0x4b, 0x4d, 0x53, 0x4b, 0x65, 0x79, 0x49, 0x44)
@@ -1095,90 +937,32 @@ func (z *BatchKeyRotateFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if cap(z.Tags) >= int(zb0002) {
 				z.Tags = (z.Tags)[:zb0002]
 			} else {
-				z.Tags = make([]BatchKeyRotateKV, zb0002)
+				z.Tags = make([]BatchJobKV, zb0002)
 			}
 			for za0001 := range z.Tags {
-				var zb0003 uint32
-				zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+				bts, err = z.Tags[za0001].UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Tags", za0001)
 					return
 				}
-				for zb0003 > 0 {
-					zb0003--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Tags", za0001)
-						return
-					}
-					switch msgp.UnsafeString(field) {
-					case "Key":
-						z.Tags[za0001].Key, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Tags", za0001, "Key")
-							return
-						}
-					case "Value":
-						z.Tags[za0001].Value, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Tags", za0001, "Value")
-							return
-						}
-					default:
-						bts, err = msgp.Skip(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Tags", za0001)
-							return
-						}
-					}
-				}
 			}
 		case "Metadata":
-			var zb0004 uint32
-			zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Metadata")
 				return
 			}
-			if cap(z.Metadata) >= int(zb0004) {
-				z.Metadata = (z.Metadata)[:zb0004]
+			if cap(z.Metadata) >= int(zb0003) {
+				z.Metadata = (z.Metadata)[:zb0003]
 			} else {
-				z.Metadata = make([]BatchKeyRotateKV, zb0004)
+				z.Metadata = make([]BatchJobKV, zb0003)
 			}
 			for za0002 := range z.Metadata {
-				var zb0005 uint32
-				zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+				bts, err = z.Metadata[za0002].UnmarshalMsg(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Metadata", za0002)
 					return
-				}
-				for zb0005 > 0 {
-					zb0005--
-					field, bts, err = msgp.ReadMapKeyZC(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "Metadata", za0002)
-						return
-					}
-					switch msgp.UnsafeString(field) {
-					case "Key":
-						z.Metadata[za0002].Key, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Metadata", za0002, "Key")
-							return
-						}
-					case "Value":
-						z.Metadata[za0002].Value, bts, err = msgp.ReadStringBytes(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Metadata", za0002, "Value")
-							return
-						}
-					default:
-						bts, err = msgp.Skip(bts)
-						if err != nil {
-							err = msgp.WrapError(err, "Metadata", za0002)
-							return
-						}
-					}
 				}
 			}
 		case "KMSKeyID":
@@ -1203,141 +987,13 @@ func (z *BatchKeyRotateFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z *BatchKeyRotateFilter) Msgsize() (s int) {
 	s = 1 + 10 + msgp.DurationSize + 10 + msgp.DurationSize + 13 + msgp.TimeSize + 14 + msgp.TimeSize + 5 + msgp.ArrayHeaderSize
 	for za0001 := range z.Tags {
-		s += 1 + 4 + msgp.StringPrefixSize + len(z.Tags[za0001].Key) + 6 + msgp.StringPrefixSize + len(z.Tags[za0001].Value)
+		s += z.Tags[za0001].Msgsize()
 	}
 	s += 9 + msgp.ArrayHeaderSize
 	for za0002 := range z.Metadata {
-		s += 1 + 4 + msgp.StringPrefixSize + len(z.Metadata[za0002].Key) + 6 + msgp.StringPrefixSize + len(z.Metadata[za0002].Value)
+		s += z.Metadata[za0002].Msgsize()
 	}
 	s += 9 + msgp.StringPrefixSize + len(z.KMSKeyID)
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *BatchKeyRotateKV) DecodeMsg(dc *msgp.Reader) (err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, err = dc.ReadMapHeader()
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, err = dc.ReadMapKeyPtr()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "Key":
-			z.Key, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Key")
-				return
-			}
-		case "Value":
-			z.Value, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Value")
-				return
-			}
-		default:
-			err = dc.Skip()
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z BatchKeyRotateKV) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
-	// write "Key"
-	err = en.Append(0x82, 0xa3, 0x4b, 0x65, 0x79)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Key)
-	if err != nil {
-		err = msgp.WrapError(err, "Key")
-		return
-	}
-	// write "Value"
-	err = en.Append(0xa5, 0x56, 0x61, 0x6c, 0x75, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Value)
-	if err != nil {
-		err = msgp.WrapError(err, "Value")
-		return
-	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z BatchKeyRotateKV) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "Key"
-	o = append(o, 0x82, 0xa3, 0x4b, 0x65, 0x79)
-	o = msgp.AppendString(o, z.Key)
-	// string "Value"
-	o = append(o, 0xa5, 0x56, 0x61, 0x6c, 0x75, 0x65)
-	o = msgp.AppendString(o, z.Value)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *BatchKeyRotateKV) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "Key":
-			z.Key, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Key")
-				return
-			}
-		case "Value":
-			z.Value, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Value")
-				return
-			}
-		default:
-			bts, err = msgp.Skip(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z BatchKeyRotateKV) Msgsize() (s int) {
-	s = 1 + 4 + msgp.StringPrefixSize + len(z.Key) + 6 + msgp.StringPrefixSize + len(z.Value)
 	return
 }
 
@@ -1466,134 +1122,6 @@ func (z *BatchKeyRotateNotification) UnmarshalMsg(bts []byte) (o []byte, err err
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z BatchKeyRotateNotification) Msgsize() (s int) {
 	s = 1 + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 6 + msgp.StringPrefixSize + len(z.Token)
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *BatchKeyRotateRetry) DecodeMsg(dc *msgp.Reader) (err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, err = dc.ReadMapHeader()
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, err = dc.ReadMapKeyPtr()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "Attempts":
-			z.Attempts, err = dc.ReadInt()
-			if err != nil {
-				err = msgp.WrapError(err, "Attempts")
-				return
-			}
-		case "Delay":
-			z.Delay, err = dc.ReadDuration()
-			if err != nil {
-				err = msgp.WrapError(err, "Delay")
-				return
-			}
-		default:
-			err = dc.Skip()
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z BatchKeyRotateRetry) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
-	// write "Attempts"
-	err = en.Append(0x82, 0xa8, 0x41, 0x74, 0x74, 0x65, 0x6d, 0x70, 0x74, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt(z.Attempts)
-	if err != nil {
-		err = msgp.WrapError(err, "Attempts")
-		return
-	}
-	// write "Delay"
-	err = en.Append(0xa5, 0x44, 0x65, 0x6c, 0x61, 0x79)
-	if err != nil {
-		return
-	}
-	err = en.WriteDuration(z.Delay)
-	if err != nil {
-		err = msgp.WrapError(err, "Delay")
-		return
-	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z BatchKeyRotateRetry) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "Attempts"
-	o = append(o, 0x82, 0xa8, 0x41, 0x74, 0x74, 0x65, 0x6d, 0x70, 0x74, 0x73)
-	o = msgp.AppendInt(o, z.Attempts)
-	// string "Delay"
-	o = append(o, 0xa5, 0x44, 0x65, 0x6c, 0x61, 0x79)
-	o = msgp.AppendDuration(o, z.Delay)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *BatchKeyRotateRetry) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "Attempts":
-			z.Attempts, bts, err = msgp.ReadIntBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Attempts")
-				return
-			}
-		case "Delay":
-			z.Delay, bts, err = msgp.ReadDurationBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Delay")
-				return
-			}
-		default:
-			bts, err = msgp.Skip(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z BatchKeyRotateRetry) Msgsize() (s int) {
-	s = 1 + 9 + msgp.IntSize + 6 + msgp.DurationSize
 	return
 }
 

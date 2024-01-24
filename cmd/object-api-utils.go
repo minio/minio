@@ -47,8 +47,9 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/trie"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/trie"
+	"github.com/minio/pkg/v2/wildcard"
+	"github.com/valyala/bytebufferpool"
 	"golang.org/x/exp/slices"
 )
 
@@ -63,6 +64,7 @@ const (
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 	// MinIO tmp meta prefix for deleted objects.
 	minioMetaTmpDeletedBucket = minioMetaTmpBucket + "/.trash"
+
 	// DNS separator (period), used for bucket name validation.
 	dnsDelimiter = "."
 	// On compressed files bigger than this;
@@ -233,25 +235,25 @@ func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
 
 // pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
 func pathJoin(elem ...string) string {
-	trailingSlash := ""
-	if len(elem) > 0 {
-		if hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar) {
-			trailingSlash = SlashSeparator
-		}
-	}
-	return path.Join(elem...) + trailingSlash
+	sb := bytebufferpool.Get()
+	defer func() {
+		sb.Reset()
+		bytebufferpool.Put(sb)
+	}()
+
+	return pathJoinBuf(sb, elem...)
 }
 
 // pathJoinBuf - like path.Join() but retains trailing SlashSeparator of the last element.
 // Provide a string builder to reduce allocation.
-func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
+func pathJoinBuf(dst *bytebufferpool.ByteBuffer, elem ...string) string {
 	trailingSlash := len(elem) > 0 && hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar)
 	dst.Reset()
 	added := 0
 	for _, e := range elem {
 		if added > 0 || e != "" {
 			if added > 0 {
-				dst.WriteRune(SlashSeparatorChar)
+				dst.WriteByte(SlashSeparatorChar)
 			}
 			dst.WriteString(e)
 			added += len(e)
@@ -266,7 +268,7 @@ func pathJoinBuf(dst *bytes.Buffer, elem ...string) string {
 		return s
 	}
 	if trailingSlash {
-		dst.WriteRune(SlashSeparatorChar)
+		dst.WriteByte(SlashSeparatorChar)
 	}
 	return dst.String()
 }
@@ -339,6 +341,15 @@ func mustGetUUID() string {
 	}
 
 	return u.String()
+}
+
+// mustGetUUIDBytes - get a random UUID as 16 bytes unencoded.
+func mustGetUUIDBytes() []byte {
+	u, err := uuid.NewRandom()
+	if err != nil {
+		logger.CriticalIf(GlobalContext, err)
+	}
+	return u[:]
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.
@@ -506,7 +517,10 @@ func (o *ObjectInfo) IsCompressedOK() (bool, error) {
 }
 
 // GetActualSize - returns the actual size of the stored object
-func (o *ObjectInfo) GetActualSize() (int64, error) {
+func (o ObjectInfo) GetActualSize() (int64, error) {
+	if o.ActualSize != nil {
+		return *o.ActualSize, nil
+	}
 	if o.IsCompressed() {
 		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
 		if !ok {
@@ -519,6 +533,14 @@ func (o *ObjectInfo) GetActualSize() (int64, error) {
 		return size, nil
 	}
 	if _, ok := crypto.IsEncrypted(o.UserDefined); ok {
+		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
+		if ok {
+			size, err := strconv.ParseInt(sizeStr, 10, 64)
+			if err != nil {
+				return -1, errObjectTampered
+			}
+			return size, nil
+		}
 		return o.DecryptedSize()
 	}
 
@@ -618,16 +640,14 @@ func getCompressedOffsets(oi ObjectInfo, offset int64, decrypt func([]byte) ([]b
 	var skipLength int64
 	var cumulativeActualSize int64
 	var firstPartIdx int
-	if len(oi.Parts) > 0 {
-		for i, part := range oi.Parts {
-			cumulativeActualSize += part.ActualSize
-			if cumulativeActualSize <= offset {
-				compressedOffset += part.Size
-			} else {
-				firstPartIdx = i
-				skipLength = cumulativeActualSize - part.ActualSize
-				break
-			}
+	for i, part := range oi.Parts {
+		cumulativeActualSize += part.ActualSize
+		if cumulativeActualSize <= offset {
+			compressedOffset += part.Size
+		} else {
+			firstPartIdx = i
+			skipLength = cumulativeActualSize - part.ActualSize
+			break
 		}
 	}
 	partSkip = offset - skipLength
@@ -684,7 +704,6 @@ type GetObjectReader struct {
 	io.Reader
 	ObjInfo    ObjectInfo
 	cleanUpFns []func()
-	opts       ObjectOptions
 	once       sync.Once
 }
 
@@ -709,7 +728,6 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 		ObjInfo:    oi,
 		Reader:     r,
 		cleanUpFns: cleanupFns,
-		opts:       opts,
 	}, nil
 }
 
@@ -846,7 +864,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				ObjInfo:    oi,
 				Reader:     decReader,
 				cleanUpFns: cFns,
-				opts:       opts,
 			}
 			return r, nil
 		}
@@ -900,7 +917,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				ObjInfo:    oi,
 				Reader:     decReader,
 				cleanUpFns: cFns,
-				opts:       opts,
 			}
 			return r, nil
 		}
@@ -915,7 +931,6 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				ObjInfo:    oi,
 				Reader:     inputReader,
 				cleanUpFns: cFns,
-				opts:       opts,
 			}
 			return r, nil
 		}
@@ -1185,7 +1200,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 		if disk == nil || disk.Total == 0 {
 			continue
 		}
-		if disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0 {
+		if !globalIsErasureSD && disk.FreeInodes < diskMinInodes && disk.UsedInodes > 0 {
 			// We have an inode count, but not enough inodes.
 			return false, nil
 		}

@@ -22,12 +22,43 @@ package ioutil
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/disk"
+)
+
+// Block sizes constant.
+const (
+	BlockSizeSmall       = 32 * humanize.KiByte // Default r/w block size for smaller objects.
+	BlockSizeLarge       = 2 * humanize.MiByte  // Default r/w block size for larger objects.
+	BlockSizeReallyLarge = 4 * humanize.MiByte  // Default write block size for objects per shard >= 64MiB
+)
+
+// aligned sync.Pool's
+var (
+	ODirectPoolXLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeReallyLarge)
+			return &b
+		},
+	}
+	ODirectPoolLarge = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeLarge)
+			return &b
+		},
+	}
+	ODirectPoolSmall = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(BlockSizeSmall)
+			return &b
+		},
+	}
 )
 
 // WriteOnCloser implements io.WriteCloser and always
@@ -71,53 +102,6 @@ func WriteOnClose(w io.Writer) *WriteOnCloser {
 type ioret struct {
 	n   int
 	err error
-}
-
-// DeadlineReader deadline reader with timeout
-type DeadlineReader struct {
-	io.ReadCloser
-	timeout time.Duration
-	err     error
-}
-
-// NewDeadlineReader wraps a writer to make it respect given deadline
-// value per Write(). If there is a blocking write, the returned Reader
-// will return whenever the timer hits (the return values are n=0
-// and err=context.DeadlineExceeded.)
-func NewDeadlineReader(r io.ReadCloser, timeout time.Duration) io.ReadCloser {
-	return &DeadlineReader{ReadCloser: r, timeout: timeout}
-}
-
-func (r *DeadlineReader) Read(buf []byte) (int, error) {
-	if r.err != nil {
-		return 0, r.err
-	}
-
-	c := make(chan ioret, 1)
-	t := time.NewTimer(r.timeout)
-	go func() {
-		n, err := r.ReadCloser.Read(buf)
-		c <- ioret{n, err}
-		close(c)
-	}()
-
-	select {
-	case res := <-c:
-		if !t.Stop() {
-			<-t.C
-		}
-		r.err = res.err
-		return res.n, res.err
-	case <-t.C:
-		r.ReadCloser.Close()
-		r.err = context.DeadlineExceeded
-		return 0, context.DeadlineExceeded
-	}
-}
-
-// Close closer interface to close the underlying closer
-func (r *DeadlineReader) Close() error {
-	return r.ReadCloser.Close()
 }
 
 // DeadlineWriter deadline writer with timeout
@@ -311,7 +295,7 @@ var copyBufPool = sync.Pool{
 	},
 }
 
-// Copy is exactly like io.Copy but with re-usable buffers.
+// Copy is exactly like io.Copy but with reusable buffers.
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
 	bufp := copyBufPool.Get().(*[]byte)
 	buf := *bufp
@@ -348,6 +332,10 @@ const DirectioAlignSize = 4096
 // input writer *os.File not a generic io.Writer. Make sure to have
 // the file opened for writes with syscall.O_DIRECT flag.
 func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, file *os.File) (int64, error) {
+	if totalSize == 0 {
+		return 0, nil
+	}
+
 	// Writes remaining bytes in the buffer.
 	writeUnaligned := func(w io.Writer, buf []byte) (remainingWritten int64, err error) {
 		// Disable O_DIRECT on fd's on unaligned buffer
@@ -364,17 +352,19 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 	var written int64
 	for {
 		buf := alignedBuf
-		if totalSize != -1 {
+		if totalSize > 0 {
 			remaining := totalSize - written
 			if remaining < int64(len(buf)) {
 				buf = buf[:remaining]
 			}
 		}
+
 		nr, err := io.ReadFull(r, buf)
-		eof := err == io.EOF || err == io.ErrUnexpectedEOF
+		eof := errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 		if err != nil && !eof {
 			return written, err
 		}
+
 		buf = buf[:nr]
 		var nw int64
 		if len(buf)%DirectioAlignSize == 0 {
@@ -386,22 +376,30 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 			// buf is not aligned, hence use writeUnaligned()
 			nw, err = writeUnaligned(w, buf)
 		}
+
 		if nw > 0 {
 			written += nw
 		}
+
 		if err != nil {
 			return written, err
 		}
+
 		if nw != int64(len(buf)) {
 			return written, io.ErrShortWrite
 		}
 
-		if totalSize != -1 {
-			if written == totalSize {
-				return written, nil
-			}
+		if totalSize > 0 && written == totalSize {
+			// we have written the entire stream, return right here.
+			return written, nil
 		}
+
 		if eof {
+			// We reached EOF prematurely but we did not write everything
+			// that we promised that we would write.
+			if totalSize > 0 && written != totalSize {
+				return written, io.ErrUnexpectedEOF
+			}
 			return written, nil
 		}
 	}

@@ -175,7 +175,7 @@ func TestGetFileInfoVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to serialize xlmeta %v", err)
 	}
-	fivs, err := getFileInfoVersions(buf, basefi.Volume, basefi.Name)
+	fivs, err := getFileInfoVersions(buf, basefi.Volume, basefi.Name, true)
 	if err != nil {
 		t.Fatalf("getFileInfoVersions failed: %v", err)
 	}

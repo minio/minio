@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -35,8 +36,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
-	"github.com/minio/pkg/logger/message/log"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/logger/message/log"
+	xnet "github.com/minio/pkg/v2/net"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -102,8 +103,10 @@ func (client *peerRESTClient) GetLocks() (lockMap map[string][]lockRequesterInfo
 }
 
 // LocalStorageInfo - fetch server information for a remote node.
-func (client *peerRESTClient) LocalStorageInfo() (info StorageInfo, err error) {
-	respBody, err := client.call(peerRESTMethodLocalStorageInfo, nil, nil, -1)
+func (client *peerRESTClient) LocalStorageInfo(metrics bool) (info StorageInfo, err error) {
+	values := make(url.Values)
+	values.Set(peerRESTMetrics, strconv.FormatBool(metrics))
+	respBody, err := client.call(peerRESTMethodLocalStorageInfo, values, nil, -1)
 	if err != nil {
 		return
 	}
@@ -126,6 +129,17 @@ func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err er
 // GetCPUs - fetch CPU information for a remote node.
 func (client *peerRESTClient) GetCPUs(ctx context.Context) (info madmin.CPUs, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodCPUInfo, nil, nil, -1)
+	if err != nil {
+		return
+	}
+	defer xhttp.DrainBody(respBody)
+	err = gob.NewDecoder(respBody).Decode(&info)
+	return info, err
+}
+
+// GetNetInfo - fetch network information for a remote node.
+func (client *peerRESTClient) GetNetInfo(ctx context.Context) (info madmin.NetInfo, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodNetHwInfo, nil, nil, -1)
 	if err != nil {
 		return
 	}
@@ -229,6 +243,33 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	return info, err
 }
 
+func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Metric, error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodResourceMetrics, nil, nil, -1)
+	if err != nil {
+		return nil, err
+	}
+	dec := gob.NewDecoder(respBody)
+	ch := make(chan Metric)
+	go func(ch chan<- Metric) {
+		defer func() {
+			xhttp.DrainBody(respBody)
+			close(ch)
+		}()
+		for {
+			var metric Metric
+			if err := dec.Decode(&metric); err != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- metric:
+			}
+		}
+	}(ch)
+	return ch, nil
+}
+
 // GetProcInfo - fetch MinIO process information for a remote node.
 func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.ProcInfo, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodProcInfo, nil, nil, -1)
@@ -275,6 +316,19 @@ func (client *peerRESTClient) GetBucketStats(bucket string) (BucketStats, error)
 	var bs BucketStats
 	defer xhttp.DrainBody(respBody)
 	return bs, msgp.Decode(respBody, &bs)
+}
+
+// GetSRMetrics- loads site replication metrics, optionally for a specific bucket
+func (client *peerRESTClient) GetSRMetrics() (SRMetricsSummary, error) {
+	values := make(url.Values)
+	respBody, err := client.call(peerRESTMethodGetSRMetrics, values, nil, -1)
+	if err != nil {
+		return SRMetricsSummary{}, err
+	}
+
+	var sm SRMetricsSummary
+	defer xhttp.DrainBody(respBody)
+	return sm, msgp.Decode(respBody, &sm)
 }
 
 // GetAllBucketStats - load replication stats for all buckets
@@ -422,26 +476,14 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return nil
 }
 
-type binaryInfo struct {
-	URL         *url.URL
-	Sha256Sum   []byte
-	ReleaseInfo string
-	BinaryFile  []byte
-}
-
 // VerifyBinary - sends verify binary message to remote peers.
-func (client *peerRESTClient) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, readerInput []byte) error {
+func (client *peerRESTClient) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, reader io.Reader) error {
 	values := make(url.Values)
-	var reader bytes.Buffer
-	if err := gob.NewEncoder(&reader).Encode(binaryInfo{
-		URL:         u,
-		Sha256Sum:   sha256Sum,
-		ReleaseInfo: releaseInfo,
-		BinaryFile:  readerInput,
-	}); err != nil {
-		return err
-	}
-	respBody, err := client.callWithContext(ctx, peerRESTMethodDownloadBinary, values, &reader, -1)
+	values.Set(peerRESTURL, u.String())
+	values.Set(peerRESTSha256Sum, hex.EncodeToString(sha256Sum))
+	values.Set(peerRESTReleaseInfo, releaseInfo)
+
+	respBody, err := client.callWithContext(ctx, peerRESTMethodVerifyBinary, values, reader, -1)
 	if err != nil {
 		return err
 	}
@@ -460,9 +502,11 @@ func (client *peerRESTClient) CommitBinary(ctx context.Context) error {
 }
 
 // SignalService - sends signal to peer nodes.
-func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string) error {
+func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string, dryRun, force bool) error {
 	values := make(url.Values)
 	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
+	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
+	values.Set(peerRESTForce, strconv.FormatBool(force))
 	values.Set(peerRESTSubSys, subSys)
 	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
 	if err != nil {
@@ -868,6 +912,7 @@ func (client *peerRESTClient) SpeedTest(ctx context.Context, opts speedTestOpts)
 	values.Set(peerRESTDuration, opts.duration.String())
 	values.Set(peerRESTStorageClass, opts.storageClass)
 	values.Set(peerRESTBucket, opts.bucketName)
+	values.Set(peerRESTEnableSha256, strconv.FormatBool(opts.enableSha256))
 
 	respBody, err := client.callWithContext(context.Background(), peerRESTMethodSpeedTest, values, nil, -1)
 	if err != nil {

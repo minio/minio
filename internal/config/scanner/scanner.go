@@ -23,13 +23,16 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 // Compression environment variables
 const (
 	Speed    = "speed"
 	EnvSpeed = "MINIO_SCANNER_SPEED"
+
+	IdleSpeed    = "idle_speed"
+	EnvIdleSpeed = "MINIO_SCANNER_IDLE_SPEED"
 
 	// All below are deprecated in October 2022 and
 	// replaced them with a single speed parameter
@@ -47,6 +50,8 @@ const (
 type Config struct {
 	// Delay is the sleep multiplier.
 	Delay float64 `json:"delay"`
+	// Behavior of the scanner when there is no other parallel S3 requests
+	IdleMode int32 // 0 => throttling, 1 => full speed
 	// MaxWait is maximum wait time between operations
 	MaxWait time.Duration
 	// Cycle is the time.Duration between each scanner cycles
@@ -59,23 +64,28 @@ var DefaultKVS = config.KVS{
 		Key:   Speed,
 		Value: "default",
 	},
-	// Deprecated Oct 2022
 	config.KV{
-		Key:        Delay,
-		Value:      "",
-		Deprecated: true,
+		Key:           IdleSpeed,
+		Value:         "",
+		HiddenIfEmpty: true,
 	},
 	// Deprecated Oct 2022
 	config.KV{
-		Key:        MaxWait,
-		Value:      "",
-		Deprecated: true,
+		Key:           Delay,
+		Value:         "",
+		HiddenIfEmpty: true,
 	},
 	// Deprecated Oct 2022
 	config.KV{
-		Key:        Cycle,
-		Value:      "",
-		Deprecated: true,
+		Key:           MaxWait,
+		Value:         "",
+		HiddenIfEmpty: true,
+	},
+	// Deprecated Oct 2022
+	config.KV{
+		Key:           Cycle,
+		Value:         "",
+		HiddenIfEmpty: true,
 	},
 }
 
@@ -99,7 +109,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	case "fast":
 		cfg.Delay, cfg.MaxWait, cfg.Cycle = 1, 100*time.Millisecond, time.Minute
 	case "default":
-		cfg.Delay, cfg.MaxWait, cfg.Cycle = 2, 5*time.Second, time.Minute
+		cfg.Delay, cfg.MaxWait, cfg.Cycle = 2, time.Second, time.Minute
 	case "slow":
 		cfg.Delay, cfg.MaxWait, cfg.Cycle = 10, 15*time.Second, time.Minute
 	case "slowest":
@@ -107,6 +117,16 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	default:
 		return cfg, fmt.Errorf("unknown '%s' value", speed)
 	}
+
+	switch idleSpeed := env.Get(EnvIdleSpeed, kvs.GetWithDefault(IdleSpeed, DefaultKVS)); idleSpeed {
+	case "", "throttled": // Empty is the default mode;
+		cfg.IdleMode = 0
+	case "full":
+		cfg.IdleMode = 1
+	default:
+		return cfg, fmt.Errorf("unknown value: '%s'", idleSpeed)
+	}
+
 	return
 }
 
@@ -127,7 +147,11 @@ func lookupDeprecatedScannerConfig(kvs config.KVS) (cfg Config, err error) {
 	if err != nil {
 		return cfg, err
 	}
-	cfg.Cycle, err = time.ParseDuration(env.Get(EnvCycle, kvs.GetWithDefault(Cycle, DefaultKVS)))
+	cycle := env.Get(EnvCycle, kvs.GetWithDefault(Cycle, DefaultKVS))
+	if cycle == "" {
+		cycle = "1m"
+	}
+	cfg.Cycle, err = time.ParseDuration(cycle)
 	if err != nil {
 		return cfg, err
 	}

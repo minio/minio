@@ -72,7 +72,7 @@ func NewTierJournal() *TierJournal {
 	return j
 }
 
-// Init intializes an in-memory journal built using a
+// Init initializes an in-memory journal built using a
 // buffered channel for new journal entries. It also initializes the on-disk
 // journal only to process existing journal entries made from previous versions.
 func (t *TierJournal) Init(ctx context.Context) error {
@@ -195,6 +195,10 @@ func (jd *tierDiskJournal) addEntry(je jentry) error {
 	defer jd.Unlock()
 	_, err = jd.file.Write(b)
 	if err != nil {
+		// Do not leak fd here, close the file properly.
+		Fdatasync(jd.file)
+		_ = jd.file.Close()
+
 		jd.file = nil // reset to allow subsequent reopen when file/disk is available.
 	}
 	return err

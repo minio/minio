@@ -61,11 +61,20 @@ const (
 	EnvMinIOCallhomeEnable    = "MINIO_CALLHOME_ENABLE"
 	EnvMinIOCallhomeFrequency = "MINIO_CALLHOME_FREQUENCY"
 
-	EnvMinIOServerURL         = "MINIO_SERVER_URL"
-	EnvBrowserRedirectURL     = "MINIO_BROWSER_REDIRECT_URL"
-	EnvRootDiskThresholdSize  = "MINIO_ROOTDISK_THRESHOLD_SIZE"
-	EnvBrowserLoginAnimation  = "MINIO_BROWSER_LOGIN_ANIMATION"
-	EnvBrowserSessionDuration = "MINIO_BROWSER_SESSION_DURATION"
+	EnvMinIOServerURL             = "MINIO_SERVER_URL"
+	EnvBrowserRedirect            = "MINIO_BROWSER_REDIRECT" // On by default
+	EnvBrowserRedirectURL         = "MINIO_BROWSER_REDIRECT_URL"
+	EnvRootDriveThresholdSize     = "MINIO_ROOTDRIVE_THRESHOLD_SIZE"
+	EnvRootDiskThresholdSize      = "MINIO_ROOTDISK_THRESHOLD_SIZE" // Deprecated Sep 2023
+	EnvBrowserLoginAnimation      = "MINIO_BROWSER_LOGIN_ANIMATION"
+	EnvBrowserSessionDuration     = "MINIO_BROWSER_SESSION_DURATION" // Deprecated after November 2023
+	EnvMinioStsDuration           = "MINIO_STS_DURATION"
+	EnvMinIOLogQueryURL           = "MINIO_LOG_QUERY_URL"
+	EnvMinIOLogQueryAuthToken     = "MINIO_LOG_QUERY_AUTH_TOKEN"
+	EnvMinIOPrometheusURL         = "MINIO_PROMETHEUS_URL"
+	EnvMinIOPrometheusJobID       = "MINIO_PROMETHEUS_JOB_ID"
+	EnvMinIOPrometheusExtraLabels = "MINIO_PROMETHEUS_EXTRA_LABELS"
+	EnvMinIOPrometheusAuthToken   = "MINIO_PROMETHEUS_AUTH_TOKEN"
 
 	EnvUpdate = "MINIO_UPDATE"
 
@@ -73,4 +82,13 @@ const (
 	EnvWorm       = "MINIO_WORM"        // legacy
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
+
+)
+
+// Expiration Token durations
+// These values are used to validate the expiration time range from
+// either the exp claim or MINI_STS_DURATION value
+const (
+	MinExpiration = 900
+	MaxExpiration = 31536000
 )

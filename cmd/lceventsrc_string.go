@@ -9,20 +9,21 @@ func _() {
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
 	_ = x[lcEventSrc_None-0]
-	_ = x[lcEventSrc_Scanner-1]
-	_ = x[lcEventSrc_Decom-2]
-	_ = x[lcEventSrc_Rebal-3]
-	_ = x[lcEventSrc_s3HeadObject-4]
-	_ = x[lcEventSrc_s3GetObject-5]
-	_ = x[lcEventSrc_s3ListObjects-6]
-	_ = x[lcEventSrc_s3PutObject-7]
-	_ = x[lcEventSrc_s3CopyObject-8]
-	_ = x[lcEventSrc_s3CompleteMultipartUpload-9]
+	_ = x[lcEventSrc_Heal-1]
+	_ = x[lcEventSrc_Scanner-2]
+	_ = x[lcEventSrc_Decom-3]
+	_ = x[lcEventSrc_Rebal-4]
+	_ = x[lcEventSrc_s3HeadObject-5]
+	_ = x[lcEventSrc_s3GetObject-6]
+	_ = x[lcEventSrc_s3ListObjects-7]
+	_ = x[lcEventSrc_s3PutObject-8]
+	_ = x[lcEventSrc_s3CopyObject-9]
+	_ = x[lcEventSrc_s3CompleteMultipartUpload-10]
 }
 
-const _lcEventSrc_name = "NoneScannerDecomRebals3HeadObjects3GetObjects3ListObjectss3PutObjects3CopyObjects3CompleteMultipartUpload"
+const _lcEventSrc_name = "NoneHealScannerDecomRebals3HeadObjects3GetObjects3ListObjectss3PutObjects3CopyObjects3CompleteMultipartUpload"
 
-var _lcEventSrc_index = [...]uint8{0, 4, 11, 16, 21, 33, 44, 57, 68, 80, 105}
+var _lcEventSrc_index = [...]uint8{0, 4, 8, 15, 20, 25, 37, 48, 61, 72, 84, 109}
 
 func (i lcEventSrc) String() string {
 	if i >= lcEventSrc(len(_lcEventSrc_index)-1) {

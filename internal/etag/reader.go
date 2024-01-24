@@ -18,6 +18,7 @@
 package etag
 
 import (
+	"context"
 	"crypto/md5"
 	"fmt"
 	"hash"
@@ -51,7 +52,7 @@ func (r wrapReader) ETag() ETag {
 // returns ETag of the content. Otherwise, it returns
 // nil as ETag.
 //
-// Wrap provides an adapter for io.Reader implemetations
+// Wrap provides an adapter for io.Reader implementations
 // that don't implement the Tagger interface.
 // It is mainly used to provide a high-level io.Reader
 // access to the ETag computed by a low-level io.Reader:
@@ -102,10 +103,17 @@ type Reader struct {
 // If the provided etag is not nil the returned
 // Reader compares the etag with the computed
 // MD5 sum once the r returns io.EOF.
-func NewReader(r io.Reader, etag ETag) *Reader {
+func NewReader(ctx context.Context, r io.Reader, etag ETag, forceMD5 []byte) *Reader {
 	if er, ok := r.(*Reader); ok {
 		if er.readN == 0 && Equal(etag, er.checksum) {
 			return er
+		}
+	}
+	if len(forceMD5) != 0 {
+		return &Reader{
+			src:      r,
+			md5:      NewUUIDHash(forceMD5),
+			checksum: etag,
 		}
 	}
 	return &Reader{
@@ -152,4 +160,41 @@ type VerifyError struct {
 
 func (v VerifyError) Error() string {
 	return fmt.Sprintf("etag: expected ETag %q does not match computed ETag %q", v.Expected, v.Computed)
+}
+
+// UUIDHash - use uuid to make md5sum
+type UUIDHash struct {
+	uuid []byte
+}
+
+// Write -  implement hash.Hash Write
+func (u UUIDHash) Write(p []byte) (n int, err error) {
+	return len(p), nil
+}
+
+// Sum -  implement md5.Sum
+func (u UUIDHash) Sum(b []byte) []byte {
+	return u.uuid
+}
+
+// Reset -  implement hash.Hash Reset
+func (u UUIDHash) Reset() {
+	return
+}
+
+// Size -  implement hash.Hash Size
+func (u UUIDHash) Size() int {
+	return len(u.uuid)
+}
+
+// BlockSize -  implement hash.Hash BlockSize
+func (u UUIDHash) BlockSize() int {
+	return md5.BlockSize
+}
+
+var _ hash.Hash = &UUIDHash{}
+
+// NewUUIDHash - new UUIDHash
+func NewUUIDHash(uuid []byte) *UUIDHash {
+	return &UUIDHash{uuid: uuid}
 }

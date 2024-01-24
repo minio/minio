@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,8 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion = "v32" // Add bucket peer metrics
-
+	peerRESTVersion       = "v36" // Rewrite VerifyBinaryHandler()
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -31,6 +30,7 @@ const (
 	peerRESTMethodLocalStorageInfo            = "/localstorageinfo"
 	peerRESTMethodCPUInfo                     = "/cpuinfo"
 	peerRESTMethodDiskHwInfo                  = "/diskhwinfo"
+	peerRESTMethodNetHwInfo                   = "/nethwinfo"
 	peerRESTMethodOsInfo                      = "/osinfo"
 	peerRESTMethodMemInfo                     = "/meminfo"
 	peerRESTMethodProcInfo                    = "/procinfo"
@@ -41,7 +41,7 @@ const (
 	peerRESTMethodLoadBucketMetadata          = "/loadbucketmetadata"
 	peerRESTMethodGetBucketStats              = "/getbucketstats"
 	peerRESTMethodGetAllBucketStats           = "/getallbucketstats"
-	peerRESTMethodDownloadBinary              = "/downloadbinary"
+	peerRESTMethodVerifyBinary                = "/verifybinary"
 	peerRESTMethodCommitBinary                = "/commitbinary"
 	peerRESTMethodSignalService               = "/signalservice"
 	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
@@ -77,7 +77,9 @@ const (
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
 	peerRESTMethodMetrics                     = "/metrics"
+	peerRESTMethodResourceMetrics             = "/resourcemetrics"
 	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
+	peerRESTMethodGetSRMetrics                = "/getsrmetrics"
 )
 
 const (
@@ -97,12 +99,20 @@ const (
 	peerRESTConcurrent     = "concurrent"
 	peerRESTDuration       = "duration"
 	peerRESTStorageClass   = "storage-class"
+	peerRESTEnableSha256   = "enableSha256"
 	peerRESTMetricsTypes   = "types"
 	peerRESTDisk           = "disk"
 	peerRESTHost           = "host"
 	peerRESTJobID          = "job-id"
 	peerRESTDepID          = "depID"
 	peerRESTStartRebalance = "start-rebalance"
+	peerRESTMetrics        = "metrics"
+	peerRESTDryRun         = "dry-run"
+	peerRESTForce          = "force"
+
+	peerRESTURL         = "url"
+	peerRESTSha256Sum   = "sha256sum"
+	peerRESTReleaseInfo = "releaseinfo"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"

@@ -34,7 +34,8 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/randreader"
+	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/pkg/v2/randreader"
 )
 
 // SpeedTestResult return value of the speedtest function
@@ -94,7 +95,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	userMetadata[globalObjectPerfUserMetadata] = "true" // Bypass S3 API freeze
 	popts := minio.PutObjectOptions{
 		UserMetadata:         userMetadata,
-		DisableContentSha256: true,
+		DisableContentSha256: !opts.enableSha256,
 		DisableMultipart:     true,
 	}
 
@@ -148,6 +149,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	var downloadTimes madmin.TimeDurations
 	var downloadTTFB madmin.TimeDurations
 	wg.Add(opts.concurrency)
+
+	c := minio.Core{Client: globalMinioClient}
 	for i := 0; i < opts.concurrency; i++ {
 		go func(i int) {
 			defer wg.Done()
@@ -161,7 +164,8 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 				}
 				tmpObjName := pathJoin(objNamePrefix, fmt.Sprintf("%d/%d", i, j))
 				t := time.Now()
-				r, err := globalMinioClient.GetObject(downloadsCtx, opts.bucketName, tmpObjName, gopts)
+
+				r, _, _, err := c.GetObject(downloadsCtx, opts.bucketName, tmpObjName, gopts)
 				if err != nil {
 					errResp, ok := err.(minio.ErrorResponse)
 					if ok && errResp.StatusCode == http.StatusNotFound {
@@ -178,7 +182,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 				fbr := firstByteRecorder{
 					r: r,
 				}
-				n, err := io.Copy(io.Discard, &fbr)
+				n, err := xioutil.Copy(xioutil.Discard, &fbr)
 				r.Close()
 				if err == nil {
 					response := time.Since(t)
@@ -306,7 +310,7 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 					defer wg.Done()
 					err := globalNotificationSys.peerClients[index].DevNull(ctx, r)
 					if err != nil {
-						errStr = err.Error()
+						errStr = fmt.Sprintf("error with %s: %s", globalNotificationSys.peerClients[index].String(), err.Error())
 					}
 				}()
 			}
@@ -351,7 +355,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 
 	for _, info := range clusterInfos.Sites {
 		// skip self
-		if globalDeploymentID == info.DeploymentID {
+		if globalDeploymentID() == info.DeploymentID {
 			continue
 		}
 		info := info

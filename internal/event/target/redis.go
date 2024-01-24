@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // Redis constants
@@ -223,7 +223,7 @@ func (target *RedisTarget) send(eventData event.Event) error {
 }
 
 // SendFromStore - reads an event from store and sends it to redis.
-func (target *RedisTarget) SendFromStore(eventKey string) error {
+func (target *RedisTarget) SendFromStore(key store.Key) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func (target *RedisTarget) SendFromStore(eventKey string) error {
 		target.firstPing = true
 	}
 
-	eventData, eErr := target.store.Get(eventKey)
+	eventData, eErr := target.store.Get(key.Name)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and would've been already been sent successfully.
@@ -267,13 +267,16 @@ func (target *RedisTarget) SendFromStore(eventKey string) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(eventKey)
+	return target.store.Del(key.Name)
 }
 
 // Close - releases the resources used by the pool.
 func (target *RedisTarget) Close() error {
 	close(target.quitCh)
-	return target.pool.Close()
+	if target.pool != nil {
+		return target.pool.Close()
+	}
+	return nil
 }
 
 func (target *RedisTarget) init() error {

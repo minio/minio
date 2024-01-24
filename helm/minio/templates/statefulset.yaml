@@ -158,7 +158,14 @@ spec:
             - name: MINIO_IDENTITY_OPENID_CLIENT_ID
               value: {{ .Values.oidc.clientId }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
+            {{- if and .Values.oidc.existingClientSecretName .Values.oidc.existingClientSecretKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.existingClientSecretName }}
+                  key: {{ .Values.oidc.existingClientSecretKey }}
+            {{- else }}
               value: {{ .Values.oidc.clientSecret }}
+            {{- end }}
             - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
               value: {{ .Values.oidc.claimName }}
             - name: MINIO_IDENTITY_OPENID_CLAIM_PREFIX
@@ -167,6 +174,8 @@ spec:
               value: {{ .Values.oidc.scopes }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
+            - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
+              value: {{ .Values.oidc.displayName }}
             {{- end }}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
@@ -212,7 +221,9 @@ spec:
   volumeClaimTemplates:
     {{- if gt $drivesPerNode 1 }}
     {{- range $diskId := until $drivesPerNode}}
-    - metadata:
+    - apiVersion: v1	
+      kind: PersistentVolumeClaim	
+      metadata:
         name: export-{{ $diskId }}
         {{- if $.Values.persistence.annotations }}
         annotations: {{- toYaml $.Values.persistence.annotations | nindent 10 }}
@@ -227,7 +238,9 @@ spec:
             storage: {{ $psize }}
     {{- end }}
     {{- else }}
-    - metadata:
+    - apiVersion: v1	
+      kind: PersistentVolumeClaim	
+      metadata:
         name: export
         {{- if $.Values.persistence.annotations }}
         annotations: {{- toYaml $.Values.persistence.annotations | nindent 10 }}

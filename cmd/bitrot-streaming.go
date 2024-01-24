@@ -95,7 +95,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 	h := algo.New()
 
 	bw := &streamingBitrotWriter{
-		iow:          ioutil.NewDeadlineWriter(w, diskMaxTimeout),
+		iow:          ioutil.NewDeadlineWriter(w, globalDriveConfig.GetMaxTimeout()),
 		closeWithErr: w.CloseWithError,
 		h:            h,
 		shardSize:    shardSize,
@@ -134,7 +134,7 @@ func (b *streamingBitrotReader) Close() error {
 		return nil
 	}
 	if closer, ok := b.rc.(io.Closer); ok {
-		// drain the body for connection re-use at network layer.
+		// drain the body for connection reuse at network layer.
 		xhttp.DrainBody(struct {
 			io.Reader
 			io.Closer

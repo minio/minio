@@ -36,8 +36,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	"github.com/minio/pkg/wildcard"
+	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v2/wildcard"
 )
 
 const (
@@ -243,7 +243,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
@@ -267,13 +267,13 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	// Validate that user.AccessKey's policies can be retrieved - it may not
 	// be in case the user is disabled.
-	if _, err = globalIAMSys.PolicyDBGet(user.AccessKey, false); err != nil {
+	if _, err = globalIAMSys.PolicyDBGet(user.AccessKey, user.Groups...); err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		claims[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalActiveCred.SecretKey
@@ -408,7 +408,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		// JWT. This is a MinIO STS API specific value, this value
 		// should be set and configured on your identity provider as
 		// part of JWT custom claims.
-		policySet, ok := iampolicy.GetPoliciesFromClaims(claims, iamPolicyClaimNameOpenID())
+		policySet, ok := policy.GetPoliciesFromClaims(claims, iamPolicyClaimNameOpenID())
 		policies := strings.Join(policySet.ToSlice(), ",")
 		if ok {
 			policyName = globalIAMSys.CurrentPolicies(policies)
@@ -438,7 +438,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
@@ -450,7 +450,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		claims[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalActiveCred.SecretKey
@@ -604,7 +604,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 			return
@@ -630,7 +630,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Check if this user or their groups have a policy applied.
-	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
+	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
 	if len(ldapPolicies) == 0 && newGlobalAuthZPluginFn() == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
@@ -649,7 +649,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	claims[ldapUserN] = ldapUsername
 
 	if len(sessionPolicyStr) > 0 {
-		claims[iampolicy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret := globalActiveCred.SecretKey
@@ -723,7 +723,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// We have to establish a TLS connection and the
 	// client must provide exactly one client certificate.
 	// Otherwise, we don't have a certificate to verify or
-	// the policy lookup would ambigious.
+	// the policy lookup would ambiguous.
 	if r.TLS == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInsecureConnection, errors.New("No TLS connection attempt"))
 		return
@@ -732,7 +732,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// A client may send a certificate chain such that we end up
 	// with multiple peer certificates. However, we can only accept
 	// a single client certificate. Otherwise, the certificate to
-	// policy mapping would be ambigious.
+	// policy mapping would be ambiguous.
 	// However, we can filter all CA certificates and only check
 	// whether they client has sent exactly one (non-CA) leaf certificate.
 	peerCertificates := make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))

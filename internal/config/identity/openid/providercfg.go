@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	xhttp "github.com/minio/minio/internal/http"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 type providerCfg struct {
@@ -91,7 +91,7 @@ func (p *providerCfg) initializeProvider(cfgGet func(string) string, transport h
 		)
 		return err
 	default:
-		return fmt.Errorf("Unsupport vendor %s", keyCloakVendor)
+		return fmt.Errorf("Unsupported vendor %s", keyCloakVendor)
 	}
 }
 

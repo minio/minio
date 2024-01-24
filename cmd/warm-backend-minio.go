@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -35,6 +36,15 @@ type warmBackendMinIO struct {
 var _ WarmBackend = (*warmBackendMinIO)(nil)
 
 func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO, error) {
+	// Validation of credentials
+	if conf.AccessKey == "" || conf.SecretKey == "" {
+		return nil, errors.New("both access and secret keys are required")
+	}
+
+	if conf.Bucket == "" {
+		return nil, errors.New("no bucket name was provided")
+	}
+
 	u, err := url.Parse(conf.Endpoint)
 	if err != nil {
 		return nil, err

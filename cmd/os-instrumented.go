@@ -39,6 +39,8 @@ const (
 	osMetricRename
 	osMetricOpenFileW
 	osMetricOpenFileR
+	osMetricOpenFileWFd
+	osMetricOpenFileRFd
 	osMetricOpen
 	osMetricOpenFileDirectIO
 	osMetricLstat
@@ -105,7 +107,8 @@ func osTrace(s osMetric, startTime time.Time, duration time.Duration, path strin
 
 func updateOSMetrics(s osMetric, paths ...string) func(err error) {
 	if globalTrace.NumSubscribers(madmin.TraceOS) == 0 {
-		return func(err error) { globalOSMetrics.time(s) }
+		osAction := globalOSMetrics.time(s)
+		return func(err error) { osAction() }
 	}
 
 	startTime := time.Now()
@@ -129,15 +132,15 @@ func Mkdir(dirPath string, mode os.FileMode) (err error) {
 }
 
 // MkdirAll captures time taken to call os.MkdirAll
-func MkdirAll(dirPath string, mode os.FileMode) (err error) {
+func MkdirAll(dirPath string, mode os.FileMode, baseDir string) (err error) {
 	defer updateOSMetrics(osMetricMkdirAll, dirPath)(err)
-	return osMkdirAll(dirPath, mode)
+	return osMkdirAll(dirPath, mode, baseDir)
 }
 
 // Rename captures time taken to call os.Rename
 func Rename(src, dst string) (err error) {
 	defer updateOSMetrics(osMetricRename, src, dst)(err)
-	return os.Rename(src, dst)
+	return RenameSys(src, dst)
 }
 
 // OpenFile captures time taken to call os.OpenFile

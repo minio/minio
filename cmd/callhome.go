@@ -60,7 +60,7 @@ func initCallhome(ctx context.Context, objAPI ObjectLayer) {
 			// sleep for some time and try again.
 			duration := time.Duration(r.Float64() * float64(globalCallhomeConfig.FrequencyDur()))
 			if duration < time.Second {
-				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				// Make sure to sleep at least a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
@@ -131,7 +131,7 @@ func performCallhome(ctx context.Context) {
 		Version:   madmin.HealthInfoVersion,
 		Minio: madmin.MinioHealthInfo{
 			Info: madmin.MinioInfo{
-				DeploymentID: globalDeploymentID,
+				DeploymentID: globalDeploymentID(),
 			},
 		},
 	}
@@ -157,15 +157,11 @@ func performCallhome(ctx context.Context) {
 }
 
 const (
-	healthURL    = "https://subnet.min.io/api/health/upload"
-	healthURLDev = "http://localhost:9000/api/health/upload"
+	subnetHealthPath = "/api/health/upload"
 )
 
 func sendHealthInfo(ctx context.Context, healthInfo madmin.HealthInfo) error {
-	url := healthURL
-	if globalIsCICD {
-		url = healthURLDev
-	}
+	url := globalSubnetConfig.BaseURL + subnetHealthPath
 
 	filename := fmt.Sprintf("health_%s.json.gz", UTCNow().Format("20060102150405"))
 	url += "?filename=" + filename

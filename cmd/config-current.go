@@ -24,13 +24,17 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/internal/config/browser"
+
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
+	"github.com/minio/minio/internal/config/batch"
 	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/config/drive"
 	"github.com/minio/minio/internal/config/etcd"
 	"github.com/minio/minio/internal/config/heal"
 	xldap "github.com/minio/minio/internal/config/identity/ldap"
@@ -46,15 +50,13 @@ import (
 	"github.com/minio/minio/internal/config/subnet"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 func initHelp() {
 	kvs := map[string]config.KVS{
 		config.EtcdSubSys:           etcd.DefaultKVS,
-		config.CacheSubSys:          cache.DefaultKVS,
 		config.CompressionSubSys:    compress.DefaultKVS,
 		config.IdentityLDAPSubSys:   xldap.DefaultKVS,
 		config.IdentityOpenIDSubSys: openid.DefaultKVS,
@@ -71,6 +73,10 @@ func initHelp() {
 		config.ScannerSubSys:        scanner.DefaultKVS,
 		config.SubnetSubSys:         subnet.DefaultKVS,
 		config.CallhomeSubSys:       callhome.DefaultKVS,
+		config.DriveSubSys:          drive.DefaultKVS,
+		config.CacheSubSys:          cache.DefaultKVS,
+		config.BatchSubSys:          batch.DefaultKVS,
+		config.BrowserSubSys:        browser.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -99,6 +105,10 @@ func initHelp() {
 			Optional:    true,
 		},
 		config.HelpKV{
+			Key:         config.DriveSubSys,
+			Description: "enable drive specific settings",
+		},
+		config.HelpKV{
 			Key:         config.SiteSubSys,
 			Description: "label the server and its location",
 		},
@@ -109,6 +119,10 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.ScannerSubSys,
 			Description: "manage namespace scanning for usage calculation, lifecycle, healing and more",
+		},
+		config.HelpKV{
+			Key:         config.BatchSubSys,
+			Description: "manage batch job workers and wait times",
 		},
 		config.HelpKV{
 			Key:         config.CompressionSubSys,
@@ -211,7 +225,14 @@ func initHelp() {
 		},
 		config.HelpKV{
 			Key:         config.CacheSubSys,
-			Description: "[DEPRECATED] add caching storage tier",
+			Type:        "string",
+			Description: "enable cache plugin on MinIO for GET/HEAD requests",
+			Optional:    true,
+		},
+		config.HelpKV{
+			Key:         config.BrowserSubSys,
+			Description: "manage Browser HTTP specific features, such as Security headers, etc.",
+			Optional:    true,
 		},
 	}
 
@@ -232,9 +253,9 @@ func initHelp() {
 		config.APISubSys:            api.Help,
 		config.StorageClassSubSys:   storageclass.Help,
 		config.EtcdSubSys:           etcd.Help,
-		config.CacheSubSys:          cache.Help,
 		config.CompressionSubSys:    compress.Help,
 		config.HealSubSys:           heal.Help,
+		config.BatchSubSys:          batch.Help,
 		config.ScannerSubSys:        scanner.Help,
 		config.IdentityOpenIDSubSys: openid.Help,
 		config.IdentityLDAPSubSys:   xldap.Help,
@@ -258,6 +279,9 @@ func initHelp() {
 		config.LambdaWebhookSubSys:  lambda.HelpWebhook,
 		config.SubnetSubSys:         subnet.HelpSubnet,
 		config.CallhomeSubSys:       callhome.HelpCallhome,
+		config.DriveSubSys:          drive.HelpDrive,
+		config.CacheSubSys:          cache.Help,
+		config.BrowserSubSys:        browser.Help,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -293,6 +317,10 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		if _, err := api.LookupConfig(s[config.APISubSys][config.Default]); err != nil {
 			return err
 		}
+	case config.BatchSubSys:
+		if _, err := batch.LookupConfig(s[config.BatchSubSys][config.Default]); err != nil {
+			return err
+		}
 	case config.StorageClassSubSys:
 		if objAPI == nil {
 			return errServerNotInitialized
@@ -301,10 +329,6 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 			if _, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount); err != nil {
 				return err
 			}
-		}
-	case config.CacheSubSys:
-		if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default]); err != nil {
-			return err
 		}
 	case config.CompressionSubSys:
 		if _, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default]); err != nil {
@@ -369,6 +393,14 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		if cfg.Enabled() && !globalSubnetConfig.Registered() {
 			return errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc license register ALIAS'")
 		}
+	case config.DriveSubSys:
+		if _, err := drive.LookupConfig(s[config.DriveSubSys][config.Default]); err != nil {
+			return err
+		}
+	case config.CacheSubSys:
+		if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport); err != nil {
+			return err
+		}
 	case config.PolicyOPASubSys:
 		// In case legacy OPA config is being set, we treat it as if the
 		// AuthZPlugin is being set.
@@ -383,6 +415,10 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 				NewHTTPTransport(), xhttp.DrainBody); err != nil {
 				return err
 			}
+		}
+	case config.BrowserSubSys:
+		if _, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default]); err != nil {
+			return err
 		}
 	default:
 		if config.LoggerSubSystems.Contains(subSys) {
@@ -463,7 +499,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 			if globalDNSConfig != nil {
-				// if global DNS is already configured, indicate with a warning, incase
+				// if global DNS is already configured, indicate with a warning, in case
 				// users are confused.
 				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
 			} else {
@@ -491,20 +527,6 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
-	}
-
-	globalCacheConfig, err = cache.LookupConfig(s[config.CacheSubSys][config.Default])
-	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to setup cache: %w", err))
-	}
-
-	if globalCacheConfig.Enabled {
-		if cacheEncKey := env.Get(cache.EnvCacheEncryptionKey, ""); cacheEncKey != "" {
-			globalCacheKMS, err = kms.Parse(cacheEncKey)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to setup encryption cache: %w", err))
-			}
-		}
 	}
 
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
@@ -566,12 +588,19 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply heal config: %w", err)
 		}
 		globalHealConfig.Update(healCfg)
+	case config.BatchSubSys:
+		batchCfg, err := batch.LookupConfig(s[config.BatchSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply batch config: %w", err)
+		}
+		globalBatchConfig.Update(batchCfg)
 	case config.ScannerSubSys:
 		scannerCfg, err := scanner.LookupConfig(s[config.ScannerSubSys][config.Default])
 		if err != nil {
 			return fmt.Errorf("Unable to apply scanner config: %w", err)
 		}
 		// update dynamic scanner values.
+		scannerIdleMode.Store(scannerCfg.IdleMode)
 		scannerCycle.Store(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
@@ -644,7 +673,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 		} else {
-			globalSubnetConfig.Update(subnetConfig)
+			globalSubnetConfig.Update(subnetConfig, globalIsCICD)
 			globalSubnetConfig.ApplyEnv() // update environment settings for Console UI
 		}
 	case config.CallhomeSubSys:
@@ -658,6 +687,28 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				initCallhome(ctx, objAPI)
 			}
 		}
+	case config.DriveSubSys:
+		if driveConfig, err := drive.LookupConfig(s[config.DriveSubSys][config.Default]); err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load drive config: %w", err))
+		} else {
+			err := globalDriveConfig.Update(driveConfig)
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
+			}
+		}
+	case config.CacheSubSys:
+		cacheCfg, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport)
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
+		} else {
+			globalCacheConfig.Update(cacheCfg)
+		}
+	case config.BrowserSubSys:
+		browserCfg, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply browser config: %w", err)
+		}
+		globalBrowserConfig.Update(browserCfg)
 	}
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()

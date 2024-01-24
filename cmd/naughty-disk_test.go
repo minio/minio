@@ -108,12 +108,19 @@ func (d *naughtyDisk) GetDiskID() (string, error) {
 	return d.disk.GetDiskID()
 }
 
+func (d *naughtyDisk) SetFormatData(b []byte) {
+	d.disk.SetFormatData(b)
+}
+
 func (d *naughtyDisk) SetDiskID(id string) {
 	d.disk.SetDiskID(id)
 }
 
-func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode) (info dataUsageCache, err error) {
-	return d.disk.NSScanner(ctx, cache, updates, scanMode)
+func (d *naughtyDisk) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, weSleep func() bool) (info dataUsageCache, err error) {
+	if err := d.calcError(); err != nil {
+		return info, err
+	}
+	return d.disk.NSScanner(ctx, cache, updates, scanMode, weSleep)
 }
 
 func (d *naughtyDisk) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {
@@ -200,11 +207,11 @@ func (d *naughtyDisk) AppendFile(ctx context.Context, volume string, path string
 	return d.disk.AppendFile(ctx, volume, path, buf)
 }
 
-func (d *naughtyDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string) (uint64, error) {
+func (d *naughtyDisk) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (uint64, error) {
 	if err := d.calcError(); err != nil {
 		return 0, err
 	}
-	return d.disk.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath)
+	return d.disk.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath, opts)
 }
 
 func (d *naughtyDisk) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error {
@@ -228,7 +235,7 @@ func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, de
 	return d.disk.Delete(ctx, volume, path, deleteOpts)
 }
 
-func (d *naughtyDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions) []error {
+func (d *naughtyDisk) DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions, opts DeleteOptions) []error {
 	if err := d.calcError(); err != nil {
 		errs := make([]error, len(versions))
 		for i := range errs {
@@ -236,7 +243,7 @@ func (d *naughtyDisk) DeleteVersions(ctx context.Context, volume string, version
 		}
 		return errs
 	}
-	return d.disk.DeleteVersions(ctx, volume, versions)
+	return d.disk.DeleteVersions(ctx, volume, versions, opts)
 }
 
 func (d *naughtyDisk) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
@@ -253,18 +260,18 @@ func (d *naughtyDisk) UpdateMetadata(ctx context.Context, volume, path string, f
 	return d.disk.UpdateMetadata(ctx, volume, path, fi, opts)
 }
 
-func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool) (err error) {
+func (d *naughtyDisk) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool, opts DeleteOptions) (err error) {
 	if err := d.calcError(); err != nil {
 		return err
 	}
-	return d.disk.DeleteVersion(ctx, volume, path, fi, forceDelMarker)
+	return d.disk.DeleteVersion(ctx, volume, path, fi, forceDelMarker, opts)
 }
 
-func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID string, readData bool) (fi FileInfo, err error) {
+func (d *naughtyDisk) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	if err := d.calcError(); err != nil {
 		return FileInfo{}, err
 	}
-	return d.disk.ReadVersion(ctx, volume, path, versionID, readData)
+	return d.disk.ReadVersion(ctx, volume, path, versionID, opts)
 }
 
 func (d *naughtyDisk) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {

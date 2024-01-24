@@ -97,14 +97,25 @@ func (a Action) Delete() bool {
 
 // Lifecycle - Configuration for bucket lifecycle.
 type Lifecycle struct {
-	XMLName xml.Name `xml:"LifecycleConfiguration"`
-	Rules   []Rule   `xml:"Rule"`
+	XMLName         xml.Name   `xml:"LifecycleConfiguration"`
+	Rules           []Rule     `xml:"Rule"`
+	ExpiryUpdatedAt *time.Time `xml:"ExpiryUpdatedAt,omitempty"`
 }
 
 // HasTransition returns 'true' if lifecycle document has Transition enabled.
 func (lc Lifecycle) HasTransition() bool {
 	for _, rule := range lc.Rules {
 		if rule.Transition.IsEnabled() {
+			return true
+		}
+	}
+	return false
+}
+
+// HasExpiry returns 'true' if lifecycle document has Expiry enabled.
+func (lc Lifecycle) HasExpiry() bool {
+	for _, rule := range lc.Rules {
+		if !rule.Expiration.IsNull() || !rule.NoncurrentVersionExpiration.IsNull() {
 			return true
 		}
 	}
@@ -137,6 +148,12 @@ func (lc *Lifecycle) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err e
 					return err
 				}
 				lc.Rules = append(lc.Rules, r)
+			case "ExpiryUpdatedAt":
+				var t time.Time
+				if err = d.DecodeElement(&t, &start); err != nil {
+					return err
+				}
+				lc.ExpiryUpdatedAt = &t
 			default:
 				return xml.UnmarshalError(fmt.Sprintf("expected element type <Rule> but have <%s>", se.Name.Local))
 			}
@@ -156,7 +173,8 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 		}
 
 		if len(prefix) > 0 && len(rule.GetPrefix()) > 0 {
-			// If recursive, we can skip this rule if it doesn't match the tested prefix.
+			// we can skip this rule if it doesn't match the tested
+			// prefix.
 			if !strings.HasPrefix(prefix, rule.GetPrefix()) && !strings.HasPrefix(rule.GetPrefix(), prefix) {
 				continue
 			}
@@ -171,13 +189,13 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 		if !rule.NoncurrentVersionTransition.IsNull() {
 			return true
 		}
-		if rule.Expiration.IsNull() && rule.Transition.IsNull() {
-			continue
-		}
 		if !rule.Expiration.IsDateNull() && rule.Expiration.Date.Before(time.Now().UTC()) {
 			return true
 		}
 		if !rule.Expiration.IsDaysNull() {
+			return true
+		}
+		if rule.Expiration.DeleteMarker.val {
 			return true
 		}
 		if !rule.Transition.IsDateNull() && rule.Transition.Date.Before(time.Now().UTC()) {
@@ -264,6 +282,9 @@ func (lc Lifecycle) FilterRules(obj ObjectOpts) []Rule {
 		if !obj.DeleteMarker && !rule.Filter.TestTags(obj.UserTags) {
 			continue
 		}
+		if !obj.DeleteMarker && !rule.Filter.BySize(obj.Size) {
+			continue
+		}
 		rules = append(rules, rule)
 	}
 	return rules
@@ -275,6 +296,7 @@ type ObjectOpts struct {
 	Name             string
 	UserTags         string
 	ModTime          time.Time
+	Size             int64
 	VersionID        string
 	IsLatest         bool
 	DeleteMarker     bool

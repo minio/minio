@@ -40,7 +40,7 @@ type fanOutOptions struct {
 }
 
 // fanOutPutObject takes an input source reader and fans out multiple PUT operations
-// based on the incoming fan-out request, a context cancelation by the caller
+// based on the incoming fan-out request, a context cancellation by the caller
 // would ensure all fan-out operations are canceled.
 func fanOutPutObject(ctx context.Context, bucket string, objectAPI ObjectLayer, fanOutEntries []minio.PutObjectFanOutEntry, fanOutBuf []byte, opts fanOutOptions) ([]ObjectInfo, []error) {
 	errs := make([]error, len(fanOutEntries))
@@ -61,7 +61,7 @@ func fanOutPutObject(ctx context.Context, bucket string, objectAPI ObjectLayer, 
 				ActualSize: -1,
 				DisableMD5: true,
 			}
-			hr, err := hash.NewReaderWithOpts(bytes.NewReader(fanOutBuf), hopts)
+			hr, err := hash.NewReaderWithOpts(ctx, bytes.NewReader(fanOutBuf), hopts)
 			if err != nil {
 				errs[idx] = err
 				return
@@ -91,7 +91,7 @@ func fanOutPutObject(ctx context.Context, bucket string, objectAPI ObjectLayer, 
 				}
 
 				// do not try to verify encrypted content/
-				hr, err = hash.NewReader(encrd, -1, "", "", -1)
+				hr, err = hash.NewReader(ctx, encrd, -1, "", "", -1)
 				if err != nil {
 					errs[idx] = err
 					return

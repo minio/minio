@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -33,8 +34,40 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/crypto"
-	"github.com/minio/pkg/trie"
+	"github.com/minio/pkg/v2/trie"
 )
+
+func pathJoinOld(elem ...string) string {
+	trailingSlash := ""
+	if len(elem) > 0 {
+		if hasSuffixByte(elem[len(elem)-1], SlashSeparatorChar) {
+			trailingSlash = SlashSeparator
+		}
+	}
+	return path.Join(elem...) + trailingSlash
+}
+
+func BenchmarkPathJoinOld(b *testing.B) {
+	b.Run("PathJoin", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			pathJoinOld("volume", "path/path/path")
+		}
+	})
+}
+
+func BenchmarkPathJoin(b *testing.B) {
+	b.Run("PathJoin", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			pathJoin("volume", "path/path/path")
+		}
+	})
+}
 
 // Wrapper
 func TestPathTraversalExploit(t *testing.T) {
@@ -66,7 +99,7 @@ func testPathTraversalExploit(obj ObjectLayer, instanceType, bucketName string, 
 		t.Fatalf("failed to create HTTP request for Put Object: <ERROR> %v", err)
 	}
 
-	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 	// Call the ServeHTTP to execute the handler.
 	apiRouter.ServeHTTP(rec, req)
 
@@ -78,7 +111,7 @@ func testPathTraversalExploit(obj ObjectLayer, instanceType, bucketName string, 
 	z := obj.(*erasureServerPools)
 	xl := z.serverPools[0].sets[0]
 	erasureDisks := xl.getDisks()
-	parts, errs := readAllFileInfo(ctx, erasureDisks, bucketName, objectName, "", false)
+	parts, errs := readAllFileInfo(ctx, erasureDisks, bucketName, objectName, "", false, false)
 	for i := range parts {
 		if errs[i] == nil {
 			if parts[i].Name == objectName {

@@ -163,3 +163,16 @@ func (r Rule) Validate() error {
 	}
 	return nil
 }
+
+// CloneNonTransition - returns a clone of the object containing non transition rules
+func (r Rule) CloneNonTransition() Rule {
+	return Rule{
+		XMLName:                     r.XMLName,
+		ID:                          r.ID,
+		Status:                      r.Status,
+		Filter:                      r.Filter,
+		Prefix:                      r.Prefix,
+		Expiration:                  r.Expiration,
+		NoncurrentVersionExpiration: r.NoncurrentVersionExpiration,
+	}
+}

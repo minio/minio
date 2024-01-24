@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode
@@ -111,7 +111,7 @@ func (api objectAPIHandlers) listObjectVersionsHandler(w http.ResponseWriter, r 
 
 	listObjectVersions := objectAPI.ListObjectVersions
 
-	// Inititate a list object versions operation based on the input params.
+	// Initiate a list object versions operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
 	listObjectVersionsInfo, err := listObjectVersions(ctx, bucket, prefix, marker, versionIDMarker, delimiter, maxkeys)
@@ -201,10 +201,10 @@ func (api objectAPIHandlers) listObjectsV2Handler(ctx context.Context, w http.Re
 	)
 
 	if r.Header.Get(xMinIOExtract) == "true" && strings.Contains(prefix, archivePattern) {
-		// Inititate a list objects operation inside a zip file based in the input params
+		// Initiate a list objects operation inside a zip file based in the input params
 		listObjectsV2Info, err = listObjectsV2InArchive(ctx, objectAPI, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
 	} else {
-		// Inititate a list objects operation based on the input params.
+		// Initiate a list objects operation based on the input params.
 		// On success would return back ListObjectsInfo object to be
 		// marshaled into S3 compatible XML header.
 		listObjectsV2Info, err = objectAPI.ListObjectsV2(ctx, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
@@ -304,7 +304,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 
 	listObjects := objectAPI.ListObjects
 
-	// Inititate a list objects operation based on the input params.
+	// Initiate a list objects operation based on the input params.
 	// On success would return back ListObjectsInfo object to be
 	// marshaled into S3 compatible XML header.
 	listObjectsInfo, err := listObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)

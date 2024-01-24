@@ -52,9 +52,6 @@ var globalObjLayerMutex sync.RWMutex
 // Global object layer, only accessed by globalObjectAPI.
 var globalObjectAPI ObjectLayer
 
-// Global cacheObjects, only accessed by newCacheObjectsFn().
-var globalCacheObjectAPI CacheObjectLayer
-
 type storageOpts struct {
 	cleanUp     bool
 	healthCheck bool
@@ -70,5 +67,5 @@ func newStorageAPI(endpoint Endpoint, opts storageOpts) (storage StorageAPI, err
 		return newXLStorageDiskIDCheck(storage, opts.healthCheck), nil
 	}
 
-	return newStorageRESTClient(endpoint, opts.healthCheck), nil
+	return newStorageRESTClient(endpoint, opts.healthCheck, globalGrid.Load())
 }

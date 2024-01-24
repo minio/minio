@@ -32,7 +32,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 const (
@@ -111,21 +111,20 @@ var userMetadataKeyPrefixes = []string{
 	"x-minio-meta-",
 }
 
-// extractMetadata extracts metadata from HTTP header and HTTP queryString.
-func extractMetadata(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
-	query := r.Form
-	header := r.Header
-	metadata = make(map[string]string)
-	// Extract all query values.
-	err = extractMetadataFromMime(ctx, textproto.MIMEHeader(query), metadata)
-	if err != nil {
-		return nil, err
-	}
+// extractMetadataFromReq extracts metadata from HTTP header and HTTP queryString.
+func extractMetadataFromReq(ctx context.Context, r *http.Request) (metadata map[string]string, err error) {
+	return extractMetadata(ctx, textproto.MIMEHeader(r.Form), textproto.MIMEHeader(r.Header))
+}
 
-	// Extract all header values.
-	err = extractMetadataFromMime(ctx, textproto.MIMEHeader(header), metadata)
-	if err != nil {
-		return nil, err
+func extractMetadata(ctx context.Context, mimesHeader ...textproto.MIMEHeader) (metadata map[string]string, err error) {
+	metadata = make(map[string]string)
+
+	for _, hdr := range mimesHeader {
+		// Extract all query values.
+		err = extractMetadataFromMime(ctx, hdr, metadata)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Set content-type to default value if it is not set.
@@ -207,7 +206,7 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	return cred
 }
 
-// Extract request params to be sent with event notifiation.
+// Extract request params to be sent with event notification.
 func extractReqParams(r *http.Request) map[string]string {
 	if r == nil {
 		return nil
@@ -238,7 +237,7 @@ func extractReqParams(r *http.Request) map[string]string {
 	return m
 }
 
-// Extract response elements to be sent with event notifiation.
+// Extract response elements to be sent with event notification.
 func extractRespElements(w http.ResponseWriter) map[string]string {
 	if w == nil {
 		return map[string]string{}
@@ -300,7 +299,8 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 		globalHTTPStats.currentS3Requests.Inc(api)
 		defer globalHTTPStats.currentS3Requests.Dec(api)
 
-		if bucket != "" && bucket != minioReservedBucket {
+		_, err = globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
+		if bucket != "" && bucket != minioReservedBucket && err == nil {
 			globalBucketHTTPStats.updateHTTPStats(bucket, api, nil)
 		}
 
@@ -316,7 +316,7 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
 			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
 
-			if bucket != "" && bucket != minioReservedBucket {
+			if bucket != "" && bucket != minioReservedBucket && err == nil {
 				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
 				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
 				globalBucketHTTPStats.updateHTTPStats(bucket, api, tc.ResponseRecorder)
@@ -385,12 +385,6 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, storageRESTPrefix):
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioStorageVersionMismatch",
-			Description:    desc,
-			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
-	case strings.HasPrefix(r.URL.Path, lockRESTPrefix):
-		writeErrorResponseString(r.Context(), w, APIError{
-			Code:           "XMinioLockVersionMismatch",
 			Description:    desc,
 			HTTPStatusCode: http.StatusUpgradeRequired,
 		}, r.URL)

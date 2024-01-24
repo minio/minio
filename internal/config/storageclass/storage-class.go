@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 // Standard constants for all storage class
@@ -228,7 +228,7 @@ func validateParity(ssParity, rrsParity, setDriveCount int) (err error) {
 //
 //	is returned, the caller is expected to choose the right parity
 //	at that point.
-func (sCfg Config) GetParityForSC(sc string) (parity int) {
+func (sCfg *Config) GetParityForSC(sc string) (parity int) {
 	ConfigLock.RLock()
 	defer ConfigLock.RUnlock()
 	switch strings.TrimSpace(sc) {

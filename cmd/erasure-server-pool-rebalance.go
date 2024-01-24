@@ -35,7 +35,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -129,7 +129,7 @@ func (z *erasureServerPools) initRebalanceMeta(ctx context.Context, buckets []st
 	}
 
 	// Fetch disk capacity and available space.
-	si := z.StorageInfo(ctx)
+	si := z.StorageInfo(ctx, true)
 	diskStats := make([]struct {
 		AvailableSpace uint64
 		TotalSpace     uint64
@@ -440,6 +440,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	lc, _ := globalLifecycleSys.Get(bucket)
 	// Check if bucket is object locked.
 	lr, _ := globalBucketObjectLockSys.Get(bucket)
+	rcfg, _ := getReplicationConfig(ctx, bucket)
 
 	pool := z.serverPools[poolIdx]
 	const envRebalanceWorkers = "_MINIO_REBALANCE_WORKERS"
@@ -467,7 +468,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			versioned := vc != nil && vc.Versioned(object)
 			objInfo := fi.ToObjectInfo(bucket, object, versioned)
 
-			evt := evalActionFromLifecycle(ctx, *lc, lr, objInfo)
+			evt := evalActionFromLifecycle(ctx, *lc, lr, rcfg, objInfo)
 			if evt.Action.Delete() {
 				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
@@ -623,10 +624,12 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 		go func() {
 			defer wg.Done()
 
+			listQuorum := (len(disks) + 1) / 2
+
 			// How to resolve partial results.
 			resolver := metadataResolutionParams{
-				dirQuorum: len(disks) / 2, // make sure to capture all quorum ratios
-				objQuorum: len(disks) / 2, // make sure to capture all quorum ratios
+				dirQuorum: listQuorum, // make sure to capture all quorum ratios
+				objQuorum: listQuorum, // make sure to capture all quorum ratios
 				bucket:    bucket,
 			}
 			err := listPathRaw(ctx, listPathRawOptions{
@@ -634,7 +637,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				bucket:         bucket,
 				recursive:      true,
 				forwardTo:      "",
-				minDisks:       len(disks) / 2, // to capture all quorum ratios
+				minDisks:       listQuorum,
 				reportNotFound: false,
 				agreed: func(entry metaCacheEntry) {
 					workers <- struct{}{}
@@ -736,7 +739,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
-			hr, err := hash.NewReader(io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
+			hr, err := hash.NewReader(ctx, io.LimitReader(gr, part.Size), part.Size, "", "", part.ActualSize)
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 			}
@@ -766,7 +769,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		return err
 	}
 
-	hr, err := hash.NewReader(gr, oi.Size, "", "", actualSize)
+	hr, err := hash.NewReader(ctx, gr, oi.Size, "", "", actualSize)
 	if err != nil {
 		return fmt.Errorf("rebalanceObject: hash.NewReader() %w", err)
 	}

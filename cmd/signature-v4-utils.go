@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/v2/policy"
 	"golang.org/x/exp/slices"
 )
 
@@ -79,7 +79,7 @@ func skipContentSha256Cksum(r *http.Request) bool {
 		// We return true only in situations when
 		// deployment has asked MinIO to allow for
 		// such broken clients and content-length > 0.
-		return r.ContentLength > 0 && !globalCLIContext.StrictS3Compat
+		return r.ContentLength > 0 && !globalServerCtxt.StrictS3Compat
 	}
 	return false
 }
@@ -180,7 +180,7 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 		return cred, owner, ErrAccessKeyDisabled
 	}
 
-	if _, ok := claims[iampolicy.SessionPolicyName]; ok {
+	if _, ok := claims[policy.SessionPolicyName]; ok {
 		owner = false
 	}
 
@@ -206,7 +206,7 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 	extractedSignedHeaders := make(http.Header)
 	for _, header := range signedHeaders {
 		// `host` will not be found in the headers, can be found in r.Host.
-		// but its alway necessary that the list of signed headers containing host in it.
+		// but its always necessary that the list of signed headers containing host in it.
 		val, ok := reqHeaders[http.CanonicalHeaderKey(header)]
 		if !ok {
 			// try to set headers from Query String
@@ -267,16 +267,6 @@ func checkMetaHeaders(signedHeadersMap http.Header, r *http.Request) APIErrorCod
 	for k, val := range r.Header {
 		if stringsHasPrefixFold(k, "X-Amz-Meta-") {
 			if signedHeadersMap.Get(k) == val[0] {
-				continue
-			}
-			return ErrUnsignedHeaders
-		}
-	}
-
-	// check values from url, if no http header
-	for k, val := range r.Form {
-		if stringsHasPrefixFold(k, "x-amz-meta-") {
-			if signedHeadersMap.Get(http.CanonicalHeaderKey(k)) == val[0] {
 				continue
 			}
 			return ErrUnsignedHeaders

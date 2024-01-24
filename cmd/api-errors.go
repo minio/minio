@@ -47,7 +47,7 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // APIError structure
@@ -310,6 +310,7 @@ const (
 	ErrSiteReplicationBucketMetaError
 	ErrSiteReplicationIAMError
 	ErrSiteReplicationConfigMissing
+	ErrSiteReplicationIAMConfigMismatch
 
 	// Pool rebalance errors
 	ErrAdminRebalanceAlreadyStarted
@@ -428,6 +429,9 @@ const (
 	// Lambda functions
 	ErrLambdaARNInvalid
 	ErrLambdaARNNotFound
+
+	// New Codes for GetObjectAttributes and GetObjectVersionAttributes
+	ErrInvalidAttributeName
 
 	apiErrCodeEnd // This is used only for the testing code
 )
@@ -955,7 +959,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationBandwidthLimitError: {
 		Code:           "XMinioAdminReplicationBandwidthLimitError",
-		Description:    "Bandwidth limit for remote target must be atleast 100MBps",
+		Description:    "Bandwidth limit for remote target must be at least 100MBps",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationNoExistingObjects: {
@@ -1512,6 +1516,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Site not found in site replication configuration",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrSiteReplicationIAMConfigMismatch: {
+		Code:           "XMinioSiteReplicationIAMConfigMismatch",
+		Description:    "IAM configuration mismatch between sites",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminRebalanceAlreadyStarted: {
 		Code:           "XMinioAdminRebalanceAlreadyStarted",
 		Description:    "Pool rebalance is already started",
@@ -2057,6 +2066,11 @@ var errorCodes = errorCodeMap{
 		Description:    "The specified policy is not found.",
 		HTTPStatusCode: http.StatusNotFound,
 	},
+	ErrInvalidAttributeName: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid attribute name specified.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -2236,8 +2250,6 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrSlowDownWrite
 	case InsufficientReadQuorum:
 		apiErr = ErrSlowDownRead
-	case InvalidMarkerPrefixCombination:
-		apiErr = ErrNotImplemented
 	case InvalidUploadIDKeyCombination:
 		apiErr = ErrNotImplemented
 	case MalformedUploadID:
@@ -2339,6 +2351,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case dns.ErrBucketConflict:
 		apiErr = ErrBucketAlreadyExists
 	default:
+		if _, ok := err.(tags.Error); ok {
+			// tag errors are not exported, so we check their custom interface to avoid logging.
+			// The correct type is inserted by toAPIError.
+			apiErr = ErrInternalError
+			break
+		}
 		var ie, iw int
 		// This work-around is to handle the issue golang/go#30648
 		//nolint:gocritic

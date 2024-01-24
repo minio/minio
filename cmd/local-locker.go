@@ -34,7 +34,7 @@ type lockRequesterInfo struct {
 	UID             string    // UID to uniquely identify request of client.
 	Timestamp       time.Time // Timestamp set at the time of initialization.
 	TimeLastRefresh time.Time // Timestamp for last lock refresh.
-	Source          string    // Contains line, function and filename reqesting the lock.
+	Source          string    // Contains line, function and filename requesting the lock.
 	Group           bool      // indicates if it was a group lock.
 	// Owner represents the UUID of the owner who originally requested the lock
 	// useful in expiry.
@@ -159,7 +159,7 @@ func (l *localLocker) removeEntry(name string, args dsync.LockArgs, lri *[]lockR
 }
 
 func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
-	if len(args.Resources) > 1 {
+	if len(args.Resources) != 1 {
 		return false, fmt.Errorf("internal error: localLocker.RLock called with more than one resource")
 	}
 

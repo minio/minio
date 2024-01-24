@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/v2/console"
 )
 
 // metaCacheEntry is an object or a directory within an unknown bucket.
@@ -248,9 +248,9 @@ func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 				ModTime:  timeSentinel1970,
 			}, nil
 		}
-		return e.cached.ToFileInfo(bucket, e.name, "", false)
+		return e.cached.ToFileInfo(bucket, e.name, "", false, false)
 	}
-	return getFileInfo(e.metadata, bucket, e.name, "", false)
+	return getFileInfo(e.metadata, bucket, e.name, "", false, false)
 }
 
 // xlmeta returns the decoded metadata.
@@ -291,7 +291,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 		}, nil
 	}
 	// Too small gains to reuse cache here.
-	return getFileInfoVersions(e.metadata, bucket, e.name)
+	return getFileInfoVersions(e.metadata, bucket, e.name, false)
 }
 
 // metaCacheEntries is a slice of metacache entries.

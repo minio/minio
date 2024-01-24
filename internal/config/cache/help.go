@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -19,71 +19,30 @@ package cache
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for caching feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
+	// Help - provides help for cache config
 	Help = config.HelpKVS{
 		config.HelpKV{
-			Key:         Drives,
-			Description: `comma separated mountpoints e.g. "/optane1,/optane2"` + defaultHelpPostfix(Drives),
-			Type:        "csv",
+			Key:         Enable,
+			Type:        "on|off",
+			Description: "set to enable remote cache plugin" + defaultHelpPostfix(Enable),
+			Optional:    true,
 		},
 		config.HelpKV{
-			Key:         Expiry,
-			Description: `cache expiry duration in days` + defaultHelpPostfix(Expiry),
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         Quota,
-			Description: `limit cache drive usage in percentage` + defaultHelpPostfix(Quota),
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         Exclude,
-			Description: `exclude cache for following patterns e.g. "bucket/*.tmp,*.exe"` + defaultHelpPostfix(Exclude),
-			Optional:    true,
-			Type:        "csv",
-		},
-		config.HelpKV{
-			Key:         After,
-			Description: `minimum number of access before caching an object` + defaultHelpPostfix(After),
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         WatermarkLow,
-			Description: `% of cache use at which to stop cache eviction` + defaultHelpPostfix(WatermarkLow),
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         WatermarkHigh,
-			Description: `% of cache use at which to start cache eviction` + defaultHelpPostfix(WatermarkHigh),
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
-			Key:         Range,
-			Description: `set to "on" or "off" caching of independent range requests per object` + defaultHelpPostfix(Range),
-			Optional:    true,
+			Key:         Endpoint,
 			Type:        "string",
+			Description: "remote cache endpoint for GET/HEAD object(s) metadata, data" + defaultHelpPostfix(Endpoint),
+			Optional:    true,
 		},
 		config.HelpKV{
-			Key:         Commit,
-			Description: `set to control cache commit behavior` + defaultHelpPostfix(Commit),
-			Optional:    true,
+			Key:         BlockSize,
 			Type:        "string",
-		},
-		config.HelpKV{
-			Key:         config.Comment,
-			Description: config.DefaultComment,
+			Description: "cache all objects below the specified block size" + defaultHelpPostfix(BlockSize),
 			Optional:    true,
-			Type:        "sentence",
 		},
 	}
 )

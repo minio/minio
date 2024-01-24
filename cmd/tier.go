@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -27,11 +27,13 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/kms"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 //go:generate msgp -file $GOFILE
@@ -67,8 +69,6 @@ const (
 	tierConfigFormat  = 1
 	tierConfigV1      = 1
 	tierConfigVersion = 2
-
-	minioHotTier = "STANDARD"
 )
 
 // tierConfigPath refers to remote tier config object name
@@ -80,6 +80,96 @@ type TierConfigMgr struct {
 	drivercache  map[string]WarmBackend `msg:"-"`
 
 	Tiers map[string]madmin.TierConfig `json:"tiers"`
+}
+
+type tierMetrics struct {
+	sync.RWMutex  // protects requestsCount only
+	requestsCount map[string]struct {
+		success int64
+		failure int64
+	}
+	histogram *prometheus.HistogramVec
+}
+
+var globalTierMetrics = tierMetrics{
+	requestsCount: make(map[string]struct {
+		success int64
+		failure int64
+	}),
+	histogram: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "tier_ttlb_seconds",
+		Help:    "Time taken by requests served by warm tier",
+		Buckets: []float64{0.01, 0.1, 1, 2, 5, 10, 60, 5 * 60, 15 * 60, 30 * 60},
+	}, []string{"tier"}),
+}
+
+func (t *tierMetrics) Observe(tier string, dur time.Duration) {
+	t.histogram.With(prometheus.Labels{"tier": tier}).Observe(dur.Seconds())
+}
+
+func (t *tierMetrics) logSuccess(tier string) {
+	t.Lock()
+	defer t.Unlock()
+
+	stat := t.requestsCount[tier]
+	stat.success++
+	t.requestsCount[tier] = stat
+}
+
+func (t *tierMetrics) logFailure(tier string) {
+	t.Lock()
+	defer t.Unlock()
+
+	stat := t.requestsCount[tier]
+	stat.failure++
+	t.requestsCount[tier] = stat
+}
+
+var (
+	// {minio_node}_{tier}_{ttlb_seconds_distribution}
+	tierTTLBMD = MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: tierSubsystem,
+		Name:      ttlbDistribution,
+		Help:      "Distribution of time to last byte for objects downloaded from warm tier",
+		Type:      gaugeMetric,
+	}
+
+	// {minio_node}_{tier}_{requests_success}
+	tierRequestsSuccessMD = MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: tierSubsystem,
+		Name:      tierRequestsSuccess,
+		Help:      "Number of requests to download object from warm tier that were successful",
+		Type:      counterMetric,
+	}
+	// {minio_node}_{tier}_{requests_failure}
+	tierRequestsFailureMD = MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: tierSubsystem,
+		Name:      tierRequestsFailure,
+		Help:      "Number of requests to download object from warm tier that failed",
+		Type:      counterMetric,
+	}
+)
+
+func (t *tierMetrics) Report() []Metric {
+	metrics := getHistogramMetrics(t.histogram, tierTTLBMD)
+	t.RLock()
+	defer t.RUnlock()
+	for tier, stat := range t.requestsCount {
+		metrics = append(metrics, Metric{
+			Description:    tierRequestsSuccessMD,
+			Value:          float64(stat.success),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+		metrics = append(metrics, Metric{
+			Description:    tierRequestsFailureMD,
+			Value:          float64(stat.failure),
+			VariableLabels: map[string]string{"tier": tier},
+		})
+	}
+	return metrics
 }
 
 // IsTierValid returns true if there exists a remote tier by name tierName,
@@ -150,12 +240,11 @@ func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
 		return err
 	} else if inuse {
 		return errTierBackendNotEmpty
-	} else {
-		config.Lock()
-		delete(config.Tiers, tier)
-		delete(config.drivercache, tier)
-		config.Unlock()
 	}
+	config.Lock()
+	delete(config.Tiers, tier)
+	delete(config.drivercache, tier)
+	config.Unlock()
 	return nil
 }
 
@@ -177,8 +266,24 @@ func (config *TierConfigMgr) Empty() bool {
 	return len(config.ListTiers()) == 0
 }
 
+// TierType returns the type of tier
+func (config *TierConfigMgr) TierType(name string) string {
+	config.RLock()
+	defer config.RUnlock()
+
+	cfg, ok := config.Tiers[name]
+	if !ok {
+		return "internal"
+	}
+	return cfg.Type.String()
+}
+
 // ListTiers lists remote tiers configured in this deployment.
 func (config *TierConfigMgr) ListTiers() []madmin.TierConfig {
+	if config == nil {
+		return nil
+	}
+
 	config.RLock()
 	defer config.RUnlock()
 
@@ -206,22 +311,30 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 	cfg := config.Tiers[tierName]
 	switch tierType {
 	case madmin.S3:
-		if (creds.AccessKey == "" || creds.SecretKey == "") && !creds.AWSRole {
-			return errTierMissingCredentials
-		}
-		switch {
-		case creds.AWSRole:
+		if creds.AWSRole {
 			cfg.S3.AWSRole = true
-		default:
+		}
+		if creds.AWSRoleWebIdentityTokenFile != "" && creds.AWSRoleARN != "" {
+			cfg.S3.AWSRoleARN = creds.AWSRoleARN
+			cfg.S3.AWSRoleWebIdentityTokenFile = creds.AWSRoleWebIdentityTokenFile
+		}
+		if creds.AccessKey != "" && creds.SecretKey != "" {
 			cfg.S3.AccessKey = creds.AccessKey
 			cfg.S3.SecretKey = creds.SecretKey
 		}
 	case madmin.Azure:
-		if creds.SecretKey == "" {
-			return errTierMissingCredentials
+		if creds.SecretKey != "" {
+			cfg.Azure.AccountKey = creds.SecretKey
 		}
-		cfg.Azure.AccountKey = creds.SecretKey
-
+		if creds.AzSP.TenantID != "" {
+			cfg.Azure.SPAuth.TenantID = creds.AzSP.TenantID
+		}
+		if creds.AzSP.ClientID != "" {
+			cfg.Azure.SPAuth.ClientID = creds.AzSP.ClientID
+		}
+		if creds.AzSP.ClientSecret != "" {
+			cfg.Azure.SPAuth.ClientSecret = creds.AzSP.ClientSecret
+		}
 	case madmin.GCS:
 		if creds.CredsJSON == nil {
 			return errTierMissingCredentials
@@ -287,7 +400,7 @@ func (config *TierConfigMgr) getDriver(tierName string) (d WarmBackend, err erro
 // using a PutObject API. PutObjReader encrypts json encoded tier configurations
 // if KMS is enabled, otherwise simply yields the json encoded bytes as is.
 // Similarly, ObjectOptions value depends on KMS' status.
-func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, error) {
+func (config *TierConfigMgr) configReader(ctx context.Context) (*PutObjReader, *ObjectOptions, error) {
 	b, err := config.Bytes()
 	if err != nil {
 		return nil, nil, err
@@ -295,7 +408,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 
 	payloadSize := int64(len(b))
 	br := bytes.NewReader(b)
-	hr, err := hash.NewReader(br, payloadSize, "", "", payloadSize)
+	hr, err := hash.NewReader(ctx, br, payloadSize, "", "", payloadSize)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -318,7 +431,7 @@ func (config *TierConfigMgr) configReader() (*PutObjReader, *ObjectOptions, erro
 		Size: payloadSize,
 	}
 	encSize := info.EncryptedSize()
-	encHr, err := hash.NewReader(encBr, encSize, "", "", encSize)
+	encHr, err := hash.NewReader(ctx, encBr, encSize, "", "", encSize)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -371,7 +484,7 @@ func (config *TierConfigMgr) Save(ctx context.Context, objAPI ObjectLayer) error
 		return errServerNotInitialized
 	}
 
-	pr, opts, err := globalTierConfigMgr.configReader()
+	pr, opts, err := globalTierConfigMgr.configReader(ctx)
 	if err != nil {
 		return err
 	}

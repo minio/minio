@@ -23,11 +23,14 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"sort"
 	"strconv"
+	"time"
 
+	"github.com/minio/madmin-go/v3"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/rest"
-	"github.com/minio/pkg/sync/errgroup"
+	"github.com/minio/pkg/v2/sync/errgroup"
 	"golang.org/x/exp/slices"
 )
 
@@ -35,6 +38,7 @@ var errPeerOffline = errors.New("peer is offline")
 
 type peerS3Client interface {
 	ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error)
+	HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error)
 	GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error)
 	MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error
 	DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error
@@ -64,6 +68,10 @@ func (l localPeerS3Client) GetPools() []int {
 
 func (l localPeerS3Client) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
 	return listBucketsLocal(ctx, opts)
+}
+
+func (l localPeerS3Client) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	return healBucketLocal(ctx, bucket, opts)
 }
 
 func (l localPeerS3Client) GetBucketInfo(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
@@ -123,12 +131,88 @@ func NewS3PeerSys(endpoints EndpointServerPools) *S3PeerSys {
 	}
 }
 
-// ListBuckets lists buckets across all servers and returns a possible consistent view
-func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (result []BucketInfo, err error) {
+// HealBucket - heals buckets at node level
+func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	g := errgroup.WithNErrs(len(sys.peerClients))
+
+	for idx, client := range sys.peerClients {
+		idx := idx
+		client := client
+		g.Go(func() error {
+			if client == nil {
+				return errPeerOffline
+			}
+			_, err := client.GetBucketInfo(ctx, bucket, BucketOptions{})
+			return err
+		}, idx)
+	}
+
+	errs := g.Wait()
+
+	var poolErrs []error
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
+		}
+		quorum := len(perPoolErrs) / 2
+		poolErrs = append(poolErrs, reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum))
+	}
+
+	opts.Remove = isAllBucketsNotFound(poolErrs)
+	opts.Recreate = !opts.Remove
+
+	g = errgroup.WithNErrs(len(sys.peerClients))
+	healBucketResults := make([]madmin.HealResultItem, len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		idx := idx
+		client := client
+		g.Go(func() error {
+			if client == nil {
+				return errPeerOffline
+			}
+			res, err := client.HealBucket(ctx, bucket, opts)
+			if err != nil {
+				return err
+			}
+			healBucketResults[idx] = res
+			return nil
+		}, idx)
+	}
+
+	errs = g.Wait()
+
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
+		}
+		quorum := len(perPoolErrs) / 2
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum); poolErr != nil {
+			return madmin.HealResultItem{}, poolErr
+		}
+	}
+
+	for i, err := range errs {
+		if err == nil {
+			return healBucketResults[i], nil
+		}
+	}
+
+	return madmin.HealResultItem{}, toObjectErr(errVolumeNotFound, bucket)
+}
+
+// ListBuckets lists buckets across all nodes and returns a consistent view:
+//   - Return an error when a pool cannot return N/2+1 valid bucket information
+//   - For each pool, check if the bucket exists in N/2+1 nodes before including it in the final result
+func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
 	nodeBuckets := make([][]BucketInfo, len(sys.peerClients))
-	errs := []error{nil}
 
 	for idx, client := range sys.peerClients {
 		idx := idx
@@ -146,26 +230,69 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) (resu
 		}, idx)
 	}
 
-	errs = append(errs, g.Wait()...)
+	errs := g.Wait()
 
-	quorum := len(sys.peerClients)/2 + 1
-	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
-		return nil, err
-	}
+	// The list of buckets in a map to avoid duplication
+	resultMap := make(map[string]BucketInfo)
 
-	bucketsMap := make(map[string]struct{})
-	for idx, buckets := range nodeBuckets {
-		if errs[idx] != nil {
-			continue
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
 		}
-		for _, bi := range buckets {
-			_, ok := bucketsMap[bi.Name]
-			if !ok {
-				bucketsMap[bi.Name] = struct{}{}
-				result = append(result, bi)
+		quorum := len(perPoolErrs) / 2
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum); poolErr != nil {
+			return nil, poolErr
+		}
+
+		bucketsMap := make(map[string]int)
+		for idx, buckets := range nodeBuckets {
+			if buckets == nil {
+				continue
+			}
+			if !slices.Contains(sys.peerClients[idx].GetPools(), poolIdx) {
+				continue
+			}
+			for _, bi := range buckets {
+				_, ok := resultMap[bi.Name]
+				if ok {
+					// Skip it, this bucket is found in another pool
+					continue
+				}
+				bucketsMap[bi.Name]++
+				if bucketsMap[bi.Name] >= quorum {
+					resultMap[bi.Name] = bi
+				}
+			}
+		}
+		// loop through buckets and see if some with lost quorum
+		// these could be stale buckets lying around, queue a heal
+		// of such a bucket. This is needed here as we identify such
+		// buckets here while listing buckets. As part of regular
+		// globalBucketMetadataSys.Init() call would get a valid
+		// buckets only and not the quourum lost ones like this, so
+		// explicit call
+		for bktName, count := range bucketsMap {
+			if count < quorum {
+				// Queue a bucket heal task
+				globalMRFState.addPartialOp(partialOperation{
+					bucket: bktName,
+					queued: time.Now(),
+				})
 			}
 		}
 	}
+
+	result := make([]BucketInfo, 0, len(resultMap))
+	for _, bi := range resultMap {
+		result = append(result, bi)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
 
 	return result, nil
 }
@@ -193,9 +320,17 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 
 	errs := g.Wait()
 
-	quorum := len(sys.peerClients)/2 + 1
-	if err = reduceReadQuorumErrs(ctx, errs, bucketOpIgnoredErrs, quorum); err != nil {
-		return BucketInfo{}, toObjectErr(err, bucket)
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
+		}
+		quorum := len(perPoolErrs) / 2
+		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum); poolErr != nil {
+			return BucketInfo{}, poolErr
+		}
 	}
 
 	for i, err := range errs {
@@ -220,6 +355,23 @@ func (client *remotePeerS3Client) ListBuckets(ctx context.Context, opts BucketOp
 	var buckets []BucketInfo
 	err = gob.NewDecoder(respBody).Decode(&buckets)
 	return buckets, err
+}
+
+func (client *remotePeerS3Client) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
+	v := url.Values{}
+	v.Set(peerS3Bucket, bucket)
+	v.Set(peerS3BucketDeleted, strconv.FormatBool(opts.Remove))
+
+	respBody, err := client.call(peerS3MethodHealBucket, v, nil, -1)
+	if err != nil {
+		return madmin.HealResultItem{}, err
+	}
+	defer xhttp.DrainBody(respBody)
+
+	var res madmin.HealResultItem
+	err = gob.NewDecoder(respBody).Decode(&res)
+
+	return res, err
 }
 
 // GetBucketInfo returns bucket stat info from a peer

@@ -20,12 +20,14 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -33,7 +35,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 )
 
 const (
@@ -82,23 +84,40 @@ func (s1 ServerSystemConfig) Diff(s2 ServerSystemConfig) error {
 				ep.Platform, s2.MinioEndpoints[i].Platform)
 		}
 	}
-	if !reflect.DeepEqual(s1.MinioEnv, s2.MinioEnv) {
-		var missing []string
-		var mismatching []string
-		for k, v := range s1.MinioEnv {
-			ev, ok := s2.MinioEnv[k]
-			if !ok {
-				missing = append(missing, k)
-			} else if v != ev {
-				mismatching = append(mismatching, k)
-			}
-		}
-		if len(mismatching) > 0 {
-			return fmt.Errorf(`Expected same MINIO_ environment variables and values across all servers: Missing environment values: %s / Mismatch environment values: %s`, missing, mismatching)
-		}
-		return fmt.Errorf(`Expected same MINIO_ environment variables and values across all servers: Missing environment values: %s`, missing)
+	if reflect.DeepEqual(s1.MinioEnv, s2.MinioEnv) {
+		return nil
 	}
-	return nil
+
+	// Report differences in environment variables.
+	var missing []string
+	var mismatching []string
+	for k, v := range s1.MinioEnv {
+		ev, ok := s2.MinioEnv[k]
+		if !ok {
+			missing = append(missing, k)
+		} else if v != ev {
+			mismatching = append(mismatching, k)
+		}
+	}
+	var extra []string
+	for k := range s2.MinioEnv {
+		_, ok := s1.MinioEnv[k]
+		if !ok {
+			extra = append(extra, k)
+		}
+	}
+	msg := "Expected same MINIO_ environment variables and values across all servers: "
+	if len(missing) > 0 {
+		msg += fmt.Sprintf(`Missing environment values: %v. `, missing)
+	}
+	if len(mismatching) > 0 {
+		msg += fmt.Sprintf(`Mismatching environment values: %v. `, mismatching)
+	}
+	if len(extra) > 0 {
+		msg += fmt.Sprintf(`Extra environment values: %v. `, extra)
+	}
+
+	return errors.New(strings.TrimSpace(msg))
 }
 
 var skipEnvs = map[string]struct{}{
@@ -242,7 +261,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 			retries++
 			// after 20 retries start logging that servers are not reachable yet
 			if retries >= 20 {
-				logger.Info(fmt.Sprintf("Waiting for atleast %d remote servers with valid configuration to be online", len(clnts)/2))
+				logger.Info(fmt.Sprintf("Waiting for at least %d remote servers with valid configuration to be online", len(clnts)/2))
 				if len(offlineEndpoints) > 0 {
 					logger.Info(fmt.Sprintf("Following servers are currently offline or unreachable %s", offlineEndpoints))
 				}

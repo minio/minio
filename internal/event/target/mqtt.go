@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 const (
@@ -169,7 +169,7 @@ func (target *MQTTTarget) send(eventData event.Event) error {
 }
 
 // SendFromStore - reads an event from store and sends it to MQTT.
-func (target *MQTTTarget) SendFromStore(eventKey string) error {
+func (target *MQTTTarget) SendFromStore(key store.Key) error {
 	if err := target.init(); err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (target *MQTTTarget) SendFromStore(eventKey string) error {
 		return err
 	}
 
-	eventData, err := target.store.Get(eventKey)
+	eventData, err := target.store.Get(key.Name)
 	if err != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -195,7 +195,7 @@ func (target *MQTTTarget) SendFromStore(eventKey string) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(eventKey)
+	return target.store.Del(key.Name)
 }
 
 // Save - saves the events to the store if queuestore is configured, which will
@@ -219,7 +219,9 @@ func (target *MQTTTarget) Save(eventData event.Event) error {
 
 // Close - does nothing and available for interface compatibility.
 func (target *MQTTTarget) Close() error {
-	target.client.Disconnect(100)
+	if target.client != nil {
+		target.client.Disconnect(100)
+	}
 	close(target.quitCh)
 	return nil
 }

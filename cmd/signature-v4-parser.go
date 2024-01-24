@@ -161,7 +161,7 @@ type signValues struct {
 	Signature     string
 }
 
-// preSignValues data type represents structued form of AWS Signature V4 query string.
+// preSignValues data type represents structured form of AWS Signature V4 query string.
 type preSignValues struct {
 	signValues
 	Date    time.Time
@@ -232,6 +232,10 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 		return psv, ErrMaximumExpires
 	}
 
+	if preSignV4Values.Date.IsZero() || preSignV4Values.Date.Equal(timeSentinel) {
+		return psv, ErrMalformedPresignedDate
+	}
+
 	// Save signed headers.
 	preSignV4Values.SignedHeaders, aec = parseSignedHeader("SignedHeaders=" + query.Get(xhttp.AmzSignedHeaders))
 	if aec != ErrNone {
@@ -244,7 +248,7 @@ func parsePreSignV4(query url.Values, region string, stype serviceType) (psv pre
 		return psv, aec
 	}
 
-	// Return structed form of signature query string.
+	// Return structured form of signature query string.
 	return preSignV4Values, ErrNone
 }
 

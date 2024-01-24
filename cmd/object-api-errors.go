@@ -348,15 +348,6 @@ func (e InvalidUploadIDKeyCombination) Error() string {
 	return fmt.Sprintf("Invalid combination of uploadID marker '%s' and marker '%s'", e.UploadIDMarker, e.KeyMarker)
 }
 
-// InvalidMarkerPrefixCombination - invalid marker and prefix combination.
-type InvalidMarkerPrefixCombination struct {
-	Marker, Prefix string
-}
-
-func (e InvalidMarkerPrefixCombination) Error() string {
-	return fmt.Sprintf("Invalid combination of marker '%s' and prefix '%s'", e.Marker, e.Prefix)
-}
-
 // BucketPolicyNotFound - no bucket policy found.
 type BucketPolicyNotFound GenericError
 
@@ -548,7 +539,7 @@ func (e ObjectNameTooLong) Error() string {
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNamePrefixAsSlash) Error() string {
-	return "Object name contains forward slash as pefix: " + e.Bucket + "/" + e.Object
+	return "Object name contains forward slash as prefix: " + e.Bucket + "/" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled
@@ -692,6 +683,12 @@ func isErrBucketNotFound(err error) bool {
 // isErrReadQuorum check if the error type is InsufficentReadQuorum
 func isErrReadQuorum(err error) bool {
 	var rquorum InsufficientReadQuorum
+	return errors.As(err, &rquorum)
+}
+
+// isErrWriteQuorum check if the error type is InsufficentWriteQuorum
+func isErrWriteQuorum(err error) bool {
+	var rquorum InsufficientWriteQuorum
 	return errors.As(err, &rquorum)
 }
 

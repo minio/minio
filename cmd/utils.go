@@ -58,10 +58,10 @@ import (
 	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/certs"
-	"github.com/minio/pkg/env"
-	pkgAudit "github.com/minio/pkg/logger/message/audit"
-	xnet "github.com/minio/pkg/net"
+	"github.com/minio/pkg/v2/certs"
+	"github.com/minio/pkg/v2/env"
+	pkgAudit "github.com/minio/pkg/v2/logger/message/audit"
+	xnet "github.com/minio/pkg/v2/net"
 	"golang.org/x/oauth2"
 )
 
@@ -99,11 +99,15 @@ func ErrorRespToObjectError(err error, params ...string) error {
 
 	bucket := ""
 	object := ""
+	versionID := ""
 	if len(params) >= 1 {
 		bucket = params[0]
 	}
-	if len(params) == 2 {
+	if len(params) >= 2 {
 		object = params[1]
+	}
+	if len(params) >= 3 {
+		versionID = params[2]
 	}
 
 	if xnet.IsNetworkOrHostDown(err, false) {
@@ -118,6 +122,10 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	}
 
 	switch minioErr.Code {
+	case "SlowDownWrite":
+		err = InsufficientWriteQuorum{Bucket: bucket, Object: object}
+	case "SlowDownRead":
+		err = InsufficientReadQuorum{Bucket: bucket, Object: object}
 	case "PreconditionFailed":
 		err = PreConditionFailed{}
 	case "InvalidRange":
@@ -139,6 +147,12 @@ func ErrorRespToObjectError(err error, params ...string) error {
 	case "NoSuchKey":
 		if object != "" {
 			err = ObjectNotFound{Bucket: bucket, Object: object}
+		} else {
+			err = BucketNotFound{Bucket: bucket}
+		}
+	case "NoSuchVersion":
+		if object != "" {
+			err = ObjectNotFound{Bucket: bucket, Object: object, VersionID: versionID}
 		} else {
 			err = BucketNotFound{Bucket: bucket}
 		}
@@ -278,7 +292,7 @@ func isMaxPartID(partID int) bool {
 	return partID > globalMaxPartID
 }
 
-// profilerWrapper is created becauses pkg/profiler doesn't
+// profilerWrapper is created because pkg/profiler doesn't
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
@@ -702,37 +716,6 @@ func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	}.NewRemoteTargetHTTPTransport(insecure)
 }
 
-// Load the json (typically from disk file).
-func jsonLoad(r io.ReadSeeker, data interface{}) error {
-	if _, err := r.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	return json.NewDecoder(r).Decode(data)
-}
-
-// Save to disk file in json format.
-func jsonSave(f interface {
-	io.WriteSeeker
-	Truncate(int64) error
-}, data interface{},
-) error {
-	b, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	if err = f.Truncate(0); err != nil {
-		return err
-	}
-	if _, err = f.Seek(0, io.SeekStart); err != nil {
-		return err
-	}
-	_, err = f.Write(b)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // ceilFrac takes a numerator and denominator representing a fraction
 // and returns its ceiling. If denominator is 0, it returns 0 instead
 // of crashing.
@@ -845,7 +828,7 @@ func newContext(r *http.Request, w http.ResponseWriter, api string) context.Cont
 	bucket := vars["bucket"]
 	object := likelyUnescapeGeneric(vars["object"], url.PathUnescape)
 	reqInfo := &logger.ReqInfo{
-		DeploymentID: globalDeploymentID,
+		DeploymentID: globalDeploymentID(),
 		RequestID:    reqID,
 		RemoteHost:   handlers.GetSourceIP(r),
 		Host:         getHostName(r),
@@ -1079,7 +1062,7 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	if len(logger.AuditTargets()) == 0 {
 		return
 	}
-	entry := audit.NewEntry(globalDeploymentID)
+	entry := audit.NewEntry(globalDeploymentID())
 	entry.Trigger = opts.Event
 	entry.Event = opts.Event
 	entry.Error = opts.Error
@@ -1285,4 +1268,22 @@ func unwrapAll(err error) error {
 func stringsHasPrefixFold(s, prefix string) bool {
 	// Test match with case first.
 	return len(s) >= len(prefix) && (s[0:len(prefix)] == prefix || strings.EqualFold(s[0:len(prefix)], prefix))
+}
+
+func ptr[T any](a T) *T {
+	return &a
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

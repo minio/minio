@@ -85,14 +85,14 @@ func bgFormatErasureCleanupTmp(diskPath string) {
 	tmpID := mustGetUUID()
 	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", tmpID)
 	if err := renameAll(pathJoin(diskPath, minioMetaTmpBucket),
-		tmpOld); err != nil && !errors.Is(err, errFileNotFound) {
+		tmpOld, diskPath); err != nil && !errors.Is(err, errFileNotFound) {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			tmpOld,
 			osErrToFileErr(err)))
 	}
 
-	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777); err != nil {
+	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777, diskPath); err != nil {
 		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			err))
@@ -225,9 +225,9 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 			return nil, nil, err
 		}
 
-		// Assign globalDeploymentID on first run for the
+		// Assign globalDeploymentID() on first run for the
 		// minio server managing the first disk
-		globalDeploymentID = format.ID
+		globalDeploymentIDPtr.Store(&format.ID)
 		return storageDisks, format, nil
 	}
 
@@ -260,13 +260,13 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		if !firstDisk {
 			return nil, nil, errNotFirstDisk
 		}
-		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format); err != nil {
+		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format, formatConfigs); err != nil {
 			logger.LogIf(GlobalContext, err)
 			return nil, nil, err
 		}
 	}
 
-	globalDeploymentID = format.ID
+	globalDeploymentIDPtr.Store(&format.ID)
 
 	if err = formatErasureFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
 		logger.LogIf(GlobalContext, err)

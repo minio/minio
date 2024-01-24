@@ -78,17 +78,6 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string, obj g
 			Object: prefix,
 		}
 	}
-	// Verify if marker has prefix.
-	if marker != "" && !HasPrefix(marker, prefix) {
-		logger.LogIf(ctx, InvalidMarkerPrefixCombination{
-			Marker: marker,
-			Prefix: prefix,
-		})
-		return InvalidMarkerPrefixCombination{
-			Marker: marker,
-			Prefix: prefix,
-		}
-	}
 	return nil
 }
 
@@ -160,7 +149,6 @@ func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer
 	// This is done on purpose since the order of errors is
 	// important here bucket does not exist error should
 	// happen before we return an error for invalid object name.
-	// FIXME: should be moved to handler layer.
 	if err := checkBucketExist(ctx, bucket, obj); err != nil {
 		return err
 	}
@@ -181,16 +169,7 @@ func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer
 }
 
 // Checks for PutObject arguments validity, also validates if bucket exists.
-func checkPutObjectArgs(ctx context.Context, bucket, object string, obj getBucketInfoI) error {
-	// Verify if bucket exists before validating object name.
-	// This is done on purpose since the order of errors is
-	// important here bucket does not exist error should
-	// happen before we return an error for invalid object name.
-	// FIXME: should be moved to handler layer.
-	if err := checkBucketExist(ctx, bucket, obj); err != nil {
-		return err
-	}
-
+func checkPutObjectArgs(ctx context.Context, bucket, object string) error {
 	if err := checkObjectNameForLengthAndSlash(bucket, object); err != nil {
 		return err
 	}

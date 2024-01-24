@@ -37,7 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/bucket/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 // API suite container common to both ErasureSD and Erasure.
@@ -137,7 +137,7 @@ func TestServerSuite(t *testing.T) {
 		// Init and run test on ErasureSet backend.
 		{serverType: "ErasureSet", signer: signerV4},
 	}
-	globalCLIContext.StrictS3Compat = true
+	globalServerCtxt.StrictS3Compat = true
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.serverType), func(t *testing.T) {
 			runAllTests(testCase, &check{t, testCase.serverType})
@@ -390,9 +390,9 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *check) {
 	bucketPolicyReadBuf, err := io.ReadAll(response.Body)
 	c.Assert(err, nil)
 	// Verify if downloaded policy matches with previously uploaded.
-	expectedPolicy, err := policy.ParseConfig(strings.NewReader(bucketPolicyStr), bucketName)
+	expectedPolicy, err := policy.ParseBucketPolicyConfig(strings.NewReader(bucketPolicyStr), bucketName)
 	c.Assert(err, nil)
-	gotPolicy, err := policy.ParseConfig(bytes.NewReader(bucketPolicyReadBuf), bucketName)
+	gotPolicy, err := policy.ParseBucketPolicyConfig(bytes.NewReader(bucketPolicyReadBuf), bucketName)
 	c.Assert(err, nil)
 	c.Assert(reflect.DeepEqual(expectedPolicy, gotPolicy), true)
 

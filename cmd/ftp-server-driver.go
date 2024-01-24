@@ -248,12 +248,19 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 	defer stopFn(err)
 
 	if globalIAMSys.LDAPConfig.Enabled() {
-		ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(username, password)
-		if err != nil {
+		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), username)
+		if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 			return false, err
 		}
-		ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, false, groupDistNames...)
-		return len(ldapPolicies) > 0, nil
+		if errors.Is(err, errNoSuchServiceAccount) {
+			ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(username, password)
+			if err != nil {
+				return false, err
+			}
+			ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
+			return len(ldapPolicies) > 0, nil
+		}
+		return subtle.ConstantTimeCompare([]byte(sa.Credentials.SecretKey), []byte(password)) == 1, nil
 	}
 
 	ui, ok := globalIAMSys.GetUser(context.Background(), username)
@@ -269,58 +276,70 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		return nil, errNoSuchUser
 	}
 	if !ok && globalIAMSys.LDAPConfig.Enabled() {
-		targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
-		if err != nil {
-			return nil, err
-		}
-		ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, false, targetGroups...)
-		if len(ldapPolicies) == 0 {
-			return nil, errAuthentication
-		}
-		expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
-		if err != nil {
-			return nil, err
-		}
-		claims := make(map[string]interface{})
-		claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-		claims[ldapUser] = targetUser
-		claims[ldapUserN] = ctx.Sess.LoginUser()
-
-		cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
-		if err != nil {
+		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), ctx.Sess.LoginUser())
+		if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 			return nil, err
 		}
 
-		// Set the parent of the temporary access key, this is useful
-		// in obtaining service accounts by this cred.
-		cred.ParentUser = targetUser
+		var mcreds *credentials.Credentials
+		if errors.Is(err, errNoSuchServiceAccount) {
+			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
+			if err != nil {
+				return nil, err
+			}
+			ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
+			if len(ldapPolicies) == 0 {
+				return nil, errAuthentication
+			}
+			expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
+			if err != nil {
+				return nil, err
+			}
+			claims := make(map[string]interface{})
+			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
+			claims[ldapUser] = targetUser
+			claims[ldapUserN] = ctx.Sess.LoginUser()
 
-		// Set this value to LDAP groups, LDAP user can be part
-		// of large number of groups
-		cred.Groups = targetGroups
+			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+			if err != nil {
+				return nil, err
+			}
 
-		// Set the newly generated credentials, policyName is empty on purpose
-		// LDAP policies are applied automatically using their ldapUser, ldapGroups
-		// mapping.
-		updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
-		if err != nil {
-			return nil, err
+			// Set the parent of the temporary access key, this is useful
+			// in obtaining service accounts by this cred.
+			cred.ParentUser = targetUser
+
+			// Set this value to LDAP groups, LDAP user can be part
+			// of large number of groups
+			cred.Groups = targetGroups
+
+			// Set the newly generated credentials, policyName is empty on purpose
+			// LDAP policies are applied automatically using their ldapUser, ldapGroups
+			// mapping.
+			updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
+			if err != nil {
+				return nil, err
+			}
+
+			// Call hook for site replication.
+			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+				Type: madmin.SRIAMItemSTSAcc,
+				STSCredential: &madmin.SRSTSCredential{
+					AccessKey:    cred.AccessKey,
+					SecretKey:    cred.SecretKey,
+					SessionToken: cred.SessionToken,
+					ParentUser:   cred.ParentUser,
+				},
+				UpdatedAt: updatedAt,
+			}))
+
+			mcreds = credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken)
+		} else {
+			mcreds = credentials.NewStaticV4(sa.Credentials.AccessKey, sa.Credentials.SecretKey, "")
 		}
-
-		// Call hook for site replication.
-		logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
-			Type: madmin.SRIAMItemSTSAcc,
-			STSCredential: &madmin.SRSTSCredential{
-				AccessKey:    cred.AccessKey,
-				SecretKey:    cred.SecretKey,
-				SessionToken: cred.SessionToken,
-				ParentUser:   cred.ParentUser,
-			},
-			UpdatedAt: updatedAt,
-		}))
 
 		return minio.New(driver.endpoint, &minio.Options{
-			Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
+			Creds:     mcreds,
 			Secure:    globalIsTLS,
 			Transport: globalRemoteFTPClientTransport,
 		})

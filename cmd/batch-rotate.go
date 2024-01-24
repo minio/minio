@@ -34,9 +34,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
-	"github.com/minio/pkg/wildcard"
-	"github.com/minio/pkg/workers"
+	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v2/workers"
 )
 
 // keyrotate:
@@ -71,56 +70,6 @@ import (
 //     delay: "500ms" # least amount of delay between each retry
 
 //go:generate msgp -file $GOFILE -unexported
-
-// BatchKeyRotateKV is a datatype that holds key and values for filtering of objects
-// used by metadata filter as well as tags based filtering.
-type BatchKeyRotateKV struct {
-	Key   string `yaml:"key" json:"key"`
-	Value string `yaml:"value" json:"value"`
-}
-
-// Validate returns an error if key is empty
-func (kv BatchKeyRotateKV) Validate() error {
-	if kv.Key == "" {
-		return errInvalidArgument
-	}
-	return nil
-}
-
-// Empty indicates if kv is not set
-func (kv BatchKeyRotateKV) Empty() bool {
-	return kv.Key == "" && kv.Value == ""
-}
-
-// Match matches input kv with kv, value will be wildcard matched depending on the user input
-func (kv BatchKeyRotateKV) Match(ikv BatchKeyRotateKV) bool {
-	if kv.Empty() {
-		return true
-	}
-	if strings.EqualFold(kv.Key, ikv.Key) {
-		return wildcard.Match(kv.Value, ikv.Value)
-	}
-	return false
-}
-
-// BatchKeyRotateRetry datatype represents total retry attempts and delay between each retries.
-type BatchKeyRotateRetry struct {
-	Attempts int           `yaml:"attempts" json:"attempts"` // number of retry attempts
-	Delay    time.Duration `yaml:"delay" json:"delay"`       // delay between each retries
-}
-
-// Validate validates input replicate retries.
-func (r BatchKeyRotateRetry) Validate() error {
-	if r.Attempts < 0 {
-		return errInvalidArgument
-	}
-
-	if r.Delay < 0 {
-		return errInvalidArgument
-	}
-
-	return nil
-}
 
 // BatchKeyRotationType defines key rotation type
 type BatchKeyRotationType string
@@ -174,13 +123,13 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 
 // BatchKeyRotateFilter holds all the filters currently supported for batch replication
 type BatchKeyRotateFilter struct {
-	NewerThan     time.Duration      `yaml:"newerThan,omitempty" json:"newerThan"`
-	OlderThan     time.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
-	CreatedAfter  time.Time          `yaml:"createdAfter,omitempty" json:"createdAfter"`
-	CreatedBefore time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
-	Tags          []BatchKeyRotateKV `yaml:"tags,omitempty" json:"tags"`
-	Metadata      []BatchKeyRotateKV `yaml:"metadata,omitempty" json:"metadata"`
-	KMSKeyID      string             `yaml:"kmskeyid" json:"kmskey"`
+	NewerThan     time.Duration `yaml:"newerThan,omitempty" json:"newerThan"`
+	OlderThan     time.Duration `yaml:"olderThan,omitempty" json:"olderThan"`
+	CreatedAfter  time.Time     `yaml:"createdAfter,omitempty" json:"createdAfter"`
+	CreatedBefore time.Time     `yaml:"createdBefore,omitempty" json:"createdBefore"`
+	Tags          []BatchJobKV  `yaml:"tags,omitempty" json:"tags"`
+	Metadata      []BatchJobKV  `yaml:"metadata,omitempty" json:"metadata"`
+	KMSKeyID      string        `yaml:"kmskeyid" json:"kmskey"`
 }
 
 // BatchKeyRotateNotification success or failure notification endpoint for each job attempts
@@ -194,9 +143,9 @@ type BatchKeyRotateNotification struct {
 // - notify
 // - retry
 type BatchJobKeyRotateFlags struct {
-	Filter BatchKeyRotateFilter       `yaml:"filter" json:"filter"`
-	Notify BatchKeyRotateNotification `yaml:"notify" json:"notify"`
-	Retry  BatchKeyRotateRetry        `yaml:"retry" json:"retry"`
+	Filter BatchKeyRotateFilter `yaml:"filter" json:"filter"`
+	Notify BatchJobNotification `yaml:"notify" json:"notify"`
+	Retry  BatchJobRetry        `yaml:"retry" json:"retry"`
 }
 
 // BatchJobKeyRotateV1 v1 of batch key rotation job
@@ -205,7 +154,6 @@ type BatchJobKeyRotateV1 struct {
 	Flags      BatchJobKeyRotateFlags      `yaml:"flags" json:"flags"`
 	Bucket     string                      `yaml:"bucket" json:"bucket"`
 	Prefix     string                      `yaml:"prefix" json:"prefix"`
-	Endpoint   string                      `yaml:"endpoint" json:"endpoint"`
 	Encryption BatchJobKeyRotateEncryption `yaml:"encryption" json:"encryption"`
 }
 
@@ -312,6 +260,9 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	if err := ri.load(ctx, api, job); err != nil {
 		return err
 	}
+	if ri.Complete {
+		return nil
+	}
 
 	globalBatchJobsMetrics.save(job.ID, ri)
 	lastObject := ri.Object
@@ -358,7 +309,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 			for _, kv := range r.Flags.Filter.Tags {
 				for t, v := range tagMap {
-					if kv.Match(BatchKeyRotateKV{Key: t, Value: v}) {
+					if kv.Match(BatchJobKV{Key: t, Value: v}) {
 						return true
 					}
 				}
@@ -375,7 +326,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 						continue
 					}
 					// We only need to match x-amz-meta or standardHeaders
-					if kv.Match(BatchKeyRotateKV{Key: k, Value: v}) {
+					if kv.Match(BatchJobKV{Key: k, Value: v}) {
 						return true
 					}
 				}
@@ -407,9 +358,9 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	ctx, cancel := context.WithCancel(ctx)
 
 	results := make(chan ObjectInfo, 100)
-	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, ObjectOptions{
-		WalkMarker: lastObject,
-		WalkFilter: skip,
+	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
+		Marker: lastObject,
+		Filter: skip,
 	}); err != nil {
 		cancel()
 		// Do not need to retry if we can't list objects on source.
@@ -428,14 +379,14 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			defer wk.Give()
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
 				attempts := attempts
-				stopFn := globalBatchJobsMetrics.trace(batchKeyRotationMetricObject, job.ID, attempts, result)
+				stopFn := globalBatchJobsMetrics.trace(batchJobMetricKeyRotation, job.ID, attempts)
 				success := true
 				if err := r.KeyRotate(ctx, api, result); err != nil {
-					stopFn(err)
+					stopFn(result, err)
 					logger.LogIf(ctx, err)
 					success = false
 				} else {
-					stopFn(nil)
+					stopFn(result, nil)
 				}
 				ri.trackCurrentBucketObject(r.Bucket, result, success)
 				ri.RetryAttempts = attempts
@@ -448,6 +399,10 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				if delay > 0 {
 					time.Sleep(delay + time.Duration(rnd.Float64()*float64(delay)))
 				}
+			}
+
+			if wait := globalBatchConfig.KeyRotationWait(); wait > 0 {
+				time.Sleep(wait)
 			}
 		}()
 	}

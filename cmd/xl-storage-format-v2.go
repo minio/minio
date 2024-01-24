@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -38,7 +37,7 @@ import (
 	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/env"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -329,6 +328,18 @@ func (x xlMetaV2VersionHeader) sortsBefore(o xlMetaV2VersionHeader) bool {
 	return false
 }
 
+func (j xlMetaV2Version) getDataDir() string {
+	if j.Valid() {
+		switch j.Type {
+		case LegacyType:
+			return j.ObjectV1.DataDir
+		case ObjectType:
+			return uuid.UUID(j.ObjectV2.DataDir).String()
+		}
+	}
+	return ""
+}
+
 // Valid xl meta xlMetaV2Version is valid
 func (j xlMetaV2Version) Valid() bool {
 	if !j.Type.valid() {
@@ -433,13 +444,13 @@ func (j xlMetaV2Version) getVersionID() [16]byte {
 }
 
 // ToFileInfo returns FileInfo of the underlying type.
-func (j *xlMetaV2Version) ToFileInfo(volume, path string) (fi FileInfo, err error) {
+func (j *xlMetaV2Version) ToFileInfo(volume, path string, allParts bool) (fi FileInfo, err error) {
 	if j == nil {
 		return fi, errFileNotFound
 	}
 	switch j.Type {
 	case ObjectType:
-		fi, err = j.ObjectV2.ToFileInfo(volume, path)
+		fi, err = j.ObjectV2.ToFileInfo(volume, path, allParts)
 	case DeleteType:
 		fi, err = j.DeleteMarker.ToFileInfo(volume, path)
 	case LegacyType:
@@ -525,6 +536,10 @@ func (j xlMetaV2Object) InlineData() bool {
 	return ok
 }
 
+func (j *xlMetaV2Object) ResetInlineData() {
+	delete(j.MetaSys, ReservedMetadataPrefixLower+"inline-data")
+}
+
 const (
 	metaTierStatus    = ReservedMetadataPrefixLower + TransitionStatus
 	metaTierObjName   = ReservedMetadataPrefixLower + TransitionedObjectName
@@ -586,7 +601,7 @@ func (j *xlMetaV2Object) Signature() [4]byte {
 	return tmp
 }
 
-func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
+func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo, error) {
 	versionID := ""
 	var uv uuid.UUID
 	// check if the version is not "null"
@@ -600,29 +615,24 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string) (FileInfo, error) {
 		ModTime:   time.Unix(0, j.ModTime).UTC(),
 		VersionID: versionID,
 	}
-	fi.Parts = make([]ObjectPartInfo, len(j.PartNumbers))
-	for i := range fi.Parts {
-		fi.Parts[i].Number = j.PartNumbers[i]
-		fi.Parts[i].Size = j.PartSizes[i]
-		if len(j.PartETags) == len(fi.Parts) {
-			fi.Parts[i].ETag = j.PartETags[i]
-		}
-		fi.Parts[i].ActualSize = j.PartActualSizes[i]
-		if len(j.PartIndices) == len(fi.Parts) {
-			fi.Parts[i].Index = j.PartIndices[i]
-		}
-	}
-	fi.Erasure.Checksums = make([]ChecksumInfo, len(j.PartSizes))
-	for i := range fi.Parts {
-		fi.Erasure.Checksums[i].PartNumber = fi.Parts[i].Number
-		switch j.BitrotChecksumAlgo {
-		case HighwayHash:
-			fi.Erasure.Checksums[i].Algorithm = HighwayHash256S
-			fi.Erasure.Checksums[i].Hash = []byte{}
-		default:
-			return FileInfo{}, fmt.Errorf("unknown BitrotChecksumAlgo: %v", j.BitrotChecksumAlgo)
+	if allParts {
+		fi.Parts = make([]ObjectPartInfo, len(j.PartNumbers))
+		for i := range fi.Parts {
+			fi.Parts[i].Number = j.PartNumbers[i]
+			fi.Parts[i].Size = j.PartSizes[i]
+			if len(j.PartETags) == len(fi.Parts) {
+				fi.Parts[i].ETag = j.PartETags[i]
+			}
+			fi.Parts[i].ActualSize = j.PartActualSizes[i]
+			if len(j.PartIndices) == len(fi.Parts) {
+				fi.Parts[i].Index = j.PartIndices[i]
+			}
 		}
 	}
+
+	// fi.Erasure.Checksums - is left empty since we do not have any
+	// whole checksums for many years now, no need to allocate.
+
 	fi.Metadata = make(map[string]string, len(j.MetaUser)+len(j.MetaSys))
 	for k, v := range j.MetaUser {
 		// https://github.com/google/security-research/security/advisories/GHSA-76wf-9vgp-pj7w
@@ -760,7 +770,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		case 1, 2, 3:
 			sz, tmp, err := msgp.ReadBytesHeader(tmp)
 			if err != nil {
-				return nil, fmt.Errorf("readXLMetaNoData(read_meta): uknown metadata version %w", err)
+				return nil, fmt.Errorf("readXLMetaNoData(read_meta): unknown metadata version %w", err)
 			}
 			want := int64(sz) + int64(len(buf)-len(tmp))
 
@@ -1176,6 +1186,22 @@ func (x *xlMetaV2) AppendTo(dst []byte) ([]byte, error) {
 	return append(dst, x.data...), nil
 }
 
+const emptyUUID = "00000000-0000-0000-0000-000000000000"
+
+func (x *xlMetaV2) findVersionStr(key string) (idx int, ver *xlMetaV2Version, err error) {
+	if key == nullVersionID {
+		key = ""
+	}
+	var u uuid.UUID
+	if key != "" {
+		u, err = uuid.Parse(key)
+		if err != nil {
+			return -1, nil, errFileVersionNotFound
+		}
+	}
+	return x.findVersion(u)
+}
+
 func (x *xlMetaV2) findVersion(key [16]byte) (idx int, ver *xlMetaV2Version, err error) {
 	for i, ver := range x.versions {
 		if key == ver.header.VersionID {
@@ -1384,10 +1410,11 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				err = x.setIdx(i, *ver)
 				return "", err
 			}
-			var err error
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
 			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
 				err = x.addVersion(ventry)
+			} else if fi.Deleted && uv.String() == emptyUUID {
+				return "", x.addVersion(ventry)
 			}
 			return "", err
 		case ObjectType:
@@ -1420,6 +1447,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 			err = x.setIdx(i, *ver)
 		case fi.TransitionStatus == lifecycle.TransitionComplete:
 			ver.ObjectV2.SetTransition(fi)
+			ver.ObjectV2.ResetInlineData()
 			err = x.setIdx(i, *ver)
 		default:
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
@@ -1430,7 +1458,6 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				err = x.addVersion(freeVersion)
 			}
 		}
-		logger.LogIf(context.Background(), err)
 
 		if fi.Deleted {
 			err = x.addVersion(ventry)
@@ -1729,7 +1756,7 @@ func (x *xlMetaV2) AddLegacy(m *xlMetaV1Object) error {
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
 // for consumption across callers.
-func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers bool) (fi FileInfo, err error) {
+func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers, allParts bool) (fi FileInfo, err error) {
 	var uv uuid.UUID
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
@@ -1757,7 +1784,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers bool) 
 			if inclFreeVers && !freeFound {
 				// ignore unmarshalling errors, will return errFileNotFound in that case
 				if _, err := freeVersion.unmarshalV(x.metaV, ver.meta); err == nil {
-					if freeFi, err = freeVersion.ToFileInfo(volume, path); err == nil {
+					if freeFi, err = freeVersion.ToFileInfo(volume, path, allParts); err == nil {
 						freeFi.IsLatest = true // when this is returned, it would be the latest free version remaining.
 						freeFound = true
 					}
@@ -1785,7 +1812,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers bool) 
 		if _, err := version.unmarshalV(x.metaV, ver.meta); err != nil {
 			return fi, err
 		}
-		if fi, err = version.ToFileInfo(volume, path); err != nil {
+		if fi, err = version.ToFileInfo(volume, path, allParts); err != nil {
 			return fi, err
 		}
 		fi.IsLatest = isLatest
@@ -1813,7 +1840,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers bool) 
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
+func (x xlMetaV2) ListVersions(volume, path string, allParts bool) ([]FileInfo, error) {
 	versions := make([]FileInfo, 0, len(x.versions))
 	var err error
 
@@ -1823,7 +1850,7 @@ func (x xlMetaV2) ListVersions(volume, path string) ([]FileInfo, error) {
 		if err != nil {
 			return versions, err
 		}
-		fi, err := dst.ToFileInfo(volume, path)
+		fi, err := dst.ToFileInfo(volume, path, allParts)
 		if err != nil {
 			return versions, err
 		}
@@ -2034,7 +2061,7 @@ type xlMetaBuf []byte
 
 // ToFileInfo converts xlMetaV2 into a common FileInfo datastructure
 // for consumption across callers.
-func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err error) {
+func (x xlMetaBuf) ToFileInfo(volume, path, versionID string, allParts bool) (fi FileInfo, err error) {
 	var uv uuid.UUID
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
@@ -2081,7 +2108,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 		if _, err := version.unmarshalV(metaV, meta); err != nil {
 			return err
 		}
-		if fi, err = version.ToFileInfo(volume, path); err != nil {
+		if fi, err = version.ToFileInfo(volume, path, allParts); err != nil {
 			return err
 		}
 		fi.IsLatest = isLatest
@@ -2105,7 +2132,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string) (fi FileInfo, err 
 // versions returns error for unexpected entries.
 // showPendingDeletes is set to true if ListVersions needs to list objects marked deleted
 // but waiting to be replicated
-func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
+func (x xlMetaBuf) ListVersions(volume, path string, allParts bool) ([]FileInfo, error) {
 	vers, _, metaV, buf, err := decodeXLHeaders(x)
 	if err != nil {
 		return nil, err
@@ -2121,7 +2148,7 @@ func (x xlMetaBuf) ListVersions(volume, path string) ([]FileInfo, error) {
 		if !xl.Valid() {
 			return errFileCorrupt
 		}
-		fi, err := xl.ToFileInfo(volume, path)
+		fi, err := xl.ToFileInfo(volume, path, allParts)
 		if err != nil {
 			return err
 		}

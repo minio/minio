@@ -7,6 +7,902 @@ import (
 )
 
 // DecodeMsg implements msgp.Decodable
+func (z *BaseOptions) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z BaseOptions) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 0
+	err = en.Append(0x80)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z BaseOptions) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 0
+	o = append(o, 0x80)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *BaseOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z BaseOptions) Msgsize() (s int) {
+	s = 1
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *CheckPartsHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "fi":
+			err = z.FI.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *CheckPartsHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
+	// write "id"
+	err = en.Append(0x84, 0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Volume)
+	if err != nil {
+		err = msgp.WrapError(err, "Volume")
+		return
+	}
+	// write "fp"
+	err = en.Append(0xa2, 0x66, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FilePath)
+	if err != nil {
+		err = msgp.WrapError(err, "FilePath")
+		return
+	}
+	// write "fi"
+	err = en.Append(0xa2, 0x66, 0x69)
+	if err != nil {
+		return
+	}
+	err = z.FI.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *CheckPartsHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 4
+	// string "id"
+	o = append(o, 0x84, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.DiskID)
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendString(o, z.Volume)
+	// string "fp"
+	o = append(o, 0xa2, 0x66, 0x70)
+	o = msgp.AppendString(o, z.FilePath)
+	// string "fi"
+	o = append(o, 0xa2, 0x66, 0x69)
+	o, err = z.FI.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *CheckPartsHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "fi":
+			bts, err = z.FI.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *CheckPartsHandlerParams) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 3 + z.FI.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *DeleteFileHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "do":
+			err = z.Opts.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Opts")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *DeleteFileHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
+	// write "id"
+	err = en.Append(0x84, 0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Volume)
+	if err != nil {
+		err = msgp.WrapError(err, "Volume")
+		return
+	}
+	// write "fp"
+	err = en.Append(0xa2, 0x66, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FilePath)
+	if err != nil {
+		err = msgp.WrapError(err, "FilePath")
+		return
+	}
+	// write "do"
+	err = en.Append(0xa2, 0x64, 0x6f)
+	if err != nil {
+		return
+	}
+	err = z.Opts.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Opts")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *DeleteFileHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 4
+	// string "id"
+	o = append(o, 0x84, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.DiskID)
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendString(o, z.Volume)
+	// string "fp"
+	o = append(o, 0xa2, 0x66, 0x70)
+	o = msgp.AppendString(o, z.FilePath)
+	// string "do"
+	o = append(o, 0xa2, 0x64, 0x6f)
+	o, err = z.Opts.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Opts")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *DeleteFileHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "do":
+			bts, err = z.Opts.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Opts")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *DeleteFileHandlerParams) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 3 + z.Opts.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "BaseOptions":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "BaseOptions")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "BaseOptions")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "BaseOptions")
+						return
+					}
+				}
+			}
+		case "r":
+			z.Recursive, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "Recursive")
+				return
+			}
+		case "i":
+			z.Immediate, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "Immediate")
+				return
+			}
+		case "u":
+			z.UndoWrite, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "UndoWrite")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *DeleteOptions) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
+	// write "BaseOptions"
+	err = en.Append(0x84, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	if err != nil {
+		return
+	}
+	// map header, size 0
+	err = en.Append(0x80)
+	if err != nil {
+		return
+	}
+	// write "r"
+	err = en.Append(0xa1, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.Recursive)
+	if err != nil {
+		err = msgp.WrapError(err, "Recursive")
+		return
+	}
+	// write "i"
+	err = en.Append(0xa1, 0x69)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.Immediate)
+	if err != nil {
+		err = msgp.WrapError(err, "Immediate")
+		return
+	}
+	// write "u"
+	err = en.Append(0xa1, 0x75)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.UndoWrite)
+	if err != nil {
+		err = msgp.WrapError(err, "UndoWrite")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *DeleteOptions) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 4
+	// string "BaseOptions"
+	o = append(o, 0x84, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	// map header, size 0
+	o = append(o, 0x80)
+	// string "r"
+	o = append(o, 0xa1, 0x72)
+	o = msgp.AppendBool(o, z.Recursive)
+	// string "i"
+	o = append(o, 0xa1, 0x69)
+	o = msgp.AppendBool(o, z.Immediate)
+	// string "u"
+	o = append(o, 0xa1, 0x75)
+	o = msgp.AppendBool(o, z.UndoWrite)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "BaseOptions":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BaseOptions")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BaseOptions")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "BaseOptions")
+						return
+					}
+				}
+			}
+		case "r":
+			z.Recursive, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Recursive")
+				return
+			}
+		case "i":
+			z.Immediate, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Immediate")
+				return
+			}
+		case "u":
+			z.UndoWrite, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UndoWrite")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *DeleteOptions) Msgsize() (s int) {
+	s = 1 + 12 + 1 + 2 + msgp.BoolSize + 2 + msgp.BoolSize + 2 + msgp.BoolSize
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *DeleteVersionHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "fdm":
+			z.ForceDelMarker, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "ForceDelMarker")
+				return
+			}
+		case "do":
+			err = z.Opts.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Opts")
+				return
+			}
+		case "fi":
+			err = z.FI.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *DeleteVersionHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 6
+	// write "id"
+	err = en.Append(0x86, 0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Volume)
+	if err != nil {
+		err = msgp.WrapError(err, "Volume")
+		return
+	}
+	// write "fp"
+	err = en.Append(0xa2, 0x66, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FilePath)
+	if err != nil {
+		err = msgp.WrapError(err, "FilePath")
+		return
+	}
+	// write "fdm"
+	err = en.Append(0xa3, 0x66, 0x64, 0x6d)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.ForceDelMarker)
+	if err != nil {
+		err = msgp.WrapError(err, "ForceDelMarker")
+		return
+	}
+	// write "do"
+	err = en.Append(0xa2, 0x64, 0x6f)
+	if err != nil {
+		return
+	}
+	err = z.Opts.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Opts")
+		return
+	}
+	// write "fi"
+	err = en.Append(0xa2, 0x66, 0x69)
+	if err != nil {
+		return
+	}
+	err = z.FI.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *DeleteVersionHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 6
+	// string "id"
+	o = append(o, 0x86, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.DiskID)
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendString(o, z.Volume)
+	// string "fp"
+	o = append(o, 0xa2, 0x66, 0x70)
+	o = msgp.AppendString(o, z.FilePath)
+	// string "fdm"
+	o = append(o, 0xa3, 0x66, 0x64, 0x6d)
+	o = msgp.AppendBool(o, z.ForceDelMarker)
+	// string "do"
+	o = append(o, 0xa2, 0x64, 0x6f)
+	o, err = z.Opts.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Opts")
+		return
+	}
+	// string "fi"
+	o = append(o, 0xa2, 0x66, 0x69)
+	o, err = z.FI.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *DeleteVersionHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "fdm":
+			z.ForceDelMarker, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ForceDelMarker")
+				return
+			}
+		case "do":
+			bts, err = z.Opts.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Opts")
+				return
+			}
+		case "fi":
+			bts, err = z.FI.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *DeleteVersionHandlerParams) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 4 + msgp.BoolSize + 3 + z.Opts.Msgsize() + 3 + z.FI.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	var zb0001 uint32
 	zb0001, err = dc.ReadArrayHeader()
@@ -14,8 +910,8 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 17 {
-		err = msgp.ArrayError{Wanted: 17, Got: zb0001}
+	if zb0001 != 18 {
+		err = msgp.ArrayError{Wanted: 18, Got: zb0001}
 		return
 	}
 	z.Total, err = dc.ReadUint64()
@@ -51,6 +947,11 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	z.Minor, err = dc.ReadUint32()
 	if err != nil {
 		err = msgp.WrapError(err, "Minor")
+		return
+	}
+	z.NRRequests, err = dc.ReadUint64()
+	if err != nil {
+		err = msgp.WrapError(err, "NRRequests")
 		return
 	}
 	z.FSType, err = dc.ReadString()
@@ -108,8 +1009,8 @@ func (z *DiskInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 17
-	err = en.Append(0xdc, 0x0, 0x11)
+	// array header, size 18
+	err = en.Append(0xdc, 0x0, 0x12)
 	if err != nil {
 		return
 	}
@@ -146,6 +1047,11 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteUint32(z.Minor)
 	if err != nil {
 		err = msgp.WrapError(err, "Minor")
+		return
+	}
+	err = en.WriteUint64(z.NRRequests)
+	if err != nil {
+		err = msgp.WrapError(err, "NRRequests")
 		return
 	}
 	err = en.WriteString(z.FSType)
@@ -204,8 +1110,8 @@ func (z *DiskInfo) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *DiskInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 17
-	o = append(o, 0xdc, 0x0, 0x11)
+	// array header, size 18
+	o = append(o, 0xdc, 0x0, 0x12)
 	o = msgp.AppendUint64(o, z.Total)
 	o = msgp.AppendUint64(o, z.Free)
 	o = msgp.AppendUint64(o, z.Used)
@@ -213,6 +1119,7 @@ func (z *DiskInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendUint64(o, z.FreeInodes)
 	o = msgp.AppendUint32(o, z.Major)
 	o = msgp.AppendUint32(o, z.Minor)
+	o = msgp.AppendUint64(o, z.NRRequests)
 	o = msgp.AppendString(o, z.FSType)
 	o = msgp.AppendBool(o, z.RootDisk)
 	o = msgp.AppendBool(o, z.Healing)
@@ -238,8 +1145,8 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 17 {
-		err = msgp.ArrayError{Wanted: 17, Got: zb0001}
+	if zb0001 != 18 {
+		err = msgp.ArrayError{Wanted: 18, Got: zb0001}
 		return
 	}
 	z.Total, bts, err = msgp.ReadUint64Bytes(bts)
@@ -275,6 +1182,11 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	z.Minor, bts, err = msgp.ReadUint32Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Minor")
+		return
+	}
+	z.NRRequests, bts, err = msgp.ReadUint64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "NRRequests")
 		return
 	}
 	z.FSType, bts, err = msgp.ReadStringBytes(bts)
@@ -333,7 +1245,7 @@ func (z *DiskInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *DiskInfo) Msgsize() (s int) {
-	s = 3 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint32Size + msgp.Uint32Size + msgp.StringPrefixSize + len(z.FSType) + msgp.BoolSize + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.Endpoint) + msgp.StringPrefixSize + len(z.MountPath) + msgp.StringPrefixSize + len(z.ID) + msgp.BoolSize + z.Metrics.Msgsize() + msgp.StringPrefixSize + len(z.Error)
+	s = 3 + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint64Size + msgp.Uint32Size + msgp.Uint32Size + msgp.Uint64Size + msgp.StringPrefixSize + len(z.FSType) + msgp.BoolSize + msgp.BoolSize + msgp.BoolSize + msgp.StringPrefixSize + len(z.Endpoint) + msgp.StringPrefixSize + len(z.MountPath) + msgp.StringPrefixSize + len(z.ID) + msgp.BoolSize + z.Metrics.Msgsize() + msgp.StringPrefixSize + len(z.Error)
 	return
 }
 
@@ -415,6 +1327,18 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.APICalls[za0003] = za0004
 			}
+		case "TotalTokens":
+			z.TotalTokens, err = dc.ReadUint32()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalTokens")
+				return
+			}
+		case "TotalWaiting":
+			z.TotalWaiting, err = dc.ReadUint32()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalWaiting")
+				return
+			}
 		case "TotalErrorsAvailability":
 			z.TotalErrorsAvailability, err = dc.ReadUint64()
 			if err != nil {
@@ -425,6 +1349,18 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 			z.TotalErrorsTimeout, err = dc.ReadUint64()
 			if err != nil {
 				err = msgp.WrapError(err, "TotalErrorsTimeout")
+				return
+			}
+		case "TotalWrites":
+			z.TotalWrites, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalWrites")
+				return
+			}
+		case "TotalDeletes":
+			z.TotalDeletes, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "TotalDeletes")
 				return
 			}
 		default:
@@ -440,9 +1376,9 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
+	// map header, size 8
 	// write "LastMinute"
-	err = en.Append(0x84, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
+	err = en.Append(0x88, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
 	if err != nil {
 		return
 	}
@@ -485,6 +1421,26 @@ func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "TotalTokens"
+	err = en.Append(0xab, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint32(z.TotalTokens)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalTokens")
+		return
+	}
+	// write "TotalWaiting"
+	err = en.Append(0xac, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x57, 0x61, 0x69, 0x74, 0x69, 0x6e, 0x67)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint32(z.TotalWaiting)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalWaiting")
+		return
+	}
 	// write "TotalErrorsAvailability"
 	err = en.Append(0xb7, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x73, 0x41, 0x76, 0x61, 0x69, 0x6c, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79)
 	if err != nil {
@@ -505,15 +1461,35 @@ func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "TotalErrorsTimeout")
 		return
 	}
+	// write "TotalWrites"
+	err = en.Append(0xab, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x57, 0x72, 0x69, 0x74, 0x65, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.TotalWrites)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalWrites")
+		return
+	}
+	// write "TotalDeletes"
+	err = en.Append(0xac, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.TotalDeletes)
+	if err != nil {
+		err = msgp.WrapError(err, "TotalDeletes")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *DiskMetrics) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
+	// map header, size 8
 	// string "LastMinute"
-	o = append(o, 0x84, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
+	o = append(o, 0x88, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
 	o = msgp.AppendMapHeader(o, uint32(len(z.LastMinute)))
 	for za0001, za0002 := range z.LastMinute {
 		o = msgp.AppendString(o, za0001)
@@ -530,12 +1506,24 @@ func (z *DiskMetrics) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendString(o, za0003)
 		o = msgp.AppendUint64(o, za0004)
 	}
+	// string "TotalTokens"
+	o = append(o, 0xab, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x73)
+	o = msgp.AppendUint32(o, z.TotalTokens)
+	// string "TotalWaiting"
+	o = append(o, 0xac, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x57, 0x61, 0x69, 0x74, 0x69, 0x6e, 0x67)
+	o = msgp.AppendUint32(o, z.TotalWaiting)
 	// string "TotalErrorsAvailability"
 	o = append(o, 0xb7, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x73, 0x41, 0x76, 0x61, 0x69, 0x6c, 0x61, 0x62, 0x69, 0x6c, 0x69, 0x74, 0x79)
 	o = msgp.AppendUint64(o, z.TotalErrorsAvailability)
 	// string "TotalErrorsTimeout"
 	o = append(o, 0xb2, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x45, 0x72, 0x72, 0x6f, 0x72, 0x73, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74)
 	o = msgp.AppendUint64(o, z.TotalErrorsTimeout)
+	// string "TotalWrites"
+	o = append(o, 0xab, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x57, 0x72, 0x69, 0x74, 0x65, 0x73)
+	o = msgp.AppendUint64(o, z.TotalWrites)
+	// string "TotalDeletes"
+	o = append(o, 0xac, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x73)
+	o = msgp.AppendUint64(o, z.TotalDeletes)
 	return
 }
 
@@ -617,6 +1605,18 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.APICalls[za0003] = za0004
 			}
+		case "TotalTokens":
+			z.TotalTokens, bts, err = msgp.ReadUint32Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TotalTokens")
+				return
+			}
+		case "TotalWaiting":
+			z.TotalWaiting, bts, err = msgp.ReadUint32Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TotalWaiting")
+				return
+			}
 		case "TotalErrorsAvailability":
 			z.TotalErrorsAvailability, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
@@ -627,6 +1627,18 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.TotalErrorsTimeout, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TotalErrorsTimeout")
+				return
+			}
+		case "TotalWrites":
+			z.TotalWrites, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TotalWrites")
+				return
+			}
+		case "TotalDeletes":
+			z.TotalDeletes, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TotalDeletes")
 				return
 			}
 		default:
@@ -657,7 +1669,7 @@ func (z *DiskMetrics) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0003) + msgp.Uint64Size
 		}
 	}
-	s += 24 + msgp.Uint64Size + 19 + msgp.Uint64Size
+	s += 12 + msgp.Uint32Size + 13 + msgp.Uint32Size + 24 + msgp.Uint64Size + 19 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
 	return
 }
 
@@ -815,10 +1827,19 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "ReplicationState")
 		return
 	}
-	z.Data, err = dc.ReadBytes(z.Data)
-	if err != nil {
-		err = msgp.WrapError(err, "Data")
-		return
+	if dc.IsNil() {
+		err = dc.ReadNil()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		z.Data = nil
+	} else {
+		z.Data, err = dc.ReadBytes(z.Data)
+		if err != nil {
+			err = msgp.WrapError(err, "Data")
+			return
+		}
 	}
 	z.NumVersions, err = dc.ReadInt()
 	if err != nil {
@@ -845,10 +1866,19 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
-	z.Checksum, err = dc.ReadBytes(z.Checksum)
-	if err != nil {
-		err = msgp.WrapError(err, "Checksum")
-		return
+	if dc.IsNil() {
+		err = dc.ReadNil()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		z.Checksum = nil
+	} else {
+		z.Checksum, err = dc.ReadBytes(z.Checksum)
+		if err != nil {
+			err = msgp.WrapError(err, "Checksum")
+			return
+		}
 	}
 	z.Versioned, err = dc.ReadBool()
 	if err != nil {
@@ -989,10 +2019,17 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ReplicationState")
 		return
 	}
-	err = en.WriteBytes(z.Data)
-	if err != nil {
-		err = msgp.WrapError(err, "Data")
-		return
+	if z.Data == nil { // allownil: if nil
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = en.WriteBytes(z.Data)
+		if err != nil {
+			err = msgp.WrapError(err, "Data")
+			return
+		}
 	}
 	err = en.WriteInt(z.NumVersions)
 	if err != nil {
@@ -1019,10 +2056,17 @@ func (z *FileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
-	err = en.WriteBytes(z.Checksum)
-	if err != nil {
-		err = msgp.WrapError(err, "Checksum")
-		return
+	if z.Checksum == nil { // allownil: if nil
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = en.WriteBytes(z.Checksum)
+		if err != nil {
+			err = msgp.WrapError(err, "Checksum")
+			return
+		}
 	}
 	err = en.WriteBool(z.Versioned)
 	if err != nil {
@@ -1077,13 +2121,21 @@ func (z *FileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "ReplicationState")
 		return
 	}
-	o = msgp.AppendBytes(o, z.Data)
+	if z.Data == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendBytes(o, z.Data)
+	}
 	o = msgp.AppendInt(o, z.NumVersions)
 	o = msgp.AppendTime(o, z.SuccessorModTime)
 	o = msgp.AppendBool(o, z.Fresh)
 	o = msgp.AppendInt(o, z.Idx)
 	o = msgp.AppendTime(o, z.DiskMTime)
-	o = msgp.AppendBytes(o, z.Checksum)
+	if z.Checksum == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendBytes(o, z.Checksum)
+	}
 	o = msgp.AppendBool(o, z.Versioned)
 	return
 }
@@ -1242,10 +2294,15 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "ReplicationState")
 		return
 	}
-	z.Data, bts, err = msgp.ReadBytesBytes(bts, z.Data)
-	if err != nil {
-		err = msgp.WrapError(err, "Data")
-		return
+	if msgp.IsNil(bts) {
+		bts = bts[1:]
+		z.Data = nil
+	} else {
+		z.Data, bts, err = msgp.ReadBytesBytes(bts, z.Data)
+		if err != nil {
+			err = msgp.WrapError(err, "Data")
+			return
+		}
 	}
 	z.NumVersions, bts, err = msgp.ReadIntBytes(bts)
 	if err != nil {
@@ -1272,10 +2329,15 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "DiskMTime")
 		return
 	}
-	z.Checksum, bts, err = msgp.ReadBytesBytes(bts, z.Checksum)
-	if err != nil {
-		err = msgp.WrapError(err, "Checksum")
-		return
+	if msgp.IsNil(bts) {
+		bts = bts[1:]
+		z.Checksum = nil
+	} else {
+		z.Checksum, bts, err = msgp.ReadBytesBytes(bts, z.Checksum)
+		if err != nil {
+			err = msgp.WrapError(err, "Checksum")
+			return
+		}
 	}
 	z.Versioned, bts, err = msgp.ReadBoolBytes(bts)
 	if err != nil {
@@ -1698,6 +2760,268 @@ func (z *FilesInfo) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *MetadataHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "uo":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "UpdateOpts")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "UpdateOpts")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "np":
+					z.UpdateOpts.NoPersistence, err = dc.ReadBool()
+					if err != nil {
+						err = msgp.WrapError(err, "UpdateOpts", "NoPersistence")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "UpdateOpts")
+						return
+					}
+				}
+			}
+		case "fi":
+			err = z.FI.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *MetadataHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 5
+	// write "id"
+	err = en.Append(0x85, 0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Volume)
+	if err != nil {
+		err = msgp.WrapError(err, "Volume")
+		return
+	}
+	// write "fp"
+	err = en.Append(0xa2, 0x66, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FilePath)
+	if err != nil {
+		err = msgp.WrapError(err, "FilePath")
+		return
+	}
+	// write "uo"
+	err = en.Append(0xa2, 0x75, 0x6f)
+	if err != nil {
+		return
+	}
+	// map header, size 1
+	// write "np"
+	err = en.Append(0x81, 0xa2, 0x6e, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.UpdateOpts.NoPersistence)
+	if err != nil {
+		err = msgp.WrapError(err, "UpdateOpts", "NoPersistence")
+		return
+	}
+	// write "fi"
+	err = en.Append(0xa2, 0x66, 0x69)
+	if err != nil {
+		return
+	}
+	err = z.FI.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MetadataHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 5
+	// string "id"
+	o = append(o, 0x85, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.DiskID)
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendString(o, z.Volume)
+	// string "fp"
+	o = append(o, 0xa2, 0x66, 0x70)
+	o = msgp.AppendString(o, z.FilePath)
+	// string "uo"
+	o = append(o, 0xa2, 0x75, 0x6f)
+	// map header, size 1
+	// string "np"
+	o = append(o, 0x81, 0xa2, 0x6e, 0x70)
+	o = msgp.AppendBool(o, z.UpdateOpts.NoPersistence)
+	// string "fi"
+	o = append(o, 0xa2, 0x66, 0x69)
+	o, err = z.FI.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetadataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "uo":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UpdateOpts")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "UpdateOpts")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "np":
+					z.UpdateOpts.NoPersistence, bts, err = msgp.ReadBoolBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "UpdateOpts", "NoPersistence")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "UpdateOpts")
+						return
+					}
+				}
+			}
+		case "fi":
+			bts, err = z.FI.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MetadataHandlerParams) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 3 + 1 + 3 + msgp.BoolSize + 3 + z.FI.Msgsize()
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *RawFileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field
@@ -1716,10 +3040,19 @@ func (z *RawFileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "b":
-			z.Buf, err = dc.ReadBytes(z.Buf)
-			if err != nil {
-				err = msgp.WrapError(err, "Buf")
-				return
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "Buf")
+					return
+				}
+				z.Buf = nil
+			} else {
+				z.Buf, err = dc.ReadBytes(z.Buf)
+				if err != nil {
+					err = msgp.WrapError(err, "Buf")
+					return
+				}
 			}
 		case "dmt":
 			z.DiskMTime, err = dc.ReadTime()
@@ -1746,10 +3079,17 @@ func (z *RawFileInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteBytes(z.Buf)
-	if err != nil {
-		err = msgp.WrapError(err, "Buf")
-		return
+	if z.Buf == nil { // allownil: if nil
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = en.WriteBytes(z.Buf)
+		if err != nil {
+			err = msgp.WrapError(err, "Buf")
+			return
+		}
 	}
 	// write "dmt"
 	err = en.Append(0xa3, 0x64, 0x6d, 0x74)
@@ -1770,7 +3110,11 @@ func (z *RawFileInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "b"
 	o = append(o, 0x82, 0xa1, 0x62)
-	o = msgp.AppendBytes(o, z.Buf)
+	if z.Buf == nil { // allownil: if nil
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendBytes(o, z.Buf)
+	}
 	// string "dmt"
 	o = append(o, 0xa3, 0x64, 0x6d, 0x74)
 	o = msgp.AppendTime(o, z.DiskMTime)
@@ -1796,10 +3140,15 @@ func (z *RawFileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "b":
-			z.Buf, bts, err = msgp.ReadBytesBytes(bts, z.Buf)
-			if err != nil {
-				err = msgp.WrapError(err, "Buf")
-				return
+			if msgp.IsNil(bts) {
+				bts = bts[1:]
+				z.Buf = nil
+			} else {
+				z.Buf, bts, err = msgp.ReadBytesBytes(bts, z.Buf)
+				if err != nil {
+					err = msgp.WrapError(err, "Buf")
+					return
+				}
 			}
 		case "dmt":
 			z.DiskMTime, bts, err = msgp.ReadTimeBytes(bts)
@@ -2368,6 +3717,697 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ReadMultipleResp) Msgsize() (s int) {
 	s = 1 + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 5 + msgp.StringPrefixSize + len(z.File) + 7 + msgp.BoolSize + 6 + msgp.StringPrefixSize + len(z.Error) + 5 + msgp.BytesPrefixSize + len(z.Data) + 8 + msgp.TimeSize
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *RenameDataHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "sv":
+			z.SrcVolume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "SrcVolume")
+				return
+			}
+		case "sp":
+			z.SrcPath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "SrcPath")
+				return
+			}
+		case "dv":
+			z.DstVolume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DstVolume")
+				return
+			}
+		case "dp":
+			z.DstPath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DstPath")
+				return
+			}
+		case "fi":
+			err = z.FI.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		case "ro":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "Opts")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Opts")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "BaseOptions":
+					var zb0003 uint32
+					zb0003, err = dc.ReadMapHeader()
+					if err != nil {
+						err = msgp.WrapError(err, "Opts", "BaseOptions")
+						return
+					}
+					for zb0003 > 0 {
+						zb0003--
+						field, err = dc.ReadMapKeyPtr()
+						if err != nil {
+							err = msgp.WrapError(err, "Opts", "BaseOptions")
+							return
+						}
+						switch msgp.UnsafeString(field) {
+						default:
+							err = dc.Skip()
+							if err != nil {
+								err = msgp.WrapError(err, "Opts", "BaseOptions")
+								return
+							}
+						}
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Opts")
+						return
+					}
+				}
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *RenameDataHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 7
+	// write "id"
+	err = en.Append(0x87, 0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
+	// write "sv"
+	err = en.Append(0xa2, 0x73, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.SrcVolume)
+	if err != nil {
+		err = msgp.WrapError(err, "SrcVolume")
+		return
+	}
+	// write "sp"
+	err = en.Append(0xa2, 0x73, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.SrcPath)
+	if err != nil {
+		err = msgp.WrapError(err, "SrcPath")
+		return
+	}
+	// write "dv"
+	err = en.Append(0xa2, 0x64, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DstVolume)
+	if err != nil {
+		err = msgp.WrapError(err, "DstVolume")
+		return
+	}
+	// write "dp"
+	err = en.Append(0xa2, 0x64, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DstPath)
+	if err != nil {
+		err = msgp.WrapError(err, "DstPath")
+		return
+	}
+	// write "fi"
+	err = en.Append(0xa2, 0x66, 0x69)
+	if err != nil {
+		return
+	}
+	err = z.FI.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	// write "ro"
+	err = en.Append(0xa2, 0x72, 0x6f)
+	if err != nil {
+		return
+	}
+	// map header, size 1
+	// write "BaseOptions"
+	err = en.Append(0x81, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	if err != nil {
+		return
+	}
+	// map header, size 0
+	err = en.Append(0x80)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *RenameDataHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 7
+	// string "id"
+	o = append(o, 0x87, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.DiskID)
+	// string "sv"
+	o = append(o, 0xa2, 0x73, 0x76)
+	o = msgp.AppendString(o, z.SrcVolume)
+	// string "sp"
+	o = append(o, 0xa2, 0x73, 0x70)
+	o = msgp.AppendString(o, z.SrcPath)
+	// string "dv"
+	o = append(o, 0xa2, 0x64, 0x76)
+	o = msgp.AppendString(o, z.DstVolume)
+	// string "dp"
+	o = append(o, 0xa2, 0x64, 0x70)
+	o = msgp.AppendString(o, z.DstPath)
+	// string "fi"
+	o = append(o, 0xa2, 0x66, 0x69)
+	o, err = z.FI.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "FI")
+		return
+	}
+	// string "ro"
+	o = append(o, 0xa2, 0x72, 0x6f)
+	// map header, size 1
+	// string "BaseOptions"
+	o = append(o, 0x81, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	// map header, size 0
+	o = append(o, 0x80)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *RenameDataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "sv":
+			z.SrcVolume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "SrcVolume")
+				return
+			}
+		case "sp":
+			z.SrcPath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "SrcPath")
+				return
+			}
+		case "dv":
+			z.DstVolume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DstVolume")
+				return
+			}
+		case "dp":
+			z.DstPath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DstPath")
+				return
+			}
+		case "fi":
+			bts, err = z.FI.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FI")
+				return
+			}
+		case "ro":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Opts")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Opts")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "BaseOptions":
+					var zb0003 uint32
+					zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Opts", "BaseOptions")
+						return
+					}
+					for zb0003 > 0 {
+						zb0003--
+						field, bts, err = msgp.ReadMapKeyZC(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Opts", "BaseOptions")
+							return
+						}
+						switch msgp.UnsafeString(field) {
+						default:
+							bts, err = msgp.Skip(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "Opts", "BaseOptions")
+								return
+							}
+						}
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Opts")
+						return
+					}
+				}
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *RenameDataHandlerParams) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 3 + msgp.StringPrefixSize + len(z.SrcVolume) + 3 + msgp.StringPrefixSize + len(z.SrcPath) + 3 + msgp.StringPrefixSize + len(z.DstVolume) + 3 + msgp.StringPrefixSize + len(z.DstPath) + 3 + z.FI.Msgsize() + 3 + 1 + 12 + 1
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *RenameDataResp) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "sig":
+			z.Signature, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "Signature")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z RenameDataResp) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "sig"
+	err = en.Append(0x81, 0xa3, 0x73, 0x69, 0x67)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.Signature)
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z RenameDataResp) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "sig"
+	o = append(o, 0x81, 0xa3, 0x73, 0x69, 0x67)
+	o = msgp.AppendUint64(o, z.Signature)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *RenameDataResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "sig":
+			z.Signature, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Signature")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z RenameDataResp) Msgsize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *RenameOptions) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "BaseOptions":
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "BaseOptions")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "BaseOptions")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "BaseOptions")
+						return
+					}
+				}
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *RenameOptions) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "BaseOptions"
+	err = en.Append(0x81, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	if err != nil {
+		return
+	}
+	// map header, size 0
+	err = en.Append(0x80)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *RenameOptions) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "BaseOptions"
+	o = append(o, 0x81, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+	// map header, size 0
+	o = append(o, 0x80)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *RenameOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "BaseOptions":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "BaseOptions")
+				return
+			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BaseOptions")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "BaseOptions")
+						return
+					}
+				}
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *RenameOptions) Msgsize() (s int) {
+	s = 1 + 12 + 1
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *UpdateMetadataOpts) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "np":
+			z.NoPersistence, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "NoPersistence")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z UpdateMetadataOpts) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "np"
+	err = en.Append(0x81, 0xa2, 0x6e, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.NoPersistence)
+	if err != nil {
+		err = msgp.WrapError(err, "NoPersistence")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z UpdateMetadataOpts) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "np"
+	o = append(o, 0x81, 0xa2, 0x6e, 0x70)
+	o = msgp.AppendBool(o, z.NoPersistence)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *UpdateMetadataOpts) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "np":
+			z.NoPersistence, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "NoPersistence")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z UpdateMetadataOpts) Msgsize() (s int) {
+	s = 1 + 3 + msgp.BoolSize
 	return
 }
 

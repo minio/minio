@@ -42,7 +42,6 @@ var toAPIErrorTests = []struct {
 	{err: InvalidPart{}, errCode: ErrInvalidPart},
 	{err: InsufficientReadQuorum{}, errCode: ErrSlowDownRead},
 	{err: InsufficientWriteQuorum{}, errCode: ErrSlowDownWrite},
-	{err: InvalidMarkerPrefixCombination{}, errCode: ErrNotImplemented},
 	{err: InvalidUploadIDKeyCombination{}, errCode: ErrNotImplemented},
 	{err: MalformedUploadID{}, errCode: ErrNoSuchUpload},
 	{err: PartTooSmall{}, errCode: ErrEntityTooSmall},

@@ -41,7 +41,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/console"
+	"github.com/minio/pkg/v2/console"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -54,11 +54,10 @@ const (
 	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
-	healDeleteDangling    = true
-	healFolderIncludeProb = 32  // Include a clean folder one in n cycles.
-	healObjectSelectProb  = 512 // Overall probability of a file being scanned; one in n.
+	healDeleteDangling   = true
+	healObjectSelectProb = 1024 // Overall probability of a file being scanned; one in n.
 
-	dataScannerExcessiveVersionsThreshold = 1000  // Issue a warning when a single object has more versions than this
+	dataScannerExcessiveVersionsThreshold = 100   // Issue a warning when a single object has more versions than this
 	dataScannerExcessiveFoldersThreshold  = 50000 // Issue a warning when a folder has more subfolders than this in a *set*
 )
 
@@ -66,8 +65,9 @@ var (
 	globalHealConfig heal.Config
 
 	// Sleeper values are updated when config is loaded.
-	scannerSleeper = newDynamicSleeper(10, 10*time.Second, true)
-	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
+	scannerSleeper  = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
+	scannerCycle    = uatomic.NewDuration(dataScannerStartDelay)
+	scannerIdleMode = uatomic.NewInt32(0) // default is throttled when idle
 )
 
 // initDataScanner will start the scanner in the background.
@@ -79,7 +79,7 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			runDataScanner(ctx, objAPI)
 			duration := time.Duration(r.Float64() * float64(scannerCycle.Load()))
 			if duration < time.Second {
-				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				// Make sure to sleep at least a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
@@ -122,13 +122,13 @@ func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundH
 	buf, err := readConfig(ctx, objAPI, backgroundHealInfoPath)
 	if err != nil {
 		if !errors.Is(err, errConfigNotFound) {
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, backgroundHealInfoPath)
 		}
 		return backgroundHealInfo{}
 	}
 	var info backgroundHealInfo
 	if err = json.Unmarshal(buf, &info); err != nil {
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, backgroundHealInfoPath)
 	}
 	return info
 }
@@ -204,7 +204,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			err := objAPI.NSScanner(ctx, results, uint32(cycleInfo.current), scanMode)
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, "ns-scanner")
 			res := map[string]string{"cycle": strconv.FormatUint(cycleInfo.current, 10)}
 			if err != nil {
 				res["error"] = err.Error()
@@ -224,7 +224,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
 				tmp, _ = cycleInfo.MarshalMsg(tmp)
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
-				logger.LogIf(ctx, err)
+				logger.LogOnceIf(ctx, err, dataUsageBloomNamePath)
 			}
 		}
 	}
@@ -246,6 +246,8 @@ type folderScanner struct {
 	dataUsageScannerDebug bool
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
+
+	weSleep func() bool
 
 	disks       []StorageAPI
 	disksQuorum int
@@ -274,7 +276,6 @@ type folderScanner struct {
 // rarer if the bloom filter for the path is clean and no lifecycles are applied.
 // Skipped leaves have their totals transferred from the previous cycle.
 //
-// A clean leaf will be included once every healFolderIncludeProb for partial heal scans.
 // When selected there is a one in healObjectSelectProb that any object will be chosen for heal scan.
 //
 // Compaction happens when either:
@@ -301,7 +302,7 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
@@ -318,6 +319,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		dataUsageScannerDebug: false,
 		healObjectSelect:      0,
 		scanMode:              scanMode,
+		weSleep:               weSleep,
 		updates:               cache.Info.updates,
 		updateCurrentPath:     updatePath,
 		disks:                 disks,
@@ -345,7 +347,6 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		// No useful information...
 		return cache, err
 	}
-
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
@@ -374,6 +375,8 @@ func (f *folderScanner) sendUpdate() {
 func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, into *dataUsageEntry) error {
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
+
+	noWait := func() {}
 
 	thisHash := hashPath(folder.name)
 	// Store initial compaction state.
@@ -404,14 +407,16 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		if !f.oldCache.Info.replication.Empty() && f.oldCache.Info.replication.Config.HasActiveRules(prefix, true) {
 			replicationCfg = f.oldCache.Info.replication
 		}
-		// Check if we can skip it due to bloom filter...
-		scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
+
+		if f.weSleep() {
+			scannerSleeper.Sleep(ctx, dataScannerSleepPerFolder)
+		}
 
 		var existingFolders, newFolders []cachedFolder
 		var foundObjects bool
-		err := readDirFn(path.Join(f.root, folder.name), func(entName string, typ os.FileMode) error {
+		err := readDirFn(pathJoin(f.root, folder.name), func(entName string, typ os.FileMode) error {
 			// Parse
-			entName = pathClean(path.Join(folder.name, entName))
+			entName = pathClean(pathJoin(folder.name, entName))
 			if entName == "" || entName == folder.name {
 				if f.dataUsageScannerDebug {
 					console.Debugf(scannerLogPrefix+" no entity (%s,%s)\n", f.root, entName)
@@ -456,12 +461,15 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				return nil
 			}
 
-			// Dynamic time delay.
-			wait := scannerSleeper.Timer(ctx)
+			wait := noWait
+			if f.weSleep() {
+				// Dynamic time delay.
+				wait = scannerSleeper.Timer(ctx)
+			}
 
 			// Get file size, ignore errors.
 			item := scannerItem{
-				Path:        path.Join(f.root, entName),
+				Path:        pathJoin(f.root, entName),
 				Typ:         typ,
 				bucket:      bucket,
 				prefix:      path.Dir(prefix),
@@ -480,7 +488,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			item.heal.enabled = item.heal.enabled && f.healObjectSelect > 0
 
 			sz, err := f.getSize(item)
-			if err != nil {
+			if err != nil && err != errIgnoreFileContrib {
 				wait() // wait to proceed to next entry.
 				if err != errSkipFile && f.dataUsageScannerDebug {
 					console.Debugf(scannerLogPrefix+" getSize \"%v/%v\" returned err: %v\n", bucket, item.objectPath(), err)
@@ -496,10 +504,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			// Object already accounted for, remove from heal map,
 			// simply because getSize() function already heals the
 			// object.
-			delete(abandonedChildren, path.Join(item.bucket, item.objectPath()))
+			delete(abandonedChildren, pathJoin(item.bucket, item.objectPath()))
 
-			into.addSizes(sz)
-			into.Objects++
+			if err != errIgnoreFileContrib {
+				into.addSizes(sz)
+				into.Objects++
+			}
 
 			wait() // wait to proceed to next entry.
 
@@ -582,12 +592,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						foundAny = true
 						break
 					}
-					if next := f.updateCache.searchParent(parent); next == nil {
+					next := f.updateCache.searchParent(parent)
+					if next == nil {
 						foundAny = true
 						break
-					} else {
-						parent = *next
 					}
+					parent = *next
 				}
 				if !foundAny {
 					// Add non-compacted empty entry.
@@ -691,6 +701,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				reportNotFound: true,
 				minDisks:       f.disksQuorum,
 				agreed: func(entry metaCacheEntry) {
+					f.updateCurrentPath(entry.name)
 					if f.dataUsageScannerDebug {
 						console.Debugf(healObjectsPrefix+" got agreement: %v\n", entry.name)
 					}
@@ -699,11 +710,21 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				partial: func(entries metaCacheEntries, errs []error) {
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
-						// check if we can get one entry atleast
+						// check if we can get one entry at least
 						// proceed to heal nonetheless, since
 						// this object might be dangling.
 						entry, _ = entries.firstFound()
 					}
+					wait := noWait
+					if f.weSleep() {
+						// wait timer per object.
+						wait = scannerSleeper.Timer(ctx)
+					}
+					defer wait()
+					f.updateCurrentPath(entry.name)
+					stopFn := globalScannerMetrics.log(scannerMetricHealAbandonedObject, f.root, entry.name)
+					custom := make(map[string]string)
+					defer stopFn(custom)
 
 					if f.dataUsageScannerDebug {
 						console.Debugf(healObjectsPrefix+" resolved to: %v, dir: %v\n", entry.name, entry.isDir())
@@ -713,40 +734,43 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						return
 					}
 
-					// wait on timer per object.
-					wait := scannerSleeper.Timer(ctx)
-
 					// We got an entry which we should be able to heal.
 					fiv, err := entry.fileInfoVersions(bucket)
 					if err != nil {
-						wait()
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    entry.name,
 							versionID: "",
 						}, madmin.HealItemObject)
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
+							logger.LogOnceIf(ctx, err, entry.name)
 						}
 						foundObjs = foundObjs || err == nil
 						return
 					}
 
+					custom["versions"] = fmt.Sprint(len(fiv.Versions))
+					var successVersions, failVersions int
 					for _, ver := range fiv.Versions {
-						// Sleep and reset.
-						wait()
-						wait = scannerSleeper.Timer(ctx)
-
+						stopFn := globalScannerMetrics.timeSize(scannerMetricHealAbandonedVersion)
 						err := bgSeq.queueHealTask(healSource{
 							bucket:    bucket,
 							object:    fiv.Name,
 							versionID: ver.VersionID,
 						}, madmin.HealItemObject)
+						stopFn(int(ver.Size))
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogIf(ctx, err)
+							logger.LogOnceIf(ctx, err, fiv.Name)
+						}
+						if err == nil {
+							successVersions++
+						} else {
+							failVersions++
 						}
 						foundObjs = foundObjs || err == nil
 					}
+					custom["success_versions"] = fmt.Sprint(successVersions)
+					custom["failed_versions"] = fmt.Sprint(failVersions)
 				},
 				// Too many disks failed.
 				finished: func(errs []error) {
@@ -846,9 +870,11 @@ type sizeSummary struct {
 	versions        uint64
 	deleteMarkers   uint64
 	replicatedSize  int64
+	replicatedCount int64
 	pendingSize     int64
 	failedSize      int64
 	replicaSize     int64
+	replicaCount    int64
 	pendingCount    uint64
 	failedCount     uint64
 	replTargetStats map[string]replTargetSizeSummary
@@ -857,11 +883,12 @@ type sizeSummary struct {
 
 // replTargetSizeSummary holds summary of replication stats by target
 type replTargetSizeSummary struct {
-	replicatedSize int64
-	pendingSize    int64
-	failedSize     int64
-	pendingCount   uint64
-	failedCount    uint64
+	replicatedSize  int64
+	replicatedCount int64
+	pendingSize     int64
+	failedSize      int64
+	pendingCount    uint64
+	failedCount     uint64
 }
 
 type getSizeFn func(item scannerItem) (sizeSummary, error)
@@ -870,7 +897,7 @@ type getSizeFn func(item scannerItem) (sizeSummary, error)
 func (i *scannerItem) transformMetaDir() {
 	split := strings.Split(i.prefix, SlashSeparator)
 	if len(split) > 1 {
-		i.prefix = path.Join(split[:len(split)-1]...)
+		i.prefix = pathJoin(split[:len(split)-1]...)
 	} else {
 		i.prefix = ""
 	}
@@ -899,29 +926,27 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 		Remove:   healDeleteDangling,
 		ScanMode: scanMode,
 	}
-	res, err := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
-	if err != nil {
-		if errors.Is(err, NotImplemented{}) || isErrObjectNotFound(err) || isErrVersionNotFound(err) {
-			err = nil
-		}
-		logger.LogIf(ctx, err)
-		return 0
+	res, _ := o.HealObject(ctx, i.bucket, i.objectPath(), oi.VersionID, healOpts)
+	if res.ObjectSize > 0 {
+		return res.ObjectSize
 	}
-	return res.ObjectSize
+	return 0
 }
 
-func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (applied bool, size int64) {
+func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (action lifecycle.Action, size int64) {
 	size, err := oi.GetActualSize()
 	if i.debug {
 		logger.LogIf(ctx, err)
 	}
 	if i.lifeCycle == nil {
-		return false, size
+		return action, size
 	}
 
 	versionID := oi.VersionID
+	vcfg, _ := globalBucketVersioningSys.Get(i.bucket)
 	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
-	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, oi)
+	replcfg, _ := getReplicationConfig(ctx, i.bucket)
+	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, replcfg, oi)
 	if i.debug {
 		if versionID != "" {
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, lcEvt.Action)
@@ -930,7 +955,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		}
 	}
 	defer func() {
-		if applied {
+		if lcEvt.Action != lifecycle.NoneAction {
 			numVersions := uint64(1)
 			if lcEvt.Action == lifecycle.DeleteAllVersionsAction {
 				numVersions = uint64(oi.NumVersions)
@@ -940,14 +965,21 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	}()
 
 	switch lcEvt.Action {
-	case lifecycle.DeleteAction, lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction, lifecycle.DeleteAllVersionsAction:
-		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), 0
-	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
-		return applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi), size
-	default:
-		// No action.
-		return false, size
+	// This version doesn't contribute towards sizeS only when it is permanently deleted.
+	// This can happen when,
+	// - ExpireObjectAllVersions flag is enabled
+	// - NoncurrentVersionExpiration is applicable
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteAllVersionsAction:
+		size = 0
+	case lifecycle.DeleteAction:
+		// On a non-versioned bucket, DeleteObject removes the only version permanently.
+		if !vcfg.PrefixEnabled(oi.Name) {
+			size = 0
+		}
 	}
+
+	applyLifecycleAction(lcEvt, lcEventSrc_Scanner, oi)
+	return lcEvt.Action, size
 }
 
 // applyTierObjSweep removes remote object pending deletion and the free-version
@@ -1062,17 +1094,6 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 // applyVersionActions will apply lifecycle checks on all versions of a scanned item. Returns versions that remain
 // after applying lifecycle checks configured.
 func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fivs []FileInfo) ([]ObjectInfo, error) {
-	if i.heal.enabled {
-		if healDeleteDangling {
-			done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
-			err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
-			done()
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err))
-			}
-		}
-	}
-
 	objInfos, err := i.applyNewerNoncurrentVersionLimit(ctx, o, fivs)
 	if err != nil {
 		return nil, err
@@ -1100,29 +1121,46 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 // The resulting size on disk will always be returned.
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
-func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) int64 {
+func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi ObjectInfo, sizeS *sizeSummary) (objDeleted bool, size int64) {
 	done := globalScannerMetrics.time(scannerMetricILM)
-	applied, size := i.applyLifecycle(ctx, o, oi)
+	var action lifecycle.Action
+	action, size = i.applyLifecycle(ctx, o, oi)
 	done()
+
+	// Note: objDeleted is true if and only if action ==
+	// lifecycle.DeleteAllVersionsAction
+	if action == lifecycle.DeleteAllVersionsAction {
+		return true, 0
+	}
 
 	// For instance, an applied lifecycle means we remove/transitioned an object
 	// from the current deployment, which means we don't have to call healing
 	// routine even if we are asked to do via heal flag.
-	if !applied {
+	if action == lifecycle.NoneAction {
 		if i.heal.enabled {
 			done := globalScannerMetrics.time(scannerMetricHealCheck)
 			size = i.applyHealing(ctx, o, oi)
 			done()
+
+			if healDeleteDangling {
+				done := globalScannerMetrics.time(scannerMetricCleanAbandoned)
+				err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
+				done()
+				if err != nil {
+					logger.LogOnceIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err), i.objectPath())
+				}
+			}
 		}
+
 		// replicate only if lifecycle rules are not applied.
 		done := globalScannerMetrics.time(scannerMetricCheckReplication)
 		i.healReplication(ctx, o, oi.Clone(), sizeS)
 		done()
 	}
-	return size
+	return false, size
 }
 
-func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, obj ObjectInfo) lifecycle.Event {
+func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr lock.Retention, rcfg *replication.Config, obj ObjectInfo) lifecycle.Event {
 	event := lc.Eval(obj.ToLifecycleOpts())
 	if serverDebugLog {
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.Action)
@@ -1154,6 +1192,9 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 			}
 			return lifecycle.Event{Action: lifecycle.NoneAction}
 		}
+		if rcfg != nil && !obj.VersionPurgeStatus.Empty() && rcfg.HasActiveRules(obj.Name, true) {
+			return lifecycle.Event{Action: lifecycle.NoneAction}
+		}
 	}
 
 	return event
@@ -1172,7 +1213,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
-		logger.LogIf(ctx, err)
+		logger.LogOnceIf(ctx, err, obj.Name)
 		return false
 	}
 	// Notification already sent in *expireTransitionedObject*, just return 'true' here.
@@ -1248,7 +1289,7 @@ func applyLifecycleAction(event lifecycle.Event, src lcEventSrc, obj ObjectInfo)
 
 // objectPath returns the prefix and object name.
 func (i *scannerItem) objectPath() string {
-	return path.Join(i.prefix, i.objectName)
+	return pathJoin(i.prefix, i.objectName)
 }
 
 // healReplication will heal a scanned item that has failed replication.
@@ -1286,13 +1327,16 @@ func (i *scannerItem) healReplication(ctx context.Context, o ObjectLayer, oi Obj
 			sizeS.failedCount++
 		case replication.Completed, replication.CompletedLegacy:
 			tgtSizeS.replicatedSize += oi.Size
+			tgtSizeS.replicatedCount++
 			sizeS.replicatedSize += oi.Size
+			sizeS.replicatedCount++
 		}
 		sizeS.replTargetStats[arn] = tgtSizeS
 	}
 
 	if oi.ReplicationStatus == replication.Replica {
 		sizeS.replicaSize += oi.Size
+		sizeS.replicaCount++
 	}
 }
 
@@ -1427,7 +1471,7 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 }
 
 // Update the current settings and cycle all waiting.
-// Parameters are the same as in the contructor.
+// Parameters are the same as in the constructor.
 func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

@@ -102,7 +102,7 @@
 // (case-sensitive) and will fail otherwise.
 // Further, some clients require that the ETag value is a double-quoted
 // string. Therefore, this package provides dedicated functions for
-// adding and extracing the ETag to/from HTTP headers.
+// adding and extracting the ETag to/from HTTP headers.
 package etag
 
 import (
@@ -119,6 +119,7 @@ import (
 
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/hash/sha256"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/sio"
 )
 
@@ -261,6 +262,12 @@ func FromContentMD5(h http.Header) (ETag, error) {
 		return nil, errors.New("etag: invalid content-md5")
 	}
 	return ETag(b), nil
+}
+
+// ContentMD5Requested - for http.request.header is not request Content-Md5
+func ContentMD5Requested(h http.Header) bool {
+	_, ok := h[xhttp.ContentMD5]
+	return ok
 }
 
 // Multipart computes an S3 multipart ETag given a list of

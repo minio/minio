@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e ; # Have script exit in the event of a failed command.
+set -e # Have script exit in the event of a failed command.
 
 {{- if .Values.configPathmc }}
 MC_CONFIG_DIR="{{ .Values.configPathmc }}"
@@ -11,99 +11,98 @@ MC="/usr/bin/mc --insecure"
 # connectToMinio
 # Use a check-sleep-check loop to wait for MinIO service to be available
 connectToMinio() {
-  SCHEME=$1
-  ATTEMPTS=0 ; LIMIT=29 ; # Allow 30 attempts
-  set -e ; # fail if we can't read the keys.
-  ACCESS=$(cat /config/rootUser) ; SECRET=$(cat /config/rootPassword) ;
-  set +e ; # The connections to minio are allowed to fail.
-  echo "Connecting to MinIO server: $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT" ;
-  MC_COMMAND="${MC} alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET" ;
-  $MC_COMMAND ;
-  STATUS=$? ;
-  until [ $STATUS = 0 ]
-  do
-    ATTEMPTS=`expr $ATTEMPTS + 1` ;
-    echo \"Failed attempts: $ATTEMPTS\" ;
-    if [ $ATTEMPTS -gt $LIMIT ]; then
-      exit 1 ;
-    fi ;
-    sleep 2 ; # 1 second intervals between attempts
-    $MC_COMMAND ;
-    STATUS=$? ;
-  done ;
-  set -e ; # reset `e` as active
-  return 0
+	SCHEME=$1
+	ATTEMPTS=0
+	LIMIT=29 # Allow 30 attempts
+	set -e   # fail if we can't read the keys.
+	ACCESS=$(cat /config/rootUser)
+	SECRET=$(cat /config/rootPassword)
+	set +e # The connections to minio are allowed to fail.
+	echo "Connecting to MinIO server: $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT"
+	MC_COMMAND="${MC} alias set myminio $SCHEME://$MINIO_ENDPOINT:$MINIO_PORT $ACCESS $SECRET"
+	$MC_COMMAND
+	STATUS=$?
+	until [ $STATUS = 0 ]; do
+		ATTEMPTS=$(expr $ATTEMPTS + 1)
+		echo \"Failed attempts: $ATTEMPTS\"
+		if [ $ATTEMPTS -gt $LIMIT ]; then
+			exit 1
+		fi
+		sleep 2 # 1 second intervals between attempts
+		$MC_COMMAND
+		STATUS=$?
+	done
+	set -e # reset `e` as active
+	return 0
 }
 
 # checkBucketExists ($bucket)
 # Check if the bucket exists, by using the exit code of `mc ls`
 checkBucketExists() {
-  BUCKET=$1
-  CMD=$(${MC} stat myminio/$BUCKET > /dev/null 2>&1)
-  return $?
+	BUCKET=$1
+	CMD=$(${MC} stat myminio/$BUCKET >/dev/null 2>&1)
+	return $?
 }
 
 # createBucket ($bucket, $policy, $purge)
 # Ensure bucket exists, purging if asked to
 createBucket() {
-  BUCKET=$1
-  POLICY=$2
-  PURGE=$3
-  VERSIONING=$4
-  OBJECTLOCKING=$5
+	BUCKET=$1
+	POLICY=$2
+	PURGE=$3
+	VERSIONING=$4
+	OBJECTLOCKING=$5
 
-  # Purge the bucket, if set & exists
-  # Since PURGE is user input, check explicitly for `true`
-  if [ $PURGE = true ]; then
-    if checkBucketExists $BUCKET ; then
-      echo "Purging bucket '$BUCKET'."
-      set +e ; # don't exit if this fails
-      ${MC} rm -r --force myminio/$BUCKET
-      set -e ; # reset `e` as active
-    else
-      echo "Bucket '$BUCKET' does not exist, skipping purge."
-    fi
-  fi
+	# Purge the bucket, if set & exists
+	# Since PURGE is user input, check explicitly for `true`
+	if [ $PURGE = true ]; then
+		if checkBucketExists $BUCKET; then
+			echo "Purging bucket '$BUCKET'."
+			set +e # don't exit if this fails
+			${MC} rm -r --force myminio/$BUCKET
+			set -e # reset `e` as active
+		else
+			echo "Bucket '$BUCKET' does not exist, skipping purge."
+		fi
+	fi
 
-# Create the bucket if it does not exist and set objectlocking if enabled (NOTE: versioning will be not changed if OBJECTLOCKING is set because it enables versioning to the Buckets created)
-if ! checkBucketExists $BUCKET ; then
-    if [ ! -z $OBJECTLOCKING ] ; then
-      if [ $OBJECTLOCKING = true ] ; then
-          echo "Creating bucket with OBJECTLOCKING '$BUCKET'"
-          ${MC} mb --with-lock myminio/$BUCKET
-      elif [ $OBJECTLOCKING = false ] ; then
-            echo "Creating bucket '$BUCKET'"
-            ${MC} mb myminio/$BUCKET
-      fi
-  elif [ -z $OBJECTLOCKING ] ; then
-        echo "Creating bucket '$BUCKET'"
-        ${MC} mb myminio/$BUCKET
-  else
-    echo "Bucket '$BUCKET' already exists."  
-  fi
-  fi
+	# Create the bucket if it does not exist and set objectlocking if enabled (NOTE: versioning will be not changed if OBJECTLOCKING is set because it enables versioning to the Buckets created)
+	if ! checkBucketExists $BUCKET; then
+		if [ ! -z $OBJECTLOCKING ]; then
+			if [ $OBJECTLOCKING = true ]; then
+				echo "Creating bucket with OBJECTLOCKING '$BUCKET'"
+				${MC} mb --with-lock myminio/$BUCKET
+			elif [ $OBJECTLOCKING = false ]; then
+				echo "Creating bucket '$BUCKET'"
+				${MC} mb myminio/$BUCKET
+			fi
+		elif [ -z $OBJECTLOCKING ]; then
+			echo "Creating bucket '$BUCKET'"
+			${MC} mb myminio/$BUCKET
+		else
+			echo "Bucket '$BUCKET' already exists."
+		fi
+	fi
 
+	# set versioning for bucket if objectlocking is disabled or not set
+	if [ $OBJECTLOCKING = false ]; then
+		if [ ! -z $VERSIONING ]; then
+			if [ $VERSIONING = true ]; then
+				echo "Enabling versioning for '$BUCKET'"
+				${MC} version enable myminio/$BUCKET
+			elif [ $VERSIONING = false ]; then
+				echo "Suspending versioning for '$BUCKET'"
+				${MC} version suspend myminio/$BUCKET
+			fi
+		fi
+	else
+		echo "Bucket '$BUCKET' versioning unchanged."
+	fi
 
-  # set versioning for bucket if objectlocking is disabled or not set
-  if [ -z $OBJECTLOCKING ] ; then
-  if [ ! -z $VERSIONING ] ; then
-    if [ $VERSIONING = true ] ; then
-        echo "Enabling versioning for '$BUCKET'"
-        ${MC} version enable myminio/$BUCKET
-    elif [ $VERSIONING = false ] ; then
-        echo "Suspending versioning for '$BUCKET'"
-        ${MC} version suspend myminio/$BUCKET
-    fi
-    fi
-  else
-      echo "Bucket '$BUCKET' versioning unchanged."
-  fi
-
-
-  # At this point, the bucket should exist, skip checking for existence
-  # Set policy on the bucket
-  echo "Setting policy of bucket '$BUCKET' to '$POLICY'."
-  ${MC} anonymous set $POLICY myminio/$BUCKET
+	# At this point, the bucket should exist, skip checking for existence
+	# Set policy on the bucket
+	echo "Setting policy of bucket '$BUCKET' to '$POLICY'."
+	${MC} anonymous set $POLICY myminio/$BUCKET
 }
 
 # Try connecting to MinIO instance
@@ -118,6 +117,6 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the buckets
 {{- range .Values.buckets }}
-createBucket {{ tpl .name $global }} {{ .policy | default "none" | quote }} {{ .purge | default false }} {{ .versioning | default false }} {{ .objectlocking  | default false }}
+createBucket {{ tpl .name $global }} {{ .policy | default "none" | quote }} {{ .purge | default false }} {{ .versioning | default false }} {{ .objectlocking | default false }}
 {{- end }}
 {{- end }}

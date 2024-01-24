@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"runtime"
 	"strings"
@@ -51,16 +52,16 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	}
 
 	errMsg := "Bucket not found: minio-bucket"
-	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
+	// operation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
 	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err == nil {
-		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
+		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is initialized on a non-existent bucket.", instanceType)
 	}
 	if errMsg != err.Error() {
 		t.Errorf("%s, Expected to fail with Error \"%s\", but instead found \"%s\".", instanceType, errMsg, err.Error())
 	}
 
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err = obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
@@ -93,7 +94,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
@@ -149,7 +150,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	bucket := "minio-bucket"
 	object := "minio-object"
 
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -181,7 +182,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -347,7 +348,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// bucketnames[1].
 	// objectNames[0].
 	// uploadIds [1-3].
-	// Bucket to test for mutiple upload Id's for a given object.
+	// Bucket to test for multiple upload Id's for a given object.
 	err = obj.MakeBucket(context.Background(), bucketNames[1], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -365,7 +366,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		uploadIDs = append(uploadIDs, res.UploadID)
 	}
 
-	// Bucket to test for mutiple objects, each with unique UUID.
+	// Bucket to test for multiple objects, each with unique UUID.
 	// bucketnames[2].
 	// objectNames[0-2].
 	// uploadIds [4-9].
@@ -1044,19 +1045,18 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{"Test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
 		{"---", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "---"}, false},
 		{"ad", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Valid bucket names, but they donot exist (Test number 5-7).
+		// Valid bucket names, but they do not exist (Test number 5-7).
 		{"volatile-bucket-1", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Valid, existing bucket, delimiter not supported, returns empty values (Test number 8-9).
 		{bucketNames[0], "", "", "", "*", 0, ListMultipartsInfo{Delimiter: "*"}, nil, true},
 		{bucketNames[0], "", "", "", "-", 0, ListMultipartsInfo{Delimiter: "-"}, nil, true},
-		// Testing for failure cases with both perfix and marker (Test number 10).
-		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
+		// If marker is *after* the last possible object from the prefix it should return an empty list.
 		{
-			bucketNames[0], "asia", "europe-object", "", "", 0,
-			ListMultipartsInfo{},
-			fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false,
+			bucketNames[0], "Asia", "europe-object", "", "", 0,
+			ListMultipartsInfo{KeyMarker: "europe-object", Prefix: "Asia", IsTruncated: false},
+			nil, true,
 		},
 		// Setting an invalid combination of uploadIDMarker and Marker (Test number 11-12).
 		{
@@ -1210,7 +1210,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1224,8 +1224,18 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	// Remove some random disk.
-	removeDiskN(disks, 1)
+	z := obj.(*erasureServerPools)
+	er := z.serverPools[0].sets[0]
+
+	erasureDisks := er.getDisks()
+	ridx := rand.Intn(len(erasureDisks))
+
+	z.serverPools[0].erasureDisksMu.Lock()
+	er.getDisks = func() []StorageAPI {
+		erasureDisks[ridx] = newNaughtyDisk(erasureDisks[ridx], nil, errFaultyDisk)
+		return erasureDisks
+	}
+	z.serverPools[0].erasureDisksMu.Unlock()
 
 	uploadIDs = append(uploadIDs, res.UploadID)
 
@@ -1257,9 +1267,6 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 	}
-
-	// Remove one disk.
-	removeDiskN(disks, 1)
 
 	partInfos := []ListPartsInfo{
 		// partinfos - 0.
@@ -1355,7 +1362,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "---"}, false},
 		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
+		// Valid bucket names, but they do not exist (Test number 5-7).
 		{"volatile-bucket-1", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
@@ -1454,7 +1461,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1592,7 +1599,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "---"}, false},
 		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
+		// Valid bucket names, but they do not exist (Test number 5-7).
 		{"volatile-bucket-1", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
@@ -1695,7 +1702,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err = obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1807,7 +1814,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		{"---", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "---"}, false},
 		{"ad", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
+		// Valid bucket names, but they do not exist (Test number 5-7).
 		{"volatile-bucket-1", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},

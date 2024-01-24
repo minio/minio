@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"sync"
@@ -40,21 +41,58 @@ const (
 	defaultHealthCheckReloadDuration = 30 * time.Minute
 )
 
+type arnTarget struct {
+	Client      *TargetClient
+	lastRefresh time.Time
+}
+
+// arnErrs represents number of errors seen for a ARN and if update is in progress
+// to refresh remote targets from bucket metadata.
+type arnErrs struct {
+	count            int64
+	updateInProgress bool
+	bucket           string
+}
+
 // BucketTargetSys represents bucket targets subsystem
 type BucketTargetSys struct {
 	sync.RWMutex
-	arnRemotesMap map[string]*TargetClient
+	arnRemotesMap map[string]arnTarget
 	targetsMap    map[string][]madmin.BucketTarget
 	hMutex        sync.RWMutex
 	hc            map[string]epHealth
 	hcClient      *madmin.AnonymousClient
+	aMutex        sync.RWMutex
+	arnErrsMap    map[string]arnErrs // map of ARN to error count of failures to get target
+}
+
+type latencyStat struct {
+	lastmin lastMinuteLatency
+	curr    time.Duration
+	avg     time.Duration
+	peak    time.Duration
+	N       int64
+}
+
+func (l *latencyStat) update(d time.Duration) {
+	l.lastmin.add(d)
+	l.N++
+	if d > l.peak {
+		l.peak = d
+	}
+	l.curr = l.lastmin.getTotal().avg()
+	l.avg = time.Duration((int64(l.avg)*(l.N-1) + int64(l.curr)) / l.N)
 }
 
 // epHealth struct represents health of a replication target endpoint.
 type epHealth struct {
-	Endpoint string
-	Scheme   string
-	Online   bool
+	Endpoint        string
+	Scheme          string
+	Online          bool
+	lastOnline      time.Time
+	lastHCAt        time.Time
+	offlineDuration time.Duration
+	latency         latencyStat
 }
 
 // isOffline returns current liveness result of remote target. Add endpoint to
@@ -117,11 +155,40 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 			if len(eps) > 0 {
 				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				m := make(map[string]epHealth, len(eps))
+				start := time.Now()
+
 				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
+					var lastOnline time.Time
+					var offline time.Duration
+					//	var deploymentID string
+					sys.hMutex.RLock()
+					prev, ok := sys.hc[result.Endpoint.Host]
+					sys.hMutex.RUnlock()
+					if ok {
+						if prev.Online != result.Online || !result.Online {
+							if !prev.lastHCAt.IsZero() {
+								offline = time.Since(prev.lastHCAt) + prev.offlineDuration
+							} else {
+								offline = prev.offlineDuration
+							}
+						} else if result.Online {
+							offline = prev.offlineDuration
+						}
+					}
+					lastOnline = prev.lastOnline
+					if result.Online {
+						lastOnline = time.Now()
+					}
+					l := prev.latency
+					l.update(time.Since(start))
 					m[result.Endpoint.Host] = epHealth{
-						Endpoint: result.Endpoint.Host,
-						Scheme:   result.Endpoint.Scheme,
-						Online:   result.Online,
+						Endpoint:        result.Endpoint.Host,
+						Scheme:          result.Endpoint.Scheme,
+						Online:          result.Online,
+						lastOnline:      lastOnline,
+						offlineDuration: offline,
+						lastHCAt:        time.Now(),
+						latency:         l,
 					}
 				}
 				cancel()
@@ -141,32 +208,61 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 func (sys *BucketTargetSys) reloadHealthCheckers(ctx context.Context) {
 	m := make(map[string]epHealth)
 	tgts := sys.ListTargets(ctx, "", "")
+	sys.hMutex.Lock()
 	for _, t := range tgts {
 		if _, ok := m[t.Endpoint]; !ok {
 			scheme := "http"
 			if t.Secure {
 				scheme = "https"
 			}
-			m[t.Endpoint] = epHealth{
+			epHealth := epHealth{
 				Online:   true,
 				Endpoint: t.Endpoint,
 				Scheme:   scheme,
 			}
+			if prev, ok := sys.hc[t.Endpoint]; ok {
+				epHealth.lastOnline = prev.lastOnline
+				epHealth.offlineDuration = prev.offlineDuration
+				epHealth.lastHCAt = prev.lastHCAt
+				epHealth.latency = prev.latency
+			}
+			m[t.Endpoint] = epHealth
 		}
 	}
-	sys.hMutex.Lock()
 	// swap out the map
 	sys.hc = m
 	sys.hMutex.Unlock()
 }
 
+func (sys *BucketTargetSys) healthStats() map[string]epHealth {
+	sys.hMutex.RLock()
+	defer sys.hMutex.RUnlock()
+	m := make(map[string]epHealth, len(sys.hc))
+	for k, v := range sys.hc {
+		m[k] = v
+	}
+	return m
+}
+
 // ListTargets lists bucket targets across tenant or for individual bucket, and returns
 // results filtered by arnType
 func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType string) (targets []madmin.BucketTarget) {
+	h := sys.healthStats()
+
 	if bucket != "" {
 		if ts, err := sys.ListBucketTargets(ctx, bucket); err == nil {
 			for _, t := range ts.Targets {
 				if string(t.Type) == arnType || arnType == "" {
+					if hs, ok := h[t.URL().Host]; ok {
+						t.TotalDowntime = hs.offlineDuration
+						t.Online = hs.Online
+						t.LastOnline = hs.lastOnline
+						t.Latency = madmin.LatencyStat{
+							Curr: hs.latency.curr,
+							Avg:  hs.latency.avg,
+							Max:  hs.latency.peak,
+						}
+					}
 					targets = append(targets, t.Clone())
 				}
 			}
@@ -178,6 +274,16 @@ func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType str
 	for _, tgts := range sys.targetsMap {
 		for _, t := range tgts {
 			if string(t.Type) == arnType || arnType == "" {
+				if hs, ok := h[t.URL().Host]; ok {
+					t.TotalDowntime = hs.offlineDuration
+					t.Online = hs.Online
+					t.LastOnline = hs.lastOnline
+					t.Latency = madmin.LatencyStat{
+						Curr: hs.latency.curr,
+						Avg:  hs.latency.avg,
+						Max:  hs.latency.peak,
+					}
+				}
 				targets = append(targets, t.Clone())
 			}
 		}
@@ -246,6 +352,27 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 			return BucketRemoteTargetNotVersioned{Bucket: tgt.TargetBucket}
 		}
 	}
+
+	// Check if target is a MinIO server and alive
+	hcCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	scheme := "http"
+	if tgt.Secure {
+		scheme = "https"
+	}
+	result := <-sys.hcClient.Alive(hcCtx, madmin.AliveOpts{}, madmin.ServerProperties{
+		Endpoint: tgt.Endpoint,
+		Scheme:   scheme,
+	})
+
+	cancel()
+	if result.Error != nil {
+		return RemoteTargetConnectionErr{Bucket: tgt.TargetBucket, Err: result.Error, AccessKey: tgt.Credentials.AccessKey}
+	}
+	if !result.Online {
+		err := errors.New("Health check timed out after 3 seconds")
+		return RemoteTargetConnectionErr{Err: err}
+	}
+
 	sys.Lock()
 	defer sys.Unlock()
 
@@ -274,7 +401,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 
 	sys.targetsMap[bucket] = newtgts
-	sys.arnRemotesMap[tgt.Arn] = clnt
+	sys.arnRemotesMap[tgt.Arn] = arnTarget{Client: clnt}
 	sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
 	return nil
 }
@@ -342,11 +469,71 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	return nil
 }
 
+func (sys *BucketTargetSys) markRefreshInProgress(bucket, arn string) {
+	sys.aMutex.Lock()
+	defer sys.aMutex.Unlock()
+	if v, ok := sys.arnErrsMap[arn]; !ok {
+		sys.arnErrsMap[arn] = arnErrs{
+			updateInProgress: true,
+			count:            v.count + 1,
+			bucket:           bucket,
+		}
+	}
+}
+
+func (sys *BucketTargetSys) markRefreshDone(bucket, arn string) {
+	sys.aMutex.Lock()
+	defer sys.aMutex.Unlock()
+	if v, ok := sys.arnErrsMap[arn]; ok {
+		sys.arnErrsMap[arn] = arnErrs{
+			updateInProgress: false,
+			count:            v.count,
+			bucket:           bucket,
+		}
+	}
+}
+
+func (sys *BucketTargetSys) isReloadingTarget(bucket, arn string) bool {
+	sys.aMutex.RLock()
+	defer sys.aMutex.RUnlock()
+	if v, ok := sys.arnErrsMap[arn]; ok {
+		return v.updateInProgress
+	}
+	return false
+}
+
+func (sys *BucketTargetSys) incTargetErr(bucket, arn string) {
+	sys.aMutex.Lock()
+	defer sys.aMutex.Unlock()
+	if v, ok := sys.arnErrsMap[arn]; ok {
+		sys.arnErrsMap[arn] = arnErrs{
+			updateInProgress: v.updateInProgress,
+			count:            v.count + 1,
+		}
+	}
+}
+
 // GetRemoteTargetClient returns minio-go client for replication target instance
-func (sys *BucketTargetSys) GetRemoteTargetClient(ctx context.Context, arn string) *TargetClient {
+func (sys *BucketTargetSys) GetRemoteTargetClient(bucket, arn string) *TargetClient {
 	sys.RLock()
-	defer sys.RUnlock()
-	return sys.arnRemotesMap[arn]
+	tgt := sys.arnRemotesMap[arn]
+	sys.RUnlock()
+
+	if tgt.Client != nil {
+		return tgt.Client
+	}
+	defer func() { // lazy refresh remote targets
+		if tgt.Client == nil && !sys.isReloadingTarget(bucket, arn) && (tgt.lastRefresh.Equal(timeSentinel) || tgt.lastRefresh.Before(UTCNow().Add(-5*time.Minute))) {
+			tgts, err := globalBucketMetadataSys.GetBucketTargetsConfig(bucket)
+			if err == nil {
+				sys.markRefreshInProgress(bucket, arn)
+				sys.UpdateAllTargets(bucket, tgts)
+				sys.markRefreshDone(bucket, arn)
+			}
+		}
+		sys.incTargetErr(bucket, arn)
+	}()
+	return nil
 }
 
 // GetRemoteBucketTargetByArn returns BucketTarget for a ARN
@@ -367,8 +554,9 @@ func (sys *BucketTargetSys) GetRemoteBucketTargetByArn(ctx context.Context, buck
 // NewBucketTargetSys - creates new replication system.
 func NewBucketTargetSys(ctx context.Context) *BucketTargetSys {
 	sys := &BucketTargetSys{
-		arnRemotesMap: make(map[string]*TargetClient),
+		arnRemotesMap: make(map[string]arnTarget),
 		targetsMap:    make(map[string][]madmin.BucketTarget),
+		arnErrsMap:    make(map[string]arnErrs),
 		hc:            make(map[string]epHealth),
 		hcClient:      newHCClient(),
 	}
@@ -399,31 +587,30 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 	defer sys.Unlock()
 
 	// Remove existingtarget and arn association
-	if tgts, ok := sys.targetsMap[bucket]; ok {
-		for _, t := range tgts {
+	if stgts, ok := sys.targetsMap[bucket]; ok {
+		for _, t := range stgts {
 			delete(sys.arnRemotesMap, t.Arn)
 		}
 		delete(sys.targetsMap, bucket)
 	}
 
-	// No need for more if not adding anything
-	if tgts == nil || tgts.Empty() {
-		globalBucketMonitor.DeleteBucket(bucket)
-		return
-	}
-
-	if len(tgts.Targets) > 0 {
-		sys.targetsMap[bucket] = tgts.Targets
-	}
-	for _, tgt := range tgts.Targets {
-		tgtClient, err := sys.getRemoteTargetClient(&tgt)
-		if err != nil {
-			continue
+	if tgts != nil {
+		for _, tgt := range tgts.Targets {
+			tgtClient, err := sys.getRemoteTargetClient(&tgt)
+			if err != nil {
+				continue
+			}
+			sys.arnRemotesMap[tgt.Arn] = arnTarget{
+				Client:      tgtClient,
+				lastRefresh: UTCNow(),
+			}
+			sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
 		}
-		sys.arnRemotesMap[tgt.Arn] = tgtClient
-		sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
+
+		if !tgts.Empty() {
+			sys.targetsMap[bucket] = tgts.Targets
+		}
 	}
-	sys.targetsMap[bucket] = tgts.Targets
 }
 
 // create minio-go clients for buckets having remote targets
@@ -434,16 +621,13 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 	}
 	sys.Lock()
 	defer sys.Unlock()
-	if len(cfg.Targets) > 0 {
-		sys.targetsMap[bucket.Name] = cfg.Targets
-	}
 	for _, tgt := range cfg.Targets {
 		tgtClient, err := sys.getRemoteTargetClient(&tgt)
 		if err != nil {
 			logger.LogIf(GlobalContext, err)
 			continue
 		}
-		sys.arnRemotesMap[tgt.Arn] = tgtClient
+		sys.arnRemotesMap[tgt.Arn] = arnTarget{Client: tgtClient}
 		sys.updateBandwidthLimit(bucket.Name, tgt.Arn, tgt.BandwidthLimit)
 	}
 	sys.targetsMap[bucket.Name] = cfg.Targets
@@ -489,6 +673,8 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 	if target == nil {
 		return
 	}
+	sys.RLock()
+	defer sys.RUnlock()
 	tgts := sys.targetsMap[bucket]
 	for _, tgt := range tgts {
 		if tgt.Type == target.Type &&
@@ -506,6 +692,8 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 
 // getRemoteARNForPeer returns the remote target for a peer site in site replication
 func (sys *BucketTargetSys) getRemoteARNForPeer(bucket string, peer madmin.PeerInfo) string {
+	sys.RLock()
+	defer sys.RUnlock()
 	tgts := sys.targetsMap[bucket]
 	for _, target := range tgts {
 		ep, _ := url.Parse(peer.Endpoint)

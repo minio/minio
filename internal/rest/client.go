@@ -36,7 +36,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // DefaultTimeout - default REST timeout is 10 seconds.
@@ -125,7 +125,7 @@ func removeEmptyPort(host string) string {
 	return host
 }
 
-// Copied from http.NewRequest but implemented to ensure we re-use `url.URL` instance.
+// Copied from http.NewRequest but implemented to ensure we reuse `url.URL` instance.
 func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
@@ -448,6 +448,7 @@ func (c *Client) MarkOffline(err error) bool {
 	c.Lock()
 	c.lastErr = err
 	c.lastErrTime = time.Now()
+	atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
 	c.Unlock()
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.

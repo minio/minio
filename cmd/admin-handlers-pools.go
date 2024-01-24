@@ -22,11 +22,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	iampolicy "github.com/minio/pkg/iam/policy"
+	"github.com/minio/pkg/v2/policy"
 )
 
 var (
@@ -37,7 +38,7 @@ var (
 func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -66,16 +67,28 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 
 	vars := mux.Vars(r)
 	v := vars["pool"]
+	byID := vars["by-id"] == "true"
 
 	pools := strings.Split(v, ",")
 	poolIndices := make([]int, 0, len(pools))
 
 	for _, pool := range pools {
-		idx := globalEndpoints.GetPoolIdx(pool)
-		if idx == -1 {
-			// We didn't find any matching pools, invalid input
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
-			return
+		var idx int
+		if byID {
+			var err error
+			idx, err = strconv.Atoi(pool)
+			if err != nil {
+				// We didn't find any matching pools, invalid input
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
+				return
+			}
+		} else {
+			idx = globalEndpoints.GetPoolIdx(pool)
+			if idx == -1 {
+				// We didn't find any matching pools, invalid input
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
+				return
+			}
 		}
 		var pool *erasureSets
 		for pidx := range z.serverPools {
@@ -113,7 +126,7 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -132,8 +145,17 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 
 	vars := mux.Vars(r)
 	v := vars["pool"]
+	byID := vars["by-id"] == "true"
+	idx := -1
 
-	idx := globalEndpoints.GetPoolIdx(v)
+	if byID {
+		if i, err := strconv.Atoi(v); err == nil && i >= 0 && i < len(globalEndpoints) {
+			idx = i
+		}
+	} else {
+		idx = globalEndpoints.GetPoolIdx(v)
+	}
+
 	if idx == -1 {
 		// We didn't find any matching pools, invalid input
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errInvalidArgument), r.URL)
@@ -159,7 +181,7 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerInfoAdminAction, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -178,8 +200,17 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	v := vars["pool"]
+	byID := vars["by-id"] == "true"
+	idx := -1
 
-	idx := globalEndpoints.GetPoolIdx(v)
+	if byID {
+		if i, err := strconv.Atoi(v); err == nil && i >= 0 && i < len(globalEndpoints) {
+			idx = i
+		}
+	} else {
+		idx = globalEndpoints.GetPoolIdx(v)
+	}
+
 	if idx == -1 {
 		apiErr := toAdminAPIErr(ctx, errInvalidArgument)
 		apiErr.Description = fmt.Sprintf("specified pool '%s' not found, please specify a valid pool", v)
@@ -200,7 +231,7 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.ServerInfoAdminAction, iampolicy.DecommissionAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerInfoAdminAction, policy.DecommissionAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -233,7 +264,7 @@ func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.RebalanceAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -304,7 +335,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.RebalanceAdminAction)
 	if objectAPI == nil {
 		return
 	}
@@ -344,7 +375,7 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, iampolicy.RebalanceAdminAction)
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.RebalanceAdminAction)
 	if objectAPI == nil {
 		return
 	}

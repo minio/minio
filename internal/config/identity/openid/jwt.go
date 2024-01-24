@@ -30,8 +30,8 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
-	iampolicy "github.com/minio/pkg/iam/policy"
-	xnet "github.com/minio/pkg/net"
+	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v2/policy"
 )
 
 type publicKeys struct {
@@ -114,8 +114,7 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 		return nil
 	}
 
-	expAt, err := auth.ExpToInt64(expStr)
-	if err != nil {
+	if _, err := auth.ExpToInt64(expStr); err != nil {
 		return err
 	}
 
@@ -123,13 +122,6 @@ func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
 	if err != nil {
 		return err
 	}
-
-	// Verify if JWT expiry is lesser than default expiry duration,
-	// if that is the case then set the default expiration to be
-	// from the JWT expiry claim.
-	if time.Unix(expAt, 0).UTC().Sub(time.Now().UTC()) < defaultExpiryDuration {
-		defaultExpiryDuration = time.Unix(expAt, 0).UTC().Sub(time.Now().UTC())
-	} // else honor the specified expiry duration.
 
 	claims["exp"] = time.Now().UTC().Add(defaultExpiryDuration).Unix() // update with new expiry.
 	return nil
@@ -198,7 +190,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 	// array of case sensitive strings. In the common special case
 	// when there is one audience, the aud value MAY be a single
 	// case sensitive
-	audValues, ok := iampolicy.GetValuesFromClaims(claims, audClaim)
+	audValues, ok := policy.GetValuesFromClaims(claims, audClaim)
 	if !ok {
 		return errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID")
 	}
@@ -212,7 +204,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		// be included even when the authorized party is the same
 		// as the sole audience. The azp value is a case sensitive
 		// string containing a StringOrURI value
-		azpValues, ok := iampolicy.GetValuesFromClaims(claims, azpClaim)
+		azpValues, ok := policy.GetValuesFromClaims(claims, azpClaim)
 		if !ok {
 			return errors.New("STS JWT Token has `azp` claim invalid, `azp` must match configured OpenID Client ID")
 		}

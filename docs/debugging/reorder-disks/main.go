@@ -30,7 +30,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/minio/pkg/ellipses"
+	"github.com/minio/pkg/v2/ellipses"
 )
 
 type xl struct {
@@ -56,7 +56,7 @@ func getMountMap() (map[string]string, error) {
 	for scanner.Scan() {
 		s := strings.Split(scanner.Text(), " ")
 		if len(s) != 11 {
-			return nil, errors.New("unsupport /proc/self/mountinfo format")
+			return nil, errors.New("unsupported /proc/self/mountinfo format")
 		}
 		result[s[2]] = s[9]
 	}
@@ -99,10 +99,11 @@ func getMajorMinor(path string) (string, error) {
 		return "", fmt.Errorf("unable to stat `%s`: %w", path, err)
 	}
 
-	major := (stat.Dev & 0x00000000000fff00) >> 8
-	major |= (stat.Dev & 0xfffff00000000000) >> 32
-	minor := (stat.Dev & 0x00000000000000ff) >> 0
-	minor |= (stat.Dev & 0x00000ffffff00000) >> 12
+	devID := uint64(stat.Dev)
+	major := (devID & 0x00000000000fff00) >> 8
+	major |= (devID & 0xfffff00000000000) >> 32
+	minor := (devID & 0x00000000000000ff) >> 0
+	minor |= (devID & 0x00000ffffff00000) >> 12
 
 	return fmt.Sprintf("%d:%d", major, minor), nil
 }

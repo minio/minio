@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/mcontext"
-	"github.com/minio/pkg/console"
-	"github.com/minio/pkg/env"
+	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v2/env"
 )
 
 // Indicator if logging is enabled.
@@ -557,7 +557,7 @@ func checkFailedUnlocks(locks []string, tolerance int) bool {
 	// caller know that lock is not successfully released
 	// yet.
 	if len(locks)-tolerance == tolerance {
-		// Incase of split brain scenarios where
+		// In case of split brain scenarios where
 		// tolerance is exactly half of the len(*locks)
 		// then we need to make sure we have unlocked
 		// upto tolerance+1 - especially for RUnlock
