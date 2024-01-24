@@ -154,8 +154,12 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 	}
 
 	for _, adminVersion := range adminVersions {
+		// Restart and stop MinIO service type=2
+		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/service").HandlerFunc(adminMiddleware(adminAPI.ServiceV2Handler, traceAllFlag)).Queries("action", "{action:.*}", "type", "2")
+
 		// Restart and stop MinIO service.
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/service").HandlerFunc(adminMiddleware(adminAPI.ServiceHandler, traceAllFlag)).Queries("action", "{action:.*}")
+
 		// Update MinIO servers.
 		adminRouter.Methods(http.MethodPost).Path(adminVersion+"/update").HandlerFunc(adminMiddleware(adminAPI.ServerUpdateHandler, traceAllFlag)).Queries("updateURL", "{updateURL:.*}")
 

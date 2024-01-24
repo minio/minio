@@ -336,7 +336,7 @@ func (target *KafkaTarget) Close() error {
 	return nil
 }
 
-// Check if atleast one broker in cluster is active
+// Check if at least one broker in cluster is active
 func (k KafkaArgs) pingBrokers() (err error) {
 	d := net.Dialer{Timeout: 1 * time.Second}
 
@@ -479,6 +479,6 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 }
 
 func isKafkaConnErr(err error) bool {
-	// Sarama opens the ciruit breaker after 3 consecutive connection failures.
+	// Sarama opens the circuit breaker after 3 consecutive connection failures.
 	return err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open"
 }

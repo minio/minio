@@ -209,9 +209,6 @@ func DecryptETags(ctx context.Context, k kms.KMS, objects []ObjectInfo) error {
 // uploaded by the user using multipart mechanism:
 // initiate new multipart, upload part, complete upload
 func (o *ObjectInfo) isMultipart() bool {
-	if len(o.Parts) == 0 {
-		return false
-	}
 	_, encrypted := crypto.IsEncrypted(o.UserDefined)
 	if encrypted {
 		if !crypto.IsMultiPart(o.UserDefined) {
@@ -228,7 +225,7 @@ func (o *ObjectInfo) isMultipart() bool {
 	// Further check if this object is uploaded using multipart mechanism
 	// by the user and it is not about Erasure internally splitting the
 	// object into parts in PutObject()
-	return !(o.backendType == BackendErasure && len(o.ETag) == 32)
+	return len(o.ETag) != 32
 }
 
 // ParseSSECopyCustomerRequest parses the SSE-C header fields of the provided request.
@@ -667,7 +664,7 @@ func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
-	// Limit the reader, so the decryptor doesnt receive bytes
+	// Limit the reader, so the decryptor doesn't receive bytes
 	// from the next part (different DARE stream)
 	encLenToRead := d.parts[d.partIndex].Size - d.partEncRelOffset
 	decrypter, err := newDecryptReaderWithObjectKey(io.LimitReader(d.reader, encLenToRead), partEncryptionKey, d.startSeqNum)
@@ -754,7 +751,7 @@ func (o ObjectInfo) DecryptedSize() (int64, error) {
 // However, DecryptETag does not try to decrypt the ETag if
 // it consists of a 128 bit hex value (32 hex chars) and exactly
 // one '-' followed by a 32-bit number.
-// This special case adresses randomly-generated ETags generated
+// This special case addresses randomly-generated ETags generated
 // by the MinIO server when running in non-compat mode. These
 // random ETags are not encrypt.
 //
@@ -1080,6 +1077,30 @@ func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
 		mac.Write([]byte(baseKey))
 		return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
 	}
+}
+
+// decryptChecksums will attempt to decode checksums and return it/them if set.
+// if part > 0, and we have the checksum for the part that will be returned.
+func (o *ObjectInfo) decryptPartsChecksums() {
+	data := o.Checksum
+	if len(data) == 0 {
+		return
+	}
+	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
+		decrypted, err := o.metadataDecrypter()("object-checksum", data)
+		if err != nil {
+			logger.LogIf(GlobalContext, err)
+			return
+		}
+		data = decrypted
+	}
+	cs := hash.ReadPartCheckSums(data)
+	if len(cs) == len(o.Parts) {
+		for i := range o.Parts {
+			o.Parts[i].Checksums = cs[i]
+		}
+	}
+	return
 }
 
 // metadataEncryptFn provides an encryption function for metadata.

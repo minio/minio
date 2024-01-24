@@ -152,7 +152,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // LivenessCheckHandler checks whether MinIO is up. It differs from the
 // readiness handler since a failing liveness check causes pod restarts
-// in K8S enviromnents. Therefore, it does not contact external systems.
+// in K8S environments. Therefore, it does not contact external systems.
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if objLayer := newObjectLayerFn(); objLayer == nil {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable) // Service not initialized yet

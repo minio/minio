@@ -220,7 +220,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 			expected: ErrRequestNotReadyYet,
 		},
 		// (7) Should not error with invalid region instead, call should proceed
-		// with sigature does not match.
+		// with signature does not match.
 		{
 			queryParams: map[string]string{
 				"X-Amz-Algorithm":      signV4Algorithm,

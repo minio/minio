@@ -213,6 +213,21 @@ func newLocalXLStorage(path string) (*xlStorage, error) {
 	}, true)
 }
 
+// Make Erasure backend meta volumes.
+func makeFormatErasureMetaVolumes(disk StorageAPI) error {
+	if disk == nil {
+		return errDiskNotFound
+	}
+	volumes := []string{
+		minioMetaTmpDeletedBucket, // creates .minio.sys/tmp as well as .minio.sys/tmp/.trash
+		minioMetaMultipartBucket,  // creates .minio.sys/multipart
+		dataUsageBucket,           // creates .minio.sys/buckets
+		minioConfigBucket,         // creates .minio.sys/config
+	}
+	// Attempt to create MinIO internal buckets.
+	return disk.MakeVolBulk(context.TODO(), volumes...)
+}
+
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	path := ep.Path
@@ -279,12 +294,12 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	s.formatFileInfo = formatFi
 	s.formatFile = pathJoin(s.drivePath, minioMetaBucket, formatConfigFile)
 
-	if len(s.formatData) == 0 {
-		// Create all necessary bucket folders if possible.
-		if err = makeFormatErasureMetaVolumes(s); err != nil {
-			return nil, err
-		}
-	} else {
+	// Create all necessary bucket folders if possible.
+	if err = makeFormatErasureMetaVolumes(s); err != nil {
+		return nil, err
+	}
+
+	if len(s.formatData) > 0 {
 		format := &formatErasureV3{}
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		if err = json.Unmarshal(s.formatData, &format); err != nil {
@@ -357,13 +372,17 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	s.RLock()
-	defer s.RUnlock()
 	// If unset, see if we can locate it.
 	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
 		return getXLDiskLoc(s.diskID)
 	}
 	return s.poolIndex, s.setIndex, s.diskIndex
+}
+
+func (s *xlStorage) SetFormatData(b []byte) {
+	s.Lock()
+	defer s.Unlock()
+	s.formatData = b
 }
 
 // Set location indexes.
@@ -715,11 +734,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
-			dcinfo := DiskInfo{
-				RootDisk:  s.rootDisk,
-				MountPath: s.drivePath,
-				Endpoint:  s.endpoint.String(),
-			}
+			dcinfo := DiskInfo{}
 			di, err := getDiskInfo(s.drivePath)
 			if err != nil {
 				return dcinfo, err
@@ -748,6 +763,10 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 	if v != nil {
 		info = v.(DiskInfo)
 	}
+
+	info.RootDisk = s.rootDisk
+	info.MountPath = s.drivePath
+	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1
 	return info, err
 }
@@ -779,12 +798,12 @@ func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 				return nil, errDiskAccessDenied
 			}
 			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-			return nil, errCorruptedFormat
+			return nil, errCorruptedBackend
 		} else if osIsPermission(err) {
 			return nil, errDiskAccessDenied
 		}
 		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-		return nil, errCorruptedFormat
+		return nil, errCorruptedBackend
 	}
 	return fi, nil
 }
@@ -830,12 +849,12 @@ func (s *xlStorage) GetDiskID() (string, error) {
 				return "", errDiskAccessDenied
 			}
 			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-			return "", errCorruptedFormat
+			return "", errCorruptedBackend
 		} else if osIsPermission(err) {
 			return "", errDiskAccessDenied
 		}
 		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
-		return "", errCorruptedFormat
+		return "", errCorruptedBackend
 	}
 
 	format := &formatErasureV3{}
@@ -2228,7 +2247,7 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate
 			if runtime.GOOS == globalMacOSName {
 				storeFilePath := pathJoin(deletePath, ".DS_Store")
 				_, err := Stat(storeFilePath)
-				// .DS_Store exsits
+				// .DS_Store exists
 				if err == nil {
 					// delete first
 					Remove(storeFilePath)
@@ -2439,7 +2458,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		formatLegacy := s.formatLegacy
 		s.RUnlock()
 		// It is possible that some drives may not have `xl.meta` file
-		// in such scenarios verify if atleast `part.1` files exist
+		// in such scenarios verify if at least `part.1` files exist
 		// to verify for legacy version.
 		if formatLegacy {
 			// We only need this code if we are moving

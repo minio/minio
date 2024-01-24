@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2023-09-30T07-02-29Z
+  tag: RELEASE.2024-01-11T07-46-16Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2023-09-29T16-41-22Z
+  tag: RELEASE.2024-01-11T05-49-32Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
@@ -84,7 +84,7 @@ priorityClassName: ""
 runtimeClassName: ""
 
 ## Set default rootUser, rootPassword
-## AccessKey and secretKey is generated when not set
+## rootUser and rootPassword is generated when not set
 ## Distributed MinIO ref: https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html
 ##
 rootUser: ""
@@ -411,7 +411,7 @@ buckets: []
   #   purge: false
   #   # set versioning for
   #   # bucket [true|false]
-  #   versioning: false
+  #   versioning: false # remove this key if you do not want versioning feature
   #   # set objectlocking for
   #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
   #   objectlocking: false
@@ -495,10 +495,17 @@ oidc:
   # Can leave empty
   claimPrefix: ""
   comment: ""
+  displayName: ""
 
 networkPolicy:
   enabled: false
+  # Specifies whether the policies created will be standard Network Policies (flavor: kubernetes)
+  # or Cilium Network Policies (flavor: cilium)
+  flavor: kubernetes
   allowExternal: true
+  # only when using flavor: cilium
+  egressEntities:
+   - kube-apiserver
 
 ## PodDisruptionBudget settings
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/

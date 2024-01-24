@@ -263,7 +263,7 @@ func isKMSReq(r *http.Request) bool {
 
 // Supported Amz date headers.
 var amzDateHeaders = []string{
-	// Do not chane this order, x-amz-date value should be
+	// Do not change this order, x-amz-date value should be
 	// validated first.
 	"x-amz-date",
 	"date",

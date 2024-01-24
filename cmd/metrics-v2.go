@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -50,32 +51,32 @@ var (
 
 func init() {
 	clusterMetricsGroups := []*MetricsGroup{
-		getNodeHealthMetrics(),
-		getClusterStorageMetrics(),
-		getClusterTierMetrics(),
-		getClusterUsageMetrics(),
-		getKMSMetrics(),
-		getClusterHealthMetrics(),
-		getIAMNodeMetrics(),
-		getReplicationSiteMetrics(),
+		getNodeHealthMetrics(MetricsGroupOpts{dependGlobalNotificationSys: true}),
+		getClusterStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getClusterTierMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getClusterUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getKMSMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependGlobalKMS: true}),
+		getClusterHealthMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
+		getReplicationSiteMetrics(MetricsGroupOpts{dependGlobalSiteReplicationSys: true}),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
 		getGoMetrics(),
-		getHTTPMetrics(false),
-		getNotificationMetrics(),
-		getLocalStorageMetrics(),
+		getHTTPMetrics(MetricsGroupOpts{}),
+		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
+		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 		getMinioProcMetrics(),
 		getMinioVersionMetrics(),
 		getNetworkMetrics(),
 		getS3TTFBMetric(),
 		getILMNodeMetrics(),
 		getScannerNodeMetrics(),
-		getIAMNodeMetrics(),
-		getKMSNodeMetrics(),
-		getMinioHealingMetrics(),
+		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
+		getKMSNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependGlobalKMS: true}),
+		getMinioHealingMetrics(MetricsGroupOpts{dependGlobalBackgroundHealState: true}),
 		getWebhookMetrics(),
-		getReplicationClusterMetrics(),
+		getReplicationClusterMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -85,27 +86,27 @@ func init() {
 	}()
 
 	nodeGroups := []*MetricsGroup{
-		getNodeHealthMetrics(),
-		getHTTPMetrics(false),
+		getNodeHealthMetrics(MetricsGroupOpts{dependGlobalNotificationSys: true}),
+		getHTTPMetrics(MetricsGroupOpts{}),
 		getNetworkMetrics(),
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
 		getTierMetrics(),
-		getNotificationMetrics(),
-		getDistLockMetrics(),
-		getIAMNodeMetrics(),
-		getLocalStorageMetrics(),
+		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
+		getDistLockMetrics(MetricsGroupOpts{dependGlobalIsDistErasure: true, dependGlobalLockServer: true}),
+		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
+		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 	}
 
 	bucketMetricsGroups := []*MetricsGroup{
-		getBucketUsageMetrics(),
-		getHTTPMetrics(true),
+		getBucketUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
-		getBatchJobsMetrics(),
+		getBatchJobsMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
-		getHTTPMetrics(true),
+		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
 	}
 
@@ -255,6 +256,7 @@ const (
 	startTime        = "starttime_seconds"
 	upTime           = "uptime_seconds"
 	memory           = "resident_memory_bytes"
+	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
 	expiryPendingTasks     MetricName = "expiry_pending_tasks"
@@ -315,8 +317,25 @@ type Metric struct {
 
 // MetricsGroup are a group of metrics that are initialized together.
 type MetricsGroup struct {
-	metricsCache  timedValue
-	cacheInterval time.Duration
+	metricsCache     timedValue
+	cacheInterval    time.Duration
+	metricsGroupOpts MetricsGroupOpts
+}
+
+// MetricsGroupOpts are a group of metrics opts to be used to initialize the metrics group.
+type MetricsGroupOpts struct {
+	dependGlobalObjectAPI           bool
+	dependGlobalAuthNPlugin         bool
+	dependGlobalSiteReplicationSys  bool
+	dependGlobalNotificationSys     bool
+	dependGlobalKMS                 bool
+	bucketOnly                      bool
+	dependGlobalLambdaTargetList    bool
+	dependGlobalIAMSys              bool
+	dependGlobalLockServer          bool
+	dependGlobalIsDistErasure       bool
+	dependGlobalBackgroundHealState bool
+	dependBucketTargetSys           bool
 }
 
 // RegisterRead register the metrics populator function to be used
@@ -326,6 +345,63 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 		g.metricsCache.Relax = true
 		g.metricsCache.TTL = g.cacheInterval
 		g.metricsCache.Update = func() (interface{}, error) {
+			if g.metricsGroupOpts.dependGlobalObjectAPI {
+				objLayer := newObjectLayerFn()
+				// Service not initialized yet
+				if objLayer == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalAuthNPlugin {
+				if globalAuthNPlugin == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalSiteReplicationSys {
+				if !globalSiteReplicationSys.isEnabled() {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalNotificationSys {
+				if globalNotificationSys == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalKMS {
+				if GlobalKMS == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalLambdaTargetList {
+				if globalLambdaTargetList == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalIAMSys {
+				if globalIAMSys == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalLockServer {
+				if globalLockServer == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalIsDistErasure {
+				if !globalIsDistErasure {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependGlobalBackgroundHealState {
+				if globalBackgroundHealState == nil {
+					return []Metric{}, nil
+				}
+			}
+			if g.metricsGroupOpts.dependBucketTargetSys {
+				if globalBucketTargetSys == nil {
+					return []Metric{}, nil
+				}
+			}
 			return read(GlobalContext), nil
 		}
 	})
@@ -444,7 +520,7 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_timeout",
-		Help:      "Total number of timeout errors since server start",
+		Help:      "Total number of drive timeout errors since server start",
 		Type:      counterMetric,
 	}
 }
@@ -454,7 +530,27 @@ func getNodeDriveAvailablityErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_availability",
-		Help:      "Total number of I/O errors, permission denied and timeouts since server start",
+		Help:      "Total number of drive I/O errors, permission denied and timeouts since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveWaitingIOMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "io_waiting",
+		Help:      "Total number I/O operations waiting on drive",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveTokensIOMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "io_tokens",
+		Help:      "Total number concurrent I/O operations configured on drive",
 		Type:      counterMetric,
 	}
 }
@@ -1457,6 +1553,16 @@ func getMinIOProcessResidentMemory() MetricDescription {
 	}
 }
 
+func getMinIOProcessVirtualMemory() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: processSubsystem,
+		Name:      memory,
+		Help:      "Virtual memory size in bytes",
+		Type:      gaugeMetric,
+	}
+}
+
 func getMinIOProcessCPUTime() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -1579,6 +1685,14 @@ func getMinioProcMetrics() *MetricsGroup {
 				})
 		}
 
+		if stat.VirtualMemory() > 0 {
+			metrics = append(metrics,
+				Metric{
+					Description: getMinIOProcessVirtualMemory(),
+					Value:       float64(stat.VirtualMemory()),
+				})
+		}
+
 		if stat.CPUTime() > 0 {
 			metrics = append(metrics,
 				Metric{
@@ -1641,6 +1755,17 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) 
 			}
 			metrics = append(metrics, metric)
 		}
+		// add metrics with +Inf label
+		labels1 := make(map[string]string)
+		for _, lp := range dtoMetric.GetLabel() {
+			labels1[*lp.Name] = *lp.Value
+		}
+		labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
+		metrics = append(metrics, Metric{
+			Description:    desc,
+			VariableLabels: labels1,
+			Value:          dtoMetric.Counter.GetValue(),
+		})
 	}
 	return metrics
 }
@@ -1889,9 +2014,10 @@ func getScannerNodeMetrics() *MetricsGroup {
 	return mg
 }
 
-func getIAMNodeMetrics() *MetricsGroup {
+func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		lastSyncTime := atomic.LoadUint64(&globalIAMSys.LastRefreshTimeUnixNano)
@@ -2010,9 +2136,10 @@ func getIAMNodeMetrics() *MetricsGroup {
 }
 
 // replication metrics for each node - published to the cluster endpoint with nodename as label
-func getReplicationClusterMetrics() *MetricsGroup {
+func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	const (
 		Online  = 1
@@ -2197,9 +2324,10 @@ func getReplicationClusterMetrics() *MetricsGroup {
 }
 
 // replication metrics for site replication
-func getReplicationSiteMetrics() *MetricsGroup {
+func getReplicationSiteMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) []Metric {
 		ml := []Metric{}
@@ -2296,9 +2424,10 @@ func getMinioVersionMetrics() *MetricsGroup {
 	return mg
 }
 
-func getNodeHealthMetrics() *MetricsGroup {
+func getNodeHealthMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 16)
@@ -2316,9 +2445,10 @@ func getNodeHealthMetrics() *MetricsGroup {
 	return mg
 }
 
-func getMinioHealingMetrics() *MetricsGroup {
+func getMinioHealingMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(_ context.Context) (metrics []Metric) {
 		bgSeq, exists := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
@@ -2386,9 +2516,10 @@ func getObjectsScanned(seq *healSequence) (m []Metric) {
 	return
 }
 
-func getDistLockMetrics() *MetricsGroup {
+func getDistLockMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Second,
+		cacheInterval:    1 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		if !globalIsDistErasure {
@@ -2433,9 +2564,10 @@ func getDistLockMetrics() *MetricsGroup {
 	return mg
 }
 
-func getNotificationMetrics() *MetricsGroup {
+func getNotificationMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		metrics := make([]Metric, 0, 3)
@@ -2608,12 +2740,13 @@ func getNotificationMetrics() *MetricsGroup {
 	return mg
 }
 
-func getHTTPMetrics(bucketOnly bool) *MetricsGroup {
+func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		if !bucketOnly {
+		if !mg.metricsGroupOpts.bucketOnly {
 			httpStats := globalHTTPStats.toServerHTTPStats()
 			metrics = make([]Metric, 0, 3+
 				len(httpStats.CurrentS3Requests.APIStats)+
@@ -2799,13 +2932,13 @@ func getNetworkMetrics() *MetricsGroup {
 	return mg
 }
 
-func getClusterUsageMetrics() *MetricsGroup {
+func getClusterUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
 		if objLayer == nil {
 			return
 		}
@@ -2905,16 +3038,13 @@ func getClusterUsageMetrics() *MetricsGroup {
 	return mg
 }
 
-func getBucketUsageMetrics() *MetricsGroup {
+func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
 
 		metrics = make([]Metric, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
@@ -3044,20 +3174,20 @@ func getBucketUsageMetrics() *MetricsGroup {
 						}
 					}
 				}
-				metrics = append(metrics, Metric{
-					Description:          getBucketObjectDistributionMD(),
-					Histogram:            usage.ObjectSizesHistogram,
-					HistogramBucketLabel: "range",
-					VariableLabels:       map[string]string{"bucket": bucket},
-				})
-
-				metrics = append(metrics, Metric{
-					Description:          getBucketObjectVersionsMD(),
-					Histogram:            usage.ObjectVersionsHistogram,
-					HistogramBucketLabel: "range",
-					VariableLabels:       map[string]string{"bucket": bucket},
-				})
 			}
+			metrics = append(metrics, Metric{
+				Description:          getBucketObjectDistributionMD(),
+				Histogram:            usage.ObjectSizesHistogram,
+				HistogramBucketLabel: "range",
+				VariableLabels:       map[string]string{"bucket": bucket},
+			})
+
+			metrics = append(metrics, Metric{
+				Description:          getBucketObjectVersionsMD(),
+				Histogram:            usage.ObjectVersionsHistogram,
+				HistogramBucketLabel: "range",
+				VariableLabels:       map[string]string{"bucket": bucket},
+			})
 		}
 		return
 	})
@@ -3094,15 +3224,14 @@ func getClusterTransitionedVersionsMD() MetricDescription {
 	}
 }
 
-func getClusterTierMetrics() *MetricsGroup {
+func getClusterTierMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		if objLayer == nil {
-			return
-		}
+
 		if globalTierConfigMgr.Empty() {
 			return
 		}
@@ -3122,16 +3251,13 @@ func getClusterTierMetrics() *MetricsGroup {
 	return mg
 }
 
-func getLocalStorageMetrics() *MetricsGroup {
+func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
 
 		metrics = make([]Metric, 0, 50)
 		storageInfo := objLayer.LocalStorageInfo(ctx, true)
@@ -3173,6 +3299,18 @@ func getLocalStorageMetrics() *MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDriveAvailablityErrorsMD(),
 					Value:          float64(disk.Metrics.TotalErrorsAvailability),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveWaitingIOMD(),
+					Value:          float64(disk.Metrics.TotalWaiting),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getNodeDriveTokensIOMD(),
+					Value:          float64(disk.Metrics.TotalTokens),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
 				})
 
@@ -3236,6 +3374,16 @@ func getClusterHealthStatusMD() MetricDescription {
 	}
 }
 
+func getClusterErasureSetReadQuorumMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_read_quorum",
+		Help:      "Get the read quorum for this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
 func getClusterErasureSetWriteQuorumMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
@@ -3266,21 +3414,18 @@ func getClusterErasureSetHealingDrivesMD() MetricDescription {
 	}
 }
 
-func getClusterHealthMetrics() *MetricsGroup {
+func getClusterHealthMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
 
 		opts := HealthOptions{}
 		result := objLayer.Health(ctx, opts)
 
-		metrics = make([]Metric, 0, 2+3*len(result.ESHealth))
+		metrics = make([]Metric, 0, 2+4*len(result.ESHealth))
 
 		metrics = append(metrics, Metric{
 			Description: getClusterWriteQuorumMD(),
@@ -3302,6 +3447,11 @@ func getClusterHealthMetrics() *MetricsGroup {
 				"pool": strconv.Itoa(h.PoolID),
 				"set":  strconv.Itoa(h.SetID),
 			}
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetReadQuorumMD(),
+				VariableLabels: labels,
+				Value:          float64(h.ReadQuorum),
+			})
 			metrics = append(metrics, Metric{
 				Description:    getClusterErasureSetWriteQuorumMD(),
 				VariableLabels: labels,
@@ -3325,18 +3475,13 @@ func getClusterHealthMetrics() *MetricsGroup {
 	return mg
 }
 
-func getBatchJobsMetrics() *MetricsGroup {
+func getBatchJobsMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
-
 		var m madmin.RealtimeMetrics
 		mLocal := collectLocalMetrics(madmin.MetricsBatchJobs, collectMetricsOpts{})
 		m.Merge(&mLocal)
@@ -3396,16 +3541,13 @@ func getBatchJobsMetrics() *MetricsGroup {
 	return mg
 }
 
-func getClusterStorageMetrics() *MetricsGroup {
+func getClusterStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 1 * time.Minute,
+		cacheInterval:    1 * time.Minute,
+		metricsGroupOpts: opts,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil {
-			return
-		}
 
 		// Fetch disk space info, ignore errors
 		metrics = make([]Metric, 0, 10)
@@ -3452,18 +3594,13 @@ func getClusterStorageMetrics() *MetricsGroup {
 	return mg
 }
 
-func getKMSNodeMetrics() *MetricsGroup {
+func getKMSNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil || GlobalKMS == nil {
-			return
-		}
-
 		const (
 			Online  = 1
 			Offline = 0
@@ -3557,18 +3694,13 @@ func getWebhookMetrics() *MetricsGroup {
 	return mg
 }
 
-func getKMSMetrics() *MetricsGroup {
+func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
-		cacheInterval: 10 * time.Second,
+		cacheInterval:    10 * time.Second,
+		metricsGroupOpts: opts,
 	}
 
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		objLayer := newObjectLayerFn()
-		// Service not initialized yet
-		if objLayer == nil || GlobalKMS == nil {
-			return []Metric{}
-		}
-
 		metrics := make([]Metric, 0, 4)
 		metric, err := GlobalKMS.Metrics(ctx)
 		if err != nil {

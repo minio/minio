@@ -1,4 +1,4 @@
-{{- if .Values.networkPolicy.enabled }}
+{{- if and (.Values.networkPolicy.enabled) (eq .Values.networkPolicy.flavor "kubernetes") }}
 kind: NetworkPolicy
 apiVersion: {{ template "minio.networkPolicy.apiVersion" . }}
 metadata:

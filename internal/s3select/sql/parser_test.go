@@ -41,7 +41,7 @@ func TestJSONPathElement(t *testing.T) {
 		// Index
 		"[2]", "[0]", "[100]",
 
-		// Object wilcard
+		// Object wildcard
 		".*",
 
 		// array wildcard
@@ -382,4 +382,14 @@ func TestSqlLexerArithOps(t *testing.T) {
 	// for i, t := range tokens {
 	// 	fmt.Printf("%d: %#v\n", i, t)
 	// }
+}
+
+func TestParseSelectStatement(t *testing.T) {
+	exp, err := ParseSelectStatement("select _3,_1,_2 as 'mytest'  from S3object")
+	if err != nil {
+		t.Fatalf("parse alias sql error: %v", err)
+	}
+	if exp.selectAST.Expression.Expressions[2].As != "mytest" {
+		t.Fatalf("parse alias sql error: %s not equal %s", exp.selectAST.Expression.Expressions[2].As, err)
+	}
 }

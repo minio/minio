@@ -157,7 +157,7 @@ func (sses3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []b
 		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
 	}
 
-	// There are two possibilites:
+	// There are two possibilities:
 	// - We use a KMS -> There must be non-empty key ID and a KMS data key.
 	// - We use a K/V -> There must be no key ID and no KMS data key.
 	// Otherwise, the caller has passed an invalid argument combination.
@@ -203,7 +203,7 @@ func (sses3) ParseMetadata(metadata map[string]string) (keyID string, kmsKey []b
 		return keyID, kmsKey, sealedKey, Errorf("The object metadata is missing the internal sealed key for SSE-S3")
 	}
 
-	// There are two possibilites:
+	// There are two possibilities:
 	// - We use a KMS -> There must be a key ID and a KMS data key.
 	// - We use a K/V -> There must be no key ID and no KMS data key.
 	// Otherwise, the metadata is corrupted.

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2023 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -45,6 +46,10 @@ import (
 
 // dataUsageHash is the hash type used.
 type dataUsageHash string
+
+// sizeHistogramV1 is size histogram V1, which has fewer intervals esp. between
+// 1024B and 1MiB.
+type sizeHistogramV1 [dataUsageBucketLenV1]uint64
 
 // sizeHistogram is a size histogram.
 type sizeHistogram [dataUsageBucketLen]uint64
@@ -204,8 +209,8 @@ func (r *replicationAllStats) clone() *replicationAllStats {
 	return &dst
 }
 
-//msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5 dataUsageEntryV6
-//msgp:marshal ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5 dataUsageEntryV6
+//msgp:encode ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5 dataUsageEntryV6 dataUsageEntryV7
+//msgp:marshal ignore dataUsageEntryV2 dataUsageEntryV3 dataUsageEntryV4 dataUsageEntryV5 dataUsageEntryV6 dataUsageEntryV7
 
 //msgp:tuple dataUsageEntryV2
 type dataUsageEntryV2 struct {
@@ -263,14 +268,28 @@ type dataUsageEntryV6 struct {
 	Compacted        bool
 }
 
+type dataUsageEntryV7 struct {
+	Children dataUsageHashMap `msg:"ch"`
+	// These fields do no include any children.
+	Size             int64                `msg:"sz"`
+	Objects          uint64               `msg:"os"`
+	Versions         uint64               `msg:"vs"` // Versions that are not delete markers.
+	DeleteMarkers    uint64               `msg:"dms"`
+	ObjSizes         sizeHistogramV1      `msg:"szs"`
+	ObjVersions      versionsHistogram    `msg:"vh"`
+	ReplicationStats *replicationAllStats `msg:"rs,omitempty"`
+	AllTierStats     *allTierStats        `msg:"ats,omitempty"`
+	Compacted        bool                 `msg:"c"`
+}
+
 // dataUsageCache contains a cache of data usage entries latest version.
 type dataUsageCache struct {
 	Info  dataUsageCacheInfo
 	Cache map[string]dataUsageEntry
 }
 
-//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6
-//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6
+//msgp:encode ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6 dataUsageCacheV7
+//msgp:marshal ignore dataUsageCacheV2 dataUsageCacheV3 dataUsageCacheV4 dataUsageCacheV5 dataUsageCacheV6 dataUsageCacheV7
 
 // dataUsageCacheV2 contains a cache of data usage entries version 2.
 type dataUsageCacheV2 struct {
@@ -300,6 +319,12 @@ type dataUsageCacheV5 struct {
 type dataUsageCacheV6 struct {
 	Info  dataUsageCacheInfo
 	Cache map[string]dataUsageEntryV6
+}
+
+// dataUsageCacheV7 contains a cache of data usage entries version 7.
+type dataUsageCacheV7 struct {
+	Info  dataUsageCacheInfo
+	Cache map[string]dataUsageEntryV7
 }
 
 //msgp:ignore dataUsageEntryInfo
@@ -750,11 +775,42 @@ func (h *sizeHistogram) add(size int64) {
 	}
 }
 
+// mergeV1 is used to migrate data usage cache from sizeHistogramV1 to
+// sizeHistogram
+func (h *sizeHistogram) mergeV1(v sizeHistogramV1) {
+	var oidx, nidx int
+	for oidx < len(v) {
+		intOld, intNew := ObjectsHistogramIntervalsV1[oidx], ObjectsHistogramIntervals[nidx]
+		// skip intervals that aren't common to both histograms
+		if intOld.start != intNew.start || intOld.end != intNew.end {
+			nidx++
+			continue
+		}
+		h[nidx] += v[oidx]
+		oidx++
+		nidx++
+	}
+}
+
 // toMap returns the map to a map[string]uint64.
 func (h *sizeHistogram) toMap() map[string]uint64 {
 	res := make(map[string]uint64, dataUsageBucketLen)
+	var splCount uint64
 	for i, count := range h {
-		res[ObjectsHistogramIntervals[i].name] = count
+		szInt := ObjectsHistogramIntervals[i]
+		switch {
+		case humanize.KiByte == szInt.start && szInt.end == humanize.MiByte-1:
+			// spl interval: [1024B, 1MiB)
+			res[szInt.name] = splCount
+		case humanize.KiByte <= szInt.start && szInt.end <= humanize.MiByte-1:
+			// intervals that fall within the spl interval above; they
+			// appear earlier in this array of intervals, see
+			// ObjectsHistogramIntervals
+			splCount += count
+			fallthrough
+		default:
+			res[szInt.name] = count
+		}
 	}
 	return res
 }
@@ -924,7 +980,7 @@ type objectIO interface {
 // The loader is optimistic and has no locking, but tries 5 times before giving up.
 // If the object is not found, a nil error with empty data usage cache is returned.
 func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) error {
-	// By defaut, empty data usage cache
+	// By default, empty data usage cache
 	*d = dataUsageCache{}
 
 	load := func(name string, timeout time.Duration) (bool, error) {
@@ -1027,7 +1083,8 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 // Bumping the cache version will drop data from previous versions
 // and write new data with the new version.
 const (
-	dataUsageCacheVerCurrent = 7
+	dataUsageCacheVerCurrent = 8
+	dataUsageCacheVerV7      = 7
 	dataUsageCacheVerV6      = 6
 	dataUsageCacheVerV5      = 5
 	dataUsageCacheVerV4      = 4
@@ -1275,6 +1332,34 @@ func (d *dataUsageCache) deserialize(r io.Reader) error {
 			}
 			d.Cache[k] = due
 		}
+		return nil
+	case dataUsageCacheVerV7:
+		// Zstd compressed.
+		dec, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(2))
+		if err != nil {
+			return err
+		}
+		defer dec.Close()
+		dold := &dataUsageCacheV7{}
+		if err = dold.DecodeMsg(msgp.NewReader(dec)); err != nil {
+			return err
+		}
+		d.Info = dold.Info
+		d.Cache = make(map[string]dataUsageEntry, len(dold.Cache))
+		for k, v := range dold.Cache {
+			var szHist sizeHistogram
+			szHist.mergeV1(v.ObjSizes)
+			d.Cache[k] = dataUsageEntry{
+				Children:         v.Children,
+				Size:             v.Size,
+				Objects:          v.Objects,
+				Versions:         v.Versions,
+				ObjSizes:         szHist,
+				ReplicationStats: v.ReplicationStats,
+				Compacted:        v.Compacted,
+			}
+		}
+
 		return nil
 	case dataUsageCacheVerCurrent:
 		// Zstd compressed.

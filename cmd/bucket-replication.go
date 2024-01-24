@@ -495,7 +495,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		}
 		tgtClnt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtEntry.Arn)
 		if tgtClnt == nil {
-			// Skip stale targets if any and log them to be missing atleast once.
+			// Skip stale targets if any and log them to be missing at least once.
 			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtEntry.Arn), tgtEntry.Arn)
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
@@ -2255,7 +2255,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 		if rs != nil {
 			h, err := rs.ToHeader()
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Invalid range header for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
+				logger.LogIf(ctx, fmt.Errorf("invalid range header for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
 				continue
 			}
 			gopts.Set(xhttp.Range, h)
@@ -2346,6 +2346,127 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 	} else {
 		globalReplicationPool.queueReplicaTask(ri)
 	}
+}
+
+// proxyTaggingToRepTarget proxies tagging requests to remote targets for
+// active-active replicated setups
+func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *tags.Tags, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (proxy proxyResult) {
+	// this option is set when active-active replication is in place between site A -> B,
+	// and request hits site B that does not have the object yet.
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+		return proxy
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, len(proxyTargets.Targets))
+	for idx, t := range proxyTargets.Targets {
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			continue
+		}
+		// if proxying explicitly disabled on remote target
+		if tgt.disableProxy {
+			continue
+		}
+		idx := idx
+		wg.Add(1)
+		go func(idx int, tgt *TargetClient) {
+			defer wg.Done()
+			var err error
+			if tags != nil {
+				popts := minio.PutObjectTaggingOptions{
+					VersionID: opts.VersionID,
+					Internal: minio.AdvancedObjectTaggingOptions{
+						ReplicationProxyRequest: "true",
+					},
+				}
+				err = tgt.PutObjectTagging(ctx, tgt.Bucket, object, tags, popts)
+			} else {
+				dopts := minio.RemoveObjectTaggingOptions{
+					VersionID: opts.VersionID,
+					Internal: minio.AdvancedObjectTaggingOptions{
+						ReplicationProxyRequest: "true",
+					},
+				}
+				err = tgt.RemoveObjectTagging(ctx, tgt.Bucket, object, dopts)
+			}
+			if err != nil {
+				errs[idx] = err
+			}
+		}(idx, tgt)
+	}
+	wg.Wait()
+
+	var (
+		terr        error
+		taggedCount int
+	)
+	for _, err := range errs {
+		if err == nil {
+			taggedCount++
+			continue
+		}
+		errCode := minio.ToErrorResponse(err).Code
+		if errCode != "NoSuchKey" && errCode != "NoSuchVersion" {
+			terr = err
+		}
+	}
+	// don't return error if at least one target was tagged successfully
+	if taggedCount == 0 && terr != nil {
+		proxy.Err = terr
+	}
+	return proxy
+}
+
+// proxyGetTaggingToRepTarget proxies get tagging requests to remote targets for
+// active-active replicated setups
+func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (tgs *tags.Tags, proxy proxyResult) {
+	// this option is set when active-active replication is in place between site A -> B,
+	// and request hits site B that does not have the object yet.
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+		return nil, proxy
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, len(proxyTargets.Targets))
+	tagSlc := make([]map[string]string, len(proxyTargets.Targets))
+	for idx, t := range proxyTargets.Targets {
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			continue
+		}
+		// if proxying explicitly disabled on remote target
+		if tgt.disableProxy {
+			continue
+		}
+		idx := idx
+		wg.Add(1)
+		go func(idx int, tgt *TargetClient) {
+			defer wg.Done()
+			var err error
+			gopts := minio.GetObjectTaggingOptions{
+				VersionID: opts.VersionID,
+				Internal: minio.AdvancedObjectTaggingOptions{
+					ReplicationProxyRequest: "true",
+				},
+			}
+			tgs, err = tgt.GetObjectTagging(ctx, tgt.Bucket, object, gopts)
+			if err != nil {
+				errs[idx] = err
+			} else {
+				tagSlc[idx] = tgs.ToMap()
+			}
+		}(idx, tgt)
+	}
+	wg.Wait()
+	for idx, err := range errs {
+		errCode := minio.ToErrorResponse(err).Code
+		if err != nil && errCode != "NoSuchKey" && errCode != "NoSuchVersion" {
+			return nil, proxyResult{Err: err}
+		}
+		if err == nil {
+			tgs, _ = tags.MapToObjectTags(tagSlc[idx])
+		}
+	}
+	return tgs, proxy
 }
 
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectReplicationInfo, o ObjectLayer) {
@@ -2876,7 +2997,7 @@ func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []Buck
 		}
 		duration := time.Duration(r.Float64() * float64(time.Minute))
 		if duration < time.Second {
-			// Make sure to sleep atleast a second to avoid high CPU ticks.
+			// Make sure to sleep at least a second to avoid high CPU ticks.
 			duration = time.Second
 		}
 		time.Sleep(duration)

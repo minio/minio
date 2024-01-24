@@ -786,7 +786,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		if debugPrint {
 			fmt.Println("expected to be client side, not server side")
 		}
-		return errors.New("expected to be client side, not server side")
+		return errors.New("grid: expected to be client side, not server side")
 	}
 	msg := message{
 		Op: OpConnectResponse,
@@ -831,7 +831,9 @@ func (c *Connection) reconnected() {
 	c.outgoing.Clear()
 
 	// Wait for existing to exit
+	c.connMu.Lock()
 	c.handleMsgWg.Wait()
+	c.connMu.Unlock()
 }
 
 func (c *Connection) updateState(s State) {
@@ -855,7 +857,9 @@ func (c *Connection) updateState(s State) {
 
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 	// Read goroutine
+	c.connMu.Lock()
 	c.handleMsgWg.Add(2)
+	c.connMu.Unlock()
 	ctx, cancel := context.WithCancelCause(ctx)
 	go func() {
 		defer func() {
@@ -899,7 +903,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 					}
 					continue
 				}
-
 				if int64(cap(dst)) < hdr.Length+1 {
 					dst = make([]byte, 0, hdr.Length+hdr.Length>>3)
 				}
@@ -913,6 +916,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 				cancel(ErrDisconnected)
 				return
+			}
+			if cap(msg) > readBufferSize*8 {
+				// Don't keep too much memory around.
+				msg = nil
 			}
 
 			var err error
@@ -1531,7 +1538,9 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 			c.debugInConn.Close()
 		}
 	case debugWaitForExit:
+		c.connMu.Lock()
 		c.handleMsgWg.Wait()
+		c.connMu.Unlock()
 	case debugSetConnPingDuration:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()

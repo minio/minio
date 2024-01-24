@@ -22,18 +22,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
-	"github.com/minio/sio"
 )
 
 // Object was stored with additional erasure codes due to degraded system at upload time
@@ -88,52 +85,6 @@ func (fi FileInfo) IsValid() bool {
 		correctIndexes)
 }
 
-func (fi FileInfo) checkMultipart() (int64, bool) {
-	if len(fi.Parts) == 0 {
-		return 0, false
-	}
-	if !crypto.IsMultiPart(fi.Metadata) {
-		return 0, false
-	}
-	var size int64
-	for _, part := range fi.Parts {
-		psize, err := sio.DecryptedSize(uint64(part.Size))
-		if err != nil {
-			return 0, false
-		}
-		size += int64(psize)
-	}
-
-	return size, len(extractETag(fi.Metadata)) != 32
-}
-
-// GetActualSize - returns the actual size of the stored object
-func (fi FileInfo) GetActualSize() (int64, error) {
-	if _, ok := fi.Metadata[ReservedMetadataPrefix+"compression"]; ok {
-		sizeStr, ok := fi.Metadata[ReservedMetadataPrefix+"actual-size"]
-		if !ok {
-			return -1, errInvalidDecompressedSize
-		}
-		size, err := strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil {
-			return -1, errInvalidDecompressedSize
-		}
-		return size, nil
-	}
-	if _, ok := crypto.IsEncrypted(fi.Metadata); ok {
-		size, ok := fi.checkMultipart()
-		if !ok {
-			size, err := sio.DecryptedSize(uint64(fi.Size))
-			if err != nil {
-				err = errObjectTampered // assign correct error type
-			}
-			return int64(size), err
-		}
-		return size, nil
-	}
-	return fi.Size, nil
-}
-
 // ToObjectInfo - Converts metadata to object info.
 func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInfo {
 	object = decodeDirObject(object)
@@ -166,7 +117,6 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 			objInfo.Expires = t.UTC()
 		}
 	}
-	objInfo.backendType = BackendErasure
 
 	// Extract etag from metadata.
 	objInfo.ETag = extractETag(fi.Metadata)
@@ -424,17 +374,6 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	return FileInfo{}, errErasureReadQuorum
 }
 
-func pickValidDiskTimeWithQuorum(metaArr []FileInfo, quorum int) time.Time {
-	diskMTimes := listObjectDiskMtimes(metaArr)
-
-	diskMTime, diskMaxima := commonTimeAndOccurence(diskMTimes, shardDiskTimeDelta)
-	if diskMaxima >= quorum {
-		return diskMTime
-	}
-
-	return timeSentinel
-}
-
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
 // slice of FileInfo.
 func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Time, etag string, quorum int) (FileInfo, error) {
@@ -533,7 +472,7 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 // readQuorum is the min required disks to read data.
 // writeQuorum is the min required disks to write data.
 func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []error, defaultParityCount int) (objectReadQuorum, objectWriteQuorum int, err error) {
-	// There should be atleast half correct entries, if not return failure
+	// There should be at least half correct entries, if not return failure
 	expectedRQuorum := len(partsMetaData) / 2
 	if defaultParityCount == 0 {
 		// if parity count is '0', we expected all entries to be present.

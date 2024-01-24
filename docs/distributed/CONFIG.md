@@ -4,7 +4,7 @@ MinIO now supports starting the server arguments and configuration via a YAML co
 
 Historically everything to MinIO was provided via command arguments for the hostnames and the drives via an ellipses syntax such as `minio server http://host{1...4}/disk{1...4}` this requirement added an additional burden to have sequential hostnames for us to make sure that we can provide horizontal distribution, however we have come across situations where sometimes this is not feasible and there are no easier alternatives without modifying /etc/hosts on the host system as root user.  Many times in airgapped deployments this is not allowed or requires audits and approvals.
 
-MinIO server configuration file allows users to provide topology that allows for heterogenous hostnames, allowing MinIO to deployed in pre-existing environments without any further OS level configurations.
+MinIO server configuration file allows users to provide topology that allows for heterogeneous hostnames, allowing MinIO to deployed in pre-existing environments without any further OS level configurations.
 
 ### Usage
 
@@ -12,7 +12,7 @@ MinIO server configuration file allows users to provide topology that allows for
 minio server --config config.yaml
 ```
 
-Lets you start MinIO server with all inputs to start MinIO server provided via this configuration file, once the configuration file is provided all other pre-existing values on disk for configuration are overriden by the new values set in this configuration file.
+Lets you start MinIO server with all inputs to start MinIO server provided via this configuration file, once the configuration file is provided all other pre-existing values on disk for configuration are overridden by the new values set in this configuration file.
 
 Following is an example YAML configuration structure.
 ```
@@ -53,7 +53,7 @@ options:
 - Mixing `local-path` and `distributed-path` is not allowed, doing so would cause MinIO to refuse starting the server.
 - Ellipses notation (e.g. `{1...10}`) or bracket notations are fully allowed (e.g. `{a,c,f}`) to have multiple entries in one line.
 
-> NOTE: MinIO environmental variables still take precedence over the `config.yaml` file, however `config.yaml` is preffered over MinIO internal config KV settings via `mc admin config set alias/ <sub-system>`.
+> NOTE: MinIO environmental variables still take precedence over the `config.yaml` file, however `config.yaml` is preferred over MinIO internal config KV settings via `mc admin config set alias/ <sub-system>`.
 
 ### TODO
 

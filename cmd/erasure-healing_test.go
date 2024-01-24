@@ -362,7 +362,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = er.HealBucket(ctx, bucket, madmin.HealOpts{
+	_, err = obj.HealBucket(ctx, bucket, madmin.HealOpts{
 		DryRun: false,
 		Remove: false,
 	})
@@ -543,7 +543,7 @@ func TestHealingVersioned(t *testing.T) {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	_, err = er.HealBucket(ctx, bucket, madmin.HealOpts{
+	_, err = obj.HealBucket(ctx, bucket, madmin.HealOpts{
 		DryRun: false,
 		Remove: false,
 	})
@@ -1067,7 +1067,7 @@ func TestHealObjectCorruptedPools(t *testing.T) {
 	for i := 0; i < (nfi.Erasure.DataBlocks + nfi.Erasure.ParityBlocks); i++ {
 		stats, _ := erasureDisks[i].StatInfoFile(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), false)
 		if len(stats) != 0 {
-			t.Errorf("Expected xl.meta file to be not present, but succeeeded")
+			t.Errorf("Expected xl.meta file to be not present, but succeeded")
 		}
 	}
 }

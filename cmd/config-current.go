@@ -499,7 +499,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 			if globalDNSConfig != nil {
-				// if global DNS is already configured, indicate with a warning, incase
+				// if global DNS is already configured, indicate with a warning, in case
 				// users are confused.
 				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
 			} else {
@@ -600,6 +600,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply scanner config: %w", err)
 		}
 		// update dynamic scanner values.
+		scannerIdleMode.Store(scannerCfg.IdleMode)
 		scannerCycle.Store(scannerCfg.Cycle)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:

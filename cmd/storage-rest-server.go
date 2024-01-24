@@ -305,19 +305,6 @@ func (s *storageRESTServer) StatVolHandler(params *grid.MSS) (*VolInfo, *grid.Re
 	return &info, nil
 }
 
-// DeleteVolHandler - delete a volume.
-func (s *storageRESTServer) DeleteVolHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	volume := r.Form.Get(storageRESTVolume)
-	forceDelete := r.Form.Get(storageRESTForceDelete) == "true"
-	err := s.getStorage().DeleteVol(r.Context(), volume, forceDelete)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-	}
-}
-
 // AppendFileHandler - append data from the request to the file specified.
 func (s *storageRESTServer) AppendFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1201,7 +1188,7 @@ func checkDiskFatalErrs(errs []error) error {
 // at each implementation of error for added hints.
 //
 // FIXME: This is an unusual function but serves its purpose for
-// now, need to revist the overall erroring structure here.
+// now, need to revisit the overall erroring structure here.
 // Do not like it :-(
 func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 	switch {
@@ -1359,11 +1346,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVol).HandlerFunc(h(server.MakeVolHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodMakeVolBulk).HandlerFunc(h(server.MakeVolBulkHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVol).HandlerFunc(h(server.DeleteVolHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListVols).HandlerFunc(h(server.ListVolsHandler))
-
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodAppendFile).HandlerFunc(h(server.AppendFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWriteAll).HandlerFunc(h(server.WriteAllHandler))
 
@@ -1408,6 +1390,8 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				}
 				storage := newXLStorageDiskIDCheck(xl, true)
 				storage.SetDiskID(xl.diskID)
+				// We do not have to do SetFormatData() since 'xl'
+				// already captures formatData cached.
 
 				globalLocalDrivesMu.Lock()
 				defer globalLocalDrivesMu.Unlock()

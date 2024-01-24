@@ -430,6 +430,9 @@ const (
 	ErrLambdaARNInvalid
 	ErrLambdaARNNotFound
 
+	// New Codes for GetObjectAttributes and GetObjectVersionAttributes
+	ErrInvalidAttributeName
+
 	apiErrCodeEnd // This is used only for the testing code
 )
 
@@ -956,7 +959,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationBandwidthLimitError: {
 		Code:           "XMinioAdminReplicationBandwidthLimitError",
-		Description:    "Bandwidth limit for remote target must be atleast 100MBps",
+		Description:    "Bandwidth limit for remote target must be at least 100MBps",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrReplicationNoExistingObjects: {
@@ -2062,6 +2065,11 @@ var errorCodes = errorCodeMap{
 		Code:           "XMinioPolicyNotAttached",
 		Description:    "The specified policy is not found.",
 		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrInvalidAttributeName: {
+		Code:           "InvalidArgument",
+		Description:    "Invalid attribute name specified.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
 }

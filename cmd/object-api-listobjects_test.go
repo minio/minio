@@ -825,7 +825,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
 		// Using an existing file for bucket name, but its not a directory (5).
 		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
-		// Valid bucket names, but they donot exist (6-8).
+		// Valid bucket names, but they do not exist (6-8).
 		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
@@ -1570,7 +1570,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
 		// Using an existing file for bucket name, but its not a directory (5).
 		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
-		// Valid bucket names, but they donot exist (6-8).
+		// Valid bucket names, but they do not exist (6-8).
 		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},

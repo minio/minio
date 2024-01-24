@@ -197,7 +197,7 @@ func (h *metrics) accumRequestRTT(reqStartTime time.Time, rttMs float64, isSucce
 		}
 	}
 
-	// Round the reqest time *down* to whole minute.
+	// Round the request time *down* to whole minute.
 	reqTimeMinute := reqStartTime.Truncate(time.Minute)
 	if reqTimeMinute.After(h.currentMinute.statsTime) {
 		// Drop the last full minute now, since we got a request for a time we

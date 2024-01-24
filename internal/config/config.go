@@ -274,7 +274,7 @@ type KV struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 
-	Deprecated bool `json:"-"`
+	HiddenIfEmpty bool `json:"-"`
 }
 
 func (kv KV) String() string {
@@ -604,7 +604,7 @@ func LookupSite(siteKV KVS, regionKV KVS) (s Site, err error) {
 }
 
 // CheckValidKeys - checks if inputs KVS has the necessary keys,
-// returns error if it find extra or superflous keys.
+// returns error if it find extra or superfluous keys.
 func CheckValidKeys(subSys string, kv KVS, validKVS KVS, deprecatedKeys ...string) error {
 	nkv := KVS{}
 	for _, kv := range kv {
@@ -1447,7 +1447,7 @@ func (cs *SubsysInfo) WriteTo(b *strings.Builder, off bool) {
 			continue
 		}
 		// Ignore empty and deprecated values
-		if dkv.Deprecated && kv.Value == "" {
+		if dkv.HiddenIfEmpty && kv.Value == "" {
 			continue
 		}
 		// Do not need to print if state is on

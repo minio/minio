@@ -65,8 +65,9 @@ var (
 	globalHealConfig heal.Config
 
 	// Sleeper values are updated when config is loaded.
-	scannerSleeper = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
-	scannerCycle   = uatomic.NewDuration(dataScannerStartDelay)
+	scannerSleeper  = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
+	scannerCycle    = uatomic.NewDuration(dataScannerStartDelay)
+	scannerIdleMode = uatomic.NewInt32(0) // default is throttled when idle
 )
 
 // initDataScanner will start the scanner in the background.
@@ -78,7 +79,7 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			runDataScanner(ctx, objAPI)
 			duration := time.Duration(r.Float64() * float64(scannerCycle.Load()))
 			if duration < time.Second {
-				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				// Make sure to sleep at least a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
@@ -709,7 +710,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				partial: func(entries metaCacheEntries, errs []error) {
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
-						// check if we can get one entry atleast
+						// check if we can get one entry at least
 						// proceed to heal nonetheless, since
 						// this object might be dangling.
 						entry, _ = entries.firstFound()
@@ -1470,7 +1471,7 @@ func (d *dynamicSleeper) Sleep(ctx context.Context, base time.Duration) {
 }
 
 // Update the current settings and cycle all waiting.
-// Parameters are the same as in the contructor.
+// Parameters are the same as in the constructor.
 func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

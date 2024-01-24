@@ -234,7 +234,7 @@ fi
 ## Check replication of deleted ILM expiry rules
 ./mc ilm rule remove --id "${id}" sitea/bucket
 sleep 30
-# should error as rule doesnt exist
+# should error as rule doesn't exist
 error=$(./mc ilm rule list siteb/bucket --json | jq '.error.cause.message' | sed 's/"//g')
 if [ "$error" != "The lifecycle configuration does not exist" ]; then
 	echo "BUG: Removed ILM expiry rule not replicated to 'siteb'"

@@ -45,8 +45,11 @@ go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
 
 wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
 	chmod +x mc
-wget -O mc.RELEASE.2021-03-12T03-36-59Z https://dl.minio.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-03-12T03-36-59Z &&
-	chmod +x mc.RELEASE.2021-03-12T03-36-59Z
+
+if [ ! -f mc.RELEASE.2021-03-12T03-36-59Z ]; then
+	wget -O mc.RELEASE.2021-03-12T03-36-59Z https://dl.minio.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-03-12T03-36-59Z &&
+		chmod +x mc.RELEASE.2021-03-12T03-36-59Z
+fi
 
 minio server --address 127.0.0.1:9001 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
 	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
@@ -208,5 +211,29 @@ s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://1
 s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9004/ -bucket olockbucket
 s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9005/ -bucket olockbucket
 s3-check-md5 -versions -access-key minio -secret-key minio123 -endpoint http://127.0.0.1:9006/ -bucket olockbucket
+
+# additional tests for encryption object alignment
+go install -v github.com/minio/multipart-debug@latest
+
+upload_id=$(multipart-debug --endpoint 127.0.0.1:9001 --accesskey minio --secretkey minio123 multipart new --bucket bucket --object new-test-encrypted-object --encrypt)
+
+dd if=/dev/urandom bs=1 count=7048531 of=/tmp/7048531.txt
+dd if=/dev/urandom bs=1 count=2847391 of=/tmp/2847391.txt
+
+sudo apt install jq -y
+
+etag_1=$(multipart-debug --endpoint 127.0.0.1:9002 --accesskey minio --secretkey minio123 multipart upload --bucket bucket --object new-test-encrypted-object --uploadid ${upload_id} --file /tmp/7048531.txt --number 1 | jq -r .ETag)
+etag_2=$(multipart-debug --endpoint 127.0.0.1:9001 --accesskey minio --secretkey minio123 multipart upload --bucket bucket --object new-test-encrypted-object --uploadid ${upload_id} --file /tmp/2847391.txt --number 2 | jq -r .ETag)
+multipart-debug --endpoint 127.0.0.1:9002 --accesskey minio --secretkey minio123 multipart complete --bucket bucket --object new-test-encrypted-object --uploadid ${upload_id} 1.${etag_1} 2.${etag_2}
+
+sleep 10
+
+./mc stat sitea/bucket/new-test-encrypted-object
+./mc stat siteb/bucket/new-test-encrypted-object
+./mc stat sitec/bucket/new-test-encrypted-object
+
+./mc ls -r sitea/bucket/
+./mc ls -r siteb/bucket/
+./mc ls -r sitec/bucket/
 
 catch

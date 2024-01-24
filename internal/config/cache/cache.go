@@ -135,7 +135,7 @@ func (c Config) Get(r *CondCheck) (*ObjectInfo, error) {
 		return nil, err
 	}
 
-	// We do not want Get's to take so much time, anything
+	// We do not want Gets to take so much time, anything
 	// beyond 250ms we should cut it, remote cache is too
 	// busy already.
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)

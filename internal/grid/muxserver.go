@@ -228,7 +228,7 @@ func (m *muxServer) checkSeq(seq uint32) (ok bool) {
 
 func (m *muxServer) message(msg message) {
 	if debugPrint {
-		fmt.Printf("muxServer: recevied message %d, length %d\n", msg.Seq, len(msg.Payload))
+		fmt.Printf("muxServer: received message %d, length %d\n", msg.Seq, len(msg.Payload))
 	}
 	m.recvMu.Lock()
 	defer m.recvMu.Unlock()

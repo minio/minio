@@ -54,16 +54,35 @@ type objectHistogramInterval struct {
 }
 
 const (
+	// dataUsageBucketLenV1 must be length of ObjectsHistogramIntervalsV1
+	dataUsageBucketLenV1 = 7
 	// dataUsageBucketLen must be length of ObjectsHistogramIntervals
-	dataUsageBucketLen  = 7
+	dataUsageBucketLen  = 11
 	dataUsageVersionLen = 7
 )
 
+// ObjectsHistogramIntervalsV1 is the list of all intervals
+// of object sizes to be included in objects histogram(V1).
+var ObjectsHistogramIntervalsV1 = [dataUsageBucketLenV1]objectHistogramInterval{
+	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
+	{"BETWEEN_1024B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
+	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
+	{"BETWEEN_10_MB_AND_64_MB", humanize.MiByte * 10, humanize.MiByte*64 - 1},
+	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
+	{"BETWEEN_128_MB_AND_512_MB", humanize.MiByte * 128, humanize.MiByte*512 - 1},
+	{"GREATER_THAN_512_MB", humanize.MiByte * 512, math.MaxInt64},
+}
+
 // ObjectsHistogramIntervals is the list of all intervals
 // of object sizes to be included in objects histogram.
+// Note: this histogram expands 1024B-1MB to incl. 1024B-64KB, 64KB-256KB, 256KB-512KB and 512KB-1MiB
 var ObjectsHistogramIntervals = [dataUsageBucketLen]objectHistogramInterval{
 	{"LESS_THAN_1024_B", 0, humanize.KiByte - 1},
-	{"BETWEEN_1024_B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
+	{"BETWEEN_1024_B_AND_64_KB", humanize.KiByte, 64*humanize.KiByte - 1},         // not exported, for support use only
+	{"BETWEEN_64_KB_AND_256_KB", 64 * humanize.KiByte, 256*humanize.KiByte - 1},   // not exported, for support use only
+	{"BETWEEN_256_KB_AND_512_KB", 256 * humanize.KiByte, 512*humanize.KiByte - 1}, // not exported, for support use only
+	{"BETWEEN_512_KB_AND_1_MB", 512 * humanize.KiByte, humanize.MiByte - 1},       // not exported, for support use only
+	{"BETWEEN_1024B_AND_1_MB", humanize.KiByte, humanize.MiByte - 1},
 	{"BETWEEN_1_MB_AND_10_MB", humanize.MiByte, humanize.MiByte*10 - 1},
 	{"BETWEEN_10_MB_AND_64_MB", humanize.MiByte * 10, humanize.MiByte*64 - 1},
 	{"BETWEEN_64_MB_AND_128_MB", humanize.MiByte * 64, humanize.MiByte*128 - 1},
@@ -181,8 +200,6 @@ type ObjectInfo struct {
 
 	Legacy bool // indicates object on disk is in legacy data format
 
-	// backendType indicates which backend filled this structure
-	backendType BackendType
 	// internal representation of version purge status
 	VersionPurgeStatusInternal string
 	VersionPurgeStatus         VersionPurgeStatusType
@@ -263,7 +280,6 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		metadataOnly:               o.metadataOnly,
 		versionOnly:                o.versionOnly,
 		keyRotation:                o.keyRotation,
-		backendType:                o.backendType,
 		AccTime:                    o.AccTime,
 		Legacy:                     o.Legacy,
 		VersionPurgeStatus:         o.VersionPurgeStatus,
@@ -412,7 +428,7 @@ func (lm ListMultipartsInfo) Lookup(uploadID string) bool {
 	return false
 }
 
-// ListMultipartsInfo - represnets bucket resources for incomplete multipart uploads.
+// ListMultipartsInfo - represents bucket resources for incomplete multipart uploads.
 type ListMultipartsInfo struct {
 	// Together with upload-id-marker, this parameter specifies the multipart upload
 	// after which listing should begin.
@@ -611,4 +627,43 @@ type CompleteMultipartUpload struct {
 type NewMultipartUploadResult struct {
 	UploadID     string
 	ChecksumAlgo string
+}
+
+type getObjectAttributesResponse struct {
+	ETag         string                    `xml:",omitempty"`
+	Checksum     *objectAttributesChecksum `xml:",omitempty"`
+	ObjectParts  *objectAttributesParts    `xml:",omitempty"`
+	StorageClass string                    `xml:",omitempty"`
+	ObjectSize   int64                     `xml:",omitempty"`
+}
+
+type objectAttributesChecksum struct {
+	ChecksumCRC32  string `xml:",omitempty"`
+	ChecksumCRC32C string `xml:",omitempty"`
+	ChecksumSHA1   string `xml:",omitempty"`
+	ChecksumSHA256 string `xml:",omitempty"`
+}
+
+type objectAttributesParts struct {
+	IsTruncated          bool
+	MaxParts             int
+	NextPartNumberMarker int
+	PartNumberMarker     int
+	PartsCount           int
+	Parts                []*objectAttributesPart `xml:"Part"`
+}
+
+type objectAttributesPart struct {
+	PartNumber     int
+	Size           int64
+	ChecksumCRC32  string `xml:",omitempty"`
+	ChecksumCRC32C string `xml:",omitempty"`
+	ChecksumSHA1   string `xml:",omitempty"`
+	ChecksumSHA256 string `xml:",omitempty"`
+}
+
+type objectAttributesErrorResponse struct {
+	ArgumentValue *string `xml:"ArgumentValue,omitempty"`
+	ArgumentName  *string `xml:"ArgumentName"`
+	APIErrorResponse
 }

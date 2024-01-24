@@ -143,10 +143,13 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	healBuckets := make([]string, len(buckets))
 	copy(healBuckets, buckets)
 
-	// Heal all buckets first in this erasure set - this is useful
-	// for new objects upload in different buckets to be successful
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
 	for _, bucket := range healBuckets {
-		_, err := er.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
+		_, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
 		if err != nil {
 			// Log bucket healing error if any, we shall retry again.
 			logger.LogIf(ctx, err)
@@ -195,10 +198,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 		tracker.setObject("")
 		tracker.setBucket(bucket)
-
 		// Heal current bucket again in case if it is failed
 		// in the beginning of erasure set healing
-		if _, err := er.HealBucket(ctx, bucket, madmin.HealOpts{
+		if _, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
 			logger.LogIf(ctx, err)
@@ -431,7 +433,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			partial: func(entries metaCacheEntries, _ []error) {
 				entry, ok := entries.resolve(&resolver)
 				if !ok {
-					// check if we can get one entry atleast
+					// check if we can get one entry at least
 					// proceed to heal nonetheless.
 					entry, _ = entries.firstFound()
 				}

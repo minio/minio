@@ -50,7 +50,7 @@ func Parse(amzDateStr string) (time.Time, error) {
 }
 
 var httpTimeFormats = []string{
-	// Do not chagne this order, http time format dates
+	// Do not change this order, http time format dates
 	// are usually in http.TimeFormat however there are
 	// situations where for example aws-sdk-java doesn't
 	// send the correct format.

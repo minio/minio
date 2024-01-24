@@ -115,6 +115,8 @@ func toStorageErr(err error) error {
 		return errVolumeAccessDenied
 	case errCorruptedFormat.Error():
 		return errCorruptedFormat
+	case errCorruptedBackend.Error():
+		return errCorruptedBackend
 	case errUnformattedDisk.Error():
 		return errUnformattedDisk
 	case errInvalidAccessKeyID.Error():
@@ -142,10 +144,12 @@ type storageRESTClient struct {
 	// Indicate of NSScanner is in progress in this disk
 	scanning int32
 
-	endpoint   Endpoint
-	restClient *rest.Client
-	gridConn   *grid.Subroute
-	diskID     string
+	endpoint    Endpoint
+	restClient  *rest.Client
+	gridConn    *grid.Subroute
+	diskID      string
+	formatData  []byte
+	formatMutex sync.RWMutex
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
@@ -249,7 +253,24 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	return *final, nil
 }
 
+func (client *storageRESTClient) SetFormatData(b []byte) {
+	if client.IsOnline() {
+		client.formatMutex.Lock()
+		client.formatData = b
+		client.formatMutex.Unlock()
+	}
+}
+
 func (client *storageRESTClient) GetDiskID() (string, error) {
+	if !client.IsOnline() {
+		// make sure to check if the disk is offline, since the underlying
+		// value is cached we should attempt to invalidate it if such calls
+		// were attempted. This can lead to false success under certain conditions
+		// - this change attempts to avoid stale information if the underlying
+		// transport is already down.
+		return "", errDiskNotFound
+	}
+
 	// This call should never be over the network, this is always
 	// a cached value - caller should make sure to use this
 	// function on a fresh disk or make sure to look at the error
@@ -291,32 +312,17 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, metrics bool) (in
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
 func (client *storageRESTClient) MakeVolBulk(ctx context.Context, volumes ...string) (err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolumes, strings.Join(volumes, ","))
-	respBody, err := client.call(ctx, storageRESTMethodMakeVolBulk, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	return errInvalidArgument
 }
 
 // MakeVol - create a volume on a remote disk.
 func (client *storageRESTClient) MakeVol(ctx context.Context, volume string) (err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	respBody, err := client.call(ctx, storageRESTMethodMakeVol, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	return errInvalidArgument
 }
 
 // ListVols - List all volumes on a remote disk.
 func (client *storageRESTClient) ListVols(ctx context.Context) (vols []VolInfo, err error) {
-	respBody, err := client.call(ctx, storageRESTMethodListVols, nil, nil, -1)
-	if err != nil {
-		return
-	}
-	defer xhttp.DrainBody(respBody)
-	vinfos := VolsInfo(vols)
-	err = msgp.Decode(respBody, &vinfos)
-	return vinfos, err
+	return nil, errInvalidArgument
 }
 
 // StatVol - get volume info over the network.
@@ -335,14 +341,7 @@ func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vo
 
 // DeleteVol - Deletes a volume over the network.
 func (client *storageRESTClient) DeleteVol(ctx context.Context, volume string, forceDelete bool) (err error) {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	if forceDelete {
-		values.Set(storageRESTForceDelete, "true")
-	}
-	respBody, err := client.call(ctx, storageRESTMethodDeleteVol, values, nil, -1)
-	defer xhttp.DrainBody(respBody)
-	return err
+	return errInvalidArgument
 }
 
 // AppendFile - append to a file.
@@ -543,6 +542,19 @@ func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, pat
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
+
+	// Specific optimization to avoid re-read from the drives for `format.json`
+	// in-case the caller is a network operation.
+	if volume == minioMetaBucket && path == formatConfigFile {
+		client.formatMutex.RLock()
+		formatData := make([]byte, len(client.formatData))
+		copy(formatData, client.formatData)
+		client.formatMutex.RUnlock()
+		if len(formatData) > 0 {
+			return formatData, nil
+		}
+	}
+
 	respBody, err := client.call(ctx, storageRESTMethodReadAll, values, nil, -1)
 	if err != nil {
 		return nil, err

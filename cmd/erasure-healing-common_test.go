@@ -31,7 +31,7 @@ import (
 
 // Returns the latest updated FileInfo files and error in case of failure.
 func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultParityCount int, errs []error) (FileInfo, error) {
-	// There should be atleast half correct entries, if not return failure
+	// There should be at least half correct entries, if not return failure
 	expectedRQuorum := len(partsMetadata) / 2
 	if defaultParityCount == 0 {
 		// if parity count is '0', we expected all entries to be present.
@@ -57,7 +57,7 @@ func getLatestFileInfo(ctx context.Context, partsMetadata []FileInfo, defaultPar
 		return FileInfo{}, errErasureReadQuorum
 	}
 
-	// Interate through all the modTimes and count the FileInfo(s) with latest time.
+	// Iterate through all the modTimes and count the FileInfo(s) with latest time.
 	for index, t := range modTimes {
 		if partsMetadata[index].IsValid() && t.Equal(modTime) {
 			latestFileInfo = partsMetadata[index]

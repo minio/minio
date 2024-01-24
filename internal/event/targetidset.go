@@ -50,7 +50,7 @@ func (set TargetIDSet) Union(sset TargetIDSet) TargetIDSet {
 	return nset
 }
 
-// Difference - returns diffrence with given set as new set.
+// Difference - returns difference with given set as new set.
 func (set TargetIDSet) Difference(sset TargetIDSet) TargetIDSet {
 	nset := NewTargetIDSet()
 	for k := range set {
