@@ -535,7 +535,6 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 				err = resp.Err
 			}
 			clientCanceled <- time.Since(started)
-			t.Log("Client Context canceled")
 		}()
 		serverEnd := <-serverCanceled
 		clientEnd := <-clientCanceled
