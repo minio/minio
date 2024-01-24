@@ -99,8 +99,8 @@ func WriteOnClose(w io.Writer) *WriteOnCloser {
 	return &WriteOnCloser{w, false}
 }
 
-type ioret struct {
-	n   int
+type ioret[V any] struct {
+	val V
 	err error
 }
 
@@ -111,35 +111,58 @@ type DeadlineWriter struct {
 	err     error
 }
 
+// WithDeadline will execute a function with a deadline and return a value of a given type.
+// If the deadline/context passes before the function finishes executing,
+// the zero value and the context error is returned.
+func WithDeadline[V any](ctx context.Context, timeout time.Duration, work func(ctx context.Context) (result V, err error)) (result V, err error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	c := make(chan ioret[V])
+	go func() {
+		v, err := work(ctx)
+		select {
+		case c <- ioret[V]{val: v, err: err}:
+		default:
+			// Ignore if caller returned.
+		}
+	}()
+
+	select {
+	case v := <-c:
+		return v.val, v.err
+	case <-ctx.Done():
+		var zero V
+		return zero, ctx.Err()
+	}
+}
+
 // DeadlineWorker implements the deadline/timeout resiliency pattern.
 type DeadlineWorker struct {
 	timeout time.Duration
-	err     error
 }
 
 // NewDeadlineWorker constructs a new DeadlineWorker with the given timeout.
+// To return values, use the WithDeadline helper instead.
 func NewDeadlineWorker(timeout time.Duration) *DeadlineWorker {
-	return &DeadlineWorker{
+	dw := &DeadlineWorker{
 		timeout: timeout,
 	}
+	return dw
 }
 
 // Run runs the given function, passing it a stopper channel. If the deadline passes before
-// the function finishes executing, Run returns ErrTimeOut to the caller and closes the stopper
-// channel so that the work function can attempt to exit gracefully. It does not (and cannot)
-// simply kill the running function, so if it doesn't respect the stopper channel then it may
-// keep running after the deadline passes. If the function finishes before the deadline, then
-// the return value of the function is returned from Run.
+// the function finishes executing, Run returns context.DeadlineExceeded to the caller.
+// channel so that the work function can attempt to exit gracefully.
+// Multiple calls to Run will run independently of each other.
 func (d *DeadlineWorker) Run(work func() error) error {
-	if d.err != nil {
-		return d.err
-	}
-
-	c := make(chan ioret, 1)
+	c := make(chan ioret[struct{}])
 	t := time.NewTimer(d.timeout)
 	go func() {
-		c <- ioret{0, work()}
-		close(c)
+		select {
+		case c <- ioret[struct{}]{val: struct{}{}, err: work()}:
+		default:
+		}
 	}()
 
 	select {
@@ -147,10 +170,8 @@ func (d *DeadlineWorker) Run(work func() error) error {
 		if !t.Stop() {
 			<-t.C
 		}
-		d.err = r.err
 		return r.err
 	case <-t.C:
-		d.err = context.DeadlineExceeded
 		return context.DeadlineExceeded
 	}
 }
@@ -168,11 +189,11 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 		return 0, w.err
 	}
 
-	c := make(chan ioret, 1)
+	c := make(chan ioret[int], 1)
 	t := time.NewTimer(w.timeout)
 	go func() {
 		n, err := w.WriteCloser.Write(buf)
-		c <- ioret{n, err}
+		c <- ioret[int]{val: n, err: err}
 		close(c)
 	}()
 
@@ -182,7 +203,7 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 			<-t.C
 		}
 		w.err = r.err
-		return r.n, r.err
+		return r.val, r.err
 	case <-t.C:
 		w.WriteCloser.Close()
 		w.err = context.DeadlineExceeded
