@@ -221,7 +221,9 @@ spec:
   volumeClaimTemplates:
     {{- if gt $drivesPerNode 1 }}
     {{- range $diskId := until $drivesPerNode}}
-    - metadata:
+    - apiVersion: v1	
+      kind: PersistentVolumeClaim	
+      metadata:
         name: export-{{ $diskId }}
         {{- if $.Values.persistence.annotations }}
         annotations: {{- toYaml $.Values.persistence.annotations | nindent 10 }}
@@ -236,7 +238,9 @@ spec:
             storage: {{ $psize }}
     {{- end }}
     {{- else }}
-    - metadata:
+    - apiVersion: v1	
+      kind: PersistentVolumeClaim	
+      metadata:
         name: export
         {{- if $.Values.persistence.annotations }}
         annotations: {{- toYaml $.Values.persistence.annotations | nindent 10 }}
