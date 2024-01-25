@@ -178,7 +178,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 				disksInfo[index] = di
 				return nil
 			}
-			info, err := disks[index].DiskInfo(context.TODO(), metrics)
+			info, err := disks[index].DiskInfo(context.TODO(), DiskInfoOptions{Metrics: metrics})
 			di.DrivePath = info.MountPath
 			di.TotalSpace = info.Total
 			di.UsedSpace = info.Used
@@ -290,7 +290,7 @@ func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (new
 				return
 			}
 
-			di, err := disk.DiskInfo(context.Background(), false)
+			di, err := disk.DiskInfo(context.Background(), DiskInfoOptions{})
 			infos[i] = di
 			if err != nil {
 				// - Do not consume disks which are not reachable

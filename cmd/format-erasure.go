@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -28,6 +28,7 @@ import (
 	"sync"
 
 	"github.com/dustin/go-humanize"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -325,15 +326,10 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 			if storageDisks[index] == nil {
 				return errDiskNotFound
 			}
-			format, formatData, err := loadFormatErasureWithData(storageDisks[index])
+			format, formatData, err := loadFormatErasureWithData(storageDisks[index], heal)
 			if err != nil {
 				return err
 			}
-			info, err := storageDisks[index].DiskInfo(context.Background(), false)
-			if err != nil {
-				return err
-			}
-			format.Info = info
 			formats[index] = format
 			if !heal {
 				// If no healing required, make the disks valid and
@@ -389,14 +385,7 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 }
 
 // loadFormatErasureWithData - loads format.json from disk.
-func loadFormatErasureWithData(disk StorageAPI) (format *formatErasureV3, data []byte, err error) {
-	// Ensure that the grid is online.
-	if _, err := disk.DiskInfo(context.Background(), false); err != nil {
-		if errors.Is(err, errDiskNotFound) {
-			return nil, nil, err
-		}
-	}
-
+func loadFormatErasureWithData(disk StorageAPI, heal bool) (format *formatErasureV3, data []byte, err error) {
 	data, err = disk.ReadAll(context.TODO(), minioMetaBucket, formatConfigFile)
 	if err != nil {
 		// 'file not found' and 'volume not found' as
@@ -413,18 +402,20 @@ func loadFormatErasureWithData(disk StorageAPI) (format *formatErasureV3, data [
 		return nil, nil, err
 	}
 
+	if heal {
+		info, err := disk.DiskInfo(context.Background(), DiskInfoOptions{NoOp: heal})
+		if err != nil {
+			return nil, nil, err
+		}
+		format.Info = info
+	}
+
 	// Success.
 	return format, data, nil
 }
 
 // loadFormatErasure - loads format.json from disk.
 func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
-	// Ensure that the grid is online.
-	if _, err := disk.DiskInfo(context.Background(), false); err != nil {
-		if errors.Is(err, errDiskNotFound) {
-			return nil, err
-		}
-	}
 	buf, err := disk.ReadAll(context.TODO(), minioMetaBucket, formatConfigFile)
 	if err != nil {
 		// 'file not found' and 'volume not found' as
@@ -434,6 +425,8 @@ func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
 		}
 		return nil, err
 	}
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	// Try to decode format json into formatConfigV1 struct.
 	format = &formatErasureV3{}
@@ -863,7 +856,9 @@ func newHealFormatSets(refFormat *formatErasureV3, setCount, setDriveCount int, 
 				newFormats[i][j].Erasure.DistributionAlgo = refFormat.Erasure.DistributionAlgo
 			}
 			if format := formats[i*setDriveCount+j]; format != nil && (errs[i*setDriveCount+j] == nil) {
-				currentDisksInfo[i][j] = format.Info
+				if format.Info.Endpoint != "" {
+					currentDisksInfo[i][j] = format.Info
+				}
 			}
 		}
 	}

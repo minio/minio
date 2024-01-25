@@ -1157,11 +1157,12 @@ func compressSelfTest() {
 // If a disk is nil or an error is returned the result will be nil as well.
 func getDiskInfos(ctx context.Context, disks ...StorageAPI) []*DiskInfo {
 	res := make([]*DiskInfo, len(disks))
+	opts := DiskInfoOptions{}
 	for i, disk := range disks {
 		if disk == nil {
 			continue
 		}
-		if di, err := disk.DiskInfo(ctx, false); err == nil {
+		if di, err := disk.DiskInfo(ctx, opts); err == nil {
 			res[i] = &di
 		}
 	}

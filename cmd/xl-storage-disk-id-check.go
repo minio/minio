@@ -338,7 +338,7 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 	return errDiskNotFound
 }
 
-func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error) {
+func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOptions) (info DiskInfo, err error) {
 	if contextCanceled(ctx) {
 		return DiskInfo{}, ctx.Err()
 	}
@@ -346,8 +346,20 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info
 	si := p.updateStorageMetrics(storageMetricDiskInfo)
 	defer si(&err)
 
+	if opts.NoOp {
+		if driveQuorum {
+			info.Metrics.TotalWrites = p.totalWrites.Load()
+			info.Metrics.TotalDeletes = p.totalDeletes.Load()
+		}
+		info.Metrics.TotalTokens = uint32(p.driveMaxConcurrent)
+		info.Metrics.TotalWaiting = uint32(p.health.waiting.Load())
+		info.Metrics.TotalErrorsTimeout = p.totalErrsTimeout.Load()
+		info.Metrics.TotalErrorsAvailability = p.totalErrsAvailability.Load()
+		return
+	}
+
 	defer func() {
-		if metrics {
+		if opts.Metrics {
 			info.Metrics = p.getMetrics()
 		}
 		if driveQuorum {
@@ -365,7 +377,7 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, metrics bool) (info
 		return info, errFaultyDisk
 	}
 
-	info, err = p.storage.DiskInfo(ctx, metrics)
+	info, err = p.storage.DiskInfo(ctx, opts)
 	if err != nil {
 		return info, err
 	}
