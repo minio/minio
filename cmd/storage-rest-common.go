@@ -20,7 +20,7 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v54" // Add more metrics per drive
+	storageRESTVersion       = "v55" // ReadAll, RenameFile migrate to websockets
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -68,6 +68,7 @@ const (
 	storageRESTForceDelete   = "force-delete"
 	storageRESTGlob          = "glob"
 	storageRESTMetrics       = "metrics"
+	storageRESTDriveQuorum   = "drive-quorum"
 )
 
 type nsScannerOptions struct {

@@ -188,6 +188,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 
 	// Attempt to load all `format.json` from all disks.
 	formatConfigs, sErrs := loadFormatErasureAll(storageDisks, false)
+
 	// Check if we have
 	for i, sErr := range sErrs {
 		// print the error, nonetheless, which is perhaps unhandled
@@ -271,9 +272,12 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	var tries int
-	var verboseLogging bool
-	storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+	var (
+		tries   int
+		verbose bool
+	)
+
+	storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
 	if err == nil {
 		return storageDisks, format, nil
 	}
@@ -286,12 +290,12 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 
 	for {
 		// Only log once every 10 iterations, then reset the tries count.
-		verboseLogging = tries >= 10
-		if verboseLogging {
+		verbose = tries >= 10
+		if verbose {
 			tries = 1
 		}
 
-		storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+		storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
 		if err == nil {
 			return storageDisks, format, nil
 		}

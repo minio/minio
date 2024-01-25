@@ -56,6 +56,8 @@ const (
 	HandlerWriteMetadata
 	HandlerCheckParts
 	HandlerRenameData
+	HandlerRenameFile
+	HandlerReadAll
 
 	HandlerServerVerify
 	// Add more above here ^^^
@@ -87,6 +89,8 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerWriteMetadata:   storagePrefix,
 	HandlerCheckParts:      storagePrefix,
 	HandlerRenameData:      storagePrefix,
+	HandlerRenameFile:      storagePrefix,
+	HandlerReadAll:         storagePrefix,
 	HandlerServerVerify:    bootstrapPrefix,
 }
 

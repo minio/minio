@@ -728,7 +728,7 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err error) {
+func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {

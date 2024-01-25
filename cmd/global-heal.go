@@ -156,7 +156,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 	}
 
-	info, err := tracker.disk.DiskInfo(ctx, false)
+	info, err := tracker.disk.DiskInfo(ctx, DiskInfoOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to get disk information before healing it: %w", err)
 	}
