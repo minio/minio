@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/minio/madmin-go/v3"
@@ -164,11 +163,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 				if localDrives[index] == nil {
 					return errDiskNotFound
 				}
-				err := localDrives[index].DeleteVol(ctx, bucket, false)
-				if !errors.Is(err, errVolumeNotEmpty) {
-					logger.LogOnceIf(ctx, fmt.Errorf("While deleting dangling Bucket (%s), Drive %s:%s returned an error (%w)",
-						bucket, localDrives[index].Hostname(), localDrives[index], err), "delete-dangling-bucket-"+bucket)
-				}
+				localDrives[index].DeleteVol(ctx, bucket, false)
 				return nil
 			}, index)
 		}
@@ -186,11 +181,11 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 			index := index
 			g.Go(func() error {
 				if beforeState[index] == madmin.DriveStateMissing {
-					makeErr := localDrives[index].MakeVol(ctx, bucket)
-					if makeErr == nil {
+					err := localDrives[index].MakeVol(ctx, bucket)
+					if err == nil {
 						afterState[index] = madmin.DriveStateOk
 					}
-					return makeErr
+					return err
 				}
 				return errs[index]
 			}, index)
