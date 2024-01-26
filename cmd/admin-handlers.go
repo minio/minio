@@ -144,20 +144,22 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 
 	failedClients := make(map[int]struct{})
 
-	// Push binary to other servers
-	for idx, nerr := range globalNotificationSys.VerifyBinary(ctx, u, sha256Sum, releaseInfo, binC) {
-		if nerr.Err != nil {
-			peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
-				Host:           nerr.Host.String(),
-				Err:            nerr.Err.Error(),
-				CurrentVersion: Version,
-			}
-			failedClients[idx] = struct{}{}
-		} else {
-			peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
-				Host:           nerr.Host.String(),
-				CurrentVersion: Version,
-				UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+	if globalIsDistErasure {
+		// Push binary to other servers
+		for idx, nerr := range globalNotificationSys.VerifyBinary(ctx, u, sha256Sum, releaseInfo, binC) {
+			if nerr.Err != nil {
+				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
+					Host:           nerr.Host.String(),
+					Err:            nerr.Err.Error(),
+					CurrentVersion: Version,
+				}
+				failedClients[idx] = struct{}{}
+			} else {
+				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
+					Host:           nerr.Host.String(),
+					CurrentVersion: Version,
+					UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+				}
 			}
 		}
 	}
@@ -185,35 +187,36 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 	}
 
 	if !dryRun {
-		ng := WithNPeers(len(globalNotificationSys.peerClients))
-		for idx, client := range globalNotificationSys.peerClients {
-			_, ok := failedClients[idx]
-			if ok {
-				continue
-			}
-			client := client
-			ng.Go(ctx, func() error {
-				return client.CommitBinary(ctx)
-			}, idx, *client.host)
-		}
-
-		for _, nerr := range ng.Wait() {
-			if nerr.Err != nil {
-				prs, ok := peerResults[nerr.Host.String()]
+		if globalIsDistErasure {
+			ng := WithNPeers(len(globalNotificationSys.peerClients))
+			for idx, client := range globalNotificationSys.peerClients {
+				_, ok := failedClients[idx]
 				if ok {
-					prs.Err = nerr.Err.Error()
-					peerResults[nerr.Host.String()] = prs
-				} else {
-					peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
-						Host:           nerr.Host.String(),
-						Err:            nerr.Err.Error(),
-						CurrentVersion: Version,
-						UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+					continue
+				}
+				client := client
+				ng.Go(ctx, func() error {
+					return client.CommitBinary(ctx)
+				}, idx, *client.host)
+			}
+
+			for _, nerr := range ng.Wait() {
+				if nerr.Err != nil {
+					prs, ok := peerResults[nerr.Host.String()]
+					if ok {
+						prs.Err = nerr.Err.Error()
+						peerResults[nerr.Host.String()] = prs
+					} else {
+						peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
+							Host:           nerr.Host.String(),
+							Err:            nerr.Err.Error(),
+							CurrentVersion: Version,
+							UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+						}
 					}
 				}
 			}
 		}
-
 		prs := peerResults[local]
 		if prs.Err == "" {
 			if err = commitBinary(); err != nil {
@@ -229,34 +232,36 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		peerResults[local] = prs
 	}
 
-	// Notify all other MinIO peers signal service.
-	ng := WithNPeers(len(globalNotificationSys.peerClients))
-	for idx, client := range globalNotificationSys.peerClients {
-		_, ok := failedClients[idx]
-		if ok {
-			continue
-		}
-		client := client
-		ng.Go(ctx, func() error {
-			prs, ok := peerResults[client.String()]
-			if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
-				return client.SignalService(serviceRestart, "", dryRun)
-			}
-			return nil
-		}, idx, *client.host)
-	}
-
-	for _, nerr := range ng.Wait() {
-		if nerr.Err != nil {
-			waitingDrives := map[string]madmin.DiskMetrics{}
-			jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
-			if jerr == nil {
-				prs, ok := peerResults[nerr.Host.String()]
-				if ok {
-					prs.WaitingDrives = waitingDrives
-					peerResults[nerr.Host.String()] = prs
-				}
+	if globalIsDistErasure {
+		// Notify all other MinIO peers signal service.
+		ng := WithNPeers(len(globalNotificationSys.peerClients))
+		for idx, client := range globalNotificationSys.peerClients {
+			_, ok := failedClients[idx]
+			if ok {
 				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				prs, ok := peerResults[client.String()]
+				if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
+					return client.SignalService(serviceRestart, "", dryRun)
+				}
+				return nil
+			}, idx, *client.host)
+		}
+
+		for _, nerr := range ng.Wait() {
+			if nerr.Err != nil {
+				waitingDrives := map[string]madmin.DiskMetrics{}
+				jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
+				if jerr == nil {
+					prs, ok := peerResults[nerr.Host.String()]
+					if ok {
+						prs.WaitingDrives = waitingDrives
+						peerResults[nerr.Host.String()] = prs
+					}
+					continue
+				}
 			}
 		}
 	}
@@ -538,8 +543,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Notify all other MinIO peers signal service.
-	nerrs := globalNotificationSys.SignalServiceV2(serviceSig, dryRun)
-	srvResult := serviceResult{Action: act, Results: make([]servicePeerResult, 0, len(nerrs))}
+	srvResult := serviceResult{Action: act, Results: []servicePeerResult{}}
 
 	process := act == madmin.ServiceActionRestart || act == madmin.ServiceActionStop
 	if process {
@@ -554,26 +558,28 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	for _, nerr := range nerrs {
-		if nerr.Err != nil && process {
-			waitingDrives := map[string]madmin.DiskMetrics{}
-			jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
-			if jerr == nil {
-				srvResult.Results = append(srvResult.Results, servicePeerResult{
-					Host:          nerr.Host.String(),
-					WaitingDrives: waitingDrives,
-				})
-				continue
+	if globalIsDistErasure {
+		for _, nerr := range globalNotificationSys.SignalServiceV2(serviceSig, dryRun) {
+			if nerr.Err != nil && process {
+				waitingDrives := map[string]madmin.DiskMetrics{}
+				jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
+				if jerr == nil {
+					srvResult.Results = append(srvResult.Results, servicePeerResult{
+						Host:          nerr.Host.String(),
+						WaitingDrives: waitingDrives,
+					})
+					continue
+				}
 			}
+			errStr := ""
+			if nerr.Err != nil {
+				errStr = nerr.Err.Error()
+			}
+			srvResult.Results = append(srvResult.Results, servicePeerResult{
+				Host: nerr.Host.String(),
+				Err:  errStr,
+			})
 		}
-		errStr := ""
-		if nerr.Err != nil {
-			errStr = nerr.Err.Error()
-		}
-		srvResult.Results = append(srvResult.Results, servicePeerResult{
-			Host: nerr.Host.String(),
-			Err:  errStr,
-		})
 	}
 
 	srvResult.DryRun = dryRun
