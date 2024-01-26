@@ -56,7 +56,10 @@ const (
 	HandlerWriteMetadata
 	HandlerCheckParts
 	HandlerRenameData
+	HandlerRenameFile
+	HandlerReadAll
 
+	HandlerServerVerify
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
 	// Handlers have no versioning, so non-compatible handler changes must result in new IDs.
@@ -86,11 +89,15 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerWriteMetadata:   storagePrefix,
 	HandlerCheckParts:      storagePrefix,
 	HandlerRenameData:      storagePrefix,
+	HandlerRenameFile:      storagePrefix,
+	HandlerReadAll:         storagePrefix,
+	HandlerServerVerify:    bootstrapPrefix,
 }
 
 const (
-	lockPrefix    = "lockR"
-	storagePrefix = "storageR"
+	lockPrefix      = "lockR"
+	storagePrefix   = "storageR"
+	bootstrapPrefix = "bootstrap"
 )
 
 func init() {

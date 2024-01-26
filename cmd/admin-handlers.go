@@ -2852,7 +2852,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 
 		ci := madmin.ClusterRegistrationInfo{}
 		ci.Info.NoOfServerPools = len(globalEndpoints)
-		ci.Info.NoOfServers = len(globalEndpoints.Hostnames())
+		ci.Info.NoOfServers = totalNodeCount()
 		ci.Info.MinioVersion = Version
 
 		si := objectAPI.StorageInfo(ctx, true)
@@ -3092,7 +3092,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// save the format.json as part of inspect by default
-	if volume != minioMetaBucket && file != formatConfigFile {
+	if !(volume == minioMetaBucket && file == formatConfigFile) {
 		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
 	}
 	if !errors.Is(err, errFileNotFound) {

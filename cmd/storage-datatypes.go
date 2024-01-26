@@ -37,6 +37,13 @@ type RenameOptions struct {
 	BaseOptions
 }
 
+// DiskInfoOptions options for requesting custom results.
+type DiskInfoOptions struct {
+	DiskID  string `msg:"id"`
+	Metrics bool   `msg:"m"`
+	NoOp    bool   `msg:"np"`
+}
+
 //go:generate msgp -file=$GOFILE
 
 // DiskInfo is an extended type which returns current
@@ -421,6 +428,22 @@ type RenameDataHandlerParams struct {
 	DstPath   string        `msg:"dp"`
 	FI        FileInfo      `msg:"fi"`
 	Opts      RenameOptions `msg:"ro"`
+}
+
+// RenameFileHandlerParams are parameters for RenameFileHandler.
+type RenameFileHandlerParams struct {
+	DiskID      string `msg:"id"`
+	SrcVolume   string `msg:"sv"`
+	SrcFilePath string `msg:"sp"`
+	DstVolume   string `msg:"dv"`
+	DstFilePath string `msg:"dp"`
+}
+
+// ReadAllHandlerParams are parameters for ReadAllHandler.
+type ReadAllHandlerParams struct {
+	DiskID   string `msg:"id"`
+	Volume   string `msg:"v"`
+	FilePath string `msg:"fp"`
 }
 
 // RenameDataResp - RenameData()'s response.

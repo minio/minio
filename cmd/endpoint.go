@@ -386,6 +386,31 @@ func (l EndpointServerPools) NEndpoints() (count int) {
 	return count
 }
 
+// GridHosts will return all peers, including local.
+// in websocket grid compatible format, The local peer
+// is returned as a separate string.
+func (l EndpointServerPools) GridHosts() (gridHosts []string, gridLocal string) {
+	seenHosts := set.NewStringSet()
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			u := endpoint.GridHost()
+			if seenHosts.Contains(u) {
+				continue
+			}
+			seenHosts.Add(u)
+
+			// Set local endpoint
+			if endpoint.IsLocal {
+				gridLocal = u
+			}
+
+			gridHosts = append(gridHosts, u)
+		}
+	}
+
+	return gridHosts, gridLocal
+}
+
 // Hostnames - returns list of unique hostnames
 func (l EndpointServerPools) Hostnames() []string {
 	foundSet := set.NewStringSet()
@@ -435,7 +460,9 @@ func (l EndpointServerPools) peers() (peers []string, local string) {
 			peer := endpoint.Host
 			if endpoint.IsLocal {
 				if _, port := mustSplitHostPort(peer); port == globalMinioPort {
-					local = peer
+					if local == "" {
+						local = peer
+					}
 				}
 			}
 

@@ -883,7 +883,7 @@ func canWeRestartNode() map[string]DiskMetrics {
 	errs := make([]error, len(globalLocalDrives))
 	infos := make([]DiskInfo, len(globalLocalDrives))
 	for i, drive := range globalLocalDrives {
-		infos[i], errs[i] = drive.DiskInfo(GlobalContext, false)
+		infos[i], errs[i] = drive.DiskInfo(GlobalContext, DiskInfoOptions{})
 	}
 	infoMaps := make(map[string]DiskMetrics)
 	for i := range infos {

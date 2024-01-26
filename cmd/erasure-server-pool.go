@@ -118,8 +118,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("parity validation returned an error: %w <- (%d, %d), for pool(%s)", err, commonParityDrives, ep.DrivesPerSet, humanize.Ordinal(i+1))
 		}
 
-		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
-			ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
+		bootstrapTrace("waitForFormatErasure: loading disks", func() {
+			storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
+				ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -138,7 +140,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("all pools must have same deployment ID - expected %s, got %s for pool(%s)", deploymentID, formats[i].ID, humanize.Ordinal(i+1))
 		}
 
-		z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
+		bootstrapTrace(fmt.Sprintf("newErasureSets: initializing %s pool", humanize.Ordinal(i+1)), func() {
+			z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -176,8 +180,12 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	setObjectLayer(z)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	attempt := 1
 	for {
-		err := z.Init(ctx) // Initializes all pools.
+		var err error
+		bootstrapTrace(fmt.Sprintf("poolMeta.Init: loading pool metadata, attempt: %d", attempt), func() {
+			err = z.Init(ctx) // Initializes all pools.
+		})
 		if err != nil {
 			if !configRetriableErrors(err) {
 				logger.Fatal(err, "Unable to initialize backend")
@@ -185,6 +193,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			retry := time.Duration(r.Float64() * float64(5*time.Second))
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize backend: %w, retrying in %s", err, retry))
 			time.Sleep(retry)
+			attempt++
 			continue
 		}
 		break

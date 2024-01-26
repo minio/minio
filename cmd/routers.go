@@ -36,7 +36,7 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	registerPeerS3Handlers(router)
 
 	// Register bootstrap REST router for distributed setups.
-	registerBootstrapRESTHandlers(router)
+	registerBootstrapRESTHandlers(globalGrid.Load())
 
 	// Register distributed namespace lock routers.
 	registerLockRESTHandlers()
