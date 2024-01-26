@@ -69,6 +69,8 @@ import (
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
+var currentReleaseTime time.Time
+
 func init() {
 	if runtime.GOOS == "windows" {
 		if mousetrap.StartedByExplorer() {
@@ -109,6 +111,8 @@ func init() {
 	// another way to look at this is we are turning off retries.
 	minio.MaxRetry = 1
 	madmin.MaxRetry = 1
+
+	currentReleaseTime, _ = GetCurrentReleaseTime()
 }
 
 const consolePrefix = "CONSOLE_"
@@ -293,9 +297,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	// Its OK to ignore any errors during doUpdate() here.
-	crTime, err := GetCurrentReleaseTime()
-	if err != nil {
+	if currentReleaseTime.IsZero() {
 		return
 	}
 
@@ -306,8 +308,8 @@ func checkUpdate(mode string) {
 
 	var older time.Duration
 	var downloadURL string
-	if lrTime.After(crTime) {
-		older = lrTime.Sub(crTime)
+	if lrTime.After(currentReleaseTime) {
+		older = lrTime.Sub(currentReleaseTime)
 		downloadURL = getDownloadURL(releaseTimeToReleaseTag(lrTime))
 	}
 
@@ -316,7 +318,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	logger.Info(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
+	logger.Info(prepareUpdateMessage("Run `mc admin update ALIAS`", lrTime.Sub(currentReleaseTime)))
 }
 
 func newConfigDir(dir string, dirSet bool, getDefaultDir func() string) (*ConfigDir, error) {
