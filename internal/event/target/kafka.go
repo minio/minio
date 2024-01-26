@@ -154,14 +154,15 @@ func (k KafkaArgs) Validate() error {
 type KafkaTarget struct {
 	initOnce once.Init
 
-	id         event.TargetID
-	args       KafkaArgs
-	producer   sarama.SyncProducer
-	config     *sarama.Config
-	store      store.Store[event.Event]
-	batch      *store.Batch[string, *sarama.ProducerMessage]
-	loggerOnce logger.LogOnce
-	quitCh     chan struct{}
+	id          event.TargetID
+	args        KafkaArgs
+	producer    sarama.SyncProducer
+	config      *sarama.Config
+	store       store.Store[event.Event]
+	batch       *store.Batch[string, *sarama.ProducerMessage]
+	loggerOnce  logger.LogOnce
+	brokerConns map[string]net.Conn
+	quitCh      chan struct{}
 }
 
 // ID - returns target ID.
@@ -188,7 +189,7 @@ func (target *KafkaTarget) IsActive() (bool, error) {
 }
 
 func (target *KafkaTarget) isActive() (bool, error) {
-	if err := target.args.pingBrokers(); err != nil {
+	if err := target.pingBrokers(); err != nil {
 		return false, store.ErrNotConnected
 	}
 	return true, nil
@@ -200,10 +201,6 @@ func (target *KafkaTarget) Save(eventData event.Event) error {
 		return target.store.Put(eventData)
 	}
 	if err := target.init(); err != nil {
-		return err
-	}
-	_, err := target.isActive()
-	if err != nil {
 		return err
 	}
 	return target.send(eventData)
@@ -234,12 +231,6 @@ func (target *KafkaTarget) SendFromStore(key store.Key) error {
 		return target.addToBatch(key)
 	}
 
-	var err error
-	_, err = target.isActive()
-	if err != nil {
-		return err
-	}
-
 	eventData, eErr := target.store.Get(key.Name)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
@@ -250,8 +241,7 @@ func (target *KafkaTarget) SendFromStore(key store.Key) error {
 		return eErr
 	}
 
-	err = target.send(eventData)
-	if err != nil {
+	if err := target.send(eventData); err != nil {
 		if isKafkaConnErr(err) {
 			return store.ErrNotConnected
 		}
@@ -292,9 +282,6 @@ func (target *KafkaTarget) addToBatch(key store.Key) error {
 }
 
 func (target *KafkaTarget) commitBatch() error {
-	if _, err := target.isActive(); err != nil {
-		return err
-	}
 	keys, msgs, err := target.batch.GetAll()
 	if err != nil {
 		return err
@@ -333,23 +320,38 @@ func (target *KafkaTarget) Close() error {
 	if target.producer != nil {
 		return target.producer.Close()
 	}
+	for _, conn := range target.brokerConns {
+		if conn != nil {
+			conn.Close()
+		}
+	}
 	return nil
 }
 
-// Check if atleast one broker in cluster is active
-func (k KafkaArgs) pingBrokers() (err error) {
+// Check if at least one broker in cluster is active
+func (target *KafkaTarget) pingBrokers() (err error) {
 	d := net.Dialer{Timeout: 1 * time.Second}
 
-	errs := make([]error, len(k.Brokers))
+	errs := make([]error, len(target.args.Brokers))
 	var wg sync.WaitGroup
-	for idx, broker := range k.Brokers {
+	for idx, broker := range target.args.Brokers {
 		broker := broker
 		idx := idx
 		wg.Add(1)
 		go func(broker xnet.Host, idx int) {
 			defer wg.Done()
-
-			_, errs[idx] = d.Dial("tcp", broker.String())
+			conn, ok := target.brokerConns[broker.String()]
+			if !ok || conn == nil {
+				conn, errs[idx] = d.Dial("tcp", broker.String())
+				if errs[idx] != nil {
+					return
+				}
+				target.brokerConns[broker.String()] = conn
+			}
+			if _, errs[idx] = conn.Write([]byte("")); errs[idx] != nil {
+				conn.Close()
+				target.brokerConns[broker.String()] = nil
+			}
 		}(broker, idx)
 	}
 	wg.Wait()
@@ -461,11 +463,12 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 	}
 
 	target := &KafkaTarget{
-		id:         event.TargetID{ID: id, Name: "kafka"},
-		args:       args,
-		store:      queueStore,
-		loggerOnce: loggerOnce,
-		quitCh:     make(chan struct{}),
+		id:          event.TargetID{ID: id, Name: "kafka"},
+		args:        args,
+		store:       queueStore,
+		loggerOnce:  loggerOnce,
+		quitCh:      make(chan struct{}),
+		brokerConns: make(map[string]net.Conn, len(args.Brokers)),
 	}
 
 	if target.store != nil {
@@ -479,6 +482,6 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 }
 
 func isKafkaConnErr(err error) bool {
-	// Sarama opens the ciruit breaker after 3 consecutive connection failures.
+	// Sarama opens the circuit breaker after 3 consecutive connection failures.
 	return err == sarama.ErrLeaderNotAvailable || err.Error() == "circuit breaker is open"
 }

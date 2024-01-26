@@ -156,7 +156,7 @@ func IsEncrypted(metadata map[string]string) (Type, bool) {
 }
 
 // CreateMultipartMetadata adds the multipart flag entry to metadata
-// and returns modifed metadata. It allocates a new metadata map if
+// and returns modified metadata. It allocates a new metadata map if
 // metadata is nil.
 func CreateMultipartMetadata(metadata map[string]string) map[string]string {
 	if metadata == nil {

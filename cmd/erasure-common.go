@@ -42,7 +42,7 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 			if disks[i] == nil {
 				return
 			}
-			di, err := disks[i].DiskInfo(context.Background(), false)
+			di, err := disks[i].DiskInfo(context.Background(), DiskInfoOptions{})
 			if err != nil || di.Healing {
 				// - Do not consume disks which are not reachable
 				//   unformatted or simply not accessible for some reason.

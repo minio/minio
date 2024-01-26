@@ -20,17 +20,13 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v52" // Added DiskInfo drive signature
+	storageRESTVersion       = "v55" // ReadAll, RenameFile migrate to websockets
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
 
 const (
-	storageRESTMethodHealth      = "/health"
-	storageRESTMethodMakeVol     = "/makevol"
-	storageRESTMethodMakeVolBulk = "/makevolbulk"
-	storageRESTMethodDeleteVol   = "/deletevol"
-	storageRESTMethodListVols    = "/listvols"
+	storageRESTMethodHealth = "/health"
 
 	storageRESTMethodAppendFile     = "/appendfile"
 	storageRESTMethodCreateFile     = "/createfile"
@@ -72,6 +68,7 @@ const (
 	storageRESTForceDelete   = "force-delete"
 	storageRESTGlob          = "glob"
 	storageRESTMetrics       = "metrics"
+	storageRESTDriveQuorum   = "drive-quorum"
 )
 
 type nsScannerOptions struct {

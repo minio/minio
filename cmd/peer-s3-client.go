@@ -135,6 +135,36 @@ func NewS3PeerSys(endpoints EndpointServerPools) *S3PeerSys {
 func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
+	for idx, client := range sys.peerClients {
+		idx := idx
+		client := client
+		g.Go(func() error {
+			if client == nil {
+				return errPeerOffline
+			}
+			_, err := client.GetBucketInfo(ctx, bucket, BucketOptions{})
+			return err
+		}, idx)
+	}
+
+	errs := g.Wait()
+
+	var poolErrs []error
+	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
+		perPoolErrs := make([]error, 0, len(sys.peerClients))
+		for i, client := range sys.peerClients {
+			if slices.Contains(client.GetPools(), poolIdx) {
+				perPoolErrs = append(perPoolErrs, errs[i])
+			}
+		}
+		quorum := len(perPoolErrs) / 2
+		poolErrs = append(poolErrs, reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, quorum))
+	}
+
+	opts.Remove = isAllBucketsNotFound(poolErrs)
+	opts.Recreate = !opts.Remove
+
+	g = errgroup.WithNErrs(len(sys.peerClients))
 	healBucketResults := make([]madmin.HealResultItem, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		idx := idx
@@ -152,7 +182,7 @@ func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin
 		}, idx)
 	}
 
-	errs := g.Wait()
+	errs = g.Wait()
 
 	for poolIdx := 0; poolIdx < sys.poolsCount; poolIdx++ {
 		perPoolErrs := make([]error, 0, len(sys.peerClients))

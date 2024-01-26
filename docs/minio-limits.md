@@ -53,7 +53,7 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 
 ## Object name restrictions on MinIO
 
-- Object name restrictions on MinIO are governed by OS and filesystem limitations. For example object names that contain characters `^*|\/&";` are unsupported on Windows platform or any other file systems that do not support filenames with special charaters.
+- Object name restrictions on MinIO are governed by OS and filesystem limitations. For example object names that contain characters `^*|\/&";` are unsupported on Windows platform or any other file systems that do not support filenames with special characters.
 
 > **This list is non exhaustive, it depends on the operating system and filesystem under use - please consult your operating system vendor for a more comprehensive list of special characters**.
 

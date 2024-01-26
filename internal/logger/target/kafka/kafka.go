@@ -77,20 +77,29 @@ type Config struct {
 	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
 }
 
-// Check if atleast one broker in cluster is active
-func (k Config) pingBrokers() (err error) {
+func (h *Target) pingBrokers() (err error) {
 	d := net.Dialer{Timeout: 1 * time.Second}
 
-	errs := make([]error, len(k.Brokers))
+	errs := make([]error, len(h.kconfig.Brokers))
 	var wg sync.WaitGroup
-	for idx, broker := range k.Brokers {
+	for idx, broker := range h.kconfig.Brokers {
 		broker := broker
 		idx := idx
 		wg.Add(1)
 		go func(broker xnet.Host, idx int) {
 			defer wg.Done()
-
-			_, errs[idx] = d.Dial("tcp", broker.String())
+			conn, ok := h.brokerConns[broker.String()]
+			if !ok || conn == nil {
+				conn, errs[idx] = d.Dial("tcp", broker.String())
+				if errs[idx] != nil {
+					return
+				}
+				h.brokerConns[broker.String()] = conn
+			}
+			if _, errs[idx] = conn.Write([]byte("")); errs[idx] != nil {
+				conn.Close()
+				h.brokerConns[broker.String()] = nil
+			}
 		}(broker, idx)
 	}
 	wg.Wait()
@@ -98,7 +107,7 @@ func (k Config) pingBrokers() (err error) {
 	var retErr error
 	for _, err := range errs {
 		if err == nil {
-			// if one broker is online its enough
+			// if one of them is active we are good.
 			return nil
 		}
 		retErr = err
@@ -129,9 +138,10 @@ type Target struct {
 	initKafkaOnce      once.Init
 	initQueueStoreOnce once.Init
 
-	producer sarama.SyncProducer
-	kconfig  Config
-	config   *sarama.Config
+	producer    sarama.SyncProducer
+	kconfig     Config
+	config      *sarama.Config
+	brokerConns map[string]net.Conn
 }
 
 func (h *Target) validate() error {
@@ -262,7 +272,7 @@ func (h *Target) send(entry interface{}) error {
 
 // Init initialize kafka target
 func (h *Target) init() error {
-	if err := h.kconfig.pingBrokers(); err != nil {
+	if err := h.pingBrokers(); err != nil {
 		return err
 	}
 
@@ -400,6 +410,12 @@ func (h *Target) Cancel() {
 		h.producer.Close()
 	}
 
+	for _, conn := range h.brokerConns {
+		if conn != nil {
+			conn.Close()
+		}
+	}
+
 	// Wait for messages to be sent...
 	h.wg.Wait()
 }
@@ -408,9 +424,10 @@ func (h *Target) Cancel() {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	target := &Target{
-		logCh:   make(chan interface{}, config.QueueSize),
-		kconfig: config,
-		status:  statusOffline,
+		logCh:       make(chan interface{}, config.QueueSize),
+		kconfig:     config,
+		status:      statusOffline,
+		brokerConns: make(map[string]net.Conn, len(config.Brokers)),
 	}
 	return target
 }

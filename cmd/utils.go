@@ -292,7 +292,7 @@ func isMaxPartID(partID int) bool {
 	return partID > globalMaxPartID
 }
 
-// profilerWrapper is created becauses pkg/profiler doesn't
+// profilerWrapper is created because pkg/profiler doesn't
 // provide any API to calculate the profiler file path in the
 // disk since the name of this latter is randomly generated.
 type profilerWrapper struct {
@@ -1036,9 +1036,8 @@ func isDirObject(object string) bool {
 }
 
 // Helper method to return total number of nodes in cluster
-func totalNodeCount() uint64 {
-	peers, _ := globalEndpoints.peers()
-	totalNodesCount := uint64(len(peers))
+func totalNodeCount() int {
+	totalNodesCount := len(globalEndpoints.Hostnames())
 	if totalNodesCount == 0 {
 		totalNodesCount = 1 // For standalone erasure coding
 	}

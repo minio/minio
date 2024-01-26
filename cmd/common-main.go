@@ -69,8 +69,6 @@ import (
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
-var shardDiskTimeDelta time.Duration
-
 func init() {
 	if runtime.GOOS == "windows" {
 		if mousetrap.StartedByExplorer() {
@@ -106,12 +104,6 @@ func init() {
 	gob.Register(madmin.TimeInfo{})
 	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
-
-	var err error
-	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
-	if err != nil {
-		shardDiskTimeDelta = 1 * time.Minute
-	}
 
 	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
@@ -373,7 +365,6 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 
 	// Check "no-compat" flag from command line argument.
 	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
-	ctxt.PreAllocate = ctx.IsSet("pre-allocate") || ctx.GlobalIsSet("pre-allocate")
 
 	switch {
 	case ctx.IsSet("config-dir"):
@@ -847,7 +838,7 @@ func loadRootCredentials() {
 // It depends on KMS env variables and global cli flags.
 func handleKMSConfig() {
 	if env.IsSet(kms.EnvKMSSecretKey) && env.IsSet(kms.EnvKESEndpoint) {
-		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
+		logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
 	}
 
 	if env.IsSet(kms.EnvKMSSecretKey) {
@@ -860,10 +851,10 @@ func handleKMSConfig() {
 	if env.IsSet(kms.EnvKESEndpoint) {
 		if env.IsSet(kms.EnvKESAPIKey) {
 			if env.IsSet(kms.EnvKESClientKey) {
-				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientKey))
+				logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientKey))
 			}
 			if env.IsSet(kms.EnvKESClientCert) {
-				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
+				logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
 			}
 		}
 		if !env.IsSet(kms.EnvKESKeyName) {

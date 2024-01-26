@@ -118,7 +118,7 @@ const (
 	// Dummy putBucketACL
 	AmzACL = "x-amz-acl"
 
-	// Signature V4 related contants.
+	// Signature V4 related constants.
 	AmzContentSha256        = "X-Amz-Content-Sha256"
 	AmzDate                 = "X-Amz-Date"
 	AmzAlgorithm            = "X-Amz-Algorithm"
@@ -227,6 +227,10 @@ const (
 	MinIOSourceObjectRetentionTimestamp = "X-Minio-Source-Replication-Retention-Timestamp"
 	// Header indiicates last rtention update time on source
 	MinIOSourceObjectLegalHoldTimestamp = "X-Minio-Source-Replication-LegalHold-Timestamp"
+	// Header indicates a Tag operation was performed on one/more peers successfully, though the
+	// current cluster does not have the object yet. This is in a site/bucket replication scenario.
+	MinIOTaggingProxied = "X-Minio-Tagging-Proxied"
+
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"
 	MinIOLifecycleCfgUpdatedAt = "X-Minio-LifecycleConfig-UpdatedAt"

@@ -27,7 +27,7 @@ inhibit_rules:
     equal: ['alertname', 'dev', 'instance']
 ```
 
-This sample confoguration uses a `webhook` at http://127.0.0.1:8010/webhook to post the alerts.
+This sample configuration uses a `webhook` at http://127.0.0.1:8010/webhook to post the alerts.
 Start the AlertManager and it listens on port `9093` by default. Make sure your webhook is up and listening for the alerts.
 
 ## Configure Prometheus to use AlertManager

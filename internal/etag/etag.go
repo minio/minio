@@ -102,7 +102,7 @@
 // (case-sensitive) and will fail otherwise.
 // Further, some clients require that the ETag value is a double-quoted
 // string. Therefore, this package provides dedicated functions for
-// adding and extracing the ETag to/from HTTP headers.
+// adding and extracting the ETag to/from HTTP headers.
 package etag
 
 import (

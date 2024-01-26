@@ -156,7 +156,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 	}
 
-	info, err := tracker.disk.DiskInfo(ctx, false)
+	info, err := tracker.disk.DiskInfo(ctx, DiskInfoOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to get disk information before healing it: %w", err)
 	}
@@ -433,7 +433,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			partial: func(entries metaCacheEntries, _ []error) {
 				entry, ok := entries.resolve(&resolver)
 				if !ok {
-					// check if we can get one entry atleast
+					// check if we can get one entry at least
 					// proceed to heal nonetheless.
 					entry, _ = entries.firstFound()
 				}

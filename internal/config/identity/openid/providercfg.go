@@ -91,7 +91,7 @@ func (p *providerCfg) initializeProvider(cfgGet func(string) string, transport h
 		)
 		return err
 	default:
-		return fmt.Errorf("Unsupport vendor %s", keyCloakVendor)
+		return fmt.Errorf("Unsupported vendor %s", keyCloakVendor)
 	}
 }
 

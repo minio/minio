@@ -65,7 +65,7 @@ type StorageAPI interface {
 	// returns 'nil' once healing is complete or if the disk
 	// has never been replaced.
 	Healing() *healingTracker
-	DiskInfo(ctx context.Context, metrics bool) (info DiskInfo, err error)
+	DiskInfo(ctx context.Context, opts DiskInfoOptions) (info DiskInfo, err error)
 	NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, shouldSleep func() bool) (dataUsageCache, error)
 
 	// Volume operations.
@@ -109,6 +109,7 @@ type StorageAPI interface {
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)
 	GetDiskLoc() (poolIdx, setIdx, diskIdx int) // Retrieve location indexes.
 	SetDiskLoc(poolIdx, setIdx, diskIdx int)    // Set location indexes.
+	SetFormatData(b []byte)                     // Set formatData cached value
 }
 
 type unrecognizedDisk struct {
@@ -151,6 +152,9 @@ func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, 
 	return dataUsageCache{}, errDiskNotFound
 }
 
+func (p *unrecognizedDisk) SetFormatData(b []byte) {
+}
+
 func (p *unrecognizedDisk) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return -1, -1, -1
 }
@@ -169,7 +173,7 @@ func (p *unrecognizedDisk) GetDiskID() (string, error) {
 func (p *unrecognizedDisk) SetDiskID(id string) {
 }
 
-func (p *unrecognizedDisk) DiskInfo(ctx context.Context, _ bool) (info DiskInfo, err error) {
+func (p *unrecognizedDisk) DiskInfo(ctx context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
 	return info, errDiskNotFound
 }
 

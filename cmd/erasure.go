@@ -91,7 +91,7 @@ func diskErrToDriveState(err error) (state string) {
 	switch {
 	case errors.Is(err, errDiskNotFound) || errors.Is(err, context.DeadlineExceeded):
 		state = madmin.DriveStateOffline
-	case errors.Is(err, errCorruptedFormat):
+	case errors.Is(err, errCorruptedFormat) || errors.Is(err, errCorruptedBackend):
 		state = madmin.DriveStateCorrupt
 	case errors.Is(err, errUnformattedDisk):
 		state = madmin.DriveStateUnformatted
@@ -178,7 +178,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 				disksInfo[index] = di
 				return nil
 			}
-			info, err := disks[index].DiskInfo(context.TODO(), metrics)
+			info, err := disks[index].DiskInfo(context.TODO(), DiskInfoOptions{Metrics: metrics})
 			di.DrivePath = info.MountPath
 			di.TotalSpace = info.Total
 			di.UsedSpace = info.Used
@@ -203,6 +203,8 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 				APICalls:                make(map[string]uint64, len(info.Metrics.APICalls)),
 				TotalErrorsAvailability: info.Metrics.TotalErrorsAvailability,
 				TotalErrorsTimeout:      info.Metrics.TotalErrorsTimeout,
+				TotalTokens:             info.Metrics.TotalTokens,
+				TotalWaiting:            info.Metrics.TotalWaiting,
 			}
 			for k, v := range info.Metrics.LastMinute {
 				if v.N > 0 {
@@ -288,7 +290,7 @@ func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (new
 				return
 			}
 
-			di, err := disk.DiskInfo(context.Background(), false)
+			di, err := disk.DiskInfo(context.Background(), DiskInfoOptions{})
 			infos[i] = di
 			if err != nil {
 				// - Do not consume disks which are not reachable

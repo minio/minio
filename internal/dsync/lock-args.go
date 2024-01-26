@@ -32,7 +32,7 @@ type LockArgs struct {
 	Source string
 
 	// Owner represents unique ID for this instance, an owner who originally requested
-	// the locked resource, useful primarily in figuring our stale locks.
+	// the locked resource, useful primarily in figuring out stale locks.
 	Owner string
 
 	// Quorum represents the expected quorum for this lock type.

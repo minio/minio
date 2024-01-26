@@ -74,12 +74,6 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_LISTENERS",
 		Hidden: true,
 	},
-	cli.BoolFlag{
-		Name:   "pre-allocate",
-		Usage:  "Number of 1MiB sized buffers to pre-allocate. Default 2048",
-		EnvVar: "MINIO_PRE_ALLOCATE",
-		Hidden: true,
-	},
 	cli.StringFlag{
 		Name:   "console-address",
 		Usage:  "bind to a specific ADDRESS:PORT for embedded Console UI, ADDRESS can be an IP or hostname",
@@ -95,7 +89,7 @@ var ServerFlags = []cli.Flag{
 	cli.DurationFlag{
 		Name:   "idle-timeout",
 		Value:  xhttp.DefaultIdleTimeout,
-		Usage:  "idle timeout is the maximum amount of time to wait for the next request when keep-alives are enabled",
+		Usage:  "idle timeout is the maximum amount of time to wait for the next request when keep-alive are enabled",
 		EnvVar: "MINIO_IDLE_TIMEOUT",
 		Hidden: true,
 	},
@@ -387,7 +381,7 @@ func initAllSubsystems(ctx context.Context) {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(ctx, totalNodeCount())
+	globalBucketMonitor = bandwidth.NewMonitor(ctx, uint64(totalNodeCount()))
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -415,7 +409,7 @@ func initAllSubsystems(ctx context.Context) {
 		globalBucketVersioningSys = NewBucketVersioningSys()
 	}
 
-	// Create new bucket replication subsytem
+	// Create new bucket replication subsystem
 	globalBucketTargetSys = NewBucketTargetSys(GlobalContext)
 
 	// Create new ILM tier configuration subsystem
@@ -731,7 +725,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	// Initialize grid
+	// Initialize gridn
 	bootstrapTrace("initGrid", func() {
 		logger.FatalIf(initGlobalGrid(GlobalContext, globalEndpoints), "Unable to configure server grid RPC services")
 	})
@@ -773,7 +767,7 @@ func serverMain(ctx *cli.Context) {
 	if globalIsDistErasure {
 		bootstrapTrace("verifying system configuration", func() {
 			// Additionally in distributed setup, validate the setup and configuration.
-			if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
+			if err := verifyServerSystemConfig(GlobalContext, globalEndpoints, globalGrid.Load()); err != nil {
 				logger.Fatal(err, "Unable to start the server")
 			}
 		})

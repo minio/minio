@@ -188,6 +188,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 
 	// Attempt to load all `format.json` from all disks.
 	formatConfigs, sErrs := loadFormatErasureAll(storageDisks, false)
+
 	// Check if we have
 	for i, sErr := range sErrs {
 		// print the error, nonetheless, which is perhaps unhandled
@@ -231,24 +232,6 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		return storageDisks, format, nil
 	}
 
-	// Mark all root disks down
-	markRootDisksAsDown(storageDisks, sErrs)
-
-	// Following function is added to fix a regressions which was introduced
-	// in release RELEASE.2018-03-16T22-52-12Z after migrating v1 to v2 to v3.
-	// This migration failed to capture '.This' field properly which indicates
-	// the disk UUID association. Below function is called to handle and fix
-	// this regression, for more info refer https://github.com/minio/minio/issues/5667
-	if err = fixFormatErasureV3(storageDisks, endpoints, formatConfigs); err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil, nil, err
-	}
-
-	// If any of the .This field is still empty, we return error.
-	if formatErasureV3ThisEmpty(formatConfigs) {
-		return nil, nil, errErasureV3ThisEmpty
-	}
-
 	format, err = getFormatErasureInQuorum(formatConfigs)
 	if err != nil {
 		logger.LogIf(GlobalContext, err)
@@ -260,7 +243,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		if !firstDisk {
 			return nil, nil, errNotFirstDisk
 		}
-		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format); err != nil {
+		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format, formatConfigs); err != nil {
 			logger.LogIf(GlobalContext, err)
 			return nil, nil, err
 		}
@@ -289,9 +272,12 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 		return time.Now().Round(time.Second).Sub(formatStartTime).String()
 	}
 
-	var tries int
-	var verboseLogging bool
-	storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+	var (
+		tries   int
+		verbose bool
+	)
+
+	storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
 	if err == nil {
 		return storageDisks, format, nil
 	}
@@ -304,12 +290,12 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 
 	for {
 		// Only log once every 10 iterations, then reset the tries count.
-		verboseLogging = tries >= 10
-		if verboseLogging {
+		verbose = tries >= 10
+		if verbose {
 			tries = 1
 		}
 
-		storageDisks, format, err := connectLoadInitFormats(verboseLogging, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+		storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
 		if err == nil {
 			return storageDisks, format, nil
 		}

@@ -37,6 +37,13 @@ type RenameOptions struct {
 	BaseOptions
 }
 
+// DiskInfoOptions options for requesting custom results.
+type DiskInfoOptions struct {
+	DiskID  string `msg:"id"`
+	Metrics bool   `msg:"m"`
+	NoOp    bool   `msg:"np"`
+}
+
 //go:generate msgp -file=$GOFILE
 
 // DiskInfo is an extended type which returns current
@@ -73,6 +80,8 @@ type DiskInfo struct {
 type DiskMetrics struct {
 	LastMinute              map[string]AccElem `json:"apiLatencies,omitempty"`
 	APICalls                map[string]uint64  `json:"apiCalls,omitempty"`
+	TotalTokens             uint32             `json:"totalTokens,omitempty"`
+	TotalWaiting            uint32             `json:"totalWaiting,omitempty"`
 	TotalErrorsAvailability uint64             `json:"totalErrsAvailability"`
 	TotalErrorsTimeout      uint64             `json:"totalErrsTimeout"`
 	TotalWrites             uint64             `json:"totalWrites"`
@@ -419,6 +428,22 @@ type RenameDataHandlerParams struct {
 	DstPath   string        `msg:"dp"`
 	FI        FileInfo      `msg:"fi"`
 	Opts      RenameOptions `msg:"ro"`
+}
+
+// RenameFileHandlerParams are parameters for RenameFileHandler.
+type RenameFileHandlerParams struct {
+	DiskID      string `msg:"id"`
+	SrcVolume   string `msg:"sv"`
+	SrcFilePath string `msg:"sp"`
+	DstVolume   string `msg:"dv"`
+	DstFilePath string `msg:"dp"`
+}
+
+// ReadAllHandlerParams are parameters for ReadAllHandler.
+type ReadAllHandlerParams struct {
+	DiskID   string `msg:"id"`
+	Volume   string `msg:"v"`
+	FilePath string `msg:"fp"`
 }
 
 // RenameDataResp - RenameData()'s response.
