@@ -82,6 +82,10 @@ var supportedHeaders = []string{
 	xhttp.AmzObjectTagging,
 	"expires",
 	xhttp.AmzBucketReplicationStatus,
+	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key",
+	"x-minio-internal-inline-data",
+	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Internal-Server-Side-Encryption-Iv",
 	// Add more supported headers here.
 }
 

@@ -33,6 +33,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/grid"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/exp/slices"
 
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/config/dns"
@@ -73,6 +74,9 @@ const (
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
+		if slices.Contains(supportedHeaders, key) {
+			return false
+		}
 		if stringsHasPrefixFold(key, ReservedMetadataPrefix) {
 			return true
 		}

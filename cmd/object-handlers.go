@@ -2234,11 +2234,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
-			return
-		}
-
 		reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -2647,10 +2642,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		if crypto.Requested(r.Header) {
 			if crypto.SSECopy.IsRequested(r.Header) {
 				return errInvalidEncryptionParameters
-			}
-
-			if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-				return errInvalidEncryptionParametersSSEC
 			}
 
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)

@@ -220,9 +220,6 @@ func (c Config) GetDestination() Destination {
 
 // Replicate returns true if the object should be replicated.
 func (c Config) Replicate(obj ObjectOpts) bool {
-	if obj.SSEC {
-		return false
-	}
 	for _, rule := range c.FilterActionableRules(obj) {
 		if rule.Status == Disabled {
 			continue

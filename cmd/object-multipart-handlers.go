@@ -116,11 +116,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
-			return
-		}
-
 		if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return

@@ -51,6 +51,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -764,11 +765,14 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
-		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-			continue
-		}
-		if isStandardHeader(k) {
-			continue
+		// In case of SSE-C objects copy the allowed internal headers as well
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(supportedHeaders, k) {
+			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
+				continue
+			}
+			if isStandardHeader(k) {
+				continue
+			}
 		}
 		meta[k] = v
 	}
@@ -1322,11 +1326,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, ObjectOptions{
-		VersionID:        ri.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
-	})
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{},
+		ObjectOptions{
+			VersionID:        ri.VersionID,
+			Versioned:        versioned,
+			VersionSuspended: versionSuspended,
+			NoDecryption:     true,
+		})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			objInfo := ri.ToObjectInfo()
@@ -1344,6 +1350,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	defer gr.Close()
 
 	objInfo := gr.ObjInfo
+
 	// make sure we have the latest metadata for metrics calculation
 	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
@@ -1365,6 +1372,11 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			Host:       globalLocalNodeName,
 		})
 		return
+	}
+
+	// Set the encrypted size for SSE-C objects
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		size = objInfo.Size
 	}
 
 	if tgt.Bucket == "" {
