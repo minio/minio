@@ -35,7 +35,7 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 | `minio_cluster_usage_version_total`          | Total number of versions (includes delete marker) in a cluster |
 | `minio_cluster_usage_deletemarker_total`     | Total number of delete markers in a cluster                    |
 | `minio_cluster_usage_total_bytes`            | Total cluster usage in bytes                                   |
-| `minio_cluster_buckets_total`                | Total number of buckets in the cluster                         |
+| `minio_cluster_bucket_total`                 | Total number of buckets in the cluster                         |
 
 ## Cluster Drive Metrics
 

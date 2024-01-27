@@ -2286,6 +2286,7 @@ type HealthResult struct {
 	ESHealth      []struct {
 		Maintenance   bool
 		PoolID, SetID int
+		Healthy       bool
 		HealthyDrives int
 		HealingDrives int
 		ReadQuorum    int
@@ -2409,23 +2410,25 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			result.ESHealth = append(result.ESHealth, struct {
 				Maintenance                  bool
 				PoolID, SetID                int
+				Healthy                      bool
 				HealthyDrives, HealingDrives int
 				ReadQuorum, WriteQuorum      int
 			}{
 				Maintenance:   opts.Maintenance,
 				SetID:         setIdx,
 				PoolID:        poolIdx,
+				Healthy:       erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx],
 				HealthyDrives: erasureSetUpCount[poolIdx][setIdx].online,
 				HealingDrives: erasureSetUpCount[poolIdx][setIdx].healing,
 				ReadQuorum:    poolReadQuorums[poolIdx],
 				WriteQuorum:   poolWriteQuorums[poolIdx],
 			})
 
-			if erasureSetUpCount[poolIdx][setIdx].online < poolWriteQuorums[poolIdx] {
+			result.Healthy = erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
+			if !result.Healthy {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
-				result.Healthy = false
 			}
 		}
 	}
