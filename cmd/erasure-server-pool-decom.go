@@ -936,7 +936,8 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					bi.Name,
 					encodeDirObject(entry.name),
 					ObjectOptions{
-						DeletePrefix: true, // use prefix delete to delete all versions at once.
+						DeletePrefix:       true, // use prefix delete to delete all versions at once.
+						DeletePrefixObject: true, // use prefix delete on exact object (this is an optimization to avoid fan-out calls)
 					},
 				)
 				stopFn(err)
