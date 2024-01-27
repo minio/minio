@@ -105,16 +105,18 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 			continue
 		}
 		m.targets[host] = newConnection(connectionParams{
-			ctx:          ctx,
-			id:           m.ID,
-			local:        o.Local,
-			remote:       host,
-			dial:         o.Dialer,
-			handlers:     &m.handlers,
-			auth:         o.AddAuth,
-			blockConnect: o.BlockConnect,
-			tlsConfig:    o.TLSConfig,
-			publisher:    o.TraceTo,
+			ctx:           ctx,
+			id:            m.ID,
+			local:         o.Local,
+			remote:        host,
+			dial:          o.Dialer,
+			handlers:      &m.handlers,
+			auth:          o.AddAuth,
+			blockConnect:  o.BlockConnect,
+			tlsConfig:     o.TLSConfig,
+			publisher:     o.TraceTo,
+			incomingBytes: o.Incoming,
+			outgoingBytes: o.Outgoing,
 		})
 	}
 	if !found {

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -64,10 +65,20 @@ type tracer struct {
 	Subroute  string
 }
 
+const (
+	httpScheme  = "http://"
+	httpsScheme = "https://"
+)
+
 func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, req []byte) ([]byte, error) {
 	if t == nil || t.Publisher.NumSubscribers(t.TraceType) == 0 {
 		return c.roundtrip(h, req)
 	}
+
+	// Following trimming is needed for consistency between outputs with other internode traces.
+	local := strings.TrimPrefix(strings.TrimPrefix(t.Local, httpsScheme), httpScheme)
+	remote := strings.TrimPrefix(strings.TrimPrefix(t.Remote, httpsScheme), httpScheme)
+
 	start := time.Now()
 	body := bytesOrLength(req)
 	resp, err := c.roundtrip(h, req)
@@ -90,7 +101,7 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 	trace := madmin.TraceInfo{
 		TraceType: t.TraceType,
 		FuncName:  prefix + "." + h.String(),
-		NodeName:  t.Remote,
+		NodeName:  remote,
 		Time:      start,
 		Duration:  end.Sub(start),
 		Path:      t.Subroute,
@@ -100,7 +111,7 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 				Time:    start,
 				Proto:   "grid",
 				Method:  "REQ",
-				Client:  t.Local,
+				Client:  local,
 				Headers: nil,
 				Path:    t.Subroute,
 				Body:    []byte(body),
