@@ -407,12 +407,12 @@ func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOption
 	opts.DiskID = client.diskID
 	b, err := opts.MarshalMsg(grid.GetByteBuffer()[:0])
 	if err != nil {
-		return err
+		return toStorageErr(err)
 	}
 
 	st, err := client.gridConn.NewStream(ctx, grid.HandlerWalkDir, b)
 	if err != nil {
-		return err
+		return toStorageErr(err)
 	}
 	return toStorageErr(st.Results(func(in []byte) error {
 		_, err := wr.Write(in)
