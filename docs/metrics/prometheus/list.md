@@ -352,20 +352,20 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 
 ## Network Interface Metrics
 
-| Name                          | Description                                   |
-|:------------------------------|:----------------------------------------------|
-| `minio_node_if_rx_bytes`      | Bytes received on the interface in 60s.       |
-| `minio_node_if_rx_bytes_avg`  | Bytes received on the interface in 60s (avg). |
-| `minio_node_if_rx_bytes_max`  | Bytes received on the interface in 60s (max). |
-| `minio_node_if_rx_errors`     | Receive errors in 60s.                        |
-| `minio_node_if_rx_errors_avg` | Receive errors in 60s (avg).                  |
-| `minio_node_if_rx_errors_max` | Receive errors in 60s (max).                  |
-| `minio_node_if_tx_bytes`      | Bytes transmitted in 60s.                     |
-| `minio_node_if_tx_bytes_avg`  | Bytes transmitted in 60s (avg).               |
-| `minio_node_if_tx_bytes_max`  | Bytes transmitted in 60s (max).               |
-| `minio_node_if_tx_errors`     | Transmit errors in 60s.                       |
-| `minio_node_if_tx_errors_avg` | Transmit errors in 60s (avg).                 |
-| `minio_node_if_tx_errors_max` | Transmit errors in 60s (max).                 |
+| Name                          | Description                                                |
+|:------------------------------|:-----------------------------------------------------------|
+| `minio_node_if_rx_bytes`      | Bytes received on the interface in 60s.                    |
+| `minio_node_if_rx_bytes_avg`  | Bytes received on the interface in 60s (avg) since uptime. |
+| `minio_node_if_rx_bytes_max`  | Bytes received on the interface in 60s (max) since uptime. |
+| `minio_node_if_rx_errors`     | Receive errors in 60s.                                     |
+| `minio_node_if_rx_errors_avg` | Receive errors in 60s (avg).                               |
+| `minio_node_if_rx_errors_max` | Receive errors in 60s (max).                               |
+| `minio_node_if_tx_bytes`      | Bytes transmitted in 60s.                                  |
+| `minio_node_if_tx_bytes_avg`  | Bytes transmitted in 60s (avg).                            |
+| `minio_node_if_tx_bytes_max`  | Bytes transmitted in 60s (max).                            |
+| `minio_node_if_tx_errors`     | Transmit errors in 60s.                                    |
+| `minio_node_if_tx_errors_avg` | Transmit errors in 60s (avg).                              |
+| `minio_node_if_tx_errors_max` | Transmit errors in 60s (max).                              |
 
 ## CPU Metrics
 
