@@ -490,6 +490,10 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	for _, disk := range disks {
+		if disk == nil {
+			continue
+		}
+
 		t, err := loadHealingTracker(ctx, disk)
 		if err != nil {
 			if !errors.Is(err, errFileNotFound) {

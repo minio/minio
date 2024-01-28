@@ -746,6 +746,10 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 	if op != ws.OpBinary {
 		return fmt.Errorf("unexpected connect response type %v", op)
 	}
+	if c.incomingBytes != nil {
+		c.incomingBytes(int64(len(b)))
+	}
+
 	var m message
 	_, _, err = m.parse(b)
 	if err != nil {
@@ -950,9 +954,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				cancel(ErrDisconnected)
 				logger.LogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
-			}
-			if c.incomingBytes != nil {
-				c.incomingBytes(int64(len(msg)))
 			}
 			// Parse the received message
 			var m message

@@ -87,6 +87,8 @@ func toStorageErr(err error) error {
 	switch err.Error() {
 	case errFaultyDisk.Error():
 		return errFaultyDisk
+	case errFaultyRemoteDisk.Error():
+		return errFaultyRemoteDisk
 	case errFileCorrupt.Error():
 		return errFileCorrupt
 	case errUnexpected.Error():
@@ -135,6 +137,16 @@ func toStorageErr(err error) error {
 		return errDiskNotFound
 	case errDiskNotFound.Error():
 		return errDiskNotFound
+	case errMaxVersionsExceeded.Error():
+		return errMaxVersionsExceeded
+	case errInconsistentDisk.Error():
+		return errInconsistentDisk
+	case errDriveIsRoot.Error():
+		return errDriveIsRoot
+	case errDiskOngoingReq.Error():
+		return errDiskOngoingReq
+	case grid.ErrUnknownHandler.Error():
+		return errInconsistentDisk
 	}
 	return err
 }

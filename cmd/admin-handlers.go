@@ -79,6 +79,213 @@ const (
 	mgmtForceStop   = "forceStop"
 )
 
+// ServerUpdateV2Handler - POST /minio/admin/v3/update?updateURL={updateURL}&type=2
+// ----------
+// updates all minio servers and restarts them gracefully.
+func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServerUpdateAdminAction)
+	if objectAPI == nil {
+		return
+	}
+
+	if globalInplaceUpdateDisabled || currentReleaseTime.IsZero() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	updateURL := vars["updateURL"]
+	dryRun := r.Form.Get("dry-run") == "true"
+
+	mode := getMinioMode()
+	if updateURL == "" {
+		updateURL = minioReleaseInfoURL
+		if runtime.GOOS == globalWindowsOSName {
+			updateURL = minioReleaseWindowsInfoURL
+		}
+	}
+
+	u, err := url.Parse(updateURL)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	content, err := downloadReleaseURL(u, updateTimeout, mode)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	sha256Sum, lrTime, releaseInfo, err := parseReleaseData(content)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
+	// Download Binary Once
+	binC, bin, err := downloadBinary(u, mode)
+	if err != nil {
+		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	updateStatus := madmin.ServerUpdateStatusV2{DryRun: dryRun}
+	peerResults := make(map[string]madmin.ServerPeerUpdateStatus)
+
+	local := globalLocalNodeName
+	if local == "" {
+		local = "127.0.0.1"
+	}
+
+	failedClients := make(map[int]struct{})
+
+	if globalIsDistErasure {
+		// Push binary to other servers
+		for idx, nerr := range globalNotificationSys.VerifyBinary(ctx, u, sha256Sum, releaseInfo, binC) {
+			if nerr.Err != nil {
+				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
+					Host:           nerr.Host.String(),
+					Err:            nerr.Err.Error(),
+					CurrentVersion: Version,
+				}
+				failedClients[idx] = struct{}{}
+			} else {
+				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
+					Host:           nerr.Host.String(),
+					CurrentVersion: Version,
+					UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+				}
+			}
+		}
+	}
+
+	if lrTime.Sub(currentReleaseTime) > 0 {
+		if err = verifyBinary(u, sha256Sum, releaseInfo, mode, bytes.NewReader(bin)); err != nil {
+			peerResults[local] = madmin.ServerPeerUpdateStatus{
+				Host:           local,
+				Err:            err.Error(),
+				CurrentVersion: Version,
+			}
+		} else {
+			peerResults[local] = madmin.ServerPeerUpdateStatus{
+				Host:           local,
+				CurrentVersion: Version,
+				UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+			}
+		}
+	} else {
+		peerResults[local] = madmin.ServerPeerUpdateStatus{
+			Host:           local,
+			Err:            fmt.Sprintf("server is already running the latest version: %s", Version),
+			CurrentVersion: Version,
+		}
+	}
+
+	if !dryRun {
+		if globalIsDistErasure {
+			ng := WithNPeers(len(globalNotificationSys.peerClients))
+			for idx, client := range globalNotificationSys.peerClients {
+				_, ok := failedClients[idx]
+				if ok {
+					continue
+				}
+				client := client
+				ng.Go(ctx, func() error {
+					return client.CommitBinary(ctx)
+				}, idx, *client.host)
+			}
+
+			for _, nerr := range ng.Wait() {
+				if nerr.Err != nil {
+					prs, ok := peerResults[nerr.Host.String()]
+					if ok {
+						prs.Err = nerr.Err.Error()
+						peerResults[nerr.Host.String()] = prs
+					} else {
+						peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
+							Host:           nerr.Host.String(),
+							Err:            nerr.Err.Error(),
+							CurrentVersion: Version,
+							UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+						}
+					}
+				}
+			}
+		}
+		prs := peerResults[local]
+		if prs.Err == "" {
+			if err = commitBinary(); err != nil {
+				prs.Err = err.Error()
+			}
+			peerResults[local] = prs
+		}
+	}
+
+	prs, ok := peerResults[local]
+	if ok {
+		prs.WaitingDrives = waitingDrivesNode()
+		peerResults[local] = prs
+	}
+
+	if globalIsDistErasure {
+		// Notify all other MinIO peers signal service.
+		ng := WithNPeers(len(globalNotificationSys.peerClients))
+		for idx, client := range globalNotificationSys.peerClients {
+			_, ok := failedClients[idx]
+			if ok {
+				continue
+			}
+			client := client
+			ng.Go(ctx, func() error {
+				prs, ok := peerResults[client.String()]
+				if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
+					return client.SignalService(serviceRestart, "", dryRun)
+				}
+				return nil
+			}, idx, *client.host)
+		}
+
+		for _, nerr := range ng.Wait() {
+			if nerr.Err != nil {
+				waitingDrives := map[string]madmin.DiskMetrics{}
+				jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
+				if jerr == nil {
+					prs, ok := peerResults[nerr.Host.String()]
+					if ok {
+						prs.WaitingDrives = waitingDrives
+						peerResults[nerr.Host.String()] = prs
+					}
+					continue
+				}
+			}
+		}
+	}
+
+	for _, pr := range peerResults {
+		updateStatus.Results = append(updateStatus.Results, pr)
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(updateStatus)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
+
+	if !dryRun {
+		if lrTime.Sub(currentReleaseTime) > 0 {
+			globalServiceSignalCh <- serviceRestart
+		}
+	}
+}
+
 // ServerUpdateHandler - POST /minio/admin/v3/update?updateURL={updateURL}
 // ----------
 // updates all minio servers and restarts them gracefully.
@@ -90,7 +297,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if globalInplaceUpdateDisabled {
+	if globalInplaceUpdateDisabled || currentReleaseTime.IsZero() {
 		// if MINIO_UPDATE=off - inplace update is disabled, mostly in containers.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 		return
@@ -124,14 +331,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
-	crTime, err := GetCurrentReleaseTime()
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	if lrTime.Sub(crTime) <= 0 {
+	if lrTime.Sub(currentReleaseTime) <= 0 {
 		updateStatus := madmin.ServerUpdateStatus{
 			CurrentVersion: Version,
 			UpdatedVersion: Version,
@@ -147,6 +347,8 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 		writeSuccessResponseJSON(w, jsonBytes)
 		return
 	}
+
+	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
 
 	// Download Binary Once
 	binC, bin, err := downloadBinary(u, mode)
@@ -279,14 +481,13 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 }
 
 type servicePeerResult struct {
-	Host          string                 `json:"host"`
-	Err           string                 `json:"err,omitempty"`
-	WaitingDrives map[string]DiskMetrics `json:"waitingDrives,omitempty"`
+	Host          string                        `json:"host"`
+	Err           string                        `json:"err,omitempty"`
+	WaitingDrives map[string]madmin.DiskMetrics `json:"waitingDrives,omitempty"`
 }
 
 type serviceResult struct {
 	Action  madmin.ServiceAction `json:"action"`
-	Forced  bool                 `json:"forced"`
 	DryRun  bool                 `json:"dryRun"`
 	Results []servicePeerResult  `json:"results,omitempty"`
 }
@@ -310,7 +511,6 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	vars := mux.Vars(r)
 	action := vars["action"]
 	dryRun := r.Form.Get("dry-run") == "true"
-	force := r.Form.Get("force") == "true"
 
 	var serviceSig serviceSignal
 	act := madmin.ServiceAction(action)
@@ -343,47 +543,45 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Notify all other MinIO peers signal service.
-	nerrs := globalNotificationSys.SignalServiceV2(serviceSig, dryRun, force)
-	srvResult := serviceResult{Action: act, Results: make([]servicePeerResult, 0, len(nerrs))}
+	srvResult := serviceResult{Action: act, Results: []servicePeerResult{}}
 
 	process := act == madmin.ServiceActionRestart || act == madmin.ServiceActionStop
-	var trigger bool
 	if process {
 		localhost := globalLocalNodeName
 		if globalLocalNodeName == "" {
 			localhost = "127.0.0.1"
 		}
-		waitingDrives := canWeRestartNode()
+		waitingDrives := waitingDrivesNode()
 		srvResult.Results = append(srvResult.Results, servicePeerResult{
 			Host:          localhost,
 			WaitingDrives: waitingDrives,
 		})
-		trigger = len(waitingDrives) == 0 || force
 	}
 
-	for _, nerr := range nerrs {
-		if nerr.Err != nil && process {
-			waitingDrives := map[string]DiskMetrics{}
-			jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
-			if jerr == nil {
-				srvResult.Results = append(srvResult.Results, servicePeerResult{
-					Host:          nerr.Host.String(),
-					WaitingDrives: waitingDrives,
-				})
-				continue
+	if globalIsDistErasure {
+		for _, nerr := range globalNotificationSys.SignalServiceV2(serviceSig, dryRun) {
+			if nerr.Err != nil && process {
+				waitingDrives := map[string]madmin.DiskMetrics{}
+				jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
+				if jerr == nil {
+					srvResult.Results = append(srvResult.Results, servicePeerResult{
+						Host:          nerr.Host.String(),
+						WaitingDrives: waitingDrives,
+					})
+					continue
+				}
 			}
+			errStr := ""
+			if nerr.Err != nil {
+				errStr = nerr.Err.Error()
+			}
+			srvResult.Results = append(srvResult.Results, servicePeerResult{
+				Host: nerr.Host.String(),
+				Err:  errStr,
+			})
 		}
-		errStr := ""
-		if nerr.Err != nil {
-			errStr = nerr.Err.Error()
-		}
-		srvResult.Results = append(srvResult.Results, servicePeerResult{
-			Host: nerr.Host.String(),
-			Err:  errStr,
-		})
 	}
 
-	srvResult.Forced = force
 	srvResult.DryRun = dryRun
 
 	buf, err := json.Marshal(srvResult)
@@ -401,7 +599,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	case serviceUnFreeze:
 		unfreezeServices()
 	case serviceRestart, serviceStop:
-		if !dryRun && trigger {
+		if !dryRun {
 			globalServiceSignalCh <- serviceSig
 		}
 	}
