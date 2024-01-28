@@ -2657,7 +2657,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 	}
 
 	go func() {
-		defer close(healthInfoCh)
+		defer xioutil.SafeClose(healthInfoCh)
 
 		partialWrite(healthInfo) // Write first message with only version and deployment id populated
 		getAndWritePlatformInfo()
@@ -3046,7 +3046,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 	resultCh := make(chan madmin.ClusterRegistrationInfo)
 
 	go func() {
-		defer close(resultCh)
+		defer xioutil.SafeClose(resultCh)
 
 		ci := madmin.ClusterRegistrationInfo{}
 		ci.Info.NoOfServerPools = len(globalEndpoints)

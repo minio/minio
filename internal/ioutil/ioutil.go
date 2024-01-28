@@ -25,6 +25,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -417,4 +418,14 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 			return written, nil
 		}
 	}
+}
+
+// SafeClose safely closes any channel of any type
+func SafeClose[T any](c chan<- T) {
+	if c != nil {
+		close(c)
+	}
+	// Print stack to check who is sending `c` as `nil`
+	// without crashing the server.
+	debug.PrintStack()
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/workers"
@@ -1263,7 +1264,7 @@ func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels
 	}
 	go func(wg *sync.WaitGroup, ch chan Metric) {
 		wg.Wait()
-		close(ch)
+		xioutil.SafeClose(ch)
 	}(&wg, ch)
 	return ch
 }
@@ -1488,7 +1489,7 @@ func (sys *NotificationSys) DriveSpeedTest(ctx context.Context, opts madmin.Driv
 
 	go func(wg *sync.WaitGroup, ch chan madmin.DriveSpeedTestResult) {
 		wg.Wait()
-		close(ch)
+		xioutil.SafeClose(ch)
 	}(&wg, ch)
 
 	return ch
@@ -1616,7 +1617,7 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 	}(mrfCh)
 	go func(wg *sync.WaitGroup) {
 		wg.Wait()
-		close(mrfCh)
+		xioutil.SafeClose(mrfCh)
 	}(&wg)
 	return mrfCh, nil
 }

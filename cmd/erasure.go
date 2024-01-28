@@ -423,7 +423,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 			bucketCh <- b
 		}
 	}
-	close(bucketCh)
+	xioutil.SafeClose(bucketCh)
 
 	bucketResults := make(chan dataUsageEntryInfo, len(disks))
 
@@ -560,7 +560,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 		}(i)
 	}
 	wg.Wait()
-	close(bucketResults)
+	xioutil.SafeClose(bucketResults)
 	saverWg.Wait()
 
 	return nil

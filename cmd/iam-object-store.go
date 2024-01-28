@@ -31,6 +31,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 )
@@ -575,7 +576,7 @@ func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix stri
 	ch := make(chan itemOrErr)
 
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 
 		// Allocate new results channel to receive ObjectInfo.
 		objInfoCh := make(chan ObjectInfo)

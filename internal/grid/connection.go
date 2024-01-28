@@ -40,6 +40,7 @@ import (
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/tinylib/msgp/msgp"
@@ -449,7 +450,7 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 	defer cancel()
 	changed := make(chan State, 1)
 	go func() {
-		defer close(changed)
+		defer xioutil.SafeClose(changed)
 		for {
 			c.connChange.Wait()
 			newState := c.State()

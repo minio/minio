@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/config/policy/opa"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/policy"
@@ -207,7 +208,7 @@ func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	select {
 	case <-sys.configLoaded:
 	default:
-		close(sys.configLoaded)
+		xioutil.SafeClose(sys.configLoaded)
 	}
 	return nil
 }

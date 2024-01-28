@@ -760,7 +760,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	}
 
 	mrfCheck := make(chan FileInfo)
-	defer close(mrfCheck)
+	defer xioutil.SafeClose(mrfCheck)
 
 	var rw sync.Mutex
 
@@ -810,7 +810,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		}
 
 		wg.Wait()
-		close(done)
+		xioutil.SafeClose(done)
 
 		fi, ok := <-mrfCheck
 		if !ok {

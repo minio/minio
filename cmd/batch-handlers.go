@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/env"
@@ -545,7 +546,7 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 	}
 
 	go func() {
-		defer close(input)
+		defer xioutil.SafeClose(input)
 
 		for _, entry := range entries {
 			gr, err := objAPI.GetObjectNInfo(ctx, r.Source.Bucket,
@@ -1038,7 +1039,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 	if !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
 		go func() {
-			defer close(slowCh)
+			defer xioutil.SafeClose(slowCh)
 
 			// Snowball currently needs the high level minio-go Client, not the Core one
 			cl, err := miniogo.New(u.Host, &miniogo.Options{
@@ -1809,7 +1810,7 @@ func (j *BatchJobPool) queueJob(req *BatchJobRequest) error {
 	select {
 	case <-j.ctx.Done():
 		j.once.Do(func() {
-			close(j.jobCh)
+			xioutil.SafeClose(j.jobCh)
 		})
 	case j.jobCh <- req:
 	default:

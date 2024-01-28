@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/certs"
 	"github.com/minio/pkg/v2/env"
@@ -737,7 +738,7 @@ func serverMain(ctx *cli.Context) {
 			logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 		}
 		// Allow grid to start after registering all services.
-		close(globalGridStart)
+		xioutil.SafeClose(globalGridStart)
 
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).

@@ -491,7 +491,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	}()
 
 	// Updates must be closed before we return.
-	defer close(updates)
+	defer xioutil.SafeClose(updates)
 	var lc *lifecycle.Lifecycle
 
 	// Check if the current bucket has a configured lifecycle policy
@@ -2803,7 +2803,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 // The resp channel is closed before the call returns.
 // Only a canceled context will return an error.
 func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
-	defer close(resp)
+	defer xioutil.SafeClose(resp)
 
 	volumeDir := pathJoin(s.drivePath, req.Bucket)
 	found := 0

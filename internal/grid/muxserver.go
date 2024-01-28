@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -117,7 +118,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		m.inbound = make(chan []byte, inboundCap)
 		handlerIn = make(chan []byte, 1)
 		go func(inbound <-chan []byte) {
-			defer close(handlerIn)
+			defer xioutil.SafeClose(handlerIn)
 			// Send unblocks when we have delivered the message to the handler.
 			for in := range inbound {
 				handlerIn <- in
@@ -146,7 +147,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 			if debugPrint {
 				fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
 			}
-			close(send)
+			xioutil.SafeClose(send)
 		}()
 		// handlerErr is guarded by 'send' channel.
 		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
@@ -247,7 +248,7 @@ func (m *muxServer) message(msg message) {
 			logger.LogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
 		}
 		if m.inbound != nil {
-			close(m.inbound)
+			xioutil.SafeClose(m.inbound)
 			m.inbound = nil
 		}
 		return
@@ -324,12 +325,9 @@ func (m *muxServer) close() {
 	m.cancel()
 	m.recvMu.Lock()
 	defer m.recvMu.Unlock()
-	if m.inbound != nil {
-		close(m.inbound)
-		m.inbound = nil
-	}
-	if m.outBlock != nil {
-		close(m.outBlock)
-		m.outBlock = nil
-	}
+	xioutil.SafeClose(m.inbound)
+	m.inbound = nil
+
+	xioutil.SafeClose(m.outBlock)
+	m.outBlock = nil
 }

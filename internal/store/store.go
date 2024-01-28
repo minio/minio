@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	xnet "github.com/minio/pkg/v2/net"
 )
 
@@ -65,7 +66,7 @@ func replayItems[I any](store Store[I], doneCh <-chan struct{}, log logger, id s
 	keyCh := make(chan Key)
 
 	go func() {
-		defer close(keyCh)
+		defer xioutil.SafeClose(keyCh)
 
 		retryTicker := time.NewTicker(retryInterval)
 		defer retryTicker.Stop()

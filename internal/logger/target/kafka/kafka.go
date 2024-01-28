@@ -34,6 +34,7 @@ import (
 	"github.com/IBM/sarama"
 	saramatls "github.com/IBM/sarama/tools/tls"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
@@ -402,7 +403,7 @@ func (h *Target) Cancel() {
 	// and finish the existing ones.
 	// All future ones will be discarded.
 	h.logChMu.Lock()
-	close(h.logCh)
+	xioutil.SafeClose(h.logCh)
 	h.logCh = nil
 	h.logChMu.Unlock()
 

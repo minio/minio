@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -800,7 +801,7 @@ func (h *healSequence) healItems(objAPI ObjectLayer, bucketsOnly bool) error {
 func (h *healSequence) traverseAndHeal(objAPI ObjectLayer) {
 	bucketsOnly := false // Heals buckets and objects also.
 	h.traverseAndHealDoneCh <- h.healItems(objAPI, bucketsOnly)
-	close(h.traverseAndHealDoneCh)
+	xioutil.SafeClose(h.traverseAndHealDoneCh)
 }
 
 // healMinioSysMeta - heals all files under a given meta prefix, returns a function
