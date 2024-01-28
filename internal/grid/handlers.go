@@ -691,6 +691,9 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 	if h.InCapacity > 0 {
 		reqT = make(chan Req)
 		// Request handler
+		if stream.Requests == nil {
+			return nil, fmt.Errorf("internal error: stream request channel nil")
+		}
 		go func() {
 			defer close(stream.Requests)
 			for req := range reqT {

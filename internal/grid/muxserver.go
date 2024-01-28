@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -138,7 +139,8 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 			}
 			if r := recover(); r != nil {
 				logger.LogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
-				err := RemoteErr(fmt.Sprintf("panic: %v", r))
+				debug.PrintStack()
+				err := RemoteErr(fmt.Sprintf("remote call panic: %v", r))
 				handlerErr = &err
 			}
 			if debugPrint {
@@ -244,8 +246,10 @@ func (m *muxServer) message(msg message) {
 		if len(msg.Payload) > 0 {
 			logger.LogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
 		}
-		close(m.inbound)
-		m.inbound = nil
+		if m.inbound != nil {
+			close(m.inbound)
+			m.inbound = nil
+		}
 		return
 	}
 
