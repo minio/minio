@@ -533,7 +533,9 @@ func (m *muxClient) closeLocked() {
 	if m.closed {
 		return
 	}
-	close(m.respWait)
-	m.respWait = nil
+	if m.respWait != nil {
+		close(m.respWait)
+		m.respWait = nil
+	}
 	m.closed = true
 }
