@@ -956,6 +956,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				logger.LogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
 			}
+			if c.incomingBytes != nil {
+				c.incomingBytes(int64(len(msg)))
+			}
+
 			// Parse the received message
 			var m message
 			subID, remain, err := m.parse(msg)
