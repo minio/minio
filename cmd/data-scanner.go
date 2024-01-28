@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	uatomic "go.uber.org/atomic"
@@ -1479,7 +1480,7 @@ func (d *dynamicSleeper) Update(factor float64, maxWait time.Duration) error {
 		return nil
 	}
 	// Update values and cycle waiting.
-	close(d.cycle)
+	xioutil.SafeClose(d.cycle)
 	d.factor = factor
 	d.maxSleep = maxWait
 	d.cycle = make(chan struct{})

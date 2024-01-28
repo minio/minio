@@ -1237,7 +1237,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	doneCh := make(chan struct{})
-	defer close(doneCh)
+	defer xioutil.SafeClose(doneCh)
 
 	ch := make(chan log.Info, 100000)
 	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
@@ -1298,7 +1298,7 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 	bucketsString := r.Form.Get("buckets")
 
 	doneCh := make(chan struct{})
-	defer close(doneCh)
+	defer xioutil.SafeClose(doneCh)
 
 	selectBuckets := b.SelectBuckets(strings.Split(bucketsString, ",")...)
 	report := globalBucketMonitor.GetReport(selectBuckets)

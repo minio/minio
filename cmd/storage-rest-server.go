@@ -778,7 +778,7 @@ func (c *closeNotifier) Read(p []byte) (n int, err error) {
 	n, err = c.rc.Read(p)
 	if err != nil {
 		if c.done != nil {
-			close(c.done)
+			xioutil.SafeClose(c.done)
 			c.done = nil
 		}
 	}
@@ -787,7 +787,7 @@ func (c *closeNotifier) Read(p []byte) (n int, err error) {
 
 func (c *closeNotifier) Close() error {
 	if c.done != nil {
-		close(c.done)
+		xioutil.SafeClose(c.done)
 		c.done = nil
 	}
 	return c.rc.Close()
@@ -826,10 +826,10 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 			} else {
 				write([]byte{0})
 			}
-			close(doneCh)
+			xioutil.SafeClose(doneCh)
 			return
 		}
-		defer close(doneCh)
+		defer xioutil.SafeClose(doneCh)
 		// Initiate ticker after body has been read.
 		ticker := time.NewTicker(time.Second * 10)
 		for {
@@ -889,7 +889,7 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 				}
 			}
 		}
-		defer close(doneCh)
+		defer xioutil.SafeClose(doneCh)
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 		for {
@@ -1027,7 +1027,7 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				} else {
 					write([]byte{0})
 				}
-				close(doneCh)
+				xioutil.SafeClose(doneCh)
 				return
 			case block := <-blockCh:
 				var tmp [5]byte

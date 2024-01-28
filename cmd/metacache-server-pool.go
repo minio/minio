@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -339,7 +340,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 // When 'in' is closed or the context is canceled the
 // function closes 'out' and exits.
 func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
-	defer close(out)
+	defer xioutil.SafeClose(out)
 
 	for {
 		var obj metaCacheEntry
@@ -472,16 +473,16 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 				funcReturnedMu.Unlock()
 				outCh <- entry
 				if returned {
-					close(outCh)
+					xioutil.SafeClose(outCh)
 				}
 			}
 			entry.reusable = returned
 			saveCh <- entry
 		}
 		if !returned {
-			close(outCh)
+			xioutil.SafeClose(outCh)
 		}
-		close(saveCh)
+		xioutil.SafeClose(saveCh)
 	}()
 
 	return filteredResults()

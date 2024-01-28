@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/v2/logger/message/log"
@@ -253,7 +254,7 @@ func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Me
 	go func(ch chan<- Metric) {
 		defer func() {
 			xhttp.DrainBody(respBody)
-			close(ch)
+			xioutil.SafeClose(ch)
 		}()
 		for {
 			var metric Metric
@@ -625,7 +626,7 @@ func (client *peerRESTClient) doTrace(traceCh chan<- madmin.TraceInfo, doneCh <-
 	ctx, cancel := context.WithCancel(GlobalContext)
 
 	cancelCh := make(chan struct{})
-	defer close(cancelCh)
+	defer xioutil.SafeClose(cancelCh)
 	go func() {
 		select {
 		case <-doneCh:
@@ -663,7 +664,7 @@ func (client *peerRESTClient) doListen(listenCh chan<- event.Event, doneCh <-cha
 	ctx, cancel := context.WithCancel(GlobalContext)
 
 	cancelCh := make(chan struct{})
-	defer close(cancelCh)
+	defer xioutil.SafeClose(cancelCh)
 	go func() {
 		select {
 		case <-doneCh:
@@ -733,7 +734,7 @@ func (client *peerRESTClient) doConsoleLog(logCh chan log.Info, doneCh <-chan st
 	ctx, cancel := context.WithCancel(GlobalContext)
 
 	cancelCh := make(chan struct{})
-	defer close(cancelCh)
+	defer xioutil.SafeClose(cancelCh)
 	go func() {
 		select {
 		case <-doneCh:
@@ -860,7 +861,7 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	go func(ch chan<- Metric) {
 		defer func() {
 			xhttp.DrainBody(respBody)
-			close(ch)
+			xioutil.SafeClose(ch)
 		}()
 		for {
 			var metric Metric
@@ -887,7 +888,7 @@ func (client *peerRESTClient) GetPeerBucketMetrics(ctx context.Context) (<-chan 
 	go func(ch chan<- Metric) {
 		defer func() {
 			xhttp.DrainBody(respBody)
-			close(ch)
+			xioutil.SafeClose(ch)
 		}()
 		for {
 			var metric Metric
@@ -1025,7 +1026,7 @@ func (client *peerRESTClient) GetReplicationMRF(ctx context.Context, bucket stri
 	go func(ch chan madmin.ReplicationMRF) {
 		defer func() {
 			xhttp.DrainBody(respBody)
-			close(ch)
+			xioutil.SafeClose(ch)
 		}()
 		for {
 			var entry madmin.ReplicationMRF

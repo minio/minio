@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/versioning"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/wildcard"
@@ -648,7 +649,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		case expireCh <- toDel:
 		}
 	}
-	close(expireCh)
+	xioutil.SafeClose(expireCh)
 
 	wk.Wait() // waits for all expire goroutines to complete
 
@@ -658,7 +659,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 
 	// Close the saverQuitCh - this also triggers saving in-memory state
 	// immediately one last time before we exit this method.
-	close(saverQuitCh)
+	xioutil.SafeClose(saverQuitCh)
 
 	// Notify expire jobs final status to the configured endpoint
 	buf, _ := json.Marshal(ri)

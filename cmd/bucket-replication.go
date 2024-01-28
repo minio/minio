@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
@@ -1894,7 +1895,7 @@ func (p *ReplicationPool) AddLargeWorkers() {
 	go func() {
 		<-p.ctx.Done()
 		for i := 0; i < LargeWorkerCount; i++ {
-			close(p.lrgworkers[i])
+			xioutil.SafeClose(p.lrgworkers[i])
 		}
 	}()
 }
@@ -1953,7 +1954,7 @@ func (p *ReplicationPool) ResizeWorkers(n, checkOld int) {
 	for len(p.workers) > n {
 		worker := p.workers[len(p.workers)-1]
 		p.workers = p.workers[:len(p.workers)-1]
-		close(worker)
+		xioutil.SafeClose(worker)
 	}
 }
 
@@ -2755,7 +2756,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	}
 	workers := make([]chan ReplicateObjectInfo, resyncParallelRoutines)
 	resultCh := make(chan TargetReplicationResyncStatus, 1)
-	defer close(resultCh)
+	defer xioutil.SafeClose(resultCh)
 	go func() {
 		for r := range resultCh {
 			s.incStats(r, opts)
@@ -2867,7 +2868,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 		}
 	}
 	for i := 0; i < resyncParallelRoutines; i++ {
-		close(workers[i])
+		xioutil.SafeClose(workers[i])
 	}
 	wg.Wait()
 	resyncStatus = ResyncCompleted
@@ -3123,7 +3124,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	}
 	diffCh := make(chan madmin.DiffInfo, 4000)
 	go func() {
-		defer close(diffCh)
+		defer xioutil.SafeClose(diffCh)
 		for obj := range objInfoCh {
 			if contextCanceled(ctx) {
 				// Just consume input...
@@ -3316,7 +3317,7 @@ func (p *ReplicationPool) persistMRF() {
 			mTimer.Reset(mrfSaveInterval)
 		case <-p.ctx.Done():
 			p.mrfStopCh <- struct{}{}
-			close(p.mrfSaveCh)
+			xioutil.SafeClose(p.mrfSaveCh)
 			// We try to save if possible, but we don't care beyond that.
 			saveMRFToDisk()
 			return
@@ -3551,7 +3552,7 @@ func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch <-chan 
 
 	mrfCh := make(chan madmin.ReplicationMRF, 100)
 	go func() {
-		defer close(mrfCh)
+		defer xioutil.SafeClose(mrfCh)
 		for vID, e := range mrfRec.Entries {
 			if bucket != "" && e.Bucket != bucket {
 				continue

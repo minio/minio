@@ -32,6 +32,7 @@ import (
 	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/minio/internal/rest"
@@ -1724,7 +1725,7 @@ func getGoMetrics() *MetricsGroup {
 func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) []Metric {
 	ch := make(chan prometheus.Metric)
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 		// Collects prometheus metrics from hist and sends it over ch
 		hist.Collect(ch)
 	}()
@@ -3881,7 +3882,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 func ReportMetrics(ctx context.Context, metricsGroups []*MetricsGroup) <-chan Metric {
 	ch := make(chan Metric)
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 		populateAndPublish(metricsGroups, func(m Metric) bool {
 			if m.VariableLabels == nil {
 				m.VariableLabels = make(map[string]string)

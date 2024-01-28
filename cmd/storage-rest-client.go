@@ -37,6 +37,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
 	xnet "github.com/minio/pkg/v2/net"
@@ -232,7 +233,7 @@ func (client *storageRESTClient) Healing() *healingTracker {
 func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, _ func() bool) (dataUsageCache, error) {
 	atomic.AddInt32(&client.scanning, 1)
 	defer atomic.AddInt32(&client.scanning, -1)
-	defer close(updates)
+	defer xioutil.SafeClose(updates)
 
 	st, err := storageNSScannerHandler.Call(ctx, client.gridConn, &nsScannerOptions{
 		DiskID:   client.diskID,
@@ -771,7 +772,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 // The resp channel is closed before the call returns.
 // Only a canceled context or network errors returns an error.
 func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
-	defer close(resp)
+	defer xioutil.SafeClose(resp)
 	body, err := req.MarshalMsg(nil)
 	if err != nil {
 		return err

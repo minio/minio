@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 )
@@ -679,7 +680,7 @@ func getQuorumDisks(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDi
 
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) (err error) {
-	defer close(results)
+	defer xioutil.SafeClose(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
 	// get prioritized non-healing disks for listing

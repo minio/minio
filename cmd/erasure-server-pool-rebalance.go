@@ -34,6 +34,7 @@ import (
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 )
@@ -372,7 +373,7 @@ func (z *erasureServerPools) IsPoolRebalancing(poolIndex int) bool {
 
 func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) (err error) {
 	doneCh := make(chan struct{})
-	defer close(doneCh)
+	defer xioutil.SafeClose(doneCh)
 
 	// Save rebalance.bin periodically.
 	go func() {

@@ -94,7 +94,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	if err != nil {
 		return err
 	}
-	defer close(out)
+	defer xioutil.SafeClose(out)
 	var objsReturned int
 
 	objReturned := func(metadata []byte) {

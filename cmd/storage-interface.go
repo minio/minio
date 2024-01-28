@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 // StorageAPI interface.
@@ -280,7 +281,7 @@ func (p *unrecognizedDisk) StatInfoFile(ctx context.Context, volume, path string
 }
 
 func (p *unrecognizedDisk) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
-	close(resp)
+	xioutil.SafeClose(resp)
 	return errDiskNotFound
 }
 

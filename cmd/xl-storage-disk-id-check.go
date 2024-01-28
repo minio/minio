@@ -279,12 +279,12 @@ func (p *xlStorageDiskIDCheck) Healing() *healingTracker {
 
 func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, _ func() bool) (dataUsageCache, error) {
 	if contextCanceled(ctx) {
-		close(updates)
+		xioutil.SafeClose(updates)
 		return dataUsageCache{}, ctx.Err()
 	}
 
 	if err := p.checkDiskStale(); err != nil {
-		close(updates)
+		xioutil.SafeClose(updates)
 		return dataUsageCache{}, err
 	}
 
@@ -733,7 +733,7 @@ func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path st
 func (p *xlStorageDiskIDCheck) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadMultiple, req.Bucket, req.Prefix)
 	if err != nil {
-		close(resp)
+		xioutil.SafeClose(resp)
 		return err
 	}
 	defer done(&err)

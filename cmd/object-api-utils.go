@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/trie"
 	"github.com/minio/pkg/v2/wildcard"
@@ -1081,7 +1082,7 @@ func newS2CompressReader(r io.Reader, on int64, encrypted bool) (rc io.ReadClose
 	comp := s2.NewWriter(pw, opts...)
 	indexCh := make(chan []byte, 1)
 	go func() {
-		defer close(indexCh)
+		defer xioutil.SafeClose(indexCh)
 		cn, err := io.Copy(comp, r)
 		if err != nil {
 			comp.Close()
