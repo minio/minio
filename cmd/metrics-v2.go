@@ -286,6 +286,7 @@ const (
 
 const (
 	serverName = "server"
+	nodeName   = "nodeName"
 )
 
 // MetricType for the types of metrics supported
@@ -2155,56 +2156,56 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 			qs := globalReplicationStats.getNodeQueueStatsSummary()
 			activeWorkersCount := Metric{
 				Description:    getClusterReplActiveWorkersCountMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			avgActiveWorkersCount := Metric{
 				Description:    getClusterReplAvgActiveWorkersCountMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			maxActiveWorkersCount := Metric{
 				Description:    getClusterReplMaxActiveWorkersCountMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			currInQueueCount := Metric{
 				Description:    getClusterReplCurrQueuedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			currInQueueBytes := Metric{
 				Description:    getClusterReplCurrQueuedBytesMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 
 			currTransferRate := Metric{
 				Description:    getClusterReplCurrentTransferRateMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			avgQueueCount := Metric{
 				Description:    getClusterReplAvgQueuedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			avgQueueBytes := Metric{
 				Description:    getClusterReplAvgQueuedBytesMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			maxQueueCount := Metric{
 				Description:    getClusterReplMaxQueuedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			maxQueueBytes := Metric{
 				Description:    getClusterReplMaxQueuedBytesMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			avgTransferRate := Metric{
 				Description:    getClusterReplAvgTransferRateMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			maxTransferRate := Metric{
 				Description:    getClusterReplMaxTransferRateMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 			}
 			mrfCount := Metric{
 				Description:    getClusterReplMRFFailedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				VariableLabels: map[string]string{nodeName: qs.NodeName},
 				Value:          float64(qs.MRFStats.LastFailedCount),
 			}
 
@@ -2249,7 +2250,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkLatencyCurrMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
+					nodeName:   globalLocalNodeName,
 				},
 			}
 			m.Value = float64(health.latency.curr / time.Millisecond)
@@ -2260,7 +2261,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkLatencyAvgMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
+					nodeName:   globalLocalNodeName,
 				},
 			}
 			m.Value = float64(health.latency.avg / time.Millisecond)
@@ -2271,7 +2272,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkLatencyMaxMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
+					nodeName:   globalLocalNodeName,
 				},
 			}
 			m.Value = float64(health.latency.peak / time.Millisecond)
@@ -2281,7 +2282,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkOnlineMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
+					nodeName:   globalLocalNodeName,
 				},
 			}
 			online := Offline
@@ -2294,7 +2295,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkCurrOfflineDurationMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
+					nodeName:   globalLocalNodeName,
 				},
 			}
 			currDowntime := time.Duration(0)
@@ -2308,7 +2309,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkTotalOfflineDurationMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
+					nodeName:   globalLocalNodeName,
 				},
 			}
 			dwntime := currDowntime
