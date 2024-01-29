@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 # shellcheck disable=SC2120
 exit_1() {
 	cleanup
@@ -403,4 +402,29 @@ ret=$?
 if [ $ret -ne 0 ]; then
 	echo "BUG: expected no missing entries after replication resync: $out"
 	exit 1
+fi
+
+# test if prometheus metrics return results
+$(./mc admin prometheus metrics minio2 node --json >/dev/null)
+if [ $? -ne 0 ]; then
+	echo "expected prometheus node metrics to pass.. exiting"
+	exit_1
+fi
+
+$(./mc admin prometheus metrics minio2 cluster --json >/dev/null)
+if [ $? -ne 0 ]; then
+	echo "expected prometheus cluster metrics to pass.. exiting"
+	exit_1
+fi
+
+$(./mc admin prometheus metrics minio2 resource --json >/dev/null)
+if [ $? -ne 0 ]; then
+	echo "expected prometheus resource metrics to pass.. exiting"
+	exit_1
+fi
+
+$(./mc admin prometheus metrics minio2 bucket --json >/dev/null)
+if [ $? -ne 0 ]; then
+	echo "expected prometheus bucket metrics to pass.. exiting"
+	exit_1
 fi
