@@ -424,6 +424,7 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 func SafeClose[T any](c chan<- T) {
 	if c != nil {
 		close(c)
+		return
 	}
 	// Print stack to check who is sending `c` as `nil`
 	// without crashing the server.
