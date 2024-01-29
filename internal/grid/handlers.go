@@ -59,8 +59,10 @@ const (
 	HandlerRenameData
 	HandlerRenameFile
 	HandlerReadAll
-
 	HandlerServerVerify
+	HandlerTrace
+	HandlerListen
+
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
 	// Handlers have no versioning, so non-compatible handler changes must result in new IDs.
@@ -540,6 +542,20 @@ func newStreamHandler[Payload, Req, Resp RoundTripper](h HandlerID) *StreamTypeH
 // An optional subroute can be given. Multiple entries are joined with '/'.
 func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func(ctx context.Context, p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	return h.register(m, handle, subroute...)
+}
+
+// WithOutCapacity adjusts the output capacity from the handler perspective.
+// This must be done prior to registering the handler.
+func (h *StreamTypeHandler[Payload, Req, Resp]) WithOutCapacity(out int) *StreamTypeHandler[Payload, Req, Resp] {
+	h.OutCapacity = out
+	return h
+}
+
+// WithInCapacity adjusts the input capacity from the handler perspective.
+// This must be done prior to registering the handler.
+func (h *StreamTypeHandler[Payload, Req, Resp]) WithInCapacity(in int) *StreamTypeHandler[Payload, Req, Resp] {
+	h.InCapacity = in
+	return h
 }
 
 // RegisterNoInput a handler for one-way streaming with payload and output stream.

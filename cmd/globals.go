@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/browser"
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
 	"go.uber.org/atomic"
@@ -128,6 +129,11 @@ const (
 	// tlsClientSessionCacheSize is the cache size for client sessions.
 	tlsClientSessionCacheSize = 100
 )
+
+func init() {
+	// Injected to prevent circular dependency.
+	pubsub.GetByteBuffer = grid.GetByteBuffer
+}
 
 type poolDisksLayout struct {
 	cmdline string
