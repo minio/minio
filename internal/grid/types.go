@@ -208,8 +208,8 @@ func (b *Bytes) Recycle() {
 	}
 }
 
-// UrlValues can be used for url.Values.
-type UrlValues map[string][]string
+// URLValues can be used for url.Values.
+type URLValues map[string][]string
 
 var urlValuesPool = sync.Pool{
 	New: func() interface{} {
@@ -217,29 +217,30 @@ var urlValuesPool = sync.Pool{
 	},
 }
 
-// NewUrlValues returns a new UrlValues.
-func NewUrlValues() *UrlValues {
-	u := UrlValues(urlValuesPool.Get().(map[string][]string))
+// NewURLValues returns a new URLValues.
+func NewURLValues() *URLValues {
+	u := URLValues(urlValuesPool.Get().(map[string][]string))
 	return &u
 }
 
-// NewUrlValuesWith returns a new UrlValues with the provided content.
-func NewUrlValuesWith(values map[string][]string) *UrlValues {
-	u := UrlValues(values)
+// NewURLValuesWith returns a new URLValues with the provided content.
+func NewURLValuesWith(values map[string][]string) *URLValues {
+	u := URLValues(values)
 	return &u
 }
 
 // Values returns the url.Values.
 // If u is nil, an empty url.Values is returned.
 // The values are a shallow copy of the underlying map.
-func (u *UrlValues) Values() url.Values {
+func (u *URLValues) Values() url.Values {
 	if u == nil {
 		return url.Values{}
 	}
 	return url.Values(*u)
 }
 
-func (u *UrlValues) Recycle() {
+// Recycle the underlying map.
+func (u *URLValues) Recycle() {
 	if *u != nil {
 		for key := range *u {
 			delete(*u, key)
@@ -251,7 +252,7 @@ func (u *UrlValues) Recycle() {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (u UrlValues) MarshalMsg(b []byte) (o []byte, err error) {
+func (u URLValues) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, u.Msgsize())
 	o = msgp.AppendMapHeader(o, uint32(len(u)))
 	for zb0006, zb0007 := range u {
@@ -265,7 +266,7 @@ func (u UrlValues) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (u *UrlValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var zb0004 uint32
 	zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
@@ -315,7 +316,7 @@ func (u *UrlValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (u UrlValues) Msgsize() (s int) {
+func (u URLValues) Msgsize() (s int) {
 	s = msgp.MapHeaderSize
 	if u != nil {
 		for zb0006, zb0007 := range u {

@@ -980,11 +980,11 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 
 // Set an output capacity of 100 for listenHandler
 // There is another buffer that will buffer events.
-var listenHandler = grid.NewStream[*grid.UrlValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen,
-	grid.NewUrlValues, nil, grid.NewBytes).WithOutCapacity(100)
+var listenHandler = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen,
+	grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
 
 // ListenHandler sends http trace messages back to peer rest client
-func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.UrlValues, out chan<- *grid.Bytes) *grid.RemoteErr {
+func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.URLValues, out chan<- *grid.Bytes) *grid.RemoteErr {
 	values := v.Values()
 	defer v.Recycle()
 	var prefix string

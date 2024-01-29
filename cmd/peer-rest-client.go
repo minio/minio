@@ -712,7 +712,7 @@ func (client *peerRESTClient) doListen(ctx context.Context, listenCh chan<- []by
 	if conn == nil {
 		return
 	}
-	st, err := listenHandler.Call(ctx, conn, grid.NewUrlValuesWith(v))
+	st, err := listenHandler.Call(ctx, conn, grid.NewURLValuesWith(v))
 	if err != nil {
 		return
 	}
