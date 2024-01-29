@@ -325,9 +325,15 @@ func (m *muxServer) close() {
 	m.cancel()
 	m.recvMu.Lock()
 	defer m.recvMu.Unlock()
-	xioutil.SafeClose(m.inbound)
-	m.inbound = nil
 
-	xioutil.SafeClose(m.outBlock)
-	m.outBlock = nil
+	if m.inbound != nil {
+		xioutil.SafeClose(m.inbound)
+		m.inbound = nil
+	}
+
+	if m.outBlock != nil {
+		xioutil.SafeClose(m.outBlock)
+		m.outBlock = nil
+
+	}
 }
