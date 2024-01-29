@@ -78,7 +78,6 @@ func init() {
 		getMinioHealingMetrics(MetricsGroupOpts{dependGlobalBackgroundHealState: true}),
 		getWebhookMetrics(),
 		getTierMetrics(),
-		getReplicationNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
