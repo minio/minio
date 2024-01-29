@@ -397,6 +397,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
 	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
+	ctxt.MaxIdleConnsPerHost = ctx.Int("max-idle-conns-per-host")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)

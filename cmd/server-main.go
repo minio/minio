@@ -135,6 +135,13 @@ var ServerFlags = []cli.Flag{
 		Value:  10 * time.Minute,
 		EnvVar: "MINIO_DNS_CACHE_TTL",
 	},
+	cli.IntFlag{
+		Name:   "max-idle-conns-per-host",
+		Usage:  "set a custom max idle connections per host value",
+		Hidden: true,
+		Value:  2048,
+		EnvVar: "MINIO_MAX_IDLE_CONNS_PER_HOST",
+	},
 	cli.StringSliceFlag{
 		Name:  "ftp",
 		Usage: "enable and configure an FTP(Secure) server",
@@ -330,7 +337,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
-	globalInternodeTransport = NewInternodeHTTPTransport()()
+	globalInternodeTransport = NewInternodeHTTPTransport(ctxt.MaxIdleConnsPerHost)()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
