@@ -427,7 +427,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				if !disk.IsOnline() {
 					continue
 				}
-				_, err := disk.ReadVersion(ctx, minioMetaBucket,
+				_, err := disk.ReadVersion(ctx, "", minioMetaBucket,
 					o.objectPath(0), "", ReadOptions{})
 				if err != nil {
 					time.Sleep(retryDelay250)
@@ -504,7 +504,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						if !disk.IsOnline() {
 							continue
 						}
-						_, err := disk.ReadVersion(ctx, minioMetaBucket,
+						_, err := disk.ReadVersion(ctx, "", minioMetaBucket,
 							o.objectPath(partN), "", ReadOptions{})
 						if err != nil {
 							time.Sleep(retryDelay250)
@@ -1057,7 +1057,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	for {
 		// Get the top entry from each
 		var current metaCacheEntry
-		var atEOF, fnf, hasErr, agree int
+		var atEOF, fnf, vnf, hasErr, agree int
 		for i := range topEntries {
 			topEntries[i] = metaCacheEntry{}
 		}
@@ -1083,6 +1083,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 					errDiskNotFound.Error():
 					atEOF++
 					fnf++
+					// This is a special case, to handle bucket does
+					// not exist situations.
+					if errors.Is(err, errVolumeNotFound) {
+						vnf++
+					}
 					continue
 				}
 				hasErr++
@@ -1140,6 +1145,10 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			return errors.New(strings.Join(combinedErr, ", "))
 		}
 
+		if vnf == len(readers) {
+			return errVolumeNotFound
+		}
+
 		// Break if all at EOF or error.
 		if atEOF+hasErr == len(readers) {
 			if hasErr > 0 && opts.finished != nil {
@@ -1147,9 +1156,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			}
 			break
 		}
+
 		if fnf == len(readers) {
 			return errFileNotFound
 		}
+
 		if agree == len(readers) {
 			// Everybody agreed
 			for _, r := range readers {

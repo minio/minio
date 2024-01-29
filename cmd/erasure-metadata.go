@@ -381,7 +381,7 @@ func pickValidFileInfo(ctx context.Context, metaArr []FileInfo, modTime time.Tim
 }
 
 // writeUniqueFileInfo - writes unique `xl.meta` content for each disk concurrently.
-func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix string, files []FileInfo, quorum int) ([]StorageAPI, error) {
+func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, origbucket, bucket, prefix string, files []FileInfo, quorum int) ([]StorageAPI, error) {
 	g := errgroup.WithNErrs(len(disks))
 
 	// Start writing `xl.meta` to all disks in parallel.
@@ -395,7 +395,7 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, bucket, prefix
 			fi := files[index]
 			fi.Erasure.Index = index + 1
 			if fi.IsValid() {
-				return disks[index].WriteMetadata(ctx, bucket, prefix, fi)
+				return disks[index].WriteMetadata(ctx, origbucket, bucket, prefix, fi)
 			}
 			return errCorruptedFormat
 		}, index)

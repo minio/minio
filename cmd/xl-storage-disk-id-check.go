@@ -439,14 +439,14 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 	return w.Run(func() error { return p.storage.DeleteVol(ctx, volume, forceDelete) })
 }
 
-func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) (s []string, err error) {
+func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, origvolume, volume, dirPath string, count int) (s []string, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricListDir, volume, dirPath)
 	if err != nil {
 		return nil, err
 	}
 	defer done(&err)
 
-	return p.storage.ListDir(ctx, volume, dirPath, count)
+	return p.storage.ListDir(ctx, origvolume, volume, dirPath, count)
 }
 
 // Legacy API - does not have any deadlines
@@ -476,14 +476,14 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 	})
 }
 
-func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) (err error) {
+func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, origvolume, volume, path string, size int64, reader io.Reader) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricCreateFile, volume, path)
 	if err != nil {
 		return err
 	}
 	defer done(&err)
 
-	return p.storage.CreateFile(ctx, volume, path, size, io.NopCloser(reader))
+	return p.storage.CreateFile(ctx, origvolume, volume, path, size, io.NopCloser(reader))
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
@@ -663,7 +663,7 @@ func (p *xlStorageDiskIDCheck) UpdateMetadata(ctx context.Context, volume, path 
 	return w.Run(func() error { return p.storage.UpdateMetadata(ctx, volume, path, fi, opts) })
 }
 
-func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricWriteMetadata, volume, path)
 	if err != nil {
 		return err
@@ -671,10 +671,10 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 	defer done(&err)
 
 	w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
-	return w.Run(func() error { return p.storage.WriteMetadata(ctx, volume, path, fi) })
+	return w.Run(func() error { return p.storage.WriteMetadata(ctx, origvolume, volume, path, fi) })
 }
 
-func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadVersion, volume, path)
 	if err != nil {
 		return fi, err
@@ -682,7 +682,7 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 	defer done(&err)
 
 	return xioutil.WithDeadline[FileInfo](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (result FileInfo, err error) {
-		return p.storage.ReadVersion(ctx, volume, path, versionID, opts)
+		return p.storage.ReadVersion(ctx, origvolume, volume, path, versionID, opts)
 	})
 }
 

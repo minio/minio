@@ -20,7 +20,9 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v55" // ReadAll, RenameFile migrate to websockets
+	// Added orig-volume support for CreateFile, WriteMetadata, ReadVersion, ListDir
+	// this is needed for performance optimization on bucket checks.
+	storageRESTVersion       = "v56"
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -43,7 +45,6 @@ const (
 	storageRESTMethodStatInfoFile   = "/statfile"
 	storageRESTMethodReadMultiple   = "/readmultiple"
 	storageRESTMethodCleanAbandoned = "/cleanabandoned"
-	storageRESTMethodLinkXL         = "/linkxl"
 )
 
 const (
@@ -69,6 +70,7 @@ const (
 	storageRESTGlob          = "glob"
 	storageRESTMetrics       = "metrics"
 	storageRESTDriveQuorum   = "drive-quorum"
+	storageRESTOrigVolume    = "orig-volume"
 )
 
 type nsScannerOptions struct {

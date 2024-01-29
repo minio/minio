@@ -366,11 +366,13 @@ func (client *storageRESTClient) AppendFile(ctx context.Context, volume string, 
 	return err
 }
 
-func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
+func (client *storageRESTClient) CreateFile(ctx context.Context, origvolume, volume, path string, size int64, reader io.Reader) error {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTLength, strconv.Itoa(int(size)))
+	values.Set(storageRESTOrigVolume, origvolume)
+
 	respBody, err := client.call(ctx, storageRESTMethodCreateFile, values, io.NopCloser(reader), size)
 	defer xhttp.DrainBody(respBody)
 	if err != nil {
@@ -380,12 +382,13 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, volume, path st
 	return err
 }
 
-func (client *storageRESTClient) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) error {
 	_, err := storageWriteMetadataHandler.Call(ctx, client.gridConn, &MetadataHandlerParams{
-		DiskID:   client.diskID,
-		Volume:   volume,
-		FilePath: path,
-		FI:       fi,
+		DiskID:     client.diskID,
+		OrigVolume: origvolume,
+		Volume:     volume,
+		FilePath:   path,
+		FI:         fi,
 	})
 	return toStorageErr(err)
 }
@@ -478,16 +481,17 @@ func readMsgpReaderPoolPut(r *msgp.Reader) {
 	}
 }
 
-func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	// Use websocket when not reading data.
 	if !opts.ReadData {
 		resp, err := storageReadVersionHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
-			storageRESTDiskID:    client.diskID,
-			storageRESTVolume:    volume,
-			storageRESTFilePath:  path,
-			storageRESTVersionID: versionID,
-			storageRESTReadData:  strconv.FormatBool(opts.ReadData),
-			storageRESTHealing:   strconv.FormatBool(opts.Healing),
+			storageRESTDiskID:     client.diskID,
+			storageRESTOrigVolume: origvolume,
+			storageRESTVolume:     volume,
+			storageRESTFilePath:   path,
+			storageRESTVersionID:  versionID,
+			storageRESTReadData:   strconv.FormatBool(opts.ReadData),
+			storageRESTHealing:    strconv.FormatBool(opts.Healing),
 		}))
 		if err != nil {
 			return fi, toStorageErr(err)
@@ -496,6 +500,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, volume, path, 
 	}
 
 	values := make(url.Values)
+	values.Set(storageRESTOrigVolume, origvolume)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
@@ -612,11 +617,13 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 }
 
 // ListDir - lists a directory.
-func (client *storageRESTClient) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
+func (client *storageRESTClient) ListDir(ctx context.Context, origvolume, volume, dirPath string, count int) (entries []string, err error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTDirPath, dirPath)
 	values.Set(storageRESTCount, strconv.Itoa(count))
+	values.Set(storageRESTOrigVolume, origvolume)
+
 	respBody, err := client.call(ctx, storageRESTMethodListDir, values, nil, -1)
 	if err != nil {
 		return nil, err
