@@ -6,7 +6,7 @@ Metrics may include one or more labels, such as the server that calculated that 
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/cluster
+https://HOSTNAME:PORT/minio/v2/metrics/cluster
 ```
 
 Replace ``HOSTNAME:PORT`` with the hostname of your MinIO deployment.
@@ -328,7 +328,7 @@ Metrics may include one or more additional labels, such as the drive path, inter
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/resource
+https://HOSTNAME:PORT/minio/v2/metrics/resource
 ```
 
 Replace `HOSTNAME:PORT` with the hostname of your MinIO deployment.
