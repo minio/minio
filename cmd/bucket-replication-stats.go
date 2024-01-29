@@ -45,6 +45,8 @@ type ReplicationStats struct {
 	workers *ActiveWorkerStat
 	// queue stats cache
 	qCache queueCache
+
+	pCache proxyStatsCache
 	// mrf backlog stats
 	mrfStats ReplicationMRFStats
 	// for bucket replication, continue to use existing cache
@@ -305,6 +307,7 @@ func (r *ReplicationStats) getSRMetricsForNode() SRMetricsSummary {
 		Queued:        r.qCache.getSiteStats(),
 		ActiveWorkers: r.ActiveWorkers(),
 		Metrics:       r.srStats.get(),
+		Proxied:       r.pCache.getSiteStats(),
 		ReplicaSize:   atomic.LoadInt64(&r.srStats.ReplicaSize),
 		ReplicaCount:  atomic.LoadInt64(&r.srStats.ReplicaCount),
 	}
@@ -333,6 +336,7 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 	rs := ReplicationStats{
 		Cache:           make(map[string]*BucketReplicationStats),
 		qCache:          newQueueCache(r),
+		pCache:          newProxyStatsCache(),
 		srStats:         newSRStats(),
 		movingAvgTicker: time.NewTicker(2 * time.Second),
 		wTimer:          time.NewTicker(2 * time.Second),
@@ -371,6 +375,7 @@ func (r *ReplicationStats) calculateBucketReplicationStats(bucket string, bucket
 				Stats: make(map[string]*BucketReplicationStat),
 			},
 			QueueStats: ReplicationQueueStats{},
+			ProxyStats: ProxyMetric{},
 		}
 		return bs
 	}
@@ -430,11 +435,16 @@ func (r *ReplicationStats) calculateBucketReplicationStats(bucket string, bucket
 	for _, bs := range bucketStats {
 		qs.Nodes = append(qs.Nodes, bs.QueueStats.Nodes...)
 	}
-
 	qs.Uptime = UTCNow().Unix() - globalBootTime.Unix()
+
+	var ps ProxyMetric
+	for _, bs := range bucketStats {
+		ps.add(bs.ProxyStats)
+	}
 	bs = BucketStats{
 		ReplicationStats: s,
 		QueueStats:       qs,
+		ProxyStats:       ps,
 	}
 	r.mostRecentStatsMu.Lock()
 	if len(r.mostRecentStats.Stats) == 0 {
@@ -481,4 +491,13 @@ func (r *ReplicationStats) decQ(bucket string, sz int64, isDelMarker bool, opTyp
 
 	atomic.AddInt64(&r.qCache.srQueueStats.nowBytes, -1*sz)
 	atomic.AddInt64(&r.qCache.srQueueStats.nowCount, -1)
+}
+
+// incProxy increments proxy metrics for proxied calls
+func (r *ReplicationStats) incProxy(bucket string, api replProxyAPI, isErr bool) {
+	r.pCache.inc(bucket, api, isErr)
+}
+
+func (r *ReplicationStats) getProxyStats(bucket string) ProxyMetric {
+	return r.pCache.getBucketStats(bucket)
 }

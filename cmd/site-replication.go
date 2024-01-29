@@ -6016,6 +6016,7 @@ func (c *SiteReplicationSys) getSiteMetrics(ctx context.Context) (madmin.SRMetri
 		}
 		sm.ReplicaCount += peer.ReplicaCount
 		sm.ReplicaSize += peer.ReplicaSize
+		sm.Proxied.Add(madmin.ReplProxyMetric(peer.Proxied))
 		for dID, v := range peer.Metrics {
 			v2, ok := sm.Metrics[dID]
 			if !ok {

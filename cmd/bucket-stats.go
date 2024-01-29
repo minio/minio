@@ -154,6 +154,7 @@ type BucketStats struct {
 	Uptime           int64                  `json:"uptime"`
 	ReplicationStats BucketReplicationStats `json:"currStats"`  // current replication stats since cluster startup
 	QueueStats       ReplicationQueueStats  `json:"queueStats"` // replication queue stats
+	ProxyStats       ProxyMetric            `json:"proxyStats"`
 }
 
 // BucketReplicationStats represents inline replication statistics

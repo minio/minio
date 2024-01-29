@@ -572,6 +572,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	for k, replicationStats := range replicationStatsList {
 		bucketStatsMap.Stats[k] = BucketStats{
 			ReplicationStats: replicationStats,
+			ProxyStats:       globalReplicationStats.getProxyStats(k),
 		}
 	}
 
@@ -607,6 +608,7 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	bucketStats = append(bucketStats, BucketStats{
 		ReplicationStats: globalReplicationStats.Get(bucketName),
 		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
+		ProxyStats:       globalReplicationStats.getProxyStats(bucketName),
 	})
 	return bucketStats
 }
