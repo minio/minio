@@ -411,7 +411,7 @@ func (l EndpointServerPools) GridHosts() (gridHosts []string, gridLocal string) 
 	return gridHosts, gridLocal
 }
 
-// FindGridHostsFromPeer will returna matching peer from provided peer.
+// FindGridHostsFromPeer will return a matching peer from provided peer.
 func (l EndpointServerPools) FindGridHostsFromPeer(peer *xnet.Host) (peerGrid string) {
 	if peer == nil {
 		return ""
