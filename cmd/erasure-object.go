@@ -91,7 +91,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	// Read metadata associated with the object from all disks.
 	if srcOpts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, storageDisks, srcBucket, srcObject, srcOpts.VersionID, true, false)
+		metaArr, errs = readAllFileInfo(ctx, storageDisks, "", srcBucket, srcObject, srcOpts.VersionID, true, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, storageDisks, srcBucket, srcObject, true, false, true)
 	}
@@ -179,7 +179,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	}
 
 	// Write unique `xl.meta` for each disk.
-	if _, err = writeUniqueFileInfo(ctx, onlineDisks, srcBucket, srcObject, metaArr, writeQuorum); err != nil {
+	if _, err = writeUniqueFileInfo(ctx, onlineDisks, "", srcBucket, srcObject, metaArr, writeQuorum); err != nil {
 		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
 
@@ -791,7 +791,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 				if opts.VersionID != "" {
 					// Read a specific version ID
-					fi, err = readFileInfo(ctx, disk, bucket, object, opts.VersionID, ropts)
+					fi, err = readFileInfo(ctx, disk, "", bucket, object, opts.VersionID, ropts)
 				} else {
 					// Read the latest version
 					rfi, err = readRawFileInfo(ctx, disk, bucket, object, readData)
@@ -1219,7 +1219,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 		}
 	}
 
-	if _, err = writeUniqueFileInfo(ctx, onlineDisks, minioMetaBucket, key, partsMetadata, writeQuorum); err != nil {
+	if _, err = writeUniqueFileInfo(ctx, onlineDisks, "", minioMetaBucket, key, partsMetadata, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, minioMetaBucket, key)
 	}
 
@@ -1449,7 +1449,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			continue
 		}
 
-		writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, tempErasureObj, shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize())
+		writers[i] = newBitrotWriter(disk, bucket, minioMetaTmpBucket, tempErasureObj, shardFileSize, DefaultBitrotAlgorithm, erasure.ShardSize())
 	}
 
 	toEncode := io.Reader(data)
@@ -1469,7 +1469,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	n, erasureErr := erasure.Encode(ctx, toEncode, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if erasureErr != nil {
-		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
+		return ObjectInfo{}, toObjectErr(erasureErr, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
@@ -2057,7 +2057,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	// Read metadata associated with the object from all disks.
 	if opts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false, false)
+		metaArr, errs = readAllFileInfo(ctx, disks, "", bucket, object, opts.VersionID, false, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false, true)
 	}
@@ -2130,7 +2130,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	// Read metadata associated with the object from all disks.
 	if opts.VersionID != "" {
-		metaArr, errs = readAllFileInfo(ctx, disks, bucket, object, opts.VersionID, false, false)
+		metaArr, errs = readAllFileInfo(ctx, disks, "", bucket, object, opts.VersionID, false, false)
 	} else {
 		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false, true)
 	}
@@ -2458,7 +2458,7 @@ func (er erasureObjects) DecomTieredObject(ctx context.Context, bucket, object s
 	var onlineDisks []StorageAPI
 	onlineDisks, partsMetadata = shuffleDisksAndPartsMetadata(storageDisks, partsMetadata, fi)
 
-	if _, err := writeUniqueFileInfo(ctx, onlineDisks, bucket, object, partsMetadata, writeQuorum); err != nil {
+	if _, err := writeUniqueFileInfo(ctx, onlineDisks, "", bucket, object, partsMetadata, writeQuorum); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 

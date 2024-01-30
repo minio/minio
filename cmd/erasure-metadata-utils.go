@@ -156,8 +156,8 @@ var readFileInfoIgnoredErrs = append(objectOpIgnoredErrs,
 	io.EOF,              // some times we would read without locks, ignore these errors
 )
 
-func readFileInfo(ctx context.Context, disk StorageAPI, bucket, object, versionID string, opts ReadOptions) (FileInfo, error) {
-	fi, err := disk.ReadVersion(ctx, bucket, object, versionID, opts)
+func readFileInfo(ctx context.Context, disk StorageAPI, origbucket, bucket, object, versionID string, opts ReadOptions) (FileInfo, error) {
+	fi, err := disk.ReadVersion(ctx, origbucket, bucket, object, versionID, opts)
 
 	if err != nil && !IsErr(err, readFileInfoIgnoredErrs...) {
 		logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
@@ -170,7 +170,7 @@ func readFileInfo(ctx context.Context, disk StorageAPI, bucket, object, versionI
 
 // Reads all `xl.meta` metadata as a FileInfo slice.
 // Returns error slice indicating the failed metadata reads.
-func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, versionID string, readData, healing bool) ([]FileInfo, []error) {
+func readAllFileInfo(ctx context.Context, disks []StorageAPI, origbucket string, bucket, object, versionID string, readData, healing bool) ([]FileInfo, []error) {
 	metadataArray := make([]FileInfo, len(disks))
 
 	opts := ReadOptions{
@@ -186,7 +186,7 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, bucket, object, ve
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			metadataArray[index], err = readFileInfo(ctx, disks[index], bucket, object, versionID, opts)
+			metadataArray[index], err = readFileInfo(ctx, disks[index], origbucket, bucket, object, versionID, opts)
 			return err
 		}, index)
 	}

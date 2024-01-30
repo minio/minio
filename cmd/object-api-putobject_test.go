@@ -81,13 +81,13 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		expectedError error
 	}{
 		// Cases with invalid bucket name.
-		0: {bucketName: ".test", objName: "obj", inputData: []byte(""), expectedError: BucketNotFound{Bucket: ".test"}},
-		1: {bucketName: "------", objName: "obj", inputData: []byte(""), expectedError: BucketNotFound{Bucket: "------"}},
+		0: {bucketName: ".test", objName: "obj", inputData: []byte(""), expectedError: BucketNameInvalid{Bucket: ".test"}},
+		1: {bucketName: "------", objName: "obj", inputData: []byte(""), expectedError: BucketNameInvalid{Bucket: "------"}},
 		2: {
 			bucketName: "$this-is-not-valid-too", objName: "obj", inputData: []byte(""),
-			expectedError: BucketNotFound{Bucket: "$this-is-not-valid-too"},
+			expectedError: BucketNameInvalid{Bucket: "$this-is-not-valid-too"},
 		},
-		3: {bucketName: "a", objName: "obj", inputData: []byte(""), expectedError: BucketNotFound{Bucket: "a"}},
+		3: {bucketName: "a", objName: "obj", inputData: []byte(""), expectedError: BucketNameInvalid{Bucket: "a"}},
 
 		// Case with invalid object names.
 		4: {bucketName: bucket, inputData: []byte(""), expectedError: ObjectNameInvalid{Bucket: bucket, Object: ""}},

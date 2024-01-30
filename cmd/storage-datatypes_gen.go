@@ -2942,6 +2942,12 @@ func (z *MetadataHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Volume")
 				return
 			}
+		case "ov":
+			z.OrigVolume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "OrigVolume")
+				return
+			}
 		case "fp":
 			z.FilePath, err = dc.ReadString()
 			if err != nil {
@@ -2996,9 +3002,9 @@ func (z *MetadataHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *MetadataHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "id"
-	err = en.Append(0x85, 0xa2, 0x69, 0x64)
+	err = en.Append(0x86, 0xa2, 0x69, 0x64)
 	if err != nil {
 		return
 	}
@@ -3015,6 +3021,16 @@ func (z *MetadataHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteString(z.Volume)
 	if err != nil {
 		err = msgp.WrapError(err, "Volume")
+		return
+	}
+	// write "ov"
+	err = en.Append(0xa2, 0x6f, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.OrigVolume)
+	if err != nil {
+		err = msgp.WrapError(err, "OrigVolume")
 		return
 	}
 	// write "fp"
@@ -3059,13 +3075,16 @@ func (z *MetadataHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *MetadataHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "id"
-	o = append(o, 0x85, 0xa2, 0x69, 0x64)
+	o = append(o, 0x86, 0xa2, 0x69, 0x64)
 	o = msgp.AppendString(o, z.DiskID)
 	// string "v"
 	o = append(o, 0xa1, 0x76)
 	o = msgp.AppendString(o, z.Volume)
+	// string "ov"
+	o = append(o, 0xa2, 0x6f, 0x76)
+	o = msgp.AppendString(o, z.OrigVolume)
 	// string "fp"
 	o = append(o, 0xa2, 0x66, 0x70)
 	o = msgp.AppendString(o, z.FilePath)
@@ -3113,6 +3132,12 @@ func (z *MetadataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			z.Volume, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "ov":
+			z.OrigVolume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "OrigVolume")
 				return
 			}
 		case "fp":
@@ -3170,7 +3195,7 @@ func (z *MetadataHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MetadataHandlerParams) Msgsize() (s int) {
-	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 3 + 1 + 3 + msgp.BoolSize + 3 + z.FI.Msgsize()
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.OrigVolume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 3 + 1 + 3 + msgp.BoolSize + 3 + z.FI.Msgsize()
 	return
 }
 

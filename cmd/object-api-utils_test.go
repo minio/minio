@@ -111,7 +111,7 @@ func testPathTraversalExploit(obj ObjectLayer, instanceType, bucketName string, 
 	z := obj.(*erasureServerPools)
 	xl := z.serverPools[0].sets[0]
 	erasureDisks := xl.getDisks()
-	parts, errs := readAllFileInfo(ctx, erasureDisks, bucketName, objectName, "", false, false)
+	parts, errs := readAllFileInfo(ctx, erasureDisks, "", bucketName, objectName, "", false, false)
 	for i := range parts {
 		if errs[i] == nil {
 			if parts[i].Name == objectName {

@@ -90,7 +90,7 @@ func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize
 }
 
 // Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {
+func newStreamingBitrotWriter(disk StorageAPI, origvolume, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {
 	r, w := io.Pipe()
 	h := algo.New()
 
@@ -110,7 +110,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 			totalFileSize = bitrotSumsTotalSize + length
 		}
-		r.CloseWithError(disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r))
+		r.CloseWithError(disk.CreateFile(context.TODO(), origvolume, volume, filePath, totalFileSize, r))
 	}()
 	return bw
 }

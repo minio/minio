@@ -164,7 +164,7 @@ func testPostPolicyReservedBucketExploit(obj ObjectLayer, instanceType string, d
 	z := obj.(*erasureServerPools)
 	xl := z.serverPools[0].sets[0]
 	erasureDisks := xl.getDisks()
-	parts, errs := readAllFileInfo(ctx, erasureDisks, bucketName, objectName+"/upload.txt", "", false, false)
+	parts, errs := readAllFileInfo(ctx, erasureDisks, "", bucketName, objectName+"/upload.txt", "", false, false)
 	for i := range parts {
 		if errs[i] == nil {
 			if parts[i].Name == objectName+"/upload.txt" {

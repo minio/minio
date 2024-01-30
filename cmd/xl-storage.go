@@ -1016,9 +1016,21 @@ func (s *xlStorage) DeleteVol(ctx context.Context, volume string, forceDelete bo
 
 // ListDir - return all the entries at the given directory path.
 // If an entry is a directory it will be returned with a trailing SlashSeparator.
-func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count int) (entries []string, err error) {
+func (s *xlStorage) ListDir(ctx context.Context, origvolume, volume, dirPath string, count int) (entries []string, err error) {
 	if contextCanceled(ctx) {
 		return nil, ctx.Err()
+	}
+
+	if origvolume != "" {
+		if !skipAccessChecks(origvolume) {
+			origvolumeDir, err := s.getVolDir(origvolume)
+			if err != nil {
+				return nil, err
+			}
+			if err = Access(origvolumeDir); err != nil {
+				return nil, convertAccessError(err, errVolumeAccessDenied)
+			}
+		}
 	}
 
 	// Verify if volume is valid and it exists.
@@ -1034,15 +1046,9 @@ func (s *xlStorage) ListDir(ctx context.Context, volume, dirPath string, count i
 		entries, err = readDir(dirPathAbs)
 	}
 	if err != nil {
-		if err == errFileNotFound {
-			if !skipAccessChecks(volume) {
-				if ierr := Access(volumeDir); ierr != nil {
-					if osIsNotExist(ierr) {
-						return nil, errVolumeNotFound
-					} else if isSysErrIO(ierr) {
-						return nil, errFaultyDisk
-					}
-				}
+		if errors.Is(err, errFileNotFound) && !skipAccessChecks(volume) {
+			if ierr := Access(volumeDir); ierr != nil {
+				return nil, convertAccessError(ierr, errVolumeAccessDenied)
 			}
 		}
 		return nil, err
@@ -1225,7 +1231,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 		metaDataPoolPut(buf) // Never used, return it
 		if fi.Deleted && forceDelMarker {
 			// Create a new xl.meta with a delete marker in it
-			return s.WriteMetadata(ctx, volume, path, fi)
+			return s.WriteMetadata(ctx, "", volume, path, fi)
 		}
 
 		s.RLock()
@@ -1344,8 +1350,22 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
-func (s *xlStorage) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+func (s *xlStorage) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) (err error) {
 	if fi.Fresh {
+		if origvolume != "" {
+			origvolumeDir, err := s.getVolDir(origvolume)
+			if err != nil {
+				return err
+			}
+
+			if !skipAccessChecks(origvolume) {
+				// Stat a volume entry.
+				if err = Access(origvolumeDir); err != nil {
+					return convertAccessError(err, errVolumeAccessDenied)
+				}
+			}
+		}
+
 		var xlMeta xlMetaV2
 		if err := xlMeta.AddVersion(fi); err != nil {
 			return err
@@ -1521,7 +1541,21 @@ type ReadOptions struct {
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
 // for all objects less than `32KiB` this call returns data as well
 // along with metadata.
-func (s *xlStorage) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+	if origvolume != "" {
+		origvolumeDir, err := s.getVolDir(origvolume)
+		if err != nil {
+			return fi, err
+		}
+
+		if !skipAccessChecks(origvolume) {
+			// Stat a volume entry.
+			if err = Access(origvolumeDir); err != nil {
+				return fi, convertAccessError(err, errVolumeAccessDenied)
+			}
+		}
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return fi, err
@@ -1968,7 +2002,21 @@ func (c closeWrapper) Close() error {
 }
 
 // CreateFile - creates the file.
-func (s *xlStorage) CreateFile(ctx context.Context, volume, path string, fileSize int64, r io.Reader) (err error) {
+func (s *xlStorage) CreateFile(ctx context.Context, origvolume, volume, path string, fileSize int64, r io.Reader) (err error) {
+	if origvolume != "" {
+		origvolumeDir, err := s.getVolDir(origvolume)
+		if err != nil {
+			return err
+		}
+
+		if !skipAccessChecks(origvolume) {
+			// Stat a volume entry.
+			if err = Access(origvolumeDir); err != nil {
+				return convertAccessError(err, errVolumeAccessDenied)
+			}
+		}
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return err
@@ -2355,23 +2403,13 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	if !skipAccessChecks(srcVolume) {
 		// Stat a volume entry.
 		if err = Access(srcVolumeDir); err != nil {
-			if osIsNotExist(err) {
-				return 0, errVolumeNotFound
-			} else if isSysErrIO(err) {
-				return 0, errFaultyDisk
-			}
-			return 0, err
+			return 0, convertAccessError(err, errVolumeAccessDenied)
 		}
 	}
 
 	if !skipAccessChecks(dstVolume) {
 		if err = Access(dstVolumeDir); err != nil {
-			if osIsNotExist(err) {
-				return 0, errVolumeNotFound
-			} else if isSysErrIO(err) {
-				return 0, errFaultyDisk
-			}
-			return 0, err
+			return 0, convertAccessError(err, errVolumeAccessDenied)
 		}
 	}
 
