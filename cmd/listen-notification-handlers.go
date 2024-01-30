@@ -123,8 +123,8 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 
 	// Convert local messages to JSON and send to mergeCh
 	go func() {
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
+		buf := bytes.NewBuffer(grid.GetByteBuffer()[:0])
+		enc := json.NewEncoder(buf)
 		tmpEvt := struct{ Records []event.Event }{[]event.Event{{}}}
 		for {
 			select {
@@ -137,6 +137,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 				}
 				mergeCh <- append(grid.GetByteBuffer()[:0], buf.Bytes()...)
 			case <-ctx.Done():
+				grid.PutByteBuffer(buf.Bytes())
 				return
 			}
 		}

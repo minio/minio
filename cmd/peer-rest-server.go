@@ -1046,12 +1046,13 @@ func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.URLValues, o
 	// Process until remote disconnects.
 	// Blocks on upstream (out) congestion.
 	// We have however a dynamic downstream buffer (ch).
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
+	buf := bytes.NewBuffer(grid.GetByteBuffer())
+	enc := json.NewEncoder(buf)
 	tmpEvt := struct{ Records []event.Event }{[]event.Event{{}}}
 	for {
 		select {
 		case <-ctx.Done():
+			grid.PutByteBuffer(buf.Bytes())
 			return nil
 		case ev := <-ch:
 			buf.Reset()
