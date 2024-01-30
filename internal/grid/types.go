@@ -273,7 +273,7 @@ func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if (*u) == nil {
+	if *u == nil {
 		*u = urlValuesPool.Get().(map[string][]string)
 	}
 	if len(*u) > 0 {
@@ -298,7 +298,7 @@ func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		if cap(zb0002) >= int(zb0005) {
-			zb0002 = (zb0002)[:zb0005]
+			zb0002 = zb0002[:zb0005]
 		} else {
 			zb0002 = make([]string, zb0005)
 		}

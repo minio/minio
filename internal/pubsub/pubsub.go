@@ -120,7 +120,6 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 	combined := Mask(atomic.LoadUint64(&ps.types))
 	combined.Merge(Mask(mask.Mask()))
 	atomic.StoreUint64(&ps.types, uint64(combined))
-	var encErr atomic.Pointer[error]
 
 	go func() {
 		var buf bytes.Buffer
@@ -135,7 +134,6 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 				buf.Reset()
 				err := enc.Encode(v)
 				if err != nil {
-					encErr.Store(&err)
 					break
 				}
 				subCh <- append(GetByteBuffer()[:0], buf.Bytes()...)
