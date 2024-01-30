@@ -1298,7 +1298,7 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 			}
 		}
 	}
-	if err != nil {
+	if err != nil && !errors.Is(err, errNoSuchGroup) {
 		return wrapSRErr(err)
 	}
 	return nil

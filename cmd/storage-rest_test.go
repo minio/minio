@@ -41,7 +41,7 @@ func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := storage.DiskInfo(context.Background(), true)
+		_, err := storage.DiskInfo(context.Background(), DiskInfoOptions{Metrics: true})
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -354,7 +354,7 @@ func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
 	}
 
 	for {
-		_, err := restClient.DiskInfo(context.Background(), false)
+		_, err := restClient.DiskInfo(context.Background(), DiskInfoOptions{})
 		if err == nil || errors.Is(err, errUnformattedDisk) {
 			break
 		}

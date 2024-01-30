@@ -143,7 +143,6 @@ type serverCtxt struct {
 	JSON, Quiet               bool
 	Anonymous                 bool
 	StrictS3Compat            bool
-	PreAllocate               bool
 	Addr, ConsoleAddr         string
 	ConfigDir, CertsDir       string
 	configDirSet, certsDirSet bool
@@ -157,10 +156,12 @@ type serverCtxt struct {
 	UserTimeout       time.Duration
 	ConnReadDeadline  time.Duration
 	ConnWriteDeadline time.Duration
+  
+	ShutdownTimeout     time.Duration
+	IdleTimeout         time.Duration
+	ReadHeaderTimeout   time.Duration
+	MaxIdleConnsPerHost int
 
-	ShutdownTimeout   time.Duration
-	IdleTimeout       time.Duration
-	ReadHeaderTimeout time.Duration
 	// The layout of disks as interpreted
 	Layout disksLayout
 	// runtime param

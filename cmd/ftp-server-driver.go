@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	ftp "goftp.io/server/v2"
 )
@@ -386,7 +387,7 @@ func (driver *ftpDriver) DeleteDir(ctx *ftp.Context, path string) (err error) {
 
 	// Send object names that are needed to be removed to objectsCh
 	go func() {
-		defer close(objectsCh)
+		defer xioutil.SafeClose(objectsCh)
 		opts := minio.ListObjectsOptions{
 			Prefix:    prefix,
 			Recursive: true,

@@ -33,8 +33,6 @@ import (
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
-const reservedMetadataPrefixLowerDataShardFix = ReservedMetadataPrefixLower + "data-shard-fix"
-
 //go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE
 
 type healingMetric uint8
@@ -44,29 +42,6 @@ const (
 	healingMetricObject
 	healingMetricCheckAbandonedParts
 )
-
-// AcceptableDelta returns 'true' if the fi.DiskMTime is under
-// acceptable delta of "delta" duration with maxTime.
-//
-// This code is primarily used for heuristic detection of
-// incorrect shards, as per https://github.com/minio/minio/pull/13803
-//
-// This check only is active if we could find maximally
-// occurring disk mtimes that are somewhat same across
-// the quorum. Allowing to skip those shards which we
-// might think are wrong.
-func (fi FileInfo) AcceptableDelta(maxTime time.Time, delta time.Duration) bool {
-	diff := maxTime.Sub(fi.DiskMTime)
-	if diff < 0 {
-		diff = -diff
-	}
-	return diff < delta
-}
-
-// DataShardFixed - data shard fixed?
-func (fi FileInfo) DataShardFixed() bool {
-	return fi.Metadata[reservedMetadataPrefixLowerDataShardFix] == "true"
-}
 
 func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -311,7 +286,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	// used here for reconstruction. This is done to ensure that
 	// we do not skip drives that have inconsistent metadata to be
 	// skipped from purging when they are stale.
-	availableDisks, dataErrs, diskMTime := disksWithAllParts(ctx, onlineDisks, partsMetadata,
+	availableDisks, dataErrs, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
 		errs, latestMeta, bucket, object, scanMode)
 
 	var erasure Erasure
@@ -627,20 +602,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		}
 	}
 
-	if !diskMTime.Equal(timeSentinel) && !diskMTime.IsZero() {
-		// Update metadata to indicate special fix.
-		_, err = er.PutObjectMetadata(ctx, bucket, object, ObjectOptions{
-			NoLock: true,
-			UserDefined: map[string]string{
-				reservedMetadataPrefixLowerDataShardFix: "true",
-				// another reserved metadata to capture original disk-mtime
-				// captured for this version of the object, to be used
-				// possibly in future to heal other versions if possible.
-				ReservedMetadataPrefixLower + "disk-mtime": diskMTime.String(),
-			},
-		})
-	}
-
 	return result, nil
 }
 
@@ -919,21 +880,25 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	// or when xl.meta is not readable in read quorum disks.
 	danglingErrsCount := func(cerrs []error) (int, int, int) {
 		var (
-			notFoundCount     int
-			corruptedCount    int
-			diskNotFoundCount int
+			notFoundCount      int
+			corruptedCount     int
+			driveNotFoundCount int
 		)
 		for _, readErr := range cerrs {
+			if readErr == nil {
+				continue
+			}
 			switch {
 			case errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound):
 				notFoundCount++
 			case errors.Is(readErr, errFileCorrupt):
 				corruptedCount++
-			case errors.Is(readErr, errDiskNotFound):
-				diskNotFoundCount++
+			default:
+				// All other errors are non-actionable
+				driveNotFoundCount++
 			}
 		}
-		return notFoundCount, corruptedCount, diskNotFoundCount
+		return notFoundCount, corruptedCount, driveNotFoundCount
 	}
 
 	ndataErrs := make([]error, len(dataErrs))

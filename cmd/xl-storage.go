@@ -101,7 +101,6 @@ type xlStorage struct {
 
 	globalSync bool
 	oDirect    bool // indicates if this disk supports ODirect
-	rootDisk   bool
 
 	diskID string
 
@@ -240,18 +239,21 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return nil, err
 	}
 
-	var rootDisk bool
 	if !globalIsCICD && !globalIsErasureSD {
+		var rootDrive bool
 		if globalRootDiskThreshold > 0 {
 			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
 			// this disk is a root disk. treat those disks with
-			// size less than or equal to the threshold as rootDisks.
-			rootDisk = info.Total <= globalRootDiskThreshold
+			// size less than or equal to the threshold as rootDrives.
+			rootDrive = info.Total <= globalRootDiskThreshold
 		} else {
-			rootDisk, err = disk.IsRootDisk(path, SlashSeparator)
+			rootDrive, err = disk.IsRootDisk(path, SlashSeparator)
 			if err != nil {
 				return nil, err
 			}
+		}
+		if rootDrive {
+			return nil, errDriveIsRoot
 		}
 	}
 
@@ -259,7 +261,6 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		drivePath:  path,
 		endpoint:   ep,
 		globalSync: globalFSOSync,
-		rootDisk:   rootDisk,
 		poolIndex:  -1,
 		setIndex:   -1,
 		diskIndex:  -1,
@@ -372,13 +373,17 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	s.RLock()
-	defer s.RUnlock()
 	// If unset, see if we can locate it.
 	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
 		return getXLDiskLoc(s.diskID)
 	}
 	return s.poolIndex, s.setIndex, s.diskIndex
+}
+
+func (s *xlStorage) SetFormatData(b []byte) {
+	s.Lock()
+	defer s.Unlock()
+	s.formatData = b
 }
 
 // Set location indexes.
@@ -465,13 +470,10 @@ func (s *xlStorage) readMetadataWithDMTime(ctx context.Context, itemPath string)
 }
 
 func (s *xlStorage) readMetadata(ctx context.Context, itemPath string) ([]byte, error) {
-	var buf []byte
-	err := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout()).Run(func() error {
-		var rerr error
-		buf, _, rerr = s.readMetadataWithDMTime(ctx, itemPath)
-		return rerr
+	return xioutil.WithDeadline[[]byte](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) ([]byte, error) {
+		buf, _, err := s.readMetadataWithDMTime(ctx, itemPath)
+		return buf, err
 	})
-	return buf, err
 }
 
 func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
@@ -489,7 +491,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 	}()
 
 	// Updates must be closed before we return.
-	defer close(updates)
+	defer xioutil.SafeClose(updates)
 	var lc *lifecycle.Lifecycle
 
 	// Check if the current bucket has a configured lifecycle policy
@@ -726,7 +728,7 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err error) {
+func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
 		s.diskInfoCache.Update = func() (interface{}, error) {
@@ -760,7 +762,6 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ bool) (info DiskInfo, err erro
 		info = v.(DiskInfo)
 	}
 
-	info.RootDisk = s.rootDisk
 	info.MountPath = s.drivePath
 	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1
@@ -2802,7 +2803,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 // The resp channel is closed before the call returns.
 // Only a canceled context will return an error.
 func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error {
-	defer close(resp)
+	defer xioutil.SafeClose(resp)
 
 	volumeDir := pathJoin(s.drivePath, req.Bucket)
 	found := 0

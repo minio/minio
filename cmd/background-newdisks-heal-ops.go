@@ -376,7 +376,7 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 var newDiskHealingTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 
 func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint) error {
-	disk, format, err := connectEndpoint(endpoint)
+	disk, format, _, err := connectEndpoint(endpoint)
 	if err != nil {
 		return fmt.Errorf("Error: %w, %s", err, endpoint)
 	}
@@ -490,6 +490,10 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	for _, disk := range disks {
+		if disk == nil {
+			continue
+		}
+
 		t, err := loadHealingTracker(ctx, disk)
 		if err != nil {
 			if !errors.Is(err, errFileNotFound) {

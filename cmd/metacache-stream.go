@@ -27,6 +27,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
@@ -550,7 +551,7 @@ func (r *metacacheReader) readAll(ctx context.Context, dst chan<- metaCacheEntry
 	if r.err != nil {
 		return r.err
 	}
-	defer close(dst)
+	defer xioutil.SafeClose(dst)
 	if r.current.name != "" {
 		select {
 		case <-ctx.Done():

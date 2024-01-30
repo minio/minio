@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/certs"
 	"github.com/minio/pkg/v2/env"
@@ -72,12 +73,6 @@ var ServerFlags = []cli.Flag{
 		Value:  1,
 		Usage:  "bind N number of listeners per ADDRESS:PORT",
 		EnvVar: "MINIO_LISTENERS",
-		Hidden: true,
-	},
-	cli.BoolFlag{
-		Name:   "pre-allocate",
-		Usage:  "Number of 1MiB sized buffers to pre-allocate. Default 2048",
-		EnvVar: "MINIO_PRE_ALLOCATE",
 		Hidden: true,
 	},
 	cli.StringFlag{
@@ -139,6 +134,13 @@ var ServerFlags = []cli.Flag{
 		Hidden: true,
 		Value:  10 * time.Minute,
 		EnvVar: "MINIO_DNS_CACHE_TTL",
+	},
+	cli.IntFlag{
+		Name:   "max-idle-conns-per-host",
+		Usage:  "set a custom max idle connections per host value",
+		Hidden: true,
+		Value:  2048,
+		EnvVar: "MINIO_MAX_IDLE_CONNS_PER_HOST",
 	},
 	cli.StringSliceFlag{
 		Name:  "ftp",
@@ -359,7 +361,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	// allow transport to be HTTP/1.1 for proxying.
 	globalProxyTransport = NewCustomHTTPProxyTransport()()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
-	globalInternodeTransport = NewInternodeHTTPTransport()()
+	globalInternodeTransport = NewInternodeHTTPTransport(ctxt.MaxIdleConnsPerHost)()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
@@ -415,7 +417,7 @@ func initAllSubsystems(ctx context.Context) {
 	}
 
 	// Create the bucket bandwidth monitor
-	globalBucketMonitor = bandwidth.NewMonitor(ctx, totalNodeCount())
+	globalBucketMonitor = bandwidth.NewMonitor(ctx, uint64(totalNodeCount()))
 
 	// Create a new config system.
 	globalConfigSys = NewConfigSys()
@@ -759,7 +761,7 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	// Initialize grid
+	// Initialize gridn
 	bootstrapTrace("initGrid", func() {
 		logger.FatalIf(initGlobalGrid(GlobalContext, globalEndpoints), "Unable to configure server grid RPC services")
 	})
@@ -771,7 +773,7 @@ func serverMain(ctx *cli.Context) {
 			logger.Fatal(config.ErrUnexpectedError(err), "Unable to configure one of server's RPC services")
 		}
 		// Allow grid to start after registering all services.
-		close(globalGridStart)
+		xioutil.SafeClose(globalGridStart)
 
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
@@ -801,7 +803,7 @@ func serverMain(ctx *cli.Context) {
 	if globalIsDistErasure {
 		bootstrapTrace("verifying system configuration", func() {
 			// Additionally in distributed setup, validate the setup and configuration.
-			if err := verifyServerSystemConfig(GlobalContext, globalEndpoints); err != nil {
+			if err := verifyServerSystemConfig(GlobalContext, globalEndpoints, globalGrid.Load()); err != nil {
 				logger.Fatal(err, "Unable to start the server")
 			}
 		})

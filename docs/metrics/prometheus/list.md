@@ -6,7 +6,7 @@ Metrics may include one or more labels, such as the server that calculated that 
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/cluster
+https://HOSTNAME:PORT/minio/v2/metrics/cluster
 ```
 
 Replace ``HOSTNAME:PORT`` with the hostname of your MinIO deployment.
@@ -35,7 +35,7 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 | `minio_cluster_usage_version_total`          | Total number of versions (includes delete marker) in a cluster |
 | `minio_cluster_usage_deletemarker_total`     | Total number of delete markers in a cluster                    |
 | `minio_cluster_usage_total_bytes`            | Total cluster usage in bytes                                   |
-| `minio_cluster_buckets_total`                | Total number of buckets in the cluster                         |
+| `minio_cluster_bucket_total`                 | Total number of buckets in the cluster                         |
 
 ## Cluster Drive Metrics
 
@@ -328,7 +328,7 @@ Metrics may include one or more additional labels, such as the drive path, inter
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/resource
+https://HOSTNAME:PORT/minio/v2/metrics/resource
 ```
 
 Replace `HOSTNAME:PORT` with the hostname of your MinIO deployment.
@@ -352,20 +352,20 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 
 ## Network Interface Metrics
 
-| Name                          | Description                                   |
-|:------------------------------|:----------------------------------------------|
-| `minio_node_if_rx_bytes`      | Bytes received on the interface in 60s.       |
-| `minio_node_if_rx_bytes_avg`  | Bytes received on the interface in 60s (avg). |
-| `minio_node_if_rx_bytes_max`  | Bytes received on the interface in 60s (max). |
-| `minio_node_if_rx_errors`     | Receive errors in 60s.                        |
-| `minio_node_if_rx_errors_avg` | Receive errors in 60s (avg).                  |
-| `minio_node_if_rx_errors_max` | Receive errors in 60s (max).                  |
-| `minio_node_if_tx_bytes`      | Bytes transmitted in 60s.                     |
-| `minio_node_if_tx_bytes_avg`  | Bytes transmitted in 60s (avg).               |
-| `minio_node_if_tx_bytes_max`  | Bytes transmitted in 60s (max).               |
-| `minio_node_if_tx_errors`     | Transmit errors in 60s.                       |
-| `minio_node_if_tx_errors_avg` | Transmit errors in 60s (avg).                 |
-| `minio_node_if_tx_errors_max` | Transmit errors in 60s (max).                 |
+| Name                          | Description                                                |
+|:------------------------------|:-----------------------------------------------------------|
+| `minio_node_if_rx_bytes`      | Bytes received on the interface in 60s.                    |
+| `minio_node_if_rx_bytes_avg`  | Bytes received on the interface in 60s (avg) since uptime. |
+| `minio_node_if_rx_bytes_max`  | Bytes received on the interface in 60s (max) since uptime. |
+| `minio_node_if_rx_errors`     | Receive errors in 60s.                                     |
+| `minio_node_if_rx_errors_avg` | Receive errors in 60s (avg).                               |
+| `minio_node_if_rx_errors_max` | Receive errors in 60s (max).                               |
+| `minio_node_if_tx_bytes`      | Bytes transmitted in 60s.                                  |
+| `minio_node_if_tx_bytes_avg`  | Bytes transmitted in 60s (avg).                            |
+| `minio_node_if_tx_bytes_max`  | Bytes transmitted in 60s (max).                            |
+| `minio_node_if_tx_errors`     | Transmit errors in 60s.                                    |
+| `minio_node_if_tx_errors_avg` | Transmit errors in 60s (avg).                              |
+| `minio_node_if_tx_errors_max` | Transmit errors in 60s (max).                              |
 
 ## CPU Metrics
 

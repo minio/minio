@@ -23,6 +23,8 @@ import (
 	"os/exec"
 	"runtime"
 	"syscall"
+
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 // Type of service signals currently supported.
@@ -109,7 +111,7 @@ func unfreezeServices() {
 		if val := globalServiceFreeze.Swap(_ch); val != nil {
 			if ch, ok := val.(chan struct{}); ok && ch != nil {
 				// Close previous non-nil channel.
-				close(ch)
+				xioutil.SafeClose(ch)
 			}
 		}
 		globalServiceFreezeCnt = 0 // Don't risk going negative.

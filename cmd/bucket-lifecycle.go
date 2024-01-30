@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/pkg/v2/env"
@@ -118,8 +119,8 @@ func (es *expiryState) PendingTasks() int {
 // close closes work channels exactly once.
 func (es *expiryState) close() {
 	es.once.Do(func() {
-		close(es.byDaysCh)
-		close(es.byNewerNoncurrentCh)
+		xioutil.SafeClose(es.byDaysCh)
+		xioutil.SafeClose(es.byNewerNoncurrentCh)
 	})
 }
 

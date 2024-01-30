@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/config/storageclass"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/wildcard"
@@ -90,13 +91,14 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		n = 2048
 	}
 
+	if globalIsCICD {
+		n = 256 // 256MiB for CI/CD environments is sufficient
+	}
+
 	// Initialize byte pool once for all sets, bpool size is set to
 	// setCount * setDriveCount with each memory upto blockSizeV2.
 	globalBytePoolCap = bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
-
-	if globalServerCtxt.PreAllocate {
-		globalBytePoolCap.Populate()
-	}
+	globalBytePoolCap.Populate()
 
 	var localDrives []StorageAPI
 	local := endpointServerPools.FirstLocal()
@@ -117,8 +119,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("parity validation returned an error: %w <- (%d, %d), for pool(%s)", err, commonParityDrives, ep.DrivesPerSet, humanize.Ordinal(i+1))
 		}
 
-		storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
-			ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
+		bootstrapTrace("waitForFormatErasure: loading disks", func() {
+			storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
+				ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -137,7 +141,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			return nil, fmt.Errorf("all pools must have same deployment ID - expected %s, got %s for pool(%s)", deploymentID, formats[i].ID, humanize.Ordinal(i+1))
 		}
 
-		z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
+		bootstrapTrace(fmt.Sprintf("newErasureSets: initializing %s pool", humanize.Ordinal(i+1)), func() {
+			z.serverPools[i], err = newErasureSets(ctx, ep, storageDisks[i], formats[i], commonParityDrives, i)
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -175,8 +181,12 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	setObjectLayer(z)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	attempt := 1
 	for {
-		err := z.Init(ctx) // Initializes all pools.
+		var err error
+		bootstrapTrace(fmt.Sprintf("poolMeta.Init: loading pool metadata, attempt: %d", attempt), func() {
+			err = z.Init(ctx) // Initializes all pools.
+		})
 		if err != nil {
 			if !configRetriableErrors(err) {
 				logger.Fatal(err, "Unable to initialize backend")
@@ -184,6 +194,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 			retry := time.Duration(r.Float64() * float64(5*time.Second))
 			logger.LogIf(ctx, fmt.Errorf("Unable to initialize backend: %w, retrying in %s", err, retry))
 			time.Sleep(retry)
+			attempt++
 			continue
 		}
 		break
@@ -643,7 +654,7 @@ func (z *erasureServerPools) StorageInfo(ctx context.Context, metrics bool) Stor
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
 	// Updates must be closed before we return.
-	defer close(updates)
+	defer xioutil.SafeClose(updates)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -670,7 +681,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 			results = append(results, dataUsageCache{})
 			go func(i int, erObj *erasureObjects) {
 				updates := make(chan dataUsageCache, 1)
-				defer close(updates)
+				defer xioutil.SafeClose(updates)
 				// Start update collector.
 				go func() {
 					defer wg.Done()
@@ -729,7 +740,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 				return
 			case v := <-updateCloser:
 				update()
-				close(v)
+				xioutil.SafeClose(v)
 				return
 			case <-updateTicker.C:
 				update()
@@ -1947,7 +1958,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts WalkOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
 		// Upon error close the channel.
-		close(results)
+		xioutil.SafeClose(results)
 		return err
 	}
 
@@ -1956,7 +1967,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	ctx, cancel := context.WithCancel(ctx)
 	go func() {
 		defer cancel()
-		defer close(results)
+		defer xioutil.SafeClose(results)
 
 		for _, erasureSet := range z.serverPools {
 			var wg sync.WaitGroup
@@ -2275,6 +2286,7 @@ type HealthResult struct {
 	ESHealth      []struct {
 		Maintenance   bool
 		PoolID, SetID int
+		Healthy       bool
 		HealthyDrives int
 		HealingDrives int
 		ReadQuorum    int
@@ -2398,23 +2410,25 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			result.ESHealth = append(result.ESHealth, struct {
 				Maintenance                  bool
 				PoolID, SetID                int
+				Healthy                      bool
 				HealthyDrives, HealingDrives int
 				ReadQuorum, WriteQuorum      int
 			}{
 				Maintenance:   opts.Maintenance,
 				SetID:         setIdx,
 				PoolID:        poolIdx,
+				Healthy:       erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx],
 				HealthyDrives: erasureSetUpCount[poolIdx][setIdx].online,
 				HealingDrives: erasureSetUpCount[poolIdx][setIdx].healing,
 				ReadQuorum:    poolReadQuorums[poolIdx],
 				WriteQuorum:   poolWriteQuorums[poolIdx],
 			})
 
-			if erasureSetUpCount[poolIdx][setIdx].online < poolWriteQuorums[poolIdx] {
+			result.Healthy = erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
+			if !result.Healthy {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
-				result.Healthy = false
 			}
 		}
 	}

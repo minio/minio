@@ -318,7 +318,7 @@ func netperf(ctx context.Context, duration time.Duration) madmin.NetperfNodeResu
 	}
 
 	time.Sleep(duration)
-	close(r.eof)
+	xioutil.SafeClose(r.eof)
 	wg.Wait()
 	for {
 		if globalNetPerfRX.ActiveConnections() == 0 {
@@ -376,7 +376,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 	}
 
 	time.Sleep(duration)
-	close(r.eof)
+	xioutil.SafeClose(r.eof)
 	wg.Wait()
 	for {
 		if globalSiteNetPerfRX.ActiveConnections() == 0 || contextCanceled(ctx) {

@@ -28,6 +28,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/storageclass"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/wildcard"
@@ -156,7 +157,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		}
 	}
 
-	info, err := tracker.disk.DiskInfo(ctx, false)
+	info, err := tracker.disk.DiskInfo(ctx, DiskInfoOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to get disk information before healing it: %w", err)
 	}
@@ -443,7 +444,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			finished: nil,
 		})
 		jt.Wait() // synchronize all the concurrent heal jobs
-		close(results)
+		xioutil.SafeClose(results)
 		if err != nil {
 			// Set this such that when we return this function
 			// we let the caller retry this disk again for the

@@ -26,6 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/zeebo/xxh3"
 )
@@ -267,7 +268,7 @@ func (m *muxClient) handleOneWayStream(start time.Time, respHandler chan<- Respo
 			fmt.Println("Mux", m.MuxID, "Request took", time.Since(start).Round(time.Millisecond))
 		}()
 	}
-	defer close(respHandler)
+	defer xioutil.SafeClose(respHandler)
 	var pingTimer <-chan time.Time
 	if m.deadline == 0 || m.deadline > clientPingInterval {
 		ticker := time.NewTicker(clientPingInterval)
@@ -324,7 +325,7 @@ func (m *muxClient) handleOneWayStream(start time.Time, respHandler chan<- Respo
 
 func (m *muxClient) handleTwowayResponses(responseCh chan Response, responses chan Response) {
 	defer m.parent.deleteMux(false, m.MuxID)
-	defer close(responseCh)
+	defer xioutil.SafeClose(responseCh)
 	for resp := range responses {
 		responseCh <- resp
 		m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID})
@@ -533,7 +534,9 @@ func (m *muxClient) closeLocked() {
 	if m.closed {
 		return
 	}
-	close(m.respWait)
-	m.respWait = nil
+	if m.respWait != nil {
+		xioutil.SafeClose(m.respWait)
+		m.respWait = nil
+	}
 	m.closed = true
 }

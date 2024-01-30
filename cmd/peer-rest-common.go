@@ -109,7 +109,6 @@ const (
 	peerRESTStartRebalance = "start-rebalance"
 	peerRESTMetrics        = "metrics"
 	peerRESTDryRun         = "dry-run"
-	peerRESTForce          = "force"
 
 	peerRESTURL         = "url"
 	peerRESTSha256Sum   = "sha256sum"

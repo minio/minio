@@ -1,0 +1,33 @@
+{{- if and (.Values.networkPolicy.enabled) (eq .Values.networkPolicy.flavor "cilium") }}
+kind: CiliumNetworkPolicy
+apiVersion: cilium.io/v2
+metadata:
+  name: {{ template "minio.fullname" . }}
+  labels:
+    app: {{ template "minio.name" . }}
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app: {{ template "minio.name" . }}
+      release: {{ .Release.Name }}
+  ingress:
+  - toPorts:
+    - ports:
+      - port: {{ .Values.minioAPIPort }}
+        protocol: TCP
+      - port: {{ .Values.minioConsolePort }}
+        protocol: TCP
+    {{- if not .Values.networkPolicy.allowExternal }}
+    fromEndpoints:
+    - matchLabels:
+        {{ template "minio.name" . }}-client: "true"
+    {{- end }}
+  egress:
+  {{- range $entity := .Values.networkPolicy.egressEntities }}
+  - toEntities:
+    - {{ $entity }}
+  {{- end }}
+{{- end }}

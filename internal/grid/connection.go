@@ -40,6 +40,7 @@ import (
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/tinylib/msgp/msgp"
@@ -68,7 +69,8 @@ type Connection struct {
 	id uuid.UUID
 
 	// Remote uuid, if we have been connected.
-	remoteID *uuid.UUID
+	remoteID    *uuid.UUID
+	reconnectMu sync.Mutex
 
 	// Context for the server.
 	ctx context.Context
@@ -448,7 +450,7 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 	defer cancel()
 	changed := make(chan State, 1)
 	go func() {
-		defer close(changed)
+		defer xioutil.SafeClose(changed)
 		for {
 			c.connChange.Wait()
 			newState := c.State()
@@ -697,6 +699,7 @@ func (c *Connection) connect() {
 			retry(fmt.Errorf("connection rejected: %s", r.RejectedReason))
 			continue
 		}
+		c.reconnectMu.Lock()
 		remoteUUID := uuid.UUID(r.ID)
 		if c.remoteID != nil {
 			c.reconnected()
@@ -705,26 +708,15 @@ func (c *Connection) connect() {
 		if debugPrint {
 			fmt.Println(c.Local, "Connected Waiting for Messages")
 		}
-		c.updateState(StateConnected)
-		go c.handleMessages(c.ctx, conn)
-		// Monitor state changes and reconnect if needed.
-		c.connChange.L.Lock()
-		for {
-			newState := c.State()
-			if newState != StateConnected {
-				c.connChange.L.Unlock()
-				if newState == StateShutdown {
-					conn.Close()
-					return
-				}
-				if debugPrint {
-					fmt.Println(c.Local, "Disconnected")
-				}
-				// Reconnect
-				break
-			}
-			// Unlock and wait for state change.
-			c.connChange.Wait()
+		// Handle messages...
+		c.handleMessages(c.ctx, conn)
+		// Reconnect unless we are shutting down (debug only).
+		if c.State() == StateShutdown {
+			conn.Close()
+			return
+		}
+		if debugPrint {
+			fmt.Println(c.Local, "Disconnected. Attempting to reconnect.")
 		}
 	}
 }
@@ -755,6 +747,10 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 	if op != ws.OpBinary {
 		return fmt.Errorf("unexpected connect response type %v", op)
 	}
+	if c.incomingBytes != nil {
+		c.incomingBytes(int64(len(b)))
+	}
+
 	var m message
 	_, _, err = m.parse(b)
 	if err != nil {
@@ -792,11 +788,6 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 		Op: OpConnectResponse,
 	}
 
-	if c.remoteID != nil {
-		c.reconnected()
-	}
-	rid := uuid.UUID(req.ID)
-	c.remoteID = &rid
 	resp := connectResp{
 		ID:       c.id,
 		Accepted: true,
@@ -805,13 +796,26 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	if debugPrint {
 		fmt.Printf("grid: Queued Response %+v Side: %v\n", resp, c.side)
 	}
-	if err == nil {
-		c.updateState(StateConnected)
-		c.handleMessages(ctx, conn)
+	if err != nil {
+		return err
 	}
-	return err
+	// Signal that we are reconnected, update state and handle messages.
+	// Prevent other connections from connecting while we process.
+	c.reconnectMu.Lock()
+	if c.remoteID != nil {
+		c.reconnected()
+	}
+	rid := uuid.UUID(req.ID)
+	c.remoteID = &rid
+
+	// Handle incoming messages until disconnect.
+	c.handleMessages(ctx, conn)
+	return nil
 }
 
+// reconnected signals the connection has been reconnected.
+// It will close all active requests and streams.
+// caller *must* hold reconnectMu.
 func (c *Connection) reconnected() {
 	c.updateState(StateConnectionError)
 	// Close all active requests.
@@ -831,9 +835,7 @@ func (c *Connection) reconnected() {
 	c.outgoing.Clear()
 
 	// Wait for existing to exit
-	c.connMu.Lock()
 	c.handleMsgWg.Wait()
-	c.connMu.Unlock()
 }
 
 func (c *Connection) updateState(s State) {
@@ -855,12 +857,37 @@ func (c *Connection) updateState(s State) {
 	c.connChange.Broadcast()
 }
 
+// monitorState will monitor the state of the connection and close the net.Conn if it changes.
+func (c *Connection) monitorState(conn net.Conn, cancel context.CancelCauseFunc) {
+	c.connChange.L.Lock()
+	defer c.connChange.L.Unlock()
+	for {
+		newState := c.State()
+		if newState != StateConnected {
+			conn.Close()
+			cancel(ErrDisconnected)
+			return
+		}
+		// Unlock and wait for state change.
+		c.connChange.Wait()
+	}
+}
+
+// handleMessages will handle incoming messages on conn.
+// caller *must* hold reconnectMu.
 func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
-	// Read goroutine
-	c.connMu.Lock()
-	c.handleMsgWg.Add(2)
-	c.connMu.Unlock()
+	c.updateState(StateConnected)
 	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(ErrDisconnected)
+
+	// This will ensure that is something asks to disconnect and we are blocked on reads/writes
+	// the connection will be closed and readers/writers will unblock.
+	go c.monitorState(conn, cancel)
+
+	c.handleMsgWg.Add(2)
+	c.reconnectMu.Unlock()
+
+	// Read goroutine
 	go func() {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -932,6 +959,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if c.incomingBytes != nil {
 				c.incomingBytes(int64(len(msg)))
 			}
+
 			// Parse the received message
 			var m message
 			subID, remain, err := m.parse(msg)
@@ -1024,7 +1052,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				lastPongTime := time.Unix(lastPong, 0)
 				if d := time.Since(lastPongTime); d > connPingInterval*2 {
 					logger.LogIf(ctx, fmt.Errorf("host %s last pong too old (%v); disconnecting", c.Remote, d.Round(time.Millisecond)))
-					cancel(ErrDisconnected)
 					return
 				}
 			}
@@ -1074,14 +1101,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			err := wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
-				cancel(ErrDisconnected)
 				return
 			}
 			PutByteBuffer(toSend)
 			_, err = buf.WriteTo(conn)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
-				cancel(ErrDisconnected)
 				return
 			}
 			continue
@@ -1099,7 +1124,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		toSend, err = m.MarshalMsg(toSend)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("msg.MarshalMsg: %w", err))
-			cancel(ErrDisconnected)
 			return
 		}
 		// Append as byte slices.
@@ -1116,14 +1140,12 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		err = wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
-			cancel(ErrDisconnected)
 			return
 		}
-		// Tosend is our local buffer, so we can reuse it.
+		// buf is our local buffer, so we can reuse it.
 		_, err = buf.WriteTo(conn)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
-			cancel(ErrDisconnected)
 			return
 		}
 
@@ -1538,9 +1560,9 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 			c.debugInConn.Close()
 		}
 	case debugWaitForExit:
-		c.connMu.Lock()
+		c.reconnectMu.Lock()
 		c.handleMsgWg.Wait()
-		c.connMu.Unlock()
+		c.reconnectMu.Unlock()
 	case debugSetConnPingDuration:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()

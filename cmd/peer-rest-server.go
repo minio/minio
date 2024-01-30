@@ -845,12 +845,24 @@ func (s *peerRESTServer) VerifyBinaryHandler(w http.ResponseWriter, r *http.Requ
 		s.writeErrorResponse(w, err)
 		return
 	}
+
 	sha256Sum, err := hex.DecodeString(r.Form.Get(peerRESTSha256Sum))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 	releaseInfo := r.Form.Get(peerRESTReleaseInfo)
+
+	lrTime, err := releaseInfoToReleaseTime(releaseInfo)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	if lrTime.Sub(currentReleaseTime) <= 0 {
+		s.writeErrorResponse(w, fmt.Errorf("server is already running the latest version: %s", Version))
+		return
+	}
 
 	zr, err := zstd.NewReader(r.Body)
 	if err != nil {
@@ -880,16 +892,19 @@ func (s *peerRESTServer) CommitBinaryHandler(w http.ResponseWriter, r *http.Requ
 
 var errUnsupportedSignal = fmt.Errorf("unsupported signal")
 
-func canWeRestartNode() map[string]DiskMetrics {
+func waitingDrivesNode() map[string]madmin.DiskMetrics {
 	errs := make([]error, len(globalLocalDrives))
 	infos := make([]DiskInfo, len(globalLocalDrives))
 	for i, drive := range globalLocalDrives {
-		infos[i], errs[i] = drive.DiskInfo(GlobalContext, false)
+		infos[i], errs[i] = drive.DiskInfo(GlobalContext, DiskInfoOptions{})
 	}
-	infoMaps := make(map[string]DiskMetrics)
+	infoMaps := make(map[string]madmin.DiskMetrics)
 	for i := range infos {
 		if infos[i].Metrics.TotalWaiting >= 1 && errors.Is(errs[i], errFaultyDisk) {
-			infoMaps[infos[i].Endpoint] = infos[i].Metrics
+			infoMaps[infos[i].Endpoint] = madmin.DiskMetrics{
+				TotalTokens:  infos[i].Metrics.TotalTokens,
+				TotalWaiting: infos[i].Metrics.TotalWaiting,
+			}
 		}
 	}
 	return infoMaps
@@ -917,9 +932,8 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	switch signal {
 	case serviceRestart, serviceStop:
 		dryRun := r.Form.Get("dry-run") == "true" // This is only supported for `restart/stop`
-		force := r.Form.Get("force") == "true"
 
-		waitingDisks := canWeRestartNode()
+		waitingDisks := waitingDrivesNode()
 		if len(waitingDisks) > 0 {
 			buf, err := json.Marshal(waitingDisks)
 			if err != nil {
@@ -927,10 +941,6 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 				return
 			}
 			s.writeErrorResponse(w, errors.New(string(buf)))
-			// if its forced we signal the process anyway.
-			if !force {
-				return
-			}
 		}
 		if !dryRun {
 			globalServiceSignalCh <- signal
@@ -1228,7 +1238,7 @@ func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	doneCh := make(chan struct{})
-	defer close(doneCh)
+	defer xioutil.SafeClose(doneCh)
 
 	ch := make(chan log.Info, 100000)
 	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
@@ -1289,7 +1299,7 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 	bucketsString := r.Form.Get("buckets")
 
 	doneCh := make(chan struct{})
-	defer close(doneCh)
+	defer xioutil.SafeClose(doneCh)
 
 	selectBuckets := b.SelectBuckets(strings.Split(bucketsString, ",")...)
 	report := globalBucketMonitor.GetReport(selectBuckets)

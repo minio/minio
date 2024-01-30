@@ -587,7 +587,7 @@ func GetDefaultConnSettings() xhttp.ConnSettings {
 
 // NewInternodeHTTPTransport returns a transport for internode MinIO
 // connections.
-func NewInternodeHTTPTransport() func() http.RoundTripper {
+func NewInternodeHTTPTransport(maxIdleConnsPerHost int) func() http.RoundTripper {
 	lookupHost := globalDNSCache.LookupHost
 	if IsKubernetes() || IsDocker() {
 		lookupHost = nil
@@ -601,7 +601,7 @@ func NewInternodeHTTPTransport() func() http.RoundTripper {
 		CurvePreferences: fips.TLSCurveIDs(),
 		EnableHTTP2:      false,
 		TCPOptions:       globalTCPOptions,
-	}.NewInternodeHTTPTransport()
+	}.NewInternodeHTTPTransport(maxIdleConnsPerHost)
 }
 
 // NewCustomHTTPProxyTransport is used only for proxied requests, specifically
@@ -1036,9 +1036,8 @@ func isDirObject(object string) bool {
 }
 
 // Helper method to return total number of nodes in cluster
-func totalNodeCount() uint64 {
-	peers, _ := globalEndpoints.peers()
-	totalNodesCount := uint64(len(peers))
+func totalNodeCount() int {
+	totalNodesCount := len(globalEndpoints.Hostnames())
 	if totalNodesCount == 0 {
 		totalNodesCount = 1 // For standalone erasure coding
 	}

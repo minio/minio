@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/minio/madmin-go/v3"
@@ -83,21 +82,21 @@ func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 	globalLocalDrivesMu.RLock()
-	globalLocalDrives := globalLocalDrives
+	localDrives := globalLocalDrives
 	globalLocalDrivesMu.RUnlock()
 
 	// Initialize sync waitgroup.
-	g := errgroup.WithNErrs(len(globalLocalDrives))
+	g := errgroup.WithNErrs(len(localDrives))
 
 	// Disk states slices
-	beforeState := make([]string, len(globalLocalDrives))
-	afterState := make([]string, len(globalLocalDrives))
+	beforeState := make([]string, len(localDrives))
+	afterState := make([]string, len(localDrives))
 
 	// Make a volume entry on all underlying storage disks.
-	for index := range globalLocalDrives {
+	for index := range localDrives {
 		index := index
 		g.Go(func() (serr error) {
-			if globalLocalDrives[index] == nil {
+			if localDrives[index] == nil {
 				beforeState[index] = madmin.DriveStateOffline
 				afterState[index] = madmin.DriveStateOffline
 				return errDiskNotFound
@@ -110,7 +109,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 				return nil
 			}
 
-			_, serr = globalLocalDrives[index].StatVol(ctx, bucket)
+			_, serr = localDrives[index].StatVol(ctx, bucket)
 			if serr != nil {
 				if serr == errDiskNotFound {
 					beforeState[index] = madmin.DriveStateOffline
@@ -138,7 +137,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	res = madmin.HealResultItem{
 		Type:      madmin.HealItemBucket,
 		Bucket:    bucket,
-		DiskCount: len(globalLocalDrives),
+		DiskCount: len(localDrives),
 		SetCount:  -1, // explicitly set an invalid value -1, for bucket heal scenario
 	}
 
@@ -150,25 +149,21 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	for i := range beforeState {
 		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: globalLocalDrives[i].String(),
+			Endpoint: localDrives[i].String(),
 			State:    beforeState[i],
 		})
 	}
 
 	// check dangling and delete bucket only if its not a meta bucket
 	if !isMinioMetaBucketName(bucket) && !isAllBucketsNotFound(errs) && opts.Remove {
-		g := errgroup.WithNErrs(len(globalLocalDrives))
-		for index := range globalLocalDrives {
+		g := errgroup.WithNErrs(len(localDrives))
+		for index := range localDrives {
 			index := index
 			g.Go(func() error {
-				if globalLocalDrives[index] == nil {
+				if localDrives[index] == nil {
 					return errDiskNotFound
 				}
-				err := globalLocalDrives[index].DeleteVol(ctx, bucket, false)
-				if !errors.Is(err, errVolumeNotEmpty) {
-					logger.LogOnceIf(ctx, fmt.Errorf("While deleting dangling Bucket (%s), Drive %s:%s returned an error (%w)",
-						bucket, globalLocalDrives[index].Hostname(), globalLocalDrives[index], err), "delete-dangling-bucket-"+bucket)
-				}
+				localDrives[index].DeleteVol(ctx, bucket, false)
 				return nil
 			}, index)
 		}
@@ -179,18 +174,18 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	// Create the quorum lost volume only if its nor makred for delete
 	if !opts.Remove {
 		// Initialize sync waitgroup.
-		g = errgroup.WithNErrs(len(globalLocalDrives))
+		g = errgroup.WithNErrs(len(localDrives))
 
 		// Make a volume entry on all underlying storage disks.
-		for index := range globalLocalDrives {
+		for index := range localDrives {
 			index := index
 			g.Go(func() error {
 				if beforeState[index] == madmin.DriveStateMissing {
-					makeErr := globalLocalDrives[index].MakeVol(ctx, bucket)
-					if makeErr == nil {
+					err := localDrives[index].MakeVol(ctx, bucket)
+					if err == nil {
 						afterState[index] = madmin.DriveStateOk
 					}
-					return makeErr
+					return err
 				}
 				return errs[index]
 			}, index)
@@ -202,7 +197,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	for i := range afterState {
 		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: globalLocalDrives[i].String(),
+			Endpoint: localDrives[i].String(),
 			State:    afterState[i],
 		})
 	}

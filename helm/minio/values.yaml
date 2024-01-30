@@ -84,7 +84,7 @@ priorityClassName: ""
 runtimeClassName: ""
 
 ## Set default rootUser, rootPassword
-## AccessKey and secretKey is generated when not set
+## rootUser and rootPassword is generated when not set
 ## Distributed MinIO ref: https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html
 ##
 rootUser: ""
@@ -495,10 +495,17 @@ oidc:
   # Can leave empty
   claimPrefix: ""
   comment: ""
+  displayName: ""
 
 networkPolicy:
   enabled: false
+  # Specifies whether the policies created will be standard Network Policies (flavor: kubernetes)
+  # or Cilium Network Policies (flavor: cilium)
+  flavor: kubernetes
   allowExternal: true
+  # only when using flavor: cilium
+  egressEntities:
+   - kube-apiserver
 
 ## PodDisruptionBudget settings
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/

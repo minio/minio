@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/hash/sha256"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -56,7 +57,10 @@ const (
 	HandlerWriteMetadata
 	HandlerCheckParts
 	HandlerRenameData
+	HandlerRenameFile
+	HandlerReadAll
 
+	HandlerServerVerify
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
 	// Handlers have no versioning, so non-compatible handler changes must result in new IDs.
@@ -86,11 +90,15 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerWriteMetadata:   storagePrefix,
 	HandlerCheckParts:      storagePrefix,
 	HandlerRenameData:      storagePrefix,
+	HandlerRenameFile:      storagePrefix,
+	HandlerReadAll:         storagePrefix,
+	HandlerServerVerify:    bootstrapPrefix,
 }
 
 const (
-	lockPrefix    = "lockR"
-	storagePrefix = "storageR"
+	lockPrefix      = "lockR"
+	storagePrefix   = "storageR"
+	bootstrapPrefix = "bootstrap"
 )
 
 func init() {
@@ -572,7 +580,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 				// Don't add extra buffering
 				inT = make(chan Req)
 				go func() {
-					defer close(inT)
+					defer xioutil.SafeClose(inT)
 					for {
 						select {
 						case <-ctx.Done():
@@ -600,7 +608,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 			outT := make(chan Resp)
 			outDone := make(chan struct{})
 			go func() {
-				defer close(outDone)
+				defer xioutil.SafeClose(outDone)
 				dropOutput := false
 				for v := range outT {
 					if dropOutput {
@@ -622,7 +630,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 				}
 			}()
 			rErr := handle(ctx, plT, inT, outT)
-			close(outT)
+			xioutil.SafeClose(outT)
 			<-outDone
 			return rErr
 		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity, Subroute: strings.Join(subroute, "/"),
@@ -684,8 +692,11 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 	if h.InCapacity > 0 {
 		reqT = make(chan Req)
 		// Request handler
+		if stream.Requests == nil {
+			return nil, fmt.Errorf("internal error: stream request channel nil")
+		}
 		go func() {
-			defer close(stream.Requests)
+			defer xioutil.SafeClose(stream.Requests)
 			for req := range reqT {
 				b, err := req.MarshalMsg(GetByteBuffer()[:0])
 				if err != nil {
@@ -696,7 +707,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 			}
 		}()
 	} else if stream.Requests != nil {
-		close(stream.Requests)
+		xioutil.SafeClose(stream.Requests)
 	}
 
 	return &TypedStream[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil

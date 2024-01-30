@@ -46,7 +46,7 @@ lint-fix: getdeps ## runs golangci-lint suite of linters with automatic fixes
 check: test
 test: verifiers build build-debugging ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue ./...
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -v -tags kqueue ./...
 
 test-root-disable: install-race
 	@echo "Running minio root lockdown tests"
@@ -116,7 +116,6 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@echo "Verify healing build with race"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
-	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
 	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
 verify-healing-with-root-disks: ## verify healing root disks

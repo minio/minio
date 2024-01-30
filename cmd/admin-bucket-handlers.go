@@ -680,22 +680,15 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			if _, ok := bucketMap[bucket]; !ok {
 				opts := MakeBucketOptions{
 					LockEnabled: config.Enabled(),
+					ForceCreate: true, // ignore if it already exists
 				}
 				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {
-					if _, ok := err.(BucketExists); !ok {
-						rpt.SetStatus(bucket, fileName, err)
-						continue
-					}
+					rpt.SetStatus(bucket, fileName, err)
+					continue
 				}
 				v := newBucketMetadata(bucket)
 				bucketMap[bucket] = &v
-			}
-
-			// Deny object locking configuration settings on existing buckets without object lock enabled.
-			if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
-				rpt.SetStatus(bucket, fileName, err)
-				continue
 			}
 
 			bucketMap[bucket].ObjectLockConfigXML = configData
@@ -724,11 +717,11 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{}); err != nil {
-					if _, ok := err.(BucketExists); !ok {
-						rpt.SetStatus(bucket, fileName, err)
-						continue
-					}
+				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{
+					ForceCreate: true, // ignore if it already exists
+				}); err != nil {
+					rpt.SetStatus(bucket, fileName, err)
+					continue
 				}
 				v := newBucketMetadata(bucket)
 				bucketMap[bucket] = &v
@@ -776,12 +769,12 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
-			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{})
+			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{
+				ForceCreate: true, // ignore if it already exists
+			})
 			if err != nil {
-				if _, ok := err.(BucketExists); !ok {
-					rpt.SetStatus(bucket, "", err)
-					continue
-				}
+				rpt.SetStatus(bucket, "", err)
+				continue
 			}
 			v := newBucketMetadata(bucket)
 			bucketMap[bucket] = &v

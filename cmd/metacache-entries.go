@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strings"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 )
@@ -659,7 +660,7 @@ func (m *metaCacheEntriesSorted) forwardPast(s string) {
 // If the context is canceled the function will return the error,
 // otherwise the function will return nil.
 func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<- metaCacheEntry, readQuorum int) error {
-	defer close(out)
+	defer xioutil.SafeClose(out)
 	top := make([]*metaCacheEntry, len(in))
 	nDone := 0
 	ctxDone := ctx.Done()

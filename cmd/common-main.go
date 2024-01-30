@@ -69,7 +69,7 @@ import (
 // serverDebugLog will enable debug printing
 var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
 
-var shardDiskTimeDelta time.Duration
+var currentReleaseTime time.Time
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -107,16 +107,12 @@ func init() {
 	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]interface{}{})
 
-	var err error
-	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
-	if err != nil {
-		shardDiskTimeDelta = 1 * time.Minute
-	}
-
 	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
 	minio.MaxRetry = 1
 	madmin.MaxRetry = 1
+
+	currentReleaseTime, _ = GetCurrentReleaseTime()
 }
 
 const consolePrefix = "CONSOLE_"
@@ -301,9 +297,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	// Its OK to ignore any errors during doUpdate() here.
-	crTime, err := GetCurrentReleaseTime()
-	if err != nil {
+	if currentReleaseTime.IsZero() {
 		return
 	}
 
@@ -314,8 +308,8 @@ func checkUpdate(mode string) {
 
 	var older time.Duration
 	var downloadURL string
-	if lrTime.After(crTime) {
-		older = lrTime.Sub(crTime)
+	if lrTime.After(currentReleaseTime) {
+		older = lrTime.Sub(currentReleaseTime)
 		downloadURL = getDownloadURL(releaseTimeToReleaseTag(lrTime))
 	}
 
@@ -324,7 +318,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	logger.Info(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
+	logger.Info(prepareUpdateMessage("Run `mc admin update ALIAS`", lrTime.Sub(currentReleaseTime)))
 }
 
 func newConfigDir(dir string, dirSet bool, getDefaultDir func() string) (*ConfigDir, error) {
@@ -373,7 +367,6 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 
 	// Check "no-compat" flag from command line argument.
 	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
-	ctxt.PreAllocate = ctx.IsSet("pre-allocate") || ctx.GlobalIsSet("pre-allocate")
 
 	switch {
 	case ctx.IsSet("config-dir"):
@@ -404,6 +397,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
 	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
+	ctxt.MaxIdleConnsPerHost = ctx.Int("max-idle-conns-per-host")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		if os.Getenv(config.EnvArgs) != "" {

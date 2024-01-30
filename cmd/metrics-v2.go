@@ -32,6 +32,7 @@ import (
 	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/minio/internal/rest"
@@ -59,13 +60,13 @@ func init() {
 		getClusterHealthMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
 		getReplicationSiteMetrics(MetricsGroupOpts{dependGlobalSiteReplicationSys: true}),
+		getBatchJobsMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
 		getGoMetrics(),
 		getHTTPMetrics(MetricsGroupOpts{}),
 		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
-		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 		getMinioProcMetrics(),
 		getMinioVersionMetrics(),
 		getNetworkMetrics(),
@@ -76,7 +77,7 @@ func init() {
 		getKMSNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependGlobalKMS: true}),
 		getMinioHealingMetrics(MetricsGroupOpts{dependGlobalBackgroundHealState: true}),
 		getWebhookMetrics(),
-		getReplicationClusterMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}),
+		getTierMetrics(),
 	}
 
 	allMetricsGroups := func() (allMetrics []*MetricsGroup) {
@@ -96,13 +97,13 @@ func init() {
 		getDistLockMetrics(MetricsGroupOpts{dependGlobalIsDistErasure: true, dependGlobalLockServer: true}),
 		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
 		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
+		getReplicationNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}),
 	}
 
 	bucketMetricsGroups := []*MetricsGroup{
 		getBucketUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
-		getBatchJobsMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
@@ -1724,7 +1725,7 @@ func getGoMetrics() *MetricsGroup {
 func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) []Metric {
 	ch := make(chan prometheus.Metric)
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 		// Collects prometheus metrics from hist and sends it over ch
 		hist.Collect(ch)
 	}()
@@ -2136,7 +2137,7 @@ func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 }
 
 // replication metrics for each node - published to the cluster endpoint with nodename as label
-func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
+func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval:    1 * time.Minute,
 		metricsGroupOpts: opts,
@@ -2153,58 +2154,45 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		if globalReplicationStats != nil {
 			qs := globalReplicationStats.getNodeQueueStatsSummary()
 			activeWorkersCount := Metric{
-				Description:    getClusterReplActiveWorkersCountMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplActiveWorkersCountMD(),
 			}
 			avgActiveWorkersCount := Metric{
-				Description:    getClusterReplAvgActiveWorkersCountMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplAvgActiveWorkersCountMD(),
 			}
 			maxActiveWorkersCount := Metric{
-				Description:    getClusterReplMaxActiveWorkersCountMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplMaxActiveWorkersCountMD(),
 			}
 			currInQueueCount := Metric{
-				Description:    getClusterReplCurrQueuedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplCurrQueuedOperationsMD(),
 			}
 			currInQueueBytes := Metric{
-				Description:    getClusterReplCurrQueuedBytesMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplCurrQueuedBytesMD(),
 			}
 
 			currTransferRate := Metric{
-				Description:    getClusterReplCurrentTransferRateMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplCurrentTransferRateMD(),
 			}
 			avgQueueCount := Metric{
-				Description:    getClusterReplAvgQueuedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplAvgQueuedOperationsMD(),
 			}
 			avgQueueBytes := Metric{
-				Description:    getClusterReplAvgQueuedBytesMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplAvgQueuedBytesMD(),
 			}
 			maxQueueCount := Metric{
-				Description:    getClusterReplMaxQueuedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplMaxQueuedOperationsMD(),
 			}
 			maxQueueBytes := Metric{
-				Description:    getClusterReplMaxQueuedBytesMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplMaxQueuedBytesMD(),
 			}
 			avgTransferRate := Metric{
-				Description:    getClusterReplAvgTransferRateMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplAvgTransferRateMD(),
 			}
 			maxTransferRate := Metric{
-				Description:    getClusterReplMaxTransferRateMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
+				Description: getClusterReplMaxTransferRateMD(),
 			}
 			mrfCount := Metric{
-				Description:    getClusterReplMRFFailedOperationsMD(),
-				VariableLabels: map[string]string{serverName: qs.NodeName},
-				Value:          float64(qs.MRFStats.LastFailedCount),
+				Description: getClusterReplMRFFailedOperationsMD(),
+				Value:       float64(qs.MRFStats.LastFailedCount),
 			}
 
 			if qs.QStats.Avg.Count > 0 || qs.QStats.Curr.Count > 0 {
@@ -2248,7 +2236,6 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkLatencyCurrMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
 				},
 			}
 			m.Value = float64(health.latency.curr / time.Millisecond)
@@ -2259,7 +2246,6 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkLatencyAvgMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
 				},
 			}
 			m.Value = float64(health.latency.avg / time.Millisecond)
@@ -2270,7 +2256,6 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkLatencyMaxMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
 				},
 			}
 			m.Value = float64(health.latency.peak / time.Millisecond)
@@ -2280,7 +2265,6 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkOnlineMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
 				},
 			}
 			online := Offline
@@ -2293,7 +2277,6 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkCurrOfflineDurationMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
 				},
 			}
 			currDowntime := time.Duration(0)
@@ -2307,7 +2290,6 @@ func getReplicationClusterMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description: getClusterRepLinkTotalOfflineDurationMD(),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
-					serverName: globalLocalNodeName,
 				},
 			}
 			dwntime := currDowntime
@@ -3374,6 +3356,16 @@ func getClusterHealthStatusMD() MetricDescription {
 	}
 }
 
+func getClusterErasureSetHealthStatusMD() MetricDescription {
+	return MetricDescription{
+		Namespace: clusterMetricNamespace,
+		Subsystem: "health",
+		Name:      "erasure_set_status",
+		Help:      "Get current health status for this erasure set",
+		Type:      gaugeMetric,
+	}
+}
+
 func getClusterErasureSetReadQuorumMD() MetricDescription {
 	return MetricDescription{
 		Namespace: clusterMetricNamespace,
@@ -3466,6 +3458,17 @@ func getClusterHealthMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				Description:    getClusterErasureSetHealingDrivesMD(),
 				VariableLabels: labels,
 				Value:          float64(h.HealingDrives),
+			})
+
+			health := 1
+			if !h.Healthy {
+				health = 0
+			}
+
+			metrics = append(metrics, Metric{
+				Description:    getClusterErasureSetHealthStatusMD(),
+				VariableLabels: labels,
+				Value:          float64(health),
 			})
 		}
 
@@ -3881,7 +3884,7 @@ func (c *minioClusterCollector) Collect(out chan<- prometheus.Metric) {
 func ReportMetrics(ctx context.Context, metricsGroups []*MetricsGroup) <-chan Metric {
 	ch := make(chan Metric)
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 		populateAndPublish(metricsGroups, func(m Metric) bool {
 			if m.VariableLabels == nil {
 				m.VariableLabels = make(map[string]string)
