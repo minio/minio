@@ -85,7 +85,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	)
 
 	// Maximum number of reusable buffers per node at any given point in time.
-	n := 1024 // single node single/multiple drives set this to 1024 entries
+	n := uint64(1024) // single node single/multiple drives set this to 1024 entries
 
 	if globalIsDistErasure {
 		n = 2048
@@ -93,6 +93,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 	if globalIsCICD {
 		n = 256 // 256MiB for CI/CD environments is sufficient
+	}
+
+	// Avoid allocating more than half of the available memory
+	if maxN := availableMemory() / (blockSizeV2 * 2); n > maxN {
+		n = maxN
 	}
 
 	// Initialize byte pool once for all sets, bpool size is set to

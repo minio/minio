@@ -21,7 +21,7 @@ import "testing"
 
 // Tests - bytePool functionality.
 func TestBytePool(t *testing.T) {
-	size := 4
+	size := uint64(4)
 	width := 1024
 	capWidth := 2048
 
@@ -49,7 +49,7 @@ func TestBytePool(t *testing.T) {
 	bufPool.Put(b)
 
 	// Fill the pool beyond the capped pool size.
-	for i := 0; i < size*2; i++ {
+	for i := uint64(0); i < size*2; i++ {
 		bufPool.Put(make([]byte, bufPool.w))
 	}
 
@@ -67,7 +67,7 @@ func TestBytePool(t *testing.T) {
 	close(bufPool.c)
 
 	// Check the size of the pool.
-	if len(bufPool.c) != size {
+	if uint64(len(bufPool.c)) != size {
 		t.Fatalf("bytepool size invalid: got %v want %v", len(bufPool.c), size)
 	}
 
