@@ -3213,6 +3213,9 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 		return roi
 	}
 
+	if isVeeamSOSAPIObject(oi.Name) {
+		return roi
+	}
 	if rcfg.Config == nil || rcfg.remotes == nil {
 		return roi
 	}
