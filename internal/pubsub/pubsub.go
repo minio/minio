@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -50,7 +50,7 @@ type PubSub[T Maskable, M Maskable] struct {
 }
 
 // Publish message to the subscribers.
-// Note that publish is always nob-blocking send so that we don't block on slow receivers.
+// Note that publish is always non-blocking send so that we don't block on slow receivers.
 // Hence receivers should use buffered channel so as not to miss the published events.
 func (ps *PubSub[T, M]) Publish(item T) {
 	ps.RLock()
