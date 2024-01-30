@@ -530,7 +530,7 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 			endpoint.Hostname(),
 		)
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.Application)
+		logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.ErrorKind)
 		return false
 	}
 	var loopback int
@@ -602,7 +602,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
 						logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
-							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.Application)
+							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.ErrorKind)
 					}
 
 					continue
@@ -631,7 +631,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.Application)
+						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
 					}
 				} else {
 					resolvedList[i] = true
@@ -796,7 +796,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
 							logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
-								endpoint.Hostname()), endpoint.Hostname(), logger.Application)
+								endpoint.Hostname()), endpoint.Hostname(), logger.ErrorKind)
 						}
 						continue
 					}
@@ -824,7 +824,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.Application)
+							logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.ErrorKind)
 						}
 					} else {
 						resolvedList[endpoint] = true

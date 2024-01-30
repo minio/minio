@@ -40,7 +40,7 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode S
 	}
 	switch errCode {
 	case ErrSTSInternalError, ErrSTSUpstreamError:
-		logger.LogIf(ctx, err, logger.Minio)
+		logger.LogIf(ctx, err, logger.ErrorKind)
 	}
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
 	writeResponse(w, stsErr.HTTPStatusCode, encodedErrorResponse, mimeXML)
