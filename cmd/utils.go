@@ -587,7 +587,7 @@ func GetDefaultConnSettings() xhttp.ConnSettings {
 
 // NewInternodeHTTPTransport returns a transport for internode MinIO
 // connections.
-func NewInternodeHTTPTransport() func() http.RoundTripper {
+func NewInternodeHTTPTransport(maxIdleConnsPerHost int) func() http.RoundTripper {
 	lookupHost := globalDNSCache.LookupHost
 	if IsKubernetes() || IsDocker() {
 		lookupHost = nil
@@ -601,7 +601,7 @@ func NewInternodeHTTPTransport() func() http.RoundTripper {
 		CurvePreferences: fips.TLSCurveIDs(),
 		EnableHTTP2:      false,
 		TCPOptions:       globalTCPOptions,
-	}.NewInternodeHTTPTransport()
+	}.NewInternodeHTTPTransport(maxIdleConnsPerHost)
 }
 
 // NewCustomHTTPProxyTransport is used only for proxied requests, specifically

@@ -157,9 +157,10 @@ type serverCtxt struct {
 	ConnReadDeadline  time.Duration
 	ConnWriteDeadline time.Duration
 
-	ShutdownTimeout   time.Duration
-	IdleTimeout       time.Duration
-	ReadHeaderTimeout time.Duration
+	ShutdownTimeout     time.Duration
+	IdleTimeout         time.Duration
+	ReadHeaderTimeout   time.Duration
+	MaxIdleConnsPerHost int
 
 	// The layout of disks as interpreted
 	Layout disksLayout

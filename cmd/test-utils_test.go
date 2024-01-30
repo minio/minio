@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
 
-	globalInternodeTransport = NewInternodeHTTPTransport()()
+	globalInternodeTransport = NewInternodeHTTPTransport(0)()
 
 	initHelp()
 
