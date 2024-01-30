@@ -1136,14 +1136,13 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 					xldisk, ok := disk.(*xlStorageDiskIDCheck)
 					if ok {
-						if driveQuorum {
-							commonWrites, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
-							xldisk.totalWrites.Store(commonWrites)
-							xldisk.totalDeletes.Store(commonDeletes)
-							xldisk.storage.setWriteAttribute(commonWrites)
-							xldisk.storage.setDeleteAttribute(commonDeletes)
+						_, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
+						xldisk.totalDeletes.Store(commonDeletes)
+						xldisk.storage.setDeleteAttribute(commonDeletes)
+
+						if globalDriveMonitoring {
+							go xldisk.monitorDiskWritable(xldisk.diskCtx)
 						}
-						go xldisk.monitorDiskWritable(xldisk.diskCtx)
 					}
 				} else {
 					disk.Close() // Close the remote storage client, re-initialize with healthchecks.
