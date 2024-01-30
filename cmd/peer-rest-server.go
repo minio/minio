@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/gob"
 	"encoding/hex"
@@ -37,6 +38,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
@@ -976,25 +978,23 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// Set an output capacity of 100 for listenHandler
+// There is another buffer that will buffer events.
+var listenHandler = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen,
+	grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
+
 // ListenHandler sends http trace messages back to peer rest client
-func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("invalid request"))
-		return
-	}
-
-	values := r.Form
-
+func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.URLValues, out chan<- *grid.Bytes) *grid.RemoteErr {
+	values := v.Values()
+	defer v.Recycle()
 	var prefix string
 	if len(values[peerRESTListenPrefix]) > 1 {
-		s.writeErrorResponse(w, errors.New("invalid request"))
-		return
+		return grid.NewRemoteErrString("invalid request (peerRESTListenPrefix)")
 	}
-
+	globalAPIConfig.getRequestsPoolCapacity()
 	if len(values[peerRESTListenPrefix]) == 1 {
 		if err := event.ValidateFilterRuleValue(values[peerRESTListenPrefix][0]); err != nil {
-			s.writeErrorResponse(w, err)
-			return
+			return grid.NewRemoteErr(err)
 		}
 
 		prefix = values[peerRESTListenPrefix][0]
@@ -1002,14 +1002,12 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 
 	var suffix string
 	if len(values[peerRESTListenSuffix]) > 1 {
-		s.writeErrorResponse(w, errors.New("invalid request"))
-		return
+		return grid.NewRemoteErrString("invalid request (peerRESTListenSuffix)")
 	}
 
 	if len(values[peerRESTListenSuffix]) == 1 {
 		if err := event.ValidateFilterRuleValue(values[peerRESTListenSuffix][0]); err != nil {
-			s.writeErrorResponse(w, err)
-			return
+			return grid.NewRemoteErr(err)
 		}
 
 		suffix = values[peerRESTListenSuffix][0]
@@ -1022,8 +1020,7 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 	for _, ev := range values[peerRESTListenEvents] {
 		eventName, err := event.ParseName(ev)
 		if err != nil {
-			s.writeErrorResponse(w, err)
-			return
+			return grid.NewRemoteErr(err)
 		}
 		mask.MergeMaskable(eventName)
 		eventNames = append(eventNames, eventName)
@@ -1031,13 +1028,10 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 
 	rulesMap := event.NewRulesMap(eventNames, pattern, event.TargetID{ID: mustGetUUID()})
 
-	doneCh := r.Context().Done()
-
 	// Listen Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	ch := make(chan event.Event, globalAPIConfig.getRequestsPoolCapacity())
-
-	err := globalHTTPListen.Subscribe(mask, ch, doneCh, func(ev event.Event) bool {
+	err := globalHTTPListen.Subscribe(mask, ch, ctx.Done(), func(ev event.Event) bool {
 		if ev.S3.Bucket.Name != "" && values.Get(peerRESTListenBucket) != "" {
 			if ev.S3.Bucket.Name != values.Get(peerRESTListenBucket) {
 				return false
@@ -1046,83 +1040,56 @@ func (s *peerRESTServer) ListenHandler(w http.ResponseWriter, r *http.Request) {
 		return rulesMap.MatchSimple(ev.EventName, ev.S3.Object.Key)
 	})
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		return grid.NewRemoteErr(err)
 	}
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
-	defer keepAliveTicker.Stop()
 
-	enc := gob.NewEncoder(w)
+	// Process until remote disconnects.
+	// Blocks on upstream (out) congestion.
+	// We have however a dynamic downstream buffer (ch).
+	buf := bytes.NewBuffer(grid.GetByteBuffer())
+	enc := json.NewEncoder(buf)
+	tmpEvt := struct{ Records []event.Event }{[]event.Event{{}}}
 	for {
 		select {
+		case <-ctx.Done():
+			grid.PutByteBuffer(buf.Bytes())
+			return nil
 		case ev := <-ch:
-			if err := enc.Encode(ev); err != nil {
-				return
+			buf.Reset()
+			tmpEvt.Records[0] = ev
+			if err := enc.Encode(tmpEvt); err != nil {
+				logger.LogOnceIf(ctx, err, "event: Encode failed")
+				continue
 			}
-			if len(ch) == 0 {
-				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
-			}
-		case <-r.Context().Done():
-			return
-		case <-keepAliveTicker.C:
-			if err := enc.Encode(&event.Event{}); err != nil {
-				return
-			}
-			w.(http.Flusher).Flush()
+			out <- grid.NewBytesWith(append(grid.GetByteBuffer()[:0], buf.Bytes()...))
 		}
 	}
 }
 
 // TraceHandler sends http trace messages back to peer rest client
-func (s *peerRESTServer) TraceHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
+func (s *peerRESTServer) TraceHandler(ctx context.Context, payload []byte, _ <-chan []byte, out chan<- []byte) *grid.RemoteErr {
 	var traceOpts madmin.ServiceTraceOpts
-	err := traceOpts.ParseParams(r)
+	err := json.Unmarshal(payload, &traceOpts)
 	if err != nil {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
+		return grid.NewRemoteErr(err)
 	}
 
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
-	ch := make(chan madmin.TraceInfo, 100000)
-	err = globalTrace.Subscribe(traceOpts.TraceTypes(), ch, r.Context().Done(), func(entry madmin.TraceInfo) bool {
+	err = globalTrace.SubscribeJSON(traceOpts.TraceTypes(), out, ctx.Done(), func(entry madmin.TraceInfo) bool {
 		return shouldTrace(entry, traceOpts)
 	})
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		return grid.NewRemoteErr(err)
 	}
 
 	// Publish bootstrap events that have already occurred before client could subscribe.
 	if traceOpts.TraceTypes().Contains(madmin.TraceBootstrap) {
-		go globalBootstrapTracer.Publish(r.Context(), globalTrace)
+		go globalBootstrapTracer.Publish(ctx, globalTrace)
 	}
-
-	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
-	defer keepAliveTicker.Stop()
-
-	enc := gob.NewEncoder(w)
-	for {
-		select {
-		case entry := <-ch:
-			if err := enc.Encode(entry); err != nil {
-				return
-			}
-		case <-r.Context().Done():
-			return
-		case <-keepAliveTicker.C:
-			if err := enc.Encode(&madmin.TraceInfo{}); err != nil {
-				return
-			}
-			w.(http.Flusher).Flush()
-		}
-	}
+	// Wait for remote to cancel.
+	<-ctx.Done()
+	return nil
 }
 
 func (s *peerRESTServer) BackgroundHealStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -1522,7 +1489,7 @@ func (s *peerRESTServer) NetSpeedTestHandler(w http.ResponseWriter, r *http.Requ
 }
 
 // registerPeerRESTHandlers - register peer rest router.
-func registerPeerRESTHandlers(router *mux.Router) {
+func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	h := func(f http.HandlerFunc) http.HandlerFunc {
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
@@ -1564,8 +1531,6 @@ func registerPeerRESTHandlers(router *mux.Router) {
 
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(h(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(h(server.DownloadProfilingDataHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodTrace).HandlerFunc(server.TraceHandler)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodListen).HandlerFunc(h(server.ListenHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocalDiskIDs).HandlerFunc(h(server.GetLocalDiskIDs))
@@ -1584,4 +1549,11 @@ func registerPeerRESTHandlers(router *mux.Router) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadRebalanceMeta).HandlerFunc(h(server.LoadRebalanceMetaHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStopRebalance).HandlerFunc(h(server.StopRebalanceHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLastDayTierStats).HandlerFunc(h(server.GetLastDayTierStatsHandler))
+	logger.FatalIf(listenHandler.RegisterNoInput(gm, server.ListenHandler), "unable to register handler")
+	logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerTrace, grid.StreamHandler{
+		Handle:      server.TraceHandler,
+		Subroute:    "",
+		OutCapacity: 100000,
+		InCapacity:  0,
+	}), "unable to register handler")
 }

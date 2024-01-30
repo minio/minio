@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/tinylib/msgp/msgp"
 )
@@ -197,4 +198,134 @@ func (b *Bytes) Msgsize() int {
 		return msgp.NilSize
 	}
 	return msgp.ArrayHeaderSize + len(*b)
+}
+
+// Recycle puts the Bytes back into the pool.
+func (b *Bytes) Recycle() {
+	if *b != nil {
+		PutByteBuffer(*b)
+		*b = nil
+	}
+}
+
+// URLValues can be used for url.Values.
+type URLValues map[string][]string
+
+var urlValuesPool = sync.Pool{
+	New: func() interface{} {
+		return make(map[string][]string, 10)
+	},
+}
+
+// NewURLValues returns a new URLValues.
+func NewURLValues() *URLValues {
+	u := URLValues(urlValuesPool.Get().(map[string][]string))
+	return &u
+}
+
+// NewURLValuesWith returns a new URLValues with the provided content.
+func NewURLValuesWith(values map[string][]string) *URLValues {
+	u := URLValues(values)
+	return &u
+}
+
+// Values returns the url.Values.
+// If u is nil, an empty url.Values is returned.
+// The values are a shallow copy of the underlying map.
+func (u *URLValues) Values() url.Values {
+	if u == nil {
+		return url.Values{}
+	}
+	return url.Values(*u)
+}
+
+// Recycle the underlying map.
+func (u *URLValues) Recycle() {
+	if *u != nil {
+		for key := range *u {
+			delete(*u, key)
+		}
+		val := map[string][]string(*u)
+		urlValuesPool.Put(val)
+		*u = nil
+	}
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (u URLValues) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, u.Msgsize())
+	o = msgp.AppendMapHeader(o, uint32(len(u)))
+	for zb0006, zb0007 := range u {
+		o = msgp.AppendString(o, zb0006)
+		o = msgp.AppendArrayHeader(o, uint32(len(zb0007)))
+		for zb0008 := range zb0007 {
+			o = msgp.AppendString(o, zb0007[zb0008])
+		}
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var zb0004 uint32
+	zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if *u == nil {
+		*u = urlValuesPool.Get().(map[string][]string)
+	}
+	if len(*u) > 0 {
+		for key := range *u {
+			delete(*u, key)
+		}
+	}
+
+	for zb0004 > 0 {
+		var zb0001 string
+		var zb0002 []string
+		zb0004--
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		var zb0005 uint32
+		zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001)
+			return
+		}
+		if cap(zb0002) >= int(zb0005) {
+			zb0002 = zb0002[:zb0005]
+		} else {
+			zb0002 = make([]string, zb0005)
+		}
+		for zb0003 := range zb0002 {
+			zb0002[zb0003], bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, zb0001, zb0003)
+				return
+			}
+		}
+		(*u)[zb0001] = zb0002
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (u URLValues) Msgsize() (s int) {
+	s = msgp.MapHeaderSize
+	if u != nil {
+		for zb0006, zb0007 := range u {
+			_ = zb0007
+			s += msgp.StringPrefixSize + len(zb0006) + msgp.ArrayHeaderSize
+			for zb0008 := range zb0007 {
+				s += msgp.StringPrefixSize + len(zb0007[zb0008])
+			}
+		}
+	}
+	return
 }

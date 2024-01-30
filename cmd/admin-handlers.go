@@ -50,6 +50,7 @@ import (
 	"github.com/minio/madmin-go/v3/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/dsync"
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -1909,14 +1910,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	setEventStreamHeaders(w)
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
-	// Use buffered channel to take care of burst sends or slow w.Write()
-
-	// Keep 100k buffered channel, should be sufficient to ensure we do not lose any events.
-	traceCh := make(chan madmin.TraceInfo, 100000)
-
+	// Keep 100k buffered channel.
+	// If receiver cannot keep up with that we drop events.
+	traceCh := make(chan []byte, 100000)
 	peers, _ := newPeerRestClients(globalEndpoints)
-
-	err = globalTrace.Subscribe(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry madmin.TraceInfo) bool {
+	err = globalTrace.SubscribeJSON(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry madmin.TraceInfo) bool {
 		return shouldTrace(entry, traceOpts)
 	})
 	if err != nil {
@@ -1933,19 +1931,19 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		if peer == nil {
 			continue
 		}
-		peer.Trace(traceCh, ctx.Done(), traceOpts)
+		peer.Trace(ctx, traceCh, traceOpts)
 	}
 
 	keepAliveTicker := time.NewTicker(time.Second)
 	defer keepAliveTicker.Stop()
 
-	enc := json.NewEncoder(w)
 	for {
 		select {
 		case entry := <-traceCh:
-			if err := enc.Encode(entry); err != nil {
+			if _, err := w.Write(entry); err != nil {
 				return
 			}
+			grid.PutByteBuffer(entry)
 			if len(traceCh) == 0 {
 				// Flush if nothing is queued
 				w.(http.Flusher).Flush()
