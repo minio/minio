@@ -2337,7 +2337,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 	}
 
 	client := &http.Client{
-		Transport: NewHTTPTransport(),
+		Transport: globalHealthChkTransport,
 		Timeout:   10 * time.Second,
 	}
 

@@ -179,7 +179,7 @@ func checkRemoteEndpoint(ctx context.Context, epURL *url.URL) error {
 	}
 
 	client := &http.Client{
-		Transport: NewHTTPTransport(),
+		Transport: globalRemoteTargetTransport,
 		Timeout:   10 * time.Second,
 	}
 
