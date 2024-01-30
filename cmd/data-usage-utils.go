@@ -71,6 +71,10 @@ type BucketUsageInfo struct {
 
 // DataUsageInfo represents data usage stats of the underlying Object API
 type DataUsageInfo struct {
+	TotalCapacity     uint64 `json:"capacity,omitempty"`
+	TotalUsedCapacity uint64 `json:"usedCapacity,omitempty"`
+	TotalFreeCapacity uint64 `json:"freeCapacity,omitempty"`
+
 	// LastUpdate is the timestamp of when the data usage info was last updated.
 	// This does not indicate a full scan.
 	LastUpdate time.Time `json:"lastUpdate"`
@@ -87,6 +91,7 @@ type DataUsageInfo struct {
 	// Objects total size across all buckets
 	ObjectsTotalSize uint64                           `json:"objectsTotalSize"`
 	ReplicationInfo  map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
+
 	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
 
