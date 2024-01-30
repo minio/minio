@@ -716,7 +716,7 @@ func (client *peerRESTClient) doListen(ctx context.Context, listenCh chan<- []by
 	if err != nil {
 		return
 	}
-	_ = st.Results(func(b *grid.Bytes) error {
+	st.Results(func(b *grid.Bytes) error {
 		select {
 		case listenCh <- *b:
 		default:
