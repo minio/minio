@@ -47,7 +47,7 @@ type mrfState struct {
 	ctx   context.Context
 	pools *erasureServerPools
 
-	mu   sync.Mutex
+	mu   sync.RWMutex
 	opCh chan partialOperation
 }
 
@@ -71,6 +71,9 @@ func (m *mrfState) addPartialOp(op partialOperation) {
 	if m == nil {
 		return
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	select {
 	case m.opCh <- op:

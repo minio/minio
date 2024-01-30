@@ -221,6 +221,9 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		// this amount, since it applies only to reads or writes (not the accumulated
 		// sum).
 		driveMaxConcurrent = int(storage.nrRequests) * 2
+		if driveMaxConcurrent <= 0 {
+			driveMaxConcurrent = 1023 * 2 // Default value on Linux for most NVMe
+		}
 		if storage.rotational {
 			// use 80% of the available nr_requests on HDDs
 			driveMaxConcurrent = int(float64(storage.nrRequests)*0.8) * 2
