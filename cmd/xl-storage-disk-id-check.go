@@ -209,9 +209,24 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 	})
 
 	if driveMaxConcurrent <= 0 {
-		driveMaxConcurrent = 512
+		// nr_requests is for both READ and WRITE separately
+		// so we this 2x tokens on our end.
+		//
+		// https://www.kernel.org/doc/Documentation/block/queue-sysfs.txt
+		//
+		// nr_requests (RW)
+		// ----------------
+		// This controls how many requests may be allocated in the block layer for
+		// read or write requests. Note that the total allocated number may be twice
+		// this amount, since it applies only to reads or writes (not the accumulated
+		// sum).
+		driveMaxConcurrent = int(storage.nrRequests) * 2
+		if driveMaxConcurrent <= 0 {
+			driveMaxConcurrent = 1023 * 2 // Default value on Linux for most NVMe
+		}
 		if storage.rotational {
-			driveMaxConcurrent = int(storage.nrRequests) / 2
+			// use 80% of the available nr_requests on HDDs
+			driveMaxConcurrent = int(float64(storage.nrRequests)*0.8) * 2
 			if driveMaxConcurrent < 32 {
 				driveMaxConcurrent = 32
 			}
