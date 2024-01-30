@@ -156,7 +156,6 @@ type serverCtxt struct {
 	UserTimeout       time.Duration
 	ConnReadDeadline  time.Duration
 	ConnWriteDeadline time.Duration
-  
 	ShutdownTimeout     time.Duration
 	IdleTimeout         time.Duration
 	ReadHeaderTimeout   time.Duration
