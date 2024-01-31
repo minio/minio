@@ -153,8 +153,8 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 		// Check if the access key is part of users credentials.
 		u, ok := globalIAMSys.GetUser(r.Context(), accessKey)
 		if !ok {
-			// Credentials will be invalid but and disabled
-			// return a different error in such a scenario.
+			// Credentials could be valid but disabled - return a different
+			// error in such a scenario.
 			if u.Credentials.Status == auth.AccountOff {
 				return cred, false, ErrAccessKeyDisabled
 			}

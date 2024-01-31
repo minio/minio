@@ -927,7 +927,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		m[iamPolicyClaimNameSA()] = inheritedPolicyType
 	}
 
-	// Add all the necessary claims for the service accounts.
+	// Add all the necessary claims for the service account.
 	for k, v := range opts.claims {
 		_, ok := m[k]
 		if !ok {
@@ -1564,37 +1564,14 @@ func (sys *IAMSys) IsAllowedServiceAccount(args iampolicy.Args, parentUser strin
 		return isOwnerDerived || combinedPolicy.IsAllowed(parentArgs)
 	}
 
-	// Now check if we have a sessionPolicy.
-	spolicy, ok := args.Claims[sessionPolicyNameExtracted]
-	if !ok {
-		return false
+	// 3. If an inline session-policy is present, evaluate it.
+	hasSessionPolicy, isAllowedSP := isAllowedBySessionPolicy(args)
+	if hasSessionPolicy {
+		return isAllowedSP && (isOwnerDerived || combinedPolicy.IsAllowed(parentArgs))
 	}
 
-	spolicyStr, ok := spolicy.(string)
-	if !ok {
-		// Sub policy if set, should be a string reject
-		// malformed/malicious requests.
-		return false
-	}
-
-	// Check if policy is parseable.
-	subPolicy, err := iampolicy.ParseConfig(bytes.NewReader([]byte(spolicyStr)))
-	if err != nil {
-		// Log any error in input session policy config.
-		logger.LogIf(GlobalContext, err)
-		return false
-	}
-
-	// This can only happen if policy was set but with an empty JSON.
-	if subPolicy.Version == "" && len(subPolicy.Statements) == 0 {
-		return isOwnerDerived || combinedPolicy.IsAllowed(parentArgs)
-	}
-
-	if subPolicy.Version == "" {
-		return false
-	}
-
-	return subPolicy.IsAllowed(parentArgs) && (isOwnerDerived || combinedPolicy.IsAllowed(parentArgs))
+	// Sub policy not set. Evaluate only the parent policies.
+	return (isOwnerDerived || combinedPolicy.IsAllowed(parentArgs))
 }
 
 // IsAllowedSTS is meant for STS based temporary credentials,
@@ -1720,8 +1697,14 @@ func isAllowedBySessionPolicy(args iampolicy.Args) (hasSessionPolicy bool, isAll
 		return
 	}
 
+	// As the session policy exists, even if the parent is the root account, it
+	// must be restricted by it. So, we set `.IsOwner` to false here
+	// unconditionally.
+	sessionPolicyArgs := args
+	sessionPolicyArgs.IsOwner = false
+
 	// Sub policy is set and valid.
-	return hasSessionPolicy, subPolicy.IsAllowed(args)
+	return hasSessionPolicy, subPolicy.IsAllowed(sessionPolicyArgs)
 }
 
 // GetCombinedPolicy returns a combined policy combining all policies
