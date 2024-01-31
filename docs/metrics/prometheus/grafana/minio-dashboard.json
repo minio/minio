@@ -2282,6 +2282,94 @@
     {
       "datasource": {
         "type": "prometheus",
+        "uid": "b7815715-2fc7-46ab-99fa-bc421ebc6bc0"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "binBps",
+          "unitScale": true
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "b7815715-2fc7-46ab-99fa-bc421ebc6bc0"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(minio_node_io_rchar_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Reads {{server}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "b7815715-2fc7-46ab-99fa-bc421ebc6bc0"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "sum(rate(minio_node_io_wchar_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Writes {{server}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Read, Write I/O - Total",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
