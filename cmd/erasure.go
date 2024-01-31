@@ -497,7 +497,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				cache.Info.SkipHealing = healing
 				cache.Info.NextCycle = wantCycle
 				if cache.Info.Name != bucket.Name {
-					logger.LogIf(ctx, fmt.Errorf("cache name mismatch: %s != %s", cache.Info.Name, bucket.Name))
 					cache.Info = dataUsageCacheInfo{
 						Name:       bucket.Name,
 						LastUpdate: time.Time{},
