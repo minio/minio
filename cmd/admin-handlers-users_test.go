@@ -206,6 +206,7 @@ func TestIAMInternalIDPServerSuite(t *testing.T) {
 				suite.TestCannedPolicies(c)
 				suite.TestGroupAddRemove(c)
 				suite.TestServiceAccountOpsByAdmin(c)
+				suite.TestServiceAccountPrivilegeEscalationBug(c)
 				suite.TestServiceAccountOpsByUser(c)
 				suite.TestAddServiceAccountPerms(c)
 				suite.TearDownSuite(c)
@@ -896,14 +897,6 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 	// 3. Check S3 access
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
-	// 4. Check that svc account can restrict the policy, and that the
-	// session policy can be updated.
-	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, accessKey, bucket)
-
-	// 4. Check that service account's secret key and account status can be
-	// updated.
-	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, accessKey, bucket)
-
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
 
@@ -977,6 +970,95 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket)
+}
+
+func (s *TestSuiteIAM) TestServiceAccountPrivilegeEscalationBug(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	err := s.client.MakeBucket(ctx, "public", minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	err = s.client.MakeBucket(ctx, "private", minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	pubPolicyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:*"
+   ],
+   "Resource": [
+    "arn:aws:s3:::public",
+    "arn:aws:s3:::public/*"
+   ]
+  }
+ ]
+}`)
+
+	fullS3PolicyBytes := []byte(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*"
+      ]
+    }
+  ]
+}
+`)
+
+	// Create a service account for the root user.
+	cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: globalActiveCred.AccessKey,
+		Policy:     pubPolicyBytes,
+	})
+	if err != nil {
+		c.Fatalf("admin should be able to create service account for themselves %s", err)
+	}
+
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+
+	// Check that the service account can access the public bucket.
+	buckets, err := svcClient.ListBuckets(ctx)
+	if err != nil {
+		c.Fatalf("err fetching buckets %s", err)
+	}
+	if len(buckets) != 1 || buckets[0].Name != "public" {
+		c.Fatalf("service account should only have access to public bucket")
+	}
+
+	// Create an madmin client with the service account creds.
+	svcAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  credentials.NewStaticV4(cr.AccessKey, cr.SecretKey, ""),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating svcacct admin client: %v", err)
+	}
+	svcAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Attempt to update the policy on the service account.
+	err = svcAdmClient.UpdateServiceAccount(ctx, cr.AccessKey,
+		madmin.UpdateServiceAccountReq{
+			NewPolicy: fullS3PolicyBytes,
+		})
+
+	if err == nil {
+		c.Fatalf("service account should not be able to update policy on itself")
+	} else if !strings.Contains(err.Error(), "Access Denied") {
+		c.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func (s *TestSuiteIAM) SetUpAccMgmtPlugin(c *check) {
