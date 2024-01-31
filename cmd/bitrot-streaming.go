@@ -20,16 +20,12 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
-	"fmt"
 	"hash"
 	"io"
-	"strings"
 	"sync"
 
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 )
 
 // Calculates bitrot in chunks and writes the hash into the stream.
@@ -90,7 +86,7 @@ func newStreamingBitrotWriterBuffer(w io.Writer, algo BitrotAlgorithm, shardSize
 }
 
 // Returns streaming bitrot writer implementation.
-func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {
+func newStreamingBitrotWriter(disk StorageAPI, origvolume, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {
 	r, w := io.Pipe()
 	h := algo.New()
 
@@ -110,7 +106,7 @@ func newStreamingBitrotWriter(disk StorageAPI, volume, filePath string, length i
 			bitrotSumsTotalSize := ceilFrac(length, shardSize) * int64(h.Size()) // Size used for storing bitrot checksums.
 			totalFileSize = bitrotSumsTotalSize + length
 		}
-		r.CloseWithError(disk.CreateFile(context.TODO(), volume, filePath, totalFileSize, r))
+		r.CloseWithError(disk.CreateFile(context.TODO(), origvolume, volume, filePath, totalFileSize, r))
 	}()
 	return bw
 }
@@ -154,29 +150,12 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		// Can never happen unless there are programmer bugs
 		return 0, errUnexpected
 	}
-	ignoredErrs := []error{
-		errDiskNotFound,
-	}
-	if strings.HasPrefix(b.volume, minioMetaBucket) {
-		ignoredErrs = append(ignoredErrs,
-			errFileNotFound,
-			errVolumeNotFound,
-			errFileVersionNotFound,
-		)
-	}
 	if b.rc == nil {
 		// For the first ReadAt() call we need to open the stream for reading.
 		b.currOffset = offset
 		streamOffset := (offset/b.shardSize)*int64(b.h.Size()) + offset
 		if len(b.data) == 0 && b.tillOffset != streamOffset {
 			b.rc, err = b.disk.ReadFileStream(context.TODO(), b.volume, b.filePath, streamOffset, b.tillOffset-streamOffset)
-			if err != nil {
-				if !IsErr(err, ignoredErrs...) {
-					logger.LogOnceIf(GlobalContext,
-						fmt.Errorf("Reading erasure shards at (%s: %s/%s) returned '%w', will attempt to reconstruct if we have quorum",
-							b.disk, b.volume, b.filePath, err), "bitrot-read-file-stream-"+b.volume+"-"+b.filePath)
-				}
-			}
 		} else {
 			b.rc = io.NewSectionReader(bytes.NewReader(b.data), streamOffset, b.tillOffset-streamOffset)
 		}
@@ -198,10 +177,7 @@ func (b *streamingBitrotReader) ReadAt(buf []byte, offset int64) (int, error) {
 		return 0, err
 	}
 	b.h.Write(buf)
-
 	if !bytes.Equal(b.h.Sum(nil), b.hashBytes) {
-		logger.LogIf(GlobalContext, fmt.Errorf("Drive: %s  -> %s/%s - content hash does not match - expected %s, got %s",
-			b.disk, b.volume, b.filePath, hex.EncodeToString(b.hashBytes), hex.EncodeToString(b.h.Sum(nil))))
 		return 0, errFileCorrupt
 	}
 	b.currOffset += int64(len(buf))

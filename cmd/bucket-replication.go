@@ -179,7 +179,7 @@ func checkRemoteEndpoint(ctx context.Context, epURL *url.URL) error {
 	}
 
 	client := &http.Client{
-		Transport: NewHTTPTransport(),
+		Transport: globalRemoteTargetTransport,
 		Timeout:   10 * time.Second,
 	}
 
@@ -3213,6 +3213,9 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 		return roi
 	}
 
+	if isVeeamSOSAPIObject(oi.Name) {
+		return roi
+	}
 	if rcfg.Config == nil || rcfg.remotes == nil {
 		return roi
 	}
@@ -3390,7 +3393,7 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 
 	for _, localDrive := range localDrives {
 		r := newReader()
-		err := localDrive.CreateFile(ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
+		err := localDrive.CreateFile(ctx, "", minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
 		r.Close()
 		if err == nil {
 			break

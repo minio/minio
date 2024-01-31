@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
@@ -89,6 +88,7 @@ type xlStorageDiskIDCheck struct {
 	diskID       string
 	storage      *xlStorage
 	health       *diskHealthTracker
+	healthCheck  bool
 
 	// driveStartChecking is a threshold above which we will start to check
 	// the state of disks, generally this value is less than driveMaxConcurrent
@@ -209,9 +209,24 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 	})
 
 	if driveMaxConcurrent <= 0 {
-		driveMaxConcurrent = 512
+		// nr_requests is for both READ and WRITE separately
+		// so we this 2x tokens on our end.
+		//
+		// https://www.kernel.org/doc/Documentation/block/queue-sysfs.txt
+		//
+		// nr_requests (RW)
+		// ----------------
+		// This controls how many requests may be allocated in the block layer for
+		// read or write requests. Note that the total allocated number may be twice
+		// this amount, since it applies only to reads or writes (not the accumulated
+		// sum).
+		driveMaxConcurrent = int(storage.nrRequests) * 2
+		if driveMaxConcurrent <= 0 {
+			driveMaxConcurrent = 1023 * 2 // Default value on Linux for most NVMe
+		}
 		if storage.rotational {
-			driveMaxConcurrent = int(storage.nrRequests) / 2
+			// use 80% of the available nr_requests on HDDs
+			driveMaxConcurrent = int(float64(storage.nrRequests)*0.8) * 2
 			if driveMaxConcurrent < 32 {
 				driveMaxConcurrent = 32
 			}
@@ -226,20 +241,18 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 	xl := xlStorageDiskIDCheck{
 		storage:            storage,
 		health:             newDiskHealthTracker(driveMaxConcurrent),
+		healthCheck:        healthCheck && globalDriveMonitoring,
 		driveMaxConcurrent: driveMaxConcurrent,
 		driveStartChecking: driveStartChecking,
 	}
 
-	if driveQuorum {
-		xl.totalWrites.Store(xl.storage.getWriteAttribute())
-		xl.totalDeletes.Store(xl.storage.getDeleteAttribute())
-	}
-
+	xl.totalWrites.Store(xl.storage.getWriteAttribute())
+	xl.totalDeletes.Store(xl.storage.getDeleteAttribute())
 	xl.diskCtx, xl.diskCancel = context.WithCancel(context.TODO())
 	for i := range xl.apiLatencies[:] {
 		xl.apiLatencies[i] = &lockedLastMinuteLatency{}
 	}
-	if healthCheck && diskActiveMonitoring {
+	if xl.healthCheck {
 		go xl.monitorDiskWritable(xl.diskCtx)
 	}
 	return &xl
@@ -347,10 +360,8 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOption
 	defer si(&err)
 
 	if opts.NoOp {
-		if driveQuorum {
-			info.Metrics.TotalWrites = p.totalWrites.Load()
-			info.Metrics.TotalDeletes = p.totalDeletes.Load()
-		}
+		info.Metrics.TotalWrites = p.totalWrites.Load()
+		info.Metrics.TotalDeletes = p.totalDeletes.Load()
 		info.Metrics.TotalTokens = uint32(p.driveMaxConcurrent)
 		info.Metrics.TotalWaiting = uint32(p.health.waiting.Load())
 		info.Metrics.TotalErrorsTimeout = p.totalErrsTimeout.Load()
@@ -362,10 +373,8 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOption
 		if opts.Metrics {
 			info.Metrics = p.getMetrics()
 		}
-		if driveQuorum {
-			info.Metrics.TotalWrites = p.totalWrites.Load()
-			info.Metrics.TotalDeletes = p.totalDeletes.Load()
-		}
+		info.Metrics.TotalWrites = p.totalWrites.Load()
+		info.Metrics.TotalDeletes = p.totalDeletes.Load()
 		info.Metrics.TotalTokens = uint32(p.driveMaxConcurrent)
 		info.Metrics.TotalWaiting = uint32(p.health.waiting.Load())
 		info.Metrics.TotalErrorsTimeout = p.totalErrsTimeout.Load()
@@ -445,14 +454,14 @@ func (p *xlStorageDiskIDCheck) DeleteVol(ctx context.Context, volume string, for
 	return w.Run(func() error { return p.storage.DeleteVol(ctx, volume, forceDelete) })
 }
 
-func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, volume, dirPath string, count int) (s []string, err error) {
+func (p *xlStorageDiskIDCheck) ListDir(ctx context.Context, origvolume, volume, dirPath string, count int) (s []string, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricListDir, volume, dirPath)
 	if err != nil {
 		return nil, err
 	}
 	defer done(&err)
 
-	return p.storage.ListDir(ctx, volume, dirPath, count)
+	return p.storage.ListDir(ctx, origvolume, volume, dirPath, count)
 }
 
 // Legacy API - does not have any deadlines
@@ -482,14 +491,14 @@ func (p *xlStorageDiskIDCheck) AppendFile(ctx context.Context, volume string, pa
 	})
 }
 
-func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) (err error) {
+func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, origvolume, volume, path string, size int64, reader io.Reader) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricCreateFile, volume, path)
 	if err != nil {
 		return err
 	}
 	defer done(&err)
 
-	return p.storage.CreateFile(ctx, volume, path, size, io.NopCloser(reader))
+	return p.storage.CreateFile(ctx, origvolume, volume, path, size, io.NopCloser(reader))
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
@@ -521,7 +530,7 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 		return 0, err
 	}
 	defer func() {
-		if driveQuorum && err == nil && !skipAccessChecks(dstVolume) {
+		if err == nil && !skipAccessChecks(dstVolume) {
 			p.storage.setWriteAttribute(p.totalWrites.Add(1))
 		}
 		done(&err)
@@ -571,7 +580,7 @@ func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string
 		return errs
 	}
 	defer func() {
-		if driveQuorum && !skipAccessChecks(volume) {
+		if !skipAccessChecks(volume) {
 			var permanentDeletes uint64
 			var deleteMarkers uint64
 
@@ -638,7 +647,7 @@ func (p *xlStorageDiskIDCheck) DeleteVersion(ctx context.Context, volume, path s
 	defer func() {
 		defer done(&err)
 
-		if driveQuorum && err == nil && !skipAccessChecks(volume) {
+		if err == nil && !skipAccessChecks(volume) {
 			if opts.UndoWrite {
 				p.storage.setWriteAttribute(p.totalWrites.Add(^uint64(0)))
 				return
@@ -669,7 +678,7 @@ func (p *xlStorageDiskIDCheck) UpdateMetadata(ctx context.Context, volume, path 
 	return w.Run(func() error { return p.storage.UpdateMetadata(ctx, volume, path, fi, opts) })
 }
 
-func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricWriteMetadata, volume, path)
 	if err != nil {
 		return err
@@ -677,10 +686,10 @@ func (p *xlStorageDiskIDCheck) WriteMetadata(ctx context.Context, volume, path s
 	defer done(&err)
 
 	w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
-	return w.Run(func() error { return p.storage.WriteMetadata(ctx, volume, path, fi) })
+	return w.Run(func() error { return p.storage.WriteMetadata(ctx, origvolume, volume, path, fi) })
 }
 
-func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadVersion, volume, path)
 	if err != nil {
 		return fi, err
@@ -688,7 +697,7 @@ func (p *xlStorageDiskIDCheck) ReadVersion(ctx context.Context, volume, path, ve
 	defer done(&err)
 
 	return xioutil.WithDeadline[FileInfo](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (result FileInfo, err error) {
-		return p.storage.ReadVersion(ctx, volume, path, versionID, opts)
+		return p.storage.ReadVersion(ctx, origvolume, volume, path, versionID, opts)
 	})
 }
 
@@ -827,19 +836,6 @@ const (
 	diskHealthOK int32 = iota
 	diskHealthFaulty
 )
-
-// diskActiveMonitoring indicates if we have enabled "active" disk monitoring
-var diskActiveMonitoring = true
-
-// Indicates if users want to enable drive_quorum feature
-var driveQuorum bool
-
-func init() {
-	diskActiveMonitoring = (env.Get("_MINIO_DRIVE_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn) ||
-		(env.Get("_MINIO_DISK_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn)
-
-	driveQuorum = env.Get("_MINIO_DRIVE_QUORUM", config.EnableOff) == config.EnableOn
-}
 
 type diskHealthTracker struct {
 	// atomic time of last success

@@ -363,7 +363,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
 	globalInternodeTransport = NewInternodeHTTPTransport(ctxt.MaxIdleConnsPerHost)()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
-
+	globalHealthChkTransport = NewHTTPTransport()
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
 		PassHost:     true,
 		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),

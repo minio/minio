@@ -50,6 +50,7 @@ import (
 	"github.com/minio/madmin-go/v3/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/dsync"
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/handlers"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -795,7 +796,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// DataUsageInfoHandler - GET /minio/admin/v3/datausage
+// DataUsageInfoHandler - GET /minio/admin/v3/datausage?capacity={true}
 // ----------
 // Get server/cluster data usage info
 func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -816,6 +817,16 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
+	}
+
+	// Get capacity info when asked.
+	if r.Form.Get("capacity") == "true" {
+		sinfo := objectAPI.StorageInfo(ctx, false)
+		dataUsageInfo.TotalCapacity = GetTotalUsableCapacity(sinfo.Disks, sinfo)
+		dataUsageInfo.TotalFreeCapacity = GetTotalUsableCapacityFree(sinfo.Disks, sinfo)
+		if dataUsageInfo.TotalCapacity > dataUsageInfo.TotalFreeCapacity {
+			dataUsageInfo.TotalUsedCapacity = dataUsageInfo.TotalCapacity - dataUsageInfo.TotalFreeCapacity
+		}
 	}
 
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
@@ -1632,7 +1643,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		duration = time.Second * 10
 	}
 
-	storageInfo := objectAPI.StorageInfo(ctx, true)
+	storageInfo := objectAPI.StorageInfo(ctx, false)
 
 	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
 	if !sufficientCapacity {
@@ -1909,14 +1920,11 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 	setEventStreamHeaders(w)
 
 	// Trace Publisher and peer-trace-client uses nonblocking send and hence does not wait for slow receivers.
-	// Use buffered channel to take care of burst sends or slow w.Write()
-
-	// Keep 100k buffered channel, should be sufficient to ensure we do not lose any events.
-	traceCh := make(chan madmin.TraceInfo, 100000)
-
+	// Keep 100k buffered channel.
+	// If receiver cannot keep up with that we drop events.
+	traceCh := make(chan []byte, 100000)
 	peers, _ := newPeerRestClients(globalEndpoints)
-
-	err = globalTrace.Subscribe(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry madmin.TraceInfo) bool {
+	err = globalTrace.SubscribeJSON(traceOpts.TraceTypes(), traceCh, ctx.Done(), func(entry madmin.TraceInfo) bool {
 		return shouldTrace(entry, traceOpts)
 	})
 	if err != nil {
@@ -1933,19 +1941,19 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 		if peer == nil {
 			continue
 		}
-		peer.Trace(traceCh, ctx.Done(), traceOpts)
+		peer.Trace(ctx, traceCh, traceOpts)
 	}
 
 	keepAliveTicker := time.NewTicker(time.Second)
 	defer keepAliveTicker.Stop()
 
-	enc := json.NewEncoder(w)
 	for {
 		select {
 		case entry := <-traceCh:
-			if err := enc.Encode(entry); err != nil {
+			if _, err := w.Write(entry); err != nil {
 				return
 			}
+			grid.PutByteBuffer(entry)
 			if len(traceCh) == 0 {
 				// Flush if nothing is queued
 				w.(http.Flusher).Flush()
@@ -2337,7 +2345,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 	}
 
 	client := &http.Client{
-		Transport: NewHTTPTransport(),
+		Transport: globalHealthChkTransport,
 		Timeout:   10 * time.Second,
 	}
 
@@ -3053,7 +3061,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 		ci.Info.NoOfServers = totalNodeCount()
 		ci.Info.MinioVersion = Version
 
-		si := objectAPI.StorageInfo(ctx, true)
+		si := objectAPI.StorageInfo(ctx, false)
 
 		ci.Info.NoOfDrives = len(si.Disks)
 		for _, disk := range si.Disks {

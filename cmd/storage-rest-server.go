@@ -330,8 +330,10 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 	if !s.IsValid(w, r) {
 		return
 	}
+
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
+	origvolume := r.Form.Get(storageRESTOrigVolume)
 
 	fileSizeStr := r.Form.Get(storageRESTLength)
 	fileSize, err := strconv.Atoi(fileSizeStr)
@@ -341,7 +343,7 @@ func (s *storageRESTServer) CreateFileHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	done, body := keepHTTPReqResponseAlive(w, r)
-	done(s.getStorage().CreateFile(r.Context(), volume, filePath, int64(fileSize), body))
+	done(s.getStorage().CreateFile(r.Context(), origvolume, volume, filePath, int64(fileSize), body))
 }
 
 var storageDeleteVersionHandler = grid.NewSingleHandler[*DeleteVersionHandlerParams, grid.NoPayload](grid.HandlerDeleteVersion, func() *DeleteVersionHandlerParams {
@@ -371,6 +373,7 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 	if !s.checkID(params.Get(storageRESTDiskID)) {
 		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
+	origvolume := params.Get(storageRESTOrigVolume)
 	volume := params.Get(storageRESTVolume)
 	filePath := params.Get(storageRESTFilePath)
 	versionID := params.Get(storageRESTVersionID)
@@ -384,7 +387,7 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 		return nil, grid.NewRemoteErr(err)
 	}
 
-	fi, err := s.getStorage().ReadVersion(context.Background(), volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
+	fi, err := s.getStorage().ReadVersion(context.Background(), origvolume, volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
@@ -396,6 +399,7 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 	if !s.IsValid(w, r) {
 		return
 	}
+	origvolume := r.Form.Get(storageRESTOrigVolume)
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
 	versionID := r.Form.Get(storageRESTVersionID)
@@ -409,7 +413,7 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
-	fi, err := s.getStorage().ReadVersion(r.Context(), volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
+	fi, err := s.getStorage().ReadVersion(r.Context(), origvolume, volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -427,10 +431,12 @@ func (s *storageRESTServer) WriteMetadataHandler(p *MetadataHandlerParams) (np g
 	if !s.checkID(p.DiskID) {
 		return grid.NewNPErr(errDiskNotFound)
 	}
+
 	volume := p.Volume
 	filePath := p.FilePath
+	origvolume := p.OrigVolume
 
-	err := s.getStorage().WriteMetadata(context.Background(), volume, filePath, p.FI)
+	err := s.getStorage().WriteMetadata(context.Background(), origvolume, volume, filePath, p.FI)
 	return np, grid.NewRemoteErr(err)
 }
 
@@ -650,13 +656,14 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 	}
 	volume := r.Form.Get(storageRESTVolume)
 	dirPath := r.Form.Get(storageRESTDirPath)
+	origvolume := r.Form.Get(storageRESTOrigVolume)
 	count, err := strconv.Atoi(r.Form.Get(storageRESTCount))
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	entries, err := s.getStorage().ListDir(r.Context(), volume, dirPath, count)
+	entries, err := s.getStorage().ListDir(r.Context(), origvolume, volume, dirPath, count)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

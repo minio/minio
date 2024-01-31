@@ -73,12 +73,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	if !skipAccessChecks(opts.Bucket) {
 		// Stat a volume entry.
 		if err = Access(volumeDir); err != nil {
-			if osIsNotExist(err) {
-				return errVolumeNotFound
-			} else if isSysErrIO(err) {
-				return errFaultyDisk
-			}
-			return err
+			return convertAccessError(err, errVolumeAccessDenied)
 		}
 	}
 
@@ -169,7 +164,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if s.walkMu != nil {
 			s.walkMu.Lock()
 		}
-		entries, err := s.ListDir(ctx, opts.Bucket, current, -1)
+		entries, err := s.ListDir(ctx, "", opts.Bucket, current, -1)
 		if s.walkMu != nil {
 			s.walkMu.Unlock()
 		}

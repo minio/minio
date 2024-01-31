@@ -30,14 +30,16 @@ func _() {
 	_ = x[HandlerRenameFile-19]
 	_ = x[HandlerReadAll-20]
 	_ = x[HandlerServerVerify-21]
-	_ = x[handlerTest-22]
-	_ = x[handlerTest2-23]
-	_ = x[handlerLast-24]
+	_ = x[HandlerTrace-22]
+	_ = x[HandlerListen-23]
+	_ = x[handlerTest-24]
+	_ = x[handlerTest2-25]
+	_ = x[handlerLast-26]
 }
 
-const _HandlerID_name = "handlerInvalidLockLockLockRLockLockUnlockLockRUnlockLockRefreshLockForceUnlockWalkDirStatVolDiskInfoNSScannerReadXLReadVersionDeleteFileDeleteVersionUpdateMetadataWriteMetadataCheckPartsRenameDataRenameFileReadAllServerVerifyhandlerTesthandlerTest2handlerLast"
+const _HandlerID_name = "handlerInvalidLockLockLockRLockLockUnlockLockRUnlockLockRefreshLockForceUnlockWalkDirStatVolDiskInfoNSScannerReadXLReadVersionDeleteFileDeleteVersionUpdateMetadataWriteMetadataCheckPartsRenameDataRenameFileReadAllServerVerifyTraceListenhandlerTesthandlerTest2handlerLast"
 
-var _HandlerID_index = [...]uint16{0, 14, 22, 31, 41, 52, 63, 78, 85, 92, 100, 109, 115, 126, 136, 149, 163, 176, 186, 196, 206, 213, 225, 236, 248, 259}
+var _HandlerID_index = [...]uint16{0, 14, 22, 31, 41, 52, 63, 78, 85, 92, 100, 109, 115, 126, 136, 149, 163, 176, 186, 196, 206, 213, 225, 230, 236, 247, 259, 270}
 
 func (i HandlerID) String() string {
 	if i >= HandlerID(len(_HandlerID_index)-1) {

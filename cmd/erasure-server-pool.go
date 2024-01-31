@@ -85,7 +85,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	)
 
 	// Maximum number of reusable buffers per node at any given point in time.
-	n := 1024 // single node single/multiple drives set this to 1024 entries
+	n := uint64(1024) // single node single/multiple drives set this to 1024 entries
 
 	if globalIsDistErasure {
 		n = 2048
@@ -93,6 +93,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 	if globalIsCICD {
 		n = 256 // 256MiB for CI/CD environments is sufficient
+	}
+
+	// Avoid allocating more than half of the available memory
+	if maxN := availableMemory() / (blockSizeV2 * 2); n > maxN {
+		n = maxN
 	}
 
 	// Initialize byte pool once for all sets, bpool size is set to
@@ -1307,7 +1312,10 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
-		return loi, err
+		if !isErrBucketNotFound(err) {
+			logger.LogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
+		}
+		return loi, toObjectErr(err, bucket)
 	}
 	defer merged.truncate(0) // Release when returning
 
@@ -1456,6 +1464,12 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			}
 			return loi, nil
 		}
+		if isErrBucketNotFound(err) {
+			return loi, err
+		}
+		if contextCanceled(ctx) {
+			return ListObjectsInfo{}, ctx.Err()
+		}
 	}
 
 	if len(prefix) > 0 && maxKeys == 1 && marker == "" {
@@ -1481,7 +1495,9 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 			loi.Objects = append(loi.Objects, objInfo)
 			return loi, nil
 		}
-
+		if isErrBucketNotFound(err) {
+			return ListObjectsInfo{}, err
+		}
 		if contextCanceled(ctx) {
 			return ListObjectsInfo{}, ctx.Err()
 		}
@@ -1492,7 +1508,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		if !isErrBucketNotFound(err) {
 			logger.LogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
 		}
-		return loi, err
+		return loi, toObjectErr(err, bucket)
 	}
 
 	merged.forwardPast(opts.Marker)
@@ -1537,7 +1553,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 }
 
 func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	if err := checkListMultipartArgs(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, z); err != nil {
+	if err := checkListMultipartArgs(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter); err != nil {
 		return ListMultipartsInfo{}, err
 	}
 
@@ -1956,7 +1972,7 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 // error walker returns error. Optionally if context.Done() is received
 // then Walk() stops the walker.
 func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts WalkOptions) error {
-	if err := checkListObjsArgs(ctx, bucket, prefix, "", z); err != nil {
+	if err := checkListObjsArgs(ctx, bucket, prefix, ""); err != nil {
 		// Upon error close the channel.
 		xioutil.SafeClose(results)
 		return err

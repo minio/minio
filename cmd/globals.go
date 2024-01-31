@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/browser"
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/kms"
 	"go.uber.org/atomic"
@@ -56,6 +57,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/v2/certs"
+	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
 )
 
@@ -128,6 +130,11 @@ const (
 	// tlsClientSessionCacheSize is the cache size for client sessions.
 	tlsClientSessionCacheSize = 100
 )
+
+func init() {
+	// Injected to prevent circular dependency.
+	pubsub.GetByteBuffer = grid.GetByteBuffer
+}
 
 type poolDisksLayout struct {
 	cmdline string
@@ -393,6 +400,8 @@ var (
 
 	globalRemoteTargetTransport http.RoundTripper
 
+	globalHealthChkTransport http.RoundTripper
+
 	globalDNSCache = &dnscache.Resolver{
 		Timeout: 5 * time.Second,
 	}
@@ -416,6 +425,8 @@ var (
 	// and should never be mutated. Hold globalLocalDrivesMu to access.
 	globalLocalDrives   []StorageAPI
 	globalLocalDrivesMu sync.RWMutex
+
+	globalDriveMonitoring = env.Get("_MINIO_DRIVE_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn
 
 	// Is MINIO_CI_CD set?
 	globalIsCICD bool

@@ -82,17 +82,17 @@ type StorageAPI interface {
 	// Metadata operations
 	DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool, opts DeleteOptions) error
 	DeleteVersions(ctx context.Context, volume string, versions []FileInfoVersions, opts DeleteOptions) []error
-	WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) error
+	WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) error
 	UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo, opts UpdateMetadataOpts) error
-	ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (FileInfo, error)
+	ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (FileInfo, error)
 	ReadXL(ctx context.Context, volume, path string, readData bool) (RawFileInfo, error)
 	RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (uint64, error)
 
 	// File operations.
-	ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error)
+	ListDir(ctx context.Context, origvolume, volume, dirPath string, count int) ([]string, error)
 	ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
 	AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error)
-	CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error
+	CreateFile(ctx context.Context, origvolume, olume, path string, size int64, reader io.Reader) error
 	ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
 	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error
@@ -198,7 +198,7 @@ func (p *unrecognizedDisk) DeleteVol(ctx context.Context, volume string, forceDe
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) ListDir(ctx context.Context, volume, dirPath string, count int) ([]string, error) {
+func (p *unrecognizedDisk) ListDir(ctx context.Context, origvolume, volume, dirPath string, count int) ([]string, error) {
 	return nil, errDiskNotFound
 }
 
@@ -210,7 +210,7 @@ func (p *unrecognizedDisk) AppendFile(ctx context.Context, volume string, path s
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) CreateFile(ctx context.Context, volume, path string, size int64, reader io.Reader) error {
+func (p *unrecognizedDisk) CreateFile(ctx context.Context, origvolume, volume, path string, size int64, reader io.Reader) error {
 	return errDiskNotFound
 }
 
@@ -260,11 +260,11 @@ func (p *unrecognizedDisk) UpdateMetadata(ctx context.Context, volume, path stri
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) WriteMetadata(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+func (p *unrecognizedDisk) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) (err error) {
 	return errDiskNotFound
 }
 
-func (p *unrecognizedDisk) ReadVersion(ctx context.Context, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+func (p *unrecognizedDisk) ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
 	return fi, errDiskNotFound
 }
 

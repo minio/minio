@@ -230,7 +230,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	}
 
 	// Re-read when we have lock...
-	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, bucket, object, versionID, true, true)
+	partsMetadata, errs := readAllFileInfo(ctx, storageDisks, "", bucket, object, versionID, true, true)
 	if isAllNotFound(errs) {
 		err := errFileNotFound
 		if versionID != "" {
@@ -518,7 +518,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(latestMeta.Size)+32))
 					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 				} else {
-					writers[i] = newBitrotWriter(disk, minioMetaTmpBucket, partPath,
+					writers[i] = newBitrotWriter(disk, bucket, minioMetaTmpBucket, partPath,
 						tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 				}
 			}
@@ -796,7 +796,7 @@ func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix 
 		}
 		index := index
 		g.Go(func() error {
-			entries, err := storageDisks[index].ListDir(ctx, bucket, prefix, 1)
+			entries, err := storageDisks[index].ListDir(ctx, "", bucket, prefix, 1)
 			if err != nil {
 				return err
 			}
@@ -808,6 +808,10 @@ func statAllDirs(ctx context.Context, storageDisks []StorageAPI, bucket, prefix 
 	}
 
 	return g.Wait()
+}
+
+func isAllVolumeNotFound(errs []error) bool {
+	return countErrs(errs, errVolumeNotFound) == len(errs)
 }
 
 // isAllNotFound will return if any element of the error slice is not
@@ -993,7 +997,7 @@ func (er erasureObjects) HealObject(ctx context.Context, bucket, object, version
 
 	// Perform quick read without lock.
 	// This allows to quickly check if all is ok or all are missing.
-	_, errs := readAllFileInfo(healCtx, storageDisks, bucket, object, versionID, false, false)
+	_, errs := readAllFileInfo(healCtx, storageDisks, "", bucket, object, versionID, false, false)
 	if isAllNotFound(errs) {
 		err := errFileNotFound
 		if versionID != "" {

@@ -393,6 +393,7 @@ type DeleteVersionHandlerParams struct {
 type MetadataHandlerParams struct {
 	DiskID     string             `msg:"id"`
 	Volume     string             `msg:"v"`
+	OrigVolume string             `msg:"ov"`
 	FilePath   string             `msg:"fp"`
 	UpdateOpts UpdateMetadataOpts `msg:"uo"`
 	FI         FileInfo           `msg:"fi"`

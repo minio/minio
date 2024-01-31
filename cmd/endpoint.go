@@ -411,6 +411,29 @@ func (l EndpointServerPools) GridHosts() (gridHosts []string, gridLocal string) 
 	return gridHosts, gridLocal
 }
 
+// FindGridHostsFromPeer will return a matching peer from provided peer.
+func (l EndpointServerPools) FindGridHostsFromPeer(peer *xnet.Host) (peerGrid string) {
+	if peer == nil {
+		return ""
+	}
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+			host, err := xnet.ParseHost(endpoint.Host)
+			if err != nil {
+				continue
+			}
+
+			if host.String() == peer.String() {
+				return endpoint.GridHost()
+			}
+		}
+	}
+	return ""
+}
+
 // Hostnames - returns list of unique hostnames
 func (l EndpointServerPools) Hostnames() []string {
 	foundSet := set.NewStringSet()
