@@ -148,7 +148,7 @@ hotfix-vars:
 
 hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
 	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.0/pkger_2.2.0_linux_amd64.deb
-	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.0/linux-systemd/distributed/minio.service
+	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.1/linux-systemd/distributed/minio.service
 	@sudo apt install ./pkger_2.2.0_linux_amd64.deb --yes
 	@mkdir -p minio-release/$(GOOS)-$(GOARCH)/archive
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio
