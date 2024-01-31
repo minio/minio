@@ -796,7 +796,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// DataUsageInfoHandler - GET /minio/admin/v3/datausage
+// DataUsageInfoHandler - GET /minio/admin/v3/datausage?capacity={true}
 // ----------
 // Get server/cluster data usage info
 func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -817,6 +817,16 @@ func (a adminAPIHandlers) DataUsageInfoHandler(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
+	}
+
+	// Get capacity info when asked.
+	if r.Form.Get("capacity") == "true" {
+		sinfo := objectAPI.StorageInfo(ctx, false)
+		dataUsageInfo.TotalCapacity = GetTotalUsableCapacity(sinfo.Disks, sinfo)
+		dataUsageInfo.TotalFreeCapacity = GetTotalUsableCapacityFree(sinfo.Disks, sinfo)
+		if dataUsageInfo.TotalCapacity > dataUsageInfo.TotalFreeCapacity {
+			dataUsageInfo.TotalUsedCapacity = dataUsageInfo.TotalCapacity - dataUsageInfo.TotalFreeCapacity
+		}
 	}
 
 	writeSuccessResponseJSON(w, dataUsageInfoJSON)
@@ -1633,7 +1643,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		duration = time.Second * 10
 	}
 
-	storageInfo := objectAPI.StorageInfo(ctx, true)
+	storageInfo := objectAPI.StorageInfo(ctx, false)
 
 	sufficientCapacity, canAutotune, capacityErrMsg := validateObjPerfOptions(ctx, storageInfo, concurrent, size, autotune)
 	if !sufficientCapacity {
@@ -3051,7 +3061,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 		ci.Info.NoOfServers = totalNodeCount()
 		ci.Info.MinioVersion = Version
 
-		si := objectAPI.StorageInfo(ctx, true)
+		si := objectAPI.StorageInfo(ctx, false)
 
 		ci.Info.NoOfDrives = len(si.Disks)
 		for _, disk := range si.Disks {

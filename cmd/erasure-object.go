@@ -46,7 +46,6 @@ import (
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/wildcard"
-	"github.com/tinylib/msgp/msgp"
 )
 
 // list all errors which can be ignored in object operations.
@@ -546,29 +545,6 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 	return m, err
 }
 
-var readRawFileInfoErrs = append(objectOpIgnoredErrs,
-	errFileNotFound,
-	errFileNameTooLong,
-	errVolumeNotFound,
-	errFileVersionNotFound,
-	io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
-	io.EOF,              // some times we would read without locks, ignore these errors
-	msgp.ErrShortBytes,
-	context.DeadlineExceeded,
-	context.Canceled,
-)
-
-func readRawFileInfo(ctx context.Context, disk StorageAPI, bucket, object string, readData bool) (RawFileInfo, error) {
-	rf, err := disk.ReadXL(ctx, bucket, object, readData)
-
-	if err != nil && !IsErr(err, readRawFileInfoErrs...) {
-		logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
-			disk.String(), bucket, object, err),
-			disk.String())
-	}
-	return rf, err
-}
-
 func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVers, allParts bool) (FileInfo, error) {
 	var xl xlMetaV2
 	if err := xl.LoadOrConvert(ri.Buf); err != nil {
@@ -611,7 +587,7 @@ func readAllRawFileInfo(ctx context.Context, disks []StorageAPI, bucket, object 
 			if disks[index] == nil {
 				return errDiskNotFound
 			}
-			rf, err := readRawFileInfo(ctx, disks[index], bucket, object, readData)
+			rf, err := disks[index].ReadXL(ctx, bucket, object, readData)
 			if err != nil {
 				return err
 			}
@@ -791,10 +767,10 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 				if opts.VersionID != "" {
 					// Read a specific version ID
-					fi, err = readFileInfo(ctx, disk, "", bucket, object, opts.VersionID, ropts)
+					fi, err = disk.ReadVersion(ctx, "", bucket, object, opts.VersionID, ropts)
 				} else {
 					// Read the latest version
-					rfi, err = readRawFileInfo(ctx, disk, bucket, object, readData)
+					rfi, err = disk.ReadXL(ctx, bucket, object, readData)
 					if err == nil {
 						fi, err = fileInfoFromRaw(rfi, bucket, object, readData, opts.InclFreeVersions, true)
 					}
@@ -829,7 +805,11 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 
 		var missingBlocks int
 		for i := range errs {
-			if errors.Is(errs[i], errFileNotFound) {
+			if IsErr(errs[i],
+				errFileNotFound,
+				errFileVersionNotFound,
+				errFileCorrupt,
+			) {
 				missingBlocks++
 			}
 		}

@@ -22,9 +22,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-
-	"github.com/minio/minio/internal/hash"
-	"github.com/minio/minio/internal/logger"
 )
 
 // Writes in parallel to writers
@@ -92,29 +89,26 @@ func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer
 				io.EOF,
 				io.ErrUnexpectedEOF,
 			}...) {
-				if !hash.IsChecksumMismatch(err) {
-					logger.LogIf(ctx, err)
-				}
 				return 0, err
 			}
 		}
+
 		eof := err == io.EOF || err == io.ErrUnexpectedEOF
 		if n == 0 && total != 0 {
 			// Reached EOF, nothing more to be done.
 			break
 		}
+
 		// We take care of the situation where if n == 0 and total == 0 by creating empty data and parity files.
 		blocks, err = e.EncodeData(ctx, buf[:n])
 		if err != nil {
-			logger.LogIf(ctx, err)
-
 			return 0, err
 		}
 
 		if err = writer.Write(ctx, blocks); err != nil {
-			logger.LogIf(ctx, err)
 			return 0, err
 		}
+
 		total += int64(n)
 		if eof {
 			break

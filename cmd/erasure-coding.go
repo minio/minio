@@ -80,11 +80,9 @@ func (e *Erasure) EncodeData(ctx context.Context, data []byte) ([][]byte, error)
 	}
 	encoded, err := e.encoder().Split(data)
 	if err != nil {
-		logger.LogIf(ctx, err)
 		return nil, err
 	}
 	if err = e.encoder().Encode(encoded); err != nil {
-		logger.LogIf(ctx, err)
 		return nil, err
 	}
 	return encoded, nil
@@ -111,11 +109,7 @@ func (e *Erasure) DecodeDataBlocks(data [][]byte) error {
 // DecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
 // It returns an error if the decoding failed.
 func (e *Erasure) DecodeDataAndParityBlocks(ctx context.Context, data [][]byte) error {
-	if err := e.encoder().Reconstruct(data); err != nil {
-		logger.LogIf(ctx, err)
-		return err
-	}
-	return nil
+	return e.encoder().Reconstruct(data)
 }
 
 // ShardSize - returns actual shared size from erasure blockSize.
