@@ -774,6 +774,16 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Permission checks:
+	//
+	// 1. Any type of account (i.e. access keys (previously/still called service
+	// accounts), STS accounts, internal IDP accounts, etc) with the
+	// policy.UpdateServiceAccountAdminAction permission can update any service
+	// account.
+	//
+	// 2. We would like to let a user update their own access keys, however it
+	// is currently blocked pending a re-design. Users are still able to delete
+	// and re-create them.
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
@@ -782,15 +792,8 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		IsOwner:         owner,
 		Claims:          cred.Claims,
 	}) {
-		requestUser := cred.AccessKey
-		if cred.ParentUser != "" {
-			requestUser = cred.ParentUser
-		}
-
-		if requestUser != svcAccount.ParentUser {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-			return
-		}
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
 	}
 
 	password := cred.SecretKey
