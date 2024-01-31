@@ -2913,6 +2913,148 @@ func (z *FilesInfo) Msgsize() (s int) {
 }
 
 // DecodeMsg implements msgp.Decodable
+func (z *LocalDiskIDs) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "IDs":
+			var zb0002 uint32
+			zb0002, err = dc.ReadArrayHeader()
+			if err != nil {
+				err = msgp.WrapError(err, "IDs")
+				return
+			}
+			if cap(z.IDs) >= int(zb0002) {
+				z.IDs = (z.IDs)[:zb0002]
+			} else {
+				z.IDs = make([]string, zb0002)
+			}
+			for za0001 := range z.IDs {
+				z.IDs[za0001], err = dc.ReadString()
+				if err != nil {
+					err = msgp.WrapError(err, "IDs", za0001)
+					return
+				}
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *LocalDiskIDs) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 1
+	// write "IDs"
+	err = en.Append(0x81, 0xa3, 0x49, 0x44, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteArrayHeader(uint32(len(z.IDs)))
+	if err != nil {
+		err = msgp.WrapError(err, "IDs")
+		return
+	}
+	for za0001 := range z.IDs {
+		err = en.WriteString(z.IDs[za0001])
+		if err != nil {
+			err = msgp.WrapError(err, "IDs", za0001)
+			return
+		}
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *LocalDiskIDs) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 1
+	// string "IDs"
+	o = append(o, 0x81, 0xa3, 0x49, 0x44, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.IDs)))
+	for za0001 := range z.IDs {
+		o = msgp.AppendString(o, z.IDs[za0001])
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LocalDiskIDs) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "IDs":
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "IDs")
+				return
+			}
+			if cap(z.IDs) >= int(zb0002) {
+				z.IDs = (z.IDs)[:zb0002]
+			} else {
+				z.IDs = make([]string, zb0002)
+			}
+			for za0001 := range z.IDs {
+				z.IDs[za0001], bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "IDs", za0001)
+					return
+				}
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *LocalDiskIDs) Msgsize() (s int) {
+	s = 1 + 4 + msgp.ArrayHeaderSize
+	for za0001 := range z.IDs {
+		s += msgp.StringPrefixSize + len(z.IDs[za0001])
+	}
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
 func (z *MetadataHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
 	var field []byte
 	_ = field

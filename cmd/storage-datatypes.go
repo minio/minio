@@ -451,3 +451,8 @@ type ReadAllHandlerParams struct {
 type RenameDataResp struct {
 	Signature uint64 `msg:"sig"`
 }
+
+// LocalDiskIDs - GetLocalIDs response.
+type LocalDiskIDs struct {
+	IDs []string
+}

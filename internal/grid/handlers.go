@@ -62,6 +62,23 @@ const (
 	HandlerServerVerify
 	HandlerTrace
 	HandlerListen
+	HandlerGetLocalDiskIDs
+	HandlerDeleteBucketMetadata
+	HandlerLoadBucketMetadata
+	HandlerReloadSiteReplicationConfig
+	HandlerReloadPoolMeta
+	HandlerStopRebalance
+	HandlerLoadRebalanceMeta
+	HandlerLoadTransitionTierConfig
+
+	HandlerDeletePolicy
+	HandlerLoadPolicy
+	HandlerLoadPolicyMapping
+	HandlerDeleteServiceAccount
+	HandlerLoadServiceAccount
+	HandlerDeleteUser
+	HandlerLoadUser
+	HandlerLoadGroup
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -74,33 +91,52 @@ const (
 // handlerPrefixes are prefixes for handler IDs used for tracing.
 // If a handler is not listed here, it will be traced with "grid" prefix.
 var handlerPrefixes = [handlerLast]string{
-	HandlerLockLock:        lockPrefix,
-	HandlerLockRLock:       lockPrefix,
-	HandlerLockUnlock:      lockPrefix,
-	HandlerLockRUnlock:     lockPrefix,
-	HandlerLockRefresh:     lockPrefix,
-	HandlerLockForceUnlock: lockPrefix,
-	HandlerWalkDir:         storagePrefix,
-	HandlerStatVol:         storagePrefix,
-	HandlerDiskInfo:        storagePrefix,
-	HandlerNSScanner:       storagePrefix,
-	HandlerReadXL:          storagePrefix,
-	HandlerReadVersion:     storagePrefix,
-	HandlerDeleteFile:      storagePrefix,
-	HandlerDeleteVersion:   storagePrefix,
-	HandlerUpdateMetadata:  storagePrefix,
-	HandlerWriteMetadata:   storagePrefix,
-	HandlerCheckParts:      storagePrefix,
-	HandlerRenameData:      storagePrefix,
-	HandlerRenameFile:      storagePrefix,
-	HandlerReadAll:         storagePrefix,
-	HandlerServerVerify:    bootstrapPrefix,
+	HandlerLockLock:                    lockPrefix,
+	HandlerLockRLock:                   lockPrefix,
+	HandlerLockUnlock:                  lockPrefix,
+	HandlerLockRUnlock:                 lockPrefix,
+	HandlerLockRefresh:                 lockPrefix,
+	HandlerLockForceUnlock:             lockPrefix,
+	HandlerWalkDir:                     storagePrefix,
+	HandlerStatVol:                     storagePrefix,
+	HandlerDiskInfo:                    storagePrefix,
+	HandlerNSScanner:                   storagePrefix,
+	HandlerReadXL:                      storagePrefix,
+	HandlerReadVersion:                 storagePrefix,
+	HandlerDeleteFile:                  storagePrefix,
+	HandlerDeleteVersion:               storagePrefix,
+	HandlerUpdateMetadata:              storagePrefix,
+	HandlerWriteMetadata:               storagePrefix,
+	HandlerCheckParts:                  storagePrefix,
+	HandlerRenameData:                  storagePrefix,
+	HandlerRenameFile:                  storagePrefix,
+	HandlerReadAll:                     storagePrefix,
+	HandlerServerVerify:                bootstrapPrefix,
+	HandlerTrace:                       peerPrefix,
+	HandlerListen:                      peerPrefix,
+	HandlerGetLocalDiskIDs:             peerPrefix,
+	HandlerDeleteBucketMetadata:        peerPrefix,
+	HandlerLoadBucketMetadata:          peerPrefix,
+	HandlerReloadSiteReplicationConfig: peerPrefix,
+	HandlerReloadPoolMeta:              peerPrefix,
+	HandlerStopRebalance:               peerPrefix,
+	HandlerLoadRebalanceMeta:           peerPrefix,
+	HandlerLoadTransitionTierConfig:    peerPrefix,
+	HandlerDeletePolicy:                peerPrefix,
+	HandlerLoadPolicy:                  peerPrefix,
+	HandlerLoadPolicyMapping:           peerPrefix,
+	HandlerDeleteServiceAccount:        peerPrefix,
+	HandlerLoadServiceAccount:          peerPrefix,
+	HandlerDeleteUser:                  peerPrefix,
+	HandlerLoadUser:                    peerPrefix,
+	HandlerLoadGroup:                   peerPrefix,
 }
 
 const (
 	lockPrefix      = "lockR"
 	storagePrefix   = "storageR"
 	bootstrapPrefix = "bootstrap"
+	peerPrefix      = "peer"
 )
 
 func init() {
