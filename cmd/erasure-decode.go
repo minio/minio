@@ -26,7 +26,6 @@ import (
 	"sync/atomic"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 )
 
 // Reads in parallel from readers.
@@ -211,11 +210,9 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 // A set of preferred drives can be supplied. In that case they will be used and the data reconstructed.
 func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64, prefer []bool) (written int64, derr error) {
 	if offset < 0 || length < 0 {
-		logger.LogIf(ctx, errInvalidArgument)
 		return -1, errInvalidArgument
 	}
 	if offset+length > totalLength {
-		logger.LogIf(ctx, errInvalidArgument)
 		return -1, errInvalidArgument
 	}
 
@@ -269,7 +266,6 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 		}
 
 		if err = e.DecodeDataBlocks(bufs); err != nil {
-			logger.LogIf(ctx, err)
 			return -1, err
 		}
 
@@ -282,7 +278,6 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 	}
 
 	if bytesWritten != length {
-		logger.LogIf(ctx, errLessData)
 		return bytesWritten, errLessData
 	}
 
@@ -321,7 +316,6 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		if err = e.DecodeDataAndParityBlocks(ctx, bufs); err != nil {
-			logger.LogOnceIf(ctx, err, "erasure-heal-decode")
 			return err
 		}
 
@@ -332,7 +326,6 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		if err = w.Write(ctx, bufs); err != nil {
-			logger.LogOnceIf(ctx, err, "erasure-heal-write")
 			return err
 		}
 	}
