@@ -23,6 +23,7 @@ import (
 	"math"
 	"net/http"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,6 +72,8 @@ func init() {
 		getMinioVersionMetrics(),
 		getNetworkMetrics(),
 		getS3TTFBMetric(),
+		getS3TTFBP90Metric(),
+		getS3TTFBP95Metric(),
 		getILMNodeMetrics(),
 		getScannerNodeMetrics(),
 		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
@@ -92,6 +95,8 @@ func init() {
 		getNetworkMetrics(),
 		getMinioVersionMetrics(),
 		getS3TTFBMetric(),
+		getS3TTFBP90Metric(),
+		getS3TTFBP95Metric(),
 		getTierMetrics(),
 		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
 		getDistLockMetrics(MetricsGroupOpts{dependGlobalIsDistErasure: true, dependGlobalLockServer: true}),
@@ -104,11 +109,15 @@ func init() {
 		getBucketUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
 		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
+		getBucketTTFBP90Metric(),
+		getBucketTTFBP95Metric(),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
 		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
 		getBucketTTFBMetric(),
+		getBucketTTFBP90Metric(),
+		getBucketTTFBP95Metric(),
 	}
 
 	nodeCollector = newMinioCollectorNode(nodeGroups)
@@ -251,6 +260,8 @@ const (
 	sizeDistribution    = "size_distribution"
 	versionDistribution = "version_distribution"
 	ttfbDistribution    = "seconds_distribution"
+	ttfbP90             = "seconds_p90"
+	ttfbP95             = "seconds_p95"
 	ttlbDistribution    = "ttlb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
@@ -1434,6 +1445,46 @@ func getBucketTTFBDistributionMD() MetricDescription {
 	}
 }
 
+func getS3TTFBP90MD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: ttfbSubsystem,
+		Name:      ttfbP90,
+		Help:      "P90 time to first byte across API calls",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketTTFBP90MD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: ttfbSubsystem,
+		Name:      ttfbP90,
+		Help:      "P90 time to first byte across API calls per bucket",
+		Type:      gaugeMetric,
+	}
+}
+
+func getS3TTFBP95MD() MetricDescription {
+	return MetricDescription{
+		Namespace: s3MetricNamespace,
+		Subsystem: ttfbSubsystem,
+		Name:      ttfbP95,
+		Help:      "P95 time to first byte across API calls",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketTTFBP95MD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: ttfbSubsystem,
+		Name:      ttfbP95,
+		Help:      "P95 time to first byte across API calls per bucket",
+		Type:      gaugeMetric,
+	}
+}
+
 func getMinioFDOpenMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -1787,6 +1838,88 @@ func getS3TTFBMetric() *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
 		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD())
+	})
+	return mg
+}
+
+// getHistogramP90Metrics fetches histogram metrics and returns it in a []Metric
+// Note: Typically used in MetricGroup.RegisterRead
+func getHistogramPMetrics(hist *prometheus.HistogramVec, desc MetricDescription, percentile float64) []Metric {
+	ch := make(chan prometheus.Metric)
+	go func() {
+		defer xioutil.SafeClose(ch)
+		// Collects prometheus metrics from hist and sends it over ch
+		hist.Collect(ch)
+	}()
+
+	// Converts metrics received into internal []Metric type
+	var metrics []Metric
+	for promMetric := range ch {
+		dtoMetric := &dto.Metric{}
+		err := promMetric.Write(dtoMetric)
+		if err != nil {
+			// Log error and continue to receive other metric
+			// values
+			logger.LogIf(GlobalContext, err)
+			continue
+		}
+
+		h := dtoMetric.GetHistogram()
+		var arr []float64
+		for _, b := range h.Bucket {
+			arr = append(arr, float64(b.GetCumulativeCount()))
+		}
+		sort.Float64s(arr)
+		pIndex := int((percentile / 100) * float64(len(arr)))
+		labels1 := make(map[string]string)
+		for _, lp := range dtoMetric.GetLabel() {
+			labels1[*lp.Name] = *lp.Value
+		}
+		metrics = append(metrics, Metric{
+			Description:    desc,
+			VariableLabels: labels1,
+			Value:          arr[pIndex],
+		})
+	}
+	return metrics
+}
+
+func getBucketTTFBP90Metric() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramPMetrics(bucketHTTPRequestsDuration, getBucketTTFBP90MD(), 90)
+	})
+	return mg
+}
+
+func getS3TTFBP90Metric() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramPMetrics(httpRequestsDuration, getS3TTFBP90MD(), 90)
+	})
+	return mg
+}
+
+func getBucketTTFBP95Metric() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramPMetrics(bucketHTTPRequestsDuration, getBucketTTFBP95MD(), 95)
+	})
+	return mg
+}
+
+func getS3TTFBP95Metric() *MetricsGroup {
+	mg := &MetricsGroup{
+		cacheInterval: 10 * time.Second,
+	}
+	mg.RegisterRead(func(ctx context.Context) []Metric {
+		return getHistogramPMetrics(httpRequestsDuration, getS3TTFBP95MD(), 95)
 	})
 	return mg
 }
