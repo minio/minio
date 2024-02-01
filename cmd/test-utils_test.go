@@ -99,7 +99,7 @@ func TestMain(m *testing.M) {
 
 	// Disable printing console messages during tests.
 	color.Output = io.Discard
-	// Minimum is error logs for testing
+	// Disable Error logging in testing.
 	logger.DisableErrorLog = true
 
 	// Uncomment the following line to see trace logs during unit tests.
