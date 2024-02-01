@@ -29,7 +29,7 @@ import (
 
 // Recycler will override the internal reuse in typed handlers.
 // When this is supported, the handler will not do internal pooling of objects,
-// call Recycle() when then object is no longer needed.
+// call Recycle() when the object is no longer needed.
 // The recycler should handle nil pointers.
 type Recycler interface {
 	Recycle()
