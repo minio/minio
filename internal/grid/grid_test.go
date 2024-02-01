@@ -231,6 +231,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		t.Errorf("want %q, got %q", testPayload, resp.OrgString)
 	}
 	t.Log("Roundtrip:", time.Since(start))
+	h1.PutResponse(resp)
 
 	start = time.Now()
 	resp, err = h2.Call(context.Background(), remoteConn, &testRequest{Num: 1, String: testPayload})
@@ -241,7 +242,72 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	if resp != nil {
 		t.Errorf("want nil, got %q", resp)
 	}
+	h2.PutResponse(resp)
 	t.Log("Roundtrip:", time.Since(start))
+}
+
+func TestSingleRoundtripGenericsRecycle(t *testing.T) {
+	defer testlogger.T.SetLogTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	grid, err := SetupTestGrid(2)
+	errFatal(err)
+	remoteHost := grid.Hosts[1]
+	local := grid.Managers[0]
+	remote := grid.Managers[1]
+
+	// 1: Echo
+	h1 := NewSingleHandler[*MSS, *MSS](handlerTest, NewMSS, NewMSS)
+	// Handles incoming requests, returns a response
+	handler1 := func(req *MSS) (resp *MSS, err *RemoteErr) {
+		resp = h1.NewResponse()
+		for k, v := range *req {
+			(*resp)[k] = v
+		}
+		return resp, nil
+	}
+	// Return error
+	h2 := NewSingleHandler[*MSS, *MSS](handlerTest2, NewMSS, NewMSS)
+	handler2 := func(req *MSS) (resp *MSS, err *RemoteErr) {
+		defer req.Recycle()
+		r := RemoteErr(req.Get("err"))
+		return nil, &r
+	}
+	errFatal(h1.Register(local, handler1))
+	errFatal(h2.Register(local, handler2))
+
+	errFatal(h1.Register(remote, handler1))
+	errFatal(h2.Register(remote, handler2))
+
+	// local to remote connection
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	start := time.Now()
+	req := NewMSSWith(map[string]string{"test": testPayload})
+	resp, err := h1.Call(context.Background(), remoteConn, req)
+	errFatal(err)
+	if resp.Get("test") != testPayload {
+		t.Errorf("want %q, got %q", testPayload, resp.Get("test"))
+	}
+	t.Log("Roundtrip:", time.Since(start))
+	h1.PutResponse(resp)
+
+	start = time.Now()
+	resp, err = h2.Call(context.Background(), remoteConn, NewMSSWith(map[string]string{"err": testPayload}))
+	t.Log("Roundtrip:", time.Since(start))
+	if err != RemoteErr(testPayload) {
+		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
+	}
+	if resp != nil {
+		t.Errorf("want nil, got %q", resp)
+	}
+	t.Log("Roundtrip:", time.Since(start))
+	h2.PutResponse(resp)
 }
 
 func TestStreamSuite(t *testing.T) {
