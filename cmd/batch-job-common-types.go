@@ -213,11 +213,14 @@ func (b BatchJobSnowball) Validate() error {
 		}
 	}
 	_, err := humanize.ParseBytes(*b.SmallerThan)
-	return BatchJobYamlErr{
-		line: b.line,
-		col:  b.col,
-		msg:  err.Error(),
+	if err != nil {
+		return BatchJobYamlErr{
+			line: b.line,
+			col:  b.col,
+			msg:  err.Error(),
+		}
 	}
+	return nil
 }
 
 // BatchJobSizeFilter supports size based filters - LesserThan and GreaterThan
