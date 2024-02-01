@@ -242,7 +242,8 @@ func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 			*b = make([]byte, 0, len(val))
 		}
 		in := *b
-		*b = append(in[:0], val...)
+		in = append(in[:0], val...)
+		*b = in
 	}
 	return bytes, nil
 }
