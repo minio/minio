@@ -152,10 +152,12 @@ func (client *bootstrapRESTClient) Verify(ctx context.Context, srcCfg *ServerSys
 		return nil
 	}
 
-	recvCfg, err := serverVerifyHandler.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{}))
+	recvCfg, err := serverVerifyHandler.Call(ctx, client.gridConn, grid.NewMSS())
 	if err != nil {
 		return err
 	}
+	// We do not need the response after returning.
+	defer serverVerifyHandler.PutResponse(recvCfg)
 
 	return srcCfg.Diff(recvCfg)
 }

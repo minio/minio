@@ -1061,7 +1061,7 @@ func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.URLValues, o
 				logger.LogOnceIf(ctx, err, "event: Encode failed")
 				continue
 			}
-			out <- grid.NewBytesWith(append(grid.GetByteBuffer()[:0], buf.Bytes()...))
+			out <- grid.NewBytesWithCopyOf(buf.Bytes())
 		}
 	}
 }

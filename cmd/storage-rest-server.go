@@ -201,7 +201,7 @@ func (s *storageRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request
 // DiskInfo types.
 // DiskInfo.Metrics elements are shared, so we cannot reuse.
 var storageDiskInfoHandler = grid.NewSingleHandler[*DiskInfoOptions, *DiskInfo](grid.HandlerDiskInfo, func() *DiskInfoOptions { return &DiskInfoOptions{} },
-	func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse()
+	func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse().AllowCallRequestPool(true)
 
 // DiskInfoHandler - returns disk info.
 func (s *storageRESTServer) DiskInfoHandler(opts *DiskInfoOptions) (*DiskInfo, *grid.RemoteErr) {
@@ -495,7 +495,7 @@ func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (grid.
 
 var storageReadAllHandler = grid.NewSingleHandler[*ReadAllHandlerParams, *grid.Bytes](grid.HandlerReadAll, func() *ReadAllHandlerParams {
 	return &ReadAllHandlerParams{}
-}, grid.NewBytes)
+}, grid.NewBytes).AllowCallRequestPool(true)
 
 // ReadAllHandler - read all the contents of a file.
 func (s *storageRESTServer) ReadAllHandler(p *ReadAllHandlerParams) (*grid.Bytes, *grid.RemoteErr) {
@@ -673,7 +673,7 @@ func (s *storageRESTServer) ListDirHandler(w http.ResponseWriter, r *http.Reques
 
 var storageDeleteFileHandler = grid.NewSingleHandler[*DeleteFileHandlerParams, grid.NoPayload](grid.HandlerDeleteFile, func() *DeleteFileHandlerParams {
 	return &DeleteFileHandlerParams{}
-}, grid.NewNoPayload)
+}, grid.NewNoPayload).AllowCallRequestPool(true)
 
 // DeleteFileHandler - delete a file.
 func (s *storageRESTServer) DeleteFileHandler(p *DeleteFileHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
@@ -751,7 +751,7 @@ func (s *storageRESTServer) RenameDataHandler(p *RenameDataHandlerParams) (*Rena
 
 var storageRenameFileHandler = grid.NewSingleHandler[*RenameFileHandlerParams, grid.NoPayload](grid.HandlerRenameFile, func() *RenameFileHandlerParams {
 	return &RenameFileHandlerParams{}
-}, grid.NewNoPayload)
+}, grid.NewNoPayload).AllowCallRequestPool(true)
 
 // RenameFileHandler - rename a file from source to destination
 func (s *storageRESTServer) RenameFileHandler(p *RenameFileHandlerParams) (grid.NoPayload, *grid.RemoteErr) {

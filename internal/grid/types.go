@@ -27,6 +27,14 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
+// Recycler will override the internal reuse in typed handlers.
+// When this is supported, the handler will not do internal pooling of objects,
+// call Recycle() when then object is no longer needed.
+// The recycler should handle nil pointers.
+type Recycler interface {
+	Recycle()
+}
+
 // MSS is a map[string]string that can be serialized.
 // It is not very efficient, but it is only used for easy parameter passing.
 type MSS map[string]string
@@ -37,6 +45,14 @@ func (m *MSS) Get(key string) string {
 		return ""
 	}
 	return (*m)[key]
+}
+
+// Set a key, value pair.
+func (m *MSS) Set(key, value string) {
+	if m == nil {
+		*m = mssPool.Get().(map[string]string)
+	}
+	(*m)[key] = value
 }
 
 // UnmarshalMsg deserializes m from the provided byte slice and returns the
@@ -111,7 +127,10 @@ func (m *MSS) Msgsize() int {
 
 // NewMSS returns a new MSS.
 func NewMSS() *MSS {
-	m := MSS(make(map[string]string))
+	m := MSS(mssPool.Get().(map[string]string))
+	for k := range m {
+		delete(m, k)
+	}
 	return &m
 }
 
@@ -119,6 +138,20 @@ func NewMSS() *MSS {
 func NewMSSWith(m map[string]string) *MSS {
 	m2 := MSS(m)
 	return &m2
+}
+
+var mssPool = sync.Pool{
+	New: func() interface{} {
+		return make(map[string]string, 5)
+	},
+}
+
+// Recycle the underlying map.
+func (m *MSS) Recycle() {
+	if m != nil && *m != nil {
+		mssPool.Put(map[string]string(*m))
+		*m = nil
+	}
 }
 
 // ToQuery constructs a URL query string from the MSS, including "?" if there are any keys.
@@ -147,14 +180,33 @@ func (m MSS) ToQuery() string {
 }
 
 // NewBytes returns a new Bytes.
+// A slice is preallocated.
 func NewBytes() *Bytes {
 	b := Bytes(GetByteBuffer()[:0])
 	return &b
 }
 
 // NewBytesWith returns a new Bytes with the provided content.
+// When sent as a parameter, the caller gives up ownership of the byte slice.
+// When returned as response, the handler also gives up ownership of the byte slice.
 func NewBytesWith(b []byte) *Bytes {
 	bb := Bytes(b)
+	return &bb
+}
+
+// NewBytesWithCopyOf returns a new byte slice with a copy of the provided content.
+func NewBytesWithCopyOf(b []byte) *Bytes {
+	if b == nil {
+		bb := Bytes(nil)
+		return &bb
+	}
+	if len(b) < maxBufferSize {
+		bb := NewBytes()
+		*bb = append(*bb, b...)
+		return bb
+	}
+	bb := Bytes(make([]byte, len(b)))
+	copy(bb, b)
 	return &bb
 }
 
@@ -168,6 +220,9 @@ func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 		return bytes, errors.New("Bytes: UnmarshalMsg on nil pointer")
 	}
 	if bytes, err := msgp.ReadNilBytes(bytes); err == nil {
+		if *b != nil {
+			PutByteBuffer(*b)
+		}
 		*b = nil
 		return bytes, nil
 	}
@@ -179,7 +234,15 @@ func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 		*b = (*b)[:len(val)]
 		copy(*b, val)
 	} else {
-		*b = append(make([]byte, 0, len(val)), val...)
+		if cap(*b) == 0 && len(val) <= maxBufferSize {
+			PutByteBuffer(*b)
+			*b = GetByteBuffer()[:0]
+		} else {
+			PutByteBuffer(*b)
+			*b = make([]byte, 0, len(val))
+		}
+		in := *b
+		*b = append(in[:0], val...)
 	}
 	return bytes, nil
 }
@@ -202,7 +265,8 @@ func (b *Bytes) Msgsize() int {
 
 // Recycle puts the Bytes back into the pool.
 func (b *Bytes) Recycle() {
-	if *b != nil {
+	if b != nil && *b != nil {
+		*b = (*b)[:0]
 		PutByteBuffer(*b)
 		*b = nil
 	}
@@ -329,3 +393,29 @@ func (u URLValues) Msgsize() (s int) {
 	}
 	return
 }
+
+// NoPayload is a type that can be used for handlers that do not use a payload.
+type NoPayload struct{}
+
+// Msgsize returns 0.
+func (p NoPayload) Msgsize() int {
+	return 0
+}
+
+// UnmarshalMsg satisfies the interface, but is a no-op.
+func (NoPayload) UnmarshalMsg(bytes []byte) ([]byte, error) {
+	return bytes, nil
+}
+
+// MarshalMsg satisfies the interface, but is a no-op.
+func (NoPayload) MarshalMsg(bytes []byte) ([]byte, error) {
+	return bytes, nil
+}
+
+// NewNoPayload returns an empty NoPayload struct.
+func NewNoPayload() NoPayload {
+	return NoPayload{}
+}
+
+// Recycle is a no-op.
+func (NoPayload) Recycle() {}
