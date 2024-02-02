@@ -287,6 +287,7 @@ func (c *Connection) newMuxClient(ctx context.Context) (*muxClient, error) {
 	if dl, ok := ctx.Deadline(); ok {
 		client.deadline = getDeadline(time.Until(dl))
 		if client.deadline == 0 {
+			client.cancelFn(context.DeadlineExceeded)
 			return nil, context.DeadlineExceeded
 		}
 	}
@@ -333,6 +334,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 			_, ok := c.outgoing.Load(client.MuxID)
 			fmt.Println(client.MuxID, c.String(), "Connection.Request: DELETING MUX. Exists:", ok)
 		}
+		client.cancelFn(context.Canceled)
 		c.outgoing.Delete(client.MuxID)
 	}()
 	return client.traceRoundtrip(ctx, c.trace, h, req)

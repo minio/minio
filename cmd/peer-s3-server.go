@@ -385,90 +385,6 @@ func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
 }
 
-func (s *peerS3Server) HealBucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
-
-	bucket := r.Form.Get(peerS3Bucket)
-	if isMinioMetaBucket(bucket) {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	res, err := healBucketLocal(r.Context(), bucket, madmin.HealOpts{
-		Remove: bucketDeleted,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(res))
-}
-
-// GetBucketInfoHandler implements peer BuckeInfo call, returns bucket create date.
-func (s *peerS3Server) GetBucketInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucket := r.Form.Get(peerS3Bucket)
-	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
-	bucketInfo, err := getBucketInfoLocal(r.Context(), bucket, BucketOptions{
-		Deleted: bucketDeleted,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(bucketInfo))
-}
-
-// DeleteBucketHandler implements peer delete bucket call.
-func (s *peerS3Server) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucket := r.Form.Get(peerS3Bucket)
-	if isMinioMetaBucket(bucket) {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	forceDelete := r.Form.Get(peerS3BucketForceDelete) == "true"
-
-	err := deleteBucketLocal(r.Context(), bucket, DeleteBucketOptions{
-		Force: forceDelete,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-}
-
-// MakeBucketHandler implements peer create bucket call.
-func (s *peerS3Server) MakeBucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucket := r.Form.Get(peerS3Bucket)
-	forceCreate := r.Form.Get(peerS3BucketForceCreate) == "true"
-
-	err := makeBucketLocal(r.Context(), bucket, MakeBucketOptions{
-		ForceCreate: forceCreate,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-}
-
 // registerPeerS3Handlers - register peer s3 router.
 func registerPeerS3Handlers(router *mux.Router) {
 	server := &peerS3Server{}
@@ -479,9 +395,5 @@ func registerPeerS3Handlers(router *mux.Router) {
 	}
 
 	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealth).HandlerFunc(h(server.HealthHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodMakeBucket).HandlerFunc(h(server.MakeBucketHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodDeleteBucket).HandlerFunc(h(server.DeleteBucketHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodGetBucketInfo).HandlerFunc(h(server.GetBucketInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(h(server.ListBucketsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealBucket).HandlerFunc(h(server.HealBucketHandler))
 }
