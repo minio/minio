@@ -139,11 +139,8 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 		trace.Path += m.ToQuery()
 	case *URLValues:
 		trace.Path += typed.Values().Encode()
-	case *NoPayload:
-	case *Bytes:
-		if typed != nil {
-			trace.Path = fmt.Sprintf("%s?bytes=%d", trace.Path, len(*typed))
-		}
+	case *NoPayload, *Bytes:
+		trace.Path = fmt.Sprintf("%s?payload=%T", trace.Path, typed)
 	case string:
 		trace.Path = fmt.Sprintf("%s?%s", trace.Path, typed)
 	default:

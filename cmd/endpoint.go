@@ -62,8 +62,9 @@ type ProxyEndpoint struct {
 // Node holds information about a node in this cluster
 type Node struct {
 	*url.URL
-	Pools   []int
-	IsLocal bool
+	Pools    []int
+	IsLocal  bool
+	GridHost string
 }
 
 // Endpoint - any type of endpoint.
@@ -254,6 +255,7 @@ func (l EndpointServerPools) GetNodes() (nodes []Node) {
 					Scheme: ep.Scheme,
 					Host:   ep.Host,
 				}
+				node.GridHost = ep.GridHost()
 			}
 			if !slices.Contains(node.Pools, ep.PoolIdx) {
 				node.Pools = append(node.Pools, ep.PoolIdx)
@@ -409,6 +411,47 @@ func (l EndpointServerPools) GridHosts() (gridHosts []string, gridLocal string) 
 	}
 
 	return gridHosts, gridLocal
+}
+
+// FindGridHostsFromPeerPool will return a matching peerPool from provided peer (as string)
+func (l EndpointServerPools) FindGridHostsFromPeerPool(peer string) []int {
+	if peer == "" {
+		return nil
+	}
+
+	var pools []int
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+
+			if !slices.Contains(pools, endpoint.PoolIdx) {
+				pools = append(pools, endpoint.PoolIdx)
+			}
+		}
+	}
+
+	return pools
+}
+
+// FindGridHostsFromPeerStr will return a matching peer from provided peer (as string)
+func (l EndpointServerPools) FindGridHostsFromPeerStr(peer string) (peerGrid string) {
+	if peer == "" {
+		return ""
+	}
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+
+			if endpoint.Host == peer {
+				return endpoint.GridHost()
+			}
+		}
+	}
+	return ""
 }
 
 // FindGridHostsFromPeer will return a matching peer from provided peer.

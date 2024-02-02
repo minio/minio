@@ -80,6 +80,11 @@ const (
 	HandlerLoadUser
 	HandlerLoadGroup
 
+	HandlerHealBucket
+	HandlerMakeBucket
+	HandlerHeadBucket
+	HandlerDeleteBucket
+
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
 	// Handlers have no versioning, so non-compatible handler changes must result in new IDs.
@@ -130,6 +135,10 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerDeleteUser:                  peerPrefix,
 	HandlerLoadUser:                    peerPrefix,
 	HandlerLoadGroup:                   peerPrefix,
+	HandlerMakeBucket:                  peerPrefixS3,
+	HandlerHeadBucket:                  peerPrefixS3,
+	HandlerDeleteBucket:                peerPrefixS3,
+	HandlerHealBucket:                  healPrefix,
 }
 
 const (
@@ -137,6 +146,8 @@ const (
 	storagePrefix   = "storageR"
 	bootstrapPrefix = "bootstrap"
 	peerPrefix      = "peer"
+	peerPrefixS3    = "peerS3"
+	healPrefix      = "heal"
 )
 
 func init() {
@@ -472,9 +483,10 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Re
 		return resp, err
 	}
 	switch any(req).(type) {
-	case *MSS, *Bytes, *URLValues:
+	case *MSS, *URLValues:
 		ctx = context.WithValue(ctx, TraceParamsKey{}, req)
-	case *NoPayload:
+	case *NoPayload, *Bytes:
+		// do not need to trace nopayload and bytes payload
 	default:
 		ctx = context.WithValue(ctx, TraceParamsKey{}, fmt.Sprintf("type=%T", req))
 	}
