@@ -1421,6 +1421,89 @@ func (s *peerRESTServer) NetSpeedTestHandler(w http.ResponseWriter, r *http.Requ
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
+var healBucketHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerHealBucket, grid.NewMSS, grid.NewNoPayload)
+
+func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+	bucket := mss.Get(peerS3Bucket)
+	if isMinioMetaBucket(bucket) {
+		return np, grid.NewRemoteErr(errInvalidArgument)
+	}
+
+	bucketDeleted := mss.Get(peerS3BucketDeleted) == "true"
+	_, err := healBucketLocal(context.Background(), bucket, madmin.HealOpts{
+		Remove: bucketDeleted,
+	})
+	if err != nil {
+		return np, grid.NewRemoteErr(err)
+	}
+
+	return np, nil
+}
+
+var headBucketHandler = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerHeadBucket, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
+
+// HeadBucketHandler implements peer BuckeInfo call, returns bucket create date.
+func (s *peerRESTServer) HeadBucketHandler(mss *grid.MSS) (info *VolInfo, nerr *grid.RemoteErr) {
+	bucket := mss.Get(peerS3Bucket)
+	if isMinioMetaBucket(bucket) {
+		return info, grid.NewRemoteErr(errInvalidArgument)
+	}
+
+	bucketDeleted := mss.Get(peerS3BucketDeleted) == "true"
+
+	bucketInfo, err := getBucketInfoLocal(context.Background(), bucket, BucketOptions{
+		Deleted: bucketDeleted,
+	})
+	if err != nil {
+		return info, grid.NewRemoteErr(err)
+	}
+
+	return &VolInfo{
+		Name:    bucketInfo.Name,
+		Created: bucketInfo.Created,
+	}, nil
+}
+
+var deleteBucketHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucket, grid.NewMSS, grid.NewNoPayload)
+
+// DeleteBucketHandler implements peer delete bucket call.
+func (s *peerRESTServer) DeleteBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+	bucket := mss.Get(peerS3Bucket)
+	if isMinioMetaBucket(bucket) {
+		return np, grid.NewRemoteErr(errInvalidArgument)
+	}
+
+	forceDelete := mss.Get(peerS3BucketForceDelete) == "true"
+	err := deleteBucketLocal(context.Background(), bucket, DeleteBucketOptions{
+		Force: forceDelete,
+	})
+	if err != nil {
+		return np, grid.NewRemoteErr(err)
+	}
+
+	return np, nil
+}
+
+var makeBucketHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerMakeBucket, grid.NewMSS, grid.NewNoPayload)
+
+// MakeBucketHandler implements peer create bucket call.
+func (s *peerRESTServer) MakeBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+	bucket := mss.Get(peerS3Bucket)
+	if isMinioMetaBucket(bucket) {
+		return np, grid.NewRemoteErr(errInvalidArgument)
+	}
+
+	forceCreate := mss.Get(peerS3BucketForceCreate) == "true"
+	err := makeBucketLocal(context.Background(), bucket, MakeBucketOptions{
+		ForceCreate: forceCreate,
+	})
+	if err != nil {
+		return np, grid.NewRemoteErr(err)
+	}
+
+	return np, nil
+}
+
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	h := func(f http.HandlerFunc) http.HandlerFunc {
@@ -1466,6 +1549,11 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetperf).HandlerFunc(h(server.NetSpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDevNull).HandlerFunc(h(server.DevNull))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLastDayTierStats).HandlerFunc(h(server.GetLastDayTierStatsHandler))
+
+	logger.FatalIf(makeBucketHandler.Register(gm, server.MakeBucketHandler), "unable to register handler")
+	logger.FatalIf(deleteBucketHandler.Register(gm, server.DeleteBucketHandler), "unable to register handler")
+	logger.FatalIf(headBucketHandler.Register(gm, server.HeadBucketHandler), "unable to register handler")
+	logger.FatalIf(healBucketHandler.Register(gm, server.HealBucketHandler), "unable to register handler")
 
 	logger.FatalIf(deletePolicyHandler.Register(gm, server.DeletePolicyHandler), "unable to register handler")
 	logger.FatalIf(loadPolicyHandler.Register(gm, server.LoadPolicyHandler), "unable to register handler")
