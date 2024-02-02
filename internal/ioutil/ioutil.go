@@ -183,31 +183,21 @@ func (w *DeadlineWriter) Write(buf []byte) (int, error) {
 		return 0, w.err
 	}
 
-	c := make(chan ioret[int], 1)
-	t := time.NewTimer(w.timeout)
-	go func() {
-		n, err := w.WriteCloser.Write(buf)
-		c <- ioret[int]{val: n, err: err}
-		close(c)
-	}()
-
-	select {
-	case r := <-c:
-		if !t.Stop() {
-			<-t.C
-		}
-		w.err = r.err
-		return r.val, r.err
-	case <-t.C:
-		w.WriteCloser.Close()
-		w.err = context.DeadlineExceeded
-		return 0, context.DeadlineExceeded
-	}
+	n, err := WithDeadline[int](context.Background(), w.timeout, func(ctx context.Context) (int, error) {
+		return w.WriteCloser.Write(buf)
+	})
+	w.err = err
+	return n, err
 }
 
 // Close closer interface to close the underlying closer
 func (w *DeadlineWriter) Close() error {
-	return w.WriteCloser.Close()
+	err := w.WriteCloser.Close()
+	w.err = err
+	if err == nil {
+		w.err = errors.New("we are closed") // Avoids any reuse on the Write() side.
+	}
+	return err
 }
 
 // LimitWriter implements io.WriteCloser.
