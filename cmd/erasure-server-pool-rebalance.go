@@ -146,7 +146,7 @@ func (z *erasureServerPools) updateRebalanceStats(ctx context.Context) error {
 		lock := z.serverPools[0].NewNSLock(minioMetaBucket, rebalMetaName)
 		lkCtx, err := lock.GetLock(ctx, globalOperationTimeout)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
+			rebalanceLogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
 			return err
 		}
 		defer lock.Unlock(lkCtx)
@@ -423,7 +423,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			stopFn := globalRebalanceMetrics.log(rebalanceMetricSaveMetadata, poolIdx, traceMsg)
 			err := z.saveRebalanceStats(ctx, poolIdx, rebalSaveStats)
 			stopFn(err)
-			logger.LogIf(ctx, err)
+			rebalanceLogIf(ctx, err)
 			timer.Reset(randSleepFor())
 
 			if rebalDone {
@@ -432,7 +432,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		}
 	}()
 
-	logger.Event(ctx, "Pool %d rebalancing is started", poolIdx+1)
+	rebalanceLogEvent(ctx, "Pool %d rebalancing is started", poolIdx+1)
 
 	for {
 		select {
@@ -451,14 +451,14 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		err = z.rebalanceBucket(ctx, bucket, poolIdx)
 		if err != nil {
 			stopFn(err)
-			logger.LogIf(ctx, err)
+			rebalanceLogIf(ctx, err)
 			return
 		}
 		stopFn(nil)
 		z.bucketRebalanceDone(bucket, poolIdx)
 	}
 
-	logger.Event(ctx, "Pool %d rebalancing is done", poolIdx+1)
+	rebalanceLogEvent(ctx, "Pool %d rebalancing is done", poolIdx+1)
 
 	return err
 }
@@ -535,7 +535,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	const envRebalanceWorkers = "_MINIO_REBALANCE_WORKERS"
 	workerSize, err := env.GetInt(envRebalanceWorkers, len(pool.sets))
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("invalid workers value err: %v, defaulting to %d", err, len(pool.sets)))
+		rebalanceLogIf(ctx, fmt.Errorf("invalid workers value err: %v, defaulting to %d", err, len(pool.sets)))
 		workerSize = len(pool.sets)
 	}
 
@@ -630,7 +630,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						})
 					var failure bool
 					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-						logger.LogIf(ctx, err)
+						rebalanceLogIf(ctx, err)
 						failure = true
 					}
 
@@ -665,14 +665,14 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					}
 					if err != nil {
 						failure = true
-						logger.LogIf(ctx, err)
+						rebalanceLogIf(ctx, err)
 						stopFn(err)
 						continue
 					}
 
 					if err = z.rebalanceObject(ctx, bucket, gr); err != nil {
 						failure = true
-						logger.LogIf(ctx, err)
+						rebalanceLogIf(ctx, err)
 						stopFn(err)
 						continue
 					}
@@ -706,7 +706,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				stopFn(err)
 				auditLogRebalance(ctx, "Rebalance:DeleteObject", bucket, entry.name, "", err)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					rebalanceLogIf(ctx, err)
 				}
 			}
 		}
@@ -724,7 +724,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				return
 			}
 			setN := humanize.Ordinal(setIdx + 1)
-			logger.LogOnceIf(ctx, fmt.Errorf("listing objects from %s set failed with %v", setN, err), "rebalance-listing-failed"+setN)
+			rebalanceLogIf(ctx, fmt.Errorf("listing objects from %s set failed with %v", setN, err), "rebalance-listing-failed"+setN)
 		}(setIdx)
 	}
 
@@ -743,7 +743,7 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 	lock := z.serverPools[0].NewNSLock(minioMetaBucket, rebalMetaName)
 	lkCtx, err := lock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
+		rebalanceLogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
 		return err
 	}
 	defer lock.Unlock(lkCtx)

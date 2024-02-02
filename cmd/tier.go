@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -534,7 +533,7 @@ func (config *TierConfigMgr) refreshTierConfig(ctx context.Context, objAPI Objec
 		case <-t.C:
 			err := config.Reload(ctx, objAPI)
 			if err != nil {
-				logger.LogIf(ctx, err)
+				tierLogIf(ctx, err)
 			}
 		}
 		t.Reset(tierCfgRefresh + randInterval())

@@ -31,6 +31,14 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 )
 
+const (
+	logSubsys = "notify"
+)
+
+func logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, logSubsys, err, id, errKind...)
+}
+
 // ErrTargetsOffline - Indicates single/multiple target failures.
 var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
 
@@ -76,7 +84,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewWebhookTarget(ctx, id, args, logger.LogOnceIf, transport)
+			t, err := target.NewWebhookTarget(ctx, id, args, logOnceIf, transport)
 			if err != nil {
 				return nil, err
 			}

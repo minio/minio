@@ -207,7 +207,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 				logger.Fatal(err, "Unable to initialize backend")
 			}
 			retry := time.Duration(r.Float64() * float64(5*time.Second))
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize backend: %w, retrying in %s", err, retry))
+			storageLogIf(ctx, fmt.Errorf("Unable to initialize backend: %w, retrying in %s", err, retry))
 			time.Sleep(retry)
 			attempt++
 			continue
@@ -376,7 +376,7 @@ func (z *erasureServerPools) getAvailablePoolIdx(ctx context.Context, bucket, ob
 		}
 	}
 	// Should not happen, but print values just in case.
-	logger.LogIf(ctx, fmt.Errorf("reached end of serverPools (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
+	storageLogIf(ctx, fmt.Errorf("reached end of serverPools (total: %v, atTotal: %v, choose: %v)", total, atTotal, choose))
 	return -1
 }
 
@@ -610,7 +610,7 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 
 	for _, err := range g.Wait() {
 		if err != nil {
-			logger.LogIf(ctx, err)
+			storageLogIf(ctx, err)
 		}
 		// let's the rest shutdown
 	}
@@ -709,7 +709,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 				// Start scanner. Blocks until done.
 				err := erObj.nsScanner(ctx, allBuckets, wantCycle, updates, healScanMode)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					scannerLogIf(ctx, err)
 					mu.Lock()
 					if firstErr == nil {
 						firstErr = err
@@ -1320,7 +1320,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		if !isErrBucketNotFound(err) {
-			logger.LogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
+			storageLogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
 		}
 		return loi, toObjectErr(err, bucket)
 	}
@@ -1513,7 +1513,7 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	merged, err := z.listPath(ctx, &opts)
 	if err != nil && err != io.EOF {
 		if !isErrBucketNotFound(err) {
-			logger.LogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
+			storageLogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
 		}
 		return loi, toObjectErr(err, bucket)
 	}
@@ -1920,7 +1920,7 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 	for _, pool := range z.serverPools {
 		result, err := pool.HealFormat(ctx, dryRun)
 		if err != nil && !errors.Is(err, errNoHealRequired) {
-			logger.LogOnceIf(ctx, err, "erasure-heal-format")
+			healingLogOnceIf(ctx, err, "erasure-heal-format")
 			continue
 		}
 		// Count errNoHealRequired across all serverPools,
@@ -2111,7 +2111,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 					}
 
 					if err := listPathRaw(ctx, lopts); err != nil {
-						logger.LogIf(ctx, fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
+						storageLogIf(ctx, fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
 						cancel()
 						return
 					}
@@ -2156,7 +2156,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 		if opts.Remove && !opts.DryRun {
 			err := z.CheckAbandonedParts(ctx, bucket, entry.name, opts)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", bucket, entry.name, err))
+				healingLogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", bucket, entry.name, err))
 			}
 		}
 		for _, version := range fivs.Versions {
@@ -2360,7 +2360,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	// Check if disks are healing on in-case of VMware vsphere deployments.
 	if opts.Maintenance && opts.DeploymentType == vmware {
 		if drivesHealing > 0 {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", drivesHealing))
+			healingLogIf(logger.SetReqInfo(ctx, reqInfo), fmt.Errorf("Total drives to be healed %d", drivesHealing))
 		}
 	}
 
@@ -2420,15 +2420,15 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
 			if !healthy {
-				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
+				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
+						poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
 			}
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !healthyRead {
-				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
+				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
 						poolIdx, setIdx, poolReadQuorums[poolIdx]))
 			}

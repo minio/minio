@@ -27,7 +27,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/minio/internal/logger"
 )
 
 // BackendType - represents different backend types.
@@ -244,7 +243,7 @@ func (o *ObjectInfo) ArchiveInfo() []byte {
 	if v, ok := o.UserDefined[archiveTypeMetadataKey]; ok && v == archiveTypeEnc {
 		decrypted, err := o.metadataDecrypter()(archiveTypeEnc, data)
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			encLogIf(GlobalContext, err)
 			return nil
 		}
 		data = decrypted

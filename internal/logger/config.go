@@ -299,7 +299,7 @@ func lookupLegacyConfigForSubSys(ctx context.Context, subSys string) Config {
 			}
 			url, err := xnet.ParseHTTPURL(endpoint)
 			if err != nil {
-				LogOnceIf(ctx, err, "logger-webhook-"+endpoint)
+				LogOnceIf(ctx, "logging", err, "logger-webhook-"+endpoint)
 				continue
 			}
 			cfg.HTTP[target] = http.Config{
@@ -327,7 +327,7 @@ func lookupLegacyConfigForSubSys(ctx context.Context, subSys string) Config {
 			}
 			url, err := xnet.ParseHTTPURL(endpoint)
 			if err != nil {
-				LogOnceIf(ctx, err, "audit-webhook-"+endpoint)
+				LogOnceIf(ctx, "logging", err, "audit-webhook-"+endpoint)
 				continue
 			}
 			cfg.AuditWebhook[target] = http.Config{

@@ -48,7 +48,6 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/policy"
@@ -206,7 +205,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 				if aerr == nil {
 					return
 				}
-				logger.LogIf(ctx,
+				batchLogIf(ctx,
 					fmt.Errorf("trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
 						humanize.Ordinal(attempts), res.UploadID, tgtBucket, tgtObject, aerr))
 				attempts++
@@ -402,7 +401,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 					} else {
 						if !isErrMethodNotAllowed(ErrorRespToObjectError(err, r.Source.Bucket, obj.Key)) &&
 							!isErrObjectNotFound(ErrorRespToObjectError(err, r.Source.Bucket, obj.Key)) {
-							logger.LogIf(ctx, err)
+							batchLogIf(ctx, err)
 						}
 						continue
 					}
@@ -414,7 +413,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 					} else {
 						if !isErrMethodNotAllowed(ErrorRespToObjectError(err, r.Source.Bucket, obj.Key)) &&
 							!isErrObjectNotFound(ErrorRespToObjectError(err, r.Source.Bucket, obj.Key)) {
-							logger.LogIf(ctx, err)
+							batchLogIf(ctx, err)
 						}
 						continue
 					}
@@ -443,7 +442,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 						return
 					}
 					stopFn(oi, err)
-					logger.LogIf(ctx, err)
+					batchLogIf(ctx, err)
 					success = false
 				} else {
 					stopFn(oi, nil)
@@ -451,7 +450,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
 				if wait := globalBatchConfig.ReplicationWait(); wait > 0 {
 					time.Sleep(wait)
@@ -466,10 +465,10 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 
 		globalBatchJobsMetrics.save(job.ID, ri)
 		// persist in-memory state to disk.
-		logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+		batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
 		if err := r.Notify(ctx, ri); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
+			batchLogIf(ctx, fmt.Errorf("unable to notify %v", err))
 		}
 
 		cancel()
@@ -553,7 +552,7 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 					VersionID: entry.VersionID,
 				})
 			if err != nil {
-				logger.LogIf(ctx, err)
+				batchLogIf(ctx, err)
 				continue
 			}
 
@@ -572,7 +571,7 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 
 			opts, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
 			if err != nil {
-				logger.LogIf(ctx, err)
+				batchLogIf(ctx, err)
 				continue
 			}
 
@@ -1074,7 +1073,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				BucketLookup: lookupStyle(r.Target.Path),
 			})
 			if err != nil {
-				logger.LogIf(ctx, err)
+				batchLogIf(ctx, err)
 				return
 			}
 
@@ -1108,7 +1107,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			write:
 				if len(batch) > 0 {
 					if err := r.writeAsArchive(ctx, api, cl, batch); err != nil {
-						logger.LogIf(ctx, err)
+						batchLogIf(ctx, err)
 						for _, b := range batch {
 							slowCh <- b
 						}
@@ -1116,7 +1115,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 						ri.trackCurrentBucketBatch(r.Source.Bucket, batch)
 						globalBatchJobsMetrics.save(job.ID, ri)
 						// persist in-memory state to disk after every 10secs.
-						logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+						batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 					}
 					batch = batch[:0]
 				}
@@ -1189,7 +1188,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 						return
 					}
 					stopFn(result, err)
-					logger.LogIf(ctx, err)
+					batchLogIf(ctx, err)
 					success = false
 				} else {
 					stopFn(result, nil)
@@ -1197,7 +1196,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				ri.trackCurrentBucketObject(r.Source.Bucket, result, success)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
 				if wait := globalBatchConfig.ReplicationWait(); wait > 0 {
 					time.Sleep(wait)
@@ -1212,10 +1211,10 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 		globalBatchJobsMetrics.save(job.ID, ri)
 		// persist in-memory state to disk.
-		logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+		batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
 		if err := r.Notify(ctx, ri); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
+			batchLogIf(ctx, fmt.Errorf("unable to notify %v", err))
 		}
 
 		cancel()
@@ -1510,7 +1509,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 		req := &BatchJobRequest{}
 		if err := req.load(ctx, objectAPI, result.Name); err != nil {
 			if !errors.Is(err, errNoSuchJob) {
-				logger.LogIf(ctx, err)
+				batchLogIf(ctx, err)
 			}
 			continue
 		}
@@ -1526,7 +1525,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	logger.LogIf(ctx, json.NewEncoder(w).Encode(&listResult))
+	batchLogIf(ctx, json.NewEncoder(w).Encode(&listResult))
 }
 
 var errNoSuchJob = errors.New("no such job")
@@ -1549,7 +1548,7 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 	req := &BatchJobRequest{}
 	if err := req.load(ctx, objectAPI, pathJoin(batchJobPrefix, jobID)); err != nil {
 		if !errors.Is(err, errNoSuchJob) {
-			logger.LogIf(ctx, err)
+			batchLogIf(ctx, err)
 		}
 
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1558,7 +1557,7 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 
 	buf, err := yaml.Marshal(req)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		batchLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -1717,7 +1716,7 @@ func (j *BatchJobPool) resume() {
 	ctx, cancel := context.WithCancel(j.ctx)
 	defer cancel()
 	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, WalkOptions{}); err != nil {
-		logger.LogIf(j.ctx, err)
+		batchLogIf(j.ctx, err)
 		return
 	}
 	for result := range results {
@@ -1727,7 +1726,7 @@ func (j *BatchJobPool) resume() {
 		}
 		req := &BatchJobRequest{}
 		if err := req.load(ctx, j.objLayer, result.Name); err != nil {
-			logger.LogIf(ctx, err)
+			batchLogIf(ctx, err)
 			continue
 		}
 		_, nodeIdx := parseRequestToken(req.ID)
@@ -1736,7 +1735,7 @@ func (j *BatchJobPool) resume() {
 			continue
 		}
 		if err := j.queueJob(req); err != nil {
-			logger.LogIf(ctx, err)
+			batchLogIf(ctx, err)
 			continue
 		}
 	}
@@ -1760,7 +1759,7 @@ func (j *BatchJobPool) AddWorker() {
 				if job.Replicate.RemoteToLocal() {
 					if err := job.Replicate.StartFromSource(job.ctx, j.objLayer, *job); err != nil {
 						if !isErrBucketNotFound(err) {
-							logger.LogIf(j.ctx, err)
+							batchLogIf(j.ctx, err)
 							j.canceler(job.ID, false)
 							continue
 						}
@@ -1769,7 +1768,7 @@ func (j *BatchJobPool) AddWorker() {
 				} else {
 					if err := job.Replicate.Start(job.ctx, j.objLayer, *job); err != nil {
 						if !isErrBucketNotFound(err) {
-							logger.LogIf(j.ctx, err)
+							batchLogIf(j.ctx, err)
 							j.canceler(job.ID, false)
 							continue
 						}
@@ -1779,14 +1778,14 @@ func (j *BatchJobPool) AddWorker() {
 			case job.KeyRotate != nil:
 				if err := job.KeyRotate.Start(job.ctx, j.objLayer, *job); err != nil {
 					if !isErrBucketNotFound(err) {
-						logger.LogIf(j.ctx, err)
+						batchLogIf(j.ctx, err)
 						continue
 					}
 				}
 			case job.Expire != nil:
 				if err := job.Expire.Start(job.ctx, j.objLayer, *job); err != nil {
 					if !isErrBucketNotFound(err) {
-						logger.LogIf(j.ctx, err)
+						batchLogIf(j.ctx, err)
 						continue
 					}
 				}

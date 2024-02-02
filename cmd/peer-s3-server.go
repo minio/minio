@@ -24,7 +24,6 @@ import (
 	"net/http"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
@@ -388,7 +387,7 @@ func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
+	peersLogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
 }
 
 // registerPeerS3Handlers - register peer s3 router.

@@ -26,7 +26,6 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/internal/logger"
 )
 
 // XL constants.
@@ -210,7 +209,7 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	}
 
 	if !c.Algorithm.Available() {
-		logger.LogIf(GlobalContext, errBitrotHashAlgoInvalid)
+		internalLogIf(GlobalContext, errBitrotHashAlgoInvalid)
 		return errBitrotHashAlgoInvalid
 	}
 	return nil

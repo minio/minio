@@ -36,7 +36,7 @@ const contextAuditKey = contextKeyType("audit-entry")
 // SetAuditEntry sets Audit info in the context.
 func SetAuditEntry(ctx context.Context, audit *audit.Entry) context.Context {
 	if ctx == nil {
-		LogIf(context.Background(), fmt.Errorf("context is nil"))
+		LogIf(context.Background(), "audit", fmt.Errorf("context is nil"))
 		return nil
 	}
 	return context.WithValue(ctx, contextAuditKey, audit)
@@ -144,7 +144,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 	// Send audit logs only to http targets.
 	for _, t := range auditTgts {
 		if err := t.Send(ctx, entry); err != nil {
-			LogOnceIf(ctx, fmt.Errorf("Unable to send an audit event to the target `%v`: %v", t, err), "send-audit-event-failure")
+			LogOnceIf(ctx, "logging", fmt.Errorf("Unable to send an audit event to the target `%v`: %v", t, err), "send-audit-event-failure")
 		}
 	}
 }

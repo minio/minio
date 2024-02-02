@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/minio/minio-go/v7/pkg/s3utils"
-	"github.com/minio/minio/internal/logger"
 )
 
 // Checks on CopyObject arguments, bucket and object.
@@ -71,10 +70,6 @@ func checkListObjsArgs(ctx context.Context, bucket, prefix, marker string) error
 
 	// Validates object prefix validity after bucket exists.
 	if !IsValidObjectPrefix(prefix) {
-		logger.LogIf(ctx, ObjectNameInvalid{
-			Bucket: bucket,
-			Object: prefix,
-		})
 		return ObjectNameInvalid{
 			Bucket: bucket,
 			Object: prefix,
@@ -90,10 +85,6 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 	}
 	if uploadIDMarker != "" {
 		if HasSuffix(keyMarker, SlashSeparator) {
-			logger.LogIf(ctx, InvalidUploadIDKeyCombination{
-				UploadIDMarker: uploadIDMarker,
-				KeyMarker:      keyMarker,
-			})
 			return InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
@@ -101,7 +92,6 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 		}
 		_, err := base64.RawURLEncoding.DecodeString(uploadIDMarker)
 		if err != nil {
-			logger.LogIf(ctx, err)
 			return MalformedUploadID{
 				UploadID: uploadIDMarker,
 			}

@@ -130,7 +130,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 	// Download Binary Once
 	binC, bin, err := downloadBinary(u, mode)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		adminLogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -354,7 +354,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	// Download Binary Once
 	binC, bin, err := downloadBinary(u, mode)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		adminLogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -368,7 +368,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 				StatusCode: http.StatusInternalServerError,
 			}
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+			adminLogIf(ctx, fmt.Errorf("server update failed with %w", err))
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
@@ -376,7 +376,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	err = verifyBinary(u, sha256Sum, releaseInfo, mode, bytes.NewReader(bin))
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		adminLogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -389,7 +389,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 				StatusCode: http.StatusInternalServerError,
 			}
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+			adminLogIf(ctx, fmt.Errorf("server update failed with %w", err))
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
@@ -397,7 +397,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	err = commitBinary()
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("server update failed with %w", err))
+		adminLogIf(ctx, fmt.Errorf("server update failed with %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -420,7 +420,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 	for _, nerr := range globalNotificationSys.SignalService(serviceRestart) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+			adminLogIf(ctx, nerr.Err)
 		}
 	}
 
@@ -451,7 +451,7 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	case madmin.ServiceActionUnfreeze:
 		serviceSig = serviceUnFreeze
 	default:
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
+		adminLogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
@@ -473,7 +473,7 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	for _, nerr := range globalNotificationSys.SignalService(serviceSig) {
 		if nerr.Err != nil {
 			logger.GetReqInfo(ctx).SetTags("peerAddress", nerr.Host.String())
-			logger.LogIf(ctx, nerr.Err)
+			adminLogIf(ctx, nerr.Err)
 		}
 	}
 
@@ -534,7 +534,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	case madmin.ServiceActionUnfreeze:
 		serviceSig = serviceUnFreeze
 	default:
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
+		adminLogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
@@ -1239,7 +1239,7 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 	if hip.clientToken == "" {
 		jerr := json.NewDecoder(r).Decode(&hip.hs)
 		if jerr != nil {
-			logger.LogIf(GlobalContext, jerr, logger.ErrorKind)
+			adminLogIf(GlobalContext, jerr, logger.ErrorKind)
 			err = ErrRequestBodyParse
 			return
 		}
@@ -1433,7 +1433,7 @@ func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmi
 		var errCount int
 		for _, nerr := range nerrs {
 			if nerr.Err != nil {
-				logger.LogIf(ctx, nerr.Err)
+				adminLogIf(ctx, nerr.Err)
 				errCount++
 			}
 		}
@@ -1561,7 +1561,7 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			// would mean the network is not stable. Logging here will help in debugging network issues.
 			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
-				logger.LogIf(ctx, err)
+				adminLogIf(ctx, err)
 			}
 		}
 		totalRx += n
@@ -2800,7 +2800,7 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			w.Header().Get(xhttp.AmzRequestID), w.Header().Get(xhttp.AmzRequestHostID))
 		encodedErrorResponse := encodeResponse(errorResponse)
 		healthInfo.Error = string(encodedErrorResponse)
-		logger.LogIf(ctx, enc.Encode(healthInfo))
+		adminLogIf(ctx, enc.Encode(healthInfo))
 	}
 
 	deadline := 10 * time.Second // Default deadline is 10secs for health diagnostics.
@@ -3113,7 +3113,7 @@ func getClusterMetaInfo(ctx context.Context) []byte {
 	case ci := <-resultCh:
 		out, err := json.MarshalIndent(ci, "", "  ")
 		if err != nil {
-			logger.LogIf(ctx, err)
+			bugLogIf(ctx, err)
 			return nil
 		}
 		return out
@@ -3206,18 +3206,18 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 
 		clusterKey, err := bytesToPublicKey(getSubnetAdminPublicKey())
 		if err != nil {
-			logger.LogIf(ctx, stream.AddError(err.Error()))
+			bugLogIf(ctx, stream.AddError(err.Error()))
 			return
 		}
 		err = stream.AddKeyEncrypted(clusterKey)
 		if err != nil {
-			logger.LogIf(ctx, stream.AddError(err.Error()))
+			bugLogIf(ctx, stream.AddError(err.Error()))
 			return
 		}
 		if b := getClusterMetaInfo(ctx); len(b) > 0 {
 			w, err := stream.AddEncryptedStream("cluster.info", nil)
 			if err != nil {
-				logger.LogIf(ctx, err)
+				bugLogIf(ctx, err)
 				return
 			}
 			w.Write(b)
@@ -3226,12 +3226,12 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 
 		// Add new key for inspect data.
 		if err := stream.AddKeyEncrypted(publicKey); err != nil {
-			logger.LogIf(ctx, stream.AddError(err.Error()))
+			bugLogIf(ctx, stream.AddError(err.Error()))
 			return
 		}
 		encStream, err := stream.AddEncryptedStream("inspect.zip", nil)
 		if err != nil {
-			logger.LogIf(ctx, stream.AddError(err.Error()))
+			bugLogIf(ctx, stream.AddError(err.Error()))
 			return
 		}
 		defer encStream.Close()
@@ -3244,7 +3244,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		// MUST use crypto/rand
 		n, err := crand.Read(key[:])
 		if err != nil || n != len(key) {
-			logger.LogIf(ctx, err)
+			bugLogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
@@ -3258,7 +3258,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 
 		stream, err := sio.AES_256_GCM.Stream(key[:])
 		if err != nil {
-			logger.LogIf(ctx, err)
+			bugLogIf(ctx, err)
 			return
 		}
 		// Zero nonce, we only use each key once, and 32 bytes is plenty.
@@ -3272,7 +3272,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		defer inspectZipW.Close()
 
 		if b := getClusterMetaInfo(ctx); len(b) > 0 {
-			logger.LogIf(ctx, embedFileInZip(inspectZipW, "cluster.info", b, 0o600))
+			adminLogIf(ctx, embedFileInZip(inspectZipW, "cluster.info", b, 0o600))
 		}
 	}
 
@@ -3300,23 +3300,23 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			sys:     nil,
 		})
 		if zerr != nil {
-			logger.LogIf(ctx, zerr)
+			bugLogIf(ctx, zerr)
 			return nil
 		}
 		header.Method = zip.Deflate
 		zwriter, zerr := inspectZipW.CreateHeader(header)
 		if zerr != nil {
-			logger.LogIf(ctx, zerr)
+			bugLogIf(ctx, zerr)
 			return nil
 		}
 		if _, err := io.Copy(zwriter, r); err != nil {
-			logger.LogIf(ctx, err)
+			adminLogIf(ctx, err)
 		}
 		return nil
 	}
 	err := o.GetRawData(ctx, volume, file, rawDataFn)
 	if !errors.Is(err, errFileNotFound) {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 	}
 
 	// save the format.json as part of inspect by default
@@ -3324,7 +3324,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
 	}
 	if !errors.Is(err, errFileNotFound) {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 	}
 
 	// save args passed to inspect command
@@ -3336,7 +3336,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		sb.WriteString(pool.CmdLine)
 	}
 	sb.WriteString("\n")
-	logger.LogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes(), 0o600))
+	adminLogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes(), 0o600))
 
 	scheme := "https"
 	if !globalIsTLS {
@@ -3370,7 +3370,7 @@ function main() {
 }
 
 main "$@"`, scheme)
-	logger.LogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes(), 0o755))
+	adminLogIf(ctx, embedFileInZip(inspectZipW, "start-minio.sh", scrb.Bytes(), 0o755))
 }
 
 func getSubnetAdminPublicKey() []byte {

@@ -66,7 +66,7 @@ func enforceRetentionForDeletion(ctx context.Context, objInfo ObjectInfo) (locke
 	if ret.Mode.Valid() && (ret.Mode == objectlock.RetCompliance || ret.Mode == objectlock.RetGovernance) {
 		t, err := objectlock.UTCNowNTP()
 		if err != nil {
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err, logger.WarningKind)
 			return true
 		}
 		if ret.RetainUntilDate.After(t) {
@@ -114,7 +114,7 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 			// duration of the retention period.
 			t, err := objectlock.UTCNowNTP()
 			if err != nil {
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err, logger.WarningKind)
 				return ObjectLocked{}
 			}
 
@@ -140,7 +140,7 @@ func enforceRetentionBypassForDelete(ctx context.Context, r *http.Request, bucke
 			if !byPassSet {
 				t, err := objectlock.UTCNowNTP()
 				if err != nil {
-					logger.LogIf(ctx, err)
+					internalLogIf(ctx, err, logger.WarningKind)
 					return ObjectLocked{}
 				}
 
@@ -170,7 +170,7 @@ func enforceRetentionBypassForPut(ctx context.Context, r *http.Request, oi Objec
 
 	t, err := objectlock.UTCNowNTP()
 	if err != nil {
-		logger.LogIf(ctx, err)
+		internalLogIf(ctx, err, logger.WarningKind)
 		return ObjectLocked{Bucket: oi.Bucket, Object: oi.Name, VersionID: oi.VersionID}
 	}
 
@@ -277,7 +277,7 @@ func checkPutObjectLockAllowed(ctx context.Context, rq *http.Request, bucket, ob
 			r := objectlock.GetObjectRetentionMeta(objInfo.UserDefined)
 			t, err := objectlock.UTCNowNTP()
 			if err != nil {
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err, logger.WarningKind)
 				return mode, retainDate, legalHold, ErrObjectLocked
 			}
 			if r.Mode == objectlock.RetCompliance && r.RetainUntilDate.After(t) {
@@ -324,7 +324,7 @@ func checkPutObjectLockAllowed(ctx context.Context, rq *http.Request, bucket, ob
 
 		t, err := objectlock.UTCNowNTP()
 		if err != nil {
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err, logger.WarningKind)
 			return mode, retainDate, legalHold, ErrObjectLocked
 		}
 

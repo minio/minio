@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/policy"
 )
 
@@ -1819,7 +1818,7 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 
 			// we are only logging errors, not handling them.
 			err := store.deleteUserIdentity(ctx, user, userType)
-			logger.LogIf(GlobalContext, err)
+			iamLogIf(GlobalContext, err)
 			delete(cache.iamUsersMap, user)
 
 			deleted = true

@@ -398,7 +398,7 @@ func (s *xlStorage) Healing() *healingTracker {
 	}
 	h := newHealingTracker()
 	_, err = h.UnmarshalMsg(b)
-	logger.LogIf(GlobalContext, err)
+	bugLogIf(GlobalContext, err)
 	return h
 }
 
@@ -785,12 +785,12 @@ func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 			} else if osIsPermission(err) {
 				return nil, errDiskAccessDenied
 			}
-			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+			storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 			return nil, errCorruptedBackend
 		} else if osIsPermission(err) {
 			return nil, errDiskAccessDenied
 		}
-		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+		storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 		return nil, errCorruptedBackend
 	}
 	return fi, nil
@@ -836,19 +836,19 @@ func (s *xlStorage) GetDiskID() (string, error) {
 			} else if osIsPermission(err) {
 				return "", errDiskAccessDenied
 			}
-			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+			storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 			return "", errCorruptedBackend
 		} else if osIsPermission(err) {
 			return "", errDiskAccessDenied
 		}
-		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+		storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 		return "", errCorruptedBackend
 	}
 
 	format := &formatErasureV3{}
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(b, &format); err != nil {
-		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+		bugLogIf(GlobalContext, err) // log unexpected errors
 		return "", errCorruptedFormat
 	}
 
@@ -2373,7 +2373,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.
-			logger.LogOnceIf(ctx, fmt.Errorf("drive:%s, srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
+			storageLogOnceIf(ctx, fmt.Errorf("drive:%s, srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				s.drivePath,
 				srcVolume, srcPath,
 				dstVolume, dstPath,
@@ -2472,12 +2472,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			xlMetaLegacy := &xlMetaV1Object{}
 			json := jsoniter.ConfigCompatibleWithStandardLibrary
 			if err := json.Unmarshal(dstBuf, xlMetaLegacy); err != nil {
-				logger.LogOnceIf(ctx, err, "read-data-unmarshal-"+dstFilePath)
+				storageLogOnceIf(ctx, err, "read-data-unmarshal-"+dstFilePath)
 				// Data appears corrupt. Drop data.
 			} else {
 				xlMetaLegacy.DataDir = legacyDataDir
 				if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
-					logger.LogOnceIf(ctx, err, "read-data-add-legacy-"+dstFilePath)
+					storageLogOnceIf(ctx, err, "read-data-add-legacy-"+dstFilePath)
 				}
 				legacyPreserved = true
 			}
@@ -2800,7 +2800,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 				errFileVersionNotFound,
 			}...) {
 				logger.GetReqInfo(ctx).AppendTags("disk", s.String())
-				logger.LogOnceIf(ctx, err, partPath)
+				storageLogOnceIf(ctx, err, partPath)
 			}
 			return err
 		}

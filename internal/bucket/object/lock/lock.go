@@ -37,6 +37,14 @@ import (
 	"github.com/minio/pkg/v2/env"
 )
 
+const (
+	logSubsys = "locking"
+)
+
+func lockLogIf(ctx context.Context, err error) {
+	logger.LogIf(ctx, logSubsys, err)
+}
+
 // Enabled indicates object locking is enabled
 const Enabled = "Enabled"
 
@@ -153,7 +161,7 @@ type Retention struct {
 func (r Retention) Retain(created time.Time) bool {
 	t, err := UTCNowNTP()
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		lockLogIf(context.Background(), err)
 		// Retain
 		return true
 	}
@@ -262,7 +270,7 @@ func (config *Config) ToRetention() Retention {
 
 		t, err := UTCNowNTP()
 		if err != nil {
-			logger.LogIf(context.Background(), err)
+			lockLogIf(context.Background(), err)
 			// Do not change any configuration
 			// upon NTP failure.
 			return r
@@ -364,7 +372,7 @@ func ParseObjectRetention(reader io.Reader) (*ObjectRetention, error) {
 
 	t, err := UTCNowNTP()
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		lockLogIf(context.Background(), err)
 		return &ret, ErrPastObjectLockRetainDate
 	}
 
@@ -427,7 +435,7 @@ func ParseObjectLockRetentionHeaders(h http.Header) (rmode RetMode, r RetentionD
 
 	t, err := UTCNowNTP()
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		lockLogIf(context.Background(), err)
 		return rmode, r, ErrPastObjectLockRetainDate
 	}
 
