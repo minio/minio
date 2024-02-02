@@ -498,7 +498,7 @@ func (p *xlStorageDiskIDCheck) CreateFile(ctx context.Context, origvolume, volum
 	}
 	defer done(&err)
 
-	return p.storage.CreateFile(ctx, origvolume, volume, path, size, io.NopCloser(reader))
+	return p.storage.CreateFile(ctx, origvolume, volume, path, size, diskReleaseWhileReading(ctx, reader))
 }
 
 func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
@@ -881,6 +881,7 @@ type (
 	healthDiskCtxKey   struct{}
 	healthDiskCtxValue struct {
 		lastSuccess *int64
+		tokens      chan struct{}
 	}
 )
 
@@ -939,7 +940,7 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	// We only progress here if we got a token.
 
 	atomic.StoreInt64(&p.health.lastStarted, time.Now().UnixNano())
-	ctx = context.WithValue(ctx, healthDiskCtxKey{}, &healthDiskCtxValue{lastSuccess: &p.health.lastSuccess})
+	ctx = context.WithValue(ctx, healthDiskCtxKey{}, &healthDiskCtxValue{lastSuccess: &p.health.lastSuccess, tokens: p.health.tokens})
 	si := p.updateStorageMetrics(s, paths...)
 	var once sync.Once
 	return ctx, func(errp *error) {
@@ -1010,7 +1011,7 @@ func (p *xlStorageDiskIDCheck) checkHealth(ctx context.Context) (err error) {
 		if p.health.status.CompareAndSwap(diskHealthOK, diskHealthFaulty) {
 			logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline, time since last response %v", globalLocalNodeName, p.storage.String(), t.Round(time.Millisecond)))
 			p.health.waiting.Add(1)
-			go p.monitorDiskStatus(0, mustGetUUID())
+			go p.monitorDiskStatus(mustGetUUID())
 		}
 		return errFaultyDisk
 	}
@@ -1025,7 +1026,7 @@ var toWrite = []byte{2048: 42}
 
 // monitorDiskStatus should be called once when a drive has been marked offline.
 // Once the disk has been deemed ok, it will return to online status.
-func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string) {
+func (p *xlStorageDiskIDCheck) monitorDiskStatus(fn string) {
 	t := time.NewTicker(5 * time.Second)
 	defer t.Stop()
 
@@ -1116,7 +1117,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 			if p.health.status.CompareAndSwap(diskHealthOK, diskHealthFaulty) {
 				logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
 				p.health.waiting.Add(1)
-				go p.monitorDiskStatus(spent, fn)
+				go p.monitorDiskStatus(fn)
 			}
 		}
 
@@ -1213,28 +1214,71 @@ type diskHealthWrapper struct {
 	tracker *healthDiskCtxValue
 	r       io.Reader
 	w       io.Writer
+	release bool
+	cancel  <-chan struct{}
 }
 
-func (d *diskHealthWrapper) Read(p []byte) (int, error) {
+func (d *diskHealthWrapper) Read(p []byte) (n int, err error) {
 	if d.r == nil {
 		return 0, fmt.Errorf("diskHealthWrapper: Read with no reader")
 	}
-	n, err := d.r.Read(p)
-	if err == nil || err == io.EOF && n > 0 {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if d.release && d.tracker.tokens != nil {
+		defer d.releaseToken()(&err)
+	}
+	n, err = d.r.Read(p)
+	if !d.release && err == nil || err == io.EOF && n > 0 {
 		d.tracker.logSuccess()
 	}
 	return n, err
 }
 
-func (d *diskHealthWrapper) Write(p []byte) (int, error) {
+func (d *diskHealthWrapper) Write(p []byte) (n int, err error) {
 	if d.w == nil {
 		return 0, fmt.Errorf("diskHealthWrapper: Write with no writer")
 	}
-	n, err := d.w.Write(p)
-	if err == nil && n == len(p) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+	if d.release && d.tracker.tokens != nil {
+		defer d.releaseToken()(&err)
+	}
+	n, err = d.w.Write(p)
+	if !d.release && err == nil && n == len(p) {
 		d.tracker.logSuccess()
 	}
 	return n, err
+}
+
+// releaseToken will release the token when under load.
+// When the returned function is called, the token is re-grabbed.
+// If the context has been canceled, the token is
+// re-grabbed async and the error is modified if not set.
+func (d *diskHealthWrapper) releaseToken() func(err *error) {
+	// When we have less than 12% capacity left, release the token.
+	threshold := cap(d.tracker.tokens)
+	threshold = (threshold + 7) / 8
+	if len(d.tracker.tokens) > threshold || cap(d.tracker.tokens) == 0 {
+		// Happy path - we are not under load
+		return func(*error) {}
+	}
+	d.tracker.tokens <- struct{}{}
+	// Regrab the token before returning.
+	return func(err *error) {
+		select {
+		case <-d.tracker.tokens:
+		case <-d.cancel:
+			go func() {
+				// We still "owe" a token. But we can grab it async.
+				<-d.tracker.tokens
+			}()
+			if err != nil && *err == nil {
+				*err = context.Canceled
+			}
+		}
+	}
 }
 
 // diskHealthReader provides a wrapper that will update disk health on
@@ -1263,4 +1307,61 @@ func diskHealthWriter(ctx context.Context, w io.Writer) io.Writer {
 		return w
 	}
 	return &diskHealthWrapper{w: w, tracker: tracker}
+}
+
+// diskReleaseWhileReading will release the disk token while reading.
+func diskReleaseWhileReading(ctx context.Context, r io.Reader) io.Reader {
+	// Check if context has a disk health check.
+	tracker, ok := ctx.Value(healthDiskCtxKey{}).(*healthDiskCtxValue)
+	if !ok {
+		// No need to wrap
+		return r
+	}
+	return &diskHealthWrapper{r: r, tracker: tracker, release: true}
+}
+
+// diskReleaseWhileWriting will release the disk token while writing.
+func diskReleaseWhileWriting(ctx context.Context, w io.Writer) io.Writer {
+	// Check if context has a disk health check.
+	tracker, ok := ctx.Value(healthDiskCtxKey{}).(*healthDiskCtxValue)
+	if !ok {
+		// No need to wrap
+		return w
+	}
+	return &diskHealthWrapper{w: w, tracker: tracker, release: true}
+}
+
+// diskReleaseWhileWriting will release the disk token while writing.
+func diskReleaseWhileSending[T any](ctx context.Context, ch chan<- T, item T) error {
+	// Check if context has a disk health check.
+	done := ctx.Done()
+	tracker, ok := ctx.Value(healthDiskCtxKey{}).(*healthDiskCtxValue)
+	if !ok {
+		select {
+		case ch <- item:
+			return nil
+		case <-done:
+			return ctx.Err()
+		}
+	}
+	select {
+	case ch <- item:
+		// Happy path
+	case <-done:
+		return ctx.Err()
+	default:
+		// Blocked. Release tracker while sending.
+		tracker.tokens <- struct{}{}
+		select {
+		case ch <- item:
+		case <-done:
+			// We still "owe" a token. But we can grab it async.
+			go func() {
+				<-tracker.tokens
+			}()
+			return ctx.Err()
+		}
+		<-tracker.tokens
+	}
+	return nil
 }

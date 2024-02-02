@@ -2870,10 +2870,8 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 				r.Exists = true
 				r.Error = err.Error()
 			}
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case resp <- r:
+			if err := diskReleaseWhileSending[ReadMultipleResp](ctx, resp, r); err != nil {
+				return err
 			}
 			if req.AbortOn404 && !r.Exists {
 				// We stop at first file not found.
@@ -2886,14 +2884,18 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		if req.MaxSize > 0 && int64(len(data)) > req.MaxSize {
 			r.Exists = true
 			r.Error = fmt.Sprintf("max size (%d) exceeded: %d", req.MaxSize, len(data))
-			resp <- r
+			if err := diskReleaseWhileSending[ReadMultipleResp](ctx, resp, r); err != nil {
+				return err
+			}
 			continue
 		}
 		found++
 		r.Exists = true
 		r.Data = data
 		r.Modtime = mt
-		resp <- r
+		if err := diskReleaseWhileSending[ReadMultipleResp](ctx, resp, r); err != nil {
+			return err
+		}
 		if req.MaxResults > 0 && found >= req.MaxResults {
 			return nil
 		}

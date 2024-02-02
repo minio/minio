@@ -392,7 +392,7 @@ func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions,
 	}
 	defer done(&err)
 
-	return p.storage.WalkDir(ctx, opts, wr)
+	return p.storage.WalkDir(ctx, opts, diskReleaseWhileWriting(ctx, wr))
 }
 
 // WalkDir will traverse a directory and return all entries found.
