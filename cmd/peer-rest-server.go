@@ -228,6 +228,10 @@ func (s *peerRESTServer) LoadGroupHandler(mss *grid.MSS) (np grid.NoPayload, ner
 	}
 
 	group := mss.Get(peerRESTGroup)
+	if group == "" {
+		return np, grid.NewRemoteErr(errors.New("group is missing"))
+	}
+
 	err := globalIAMSys.LoadGroup(context.Background(), objAPI, group)
 	if err != nil {
 		return np, grid.NewRemoteErr(err)

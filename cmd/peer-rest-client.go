@@ -415,10 +415,7 @@ func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
 	_, err := loadBucketMetadataHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTBucket: bucket,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // DeleteBucketMetadata - Delete bucket metadata
@@ -430,10 +427,7 @@ func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
 	_, err := deleteBucketMetadataHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTBucket: bucket,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // DeletePolicy - delete a specific canned policy.
@@ -446,10 +440,7 @@ func (client *peerRESTClient) DeletePolicy(policyName string) (err error) {
 	_, err = deletePolicyHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTPolicy: policyName,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // LoadPolicy - reload a specific canned policy.
@@ -462,10 +453,7 @@ func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
 	_, err = loadPolicyHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTPolicy: policyName,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // LoadPolicyMapping - reload a specific policy mapping
@@ -480,10 +468,7 @@ func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, userType IAM
 		peerRESTUserType:    strconv.Itoa(int(userType)),
 		peerRESTIsGroup:     strconv.FormatBool(isGroup),
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // DeleteUser - delete a specific user.
@@ -496,10 +481,7 @@ func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
 	_, err = deleteUserHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTUser: accessKey,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // DeleteServiceAccount - delete a specific service account.
@@ -512,10 +494,7 @@ func (client *peerRESTClient) DeleteServiceAccount(accessKey string) (err error)
 	_, err = deleteSvcActHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTUser: accessKey,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // LoadUser - reload a specific user.
@@ -529,10 +508,7 @@ func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) 
 		peerRESTUser:     accessKey,
 		peerRESTUserTemp: strconv.FormatBool(temp),
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // LoadServiceAccount - reload a specific service account.
@@ -545,10 +521,7 @@ func (client *peerRESTClient) LoadServiceAccount(accessKey string) (err error) {
 	_, err = loadSvcActHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTUser: accessKey,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // LoadGroup - send load group command to peers.
@@ -561,10 +534,7 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	_, err := loadGroupHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
 		peerRESTGroup: group,
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // VerifyBinary - sends verify binary message to remote peers.
@@ -678,10 +648,7 @@ func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
 		return nil
 	}
 	_, err := reloadPoolMetaHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
@@ -690,10 +657,7 @@ func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
 		return nil
 	}
 	_, err := stopRebalanceHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebalance bool) error {
@@ -704,10 +668,7 @@ func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebala
 	_, err := loadRebalanceMetaHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{
 		peerRESTStartRebalance: strconv.FormatBool(startRebalance),
 	}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {
@@ -716,10 +677,7 @@ func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) erro
 		return nil
 	}
 	_, err := loadTransitionTierConfigHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (client *peerRESTClient) doTrace(ctx context.Context, traceCh chan<- []byte, traceOpts madmin.ServiceTraceOpts) {
