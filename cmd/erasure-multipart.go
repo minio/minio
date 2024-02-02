@@ -590,7 +590,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	data := r.Reader
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.ErrorKind)
+		bugLogIf(ctx, errInvalidArgument, logger.ErrorKind)
 		return pi, toObjectErr(errInvalidArgument)
 	}
 
@@ -1026,7 +1026,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	if len(partInfoFiles) != len(parts) {
 		// Should only happen through internal error
 		err := fmt.Errorf("unexpected part result count: %d, want %d", len(partInfoFiles), len(parts))
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		return oi, toObjectErr(err, bucket, object)
 	}
 
@@ -1096,7 +1096,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		_, err := pfi.UnmarshalMsg(part.Data)
 		if err != nil {
 			// Maybe crash or similar.
-			logger.LogIf(ctx, err)
+			bugLogIf(ctx, err)
 			return oi, InvalidPart{
 				PartNumber: partID,
 			}
@@ -1105,7 +1105,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		partI := pfi.Parts[0]
 		partNumber := partI.Number
 		if partID != partNumber {
-			logger.LogIf(ctx, fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", partID, partID, partI.Number))
+			internalLogIf(ctx, fmt.Errorf("part.%d.meta has incorrect corresponding part number: expected %d, got %d", partID, partID, partI.Number))
 			return oi, InvalidPart{
 				PartNumber: partID,
 			}

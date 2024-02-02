@@ -1044,7 +1044,7 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		}
 		if err = manager.AddCertificate(certFile, keyFile); err != nil {
 			err = fmt.Errorf("Unable to load TLS certificate '%s,%s': %w", certFile, keyFile, err)
-			logger.LogIf(GlobalContext, err, logger.ErrorKind)
+			bootLogIf(GlobalContext, err, logger.ErrorKind)
 		}
 	}
 	secureConn = true

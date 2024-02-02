@@ -43,13 +43,13 @@ func (s *sftpLogger) Info(tag xsftp.LogType, msg string) {
 func (s *sftpLogger) Error(tag xsftp.LogType, err error) {
 	switch tag {
 	case xsftp.AcceptNetworkError:
-		logger.LogOnceIf(context.Background(), err, "accept-limit-sftp")
+		sftpLogOnceIf(context.Background(), err, "accept-limit-sftp")
 	case xsftp.AcceptChannelError:
-		logger.LogOnceIf(context.Background(), err, "accept-channel-sftp")
+		sftpLogOnceIf(context.Background(), err, "accept-channel-sftp")
 	case xsftp.SSHKeyExchangeError:
-		logger.LogOnceIf(context.Background(), err, "key-exchange-sftp")
+		sftpLogOnceIf(context.Background(), err, "key-exchange-sftp")
 	default:
-		logger.LogOnceIf(context.Background(), err, "unknown-error-sftp")
+		sftpLogOnceIf(context.Background(), err, "unknown-error-sftp")
 	}
 }
 

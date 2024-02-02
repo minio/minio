@@ -336,7 +336,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 			case newerNoncurrentTask:
 				deleteObjectVersions(es.ctx, es.objAPI, v.bucket, v.versions, v.event)
 			case jentry:
-				logger.LogIf(es.ctx, deleteObjectFromRemoteTier(es.ctx, v.ObjName, v.VersionID, v.TierName))
+				transitionLogIf(es.ctx, deleteObjectFromRemoteTier(es.ctx, v.ObjName, v.VersionID, v.TierName))
 			case freeVersionTask:
 				oi := v.ObjectInfo
 				traceFn := globalLifecycleSys.trace(oi)
@@ -355,7 +355,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				// Remove the remote object
 				err := deleteObjectFromRemoteTier(es.ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
 				if ignoreNotFoundErr(err) != nil {
-					logger.LogIf(es.ctx, err)
+					transitionLogIf(es.ctx, err)
 					return
 				}
 
@@ -368,10 +368,10 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 					auditLogLifecycle(es.ctx, oi, ILMFreeVersionDelete, nil, traceFn)
 				}
 				if ignoreNotFoundErr(err) != nil {
-					logger.LogIf(es.ctx, err)
+					transitionLogIf(es.ctx, err)
 				}
 			default:
-				logger.LogIf(es.ctx, fmt.Errorf("Invalid work type - %v", v))
+				bugLogIf(es.ctx, fmt.Errorf("Invalid work type - %v", v))
 			}
 		}
 	}
@@ -486,7 +486,7 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 			if err := transitionObject(t.ctx, objectAPI, task.objInfo, newLifecycleAuditEvent(task.src, task.event)); err != nil {
 				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !xnet.IsNetworkOrHostDown(err, false) {
 					if !strings.Contains(err.Error(), "use of closed network connection") {
-						logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
+						transitionLogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
 							task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
 					}
 				}
@@ -614,7 +614,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		// remote object
 		opts.SkipFreeVersion = true
 	} else {
-		logger.LogIf(ctx, err)
+		transitionLogIf(ctx, err)
 	}
 
 	// Now, delete object from hot-tier namespace
@@ -879,7 +879,7 @@ func postRestoreOpts(ctx context.Context, r *http.Request, bucket, object string
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			s3LogIf(ctx, err)
 			return opts, InvalidVersionID{
 				Bucket:    bucket,
 				Object:    object,

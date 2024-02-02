@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/workers"
 )
@@ -383,7 +382,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				success := true
 				if err := r.KeyRotate(ctx, api, result); err != nil {
 					stopFn(result, err)
-					logger.LogIf(ctx, err)
+					batchLogIf(ctx, err)
 					success = false
 				} else {
 					stopFn(result, nil)
@@ -392,7 +391,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				ri.RetryAttempts = attempts
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 				if success {
 					break
 				}
@@ -412,10 +411,10 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	ri.Failed = ri.ObjectsFailed > 0
 	globalBatchJobsMetrics.save(job.ID, ri)
 	// persist in-memory state to disk.
-	logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+	batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 
 	if err := r.Notify(ctx, ri); err != nil {
-		logger.LogIf(ctx, fmt.Errorf("unable to notify %v", err))
+		batchLogIf(ctx, fmt.Errorf("unable to notify %v", err))
 	}
 
 	cancel()

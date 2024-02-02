@@ -479,7 +479,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 	}
 	if err == nil && dnsURL != "" {
 		bootstrapTraceMsg("initialize remote bucket DNS store")
@@ -487,27 +487,27 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 		}
 	}
 
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 	}
 
 	if etcdCfg.Enabled {
 		bootstrapTraceMsg("initialize etcd store")
 		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 		}
 
 		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 			if globalDNSConfig != nil {
 				// if global DNS is already configured, indicate with a warning, in case
 				// users are confused.
-				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
+				configLogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
 			} else {
 				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 					dns.DomainNames(globalDomainNames),
@@ -516,7 +516,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 					dns.CoreDNSPath(etcdCfg.CoreDNSPath),
 				)
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+					configLogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
 						globalDomainNames, err))
 				}
 			}
@@ -532,7 +532,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
+		configLogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
 	}
 
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
@@ -545,19 +545,19 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	bootstrapTraceMsg("initialize the event notification targets")
 	globalNotifyTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
 	bootstrapTraceMsg("initialize the lambda targets")
 	globalLambdaTargetList, err = lambda.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize lambda target(s): %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize lambda target(s): %w", err))
 	}
 
 	bootstrapTraceMsg("applying the dynamic configuration")
 	// Apply dynamic config values
 	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
-		logger.LogIf(ctx, err)
+		configLogIf(ctx, err)
 	}
 }
 
@@ -571,7 +571,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 	case config.APISubSys:
 		apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
+			configLogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 		}
 
 		globalAPIConfig.init(apiConfig, setDriveCounts)
@@ -607,33 +607,33 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		scannerCycle.Store(scannerCfg.Cycle)
 		scannerExcessObjectVersions.Store(scannerCfg.ExcessVersions)
 		scannerExcessFolders.Store(scannerCfg.ExcessFolders)
-		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
+		configLogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.LoggerWebhookSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 		}
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.HTTP {
 			if l.Enabled {
-				l.LogOnceIf = logger.LogOnceConsoleIf
+				l.LogOnceIf = configLogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			}
 			loggerCfg.HTTP[n] = l
 		}
 		if errs := logger.UpdateHTTPWebhooks(ctx, loggerCfg.HTTP); len(errs) > 0 {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
+			configLogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditWebhookSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
 		}
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.AuditWebhook {
 			if l.Enabled {
-				l.LogOnceIf = logger.LogOnceConsoleIf
+				l.LogOnceIf = configLogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			}
@@ -641,30 +641,30 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		}
 
 		if errs := logger.UpdateAuditWebhooks(ctx, loggerCfg.AuditWebhook); len(errs) > 0 {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
+			configLogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditKafkaSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
 		}
 		for n, l := range loggerCfg.AuditKafka {
 			if l.Enabled {
 				if l.TLS.Enable {
 					l.TLS.RootCAs = globalRootCAs
 				}
-				l.LogOnce = logger.LogOnceIf
+				l.LogOnce = configLogOnceIf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
 		if errs := logger.UpdateAuditKafkaTargets(ctx, loggerCfg); len(errs) > 0 {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
+			configLogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:
 		for i, setDriveCount := range setDriveCounts {
 			sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
+				configLogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 				break
 			}
 			// if we validated all setDriveCounts and it was successful
@@ -676,7 +676,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 	case config.SubnetSubSys:
 		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 		} else {
 			globalSubnetConfig.Update(subnetConfig, globalIsCICD)
 			globalSubnetConfig.ApplyEnv() // update environment settings for Console UI
@@ -684,7 +684,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 	case config.CallhomeSubSys:
 		callhomeCfg, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default])
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load callhome config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load callhome config: %w", err))
 		} else {
 			enable := callhomeCfg.Enable && !globalCallhomeConfig.Enabled()
 			globalCallhomeConfig.Update(callhomeCfg)
@@ -694,17 +694,17 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		}
 	case config.DriveSubSys:
 		if driveConfig, err := drive.LookupConfig(s[config.DriveSubSys][config.Default]); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load drive config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load drive config: %w", err))
 		} else {
 			err := globalDriveConfig.Update(driveConfig)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
+				configLogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
 			}
 		}
 	case config.CacheSubSys:
 		cacheCfg, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
 		} else {
 			globalCacheConfig.Update(cacheCfg)
 		}
@@ -749,7 +749,7 @@ func autoGenerateRootCredentials() {
 	if manager, ok := GlobalKMS.(kms.KeyManager); ok {
 		stat, err := GlobalKMS.Stat(GlobalContext)
 		if err != nil {
-			logger.LogIf(GlobalContext, err, "Unable to generate root credentials using KMS")
+			kmsLogIf(GlobalContext, err, "Unable to generate root credentials using KMS")
 			return
 		}
 

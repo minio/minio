@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"strconv"
-
-	"github.com/minio/minio/internal/logger"
 )
 
 // label constants
@@ -83,7 +81,7 @@ var (
 func loadDriveMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
 	driveMetrics, err := c.driveMetrics.Get()
 	if err != nil {
-		logger.LogIf(ctx, err)
+		metricsLogIf(ctx, err)
 		return nil
 	}
 

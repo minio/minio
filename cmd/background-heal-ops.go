@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 )
 
@@ -158,7 +157,7 @@ func newHealRoutine() *healRoutine {
 
 	if envHealWorkers := env.Get("_MINIO_HEAL_WORKERS", ""); envHealWorkers != "" {
 		if numHealers, err := strconv.Atoi(envHealWorkers); err != nil {
-			logger.LogIf(context.Background(), fmt.Errorf("invalid _MINIO_HEAL_WORKERS value: %w", err))
+			bugLogIf(context.Background(), fmt.Errorf("invalid _MINIO_HEAL_WORKERS value: %w", err))
 		} else {
 			workers = numHealers
 		}

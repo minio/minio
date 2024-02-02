@@ -28,7 +28,6 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"golang.org/x/exp/slices"
 )
@@ -511,7 +510,7 @@ func newPeerS3Client(node Node) peerS3Client {
 			// Lazy initialization of grid connection.
 			// When we create this peer client, the grid connection is likely not yet initialized.
 			if node.GridHost == "" {
-				logger.LogOnceIf(context.Background(), fmt.Errorf("gridHost is empty for peer %s", node.Host), node.Host+":gridHost")
+				bugLogIf(context.Background(), fmt.Errorf("gridHost is empty for peer %s", node.Host), node.Host+":gridHost")
 				return nil
 			}
 			gc := gridConn.Load()
@@ -524,7 +523,7 @@ func newPeerS3Client(node Node) peerS3Client {
 			}
 			gc = gm.Connection(node.GridHost)
 			if gc == nil {
-				logger.LogOnceIf(context.Background(), fmt.Errorf("gridHost %s not found for peer %s", node.GridHost, node.Host), node.Host+":gridHost")
+				bugLogIf(context.Background(), fmt.Errorf("gridHost %s not found for peer %s", node.GridHost, node.Host), node.Host+":gridHost")
 				return nil
 			}
 			gridConn.Store(gc)

@@ -24,7 +24,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -39,7 +38,7 @@ func (p promLogger) Println(v ...interface{}) {
 		s = append(s, fmt.Sprintf("%v", val))
 	}
 	err := fmt.Errorf("metrics handler error: %v", strings.Join(s, " "))
-	logger.LogIf(GlobalContext, err)
+	metricsLogIf(GlobalContext, err)
 }
 
 type metricsV3Server struct {

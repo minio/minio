@@ -153,7 +153,7 @@ func (r *ReqInfo) PopulateTagsMap(tagsMap map[string]interface{}) {
 // SetReqInfo sets ReqInfo in the context.
 func SetReqInfo(ctx context.Context, req *ReqInfo) context.Context {
 	if ctx == nil {
-		LogIf(context.Background(), fmt.Errorf("context is nil"))
+		LogIf(context.Background(), "", fmt.Errorf("context is nil"))
 		return nil
 	}
 	return context.WithValue(ctx, contextLogKey, req)

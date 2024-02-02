@@ -25,7 +25,6 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/cachevalue"
-	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -49,7 +48,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			scannerLogIf(ctx, err)
 			continue
 		}
 		if attempts > 10 {
@@ -57,7 +56,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 			attempts = 1
 		}
 		if err = saveConfig(ctx, objAPI, dataUsageObjNamePath, dataUsageJSON); err != nil {
-			logger.LogOnceIf(ctx, err, dataUsageObjNamePath)
+			scannerLogOnceIf(ctx, err, dataUsageObjNamePath)
 		}
 		attempts++
 	}
