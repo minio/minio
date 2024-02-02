@@ -301,6 +301,7 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOption
 	if opts.NoOp {
 		info.Metrics.TotalWrites = p.totalWrites.Load()
 		info.Metrics.TotalDeletes = p.totalDeletes.Load()
+		info.Metrics.TotalWaiting = uint32(p.health.waiting.Load())
 		info.Metrics.TotalErrorsTimeout = p.totalErrsTimeout.Load()
 		info.Metrics.TotalErrorsAvailability = p.totalErrsAvailability.Load()
 		return
@@ -312,6 +313,7 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOption
 		}
 		info.Metrics.TotalWrites = p.totalWrites.Load()
 		info.Metrics.TotalDeletes = p.totalDeletes.Load()
+		info.Metrics.TotalWaiting = uint32(p.health.waiting.Load())
 		info.Metrics.TotalErrorsTimeout = p.totalErrsTimeout.Load()
 		info.Metrics.TotalErrorsAvailability = p.totalErrsAvailability.Load()
 	}()
@@ -781,6 +783,9 @@ type diskHealthTracker struct {
 
 	// Atomic status of disk.
 	status atomic.Int32
+
+	// Atomic number indicates if a disk is hung
+	waiting atomic.Int32
 }
 
 // newDiskHealthTracker creates a new disk health tracker.
@@ -853,10 +858,13 @@ func (p *xlStorageDiskIDCheck) TrackDiskHealth(ctx context.Context, s storageMet
 	}
 
 	atomic.StoreInt64(&p.health.lastStarted, time.Now().UnixNano())
+	p.health.waiting.Add(1)
+
 	ctx = context.WithValue(ctx, healthDiskCtxKey{}, &healthDiskCtxValue{lastSuccess: &p.health.lastSuccess})
 	si := p.updateStorageMetrics(s, paths...)
 	var once sync.Once
 	return ctx, func(errp *error) {
+		p.health.waiting.Add(-1)
 		once.Do(func() {
 			if errp != nil {
 				err := *errp
@@ -900,6 +908,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string)
 		if err == nil {
 			logger.Info("node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
 			p.health.status.Store(diskHealthOK)
+			p.health.waiting.Add(-1)
 			return
 		}
 	}
@@ -957,6 +966,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskWritable(ctx context.Context) {
 		goOffline := func(err error, spent time.Duration) {
 			if p.health.status.CompareAndSwap(diskHealthOK, diskHealthFaulty) {
 				logger.LogAlwaysIf(ctx, fmt.Errorf("node(%s): taking drive %s offline: %v", globalLocalNodeName, p.storage.String(), err))
+				p.health.waiting.Add(1)
 				go p.monitorDiskStatus(spent, fn)
 			}
 		}
