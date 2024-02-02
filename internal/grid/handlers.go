@@ -348,9 +348,14 @@ type SingleHandler[Req, Resp RoundTripper] struct {
 
 func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle func(r RT)) {
 	rAny := any(newRT())
-	if rc, ok := rAny.(Recycler); ok {
+	var rZero RT
+	if _, ok := rAny.(Recycler); ok {
 		return newRT, func(r RT) {
-			rc.Recycle()
+			if r != rZero {
+				if rc, ok := any(r).(Recycler); ok {
+					rc.Recycle()
+				}
+			}
 		}
 	}
 	pool := sync.Pool{
@@ -358,7 +363,6 @@ func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle fun
 			return newRT()
 		},
 	}
-	var rZero RT
 	return func() RT { return pool.Get().(RT) },
 		func(r RT) {
 			if r != rZero {
@@ -436,6 +440,7 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 		}
 		resp, rerr := handle(req)
 		h.recycleReq(req)
+
 		if rerr != nil {
 			PutByteBuffer(payload)
 			return nil, rerr
@@ -474,22 +479,20 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Re
 		ctx = context.WithValue(ctx, TraceParamsKey{}, fmt.Sprintf("type=%T", req))
 	}
 	if h.callReuseReq {
-		defer func() {
-			h.recycleReq(req)
-		}()
+		defer h.recycleReq(req)
 	}
 	res, err := c.Request(ctx, h.id, payload)
 	PutByteBuffer(payload)
 	if err != nil {
 		return resp, err
 	}
+	defer PutByteBuffer(res)
 	r := h.NewResponse()
 	_, err = r.UnmarshalMsg(res)
 	if err != nil {
 		h.PutResponse(r)
 		return resp, err
 	}
-	PutByteBuffer(res)
 	return r, err
 }
 
