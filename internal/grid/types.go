@@ -235,7 +235,6 @@ func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 		copy(*b, val)
 	} else {
 		if cap(*b) == 0 && len(val) <= maxBufferSize {
-			PutByteBuffer(*b)
 			*b = GetByteBuffer()[:0]
 		} else {
 			PutByteBuffer(*b)
