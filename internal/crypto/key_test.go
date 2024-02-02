@@ -49,8 +49,8 @@ var generateKeyTests = []struct {
 }
 
 func TestGenerateKey(t *testing.T) {
-	defer func(l logger.LogLevel) { logger.MinimumLogLevel = l }(logger.MinimumLogLevel)
-	logger.MinimumLogLevel = logger.ErrorLvl
+	defer func(l bool) { logger.DisableErrorLog = l }(logger.DisableErrorLog)
+	logger.DisableErrorLog = true
 
 	for i, test := range generateKeyTests {
 		i, test := i, test
@@ -75,8 +75,8 @@ var generateIVTests = []struct {
 }
 
 func TestGenerateIV(t *testing.T) {
-	defer func(l logger.LogLevel) { logger.MinimumLogLevel = l }(logger.MinimumLogLevel)
-	logger.MinimumLogLevel = logger.ErrorLvl
+	defer func(l bool) { logger.DisableErrorLog = l }(logger.DisableErrorLog)
+	logger.DisableErrorLog = true
 
 	for i, test := range generateIVTests {
 		i, test := i, test

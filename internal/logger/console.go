@@ -91,7 +91,7 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 		message = fmt.Sprint(args...)
 	}
 	logJSON, err := json.Marshal(&log.Entry{
-		Level:   FatalLvl.String(),
+		Level:   FatalKind,
 		Message: message,
 		Time:    time.Now().UTC(),
 		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
@@ -169,7 +169,7 @@ func (i infoMsg) json(msg string, args ...interface{}) {
 		message = fmt.Sprint(args...)
 	}
 	logJSON, err := json.Marshal(&log.Entry{
-		Level:   InfoLvl.String(),
+		Level:   InfoKind,
 		Message: message,
 		Time:    time.Now().UTC(),
 	})
@@ -201,7 +201,7 @@ func (i errorMsg) json(msg string, args ...interface{}) {
 		message = fmt.Sprint(args...)
 	}
 	logJSON, err := json.Marshal(&log.Entry{
-		Level:   ErrorLvl.String(),
+		Level:   ErrorKind,
 		Message: message,
 		Time:    time.Now().UTC(),
 		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
@@ -225,7 +225,7 @@ func (i errorMsg) pretty(msg string, args ...interface{}) {
 
 // Error :
 func Error(msg string, data ...interface{}) {
-	if MinimumLogLevel > ErrorLvl {
+	if DisableErrorLog {
 		return
 	}
 	consoleLog(errorm, msg, data...)
@@ -233,7 +233,7 @@ func Error(msg string, data ...interface{}) {
 
 // Info :
 func Info(msg string, data ...interface{}) {
-	if MinimumLogLevel > InfoLvl {
+	if DisableErrorLog {
 		return
 	}
 	consoleLog(info, msg, data...)

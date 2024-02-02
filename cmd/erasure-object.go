@@ -1094,7 +1094,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		logger.LogIf(ctx, errInvalidArgument, logger.ErrorKind)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
@@ -1281,7 +1281,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	// Validate input data size and it can never be less than -1.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		logger.LogIf(ctx, errInvalidArgument, logger.ErrorKind)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 

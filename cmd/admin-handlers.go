@@ -451,7 +451,7 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	case madmin.ServiceActionUnfreeze:
 		serviceSig = serviceUnFreeze
 	default:
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
@@ -534,7 +534,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	case madmin.ServiceActionUnfreeze:
 		serviceSig = serviceUnFreeze
 	default:
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
@@ -1239,7 +1239,7 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	if hip.clientToken == "" {
 		jerr := json.NewDecoder(r).Decode(&hip.hs)
 		if jerr != nil {
-			logger.LogIf(GlobalContext, jerr, logger.Application)
+			logger.LogIf(GlobalContext, jerr, logger.ErrorKind)
 			err = ErrRequestBodyParse
 			return
 		}
