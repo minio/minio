@@ -1525,10 +1525,9 @@ func (s *xlStorage) ReadXL(ctx context.Context, volume, path string, readData bo
 		return RawFileInfo{}, err
 	}
 
-	buf, dmTime, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
+	buf, _, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
 	return RawFileInfo{
-		Buf:       buf,
-		DiskMTime: dmTime,
+		Buf: buf,
 	}, err
 }
 
@@ -1569,7 +1568,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 
 	readData := opts.ReadData
 
-	buf, dmTime, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
+	buf, _, err := s.readRaw(ctx, volume, volumeDir, filePath, readData)
 	if err != nil {
 		if err == errFileNotFound {
 			if versionID != "" {
@@ -1583,7 +1582,6 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 	if err != nil {
 		return fi, err
 	}
-	fi.DiskMTime = dmTime
 
 	if len(fi.Data) == 0 {
 		// We did not read inline data, so we have no references.

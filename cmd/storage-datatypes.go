@@ -163,11 +163,6 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 type RawFileInfo struct {
 	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
 	Buf []byte `msg:"b,allownil"`
-
-	// DiskMTime indicates the mtime of the xl.meta on disk
-	// This is mainly used for detecting a particular issue
-	// reported in https://github.com/minio/minio/pull/13803
-	DiskMTime time.Time `msg:"dmt"`
 }
 
 // FileInfo - represents file stat information.
@@ -247,11 +242,6 @@ type FileInfo struct {
 	// no other caller must set this value other than multi-object delete call.
 	// usage in other calls in undefined please avoid.
 	Idx int `msg:"i"`
-
-	// DiskMTime indicates the mtime of the xl.meta on disk
-	// This is mainly used for detecting a particular issue
-	// reported in https://github.com/minio/minio/pull/13803
-	DiskMTime time.Time `msg:"dmt"`
 
 	// Combined checksum when object was uploaded.
 	Checksum []byte `msg:"cs,allownil"`
