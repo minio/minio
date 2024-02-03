@@ -1244,6 +1244,10 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// Save the consolidated actual size.
 	fi.Metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
 
+	if opts.DataMovement {
+		fi.SetDataMov()
+	}
+
 	// Update all erasure metadata, make sure to not modify fields like
 	// checksum which are different on each disks.
 	for index := range partsMetadata {
