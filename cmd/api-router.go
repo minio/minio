@@ -227,7 +227,7 @@ func registerAPIRouter(router *mux.Router) {
 		// HeadObject
 		router.Methods(http.MethodHead).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("headobject", maxClients(gz(httpTraceAll(api.HeadObjectHandler)))))
-		// GetObjectAttribytes
+		// GetObjectAttributes
 		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("getobjectattributes", maxClients(gz(httpTraceHdrs(api.GetObjectAttributesHandler))))).Queries("attributes", "")
 		// CopyObjectPart
