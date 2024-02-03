@@ -1374,7 +1374,7 @@ func (c *Connection) handleDisconnectClientMux(m message) {
 		if m.Flags&FlagPayloadIsErr != 0 {
 			v.error(RemoteErr(m.Payload))
 		} else {
-			v.error("remote disconnected")
+			v.error(ErrDisconnected)
 		}
 		return
 	}
