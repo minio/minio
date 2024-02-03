@@ -148,6 +148,8 @@ func toStorageErr(err error) error {
 		return errDiskOngoingReq
 	case grid.ErrUnknownHandler.Error():
 		return errInconsistentDisk
+	case grid.ErrDisconnected.Error():
+		return errDiskNotFound
 	}
 	return err
 }
