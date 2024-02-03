@@ -2629,7 +2629,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 		diskHealthCheckOK(ctx, err)
 
-		if !fi.Versioned && !fi.Healing() {
+		if !fi.Versioned && !fi.DataMov() && !fi.Healing() {
 			// Use https://man7.org/linux/man-pages/man2/rename.2.html if possible on unversioned bucket.
 			if err := Rename2(pathutil.Join(srcVolumeDir, srcPath), pathutil.Join(dstVolumeDir, dstPath)); err == nil {
 				return sign, nil

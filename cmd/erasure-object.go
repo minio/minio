@@ -1516,12 +1516,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = userDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
-	}
-
-	if len(inlineBuffers) > 0 {
-		// Set an additional header when data is inlined.
-		for index := range partsMetadata {
+		if len(inlineBuffers) > 0 {
 			partsMetadata[index].SetInlineData()
+		}
+		if opts.DataMovement {
+			partsMetadata[index].SetDataMov()
 		}
 	}
 
