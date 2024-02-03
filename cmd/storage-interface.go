@@ -109,8 +109,6 @@ type StorageAPI interface {
 	// Read all.
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)
 	GetDiskLoc() (poolIdx, setIdx, diskIdx int) // Retrieve location indexes.
-	SetDiskLoc(poolIdx, setIdx, diskIdx int)    // Set location indexes.
-	SetFormatData(b []byte)                     // Set formatData cached value
 }
 
 type unrecognizedDisk struct {
@@ -153,14 +151,8 @@ func (p *unrecognizedDisk) NSScanner(ctx context.Context, cache dataUsageCache, 
 	return dataUsageCache{}, errDiskNotFound
 }
 
-func (p *unrecognizedDisk) SetFormatData(b []byte) {
-}
-
 func (p *unrecognizedDisk) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return -1, -1, -1
-}
-
-func (p *unrecognizedDisk) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 }
 
 func (p *unrecognizedDisk) Close() error {

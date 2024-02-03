@@ -743,10 +743,9 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		wg := sync.WaitGroup{}
 		for i, disk := range disks {
 			if disk == nil {
-				done <- false
-				continue
-			}
-			if !disk.IsOnline() {
+				rw.Lock()
+				errs[i] = errDiskNotFound
+				rw.Unlock()
 				done <- false
 				continue
 			}

@@ -102,14 +102,8 @@ func (d *naughtyDisk) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return -1, -1, -1
 }
 
-func (d *naughtyDisk) SetDiskLoc(poolIdx, setIdx, diskIdx int) {}
-
 func (d *naughtyDisk) GetDiskID() (string, error) {
 	return d.disk.GetDiskID()
-}
-
-func (d *naughtyDisk) SetFormatData(b []byte) {
-	d.disk.SetFormatData(b)
 }
 
 func (d *naughtyDisk) SetDiskID(id string) {

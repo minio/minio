@@ -207,12 +207,7 @@ func (h *healingTracker) update(ctx context.Context) error {
 func (h *healingTracker) save(ctx context.Context) error {
 	h.mu.Lock()
 	if h.PoolIndex < 0 || h.SetIndex < 0 || h.DiskIndex < 0 {
-		// Attempt to get location.
-		if api := newObjectLayerFn(); api != nil {
-			if ep, ok := api.(*erasureServerPools); ok {
-				h.PoolIndex, h.SetIndex, h.DiskIndex, _ = ep.getPoolAndSet(h.ID)
-			}
-		}
+		h.PoolIndex, h.SetIndex, h.DiskIndex = h.disk.Endpoint().PoolIdx, h.disk.Endpoint().SetIdx, h.disk.Endpoint().DiskIdx
 	}
 	h.LastUpdate = time.Now().UTC()
 	htrackerBytes, err := h.MarshalMsg(nil)
@@ -376,22 +371,14 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 var newDiskHealingTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 
 func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint) error {
-	disk, format, _, err := connectEndpoint(endpoint)
+	disk, _, _, err := connectEndpoint(endpoint)
 	if err != nil {
 		return fmt.Errorf("Error: %w, %s", err, endpoint)
 	}
 	defer disk.Close()
-	poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
+	poolIdx, setIdx := disk.Endpoint().PoolIdx, disk.Endpoint().SetIdx
 	if poolIdx < 0 {
 		return fmt.Errorf("unexpected pool index (%d) found for %s", poolIdx, disk.Endpoint())
-	}
-
-	// Calculate the set index where the current endpoint belongs
-	z.serverPools[poolIdx].erasureDisksMu.RLock()
-	setIdx, _, err := findDiskIndex(z.serverPools[poolIdx].format, format)
-	z.serverPools[poolIdx].erasureDisksMu.RUnlock()
-	if err != nil {
-		return err
 	}
 	if setIdx < 0 {
 		return fmt.Errorf("unexpected set index (%d) found for  %s", setIdx, disk.Endpoint())

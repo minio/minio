@@ -1333,90 +1333,85 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			globalLocalSetDrives[pool][set] = make([]StorageAPI, endpointServerPools[pool].DrivesPerSet)
 		}
 	}
-	for _, serverPool := range endpointServerPools {
-		for _, endpoint := range serverPool.Endpoints {
-			if !endpoint.IsLocal {
-				continue
-			}
-
-			server := &storageRESTServer{
-				poolIndex: endpoint.PoolIdx,
-				setIndex:  endpoint.SetIdx,
-				diskIndex: endpoint.DiskIdx,
-			}
-
-			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
-
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodAppendFile).HandlerFunc(h(server.AppendFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWriteAll).HandlerFunc(h(server.WriteAllHandler))
-
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadXL).HandlerFunc(h(server.ReadXLHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(h(server.CreateFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFile).HandlerFunc(h(server.ReadFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListDir).HandlerFunc(h(server.ListDirHandler))
-
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(h(server.DeleteVersionsHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(h(server.VerifyFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
-			logger.FatalIf(storageReadAllHandler.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageRenameFileHandler.Register(gm, server.RenameFileHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageRenameDataHandler.Register(gm, server.RenameDataHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageDeleteFileHandler.Register(gm, server.DeleteFileHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageCheckPartsHandler.Register(gm, server.CheckPartsHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageReadVersionHandler.Register(gm, server.ReadVersionHandlerWS, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageWriteMetadataHandler.Register(gm, server.WriteMetadataHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageUpdateMetadataHandler.Register(gm, server.UpdateMetadataHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageDeleteVersionHandler.Register(gm, server.DeleteVersionHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageReadXLHandler.Register(gm, server.ReadXLHandlerWS, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageNSScannerHandler.RegisterNoInput(gm, server.NSScannerHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageDiskInfoHandler.Register(gm, server.DiskInfoHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageStatVolHandler.Register(gm, server.StatVolHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
-				Subroute:    endpoint.Path,
-				Handle:      server.WalkDirHandler,
-				OutCapacity: 1,
-			}), "unable to register handler")
-
-			createStorage := func(server *storageRESTServer) bool {
-				xl, err := newXLStorage(endpoint, false)
-				if err != nil {
-					// if supported errors don't fail, we proceed to
-					// printing message and moving forward.
-					logFatalErrs(err, endpoint, false)
-					return false
-				}
-				storage := newXLStorageDiskIDCheck(xl, true)
-				storage.SetDiskID(xl.diskID)
-				// We do not have to do SetFormatData() since 'xl'
-				// already captures formatData cached.
-
-				globalLocalDrivesMu.Lock()
-				defer globalLocalDrivesMu.Unlock()
-
-				globalLocalDrives = append(globalLocalDrives, storage)
-				globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
-				return true
-			}
-
-			if createStorage(server) {
-				continue
-			}
-
-			// Start async goroutine to create storage.
-			go func(server *storageRESTServer) {
-				for {
-					time.Sleep(3 * time.Second)
-					if createStorage(server) {
-						return
-					}
-				}
-			}(server)
-
+	for _, endpoint := range endpointServerPools.LocalDrives() {
+		server := &storageRESTServer{
+			poolIndex: endpoint.PoolIdx,
+			setIndex:  endpoint.SetIdx,
+			diskIndex: endpoint.DiskIdx,
 		}
+
+		subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
+
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodAppendFile).HandlerFunc(h(server.AppendFileHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWriteAll).HandlerFunc(h(server.WriteAllHandler))
+
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadXL).HandlerFunc(h(server.ReadXLHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(h(server.CreateFileHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFile).HandlerFunc(h(server.ReadFileHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodListDir).HandlerFunc(h(server.ListDirHandler))
+
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(h(server.DeleteVersionsHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(h(server.VerifyFileHandler))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
+		subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
+		logger.FatalIf(storageReadAllHandler.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageRenameFileHandler.Register(gm, server.RenameFileHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageRenameDataHandler.Register(gm, server.RenameDataHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageDeleteFileHandler.Register(gm, server.DeleteFileHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageCheckPartsHandler.Register(gm, server.CheckPartsHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageReadVersionHandler.Register(gm, server.ReadVersionHandlerWS, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageWriteMetadataHandler.Register(gm, server.WriteMetadataHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageUpdateMetadataHandler.Register(gm, server.UpdateMetadataHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageDeleteVersionHandler.Register(gm, server.DeleteVersionHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageReadXLHandler.Register(gm, server.ReadXLHandlerWS, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageNSScannerHandler.RegisterNoInput(gm, server.NSScannerHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageDiskInfoHandler.Register(gm, server.DiskInfoHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(storageStatVolHandler.Register(gm, server.StatVolHandler, endpoint.Path), "unable to register handler")
+		logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerWalkDir, grid.StreamHandler{
+			Subroute:    endpoint.Path,
+			Handle:      server.WalkDirHandler,
+			OutCapacity: 1,
+		}), "unable to register handler")
+
+		createStorage := func(server *storageRESTServer) bool {
+			xl, err := newXLStorage(endpoint, false)
+			if err != nil {
+				// if supported errors don't fail, we proceed to
+				// printing message and moving forward.
+				logFatalErrs(err, endpoint, false)
+				return false
+			}
+
+			storage := newXLStorageDiskIDCheck(xl, true)
+			storage.SetDiskID(xl.diskID)
+			// We do not have to do SetFormatData() since 'xl'
+			// already captures formatData cached.
+
+			globalLocalDrivesMu.Lock()
+			defer globalLocalDrivesMu.Unlock()
+
+			globalLocalDrives = append(globalLocalDrives, storage)
+			globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
+			return true
+		}
+
+		if createStorage(server) {
+			continue
+		}
+
+		// Start async goroutine to create storage.
+		go func(server *storageRESTServer) {
+			for {
+				time.Sleep(3 * time.Second)
+				if createStorage(server) {
+					return
+				}
+			}
+		}(server)
+
 	}
 }

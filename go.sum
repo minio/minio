@@ -454,8 +454,6 @@ github.com/minio/minio-go/v7 v7.0.66 h1:bnTOXOHjOqv/gcMuiVbN9o2ngRItvqE774dG9nq0
 github.com/minio/minio-go/v7 v7.0.66/go.mod h1:DHAgmyQEGdW3Cif0UooKOyrT3Vxs82zNdV6tkKhRtbs=
 github.com/minio/mux v1.9.0 h1:dWafQFyEfGhJvK6AwLOt83bIG5bxKxKJnKMCi0XAaoA=
 github.com/minio/mux v1.9.0/go.mod h1:1pAare17ZRL5GpmNL+9YmqHoWnLmMZF9C/ioUCfy0BQ=
-github.com/minio/pkg/v2 v2.0.9-0.20240130164631-ac3f1be23e94 h1:nBZkkmq9HPfs2ZUDcRqPahe2js1mvMUR/7cBfW17Jik=
-github.com/minio/pkg/v2 v2.0.9-0.20240130164631-ac3f1be23e94/go.mod h1:yayUTo82b0RK+e97hGb1naC787mOtUEyDs3SIcwSyHI=
 github.com/minio/pkg/v2 v2.0.9-0.20240209124402-7990a27fd79d h1:xGtyFgqwGy7Lc/i5udOKKeqsyRpQPlKQY2Pf4RiUDtk=
 github.com/minio/pkg/v2 v2.0.9-0.20240209124402-7990a27fd79d/go.mod h1:yayUTo82b0RK+e97hGb1naC787mOtUEyDs3SIcwSyHI=
 github.com/minio/selfupdate v0.6.0 h1:i76PgT0K5xO9+hjzKcacQtO7+MjJ4JKA8Ak8XQ9DDwU=

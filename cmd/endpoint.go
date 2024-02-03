@@ -344,6 +344,19 @@ func (l EndpointServerPools) Localhost() string {
 	return fmt.Sprintf("%s://%s", getURLScheme(globalIsTLS), net.JoinHostPort(host, globalMinioPort))
 }
 
+// LocalDrives returns all the local drives.
+func (l EndpointServerPools) LocalDrives() []Endpoint {
+	var drives []Endpoint
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				drives = append(drives, endpoint)
+			}
+		}
+	}
+	return drives
+}
+
 // LocalDisksPaths returns the disk paths of the local disks
 func (l EndpointServerPools) LocalDisksPaths() []string {
 	var disks []string

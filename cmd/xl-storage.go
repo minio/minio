@@ -102,15 +102,17 @@ type xlStorage struct {
 	globalSync bool
 	oDirect    bool // indicates if this disk supports ODirect
 
-	diskID string
+	diskID       string
+	deploymentID string
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
 
-	formatFileInfo  os.FileInfo
-	formatFile      string
-	formatLegacy    bool
-	formatLastCheck time.Time
+	formatFileInfo         os.FileInfo
+	formatFile             string
+	formatLegacy           bool
+	formatLastCheck        time.Time
+	formatDistributionAlgo string
 
 	diskInfoCache timedValue
 	sync.RWMutex
@@ -307,8 +309,22 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 			return s, errCorruptedFormat
 		}
 		s.diskID = format.Erasure.This
+		s.deploymentID = format.ID
+		format.Erasure.This = ""
+		if s.diskID != "" {
+			m, n, err := findDiskIndexByDiskID(format, s.diskID)
+			if err != nil {
+				return s, err
+			}
+			if m != ep.SetIdx && n != ep.DiskIdx {
+				err = fmt.Errorf("Detected unexpected drive ordering refusing to use the drive - poolID: %s, found drive mounted at (set=%s, drive=%s) expected mount at (set=%s, drive=%s): %s(%s)", humanize.Ordinal(ep.PoolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(ep.SetIdx+1), humanize.Ordinal(ep.DiskIdx+1), ep, s.diskID)
+				return s, err
+			}
+		}
+
 		s.formatLastCheck = time.Now()
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
+		s.formatDistributionAlgo = format.Erasure.DistributionAlgo
 	}
 
 	// Return an error if ODirect is not supported. Single disk will have
@@ -373,24 +389,7 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	// If unset, see if we can locate it.
-	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
-		return getXLDiskLoc(s.diskID)
-	}
-	return s.poolIndex, s.setIndex, s.diskIndex
-}
-
-func (s *xlStorage) SetFormatData(b []byte) {
-	s.Lock()
-	defer s.Unlock()
-	s.formatData = b
-}
-
-// Set location indexes.
-func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
-	s.poolIndex = poolIdx
-	s.setIndex = setIdx
-	s.diskIndex = diskIdx
+	return s.endpoint.PoolIdx, s.endpoint.SetIdx, s.endpoint.DiskIdx
 }
 
 func (s *xlStorage) Healing() *healingTracker {
@@ -865,6 +864,18 @@ func (s *xlStorage) GetDiskID() (string, error) {
 	defer s.Unlock()
 	s.formatData = b
 	s.diskID = format.Erasure.This
+	s.deploymentID = format.ID
+	format.Erasure.This = ""
+
+	m, n, err := findDiskIndexByDiskID(format, s.diskID)
+	if err != nil {
+		return "", err
+	}
+	if m != s.endpoint.SetIdx && n != s.endpoint.DiskIdx {
+		err = fmt.Errorf("Detected unexpected drive ordering refusing to use the drive - poolID: %s, found drive mounted at (set=%s, drive=%s) expected mount at (set=%s, drive=%s): %s(%s)", humanize.Ordinal(s.endpoint.PoolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(s.endpoint.SetIdx+1), humanize.Ordinal(s.endpoint.DiskIdx+1), s.endpoint, s.diskID)
+		return "", err
+	}
+
 	s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	s.formatFileInfo = fi
 	s.formatLastCheck = time.Now()

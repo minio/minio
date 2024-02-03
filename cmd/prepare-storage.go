@@ -154,7 +154,7 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 // connect to list of endpoints and load all Erasure disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
+func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, err error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints, storageOpts{cleanUp: true, healthCheck: true})
 
@@ -183,36 +183,14 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 	}
 
 	if err := checkDiskFatalErrs(errs); err != nil {
-		return nil, nil, err
-	}
-
-	// Attempt to load all `format.json` from all disks.
-	formatConfigs, sErrs := loadFormatErasureAll(storageDisks, false)
-
-	// Check if we have
-	for i, sErr := range sErrs {
-		// print the error, nonetheless, which is perhaps unhandled
-		if !errors.Is(sErr, errUnformattedDisk) && !errors.Is(sErr, errDiskNotFound) && verboseLogging {
-			if sErr != nil {
-				logger.Error("Unable to read 'format.json' from %s: %v\n", endpoints[i], sErr)
-			}
-		}
-	}
-
-	// Pre-emptively check if one of the formatted disks
-	// is invalid. This function returns success for the
-	// most part unless one of the formats is not consistent
-	// with expected Erasure format. For example if a user is
-	// trying to pool FS backend into an Erasure set.
-	if err = checkFormatErasureValues(formatConfigs, storageDisks, setDriveCount); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Return error when quorum unformatted disks - indicating we are
 	// waiting for first server to be online.
-	unformattedDisks := quorumUnformattedDisks(sErrs)
+	unformattedDisks := quorumUnformattedDisks(errs)
 	if unformattedDisks && !firstDisk {
-		return nil, nil, errNotFirstDisk
+		return nil, errNotFirstDisk
 	}
 
 	// All disks report unformatted we should initialized everyone.
@@ -221,32 +199,22 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 			humanize.Ordinal(poolCount), setCount, setDriveCount)
 
 		// Initialize erasure code format on disks
-		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, deploymentID, sErrs)
+		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, deploymentID, errs)
 		if err != nil {
-			return nil, nil, err
+			return nil,  err
 		}
 
 		// Assign globalDeploymentID() on first run for the
 		// minio server managing the first disk
 		globalDeploymentIDPtr.Store(&format.ID)
-		return storageDisks, format, nil
 	}
 
-	format, err = getFormatErasureInQuorum(formatConfigs)
-	if err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil, nil, err
-	}
-
-	if format.ID == "" {
-		// Not a first disk, wait until first disk fixes deploymentID
-		if !firstDisk {
-			return nil, nil, errNotFirstDisk
-		}
-		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format, formatConfigs); err != nil {
-			logger.LogIf(GlobalContext, err)
-			return nil, nil, err
-		}
+	// Assign globalDeploymentID() on first run for the
+	// minio server managing the first disk
+	globalDeploymentIDPtr.Store(&format.ID)
+	
+	
+	return storageDisks, nil
 	}
 
 	globalDeploymentIDPtr.Store(&format.ID)

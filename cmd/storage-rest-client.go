@@ -165,21 +165,11 @@ type storageRESTClient struct {
 	diskID      string
 	formatData  []byte
 	formatMutex sync.RWMutex
-
-	// Indexes, will be -1 until assigned a set.
-	poolIndex, setIndex, diskIndex int
 }
 
 // Retrieve location indexes.
 func (client *storageRESTClient) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	return client.poolIndex, client.setIndex, client.diskIndex
-}
-
-// Set location indexes.
-func (client *storageRESTClient) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
-	client.poolIndex = poolIdx
-	client.setIndex = setIdx
-	client.diskIndex = diskIdx
+	return client.endpoint.PoolIdx, client.endpoint.SetIdx, client.endpoint.DiskIdx
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
@@ -266,14 +256,6 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 		return cache, errors.New("no final cache")
 	}
 	return *final, nil
-}
-
-func (client *storageRESTClient) SetFormatData(b []byte) {
-	if client.IsOnline() {
-		client.formatMutex.Lock()
-		client.formatData = b
-		client.formatMutex.Unlock()
-	}
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
@@ -859,7 +841,7 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 		return nil, fmt.Errorf("unable to find connection for %s in targets: %v", endpoint.GridHost(), gm.Targets())
 	}
 	return &storageRESTClient{
-		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
+		endpoint: endpoint, restClient: restClient,
 		gridConn: conn,
 	}, nil
 }
