@@ -30,7 +30,6 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -661,8 +660,7 @@ func (c *Connection) connect() {
 			if gotState != StateConnecting {
 				// Don't print error on first attempt,
 				// and after that only once per hour.
-				cHour := strconv.FormatInt(time.Now().Unix()/60/60, 10)
-				logger.LogOnceIf(c.ctx, fmt.Errorf("grid: %s connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), c.Local+toDial+cHour+err.Error())
+				logger.LogOnceIf(c.ctx, fmt.Errorf("grid: %s connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), toDial)
 			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
