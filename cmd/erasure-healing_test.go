@@ -41,6 +41,10 @@ func TestIsObjectDangling(t *testing.T) {
 	fi := newFileInfo("test-object", 2, 2)
 	fi.Erasure.Index = 1
 
+	ifi := newFileInfo("test-object", 2, 2)
+	ifi.SetInlineData()
+	ifi.Erasure.Index = 1
+
 	testCases := []struct {
 		name             string
 		metaArr          []FileInfo
@@ -130,12 +134,76 @@ func TestIsObjectDangling(t *testing.T) {
 			expectedDangling: false,
 		},
 		{
+			name: "FileInfoUnDecided-case4",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				ifi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				errFileCorrupt,
+				nil,
+			},
+			dataErrs:         nil,
+			expectedMeta:     ifi,
+			expectedDangling: false,
+		},
+		{
+			name: "FileInfoUnDecided-case5-(ignore errFileCorrupt error)",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				nil,
+				nil,
+			},
+			dataErrs: []error{
+				errFileCorrupt,
+				errFileNotFound,
+				nil,
+				errFileCorrupt,
+			},
+			expectedMeta:     fi,
+			expectedDangling: false,
+		},
+		{
+			name: "FileInfoUnDecided-case6-(data-dir intact)",
+			metaArr: []FileInfo{
+				{},
+				{},
+				{},
+				fi,
+			},
+			errs: []error{
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				nil,
+			},
+			dataErrs: []error{
+				errFileNotFound,
+				errFileCorrupt,
+				nil,
+				nil,
+			},
+			expectedMeta:     fi,
+			expectedDangling: false,
+		},
+		{
 			name: "FileInfoDecided-case1",
 			metaArr: []FileInfo{
 				{},
 				{},
 				{},
-				fi,
+				ifi,
 			},
 			errs: []error{
 				errFileNotFound,
@@ -144,25 +212,7 @@ func TestIsObjectDangling(t *testing.T) {
 				nil,
 			},
 			dataErrs:         nil,
-			expectedMeta:     fi,
-			expectedDangling: true,
-		},
-		{
-			name: "FileInfoDecided-case2",
-			metaArr: []FileInfo{
-				{},
-				{},
-				{},
-				fi,
-			},
-			errs: []error{
-				errFileNotFound,
-				errFileCorrupt,
-				errFileCorrupt,
-				nil,
-			},
-			dataErrs:         nil,
-			expectedMeta:     fi,
+			expectedMeta:     ifi,
 			expectedDangling: true,
 		},
 		{
@@ -175,8 +225,8 @@ func TestIsObjectDangling(t *testing.T) {
 			},
 			errs: []error{
 				errFileNotFound,
-				errFileCorrupt,
-				errFileCorrupt,
+				errFileNotFound,
+				errFileNotFound,
 				nil,
 			},
 			dataErrs:         nil,
@@ -184,26 +234,26 @@ func TestIsObjectDangling(t *testing.T) {
 			expectedDangling: true,
 		},
 		{
-			name: "FileInfoDecided-case2-(duplicate data errors)",
+			name: "FileInfoDecided-case3-(enough data-dir missing)",
 			metaArr: []FileInfo{
 				{},
 				{},
 				{},
-				{Deleted: true},
+				fi,
 			},
 			errs: []error{
 				errFileNotFound,
-				errFileCorrupt,
-				errFileCorrupt,
+				errFileNotFound,
+				nil,
 				nil,
 			},
 			dataErrs: []error{
 				errFileNotFound,
-				errFileCorrupt,
+				errFileNotFound,
 				nil,
-				nil,
+				errFileNotFound,
 			},
-			expectedMeta:     FileInfo{Deleted: true},
+			expectedMeta:     fi,
 			expectedDangling: true,
 		},
 		// Add new cases as seen
