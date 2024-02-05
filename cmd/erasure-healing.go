@@ -978,7 +978,7 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		return validMeta, true
 	}
 
-	if notFoundPartsErrs > 0 && notFoundPartsErrs >= quorum {
+	if !validMeta.IsRemote() && notFoundPartsErrs > 0 && notFoundPartsErrs >= quorum {
 		// All data-dir is beyond data blocks missing, this is dangling
 		return validMeta, true
 	}
