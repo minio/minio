@@ -574,7 +574,6 @@ func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVe
 		fileInfo.Data = xl.data.find(versionID)
 	}
 
-	fileInfo.DiskMTime = ri.DiskMTime
 	return fileInfo, nil
 }
 
@@ -625,9 +624,7 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 			continue
 		}
 		metadataArray[index] = &xl
-		metaFileInfos[index] = FileInfo{
-			DiskMTime: rf.DiskMTime,
-		}
+		metaFileInfos[index] = FileInfo{}
 	}
 
 	for index := range metadataArray {
@@ -667,7 +664,6 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 		}
 
 		// make sure to preserve this for diskmtime based healing bugfix.
-		diskMTime := metaFileInfos[index].DiskMTime
 		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, versionID, inclFreeVers, allParts)
 		if errs[index] != nil {
 			continue
@@ -676,7 +672,6 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 		if readData {
 			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
 		}
-		metaFileInfos[index].DiskMTime = diskMTime
 	}
 	if !readData {
 		for i := range v2bufs {
