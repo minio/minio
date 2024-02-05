@@ -503,7 +503,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -533,7 +533,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -560,7 +560,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 
@@ -601,7 +601,7 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 	bucketStats = append(bucketStats, BucketStats{
@@ -633,7 +633,7 @@ func (sys *NotificationSys) GetClusterSiteMetrics(ctx context.Context) []SRMetri
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 	siteStats = append(siteStats, globalReplicationStats.getSRMetricsForNode())
@@ -655,7 +655,7 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -676,7 +676,7 @@ func (sys *NotificationSys) StopRebalance(ctx context.Context) {
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 
@@ -685,6 +685,7 @@ func (sys *NotificationSys) StopRebalance(ctx context.Context) {
 		logger.LogIf(ctx, errServerNotInitialized)
 		return
 	}
+
 	if pools, ok := objAPI.(*erasureServerPools); ok {
 		pools.StopRebalance()
 	}
@@ -707,7 +708,7 @@ func (sys *NotificationSys) LoadRebalanceMeta(ctx context.Context, startRebalanc
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -728,7 +729,7 @@ func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err)
+			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -1474,7 +1475,7 @@ func (sys *NotificationSys) DriveSpeedTest(ctx context.Context, opts madmin.Driv
 
 			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogIf(ctx, err)
+			logger.LogOnceIf(ctx, err, client.host.String())
 		}(client)
 	}
 
