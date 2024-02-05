@@ -23,12 +23,11 @@ import (
 )
 
 var (
-	errLifecycleInvalidDate              = Errorf("Date must be provided in ISO 8601 format")
-	errLifecycleInvalidDays              = Errorf("Days must be positive integer when used with Expiration")
-	errLifecycleInvalidExpiration        = Errorf("Exactly one of Days (positive integer) or Date (positive ISO 8601 format) should be present inside Expiration.")
-	errLifecycleInvalidDeleteMarker      = Errorf("Delete marker cannot be specified with Days or Date in a Lifecycle Expiration Policy")
-	errLifecycleInvalidDeleteAllVersions = Errorf("Delete all versions cannot be specified with Days or Date in a Lifecycle Expiration Policy")
-	errLifecycleDateNotMidnight          = Errorf("'Date' must be at midnight GMT")
+	errLifecycleInvalidDate         = Errorf("Date must be provided in ISO 8601 format")
+	errLifecycleInvalidDays         = Errorf("Days must be positive integer when used with Expiration")
+	errLifecycleInvalidExpiration   = Errorf("Exactly one of Days (positive integer) or Date (positive ISO 8601 format) should be present inside Expiration.")
+	errLifecycleInvalidDeleteMarker = Errorf("Delete marker cannot be specified with Days or Date in a Lifecycle Expiration Policy")
+	errLifecycleDateNotMidnight     = Errorf("'Date' must be at midnight GMT")
 )
 
 // ExpirationDays is a type alias to unmarshal Days in Expiration
@@ -176,11 +175,6 @@ func (e Expiration) Validate() error {
 	// DeleteMarker cannot be specified if date or dates are specified.
 	if (!e.IsDaysNull() || !e.IsDateNull()) && e.DeleteMarker.set {
 		return errLifecycleInvalidDeleteMarker
-	}
-
-	// DeleteAll cannot be specified if date or dates are specified.
-	if (!e.IsDaysNull() || !e.IsDateNull()) && e.DeleteAll.set {
-		return errLifecycleInvalidDeleteAllVersions
 	}
 
 	if !e.DeleteMarker.set && !e.DeleteAll.set && e.IsDaysNull() && e.IsDateNull() {
