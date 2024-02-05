@@ -2054,6 +2054,13 @@ func (sys *IAMSys) GetCombinedPolicy(policies ...string) policy.Policy {
 	return policy
 }
 
+// doesPolicyAllow - checks if the given policy allows the passed action with given args. This is rarely needed.
+// Notice there is no account name involved, so this is a dangerous function.
+func (sys *IAMSys) doesPolicyAllow(policy string, args policy.Args) bool {
+	// Policies were found, evaluate all of them.
+	return sys.GetCombinedPolicy(policy).IsAllowed(args)
+}
+
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args policy.Args) bool {
 	// If opa is configured, use OPA always.
