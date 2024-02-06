@@ -133,7 +133,10 @@ func (ahs *allHealState) popHealLocalDisks(healLocalDisks ...Endpoint) {
 func (ahs *allHealState) updateHealStatus(tracker *healingTracker) {
 	ahs.Lock()
 	defer ahs.Unlock()
+
+	tracker.mu.RLock()
 	ahs.healStatus[tracker.ID] = *tracker
+	tracker.mu.Unlock()
 }
 
 // Sort by zone, set and disk index

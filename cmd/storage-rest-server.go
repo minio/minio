@@ -222,6 +222,8 @@ var storageNSScannerHandler = grid.NewStream[*nsScannerOptions, grid.NoPayload, 
 	func() *nsScannerResp { return &nsScannerResp{} })
 
 func (s *storageRESTServer) NSScannerHandler(ctx context.Context, params *nsScannerOptions, out chan<- *nsScannerResp) *grid.RemoteErr {
+	defer close(out)
+
 	if !s.checkID(params.DiskID) {
 		return grid.NewRemoteErr(errDiskNotFound)
 	}
@@ -235,7 +237,6 @@ func (s *storageRESTServer) NSScannerHandler(ctx context.Context, params *nsScan
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer close(out)
 
 		for update := range updates {
 			resp := storageNSScannerHandler.NewResponse()

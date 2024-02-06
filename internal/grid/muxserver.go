@@ -130,6 +130,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		m.outBlock <- struct{}{}
 	}
 
+	var localmu sync.Mutex
 	// Handler goroutine.
 	var handlerErr *RemoteErr
 	go func() {
@@ -148,8 +149,11 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 				fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
 			}
 		}()
+
+		localmu.Lock()
 		// handlerErr is guarded by 'send' channel.
 		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
+		localmu.Unlock()
 	}()
 	// Response sender gorutine...
 	go func(outBlock <-chan struct{}) {
@@ -178,9 +182,17 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 					fmt.Println("muxServer: Mux", m.ID, "send EOF", handlerErr)
 				}
 				msg.Flags |= FlagEOF
+
+				var err *RemoteErr
+				localmu.Lock()
 				if handlerErr != nil {
+					err = NewRemoteErr(handlerErr)
+				}
+				localmu.Unlock()
+
+				if err != nil {
 					msg.Flags |= FlagPayloadIsErr
-					msg.Payload = []byte(*handlerErr)
+					msg.Payload = []byte(*err)
 				}
 				msg.setZeroPayloadFlag()
 				m.send(msg)
