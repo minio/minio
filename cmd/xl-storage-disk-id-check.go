@@ -745,10 +745,9 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 			errFaultyDisk,
 			errFaultyRemoteDisk,
 			context.DeadlineExceeded,
-			context.Canceled,
 		}...) {
 			p.totalErrsAvailability.Add(1)
-			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			if errors.Is(err, context.DeadlineExceeded) {
 				p.totalErrsTimeout.Add(1)
 			}
 		}
