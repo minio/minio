@@ -104,7 +104,7 @@ func (ps *PubSub[T, M]) Subscribe(mask M, subCh chan T, doneCh <-chan struct{}, 
 }
 
 // SubscribeJSON - Adds a subscriber to pubsub system and returns results with JSON encoding.
-func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan struct{}, filter func(entry T) bool) error {
+func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan struct{}, filter func(entry T) bool, wg *sync.WaitGroup) error {
 	totalSubs := atomic.AddInt32(&ps.numSubscribers, 1)
 	if ps.maxSubscribers > 0 && totalSubs > ps.maxSubscribers {
 		atomic.AddInt32(&ps.numSubscribers, -1)
@@ -120,10 +120,16 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 	combined := Mask(atomic.LoadUint64(&ps.types))
 	combined.Merge(Mask(mask.Mask()))
 	atomic.StoreUint64(&ps.types, uint64(combined))
-
+	if wg != nil {
+		defer wg.Add(1)
+	}
 	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
+	loop:
 		for {
 			select {
 			case <-doneCh:
@@ -136,7 +142,12 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 				if err != nil {
 					break
 				}
-				subCh <- append(GetByteBuffer()[:0], buf.Bytes()...)
+
+				select {
+				case subCh <- append(GetByteBuffer()[:0], buf.Bytes()...):
+				case <-doneCh:
+					break loop
+				}
 				continue
 			}
 			break
