@@ -109,6 +109,17 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_cluster_replication_sent_bytes`                     | (_Site Replication Only_) Total number of bytes replicated to the target cluster.                        |
 | `minio_cluster_replication_sent_count`                     | (_Site Replication Only_) Total number of objects replicated to the target cluster.                      |
 | `minio_cluster_replication_credential_errors`              | (_Site Replication Only_) Total number of replication credential errors since server start               |
+| `minio_cluster_replication_proxied_get_requests_total` | (_Site Replication Only_)Number of GET requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_head_requests_total` | (_Site Replication Only_)Number of HEAD requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_delete_tagging_requests_total` | (_Site Replication Only_)Number of DELETE tagging requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_get_tagging_requests_total` | (_Site Replication Only_)Number of GET tagging requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_put_tagging_requests_total` | (_Site Replication Only_)Number of PUT tagging requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_get_requests_failures` | (_Site Replication Only_)Number of failures in GET requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_head_requests_failures` | (_Site Replication Only_)Number of failures in HEAD requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_delete_tagging_requests_failures` | (_Site Replication Only_)Number of failures proxying DELETE tagging requests to replication target                          |
+| `minio_cluster_replication_proxied_get_tagging_requests_failures` | (_Site Replication Only_)Number of failures proxying GET tagging requests to replication target                          |
+| `minio_cluster_replication_proxied_put_tagging_requests_failures` | (_Site Replication Only_)Number of failures proxying PUT tagging requests to replication target                          |
+
 
 ## Healing Metrics
 
@@ -290,6 +301,16 @@ For deployments with [Site Replication](https://min.io/docs/minio/linux/operatio
 | `minio_bucket_replication_sent_bytes`               | Total number of bytes replicated to the target bucket.                           |
 | `minio_bucket_replication_sent_count`               | Total number of objects replicated to the target bucket.                         |
 | `minio_bucket_replication_credential_errors`        | Total number of replication credential errors since server start                 |
+| `minio_bucket_replication_proxied_get_requests_total` | Number of GET requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_head_requests_total` | Number of HEAD requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_delete_tagging_requests_total` | Number of DELETE tagging requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_get_tagging_requests_total` | Number of GET tagging requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_put_tagging_requests_total` | Number of PUT tagging requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_get_requests_failures` | Number of failures in GET requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_head_requests_failures` | Number of failures in HEAD requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_delete_tagging_requests_failures` | Number of failures in DELETE tagging proxy requests to replication target                          |
+| `minio_bucket_replication_proxied_get_tagging_requests_failures` |Number of failures in GET tagging proxy requests to replication target                          |
+| `minio_bucket_replication_proxied_put_tagging_requests_failures` | Number of failures in PUT tagging proxy requests to replication target                          |
 
 ## Traffic Metrics
 

@@ -379,3 +379,145 @@ func (s *SMA) simpleMovingAvg() float64 {
 const (
 	defaultWindowSize = 10
 )
+
+type proxyStatsCache struct {
+	srProxyStats ProxyMetric
+	bucketStats  map[string]ProxyMetric
+	sync.RWMutex // mutex for proxy stats
+}
+
+func newProxyStatsCache() proxyStatsCache {
+	return proxyStatsCache{
+		bucketStats: make(map[string]ProxyMetric),
+	}
+}
+
+func (p *proxyStatsCache) inc(bucket string, api replProxyAPI, isErr bool) {
+	p.Lock()
+	defer p.Unlock()
+	v, ok := p.bucketStats[bucket]
+	if !ok {
+		v = ProxyMetric{}
+	}
+	switch api {
+	case putObjectTaggingAPI:
+		if !isErr {
+			atomic.AddUint64(&v.PutTagTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.PutTagTotal, 1)
+		} else {
+			atomic.AddUint64(&v.PutTagFailedTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.PutTagFailedTotal, 1)
+		}
+	case getObjectTaggingAPI:
+		if !isErr {
+			atomic.AddUint64(&v.GetTagTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.GetTagTotal, 1)
+		} else {
+			atomic.AddUint64(&v.GetTagFailedTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.GetTagFailedTotal, 1)
+		}
+	case removeObjectTaggingAPI:
+		if !isErr {
+			atomic.AddUint64(&v.RmvTagTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.RmvTagTotal, 1)
+		} else {
+			atomic.AddUint64(&v.RmvTagFailedTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.RmvTagFailedTotal, 1)
+		}
+	case headObjectAPI:
+		if !isErr {
+			atomic.AddUint64(&v.HeadTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.HeadTotal, 1)
+		} else {
+			atomic.AddUint64(&v.HeadFailedTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.HeadFailedTotal, 1)
+		}
+	case getObjectAPI:
+		if !isErr {
+			atomic.AddUint64(&v.GetTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.GetTotal, 1)
+		} else {
+			atomic.AddUint64(&v.GetFailedTotal, 1)
+			atomic.AddUint64(&p.srProxyStats.GetFailedTotal, 1)
+		}
+	default:
+		return
+	}
+	p.bucketStats[bucket] = v
+}
+
+func (p *proxyStatsCache) getBucketStats(bucket string) ProxyMetric {
+	p.RLock()
+	defer p.RUnlock()
+	v, ok := p.bucketStats[bucket]
+
+	if !ok {
+		return ProxyMetric{}
+	}
+	return ProxyMetric{
+		PutTagTotal: atomic.LoadUint64(&v.PutTagTotal),
+		GetTagTotal: atomic.LoadUint64(&v.GetTagTotal),
+		RmvTagTotal: atomic.LoadUint64(&v.RmvTagTotal),
+		HeadTotal:   atomic.LoadUint64(&v.HeadTotal),
+		GetTotal:    atomic.LoadUint64(&v.GetTotal),
+
+		PutTagFailedTotal: atomic.LoadUint64(&v.PutTagFailedTotal),
+		GetTagFailedTotal: atomic.LoadUint64(&v.GetTagFailedTotal),
+		RmvTagFailedTotal: atomic.LoadUint64(&v.RmvTagFailedTotal),
+		HeadFailedTotal:   atomic.LoadUint64(&v.HeadFailedTotal),
+		GetFailedTotal:    atomic.LoadUint64(&v.GetFailedTotal),
+	}
+}
+
+func (p *proxyStatsCache) getSiteStats() ProxyMetric {
+	v := p.srProxyStats
+	return ProxyMetric{
+		PutTagTotal:       atomic.LoadUint64(&v.PutTagTotal),
+		GetTagTotal:       atomic.LoadUint64(&v.GetTagTotal),
+		RmvTagTotal:       atomic.LoadUint64(&v.RmvTagTotal),
+		HeadTotal:         atomic.LoadUint64(&v.HeadTotal),
+		GetTotal:          atomic.LoadUint64(&v.GetTotal),
+		PutTagFailedTotal: atomic.LoadUint64(&v.PutTagFailedTotal),
+		GetTagFailedTotal: atomic.LoadUint64(&v.GetTagFailedTotal),
+		RmvTagFailedTotal: atomic.LoadUint64(&v.RmvTagFailedTotal),
+		HeadFailedTotal:   atomic.LoadUint64(&v.HeadFailedTotal),
+		GetFailedTotal:    atomic.LoadUint64(&v.GetFailedTotal),
+	}
+}
+
+type replProxyAPI string
+
+const (
+	putObjectTaggingAPI    replProxyAPI = "PutObjectTagging"
+	getObjectTaggingAPI    replProxyAPI = "GetObjectTagging"
+	removeObjectTaggingAPI replProxyAPI = "RemoveObjectTagging"
+	headObjectAPI          replProxyAPI = "HeadObject"
+	getObjectAPI           replProxyAPI = "GetObject"
+)
+
+// ProxyMetric holds stats for replication proxying
+type ProxyMetric struct {
+	PutTagTotal       uint64 `json:"putTaggingProxyTotal" msg:"ptc"`
+	GetTagTotal       uint64 `json:"getTaggingProxyTotal" msg:"gtc"`
+	RmvTagTotal       uint64 `json:"removeTaggingProxyTotal" msg:"rtc"`
+	GetTotal          uint64 `json:"getProxyTotal" msg:"gc"`
+	HeadTotal         uint64 `json:"headProxyTotal" msg:"hc"`
+	PutTagFailedTotal uint64 `json:"putTaggingProxyFailed" msg:"ptf"`
+	GetTagFailedTotal uint64 `json:"getTaggingProxyFailed" msg:"gtf"`
+	RmvTagFailedTotal uint64 `json:"removeTaggingProxyFailed" msg:"rtf"`
+	GetFailedTotal    uint64 `json:"getProxyFailed" msg:"gf"`
+	HeadFailedTotal   uint64 `json:"headProxyFailed" msg:"hf"`
+}
+
+func (p *ProxyMetric) add(p2 ProxyMetric) {
+	atomic.AddUint64(&p.GetTotal, p2.GetTotal)
+	atomic.AddUint64(&p.HeadTotal, p2.HeadTotal)
+	atomic.AddUint64(&p.GetTagTotal, p2.GetTagTotal)
+	atomic.AddUint64(&p.PutTagTotal, p2.PutTagTotal)
+	atomic.AddUint64(&p.RmvTagTotal, p2.RmvTagTotal)
+	atomic.AddUint64(&p.GetFailedTotal, p2.GetFailedTotal)
+	atomic.AddUint64(&p.HeadFailedTotal, p2.HeadFailedTotal)
+	atomic.AddUint64(&p.GetTagFailedTotal, p2.GetTagFailedTotal)
+	atomic.AddUint64(&p.PutTagFailedTotal, p2.PutTagFailedTotal)
+	atomic.AddUint64(&p.RmvTagFailedTotal, p2.RmvTagFailedTotal)
+}
