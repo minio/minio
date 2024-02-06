@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/minio/madmin-go/v3"
 	"io"
 	"net/http"
 	"net/url"
@@ -36,6 +35,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zstd"
+	"github.com/minio/madmin-go/v3"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/grid"
