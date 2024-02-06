@@ -42,6 +42,8 @@ import (
 	"github.com/prometheus/procfs"
 )
 
+//go:generate msgp -file=$GOFILE -unexported -io=false
+
 var (
 	nodeCollector           *minioNodeCollector
 	clusterCollector        *minioClusterCollector
@@ -328,7 +330,7 @@ type Metric struct {
 
 // MetricsGroup are a group of metrics that are initialized together.
 type MetricsGroup struct {
-	metricsCache     timedValue
+	metricsCache     timedValue `msg:"-"`
 	cacheInterval    time.Duration
 	metricsGroupOpts MetricsGroupOpts
 }
@@ -4005,6 +4007,7 @@ func collectMetric(metric Metric, labels []string, values []string, metricName s
 	}
 }
 
+//msgp:ignore minioBucketCollector
 type minioBucketCollector struct {
 	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc
@@ -4040,6 +4043,7 @@ func (c *minioBucketCollector) Collect(out chan<- prometheus.Metric) {
 	wg.Wait()
 }
 
+//msgp:ignore minioClusterCollector
 type minioClusterCollector struct {
 	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc
@@ -4099,6 +4103,8 @@ func ReportMetrics(ctx context.Context, metricsGroups []*MetricsGroup) <-chan Me
 }
 
 // minioNodeCollector is the Custom Collector
+//
+//msgp:ignore minioNodeCollector
 type minioNodeCollector struct {
 	metricsGroups []*MetricsGroup
 	desc          *prometheus.Desc

@@ -44,7 +44,6 @@ import (
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/logger/message/log"
-	"github.com/tinylib/msgp/msgp"
 )
 
 // To abstract a node over network.
@@ -62,14 +61,65 @@ func (s *peerRESTServer) GetLocksHandler(w http.ResponseWriter, r *http.Request)
 }
 
 var (
-	deletePolicyHandler      = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeletePolicy, grid.NewMSS, grid.NewNoPayload)
-	loadPolicyHandler        = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadPolicy, grid.NewMSS, grid.NewNoPayload)
-	loadPolicyMappingHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadPolicyMapping, grid.NewMSS, grid.NewNoPayload)
-	deleteSvcActHandler      = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteServiceAccount, grid.NewMSS, grid.NewNoPayload)
-	loadSvcActHandler        = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadServiceAccount, grid.NewMSS, grid.NewNoPayload)
-	deleteUserHandler        = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteUser, grid.NewMSS, grid.NewNoPayload)
-	loadUserHandler          = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadUser, grid.NewMSS, grid.NewNoPayload)
-	loadGroupHandler         = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadGroup, grid.NewMSS, grid.NewNoPayload)
+	// Types & Wrappers
+	aoMetricsGroup         = grid.NewArrayOf[*Metric](func() *Metric { return &Metric{} })
+	madminMemInfo          = grid.NewJSONPool[madmin.MemInfo]()
+	madminNetInfo          = grid.NewJSONPool[madmin.NetInfo]()
+	madminOSInfo           = grid.NewJSONPool[madmin.OSInfo]()
+	madminPartitions       = grid.NewJSONPool[madmin.Partitions]()
+	madminProcInfo         = grid.NewJSONPool[madmin.ProcInfo]()
+	madminRealtimeMetrics  = grid.NewJSONPool[madmin.RealtimeMetrics]()
+	madminServerProperties = grid.NewJSONPool[madmin.ServerProperties]()
+	madminStorageInfo      = grid.NewJSONPool[madmin.StorageInfo]()
+	madminSysConfig        = grid.NewJSONPool[madmin.SysConfig]()
+	madminSysErrors        = grid.NewJSONPool[madmin.SysErrors]()
+	madminSysServices      = grid.NewJSONPool[madmin.SysServices]()
+
+	// Request -> Response RPC calls
+	deleteBucketMetadataRPC        = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucketMetadata, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	deleteBucketRPC                = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucket, grid.NewMSS, grid.NewNoPayload)
+	deletePolicyRPC                = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeletePolicy, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	deleteSvcActRPC                = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteServiceAccount, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	deleteUserRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteUser, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	getAllBucketStatsRPC           = grid.NewSingleHandler[*grid.MSS, *BucketStatsMap](grid.HandlerGetAllBucketStats, grid.NewMSS, func() *BucketStatsMap { return &BucketStatsMap{} })
+	getBucketStatsRPC              = grid.NewSingleHandler[*grid.MSS, *BucketStats](grid.HandlerGetBucketStats, grid.NewMSS, func() *BucketStats { return &BucketStats{} })
+	getLocalDiskIDsRPC             = grid.NewSingleHandler[*grid.MSS, *LocalDiskIDs](grid.HandlerGetLocalDiskIDs, grid.NewMSS, func() *LocalDiskIDs { return &LocalDiskIDs{} })
+	getMemInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.MemInfo]](grid.HandlerGetMemInfo, grid.NewMSS, madminMemInfo.NewJSON)
+	getMetacacheListingRPC         = grid.NewSingleHandler[*listPathOptions, *metacache](grid.HandlerGetMetacacheListing, func() *listPathOptions { return &listPathOptions{} }, func() *metacache { return &metacache{} })
+	getMetricsRPC                  = grid.NewSingleHandler[*grid.URLValues, *grid.JSON[madmin.RealtimeMetrics]](grid.HandlerGetMetrics, grid.NewURLValues, madminRealtimeMetrics.NewJSON)
+	getNetInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.NetInfo]](grid.HandlerGetNetInfo, grid.NewMSS, madminNetInfo.NewJSON)
+	getOSInfoRPC                   = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.OSInfo]](grid.HandlerGetOSInfo, grid.NewMSS, madminOSInfo.NewJSON)
+	getPartitionsRPC               = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.Partitions]](grid.HandlerGetPartitions, grid.NewMSS, madminPartitions.NewJSON)
+	getPeerBucketMetricsRPC        = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetPeerBucketMetrics, grid.NewMSS, aoMetricsGroup.New)
+	getPeerMetricsRPC              = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetPeerMetrics, grid.NewMSS, aoMetricsGroup.New)
+	getProcInfoRPC                 = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.ProcInfo]](grid.HandlerGetProcInfo, grid.NewMSS, madminProcInfo.NewJSON)
+	getSRMetricsRPC                = grid.NewSingleHandler[*grid.MSS, *SRMetricsSummary](grid.HandlerGetSRMetrics, grid.NewMSS, func() *SRMetricsSummary { return &SRMetricsSummary{} })
+	getSysConfigRPC                = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysConfig]](grid.HandlerGetSysConfig, grid.NewMSS, madminSysConfig.NewJSON)
+	getSysErrorsRPC                = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysErrors]](grid.HandlerGetSysErrors, grid.NewMSS, madminSysErrors.NewJSON)
+	getSysServicesRPC              = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysServices]](grid.HandlerGetSysServices, grid.NewMSS, madminSysServices.NewJSON)
+	headBucketRPC                  = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerHeadBucket, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
+	healBucketRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerHealBucket, grid.NewMSS, grid.NewNoPayload)
+	loadBucketMetadataRPC          = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadBucketMetadata, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	loadGroupRPC                   = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadGroup, grid.NewMSS, grid.NewNoPayload)
+	loadPolicyMappingRPC           = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadPolicyMapping, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	loadPolicyRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadPolicy, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	loadRebalanceMetaRPC           = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadRebalanceMeta, grid.NewMSS, grid.NewNoPayload)
+	loadSvcActRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadServiceAccount, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	loadTransitionTierConfigRPC    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadTransitionTierConfig, grid.NewMSS, grid.NewNoPayload)
+	loadUserRPC                    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadUser, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	localStorageInfoRPC            = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.StorageInfo]](grid.HandlerStorageInfo, grid.NewMSS, madminStorageInfo.NewJSON)
+	makeBucketRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerMakeBucket, grid.NewMSS, grid.NewNoPayload)
+	reloadPoolMetaRPC              = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerReloadPoolMeta, grid.NewMSS, grid.NewNoPayload)
+	reloadSiteReplicationConfigRPC = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerReloadSiteReplicationConfig, grid.NewMSS, grid.NewNoPayload)
+	serverInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.ServerProperties]](grid.HandlerServerInfo, grid.NewMSS, madminServerProperties.NewJSON)
+	stopRebalanceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerStopRebalance, grid.NewMSS, grid.NewNoPayload)
+	updateMetacacheListingRPC      = grid.NewSingleHandler[*metacache, *metacache](grid.HandlerUpdateMetacacheListing, func() *metacache { return &metacache{} }, func() *metacache { return &metacache{} })
+
+	// STREAMS
+	// Set an output capacity of 100 for listenRPC
+	// There is another buffer that will buffer events.
+	listenRPC             = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen, grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
+	getResourceMetricsRPC = grid.NewStream[*grid.MSS, grid.NoPayload, *Metric](grid.HandlerGetResourceMetrics, grid.NewMSS, nil, func() *Metric { return &Metric{} })
 )
 
 // DeletePolicyHandler - deletes a policy on the server.
@@ -295,236 +345,123 @@ func (s *peerRESTServer) DownloadProfilingDataHandler(w http.ResponseWriter, r *
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(profileData))
 }
 
-func (s *peerRESTServer) LocalStorageInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx := newContext(r, w, "LocalStorageInfo")
-
+func (s *peerRESTServer) LocalStorageInfoHandler(mss *grid.MSS) (*grid.JSON[madmin.StorageInfo], *grid.RemoteErr) {
 	objLayer := newObjectLayerFn()
 	if objLayer == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
+		return nil, grid.NewRemoteErr(errServerNotInitialized)
 	}
 
-	metrics, err := strconv.ParseBool(r.Form.Get(peerRESTMetrics))
+	metrics, err := strconv.ParseBool(mss.Get(peerRESTMetrics))
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-
+		return nil, grid.NewRemoteErr(err)
 	}
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(objLayer.LocalStorageInfo(r.Context(), metrics)))
+	info := objLayer.LocalStorageInfo(context.Background(), metrics)
+	return madminStorageInfo.NewJSONWith(&info), nil
 }
 
 // ServerInfoHandler - returns Server Info
-func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx := newContext(r, w, "ServerInfo")
-	info := getLocalServerProperty(globalEndpoints, r)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) ServerInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.ServerProperties], *grid.RemoteErr) {
+	r := http.Request{Host: globalMinioHost}
+	info := getLocalServerProperty(globalEndpoints, &r)
+	return madminServerProperties.NewJSONWith(&info), nil
 }
 
+var (
+	madminCPUs     = grid.NewJSONPool[madmin.CPUs]()
+	getCPUsHandler = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.CPUs]](grid.HandlerGetCPUs, grid.NewMSS, madminCPUs.NewJSON)
+)
+
 // GetCPUsHandler - returns CPU info.
-func (s *peerRESTServer) GetCPUsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetCPUs(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetCPUsHandler(_ *grid.MSS) (*grid.JSON[madmin.CPUs], *grid.RemoteErr) {
+	info := madmin.GetCPUs(context.Background(), globalMinioHost)
+	return madminCPUs.NewJSONWith(&info), nil
 }
 
 // GetNetInfoHandler - returns network information.
-func (s *peerRESTServer) GetNetInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetNetInfo(r.Host, globalInternodeInterface)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetNetInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.NetInfo], *grid.RemoteErr) {
+	info := madmin.GetNetInfo(globalMinioHost, globalInternodeInterface)
+	return madminNetInfo.NewJSONWith(&info), nil
 }
 
 // GetPartitionsHandler - returns disk partition information.
-func (s *peerRESTServer) GetPartitionsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetPartitions(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetPartitionsHandler(_ *grid.MSS) (*grid.JSON[madmin.Partitions], *grid.RemoteErr) {
+	info := madmin.GetPartitions(context.Background(), globalMinioHost)
+	return madminPartitions.NewJSONWith(&info), nil
 }
 
 // GetOSInfoHandler - returns operating system's information.
-func (s *peerRESTServer) GetOSInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetOSInfo(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetOSInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.OSInfo], *grid.RemoteErr) {
+	info := madmin.GetOSInfo(context.Background(), globalMinioHost)
+	return madminOSInfo.NewJSONWith(&info), nil
 }
 
 // GetProcInfoHandler - returns this MinIO process information.
-func (s *peerRESTServer) GetProcInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetProcInfo(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetProcInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.ProcInfo], *grid.RemoteErr) {
+	info := madmin.GetProcInfo(context.Background(), globalMinioHost)
+	return madminProcInfo.NewJSONWith(&info), nil
 }
 
 // GetMemInfoHandler - returns memory information.
-func (s *peerRESTServer) GetMemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetMemInfo(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetMemInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.MemInfo], *grid.RemoteErr) {
+	info := madmin.GetMemInfo(context.Background(), globalMinioHost)
+	return madminMemInfo.NewJSONWith(&info), nil
 }
 
 // GetMetricsHandler - returns server metrics.
-func (s *peerRESTServer) GetMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
+func (s *peerRESTServer) GetMetricsHandler(v *grid.URLValues) (*grid.JSON[madmin.RealtimeMetrics], *grid.RemoteErr) {
+	values := v.Values()
 	var types madmin.MetricType
-	if t, _ := strconv.ParseUint(r.Form.Get(peerRESTMetricsTypes), 10, 64); t != 0 {
+	if t, _ := strconv.ParseUint(values.Get(peerRESTMetricsTypes), 10, 64); t != 0 {
 		types = madmin.MetricType(t)
 	} else {
 		types = madmin.MetricsAll
 	}
 
 	diskMap := make(map[string]struct{})
-	for _, disk := range r.Form[peerRESTDisk] {
+	for _, disk := range values[peerRESTDisk] {
 		diskMap[disk] = struct{}{}
 	}
 
 	hostMap := make(map[string]struct{})
-	for _, host := range r.Form[peerRESTHost] {
+	for _, host := range values[peerRESTHost] {
 		hostMap[host] = struct{}{}
 	}
-
-	jobID := r.Form.Get(peerRESTJobID)
-	depID := r.Form.Get(peerRESTDepID)
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
 
 	info := collectLocalMetrics(types, collectMetricsOpts{
 		disks: diskMap,
 		hosts: hostMap,
-		jobID: jobID,
-		depID: depID,
+		jobID: values.Get(peerRESTJobID),
+		depID: values.Get(peerRESTDepID),
 	})
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+	return madminRealtimeMetrics.NewJSONWith(&info), nil
 }
 
-func (s *peerRESTServer) GetResourceMetrics(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("invalid request"))
-		return
+func (s *peerRESTServer) GetResourceMetrics(ctx context.Context, _ *grid.MSS, out chan<- *Metric) *grid.RemoteErr {
+	for m := range ReportMetrics(ctx, resourceMetricsGroups) {
+		out <- &m
 	}
-
-	enc := gob.NewEncoder(w)
-
-	for m := range ReportMetrics(r.Context(), resourceMetricsGroups) {
-		if err := enc.Encode(m); err != nil {
-			s.writeErrorResponse(w, errors.New("Encoding metric failed: "+err.Error()))
-			return
-		}
-	}
+	return nil
 }
 
 // GetSysConfigHandler - returns system config information.
 // (only the config that are of concern to minio)
-func (s *peerRESTServer) GetSysConfigHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetSysConfig(ctx, r.Host)
-
-	logger.LogOnceIf(ctx, gob.NewEncoder(w).Encode(info), "get-sys-config")
+func (s *peerRESTServer) GetSysConfigHandler(_ *grid.MSS) (*grid.JSON[madmin.SysConfig], *grid.RemoteErr) {
+	info := madmin.GetSysConfig(context.Background(), globalMinioHost)
+	return madminSysConfig.NewJSONWith(&info), nil
 }
 
 // GetSysServicesHandler - returns system services information.
 // (only the services that are of concern to minio)
-func (s *peerRESTServer) GetSysServicesHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetSysServices(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetSysServicesHandler(_ *grid.MSS) (*grid.JSON[madmin.SysServices], *grid.RemoteErr) {
+	info := madmin.GetSysServices(context.Background(), globalMinioHost)
+	return madminSysServices.NewJSONWith(&info), nil
 }
 
 // GetSysErrorsHandler - returns system level errors
-func (s *peerRESTServer) GetSysErrorsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	info := madmin.GetSysErrors(ctx, r.Host)
-
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
+func (s *peerRESTServer) GetSysErrorsHandler(_ *grid.MSS) (*grid.JSON[madmin.SysErrors], *grid.RemoteErr) {
+	info := madmin.GetSysErrors(context.Background(), globalMinioHost)
+	return madminSysErrors.NewJSONWith(&info), nil
 }
-
-var deleteBucketMetadataHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucketMetadata, grid.NewMSS, grid.NewNoPayload)
 
 // DeleteBucketMetadataHandler - Delete in memory bucket metadata
 func (s *peerRESTServer) DeleteBucketMetadataHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -546,12 +483,7 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(mss *grid.MSS) (np grid.NoP
 }
 
 // GetAllBucketStatsHandler - fetches bucket replication stats for all buckets from this peer.
-func (s *peerRESTServer) GetAllBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
+func (s *peerRESTServer) GetAllBucketStatsHandler(mss *grid.MSS) (*BucketStatsMap, *grid.RemoteErr) {
 	replicationStats := globalReplicationStats.GetAll()
 	bucketStatsMap := make(map[string]BucketStats, len(replicationStats))
 	for k, v := range replicationStats {
@@ -560,22 +492,15 @@ func (s *peerRESTServer) GetAllBucketStatsHandler(w http.ResponseWriter, r *http
 			ProxyStats:       globalReplicationStats.getProxyStats(k),
 		}
 	}
-	logger.LogIf(r.Context(), msgp.Encode(w, &BucketStatsMap{Stats: bucketStatsMap, Timestamp: UTCNow()}))
+	return &BucketStatsMap{Stats: bucketStatsMap, Timestamp: time.Now()}, nil
 }
 
 // GetBucketStatsHandler - fetches current in-memory bucket stats, currently only
 // returns BucketStats, that currently includes ReplicationStats.
-func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	vars := mux.Vars(r)
-	bucketName := vars[peerRESTBucket]
+func (s *peerRESTServer) GetBucketStatsHandler(vars *grid.MSS) (*BucketStats, *grid.RemoteErr) {
+	bucketName := vars.Get(peerRESTBucket)
 	if bucketName == "" {
-		s.writeErrorResponse(w, errors.New("Bucket name is missing"))
-		return
+		return nil, grid.NewRemoteErrString("Bucket name is missing")
 	}
 
 	bs := BucketStats{
@@ -583,26 +508,19 @@ func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Re
 		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
 		ProxyStats:       globalReplicationStats.getProxyStats(bucketName),
 	}
-	logger.LogIf(r.Context(), msgp.Encode(w, &bs))
+	return &bs, nil
 }
 
 // GetSRMetricsHandler - fetches current in-memory replication stats at site level from this peer
-func (s *peerRESTServer) GetSRMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
+func (s *peerRESTServer) GetSRMetricsHandler(mss *grid.MSS) (*SRMetricsSummary, *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return
+		return nil, grid.NewRemoteErr(errServerNotInitialized)
 	}
 
 	sm := globalReplicationStats.getSRMetricsForNode()
-	logger.LogIf(r.Context(), msgp.Encode(w, &sm))
+	return &sm, nil
 }
-
-var loadBucketMetadataHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadBucketMetadata, grid.NewMSS, grid.NewNoPayload)
 
 // LoadBucketMetadataHandler - reloads in memory bucket metadata
 func (s *peerRESTServer) LoadBucketMetadataHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -634,43 +552,17 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(mss *grid.MSS) (np grid.NoPay
 	return
 }
 
-func (s *peerRESTServer) GetMetacacheListingHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-	ctx := newContext(r, w, "GetMetacacheListing")
-
-	var opts listPathOptions
-	err := gob.NewDecoder(r.Body).Decode(&opts)
-	if err != nil && err != io.EOF {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	resp := localMetacacheMgr.getBucket(ctx, opts.Bucket).findCache(opts)
-	logger.LogIf(ctx, msgp.Encode(w, &resp))
+func (s *peerRESTServer) GetMetacacheListingHandler(opts *listPathOptions) (*metacache, *grid.RemoteErr) {
+	resp := localMetacacheMgr.getBucket(context.Background(), opts.Bucket).findCache(*opts)
+	return &resp, nil
 }
 
-func (s *peerRESTServer) UpdateMetacacheListingHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-	ctx := newContext(r, w, "UpdateMetacacheListing")
-
-	var req metacache
-	err := msgp.Decode(r.Body, &req)
+func (s *peerRESTServer) UpdateMetacacheListingHandler(req *metacache) (*metacache, *grid.RemoteErr) {
+	cache, err := localMetacacheMgr.updateCacheEntry(*req)
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		return nil, grid.NewRemoteErr(err)
 	}
-	cache, err := localMetacacheMgr.updateCacheEntry(req)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	// Return updated metadata.
-	logger.LogIf(ctx, msgp.Encode(w, &cache))
+	return &cache, nil
 }
 
 // PutBucketNotificationHandler - Set bucket policy.
@@ -734,10 +626,6 @@ func getLocalDiskIDs(z *erasureServerPools) []string {
 func (s *peerRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsValid(w, r)
 }
-
-var getLocalDiskIDsHandler = grid.NewSingleHandler[*grid.MSS, *LocalDiskIDs](grid.HandlerGetLocalDiskIDs, grid.NewMSS, func() *LocalDiskIDs {
-	return &LocalDiskIDs{}
-})
 
 // GetLocalDiskIDs - Return disk IDs of all the local disks.
 func (s *peerRESTServer) GetLocalDiskIDs(mss *grid.MSS) (*LocalDiskIDs, *grid.RemoteErr) {
@@ -904,11 +792,6 @@ func (s *peerRESTServer) SignalServiceHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// Set an output capacity of 100 for listenHandler
-// There is another buffer that will buffer events.
-var listenHandler = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen,
-	grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
-
 // ListenHandler sends http trace messages back to peer rest client
 func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.URLValues, out chan<- *grid.Bytes) *grid.RemoteErr {
 	values := v.Values()
@@ -1034,8 +917,6 @@ func (s *peerRESTServer) BackgroundHealStatusHandler(w http.ResponseWriter, r *h
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(state))
 }
 
-var reloadSiteReplicationConfigHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerReloadSiteReplicationConfig, grid.NewMSS, grid.NewNoPayload)
-
 // ReloadSiteReplicationConfigHandler - reloads site replication configuration from the disks
 func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
@@ -1046,8 +927,6 @@ func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(mss *grid.MSS) (np g
 	logger.LogIf(context.Background(), globalSiteReplicationSys.Init(context.Background(), objAPI))
 	return
 }
-
-var reloadPoolMetaHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerReloadPoolMeta, grid.NewMSS, grid.NewNoPayload)
 
 func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
@@ -1067,8 +946,6 @@ func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload
 	return
 }
 
-var stopRebalanceHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerStopRebalance, grid.NewMSS, grid.NewNoPayload)
-
 func (s *peerRESTServer) StopRebalanceHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
@@ -1083,8 +960,6 @@ func (s *peerRESTServer) StopRebalanceHandler(mss *grid.MSS) (np grid.NoPayload,
 	pools.StopRebalance()
 	return
 }
-
-var loadRebalanceMetaHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadRebalanceMeta, grid.NewMSS, grid.NewNoPayload)
 
 func (s *peerRESTServer) LoadRebalanceMetaHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
@@ -1112,8 +987,6 @@ func (s *peerRESTServer) LoadRebalanceMetaHandler(mss *grid.MSS) (np grid.NoPayl
 
 	return
 }
-
-var loadTransitionTierConfigHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadTransitionTierConfig, grid.NewMSS, grid.NewNoPayload)
 
 func (s *peerRESTServer) LoadTransitionTierConfigHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
@@ -1213,37 +1086,23 @@ func (s *peerRESTServer) GetBandwidth(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetPeerMetrics gets the metrics to be federated across peers.
-func (s *peerRESTServer) GetPeerMetrics(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("invalid request"))
-		return
+func (s *peerRESTServer) GetPeerMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
+	m := ReportMetrics(context.Background(), peerMetricsGroups)
+	res := make([]*Metric, 0, len(m))
+	for m := range m {
+		res = append(res, &m)
 	}
-
-	enc := gob.NewEncoder(w)
-
-	for m := range ReportMetrics(r.Context(), peerMetricsGroups) {
-		if err := enc.Encode(m); err != nil {
-			s.writeErrorResponse(w, errors.New("Encoding metric failed: "+err.Error()))
-			return
-		}
-	}
+	return aoMetricsGroup.NewWith(res), nil
 }
 
 // GetPeerBucketMetrics gets the metrics to be federated across peers.
-func (s *peerRESTServer) GetPeerBucketMetrics(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("invalid request"))
-		return
+func (s *peerRESTServer) GetPeerBucketMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
+	m := ReportMetrics(context.Background(), bucketPeerMetricsGroups)
+	res := make([]*Metric, 0, len(m))
+	for m := range m {
+		res = append(res, &m)
 	}
-
-	enc := gob.NewEncoder(w)
-
-	for m := range ReportMetrics(r.Context(), bucketPeerMetricsGroups) {
-		if err := enc.Encode(m); err != nil {
-			s.writeErrorResponse(w, errors.New("Encoding metric failed: "+err.Error()))
-			return
-		}
-	}
+	return aoMetricsGroup.NewWith(res), nil
 }
 
 func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request) {
@@ -1423,8 +1282,6 @@ func (s *peerRESTServer) NetSpeedTestHandler(w http.ResponseWriter, r *http.Requ
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
-var healBucketHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerHealBucket, grid.NewMSS, grid.NewNoPayload)
-
 func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	bucket := mss.Get(peerS3Bucket)
 	if isMinioMetaBucket(bucket) {
@@ -1441,8 +1298,6 @@ func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np grid.NoPayload, ne
 
 	return np, nil
 }
-
-var headBucketHandler = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerHeadBucket, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
 
 // HeadBucketHandler implements peer BuckeInfo call, returns bucket create date.
 func (s *peerRESTServer) HeadBucketHandler(mss *grid.MSS) (info *VolInfo, nerr *grid.RemoteErr) {
@@ -1466,8 +1321,6 @@ func (s *peerRESTServer) HeadBucketHandler(mss *grid.MSS) (info *VolInfo, nerr *
 	}, nil
 }
 
-var deleteBucketHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucket, grid.NewMSS, grid.NewNoPayload)
-
 // DeleteBucketHandler implements peer delete bucket call.
 func (s *peerRESTServer) DeleteBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	bucket := mss.Get(peerS3Bucket)
@@ -1485,8 +1338,6 @@ func (s *peerRESTServer) DeleteBucketHandler(mss *grid.MSS) (np grid.NoPayload, 
 
 	return np, nil
 }
-
-var makeBucketHandler = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerMakeBucket, grid.NewMSS, grid.NewNoPayload)
 
 // MakeBucketHandler implements peer create bucket call.
 func (s *peerRESTServer) MakeBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -1516,65 +1367,63 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter := router.PathPrefix(peerRESTPrefix).Subrouter()
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(h(server.GetLocksHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(h(server.ServerInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLocalStorageInfo).HandlerFunc(h(server.LocalStorageInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(h(server.GetProcInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(h(server.GetMemInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMetrics).HandlerFunc(h(server.GetMetricsHandler)).Queries(restQueries(peerRESTMetricsTypes)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodResourceMetrics).HandlerFunc(h(server.GetResourceMetrics))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysErrors).HandlerFunc(h(server.GetSysErrorsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysServices).HandlerFunc(h(server.GetSysServicesHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSysConfig).HandlerFunc(h(server.GetSysConfigHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodOsInfo).HandlerFunc(h(server.GetOSInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDiskHwInfo).HandlerFunc(h(server.GetPartitionsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetHwInfo).HandlerFunc(h(server.GetNetInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCPUInfo).HandlerFunc(h(server.GetCPUsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetAllBucketStats).HandlerFunc(h(server.GetAllBucketStatsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBucketStats).HandlerFunc(h(server.GetBucketStatsHandler)).Queries(restQueries(peerRESTBucket)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSignalService).HandlerFunc(h(server.SignalServiceHandler)).Queries(restQueries(peerRESTSignal)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodVerifyBinary).HandlerFunc(h(server.VerifyBinaryHandler)).Queries(restQueries(peerRESTURL, peerRESTSha256Sum, peerRESTReleaseInfo)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodCommitBinary).HandlerFunc(h(server.CommitBinaryHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetReplicationMRF).HandlerFunc(httpTraceHdrs(server.GetReplicationMRFHandler)).Queries(restQueries(peerRESTBucket)...)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetSRMetrics).HandlerFunc(h(server.GetSRMetricsHandler))
-
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(h(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(h(server.DownloadProfilingDataHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBandwidth).HandlerFunc(h(server.GetBandwidth))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetMetacacheListing).HandlerFunc(h(server.GetMetacacheListingHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodUpdateMetacacheListing).HandlerFunc(h(server.UpdateMetacacheListingHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerMetrics).HandlerFunc(h(server.GetPeerMetrics))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetPeerBucketMetrics).HandlerFunc(h(server.GetPeerBucketMetrics))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedTest).HandlerFunc(h(server.SpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDriveSpeedTest).HandlerFunc(h(server.DriveSpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodNetperf).HandlerFunc(h(server.NetSpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDevNull).HandlerFunc(h(server.DevNull))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLastDayTierStats).HandlerFunc(h(server.GetLastDayTierStatsHandler))
 
-	logger.FatalIf(makeBucketHandler.Register(gm, server.MakeBucketHandler), "unable to register handler")
-	logger.FatalIf(deleteBucketHandler.Register(gm, server.DeleteBucketHandler), "unable to register handler")
-	logger.FatalIf(headBucketHandler.Register(gm, server.HeadBucketHandler), "unable to register handler")
-	logger.FatalIf(healBucketHandler.Register(gm, server.HealBucketHandler), "unable to register handler")
+	logger.FatalIf(deleteBucketMetadataRPC.Register(gm, server.DeleteBucketMetadataHandler), "unable to register handler")
+	logger.FatalIf(deleteBucketRPC.Register(gm, server.DeleteBucketHandler), "unable to register handler")
+	logger.FatalIf(deletePolicyRPC.Register(gm, server.DeletePolicyHandler), "unable to register handler")
+	logger.FatalIf(deleteSvcActRPC.Register(gm, server.DeleteServiceAccountHandler), "unable to register handler")
+	logger.FatalIf(deleteUserRPC.Register(gm, server.DeleteUserHandler), "unable to register handler")
+	logger.FatalIf(getAllBucketStatsRPC.Register(gm, server.GetAllBucketStatsHandler), "unable to register handler")
+	logger.FatalIf(getBucketStatsRPC.Register(gm, server.GetBucketStatsHandler), "unable to register handler")
+	logger.FatalIf(getCPUsHandler.Register(gm, server.GetCPUsHandler), "unable to register handler")
+	logger.FatalIf(getLocalDiskIDsRPC.Register(gm, server.GetLocalDiskIDs), "unable to register handler")
+	logger.FatalIf(getMemInfoRPC.Register(gm, server.GetMemInfoHandler), "unable to register handler")
+	logger.FatalIf(getMetacacheListingRPC.Register(gm, server.GetMetacacheListingHandler), "unable to register handler")
+	logger.FatalIf(getMetricsRPC.Register(gm, server.GetMetricsHandler), "unable to register handler")
+	logger.FatalIf(getNetInfoRPC.Register(gm, server.GetNetInfoHandler), "unable to register handler")
+	logger.FatalIf(getOSInfoRPC.Register(gm, server.GetOSInfoHandler), "unable to register handler")
+	logger.FatalIf(getPartitionsRPC.Register(gm, server.GetPartitionsHandler), "unable to register handler")
+	logger.FatalIf(getPeerBucketMetricsRPC.Register(gm, server.GetPeerBucketMetrics), "unable to register handler")
+	logger.FatalIf(getPeerMetricsRPC.Register(gm, server.GetPeerMetrics), "unable to register handler")
+	logger.FatalIf(getProcInfoRPC.Register(gm, server.GetProcInfoHandler), "unable to register handler")
+	logger.FatalIf(getResourceMetricsRPC.RegisterNoInput(gm, server.GetResourceMetrics), "unable to register handler")
+	logger.FatalIf(getSRMetricsRPC.Register(gm, server.GetSRMetricsHandler), "unable to register handler")
+	logger.FatalIf(getSysConfigRPC.Register(gm, server.GetSysConfigHandler), "unable to register handler")
+	logger.FatalIf(getSysErrorsRPC.Register(gm, server.GetSysErrorsHandler), "unable to register handler")
+	logger.FatalIf(getSysServicesRPC.Register(gm, server.GetSysServicesHandler), "unable to register handler")
+	logger.FatalIf(headBucketRPC.Register(gm, server.HeadBucketHandler), "unable to register handler")
+	logger.FatalIf(healBucketRPC.Register(gm, server.HealBucketHandler), "unable to register handler")
+	logger.FatalIf(listenRPC.RegisterNoInput(gm, server.ListenHandler), "unable to register handler")
+	logger.FatalIf(loadBucketMetadataRPC.Register(gm, server.LoadBucketMetadataHandler), "unable to register handler")
+	logger.FatalIf(loadGroupRPC.Register(gm, server.LoadGroupHandler), "unable to register handler")
+	logger.FatalIf(loadPolicyMappingRPC.Register(gm, server.LoadPolicyMappingHandler), "unable to register handler")
+	logger.FatalIf(loadPolicyRPC.Register(gm, server.LoadPolicyHandler), "unable to register handler")
+	logger.FatalIf(loadRebalanceMetaRPC.Register(gm, server.LoadRebalanceMetaHandler), "unable to register handler")
+	logger.FatalIf(loadSvcActRPC.Register(gm, server.LoadServiceAccountHandler), "unable to register handler")
+	logger.FatalIf(loadTransitionTierConfigRPC.Register(gm, server.LoadTransitionTierConfigHandler), "unable to register handler")
+	logger.FatalIf(loadUserRPC.Register(gm, server.LoadUserHandler), "unable to register handler")
+	logger.FatalIf(localStorageInfoRPC.Register(gm, server.LocalStorageInfoHandler), "unable to register handler")
+	logger.FatalIf(makeBucketRPC.Register(gm, server.MakeBucketHandler), "unable to register handler")
+	logger.FatalIf(reloadPoolMetaRPC.Register(gm, server.ReloadPoolMetaHandler), "unable to register handler")
+	logger.FatalIf(reloadSiteReplicationConfigRPC.Register(gm, server.ReloadSiteReplicationConfigHandler), "unable to register handler")
+	logger.FatalIf(serverInfoRPC.Register(gm, server.ServerInfoHandler), "unable to register handler")
+	logger.FatalIf(stopRebalanceRPC.Register(gm, server.StopRebalanceHandler), "unable to register handler")
+	logger.FatalIf(updateMetacacheListingRPC.Register(gm, server.UpdateMetacacheListingHandler), "unable to register handler")
 
-	logger.FatalIf(deletePolicyHandler.Register(gm, server.DeletePolicyHandler), "unable to register handler")
-	logger.FatalIf(loadPolicyHandler.Register(gm, server.LoadPolicyHandler), "unable to register handler")
-	logger.FatalIf(loadPolicyMappingHandler.Register(gm, server.LoadPolicyMappingHandler), "unable to register handler")
-	logger.FatalIf(deleteUserHandler.Register(gm, server.DeleteUserHandler), "unable to register handler")
-	logger.FatalIf(deleteSvcActHandler.Register(gm, server.DeleteServiceAccountHandler), "unable to register handler")
-	logger.FatalIf(loadUserHandler.Register(gm, server.LoadUserHandler), "unable to register handler")
-	logger.FatalIf(loadSvcActHandler.Register(gm, server.LoadServiceAccountHandler), "unable to register handler")
-	logger.FatalIf(loadGroupHandler.Register(gm, server.LoadGroupHandler), "unable to register handler")
-
-	logger.FatalIf(loadTransitionTierConfigHandler.Register(gm, server.LoadTransitionTierConfigHandler), "unable to register handler")
-	logger.FatalIf(reloadPoolMetaHandler.Register(gm, server.ReloadPoolMetaHandler), "unable to register handler")
-	logger.FatalIf(loadRebalanceMetaHandler.Register(gm, server.LoadRebalanceMetaHandler), "unable to register handler")
-	logger.FatalIf(stopRebalanceHandler.Register(gm, server.StopRebalanceHandler), "unable to register handler")
-	logger.FatalIf(reloadSiteReplicationConfigHandler.Register(gm, server.ReloadSiteReplicationConfigHandler), "unable to register handler")
-	logger.FatalIf(loadBucketMetadataHandler.Register(gm, server.LoadBucketMetadataHandler), "unable to register handler")
-	logger.FatalIf(deleteBucketMetadataHandler.Register(gm, server.DeleteBucketMetadataHandler), "unable to register handler")
-	logger.FatalIf(getLocalDiskIDsHandler.Register(gm, server.GetLocalDiskIDs), "unable to register handler")
-	logger.FatalIf(listenHandler.RegisterNoInput(gm, server.ListenHandler), "unable to register handler")
 	logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerTrace, grid.StreamHandler{
 		Handle:      server.TraceHandler,
 		Subroute:    "",

@@ -70,7 +70,6 @@ const (
 	HandlerStopRebalance
 	HandlerLoadRebalanceMeta
 	HandlerLoadTransitionTierConfig
-
 	HandlerDeletePolicy
 	HandlerLoadPolicy
 	HandlerLoadPolicyMapping
@@ -79,11 +78,30 @@ const (
 	HandlerDeleteUser
 	HandlerLoadUser
 	HandlerLoadGroup
-
 	HandlerHealBucket
 	HandlerMakeBucket
 	HandlerHeadBucket
 	HandlerDeleteBucket
+	HandlerGetMetrics
+	HandlerGetResourceMetrics
+	HandlerGetMemInfo
+	HandlerGetProcInfo
+	HandlerGetOSInfo
+	HandlerGetPartitions
+	HandlerGetNetInfo
+	HandlerGetCPUs
+	HandlerServerInfo
+	HandlerGetSysConfig
+	HandlerGetSysServices
+	HandlerGetSysErrors
+	HandlerGetAllBucketStats
+	HandlerGetBucketStats
+	HandlerGetSRMetrics
+	HandlerGetPeerMetrics
+	HandlerGetMetacacheListing
+	HandlerUpdateMetacacheListing
+	HandlerGetPeerBucketMetrics
+	HandlerStorageInfo
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -139,6 +157,26 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerHeadBucket:                  peerPrefixS3,
 	HandlerDeleteBucket:                peerPrefixS3,
 	HandlerHealBucket:                  healPrefix,
+	HandlerGetMetrics:                  peerPrefix,
+	HandlerGetResourceMetrics:          peerPrefix,
+	HandlerGetMemInfo:                  peerPrefix,
+	HandlerGetProcInfo:                 peerPrefix,
+	HandlerGetOSInfo:                   peerPrefix,
+	HandlerGetPartitions:               peerPrefix,
+	HandlerGetNetInfo:                  peerPrefix,
+	HandlerGetCPUs:                     peerPrefix,
+	HandlerServerInfo:                  peerPrefix,
+	HandlerGetSysConfig:                peerPrefix,
+	HandlerGetSysServices:              peerPrefix,
+	HandlerGetSysErrors:                peerPrefix,
+	HandlerGetAllBucketStats:           peerPrefix,
+	HandlerGetBucketStats:              peerPrefix,
+	HandlerGetSRMetrics:                peerPrefix,
+	HandlerGetPeerMetrics:              peerPrefix,
+	HandlerGetMetacacheListing:         peerPrefix,
+	HandlerUpdateMetacacheListing:      peerPrefix,
+	HandlerGetPeerBucketMetrics:        peerPrefix,
+	HandlerStorageInfo:                 peerPrefix,
 }
 
 const (
@@ -346,9 +384,10 @@ type RoundTripper interface {
 
 // SingleHandler is a type safe handler for single roundtrip requests.
 type SingleHandler[Req, Resp RoundTripper] struct {
-	id           HandlerID
-	sharedResp   bool
-	callReuseReq bool
+	id            HandlerID
+	sharedResp    bool
+	callReuseReq  bool
+	ignoreNilConn bool
 
 	newReq  func() Req
 	newResp func() Resp
@@ -406,6 +445,17 @@ func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
 // CAREFUL: This should only be used when there are no pointers, slices that aren't freshly constructed.
 func (h *SingleHandler[Req, Resp]) AllowCallRequestPool(b bool) *SingleHandler[Req, Resp] {
 	h.callReuseReq = b
+	return h
+}
+
+// IgnoreNilConn will ignore nil connections when calling.
+// This will make Call return nil instead of ErrDisconnected when the connection is nil.
+// This may only be set ONCE before use.
+func (h *SingleHandler[Req, Resp]) IgnoreNilConn() *SingleHandler[Req, Resp] {
+	if h.ignoreNilConn {
+		logger.LogOnceIf(context.Background(), fmt.Errorf("%s: IgnoreNilConn called twice", h.id.String()), h.id.String()+"IgnoreNilConn")
+	}
+	h.ignoreNilConn = true
 	return h
 }
 
@@ -478,6 +528,12 @@ type Requester interface {
 // The response should be returned with PutResponse when no error.
 // If no deadline is set, a 1-minute deadline is added.
 func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Req) (resp Resp, err error) {
+	if c == nil {
+		if h.ignoreNilConn {
+			return resp, nil
+		}
+		return resp, ErrDisconnected
+	}
 	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
 	if err != nil {
 		return resp, err
@@ -779,6 +835,9 @@ type Streamer interface {
 
 // Call the remove with the request and
 func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Streamer, payload Payload) (st *TypedStream[Req, Resp], err error) {
+	if c == nil {
+		return nil, ErrDisconnected
+	}
 	var payloadB []byte
 	if h.WithPayload {
 		var err error
