@@ -147,7 +147,6 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 			if debugPrint {
 				fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
 			}
-			xioutil.SafeClose(send)
 		}()
 		// handlerErr is guarded by 'send' channel.
 		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)

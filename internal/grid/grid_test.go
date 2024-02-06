@@ -391,6 +391,8 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 	register := func(manager *Manager) {
 		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				defer close(resp)
+
 				for in := range request {
 					b := append([]byte{}, payload...)
 					b = append(b, in...)
@@ -405,6 +407,7 @@ func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
 		// 2: Return as error
 		errFatal(manager.RegisterStreamingHandler(handlerTest2, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				defer close(resp)
 				for in := range request {
 					t.Log("2: Got err request", string(in))
 					err := RemoteErr(append(payload, in...))
@@ -637,6 +640,8 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	register := func(manager *Manager) {
 		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				defer close(resp)
+
 				// Send many responses.
 				// Test that this doesn't block.
 				for i := byte(0); i < 100; i++ {
@@ -711,6 +716,8 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 	register := func(manager *Manager) {
 		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+				defer close(resp)
+
 				// Block incoming requests.
 				var n byte
 				<-processHandler
@@ -799,6 +806,8 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 	// 1: Echo
 	register := func(manager *Manager) {
 		errFatal(handler.Register(manager, func(ctx context.Context, pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
+			defer close(out)
+
 			n := 0
 			for i := range in {
 				if n > payloads {
@@ -870,6 +879,8 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 	// 1: Echo
 	register := func(manager *Manager) {
 		errFatal(handler.Register(manager, func(ctx context.Context, pp *testRequest, in <-chan *testRequest, out chan<- *testResponse) *RemoteErr {
+			defer close(out)
+
 			sub := GetSubroute(ctx)
 			if sub != "subroute/1" {
 				t.Fatal("expected subroute/1, got", sub)

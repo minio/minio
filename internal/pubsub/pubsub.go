@@ -108,6 +108,7 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 	totalSubs := atomic.AddInt32(&ps.numSubscribers, 1)
 	if ps.maxSubscribers > 0 && totalSubs > ps.maxSubscribers {
 		atomic.AddInt32(&ps.numSubscribers, -1)
+		close(subCh)
 		return fmt.Errorf("the limit of `%d` subscribers is reached", ps.maxSubscribers)
 	}
 	ps.Lock()
@@ -122,6 +123,8 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 	atomic.StoreUint64(&ps.types, uint64(combined))
 
 	go func() {
+		defer close(subCh)
+
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
 		for {
@@ -136,8 +139,11 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 				if err != nil {
 					break
 				}
-				subCh <- append(GetByteBuffer()[:0], buf.Bytes()...)
-				continue
+				select {
+				case <-doneCh:
+				case subCh <- append(GetByteBuffer()[:0], buf.Bytes()...):
+					continue
+				}
 			}
 			break
 		}

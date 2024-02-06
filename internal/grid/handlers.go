@@ -670,6 +670,8 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoPayload(m *Manager, ha
 func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func(ctx context.Context, p Payload, in <-chan Req, out chan<- Resp) *RemoteErr, subroute ...string) error {
 	return m.RegisterStreamingHandler(h.id, StreamHandler{
 		Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
+			defer close(out)
+
 			var plT Payload
 			if h.WithPayload {
 				plT = h.NewPayload()
@@ -718,7 +720,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 				dropOutput := false
 				for v := range outT {
 					if dropOutput {
-						continue
+						break
 					}
 					dst := GetByteBuffer()
 					dst, err := v.MarshalMsg(dst[:0])
@@ -736,7 +738,6 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 				}
 			}()
 			rErr := handle(ctx, plT, inT, outT)
-			xioutil.SafeClose(outT)
 			<-outDone
 			return rErr
 		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity, Subroute: strings.Join(subroute, "/"),

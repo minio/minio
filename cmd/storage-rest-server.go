@@ -235,6 +235,8 @@ func (s *storageRESTServer) NSScannerHandler(ctx context.Context, params *nsScan
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer close(out)
+
 		for update := range updates {
 			resp := storageNSScannerHandler.NewResponse()
 			resp.Update = &update
