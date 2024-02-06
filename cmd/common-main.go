@@ -105,7 +105,7 @@ func init() {
 	gob.Register(StorageErr(""))
 	gob.Register(madmin.TimeInfo{})
 	gob.Register(madmin.XFSErrorConfigs{})
-	gob.Register(madmin.SysConfig{})
+	gob.Register(map[string]string{})
 	gob.Register(map[string]interface{}{})
 
 	// All minio-go and madmin-go API operations shall be performed only once,
