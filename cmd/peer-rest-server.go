@@ -1017,7 +1017,7 @@ func (s *peerRESTServer) TraceHandler(ctx context.Context, payload []byte, _ <-c
 	}
 
 	// Wait for remote to cancel and SubscribeJSON to exit.
-	wg.Done()
+	wg.Wait()
 	return nil
 }
 
