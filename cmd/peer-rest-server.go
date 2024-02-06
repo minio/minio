@@ -28,7 +28,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1489,81 +1488,6 @@ func (s *peerRESTServer) NetSpeedTestHandler(w http.ResponseWriter, r *http.Requ
 	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
-// SelfPoolExpandResponse - peer client api response
-type SelfPoolExpandResponse struct {
-	SelfPoolExpand
-	Success bool `json:"success"`
-}
-
-func (s *peerRESTServer) SyncExpandPoolsStatus(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		return
-	}
-
-	// Legacy args style such as non-ellipses style is not supported with this API.
-	if globalEndpoints.Legacy() {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	z, ok := objectAPI.(*erasureServerPools)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	if z.IsRebalanceStarted() {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
-		return
-	}
-
-	resp := SelfPoolExpandResponse{}
-	status := r.Form.Get("poolExpandStatus")
-	_, pools, err := getConfigFileInfo()
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	before := strings.Split(r.Form.Get("before"), ",")
-	after := strings.Split(r.Form.Get("after"), ",")
-	if len(before) == 0 || len(after) == 0 {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("empty pool")), r.URL)
-		return
-	}
-	switch status {
-	case "":
-	case PoolExpandStatusWaitForFileChange:
-		if !reflect.DeepEqual(pools, after) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
-			return
-		}
-		resp.Success = true
-	case PoolExpandStatusSetEnvToRestart:
-		if !reflect.DeepEqual(after, pools) {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
-			return
-		}
-		setEnvToMinioArgs(fmt.Sprintf("%s %s",
-			strings.Join(before, ","),
-			strings.Join(after, ","),
-		))
-		resp.Success = true
-	case PoolExpandStatusWaitForRenameDataDir:
-		_ = (&SelfPoolExpand{}).renameDataDir()
-		setEnvToMinioArgs("\"\"")
-		resp.Success = true
-	}
-	data, err := json.Marshal(resp)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseJSON(w, data)
-}
-
 // registerPeerRESTHandlers - register peer rest router.
 func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	h := func(f http.HandlerFunc) http.HandlerFunc {
@@ -1625,7 +1549,6 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLoadRebalanceMeta).HandlerFunc(h(server.LoadRebalanceMetaHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStopRebalance).HandlerFunc(h(server.StopRebalanceHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLastDayTierStats).HandlerFunc(h(server.GetLastDayTierStatsHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSyncExpandPoolStatus).HandlerFunc(h(server.SyncExpandPoolsStatus))
 	logger.FatalIf(listenHandler.RegisterNoInput(gm, server.ListenHandler), "unable to register handler")
 	logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerTrace, grid.StreamHandler{
 		Handle:      server.TraceHandler,

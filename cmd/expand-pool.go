@@ -22,7 +22,9 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"reflect"
 	"strings"
@@ -475,4 +477,80 @@ func setEnvToMinioArgs(envstr string) {
 	if serverDebugLog {
 		log.Infof("[Expand pool]:Set env [%s=%s] to restart", config.EnvArgs, os.Getenv(config.EnvArgs))
 	}
+}
+
+// SelfPoolExpandResponse - peer client api response
+type SelfPoolExpandResponse struct {
+	SelfPoolExpand
+	Success bool `json:"success"`
+}
+
+// subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSyncExpandPoolStatus).HandlerFunc(h(server.SyncExpandPoolsStatus))
+func (s *peerRESTServer) SyncExpandPoolsStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		return
+	}
+
+	// Legacy args style such as non-ellipses style is not supported with this API.
+	if globalEndpoints.Legacy() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	z, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+		return
+	}
+
+	if z.IsRebalanceStarted() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
+		return
+	}
+
+	resp := SelfPoolExpandResponse{}
+	status := r.Form.Get("poolExpandStatus")
+	_, pools, err := getConfigFileInfo()
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	before := strings.Split(r.Form.Get("before"), ",")
+	after := strings.Split(r.Form.Get("after"), ",")
+	if len(before) == 0 || len(after) == 0 {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("empty pool")), r.URL)
+		return
+	}
+	switch status {
+	case "":
+	case PoolExpandStatusWaitForFileChange:
+		if !reflect.DeepEqual(pools, after) {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
+			return
+		}
+		resp.Success = true
+	case PoolExpandStatusSetEnvToRestart:
+		if !reflect.DeepEqual(after, pools) {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, fmt.Errorf("after pools not match")), r.URL)
+			return
+		}
+		setEnvToMinioArgs(fmt.Sprintf("%s %s",
+			strings.Join(before, ","),
+			strings.Join(after, ","),
+		))
+		resp.Success = true
+	case PoolExpandStatusWaitForRenameDataDir:
+		_ = (&SelfPoolExpand{}).renameDataDir()
+		setEnvToMinioArgs("\"\"")
+		resp.Success = true
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	writeSuccessResponseJSON(w, data)
 }
