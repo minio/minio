@@ -485,7 +485,7 @@ type SelfPoolExpandResponse struct {
 	Success bool `json:"success"`
 }
 
-// subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSyncExpandPoolStatus).HandlerFunc(h(server.SyncExpandPoolsStatus))
+// SyncExpandPoolsStatus - sync expand pool status to peer
 func (s *peerRESTServer) SyncExpandPoolsStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
