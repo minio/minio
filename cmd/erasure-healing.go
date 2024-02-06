@@ -896,7 +896,7 @@ func isObjectDirDangling(errs []error) (ok bool) {
 // Object is considered dangling/corrupted if and only
 // if total disks - a combination of corrupted and missing
 // files is lesser than number of data blocks.
-func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (validMeta FileInfo, ok bool) {
+func (er erasureObjects) isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (validMeta FileInfo, ok bool) {
 	// We can consider an object data not reliable
 	// when xl.meta is not found in read quorum disks.
 	// or when xl.meta is not readable in read quorum disks.
@@ -961,10 +961,7 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		return validMeta, notFoundMetaErrs > dataBlocks
 	}
 
-	quorum := validMeta.Erasure.DataBlocks
-	if validMeta.Erasure.DataBlocks == validMeta.Erasure.ParityBlocks {
-		quorum++
-	}
+	quorum := validMeta.WriteQuorum(er.defaultWQuorum())
 
 	// TODO: It is possible to replay the object via just single
 	// xl.meta file, considering quorum number of data-dirs are still
@@ -972,7 +969,6 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	//
 	// However this requires a bit of a rewrite, leave this up for
 	// future work.
-
 	if notFoundMetaErrs > 0 && notFoundMetaErrs >= quorum {
 		// All xl.meta is beyond data blocks missing, this is dangling
 		return validMeta, true

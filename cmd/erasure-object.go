@@ -465,7 +465,7 @@ func joinErrs(errs []error) []string {
 
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
 	var err error
-	m, ok := isObjectDangling(metaArr, errs, dataErrs)
+	m, ok := er.isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
 		tags := make(map[string]interface{}, 4)
 		tags["set"] = er.setIndex
@@ -948,7 +948,13 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 	if err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}
+
 	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
+	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
+		// Make sure to return object info to provide extra information.
+		return objInfo, toObjectErr(errMethodNotAllowed, bucket, object)
+	}
+
 	if fi.Deleted {
 		if opts.VersionID == "" || opts.DeleteMarker {
 			return objInfo, toObjectErr(errFileNotFound, bucket, object)
@@ -958,32 +964,6 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 	}
 
 	return objInfo, nil
-}
-
-// getObjectInfoAndQuroum - wrapper for reading object metadata and constructs ObjectInfo, additionally returns write quorum for the object.
-func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, wquorum int, err error) {
-	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
-	if err != nil {
-		return objInfo, er.defaultWQuorum(), toObjectErr(err, bucket, object)
-	}
-
-	wquorum = fi.WriteQuorum(er.defaultWQuorum())
-
-	objInfo = fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
-	if !fi.VersionPurgeStatus().Empty() && opts.VersionID != "" {
-		// Make sure to return object info to provide extra information.
-		return objInfo, wquorum, toObjectErr(errMethodNotAllowed, bucket, object)
-	}
-
-	if fi.Deleted {
-		if opts.VersionID == "" || opts.DeleteMarker {
-			return objInfo, wquorum, toObjectErr(errFileNotFound, bucket, object)
-		}
-		// Make sure to return object info to provide extra information.
-		return objInfo, wquorum, toObjectErr(errMethodNotAllowed, bucket, object)
-	}
-
-	return objInfo, wquorum, nil
 }
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
@@ -1841,7 +1821,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	storageDisks := er.getDisks()
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
-	goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+	goi, gerr := er.getObjectInfo(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		if _, ok := gerr.(InsufficientReadQuorum); ok {
 			return objInfo, InsufficientWriteQuorum{}
