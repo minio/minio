@@ -87,7 +87,7 @@ function verify_rewrite() {
 		exit 1
 	fi
 
-	go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
+	go install github.com/minio/minio/docs/debugging/s3-check-md5@master
 	if ! s3-check-md5 \
 		-debug \
 		-versions \
