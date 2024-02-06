@@ -2171,7 +2171,7 @@ func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, o
 	// Wait for all the routines.
 	mErrs := g.Wait()
 
-	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, er.defaultWQuorum())
+	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, fi.WriteQuorum(er.defaultWQuorum()))
 }
 
 // updateObjectMeta will update the metadata of a file.
