@@ -63,10 +63,11 @@ func (s *Stream) Send(b []byte) error {
 func (s *Stream) Results(next func(b []byte) error) (err error) {
 	done := false
 	defer func() {
+		if s.cancel != nil {
+			s.cancel(err)
+		}
+
 		if !done {
-			if s.cancel != nil {
-				s.cancel(err)
-			}
 			// Drain channel.
 			for range s.responses {
 			}

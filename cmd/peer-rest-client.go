@@ -408,134 +408,133 @@ func (client *peerRESTClient) GetAllBucketStats() (BucketStatsMap, error) {
 
 // LoadBucketMetadata - load bucket metadata
 func (client *peerRESTClient) LoadBucketMetadata(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodLoadBucketMetadata, values, nil, -1)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := loadBucketMetadataHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTBucket: bucket,
+	}))
+	return err
 }
 
 // DeleteBucketMetadata - Delete bucket metadata
 func (client *peerRESTClient) DeleteBucketMetadata(bucket string) error {
-	values := make(url.Values)
-	values.Set(peerRESTBucket, bucket)
-	respBody, err := client.call(peerRESTMethodDeleteBucketMetadata, values, nil, -1)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := deleteBucketMetadataHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTBucket: bucket,
+	}))
+	return err
 }
 
 // DeletePolicy - delete a specific canned policy.
 func (client *peerRESTClient) DeletePolicy(policyName string) (err error) {
-	values := make(url.Values)
-	values.Set(peerRESTPolicy, policyName)
-
-	respBody, err := client.call(peerRESTMethodDeletePolicy, values, nil, -1)
-	if err != nil {
-		return
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err = deletePolicyHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTPolicy: policyName,
+	}))
+	return err
 }
 
 // LoadPolicy - reload a specific canned policy.
 func (client *peerRESTClient) LoadPolicy(policyName string) (err error) {
-	values := make(url.Values)
-	values.Set(peerRESTPolicy, policyName)
-
-	respBody, err := client.call(peerRESTMethodLoadPolicy, values, nil, -1)
-	if err != nil {
-		return
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err = loadPolicyHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTPolicy: policyName,
+	}))
+	return err
 }
 
 // LoadPolicyMapping - reload a specific policy mapping
 func (client *peerRESTClient) LoadPolicyMapping(userOrGroup string, userType IAMUserType, isGroup bool) error {
-	values := make(url.Values)
-	values.Set(peerRESTUserOrGroup, userOrGroup)
-	values.Set(peerRESTUserType, strconv.Itoa(int(userType)))
-	if isGroup {
-		values.Set(peerRESTIsGroup, "")
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
 
-	respBody, err := client.call(peerRESTMethodLoadPolicyMapping, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := loadPolicyMappingHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTUserOrGroup: userOrGroup,
+		peerRESTUserType:    strconv.Itoa(int(userType)),
+		peerRESTIsGroup:     strconv.FormatBool(isGroup),
+	}))
+	return err
 }
 
 // DeleteUser - delete a specific user.
 func (client *peerRESTClient) DeleteUser(accessKey string) (err error) {
-	values := make(url.Values)
-	values.Set(peerRESTUser, accessKey)
-
-	respBody, err := client.call(peerRESTMethodDeleteUser, values, nil, -1)
-	if err != nil {
-		return
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err = deleteUserHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTUser: accessKey,
+	}))
+	return err
 }
 
 // DeleteServiceAccount - delete a specific service account.
 func (client *peerRESTClient) DeleteServiceAccount(accessKey string) (err error) {
-	values := make(url.Values)
-	values.Set(peerRESTUser, accessKey)
-
-	respBody, err := client.call(peerRESTMethodDeleteServiceAccount, values, nil, -1)
-	if err != nil {
-		return
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err = deleteSvcActHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTUser: accessKey,
+	}))
+	return err
 }
 
 // LoadUser - reload a specific user.
 func (client *peerRESTClient) LoadUser(accessKey string, temp bool) (err error) {
-	values := make(url.Values)
-	values.Set(peerRESTUser, accessKey)
-	values.Set(peerRESTUserTemp, strconv.FormatBool(temp))
-
-	respBody, err := client.call(peerRESTMethodLoadUser, values, nil, -1)
-	if err != nil {
-		return
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err = loadUserHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTUser:     accessKey,
+		peerRESTUserTemp: strconv.FormatBool(temp),
+	}))
+	return err
 }
 
 // LoadServiceAccount - reload a specific service account.
 func (client *peerRESTClient) LoadServiceAccount(accessKey string) (err error) {
-	values := make(url.Values)
-	values.Set(peerRESTUser, accessKey)
-
-	respBody, err := client.call(peerRESTMethodLoadServiceAccount, values, nil, -1)
-	if err != nil {
-		return
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err = loadSvcActHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTUser: accessKey,
+	}))
+	return err
 }
 
 // LoadGroup - send load group command to peers.
 func (client *peerRESTClient) LoadGroup(group string) error {
-	values := make(url.Values)
-	values.Set(peerRESTGroup, group)
-	respBody, err := client.call(peerRESTMethodLoadGroup, values, nil, -1)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+
+	_, err := loadGroupHandler.Call(context.Background(), conn, grid.NewMSSWith(map[string]string{
+		peerRESTGroup: group,
+	}))
+	return err
 }
 
 // VerifyBinary - sends verify binary message to remote peers.
@@ -591,15 +590,17 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 
 // GetLocalDiskIDs - get a peer's local disks' IDs.
 func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []string) {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodGetLocalDiskIDs, nil, nil, -1)
+	conn := client.gridConn()
+	if conn == nil {
+		return
+	}
+
+	resp, err := getLocalDiskIDsHandler.Call(ctx, conn, grid.NewMSS())
 	if err != nil {
-		return nil
+		return
 	}
-	defer xhttp.DrainBody(respBody)
-	if err = gob.NewDecoder(respBody).Decode(&diskIDs); err != nil {
-		return nil
-	}
-	return diskIDs
+
+	return resp.IDs
 }
 
 // GetMetacacheListing - get a new or existing metacache.
@@ -642,41 +643,41 @@ func (client *peerRESTClient) UpdateMetacacheListing(ctx context.Context, m meta
 }
 
 func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodReloadPoolMeta, nil, nil, 0)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := reloadPoolMetaHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
+	return err
 }
 
 func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodStopRebalance, nil, nil, 0)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := stopRebalanceHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
+	return err
 }
 
 func (client *peerRESTClient) LoadRebalanceMeta(ctx context.Context, startRebalance bool) error {
-	values := url.Values{}
-	values.Set(peerRESTStartRebalance, strconv.FormatBool(startRebalance))
-	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadRebalanceMeta, values, nil, 0)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := loadRebalanceMetaHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{
+		peerRESTStartRebalance: strconv.FormatBool(startRebalance),
+	}))
+	return err
 }
 
 func (client *peerRESTClient) LoadTransitionTierConfig(ctx context.Context) error {
-	respBody, err := client.callWithContext(ctx, peerRESTMethodLoadTransitionTierConfig, nil, nil, 0)
-	if err != nil {
-		return err
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
 	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := loadTransitionTierConfigHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
+	return err
 }
 
 func (client *peerRESTClient) doTrace(ctx context.Context, traceCh chan<- []byte, traceOpts madmin.ServiceTraceOpts) {

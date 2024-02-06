@@ -30,7 +30,6 @@ import (
 	"net"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -287,6 +286,7 @@ func (c *Connection) newMuxClient(ctx context.Context) (*muxClient, error) {
 	if dl, ok := ctx.Deadline(); ok {
 		client.deadline = getDeadline(time.Until(dl))
 		if client.deadline == 0 {
+			client.cancelFn(context.DeadlineExceeded)
 			return nil, context.DeadlineExceeded
 		}
 	}
@@ -333,6 +333,7 @@ func (c *Connection) Request(ctx context.Context, h HandlerID, req []byte) ([]by
 			_, ok := c.outgoing.Load(client.MuxID)
 			fmt.Println(client.MuxID, c.String(), "Connection.Request: DELETING MUX. Exists:", ok)
 		}
+		client.cancelFn(context.Canceled)
 		c.outgoing.Delete(client.MuxID)
 	}()
 	return client.traceRoundtrip(ctx, c.trace, h, req)
@@ -659,8 +660,7 @@ func (c *Connection) connect() {
 			if gotState != StateConnecting {
 				// Don't print error on first attempt,
 				// and after that only once per hour.
-				cHour := strconv.FormatInt(time.Now().Unix()/60/60, 10)
-				logger.LogOnceIf(c.ctx, fmt.Errorf("grid: %s connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), c.Local+toDial+cHour+err.Error())
+				logger.LogOnceIf(c.ctx, fmt.Errorf("grid: %s connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), toDial)
 			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
@@ -1372,7 +1372,7 @@ func (c *Connection) handleDisconnectClientMux(m message) {
 		if m.Flags&FlagPayloadIsErr != 0 {
 			v.error(RemoteErr(m.Payload))
 		} else {
-			v.error("remote disconnected")
+			v.error(ErrDisconnected)
 		}
 		return
 	}

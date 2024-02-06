@@ -73,7 +73,7 @@ func LookupConfig(kvs config.KVS) (cfg *Config, err error) {
 	}
 	dur, _ := time.ParseDuration(d)
 	if dur < time.Second {
-		cfg.MaxTimeout = time.Minute * 2
+		cfg.MaxTimeout = 30 * time.Second
 	} else {
 		cfg.MaxTimeout = getMaxTimeout(dur)
 	}
@@ -89,7 +89,7 @@ func getMaxTimeout(t time.Duration) time.Duration {
 		}
 		dur, _ := time.ParseDuration(d)
 		if dur < time.Second {
-			return time.Minute * 2
+			return 30 * time.Second
 		}
 		return dur
 	}

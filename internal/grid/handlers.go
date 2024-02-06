@@ -62,6 +62,28 @@ const (
 	HandlerServerVerify
 	HandlerTrace
 	HandlerListen
+	HandlerGetLocalDiskIDs
+	HandlerDeleteBucketMetadata
+	HandlerLoadBucketMetadata
+	HandlerReloadSiteReplicationConfig
+	HandlerReloadPoolMeta
+	HandlerStopRebalance
+	HandlerLoadRebalanceMeta
+	HandlerLoadTransitionTierConfig
+
+	HandlerDeletePolicy
+	HandlerLoadPolicy
+	HandlerLoadPolicyMapping
+	HandlerDeleteServiceAccount
+	HandlerLoadServiceAccount
+	HandlerDeleteUser
+	HandlerLoadUser
+	HandlerLoadGroup
+
+	HandlerHealBucket
+	HandlerMakeBucket
+	HandlerHeadBucket
+	HandlerDeleteBucket
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -74,33 +96,58 @@ const (
 // handlerPrefixes are prefixes for handler IDs used for tracing.
 // If a handler is not listed here, it will be traced with "grid" prefix.
 var handlerPrefixes = [handlerLast]string{
-	HandlerLockLock:        lockPrefix,
-	HandlerLockRLock:       lockPrefix,
-	HandlerLockUnlock:      lockPrefix,
-	HandlerLockRUnlock:     lockPrefix,
-	HandlerLockRefresh:     lockPrefix,
-	HandlerLockForceUnlock: lockPrefix,
-	HandlerWalkDir:         storagePrefix,
-	HandlerStatVol:         storagePrefix,
-	HandlerDiskInfo:        storagePrefix,
-	HandlerNSScanner:       storagePrefix,
-	HandlerReadXL:          storagePrefix,
-	HandlerReadVersion:     storagePrefix,
-	HandlerDeleteFile:      storagePrefix,
-	HandlerDeleteVersion:   storagePrefix,
-	HandlerUpdateMetadata:  storagePrefix,
-	HandlerWriteMetadata:   storagePrefix,
-	HandlerCheckParts:      storagePrefix,
-	HandlerRenameData:      storagePrefix,
-	HandlerRenameFile:      storagePrefix,
-	HandlerReadAll:         storagePrefix,
-	HandlerServerVerify:    bootstrapPrefix,
+	HandlerLockLock:                    lockPrefix,
+	HandlerLockRLock:                   lockPrefix,
+	HandlerLockUnlock:                  lockPrefix,
+	HandlerLockRUnlock:                 lockPrefix,
+	HandlerLockRefresh:                 lockPrefix,
+	HandlerLockForceUnlock:             lockPrefix,
+	HandlerWalkDir:                     storagePrefix,
+	HandlerStatVol:                     storagePrefix,
+	HandlerDiskInfo:                    storagePrefix,
+	HandlerNSScanner:                   storagePrefix,
+	HandlerReadXL:                      storagePrefix,
+	HandlerReadVersion:                 storagePrefix,
+	HandlerDeleteFile:                  storagePrefix,
+	HandlerDeleteVersion:               storagePrefix,
+	HandlerUpdateMetadata:              storagePrefix,
+	HandlerWriteMetadata:               storagePrefix,
+	HandlerCheckParts:                  storagePrefix,
+	HandlerRenameData:                  storagePrefix,
+	HandlerRenameFile:                  storagePrefix,
+	HandlerReadAll:                     storagePrefix,
+	HandlerServerVerify:                bootstrapPrefix,
+	HandlerTrace:                       peerPrefix,
+	HandlerListen:                      peerPrefix,
+	HandlerGetLocalDiskIDs:             peerPrefix,
+	HandlerDeleteBucketMetadata:        peerPrefix,
+	HandlerLoadBucketMetadata:          peerPrefix,
+	HandlerReloadSiteReplicationConfig: peerPrefix,
+	HandlerReloadPoolMeta:              peerPrefix,
+	HandlerStopRebalance:               peerPrefix,
+	HandlerLoadRebalanceMeta:           peerPrefix,
+	HandlerLoadTransitionTierConfig:    peerPrefix,
+	HandlerDeletePolicy:                peerPrefix,
+	HandlerLoadPolicy:                  peerPrefix,
+	HandlerLoadPolicyMapping:           peerPrefix,
+	HandlerDeleteServiceAccount:        peerPrefix,
+	HandlerLoadServiceAccount:          peerPrefix,
+	HandlerDeleteUser:                  peerPrefix,
+	HandlerLoadUser:                    peerPrefix,
+	HandlerLoadGroup:                   peerPrefix,
+	HandlerMakeBucket:                  peerPrefixS3,
+	HandlerHeadBucket:                  peerPrefixS3,
+	HandlerDeleteBucket:                peerPrefixS3,
+	HandlerHealBucket:                  healPrefix,
 }
 
 const (
 	lockPrefix      = "lockR"
 	storagePrefix   = "storageR"
 	bootstrapPrefix = "bootstrap"
+	peerPrefix      = "peer"
+	peerPrefixS3    = "peerS3"
+	healPrefix      = "heal"
 )
 
 func init() {
@@ -299,14 +346,40 @@ type RoundTripper interface {
 
 // SingleHandler is a type safe handler for single roundtrip requests.
 type SingleHandler[Req, Resp RoundTripper] struct {
-	id             HandlerID
-	sharedResponse bool
+	id           HandlerID
+	sharedResp   bool
+	callReuseReq bool
 
-	reqPool  sync.Pool
-	respPool sync.Pool
+	newReq  func() Req
+	newResp func() Resp
 
-	nilReq  Req
-	nilResp Resp
+	recycleReq  func(Req)
+	recycleResp func(Resp)
+}
+
+func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle func(r RT)) {
+	rAny := any(newRT())
+	var rZero RT
+	if _, ok := rAny.(Recycler); ok {
+		return newRT, func(r RT) {
+			if r != rZero {
+				if rc, ok := any(r).(Recycler); ok {
+					rc.Recycle()
+				}
+			}
+		}
+	}
+	pool := sync.Pool{
+		New: func() interface{} {
+			return newRT()
+		},
+	}
+	return func() RT { return pool.Get().(RT) },
+		func(r RT) {
+			if r != rZero {
+				pool.Put(r)
+			}
+		}
 }
 
 // NewSingleHandler creates a typed handler that can provide Marshal/Unmarshal.
@@ -314,27 +387,34 @@ type SingleHandler[Req, Resp RoundTripper] struct {
 // Use Call to initiate a clientside call.
 func NewSingleHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
 	s := SingleHandler[Req, Resp]{id: h}
-	s.reqPool.New = func() interface{} {
-		return newReq()
-	}
-	s.respPool.New = func() interface{} {
-		return newResp()
+	s.newReq, s.recycleReq = recycleFunc[Req](newReq)
+	s.newResp, s.recycleResp = recycleFunc[Resp](newResp)
+	if _, ok := any(newReq()).(Recycler); ok {
+		s.callReuseReq = true
 	}
 	return &s
 }
 
 // PutResponse will accept a response for reuse.
-// These should be returned by the caller.
+// This can be used by a caller to recycle a response after receiving it from a Call.
 func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
-	if r != h.nilResp {
-		h.respPool.Put(r)
-	}
+	h.recycleResp(r)
 }
 
-// WithSharedResponse indicates it is unsafe to reuse the response.
+// AllowCallRequestPool indicates it is safe to reuse the request
+// on the client side, meaning the request is recycled/pooled when a request is sent.
+// CAREFUL: This should only be used when there are no pointers, slices that aren't freshly constructed.
+func (h *SingleHandler[Req, Resp]) AllowCallRequestPool(b bool) *SingleHandler[Req, Resp] {
+	h.callReuseReq = b
+	return h
+}
+
+// WithSharedResponse indicates it is unsafe to reuse the response
+// when it has been returned on a handler.
+// This will disable automatic response recycling/pooling.
 // Typically this is used when the response sharing part of its data structure.
 func (h *SingleHandler[Req, Resp]) WithSharedResponse() *SingleHandler[Req, Resp] {
-	h.sharedResponse = true
+	h.sharedResp = true
 	return h
 }
 
@@ -342,26 +422,25 @@ func (h *SingleHandler[Req, Resp]) WithSharedResponse() *SingleHandler[Req, Resp
 // Handlers can use this to create a reusable response.
 // The response may be reused, so caller should clear any fields.
 func (h *SingleHandler[Req, Resp]) NewResponse() Resp {
-	return h.respPool.Get().(Resp)
-}
-
-// putRequest will accept a request for reuse.
-// This is not exported, since it shouldn't be needed.
-func (h *SingleHandler[Req, Resp]) putRequest(r Req) {
-	if r != h.nilReq {
-		h.reqPool.Put(r)
-	}
+	return h.newResp()
 }
 
 // NewRequest creates a new request.
 // Handlers can use this to create a reusable request.
 // The request may be reused, so caller should clear any fields.
 func (h *SingleHandler[Req, Resp]) NewRequest() Req {
-	return h.reqPool.Get().(Req)
+	return h.newReq()
 }
 
 // Register a handler for a Req -> Resp roundtrip.
+// Requests are automatically recycled.
 func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr), subroute ...string) error {
+	if h.newReq == nil {
+		return errors.New("newReq nil in NewSingleHandler")
+	}
+	if h.newResp == nil {
+		return errors.New("newResp nil in NewSingleHandler")
+	}
 	return m.RegisterSingleHandler(h.id, func(payload []byte) ([]byte, *RemoteErr) {
 		req := h.NewRequest()
 		_, err := req.UnmarshalMsg(payload)
@@ -371,13 +450,14 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 			return nil, &r
 		}
 		resp, rerr := handle(req)
-		h.putRequest(req)
+		h.recycleReq(req)
+
 		if rerr != nil {
 			PutByteBuffer(payload)
 			return nil, rerr
 		}
 		payload, err = resp.MarshalMsg(payload[:0])
-		if !h.sharedResponse {
+		if !h.sharedResp {
 			h.PutResponse(resp)
 		}
 		if err != nil {
@@ -402,19 +482,29 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Re
 	if err != nil {
 		return resp, err
 	}
-	ctx = context.WithValue(ctx, TraceParamsKey{}, req)
+	switch any(req).(type) {
+	case *MSS, *URLValues:
+		ctx = context.WithValue(ctx, TraceParamsKey{}, req)
+	case *NoPayload, *Bytes:
+		// do not need to trace nopayload and bytes payload
+	default:
+		ctx = context.WithValue(ctx, TraceParamsKey{}, fmt.Sprintf("type=%T", req))
+	}
+	if h.callReuseReq {
+		defer h.recycleReq(req)
+	}
 	res, err := c.Request(ctx, h.id, payload)
 	PutByteBuffer(payload)
 	if err != nil {
 		return resp, err
 	}
+	defer PutByteBuffer(res)
 	r := h.NewResponse()
 	_, err = r.UnmarshalMsg(res)
 	if err != nil {
 		h.PutResponse(r)
 		return resp, err
 	}
-	PutByteBuffer(res)
 	return r, err
 }
 
@@ -727,27 +817,4 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 	}
 
 	return &TypedStream[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil
-}
-
-// NoPayload is a type that can be used for handlers that do not use a payload.
-type NoPayload struct{}
-
-// Msgsize returns 0.
-func (p NoPayload) Msgsize() int {
-	return 0
-}
-
-// UnmarshalMsg satisfies the interface, but is a no-op.
-func (NoPayload) UnmarshalMsg(bytes []byte) ([]byte, error) {
-	return bytes, nil
-}
-
-// MarshalMsg satisfies the interface, but is a no-op.
-func (NoPayload) MarshalMsg(bytes []byte) ([]byte, error) {
-	return bytes, nil
-}
-
-// NewNoPayload returns an empty NoPayload struct.
-func NewNoPayload() NoPayload {
-	return NoPayload{}
 }

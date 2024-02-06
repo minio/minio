@@ -655,7 +655,8 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 			}
 		}
 		_, err = z.CompleteMultipartUpload(ctx, bucket, objInfo.Name, res.UploadID, parts, ObjectOptions{
-			MTime: objInfo.ModTime,
+			DataMovement: true,
+			MTime:        objInfo.ModTime,
 		})
 		if err != nil {
 			err = fmt.Errorf("decommissionObject: CompleteMultipartUpload() %w", err)
@@ -667,11 +668,13 @@ func (z *erasureServerPools) decommissionObject(ctx context.Context, bucket stri
 	if err != nil {
 		return fmt.Errorf("decommissionObject: hash.NewReader() %w", err)
 	}
+
 	_, err = z.PutObject(ctx,
 		bucket,
 		objInfo.Name,
 		NewPutObjReader(hr),
 		ObjectOptions{
+			DataMovement: true,
 			VersionID:    objInfo.VersionID,
 			MTime:        objInfo.ModTime,
 			UserDefined:  objInfo.UserDefined,

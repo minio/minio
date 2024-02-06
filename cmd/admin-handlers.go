@@ -430,6 +430,8 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 // ServiceHandler - POST /minio/admin/v3/service?action={action}
 // ----------
 // Supports following actions:
+// - restart (restarts all the MinIO instances in a setup)
+// - stop (stops all the MinIO instances in a setup)
 // - freeze (freezes all incoming S3 API calls)
 // - unfreeze (unfreezes previously frozen S3 API calls)
 func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request) {
@@ -439,25 +441,30 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 	action := vars["action"]
 
 	var serviceSig serviceSignal
-	switch act := madmin.ServiceAction(action); act {
+	switch madmin.ServiceAction(action) {
+	case madmin.ServiceActionRestart:
+		serviceSig = serviceRestart
+	case madmin.ServiceActionStop:
+		serviceSig = serviceStop
 	case madmin.ServiceActionFreeze:
 		serviceSig = serviceFreeze
 	case madmin.ServiceActionUnfreeze:
 		serviceSig = serviceUnFreeze
 	default:
-		process := act == madmin.ServiceActionRestart || act == madmin.ServiceActionStop
-		if process {
-			apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
-			apiErr.Description = "process actions are not supported via this API anymore, please upgrade 'mc' or madmin-go to use ServiceV2() API"
-			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
-			return
-		}
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ServiceFreezeAdminAction)
+	var objectAPI ObjectLayer
+	switch serviceSig {
+	case serviceRestart:
+		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceRestartAdminAction)
+	case serviceStop:
+		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceStopAdminAction)
+	case serviceFreeze, serviceUnFreeze:
+		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceFreezeAdminAction)
+	}
 	if objectAPI == nil {
 		return
 	}
@@ -478,6 +485,8 @@ func (a adminAPIHandlers) ServiceHandler(w http.ResponseWriter, r *http.Request)
 		freezeServices()
 	case serviceUnFreeze:
 		unfreezeServices()
+	case serviceRestart, serviceStop:
+		globalServiceSignalCh <- serviceSig
 	}
 }
 
@@ -525,7 +534,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	case madmin.ServiceActionUnfreeze:
 		serviceSig = serviceUnFreeze
 	default:
-		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.Application)
+		logger.LogIf(ctx, fmt.Errorf("Unrecognized service action %s requested", action), logger.ErrorKind)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
@@ -1230,7 +1239,7 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 	if hip.clientToken == "" {
 		jerr := json.NewDecoder(r).Decode(&hip.hs)
 		if jerr != nil {
-			logger.LogIf(GlobalContext, jerr, logger.Application)
+			logger.LogIf(GlobalContext, jerr, logger.ErrorKind)
 			err = ErrRequestBodyParse
 			return
 		}

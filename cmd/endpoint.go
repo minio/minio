@@ -62,8 +62,9 @@ type ProxyEndpoint struct {
 // Node holds information about a node in this cluster
 type Node struct {
 	*url.URL
-	Pools   []int
-	IsLocal bool
+	Pools    []int
+	IsLocal  bool
+	GridHost string
 }
 
 // Endpoint - any type of endpoint.
@@ -254,6 +255,7 @@ func (l EndpointServerPools) GetNodes() (nodes []Node) {
 					Scheme: ep.Scheme,
 					Host:   ep.Host,
 				}
+				node.GridHost = ep.GridHost()
 			}
 			if !slices.Contains(node.Pools, ep.PoolIdx) {
 				node.Pools = append(node.Pools, ep.PoolIdx)
@@ -411,6 +413,47 @@ func (l EndpointServerPools) GridHosts() (gridHosts []string, gridLocal string) 
 	return gridHosts, gridLocal
 }
 
+// FindGridHostsFromPeerPool will return a matching peerPool from provided peer (as string)
+func (l EndpointServerPools) FindGridHostsFromPeerPool(peer string) []int {
+	if peer == "" {
+		return nil
+	}
+
+	var pools []int
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+
+			if !slices.Contains(pools, endpoint.PoolIdx) {
+				pools = append(pools, endpoint.PoolIdx)
+			}
+		}
+	}
+
+	return pools
+}
+
+// FindGridHostsFromPeerStr will return a matching peer from provided peer (as string)
+func (l EndpointServerPools) FindGridHostsFromPeerStr(peer string) (peerGrid string) {
+	if peer == "" {
+		return ""
+	}
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+
+			if endpoint.Host == peer {
+				return endpoint.GridHost()
+			}
+		}
+	}
+	return ""
+}
+
 // FindGridHostsFromPeer will return a matching peer from provided peer.
 func (l EndpointServerPools) FindGridHostsFromPeer(peer *xnet.Host) (peerGrid string) {
 	if peer == nil {
@@ -530,7 +573,7 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 			endpoint.Hostname(),
 		)
 		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.Application)
+		logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.ErrorKind)
 		return false
 	}
 	var loopback int
@@ -602,7 +645,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
 						logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
-							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.Application)
+							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.ErrorKind)
 					}
 
 					continue
@@ -631,7 +674,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.Application)
+						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
 					}
 				} else {
 					resolvedList[i] = true
@@ -796,7 +839,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
 							logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
-								endpoint.Hostname()), endpoint.Hostname(), logger.Application)
+								endpoint.Hostname()), endpoint.Hostname(), logger.ErrorKind)
 						}
 						continue
 					}
@@ -824,7 +867,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.Application)
+							logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.ErrorKind)
 						}
 					} else {
 						resolvedList[endpoint] = true

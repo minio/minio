@@ -44,7 +44,6 @@ func (w *sleepWriter) Close() error {
 func TestDeadlineWriter(t *testing.T) {
 	w := NewDeadlineWriter(&sleepWriter{timeout: 500 * time.Millisecond}, 450*time.Millisecond)
 	_, err := w.Write([]byte("1"))
-	w.Close()
 	if err != context.DeadlineExceeded {
 		t.Error("DeadlineWriter shouldn't be successful - should return context.DeadlineExceeded")
 	}
@@ -52,6 +51,7 @@ func TestDeadlineWriter(t *testing.T) {
 	if err != context.DeadlineExceeded {
 		t.Error("DeadlineWriter shouldn't be successful - should return context.DeadlineExceeded")
 	}
+	w.Close()
 	w = NewDeadlineWriter(&sleepWriter{timeout: 100 * time.Millisecond}, 600*time.Millisecond)
 	n, err := w.Write([]byte("abcd"))
 	w.Close()

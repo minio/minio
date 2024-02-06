@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -131,22 +130,23 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 	}
 	// If the context contains a TraceParamsKey, add it to the trace path.
 	v := ctx.Value(TraceParamsKey{})
-	if p, ok := v.(*MSS); ok && p != nil {
-		trace.Path += p.ToQuery()
-		trace.HTTP.ReqInfo.Path = trace.Path
-	} else if p, ok := v.(map[string]string); ok {
-		m := MSS(p)
+	// Should match SingleHandler.Call checks.
+	switch typed := v.(type) {
+	case *MSS:
+		trace.Path += typed.ToQuery()
+	case map[string]string:
+		m := MSS(typed)
 		trace.Path += m.ToQuery()
-		trace.HTTP.ReqInfo.Path = trace.Path
-	} else if v != nil {
-		// Print exported fields as single request to path.
-		obj := fmt.Sprintf("%+v", v)
-		if len(obj) > 1024 {
-			obj = obj[:1024] + "..."
-		}
-		trace.Path = fmt.Sprintf("%s?req=%s", trace.Path, url.QueryEscape(obj))
-		trace.HTTP.ReqInfo.Path = trace.Path
+	case *URLValues:
+		trace.Path += typed.Values().Encode()
+	case *NoPayload, *Bytes:
+		trace.Path = fmt.Sprintf("%s?payload=%T", trace.Path, typed)
+	case string:
+		trace.Path = fmt.Sprintf("%s?%s", trace.Path, typed)
+	default:
 	}
+	trace.HTTP.ReqInfo.Path = trace.Path
+
 	t.Publisher.Publish(trace)
 	return resp, err
 }

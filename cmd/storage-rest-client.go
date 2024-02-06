@@ -148,6 +148,8 @@ func toStorageErr(err error) error {
 		return errDiskOngoingReq
 	case grid.ErrUnknownHandler.Error():
 		return errInconsistentDisk
+	case grid.ErrDisconnected.Error():
+		return errDiskNotFound
 	}
 	return err
 }
@@ -346,6 +348,7 @@ func (client *storageRESTClient) StatVol(ctx context.Context, volume string) (vo
 		return vol, toStorageErr(err)
 	}
 	vol = *v
+	// Performs shallow copy, so we can reuse.
 	storageStatVolHandler.PutResponse(v)
 	return vol, nil
 }
@@ -455,6 +458,7 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 	if err != nil {
 		return 0, toStorageErr(err)
 	}
+	defer storageRenameDataHandler.PutResponse(resp)
 	return resp.Signature, nil
 }
 

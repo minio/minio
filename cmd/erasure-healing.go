@@ -178,7 +178,10 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 	return false
 }
 
-const xMinIOHealing = ReservedMetadataPrefix + "healing"
+const (
+	xMinIOHealing = ReservedMetadataPrefix + "healing"
+	xMinIODataMov = ReservedMetadataPrefix + "data-mov"
+)
 
 // SetHealing marks object (version) as being healed.
 // Note: this is to be used only from healObject
@@ -193,6 +196,21 @@ func (fi *FileInfo) SetHealing() {
 // from healObject)
 func (fi FileInfo) Healing() bool {
 	_, ok := fi.Metadata[xMinIOHealing]
+	return ok
+}
+
+// SetDataMov marks object (version) as being currently
+// in movement, such as decommissioning or rebalance.
+func (fi *FileInfo) SetDataMov() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[xMinIODataMov] = "true"
+}
+
+// DataMov returns true if object is being in movement
+func (fi FileInfo) DataMov() bool {
+	_, ok := fi.Metadata[xMinIODataMov]
 	return ok
 }
 
@@ -882,11 +900,10 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	// We can consider an object data not reliable
 	// when xl.meta is not found in read quorum disks.
 	// or when xl.meta is not readable in read quorum disks.
-	danglingErrsCount := func(cerrs []error) (int, int, int) {
+	danglingErrsCount := func(cerrs []error) (int, int) {
 		var (
 			notFoundCount      int
-			corruptedCount     int
-			driveNotFoundCount int
+			nonActionableCount int
 		)
 		for _, readErr := range cerrs {
 			if readErr == nil {
@@ -895,29 +912,16 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 			switch {
 			case errors.Is(readErr, errFileNotFound) || errors.Is(readErr, errFileVersionNotFound):
 				notFoundCount++
-			case errors.Is(readErr, errFileCorrupt):
-				corruptedCount++
 			default:
 				// All other errors are non-actionable
-				driveNotFoundCount++
+				nonActionableCount++
 			}
 		}
-		return notFoundCount, corruptedCount, driveNotFoundCount
+		return notFoundCount, nonActionableCount
 	}
 
-	ndataErrs := make([]error, len(dataErrs))
-	for i := range dataErrs {
-		if errs[i] != dataErrs[i] {
-			// Only count part errors, if the error is not
-			// same as xl.meta error. This is to avoid
-			// double counting when both parts and xl.meta
-			// are not available.
-			ndataErrs[i] = dataErrs[i]
-		}
-	}
-
-	notFoundMetaErrs, corruptedMetaErrs, driveNotFoundMetaErrs := danglingErrsCount(errs)
-	notFoundPartsErrs, corruptedPartsErrs, driveNotFoundPartsErrs := danglingErrsCount(ndataErrs)
+	notFoundMetaErrs, nonActionableMetaErrs := danglingErrsCount(errs)
+	notFoundPartsErrs, nonActionablePartsErrs := danglingErrsCount(dataErrs)
 
 	for _, m := range metaArr {
 		if m.IsValid() {
@@ -927,10 +931,9 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 	}
 
 	if !validMeta.IsValid() {
-		// validMeta is invalid because notFoundPartsErrs is
-		// greater than parity blocks, thus invalidating the FileInfo{}
-		// every dataErrs[i], metaArr[i] is an empty FileInfo{}
-		dataBlocks := (len(ndataErrs) + 1) / 2
+		// validMeta is invalid because all xl.meta is missing apparently
+		// we should figure out if dataDirs are also missing > dataBlocks.
+		dataBlocks := (len(dataErrs) + 1) / 2
 		if notFoundPartsErrs > dataBlocks {
 			// Not using parity to ensure that we do not delete
 			// any valid content, if any is recoverable. But if
@@ -947,25 +950,40 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		return validMeta, false
 	}
 
-	if driveNotFoundMetaErrs > 0 || driveNotFoundPartsErrs > 0 {
+	if nonActionableMetaErrs > 0 || nonActionablePartsErrs > 0 {
 		return validMeta, false
 	}
 
 	if validMeta.Deleted {
 		// notFoundPartsErrs is ignored since
 		// - delete marker does not have any parts
-		return validMeta, corruptedMetaErrs+notFoundMetaErrs > len(errs)/2
+		dataBlocks := (len(errs) + 1) / 2
+		return validMeta, notFoundMetaErrs > dataBlocks
 	}
 
-	totalErrs := notFoundMetaErrs + corruptedMetaErrs + notFoundPartsErrs + corruptedPartsErrs
-	if validMeta.IsRemote() {
-		// notFoundPartsErrs is ignored since
-		// - transition status of complete has no parts
-		totalErrs = notFoundMetaErrs + corruptedMetaErrs
+	quorum := validMeta.Erasure.DataBlocks
+	if validMeta.Erasure.DataBlocks == validMeta.Erasure.ParityBlocks {
+		quorum++
 	}
 
-	// We have valid meta, now verify if we have enough files with parity blocks.
-	return validMeta, totalErrs > validMeta.Erasure.ParityBlocks
+	// TODO: It is possible to replay the object via just single
+	// xl.meta file, considering quorum number of data-dirs are still
+	// present on other drives.
+	//
+	// However this requires a bit of a rewrite, leave this up for
+	// future work.
+
+	if notFoundMetaErrs > 0 && notFoundMetaErrs >= quorum {
+		// All xl.meta is beyond data blocks missing, this is dangling
+		return validMeta, true
+	}
+
+	if !validMeta.IsRemote() && notFoundPartsErrs > 0 && notFoundPartsErrs >= quorum {
+		// All data-dir is beyond data blocks missing, this is dangling
+		return validMeta, true
+	}
+
+	return validMeta, false
 }
 
 // HealObject - heal the given object, automatically deletes the object if stale/corrupted if `remove` is true.

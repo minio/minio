@@ -30,7 +30,7 @@ import (
 )
 
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
-var ErrDisconnected = errors.New("remote disconnected")
+var ErrDisconnected = RemoteErr("remote disconnected")
 
 const (
 	// minBufferSize is the minimum buffer size.

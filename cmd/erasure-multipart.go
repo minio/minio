@@ -583,7 +583,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	data := r.Reader
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		logger.LogIf(ctx, errInvalidArgument, logger.ErrorKind)
 		return pi, toObjectErr(errInvalidArgument)
 	}
 
@@ -1243,6 +1243,10 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Save the consolidated actual size.
 	fi.Metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
+
+	if opts.DataMovement {
+		fi.SetDataMov()
+	}
 
 	// Update all erasure metadata, make sure to not modify fields like
 	// checksum which are different on each disks.

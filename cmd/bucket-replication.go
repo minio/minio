@@ -2235,6 +2235,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
 		return nil, oi, proxy
 	}
+	var perr error
 	for _, t := range proxyTargets.Targets {
 		tgt = globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
 		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
@@ -2264,6 +2265,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 
 		objInfo, err := tgt.StatObject(ctx, t.TargetBucket, object, gopts)
 		if err != nil {
+			perr = err
 			if isErrInvalidRange(ErrorRespToObjectError(err, bucket, object)) {
 				return nil, oi, proxyResult{Err: err}
 			}
@@ -2300,6 +2302,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 		}
 		return tgt, oi, proxyResult{Proxy: true}
 	}
+	proxy.Err = perr
 	return nil, oi, proxy
 }
 

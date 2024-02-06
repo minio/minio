@@ -574,7 +574,6 @@ func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVe
 		fileInfo.Data = xl.data.find(versionID)
 	}
 
-	fileInfo.DiskMTime = ri.DiskMTime
 	return fileInfo, nil
 }
 
@@ -625,9 +624,7 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 			continue
 		}
 		metadataArray[index] = &xl
-		metaFileInfos[index] = FileInfo{
-			DiskMTime: rf.DiskMTime,
-		}
+		metaFileInfos[index] = FileInfo{}
 	}
 
 	for index := range metadataArray {
@@ -667,7 +664,6 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 		}
 
 		// make sure to preserve this for diskmtime based healing bugfix.
-		diskMTime := metaFileInfos[index].DiskMTime
 		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, versionID, inclFreeVers, allParts)
 		if errs[index] != nil {
 			continue
@@ -676,7 +672,6 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 		if readData {
 			metaFileInfos[index].Data = metadataArray[index].data.find(versionID)
 		}
-		metaFileInfos[index].DiskMTime = diskMTime
 	}
 	if !readData {
 		for i := range v2bufs {
@@ -1094,7 +1089,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 
 	// Validate input data size and it can never be less than zero.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		logger.LogIf(ctx, errInvalidArgument, logger.ErrorKind)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
@@ -1281,7 +1276,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	// Validate input data size and it can never be less than -1.
 	if data.Size() < -1 {
-		logger.LogIf(ctx, errInvalidArgument, logger.Application)
+		logger.LogIf(ctx, errInvalidArgument, logger.ErrorKind)
 		return ObjectInfo{}, toObjectErr(errInvalidArgument)
 	}
 
@@ -1516,12 +1511,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		partsMetadata[index].Metadata = userDefined
 		partsMetadata[index].Size = n
 		partsMetadata[index].ModTime = modTime
-	}
-
-	if len(inlineBuffers) > 0 {
-		// Set an additional header when data is inlined.
-		for index := range partsMetadata {
+		if len(inlineBuffers) > 0 {
 			partsMetadata[index].SetInlineData()
+		}
+		if opts.DataMovement {
+			partsMetadata[index].SetDataMov()
 		}
 	}
 
@@ -2177,7 +2171,7 @@ func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, o
 	// Wait for all the routines.
 	mErrs := g.Wait()
 
-	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, er.defaultWQuorum())
+	return reduceWriteQuorumErrs(ctx, mErrs, objectOpIgnoredErrs, fi.WriteQuorum(er.defaultWQuorum()))
 }
 
 // updateObjectMeta will update the metadata of a file.
