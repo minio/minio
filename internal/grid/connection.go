@@ -360,6 +360,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 		if debugReqs {
 			fmt.Println(client.MuxID, c.String(), "Subroute.Request: DELETING MUX")
 		}
+		client.cancelFn(context.Canceled)
 		c.outgoing.Delete(client.MuxID)
 	}()
 	return client.traceRoundtrip(ctx, c.trace, h, req)
