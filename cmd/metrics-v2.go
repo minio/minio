@@ -225,10 +225,20 @@ const (
 	linkOfflineDuration       MetricName = "link_offline_duration_seconds"
 	linkDowntimeTotalDuration MetricName = "link_downtime_duration_seconds"
 
-	avgInQueueCount MetricName = "average_queued_count"
-	avgInQueueBytes MetricName = "average_queued_bytes"
-	maxInQueueCount MetricName = "max_queued_count"
-	maxInQueueBytes MetricName = "max_queued_bytes"
+	avgInQueueCount                     MetricName = "average_queued_count"
+	avgInQueueBytes                     MetricName = "average_queued_bytes"
+	maxInQueueCount                     MetricName = "max_queued_count"
+	maxInQueueBytes                     MetricName = "max_queued_bytes"
+	proxiedGetRequestsTotal             MetricName = "proxied_get_requests_total"
+	proxiedHeadRequestsTotal            MetricName = "proxied_head_requests_total"
+	proxiedPutTaggingRequestsTotal      MetricName = "proxied_put_tagging_requests_total"
+	proxiedGetTaggingRequestsTotal      MetricName = "proxied_get_tagging_requests_total"
+	proxiedDeleteTaggingRequestsTotal   MetricName = "proxied_delete_tagging_requests_total"
+	proxiedGetRequestsFailures          MetricName = "proxied_get_requests_failures"
+	proxiedHeadRequestsFailures         MetricName = "proxied_head_requests_failures"
+	proxiedPutTaggingRequestFailures    MetricName = "proxied_put_tagging_requests_failures"
+	proxiedGetTaggingRequestFailures    MetricName = "proxied_get_tagging_requests_failures"
+	proxiedDeleteTaggingRequestFailures MetricName = "proxied_delete_tagging_requests_failures"
 
 	freeBytes       MetricName = "free_bytes"
 	readBytes       MetricName = "read_bytes"
@@ -1121,6 +1131,106 @@ func getClusterReplMaxTransferRateMD() MetricDescription {
 		Name:      maxTransferRate,
 		Help:      "Maximum replication transfer rate in bytes/sec seen since server start",
 		Type:      gaugeMetric,
+	}
+}
+
+func getClusterReplProxiedGetOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedGetRequestsTotal,
+		Help:      "Number of GET requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedHeadOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedHeadRequestsTotal,
+		Help:      "Number of HEAD requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedPutTaggingOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedPutTaggingRequestsTotal,
+		Help:      "Number of PUT tagging requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedGetTaggingOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedGetTaggingRequestsTotal,
+		Help:      "Number of GET tagging requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedRmvTaggingOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedDeleteTaggingRequestsTotal,
+		Help:      "Number of DELETE tagging requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedGetFailedOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedGetRequestsFailures,
+		Help:      "Number of failures in GET requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedHeadFailedOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedHeadRequestsFailures,
+		Help:      "Number of failures in HEAD requests proxied to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedPutTaggingFailedOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedPutTaggingRequestFailures,
+		Help:      "Number of failures in PUT tagging proxy requests to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedGetTaggingFailedOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedGetTaggingRequestFailures,
+		Help:      "Number of failures in GET tagging proxy requests to replication target",
+		Type:      counterMetric,
+	}
+}
+
+func getClusterReplProxiedRmvTaggingFailedOperationsMD(ns MetricNamespace) MetricDescription {
+	return MetricDescription{
+		Namespace: ns,
+		Subsystem: replicationSubsystem,
+		Name:      proxiedDeleteTaggingRequestFailures,
+		Help:      "Number of  failures in DELETE tagging proxy requests to replication target",
+		Type:      counterMetric,
 	}
 }
 
@@ -2381,6 +2491,46 @@ func getReplicationSiteMetrics(opts MetricsGroupOpts) *MetricsGroup {
 					})
 				}
 			}
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedGetOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.GetTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedHeadOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.HeadTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedPutTaggingOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.PutTagTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedGetTaggingOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.GetTagTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedRmvTaggingOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.RmvTagTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedGetFailedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.GetFailedTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedHeadFailedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.HeadFailedTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedPutTaggingFailedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.PutTagFailedTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedGetTaggingFailedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.GetTagFailedTotal),
+			})
+			ml = append(ml, Metric{
+				Description: getClusterReplProxiedRmvTaggingFailedOperationsMD(clusterMetricNamespace),
+				Value:       float64(m.Proxied.RmvTagFailedTotal),
+			})
 		}
 
 		return ml
@@ -3097,6 +3247,51 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 						Description:    getRepReceivedOperationsMD(bucketMetricNamespace),
 						Value:          float64(stats.ReplicaCount),
 						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getClusterReplProxiedGetOperationsMD(bucketMetricNamespace),
+						Value:          float64(s.ProxyStats.GetTotal),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getClusterReplProxiedHeadOperationsMD(bucketMetricNamespace),
+						Value:          float64(s.ProxyStats.HeadTotal),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getClusterReplProxiedPutTaggingOperationsMD(bucketMetricNamespace),
+						Value:          float64(s.ProxyStats.PutTagTotal),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getClusterReplProxiedGetTaggingOperationsMD(bucketMetricNamespace),
+						Value:          float64(s.ProxyStats.GetTagTotal),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description:    getClusterReplProxiedRmvTaggingOperationsMD(bucketMetricNamespace),
+						Value:          float64(s.ProxyStats.RmvTagTotal),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+					metrics = append(metrics, Metric{
+						Description: getClusterReplProxiedGetFailedOperationsMD(bucketMetricNamespace),
+						Value:       float64(s.ProxyStats.GetFailedTotal),
+					})
+					metrics = append(metrics, Metric{
+						Description: getClusterReplProxiedHeadFailedOperationsMD(bucketMetricNamespace),
+						Value:       float64(s.ProxyStats.HeadFailedTotal),
+					})
+					metrics = append(metrics, Metric{
+						Description: getClusterReplProxiedPutTaggingFailedOperationsMD(bucketMetricNamespace),
+						Value:       float64(s.ProxyStats.PutTagFailedTotal),
+					})
+					metrics = append(metrics, Metric{
+						Description: getClusterReplProxiedGetTaggingFailedOperationsMD(bucketMetricNamespace),
+						Value:       float64(s.ProxyStats.GetTagFailedTotal),
+					})
+					metrics = append(metrics, Metric{
+						Description: getClusterReplProxiedRmvTaggingFailedOperationsMD(clusterMetricNamespace),
+						Value:       float64(s.ProxyStats.RmvTagFailedTotal),
 					})
 				}
 				if stats.hasReplicationUsage() {

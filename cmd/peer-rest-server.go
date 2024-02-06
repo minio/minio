@@ -557,6 +557,7 @@ func (s *peerRESTServer) GetAllBucketStatsHandler(w http.ResponseWriter, r *http
 	for k, v := range replicationStats {
 		bucketStatsMap[k] = BucketStats{
 			ReplicationStats: v,
+			ProxyStats:       globalReplicationStats.getProxyStats(k),
 		}
 	}
 	logger.LogIf(r.Context(), msgp.Encode(w, &BucketStatsMap{Stats: bucketStatsMap, Timestamp: UTCNow()}))
@@ -580,6 +581,7 @@ func (s *peerRESTServer) GetBucketStatsHandler(w http.ResponseWriter, r *http.Re
 	bs := BucketStats{
 		ReplicationStats: globalReplicationStats.Get(bucketName),
 		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
+		ProxyStats:       globalReplicationStats.getProxyStats(bucketName),
 	}
 	logger.LogIf(r.Context(), msgp.Encode(w, &bs))
 }

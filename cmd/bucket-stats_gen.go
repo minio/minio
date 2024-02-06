@@ -1142,6 +1142,12 @@ func (z *BucketStats) DecodeMsg(dc *msgp.Reader) (err error) {
 					}
 				}
 			}
+		case "ProxyStats":
+			err = z.ProxyStats.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "ProxyStats")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -1155,9 +1161,9 @@ func (z *BucketStats) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *BucketStats) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+	// map header, size 4
 	// write "Uptime"
-	err = en.Append(0x83, 0xa6, 0x55, 0x70, 0x74, 0x69, 0x6d, 0x65)
+	err = en.Append(0x84, 0xa6, 0x55, 0x70, 0x74, 0x69, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -1209,15 +1215,25 @@ func (z *BucketStats) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "QueueStats", "Uptime")
 		return
 	}
+	// write "ProxyStats"
+	err = en.Append(0xaa, 0x50, 0x72, 0x6f, 0x78, 0x79, 0x53, 0x74, 0x61, 0x74, 0x73)
+	if err != nil {
+		return
+	}
+	err = z.ProxyStats.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "ProxyStats")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *BucketStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 4
 	// string "Uptime"
-	o = append(o, 0x83, 0xa6, 0x55, 0x70, 0x74, 0x69, 0x6d, 0x65)
+	o = append(o, 0x84, 0xa6, 0x55, 0x70, 0x74, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.Uptime)
 	// string "ReplicationStats"
 	o = append(o, 0xb0, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x73)
@@ -1242,6 +1258,13 @@ func (z *BucketStats) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Uptime"
 	o = append(o, 0xa6, 0x55, 0x70, 0x74, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.QueueStats.Uptime)
+	// string "ProxyStats"
+	o = append(o, 0xaa, 0x50, 0x72, 0x6f, 0x78, 0x79, 0x53, 0x74, 0x61, 0x74, 0x73)
+	o, err = z.ProxyStats.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "ProxyStats")
+		return
+	}
 	return
 }
 
@@ -1323,6 +1346,12 @@ func (z *BucketStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			}
+		case "ProxyStats":
+			bts, err = z.ProxyStats.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ProxyStats")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1341,7 +1370,7 @@ func (z *BucketStats) Msgsize() (s int) {
 	for za0001 := range z.QueueStats.Nodes {
 		s += z.QueueStats.Nodes[za0001].Msgsize()
 	}
-	s += 7 + msgp.Int64Size
+	s += 7 + msgp.Int64Size + 11 + z.ProxyStats.Msgsize()
 	return
 }
 
