@@ -21,13 +21,11 @@
 package cmd
 
 import (
-	"errors"
 	"os"
 )
 
 // Rename2 is not implemented in a non linux environment
 func Rename2(src, dst string) (err error) {
-	defer updateOSMetrics(osMetricRename2, src, dst)(errors.New("not implemented, skipping"))
 	return errSkipFile
 }
 
