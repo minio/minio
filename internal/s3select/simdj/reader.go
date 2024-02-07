@@ -170,7 +170,7 @@ func NewReader(readCloser io.ReadCloser, args *json.ReaderArgs) *Reader {
 	}
 
 	// We cannot reuse as we are sending parsed objects elsewhere.
-	simdjson.ParseANDStream(readCloser, r.input, nil)
+	simdjson.ParseNDStream(readCloser, r.input, nil)
 	r.readerWg.Add(1)
 	go r.startReader()
 	return &r

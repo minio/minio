@@ -73,7 +73,7 @@ func TestNDJSON(t *testing.T) {
 			var err error
 			dst := make(chan simdjson.Object, 100)
 			dec := NewElementReader(dst, &err, &json.ReaderArgs{ContentType: "json"})
-			pj, err := simdjson.ParseAND(ref, nil)
+			pj, err := simdjson.ParseND(ref, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
