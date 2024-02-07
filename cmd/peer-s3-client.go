@@ -400,7 +400,7 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 
 	volInfo, err := headBucketRPC.Call(ctx, conn, mss)
 	if err != nil {
-		return BucketInfo{}, err
+		return BucketInfo{}, toStorageErr(err)
 	}
 
 	return BucketInfo{
