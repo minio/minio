@@ -959,7 +959,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
 				cancel(ErrDisconnected)
-				logger.LogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
 			}
 			if c.incomingBytes != nil {
@@ -970,7 +969,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			var m message
 			subID, remain, err := m.parse(msg)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("ws parse package: %w", err))
 				cancel(ErrDisconnected)
 				return
 			}
@@ -991,7 +989,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				var next []byte
 				next, remain, err = msgp.ReadBytesZC(remain)
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("ws read merged: %w", err))
 					cancel(ErrDisconnected)
 					return
 				}
@@ -999,7 +996,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				m.Payload = nil
 				subID, _, err = m.parse(next)
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("ws parse merged: %w", err))
 					cancel(ErrDisconnected)
 					return
 				}
@@ -1064,7 +1060,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			var err error
 			toSend, err = pingFrame.MarshalMsg(GetByteBuffer()[:0])
 			if err != nil {
-				logger.LogIf(ctx, err)
 				// Fake it...
 				atomic.StoreInt64(&c.LastPong, time.Now().Unix())
 				continue
@@ -1106,18 +1101,13 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			buf.Reset()
 			err := wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
 				return
 			}
 			PutByteBuffer(toSend)
-			err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
+			if err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout)); err != nil {
 				return
 			}
-			_, err = buf.WriteTo(conn)
-			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
+			if _, err = buf.WriteTo(conn); err != nil {
 				return
 			}
 			continue
@@ -1134,7 +1124,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		var err error
 		toSend, err = m.MarshalMsg(toSend)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("msg.MarshalMsg: %w", err))
 			return
 		}
 		// Append as byte slices.
@@ -1150,18 +1139,15 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		buf.Reset()
 		err = wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
 			return
 		}
 		// buf is our local buffer, so we can reuse it.
 		err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
 			return
 		}
 		_, err = buf.WriteTo(conn)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
 			return
 		}
 

@@ -262,6 +262,10 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 // listMerged will list across all sets and return a merged results stream.
 // The result channel is closed when no more results are expected.
 func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) error {
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var errs []error
@@ -302,22 +306,23 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	// Gather results to a single channel.
 	// Quorum is one since we are merging across sets.
 	err := mergeEntryChannels(ctx, inputs, results, 1)
-
 	cancelList()
 	wg.Wait()
+
+	// Honor
+	if isAllNotFound(errs) {
+		if isAllVolumeNotFound(errs) {
+			return errVolumeNotFound
+		}
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
 
 	if contextCanceled(ctx) {
 		return ctx.Err()
-	}
-
-	if isAllNotFound(errs) {
-		if isAllVolumeNotFound(errs) {
-			return errVolumeNotFound
-		}
-		return nil
 	}
 
 	for _, err := range errs {
