@@ -554,12 +554,14 @@ func NewNoPayload() NoPayload {
 // Recycle is a no-op.
 func (NoPayload) Recycle() {}
 
-// ArrayOf
+// ArrayOf wraps an array of Messagepack compatible objects.
 type ArrayOf[T RoundTripper] struct {
 	aPool sync.Pool // Arrays
 	ePool sync.Pool // Elements
 }
 
+// NewArrayOf returns a new ArrayOf.
+// You must provide a function that returns a new instance of T.
 func NewArrayOf[T RoundTripper](newFn func() T) *ArrayOf[T] {
 	return &ArrayOf[T]{
 		ePool: sync.Pool{New: func() any {
@@ -568,12 +570,14 @@ func NewArrayOf[T RoundTripper](newFn func() T) *ArrayOf[T] {
 	}
 }
 
+// New returns a new empty Array.
 func (p *ArrayOf[T]) New() *Array[T] {
 	return &Array[T]{
 		p: p,
 	}
 }
 
+// NewWith returns a new Array with the provided value (not copied).
 func (p *ArrayOf[T]) NewWith(val []T) *Array[T] {
 	return &Array[T]{
 		p:   p,
@@ -593,19 +597,23 @@ func (p *ArrayOf[T]) putA(v []T) {
 	for _, t := range v {
 		p.ePool.Put(t)
 	}
-	v = v[:0]
-	p.aPool.Put(v)
+	if v != nil {
+		v = v[:0]
+		p.aPool.Put(v)
+	}
 }
 
 func (p *ArrayOf[T]) newE() T {
 	return p.ePool.Get().(T)
 }
 
+// Array provides a wrapper for an underlying array of serializable objects.
 type Array[T RoundTripper] struct {
 	p   *ArrayOf[T]
 	val []T
 }
 
+// Msgsize returns the size of the array in bytes.
 func (j *Array[T]) Msgsize() int {
 	if j.val == nil {
 		return msgp.NilSize
@@ -617,6 +625,9 @@ func (j *Array[T]) Msgsize() int {
 	return sz
 }
 
+// Value returns the underlying value.
+// Regular append mechanics should be observed.
+// If no value has been set yet, a new array is created.
 func (j *Array[T]) Value() []T {
 	if j.val == nil {
 		j.val = j.p.newA(10)
@@ -624,6 +635,7 @@ func (j *Array[T]) Value() []T {
 	return j.val
 }
 
+// Set the underlying value.
 func (j *Array[T]) Set(val []T) {
 	j.val = val
 }
