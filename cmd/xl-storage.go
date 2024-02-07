@@ -1696,7 +1696,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, f
 	}
 
 	if discard {
-		// This discard is mostly true for DELETEEs
+		// This discard is mostly true for DELETE-s
 		// so we need to make sure we do not keep
 		// page-cache references after.
 		defer disk.Fdatasync(f)
