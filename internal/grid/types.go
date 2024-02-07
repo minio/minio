@@ -599,6 +599,7 @@ func (p *ArrayOf[T]) putA(v []T) {
 	}
 	if v != nil {
 		v = v[:0]
+		//staticcheck:ignore SA6002
 		p.aPool.Put(v)
 	}
 }
