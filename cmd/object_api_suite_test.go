@@ -825,7 +825,6 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	length := int64(len(content))
 	var opts ObjectOptions
 	_, err = obj.PutObject(context.Background(), bucketName, "dir1/dir3/object", mustGetPutObjReader(t, bytes.NewBufferString(content), length, "", ""), opts)
-
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
