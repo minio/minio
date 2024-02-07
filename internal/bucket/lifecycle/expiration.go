@@ -177,7 +177,7 @@ func (e Expiration) Validate() error {
 		return errLifecycleInvalidDeleteMarker
 	}
 
-	if !e.DeleteMarker.set && e.IsDaysNull() && e.IsDateNull() {
+	if !e.DeleteMarker.set && !e.DeleteAll.set && e.IsDaysNull() && e.IsDateNull() {
 		return errXMLNotWellFormed
 	}
 

@@ -104,7 +104,7 @@ func (ps *PubSub[T, M]) Subscribe(mask M, subCh chan T, doneCh <-chan struct{}, 
 }
 
 // SubscribeJSON - Adds a subscriber to pubsub system and returns results with JSON encoding.
-func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan struct{}, filter func(entry T) bool) error {
+func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan struct{}, filter func(entry T) bool, wg *sync.WaitGroup) error {
 	totalSubs := atomic.AddInt32(&ps.numSubscribers, 1)
 	if ps.maxSubscribers > 0 && totalSubs > ps.maxSubscribers {
 		atomic.AddInt32(&ps.numSubscribers, -1)
@@ -120,40 +120,54 @@ func (ps *PubSub[T, M]) SubscribeJSON(mask M, subCh chan<- []byte, doneCh <-chan
 	combined := Mask(atomic.LoadUint64(&ps.types))
 	combined.Merge(Mask(mask.Mask()))
 	atomic.StoreUint64(&ps.types, uint64(combined))
-
+	if wg != nil {
+		wg.Add(1)
+	}
 	go func() {
+		defer func() {
+			if wg != nil {
+				wg.Done()
+			}
+			// Clean up and de-register the subscriber
+			ps.Lock()
+			defer ps.Unlock()
+			var remainTypes Mask
+			for i, s := range ps.subs {
+				if s == sub {
+					ps.subs = append(ps.subs[:i], ps.subs[i+1:]...)
+				} else {
+					remainTypes.Merge(s.types)
+				}
+			}
+			atomic.StoreUint64(&ps.types, uint64(remainTypes))
+			atomic.AddInt32(&ps.numSubscribers, -1)
+		}()
+
+		// Read from subChT and write to subCh
 		var buf bytes.Buffer
 		enc := json.NewEncoder(&buf)
 		for {
 			select {
 			case <-doneCh:
+				return
 			case v, ok := <-subChT:
 				if !ok {
-					break
+					return
 				}
 				buf.Reset()
 				err := enc.Encode(v)
 				if err != nil {
-					break
+					return
 				}
-				subCh <- append(GetByteBuffer()[:0], buf.Bytes()...)
-				continue
-			}
-			break
-		}
 
-		ps.Lock()
-		defer ps.Unlock()
-		var remainTypes Mask
-		for i, s := range ps.subs {
-			if s == sub {
-				ps.subs = append(ps.subs[:i], ps.subs[i+1:]...)
-			} else {
-				remainTypes.Merge(s.types)
+				select {
+				case subCh <- append(GetByteBuffer()[:0], buf.Bytes()...):
+					continue
+				case <-doneCh:
+					return
+				}
 			}
 		}
-		atomic.StoreUint64(&ps.types, uint64(remainTypes))
-		atomic.AddInt32(&ps.numSubscribers, -1)
 	}()
 
 	return nil

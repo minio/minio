@@ -179,6 +179,7 @@ const (
 	writeBufferSize    = 16 << 10
 	defaultDialTimeout = 2 * time.Second
 	connPingInterval   = 10 * time.Second
+	connWriteTimeout   = 3 * time.Second
 )
 
 type connectionParams struct {
@@ -359,6 +360,7 @@ func (c *Subroute) Request(ctx context.Context, h HandlerID, req []byte) ([]byte
 		if debugReqs {
 			fmt.Println(client.MuxID, c.String(), "Subroute.Request: DELETING MUX")
 		}
+		client.cancelFn(context.Canceled)
 		c.outgoing.Delete(client.MuxID)
 	}()
 	return client.traceRoundtrip(ctx, c.trace, h, req)
@@ -599,6 +601,10 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 	}
 	if c.outgoingBytes != nil {
 		c.outgoingBytes(int64(len(dst)))
+	}
+	err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
+	if err != nil {
+		return err
 	}
 	return wsutil.WriteMessage(conn, c.side, ws.OpBinary, dst)
 }
@@ -1104,6 +1110,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				return
 			}
 			PutByteBuffer(toSend)
+			err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
+			if err != nil {
+				logger.LogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
+				return
+			}
 			_, err = buf.WriteTo(conn)
 			if err != nil {
 				logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
@@ -1143,6 +1154,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			return
 		}
 		// buf is our local buffer, so we can reuse it.
+		err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
+		if err != nil {
+			logger.LogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
+			return
+		}
 		_, err = buf.WriteTo(conn)
 		if err != nil {
 			logger.LogIf(ctx, fmt.Errorf("ws write: %w", err))
