@@ -270,16 +270,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
 
 	sys.Lock()
-	defer sys.Unlock()
-
 	sys.LDAPConfig = ldapConfig
 	sys.OpenIDConfig = openidConfig
 	sys.STSTLSConfig = stsTLSConfig
-
 	sys.iamRefreshInterval = iamRefreshInterval
-
 	// Initialize IAM store
 	sys.initStore(objAPI, etcdClient)
+	sys.Unlock()
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
