@@ -124,17 +124,17 @@ func Init(goPath string, goRoot string) {
 	var goRootList []string
 	var defaultgoPathList []string
 	var defaultgoRootList []string
-	pathSeperator := ":"
+	pathSeparator := ":"
 	// Add all possible GOPATH paths into trimStrings
 	// Split GOPATH depending on the OS type
 	if runtime.GOOS == "windows" {
-		pathSeperator = ";"
+		pathSeparator = ";"
 	}
 
-	goPathList = strings.Split(goPath, pathSeperator)
-	goRootList = strings.Split(goRoot, pathSeperator)
-	defaultgoPathList = strings.Split(build.Default.GOPATH, pathSeperator)
-	defaultgoRootList = strings.Split(build.Default.GOROOT, pathSeperator)
+	goPathList = strings.Split(goPath, pathSeparator)
+	goRootList = strings.Split(goRoot, pathSeparator)
+	defaultgoPathList = strings.Split(build.Default.GOPATH, pathSeparator)
+	defaultgoRootList = strings.Split(build.Default.GOROOT, pathSeparator)
 
 	// Add trim string "{GOROOT}/src/" into trimStrings
 	trimStrings = []string{filepath.Join(runtime.GOROOT(), "src") + string(filepath.Separator)}

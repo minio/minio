@@ -258,7 +258,7 @@ func TestParseSignature(t *testing.T) {
 		expectedErrCode  APIErrorCode
 	}{
 		// Test case - 1.
-		// SignElemenet doesn't have 2 parts on an attempt to split at '='.
+		// SignElement doesn't have 2 parts on an attempt to split at '='.
 		// ErrMissingFields expected.
 		{
 			inputSignElement: "Signature",
@@ -274,7 +274,7 @@ func TestParseSignature(t *testing.T) {
 			expectedErrCode:  ErrMissingFields,
 		},
 		// Test case - 3.
-		// SignElemenet with missing "SignatureTag",ErrMissingSignTag expected.
+		// SignElement with missing "SignatureTag",ErrMissingSignTag expected.
 		{
 			inputSignElement: "Sign=",
 			expectedSignStr:  "",
@@ -310,7 +310,7 @@ func TestParseSignedHeaders(t *testing.T) {
 		expectedErrCode       APIErrorCode
 	}{
 		// Test case - 1.
-		// SignElemenet doesn't have 2 parts on an attempt to split at '='.
+		// SignElement doesn't have 2 parts on an attempt to split at '='.
 		// ErrMissingFields expected.
 		{
 			inputSignElement:      "SignedHeaders",
@@ -318,7 +318,7 @@ func TestParseSignedHeaders(t *testing.T) {
 			expectedErrCode:       ErrMissingFields,
 		},
 		// Test case - 2.
-		// SignElemenet with missing "SigHeaderTag",ErrMissingSignHeadersTag expected.
+		// SignElement with missing "SigHeaderTag",ErrMissingSignHeadersTag expected.
 		{
 			inputSignElement:      "Sign=",
 			expectedSignedHeaders: nil,

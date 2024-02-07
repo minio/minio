@@ -202,7 +202,7 @@ func (h *Target) Init(ctx context.Context) error {
 	if err := h.init(); err != nil {
 		return err
 	}
-	go h.startKakfaLogger()
+	go h.startKafkaLogger()
 	return nil
 }
 
@@ -220,7 +220,7 @@ func (h *Target) initQueueStore(ctx context.Context) (err error) {
 	return
 }
 
-func (h *Target) startKakfaLogger() {
+func (h *Target) startKafkaLogger() {
 	h.logChMu.RLock()
 	logCh := h.logCh
 	if logCh != nil {

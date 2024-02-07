@@ -58,8 +58,8 @@ func commonETags(etags []string) (etag string, maxima int) {
 }
 
 // commonTime returns a maximally occurring time from a list of time.
-func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime time.Time, maxima int) {
-	timeOccurenceMap := make(map[int64]int, len(times))
+func commonTimeAndOccurrence(times []time.Time, group time.Duration) (maxTime time.Time, maxima int) {
+	timeOccurrenceMap := make(map[int64]int, len(times))
 	groupNano := group.Nanoseconds()
 	// Ignore the uuid sentinel and count the rest.
 	for _, t := range times {
@@ -68,7 +68,7 @@ func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime tim
 		}
 		nano := t.UnixNano()
 		if group > 0 {
-			for k := range timeOccurenceMap {
+			for k := range timeOccurrenceMap {
 				if k == nano {
 					// We add to ourself later
 					continue
@@ -79,12 +79,12 @@ func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime tim
 				}
 				// We are within the limit
 				if diff < groupNano {
-					timeOccurenceMap[k]++
+					timeOccurrenceMap[k]++
 				}
 			}
 		}
 		// Add ourself...
-		timeOccurenceMap[nano]++
+		timeOccurrenceMap[nano]++
 	}
 
 	maxima = 0 // Counter for remembering max occurrence of elements.
@@ -92,7 +92,7 @@ func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime tim
 
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
-	for nano, count := range timeOccurenceMap {
+	for nano, count := range timeOccurrenceMap {
 		if count < maxima {
 			continue
 		}
@@ -111,7 +111,7 @@ func commonTimeAndOccurence(times []time.Time, group time.Duration) (maxTime tim
 // commonTime returns a maximally occurring time from a list of time if it
 // occurs >= quorum, else return timeSentinel
 func commonTime(modTimes []time.Time, quorum int) time.Time {
-	if modTime, count := commonTimeAndOccurence(modTimes, 0); count >= quorum {
+	if modTime, count := commonTimeAndOccurrence(modTimes, 0); count >= quorum {
 		return modTime
 	}
 

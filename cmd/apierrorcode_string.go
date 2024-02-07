@@ -292,7 +292,7 @@ func _() {
 	_ = x[ErrParseExpectedIdentForGroupName-281]
 	_ = x[ErrParseExpectedIdentForAlias-282]
 	_ = x[ErrParseUnsupportedCallWithStar-283]
-	_ = x[ErrParseNonUnaryAgregateFunctionCall-284]
+	_ = x[ErrParseNonUnaryAggregateFunctionCall-284]
 	_ = x[ErrParseMalformedJoin-285]
 	_ = x[ErrParseExpectedIdentForAt-286]
 	_ = x[ErrParseAsteriskIsNotAloneInSelectList-287]

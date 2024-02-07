@@ -473,13 +473,13 @@ func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, t TestErrHan
 	}
 }
 
-// Wrapper for calling testNonExistantBucketOperations for both Erasure and FS.
-func TestNonExistantBucketOperations(t *testing.T) {
-	ExecObjectLayerTest(t, testNonExistantBucketOperations)
+// Wrapper for calling testNonExistentBucketOperations for both Erasure and FS.
+func TestNonExistentBucketOperations(t *testing.T) {
+	ExecObjectLayerTest(t, testNonExistentBucketOperations)
 }
 
 // Tests validate that bucket operation on non-existent bucket fails.
-func testNonExistantBucketOperations(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testNonExistentBucketOperations(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	var opts ObjectOptions
 	_, err := obj.PutObject(context.Background(), "bucket1", "object", mustGetPutObjReader(t, bytes.NewBufferString("one"), int64(len("one")), "", ""), opts)
 	if err == nil {
@@ -529,7 +529,7 @@ func enableCompression(t *testing.T, encrypt bool) {
 	}
 }
 
-func enableEncrytion(t *testing.T) {
+func enableEncryption(t *testing.T) {
 	// Exec with default settings...
 	globalCompressConfigMu.Lock()
 	globalCompressConfig.Enabled = false
@@ -572,7 +572,7 @@ func execExtended(t *testing.T, fn func(t *testing.T)) {
 
 	t.Run("encrypted", func(t *testing.T) {
 		resetCompressEncryption()
-		enableEncrytion(t)
+		enableEncryption(t)
 		fn(t)
 	})
 
@@ -760,13 +760,13 @@ func testListBucketsOrder(obj ObjectLayer, instanceType string, t TestErrHandler
 	}
 }
 
-// Wrapper for calling testListObjectsTestsForNonExistantBucket for both Erasure and FS.
-func TestListObjectsTestsForNonExistantBucket(t *testing.T) {
-	ExecObjectLayerTest(t, testListObjectsTestsForNonExistantBucket)
+// Wrapper for calling testListObjectsTestsForNonExistentBucket for both Erasure and FS.
+func TestListObjectsTestsForNonExistentBucket(t *testing.T) {
+	ExecObjectLayerTest(t, testListObjectsTestsForNonExistentBucket)
 }
 
 // Tests validate that ListObjects operation on a non-existent bucket fails as expected.
-func testListObjectsTestsForNonExistantBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testListObjectsTestsForNonExistentBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	result, err := obj.ListObjects(context.Background(), "bucket", "", "", "", 1000)
 	if err == nil {
 		t.Fatalf("%s: Expected error but found nil.", instanceType)
@@ -782,13 +782,13 @@ func testListObjectsTestsForNonExistantBucket(obj ObjectLayer, instanceType stri
 	}
 }
 
-// Wrapper for calling testNonExistantObjectInBucket for both Erasure and FS.
-func TestNonExistantObjectInBucket(t *testing.T) {
-	ExecObjectLayerTest(t, testNonExistantObjectInBucket)
+// Wrapper for calling testNonExistentObjectInBucket for both Erasure and FS.
+func TestNonExistentObjectInBucket(t *testing.T) {
+	ExecObjectLayerTest(t, testNonExistentObjectInBucket)
 }
 
 // Tests validate that GetObject fails on a non-existent bucket as expected.
-func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testNonExistentObjectInBucket(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	err := obj.MakeBucket(context.Background(), "bucket", MakeBucketOptions{})
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)

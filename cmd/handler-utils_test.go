@@ -32,7 +32,7 @@ import (
 )
 
 // Tests validate bucket LocationConstraint.
-func TestIsValidLocationContraint(t *testing.T) {
+func TestIsValidLocationConstraint(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
