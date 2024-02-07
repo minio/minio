@@ -153,7 +153,7 @@ var s3IsRequestedTests = []struct {
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: true},                // 0
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES-256"}}, Expected: true},               // 1
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{""}}, Expected: true},                      // 2
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, Expected: false},                // 3
+	{Header: http.Header{"X-Amz-Server-Side-Encryptio": []string{"AES256"}}, Expected: false},                // 3
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{xhttp.AmzEncryptionKMS}}, Expected: false}, // 4
 }
 
@@ -172,7 +172,7 @@ var s3ParseTests = []struct {
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, ExpectedErr: nil},                         // 0
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES-256"}}, ExpectedErr: ErrInvalidEncryptionMethod}, // 1
 	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{""}}, ExpectedErr: ErrInvalidEncryptionMethod},        // 2
-	{Header: http.Header{"X-Amz-Server-Side-Encryption": []string{"AES256"}}, ExpectedErr: ErrInvalidEncryptionMethod},   // 3
+	{Header: http.Header{"X-Amz-Server-Side-Encryptio": []string{"AES256"}}, ExpectedErr: ErrInvalidEncryptionMethod},   // 3
 }
 
 func TestS3Parse(t *testing.T) {
