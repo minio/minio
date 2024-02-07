@@ -30,6 +30,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -883,12 +884,13 @@ func (s *peerRESTServer) TraceHandler(ctx context.Context, payload []byte, _ <-c
 	if err != nil {
 		return grid.NewRemoteErr(err)
 	}
+	var wg sync.WaitGroup
 
 	// Trace Publisher uses nonblocking publish and hence does not wait for slow subscribers.
 	// Use buffered channel to take care of burst sends or slow w.Write()
 	err = globalTrace.SubscribeJSON(traceOpts.TraceTypes(), out, ctx.Done(), func(entry madmin.TraceInfo) bool {
 		return shouldTrace(entry, traceOpts)
-	})
+	}, &wg)
 	if err != nil {
 		return grid.NewRemoteErr(err)
 	}
@@ -897,8 +899,9 @@ func (s *peerRESTServer) TraceHandler(ctx context.Context, payload []byte, _ <-c
 	if traceOpts.TraceTypes().Contains(madmin.TraceBootstrap) {
 		go globalBootstrapTracer.Publish(ctx, globalTrace)
 	}
-	// Wait for remote to cancel.
-	<-ctx.Done()
+
+	// Wait for remote to cancel and SubscribeJSON to exit.
+	wg.Wait()
 	return nil
 }
 
