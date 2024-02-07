@@ -75,7 +75,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		inputData      []byte
 		inputMeta      map[string]string
 		inputSHA256    string
-		inputDataSize int64
+		inputDataSize  int64
 		// expected error output.
 		expectedMd5   string
 		expectedError error
@@ -247,7 +247,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		objName        string
 		inputData      []byte
 		inputMeta      map[string]string
-		inputDataSize int64
+		inputDataSize  int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
@@ -295,7 +295,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		objName        string
 		inputData      []byte
 		inputMeta      map[string]string
-		inputDataSize int64
+		inputDataSize  int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
