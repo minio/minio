@@ -305,19 +305,21 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 
 	cancelList()
 	wg.Wait()
+
+	// we should return 'errs' from per disk
+	if isAllNotFound(errs) {
+		if isAllVolumeNotFound(errs) {
+			return errVolumeNotFound
+		}
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}
 
 	if contextCanceled(ctx) {
 		return ctx.Err()
-	}
-
-	if isAllNotFound(errs) {
-		if isAllVolumeNotFound(errs) {
-			return errVolumeNotFound
-		}
-		return nil
 	}
 
 	for _, err := range errs {
