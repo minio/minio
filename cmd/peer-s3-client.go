@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	grid "github.com/minio/minio/internal/grid"
+	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -400,7 +400,7 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 
 	volInfo, err := headBucketHandler.Call(ctx, conn, mss)
 	if err != nil {
-		return BucketInfo{}, err
+		return BucketInfo{}, toStorageErr(err)
 	}
 
 	return BucketInfo{
