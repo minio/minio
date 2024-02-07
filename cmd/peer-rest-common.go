@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v36" // Rewrite VerifyBinaryHandler()
+	peerRESTVersion       = "v37" // Convert RPC calls
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
@@ -26,60 +26,21 @@ const (
 
 const (
 	peerRESTMethodHealth                      = "/health"
-	peerRESTMethodServerInfo                  = "/serverinfo"
-	peerRESTMethodLocalStorageInfo            = "/localstorageinfo"
-	peerRESTMethodCPUInfo                     = "/cpuinfo"
-	peerRESTMethodDiskHwInfo                  = "/diskhwinfo"
-	peerRESTMethodNetHwInfo                   = "/nethwinfo"
-	peerRESTMethodOsInfo                      = "/osinfo"
-	peerRESTMethodMemInfo                     = "/meminfo"
-	peerRESTMethodProcInfo                    = "/procinfo"
-	peerRESTMethodSysErrors                   = "/syserrors"
-	peerRESTMethodSysServices                 = "/sysservices"
-	peerRESTMethodSysConfig                   = "/sysconfig"
-	peerRESTMethodDeleteBucketMetadata        = "/deletebucketmetadata"
-	peerRESTMethodLoadBucketMetadata          = "/loadbucketmetadata"
-	peerRESTMethodGetBucketStats              = "/getbucketstats"
-	peerRESTMethodGetAllBucketStats           = "/getallbucketstats"
 	peerRESTMethodVerifyBinary                = "/verifybinary"
 	peerRESTMethodCommitBinary                = "/commitbinary"
 	peerRESTMethodSignalService               = "/signalservice"
 	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
 	peerRESTMethodGetLocks                    = "/getlocks"
-	peerRESTMethodLoadUser                    = "/loaduser"
-	peerRESTMethodLoadServiceAccount          = "/loadserviceaccount"
-	peerRESTMethodDeleteUser                  = "/deleteuser"
-	peerRESTMethodDeleteServiceAccount        = "/deleteserviceaccount"
-	peerRESTMethodLoadPolicy                  = "/loadpolicy"
-	peerRESTMethodLoadPolicyMapping           = "/loadpolicymapping"
-	peerRESTMethodDeletePolicy                = "/deletepolicy"
-	peerRESTMethodLoadGroup                   = "/loadgroup"
 	peerRESTMethodStartProfiling              = "/startprofiling"
 	peerRESTMethodDownloadProfilingData       = "/downloadprofilingdata"
-	peerRESTMethodCycleBloom                  = "/cyclebloom"
-	peerRESTMethodTrace                       = "/trace"
-	peerRESTMethodListen                      = "/listen"
-	peerRESTMethodLog                         = "/log"
-	peerRESTMethodGetLocalDiskIDs             = "/getlocaldiskids"
 	peerRESTMethodGetBandwidth                = "/bandwidth"
-	peerRESTMethodGetMetacacheListing         = "/getmetacache"
-	peerRESTMethodUpdateMetacacheListing      = "/updatemetacache"
-	peerRESTMethodGetPeerMetrics              = "/peermetrics"
-	peerRESTMethodGetPeerBucketMetrics        = "/peerbucketmetrics"
-	peerRESTMethodLoadTransitionTierConfig    = "/loadtransitiontierconfig"
 	peerRESTMethodSpeedTest                   = "/speedtest"
 	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
 	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
-	peerRESTMethodReloadPoolMeta              = "/reloadpoolmeta"
-	peerRESTMethodLoadRebalanceMeta           = "/loadrebalancemeta"
-	peerRESTMethodStopRebalance               = "/stoprebalance"
 	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
-	peerRESTMethodMetrics                     = "/metrics"
-	peerRESTMethodResourceMetrics             = "/resourcemetrics"
 	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
-	peerRESTMethodGetSRMetrics                = "/getsrmetrics"
 )
 
 const (
@@ -117,4 +78,5 @@ const (
 	peerRESTListenPrefix = "prefix"
 	peerRESTListenSuffix = "suffix"
 	peerRESTListenEvents = "events"
+	peerRESTLogMask      = "log-mask"
 )

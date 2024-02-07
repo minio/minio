@@ -72,14 +72,15 @@ func _() {
 	_ = x[HandlerUpdateMetacacheListing-61]
 	_ = x[HandlerGetPeerBucketMetrics-62]
 	_ = x[HandlerStorageInfo-63]
-	_ = x[handlerTest-64]
-	_ = x[handlerTest2-65]
-	_ = x[handlerLast-66]
+	_ = x[HandlerConsoleLog-64]
+	_ = x[handlerTest-65]
+	_ = x[handlerTest2-66]
+	_ = x[handlerLast-67]
 }
 
-const _HandlerID_name = "handlerInvalidLockLockLockRLockLockUnlockLockRUnlockLockRefreshLockForceUnlockWalkDirStatVolDiskInfoNSScannerReadXLReadVersionDeleteFileDeleteVersionUpdateMetadataWriteMetadataCheckPartsRenameDataRenameFileReadAllServerVerifyTraceListenGetLocalDiskIDsDeleteBucketMetadataLoadBucketMetadataReloadSiteReplicationConfigReloadPoolMetaStopRebalanceLoadRebalanceMetaLoadTransitionTierConfigDeletePolicyLoadPolicyLoadPolicyMappingDeleteServiceAccountLoadServiceAccountDeleteUserLoadUserLoadGroupHealBucketMakeBucketHeadBucketDeleteBucketGetMetricsGetResourceMetricsGetMemInfoGetProcInfoGetOSInfoGetPartitionsGetNetInfoGetCPUsServerInfoGetSysConfigGetSysServicesGetSysErrorsGetAllBucketStatsGetBucketStatsGetSRMetricsGetPeerMetricsGetMetacacheListingUpdateMetacacheListingGetPeerBucketMetricsStorageInfohandlerTesthandlerTest2handlerLast"
+const _HandlerID_name = "handlerInvalidLockLockLockRLockLockUnlockLockRUnlockLockRefreshLockForceUnlockWalkDirStatVolDiskInfoNSScannerReadXLReadVersionDeleteFileDeleteVersionUpdateMetadataWriteMetadataCheckPartsRenameDataRenameFileReadAllServerVerifyTraceListenGetLocalDiskIDsDeleteBucketMetadataLoadBucketMetadataReloadSiteReplicationConfigReloadPoolMetaStopRebalanceLoadRebalanceMetaLoadTransitionTierConfigDeletePolicyLoadPolicyLoadPolicyMappingDeleteServiceAccountLoadServiceAccountDeleteUserLoadUserLoadGroupHealBucketMakeBucketHeadBucketDeleteBucketGetMetricsGetResourceMetricsGetMemInfoGetProcInfoGetOSInfoGetPartitionsGetNetInfoGetCPUsServerInfoGetSysConfigGetSysServicesGetSysErrorsGetAllBucketStatsGetBucketStatsGetSRMetricsGetPeerMetricsGetMetacacheListingUpdateMetacacheListingGetPeerBucketMetricsStorageInfoConsoleLoghandlerTesthandlerTest2handlerLast"
 
-var _HandlerID_index = [...]uint16{0, 14, 22, 31, 41, 52, 63, 78, 85, 92, 100, 109, 115, 126, 136, 149, 163, 176, 186, 196, 206, 213, 225, 230, 236, 251, 271, 289, 316, 330, 343, 360, 384, 396, 406, 423, 443, 461, 471, 479, 488, 498, 508, 518, 530, 540, 558, 568, 579, 588, 601, 611, 618, 628, 640, 654, 666, 683, 697, 709, 723, 742, 764, 784, 795, 806, 818, 829}
+var _HandlerID_index = [...]uint16{0, 14, 22, 31, 41, 52, 63, 78, 85, 92, 100, 109, 115, 126, 136, 149, 163, 176, 186, 196, 206, 213, 225, 230, 236, 251, 271, 289, 316, 330, 343, 360, 384, 396, 406, 423, 443, 461, 471, 479, 488, 498, 508, 518, 530, 540, 558, 568, 579, 588, 601, 611, 618, 628, 640, 654, 666, 683, 697, 709, 723, 742, 764, 784, 795, 805, 816, 828, 839}
 
 func (i HandlerID) String() string {
 	if i >= HandlerID(len(_HandlerID_index)-1) {

@@ -37,7 +37,6 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
-	"github.com/minio/pkg/v2/logger/message/log"
 	xnet "github.com/minio/pkg/v2/net"
 )
 
@@ -608,48 +607,31 @@ func (client *peerRESTClient) Trace(ctx context.Context, traceCh chan<- []byte, 
 	}()
 }
 
-func (client *peerRESTClient) doConsoleLog(logCh chan log.Info, doneCh <-chan struct{}) {
-	// To cancel the REST request in case doneCh gets closed.
-	ctx, cancel := context.WithCancel(GlobalContext)
-
-	cancelCh := make(chan struct{})
-	defer close(cancelCh)
-	go func() {
-		select {
-		case <-doneCh:
-		case <-cancelCh:
-			// There was an error in the REST request.
-		}
-		cancel()
-	}()
-
-	respBody, err := client.callWithContext(ctx, peerRESTMethodLog, nil, nil, -1)
-	defer xhttp.DrainBody(respBody)
+func (client *peerRESTClient) doConsoleLog(ctx context.Context, kind madmin.LogMask, logCh chan<- []byte) {
+	st, err := consoleLogRPC.Call(ctx, client.gridConn(), grid.NewMSSWith(map[string]string{
+		peerRESTLogMask: strconv.Itoa(int(kind)),
+	}))
 	if err != nil {
 		return
 	}
-
-	dec := gob.NewDecoder(respBody)
-	for {
-		var lg log.Info
-		if err = dec.Decode(&lg); err != nil {
-			break
-		}
+	st.Results(func(b *grid.Bytes) error {
 		select {
-		case logCh <- lg:
+		case logCh <- *b:
 		default:
+			consoleLogRPC.PutResponse(b)
 			// Do not block on slow receivers.
 		}
-	}
+		return nil
+	})
 }
 
 // ConsoleLog - sends request to peer nodes to get console logs
-func (client *peerRESTClient) ConsoleLog(logCh chan log.Info, doneCh <-chan struct{}) {
+func (client *peerRESTClient) ConsoleLog(ctx context.Context, kind madmin.LogMask, logCh chan<- []byte) {
 	go func() {
 		for {
-			client.doConsoleLog(logCh, doneCh)
+			client.doConsoleLog(ctx, kind, logCh)
 			select {
-			case <-doneCh:
+			case <-ctx.Done():
 				return
 			default:
 				// There was error in the REST request, retry after sometime as probably the peer is down.

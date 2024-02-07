@@ -116,8 +116,9 @@ var (
 	updateMetacacheListingRPC      = grid.NewSingleHandler[*metacache, *metacache](grid.HandlerUpdateMetacacheListing, func() *metacache { return &metacache{} }, func() *metacache { return &metacache{} })
 
 	// STREAMS
-	// Set an output capacity of 100 for listenRPC
+	// Set an output capacity of 100 for consoleLog and listenRPC
 	// There is another buffer that will buffer events.
+	consoleLogRPC         = grid.NewStream[*grid.MSS, grid.NoPayload, *grid.Bytes](grid.HandlerConsoleLog, grid.NewMSS, nil, grid.NewBytes).WithOutCapacity(100)
 	listenRPC             = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen, grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
 	getResourceMetricsRPC = grid.NewStream[*grid.MSS, grid.NoPayload, *Metric](grid.HandlerGetResourceMetrics, grid.NewMSS, nil, func() *Metric { return &Metric{} })
 )
@@ -1005,46 +1006,34 @@ func (s *peerRESTServer) LoadTransitionTierConfigHandler(mss *grid.MSS) (np grid
 }
 
 // ConsoleLogHandler sends console logs of this node back to peer rest client
-func (s *peerRESTServer) ConsoleLogHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		s.writeErrorResponse(w, errors.New("Invalid request"))
-		return
-	}
-
-	doneCh := make(chan struct{})
-	defer xioutil.SafeClose(doneCh)
-
-	ch := make(chan log.Info, 100000)
-	err := globalConsoleSys.Subscribe(ch, doneCh, "", 0, madmin.LogMaskAll, nil)
+func (s *peerRESTServer) ConsoleLogHandler(ctx context.Context, params *grid.MSS, out chan<- *grid.Bytes) *grid.RemoteErr {
+	mask, err := strconv.Atoi(params.Get(peerRESTLogMask))
 	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
+		mask = int(madmin.LogMaskAll)
 	}
-	keepAliveTicker := time.NewTicker(time.Second)
-	defer keepAliveTicker.Stop()
-
-	enc := gob.NewEncoder(w)
+	ch := make(chan log.Info, 1000)
+	err = globalConsoleSys.Subscribe(ch, ctx.Done(), "", 0, madmin.LogMask(mask), nil)
+	if err != nil {
+		return grid.NewRemoteErr(err)
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	for {
 		select {
 		case entry, ok := <-ch:
 			if !ok {
-				return
+				return grid.NewRemoteErrString("console log channel closed")
 			}
+			if !entry.SendLog("", madmin.LogMask(mask)) {
+				continue
+			}
+			buf.Reset()
 			if err := enc.Encode(entry); err != nil {
-				return
+				return grid.NewRemoteErr(err)
 			}
-			if len(ch) == 0 {
-				w.(http.Flusher).Flush()
-			}
-		case <-keepAliveTicker.C:
-			if len(ch) == 0 {
-				if err := enc.Encode(&madmin.LogInfo{}); err != nil {
-					return
-				}
-				w.(http.Flusher).Flush()
-			}
-		case <-r.Context().Done():
-			return
+			out <- grid.NewBytesWithCopyOf(buf.Bytes())
+		case <-ctx.Done():
+			return grid.NewRemoteErr(ctx.Err())
 		}
 	}
 }
@@ -1374,7 +1363,6 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodStartProfiling).HandlerFunc(h(server.StartProfilingHandler)).Queries(restQueries(peerRESTProfiler)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDownloadProfilingData).HandlerFunc(h(server.DownloadProfilingDataHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodBackgroundHealStatus).HandlerFunc(server.BackgroundHealStatusHandler)
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLog).HandlerFunc(server.ConsoleLogHandler)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetBandwidth).HandlerFunc(h(server.GetBandwidth))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodSpeedTest).HandlerFunc(h(server.SpeedTestHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDriveSpeedTest).HandlerFunc(h(server.DriveSpeedTestHandler))
@@ -1382,6 +1370,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodDevNull).HandlerFunc(h(server.DevNull))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLastDayTierStats).HandlerFunc(h(server.GetLastDayTierStatsHandler))
 
+	logger.FatalIf(consoleLogRPC.RegisterNoInput(gm, server.ConsoleLogHandler), "unable to register handler")
 	logger.FatalIf(deleteBucketMetadataRPC.Register(gm, server.DeleteBucketMetadataHandler), "unable to register handler")
 	logger.FatalIf(deleteBucketRPC.Register(gm, server.DeleteBucketHandler), "unable to register handler")
 	logger.FatalIf(deletePolicyRPC.Register(gm, server.DeletePolicyHandler), "unable to register handler")

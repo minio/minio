@@ -102,6 +102,7 @@ const (
 	HandlerUpdateMetacacheListing
 	HandlerGetPeerBucketMetrics
 	HandlerStorageInfo
+	HandlerConsoleLog
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -177,6 +178,7 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerUpdateMetacacheListing:      peerPrefix,
 	HandlerGetPeerBucketMetrics:        peerPrefix,
 	HandlerStorageInfo:                 peerPrefix,
+	HandlerConsoleLog:                  peerPrefix,
 }
 
 const (
