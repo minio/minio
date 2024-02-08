@@ -21,6 +21,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -58,14 +59,16 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var out bytes.Buffer
+	json.Indent(&out, body, "", "  ")
+	fmt.Printf("Received JSON payload:\n%s\n", out.String())
+
 	reqMap := make(map[string]interface{})
 	err = json.Unmarshal(body, &reqMap)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
 	}
-
-	// fmt.Printf("request: %#v\n", reqMap)
 
 	m := reqMap["input"].(map[string]interface{})
 	accountValue := m["account"].(string)
