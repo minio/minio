@@ -1840,12 +1840,6 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 		}
 	}
 
-	if err != nil && !isErrBucketNotFound(err) {
-		if !opts.NoRecreate {
-			z.s3Peer.MakeBucket(ctx, bucket, MakeBucketOptions{})
-		}
-	}
-
 	if err == nil {
 		// Purge the entire bucket metadata entirely.
 		z.deleteAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))

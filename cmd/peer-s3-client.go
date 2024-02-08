@@ -474,9 +474,12 @@ func (sys *S3PeerSys) DeleteBucket(ctx context.Context, bucket string, opts Dele
 				perPoolErrs = append(perPoolErrs, errs[i])
 			}
 		}
-		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1); poolErr != nil && poolErr != errVolumeNotFound {
-			// re-create successful deletes, since we are return an error.
-			sys.MakeBucket(ctx, bucket, MakeBucketOptions{})
+		poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1)
+		if poolErr != nil && !errors.Is(poolErr, errVolumeNotFound) {
+			if !opts.NoRecreate {
+				// re-create successful deletes, since we are return an error.
+				sys.MakeBucket(ctx, bucket, MakeBucketOptions{})
+			}
 			return toObjectErr(poolErr, bucket)
 		}
 	}
