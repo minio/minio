@@ -460,6 +460,7 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		index := index
+		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerNotReachable
