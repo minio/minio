@@ -1587,6 +1587,18 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		c.clientPingInterval = args[0].(time.Duration)
 	case debugAddToDeadline:
 		c.addDeadline = args[0].(time.Duration)
+	case debugIsOutgoingClosed:
+		// params: muxID uint64, isClosed func(bool)
+		muxID := args[0].(uint64)
+		resp := args[1].(func(b bool))
+		mid, ok := c.outgoing.Load(muxID)
+		if !ok || mid == nil {
+			resp(true)
+			return
+		}
+		mid.respMu.Lock()
+		resp(mid.closed)
+		mid.respMu.Unlock()
 	}
 }
 

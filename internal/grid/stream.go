@@ -41,7 +41,8 @@ type Stream struct {
 	// Requests sent cannot be used any further by the called.
 	Requests chan<- []byte
 
-	ctx context.Context
+	muxID uint64
+	ctx   context.Context
 }
 
 // Send a payload to the remote server.

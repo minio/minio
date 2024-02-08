@@ -372,6 +372,12 @@ func TestStreamSuite(t *testing.T) {
 		assertNoActive(t, connRemoteLocal)
 		assertNoActive(t, connLocalToRemote)
 	})
+	t.Run("testServerStreamResponseBlocked", func(t *testing.T) {
+		defer timeout(1 * time.Minute)()
+		testServerStreamResponseBlocked(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
+	})
 }
 
 func testStreamRoundtrip(t *testing.T, local, remote *Manager) {
@@ -927,6 +933,96 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 
 	errFatal(err)
 	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
+}
+
+// testServerStreamResponseBlocked will test if server can handle a blocked response stream
+func testServerStreamResponseBlocked(t *testing.T, local, remote *Manager) {
+	defer testlogger.T.SetErrorTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// We fake a local and remote server.
+	remoteHost := remote.HostName()
+
+	// 1: Echo
+	serverSent := make(chan struct{})
+	serverCanceled := make(chan struct{})
+	register := func(manager *Manager) {
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
+			Handle: func(ctx context.Context, payload []byte, _ <-chan []byte, resp chan<- []byte) *RemoteErr {
+				// Send many responses.
+				// Test that this doesn't block.
+				for i := byte(0); i < 100; i++ {
+					select {
+					case resp <- []byte{i}:
+					// ok
+					case <-ctx.Done():
+						close(serverCanceled)
+						return NewRemoteErr(ctx.Err())
+					}
+					if i == 1 {
+						close(serverSent)
+					}
+				}
+				return nil
+			},
+			OutCapacity: 1,
+			InCapacity:  0,
+		}))
+	}
+	register(local)
+	register(remote)
+
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+	errFatal(err)
+
+	// Wait for the server to send the first response.
+	<-serverSent
+
+	// Read back from the stream and block.
+	nowBlocking := make(chan struct{})
+	stopBlocking := make(chan struct{})
+	defer close(stopBlocking)
+	go func() {
+		st.Results(func(b []byte) error {
+			close(nowBlocking)
+			// Block until test is done.
+			<-stopBlocking
+			return nil
+		})
+	}()
+
+	<-nowBlocking
+	// Wait for the receiver channel to fill.
+	for len(st.responses) != cap(st.responses) {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-serverCanceled
+	local.debugMsg(debugIsOutgoingClosed, st.muxID, func(closed bool) {
+		if !closed {
+			t.Error("expected outgoing closed")
+		} else {
+			t.Log("outgoing was closed")
+		}
+	})
+
+	// Drain responses and check if error propagated.
+	err = st.Results(func(b []byte) error {
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Error("expected context.Canceled, got", err)
+	}
 }
 
 func timeout(after time.Duration) (cancel func()) {
