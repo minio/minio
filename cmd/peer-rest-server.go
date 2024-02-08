@@ -328,7 +328,20 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	ctx := newContext(r, w, "ServerInfo")
-	info := getLocalServerProperty(globalEndpoints, r)
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	metrics, err := strconv.ParseBool(r.Form.Get(peerRESTMetrics))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+
+	}
+
+	info := getLocalServerProperty(globalEndpoints, r, metrics)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }

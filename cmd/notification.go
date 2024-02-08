@@ -1080,7 +1080,7 @@ func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer, metrics bool) Stor
 }
 
 // ServerInfo - calls ServerInfo RPC call on all peers.
-func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
+func (sys *NotificationSys) ServerInfo(metrics bool) []madmin.ServerProperties {
 	reply := make([]madmin.ServerProperties, len(sys.peerClients))
 	var wg sync.WaitGroup
 	for i, client := range sys.peerClients {
@@ -1090,7 +1090,7 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
-			info, err := client.ServerInfo()
+			info, err := client.ServerInfo(metrics)
 			if err != nil {
 				info.Endpoint = client.host.String()
 				info.State = string(madmin.ItemOffline)

@@ -34,7 +34,7 @@ import (
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
 // local endpoints from given list of endpoints
-func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerProperties {
+func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request, metrics bool) madmin.ServerProperties {
 	addr := globalLocalNodeName
 	if r != nil {
 		addr = r.Host
@@ -141,7 +141,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 
 	objLayer := newObjectLayerFn()
 	if objLayer != nil {
-		storageInfo := objLayer.LocalStorageInfo(GlobalContext, true)
+		storageInfo := objLayer.LocalStorageInfo(GlobalContext, metrics)
 		props.State = string(madmin.ItemOnline)
 		props.Disks = storageInfo.Disks
 	} else {

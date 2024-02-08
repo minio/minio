@@ -301,10 +301,10 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 	// to read the metadata entry.
 	var uploads []MultipartInfo
 
-	populatedUploadIds := set.NewStringSet()
+	populatedUploadIDs := set.NewStringSet()
 
 	for _, uploadID := range uploadIDs {
-		if populatedUploadIds.Contains(uploadID) {
+		if populatedUploadIDs.Contains(uploadID) {
 			continue
 		}
 		// If present, use time stored in ID.
@@ -321,7 +321,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
 			Initiated: startTime,
 		})
-		populatedUploadIds.Add(uploadID)
+		populatedUploadIDs.Add(uploadID)
 	}
 
 	sort.Slice(uploads, func(i int, j int) bool {

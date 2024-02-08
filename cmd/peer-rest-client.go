@@ -178,7 +178,10 @@ func (client *peerRESTClient) LocalStorageInfo(metrics bool) (info StorageInfo, 
 }
 
 // ServerInfo - fetch server information for a remote node.
-func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err error) {
+func (client *peerRESTClient) ServerInfo(metrics bool) (info madmin.ServerProperties, err error) {
+	values := make(url.Values)
+	values.Set(peerRESTMetrics, strconv.FormatBool(metrics))
+
 	respBody, err := client.call(peerRESTMethodServerInfo, nil, nil, -1)
 	if err != nil {
 		return
