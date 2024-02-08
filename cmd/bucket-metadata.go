@@ -182,26 +182,34 @@ func loadBucketMetadataParse(ctx context.Context, objectAPI ObjectLayer, bucket 
 		b.defaultTimestamps()
 	}
 
-	configs, err := b.getAllLegacyConfigs(ctx, objectAPI)
-	if err != nil {
-		return b, err
+	// If bucket metadata is missing look for legacy files,
+	// since we only ever had b.Created as non-zero when
+	// migration was complete in 2020-May release. So this
+	// a check to avoid migrating for buckets that already
+	// have this field set.
+	if b.Created.IsZero() {
+		configs, err := b.getAllLegacyConfigs(ctx, objectAPI)
+		if err != nil {
+			return b, err
+		}
+
+		if len(configs) > 0 {
+			// Old bucket without bucket metadata. Hence we migrate existing settings.
+			if err = b.convertLegacyConfigs(ctx, objectAPI, configs); err != nil {
+				return b, err
+			}
+		}
 	}
 
-	if len(configs) == 0 {
-		if parse {
-			// nothing to update, parse and proceed.
-			err = b.parseAllConfigs(ctx, objectAPI)
+	if parse {
+		// nothing to update, parse and proceed.
+		if err = b.parseAllConfigs(ctx, objectAPI); err != nil {
+			return b, err
 		}
-	} else {
-		// Old bucket without bucket metadata. Hence we migrate existing settings.
-		err = b.convertLegacyConfigs(ctx, objectAPI, configs)
-	}
-	if err != nil {
-		return b, err
 	}
 
 	// migrate unencrypted remote targets
-	if err := b.migrateTargetConfig(ctx, objectAPI); err != nil {
+	if err = b.migrateTargetConfig(ctx, objectAPI); err != nil {
 		return b, err
 	}
 
@@ -331,7 +339,7 @@ func (b *BucketMetadata) getAllLegacyConfigs(ctx context.Context, objectAPI Obje
 	for _, legacyFile := range legacyConfigs {
 		configFile := path.Join(bucketMetaPrefix, b.Name, legacyFile)
 
-		configData, err := readConfig(ctx, objectAPI, configFile)
+		configData, info, err := readConfigWithMetadata(ctx, objectAPI, configFile, ObjectOptions{})
 		if err != nil {
 			if _, ok := err.(ObjectExistsAsDirectory); ok {
 				// in FS mode it possible that we have actual
@@ -346,6 +354,7 @@ func (b *BucketMetadata) getAllLegacyConfigs(ctx context.Context, objectAPI Obje
 			return nil, err
 		}
 		configs[legacyFile] = configData
+		b.Created = info.ModTime
 	}
 
 	return configs, nil
