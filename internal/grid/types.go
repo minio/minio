@@ -586,11 +586,12 @@ func (p *ArrayOf[T]) NewWith(val []T) *Array[T] {
 }
 
 func (p *ArrayOf[T]) newA(sz uint32) []T {
-	t := p.aPool.Get().([]T)
-	if t == nil {
+	t, ok := p.aPool.Get().(*[]T)
+	if !ok || t == nil {
 		return make([]T, 0, sz)
 	}
-	return t[:0]
+	t2 := *t
+	return t2[:0]
 }
 
 func (p *ArrayOf[T]) putA(v []T) {
@@ -599,8 +600,7 @@ func (p *ArrayOf[T]) putA(v []T) {
 	}
 	if v != nil {
 		v = v[:0]
-		//staticcheck:ignore SA6002
-		p.aPool.Put(v)
+		p.aPool.Put(&v)
 	}
 }
 
