@@ -160,9 +160,10 @@ type serverCtxt struct {
 	FTP  []string
 	SFTP []string
 
-	UserTimeout       time.Duration
-	ConnReadDeadline  time.Duration
-	ConnWriteDeadline time.Duration
+	UserTimeout            time.Duration
+	ConnReadDeadline       time.Duration
+	ConnWriteDeadline      time.Duration
+	ConnClientReadDeadline time.Duration
 
 	ShutdownTimeout     time.Duration
 	IdleTimeout         time.Duration
