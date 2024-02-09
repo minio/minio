@@ -105,7 +105,6 @@ var ServerFlags = []cli.Flag{
 		Name:   "conn-client-read-deadline",
 		Usage:  "custom connection READ deadline for incoming requests",
 		Hidden: true,
-		Value:  3 * time.Minute,
 		EnvVar: "MINIO_CONN_CLIENT_READ_DEADLINE",
 	},
 	cli.DurationFlag{
