@@ -717,7 +717,7 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
-	done := keepHTTPResponseAlive(w)
+	done := keepHTTPResponseAlive(r.Context(), w)
 
 	opts := DeleteOptions{}
 	errs := s.getStorage().DeleteVersions(r.Context(), volume, versions, opts)
@@ -771,7 +771,7 @@ func (s *storageRESTServer) CleanAbandonedDataHandler(w http.ResponseWriter, r *
 	if volume == "" || filePath == "" {
 		return // Ignore
 	}
-	keepHTTPResponseAlive(w)(s.getStorage().CleanAbandonedData(r.Context(), volume, filePath))
+	keepHTTPResponseAlive(r.Context(), w)(s.getStorage().CleanAbandonedData(r.Context(), volume, filePath))
 }
 
 // closeNotifier is itself a ReadCloser that will notify when either an error occurs or
@@ -841,6 +841,9 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 		ticker := time.NewTicker(time.Second * 10)
 		for {
 			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
 				write([]byte{32})
@@ -884,7 +887,7 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 // An optional error can be sent which will be picked as text only error,
 // without its original type by the receiver.
 // waitForHTTPResponse should be used to the receiving side.
-func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
+func keepHTTPResponseAlive(ctx context.Context, w http.ResponseWriter) func(error) {
 	doneCh := make(chan error)
 	go func() {
 		canWrite := true
@@ -897,10 +900,13 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 			}
 		}
 		defer xioutil.SafeClose(doneCh)
+
 		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-ticker.C:
 				// Response not ready, write a filler byte.
 				write([]byte{32})
@@ -936,9 +942,13 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 // waitForHTTPResponse will wait for responses where keepHTTPResponseAlive
 // has been used.
 // The returned reader contains the payload.
-func waitForHTTPResponse(respBody io.Reader) (io.Reader, error) {
+func waitForHTTPResponse(ctx context.Context, respBody io.Reader) (io.Reader, error) {
 	reader := bufio.NewReader(respBody)
 	for {
+		if contextCanceled(ctx) {
+			return nil, ctx.Err()
+		}
+
 		b, err := reader.ReadByte()
 		if err != nil {
 			return nil, err
@@ -1144,7 +1154,7 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
-	done := keepHTTPResponseAlive(w)
+	done := keepHTTPResponseAlive(r.Context(), w)
 	err := s.getStorage().VerifyFile(r.Context(), volume, filePath, fi)
 	done(nil)
 	vresp := &VerifyFileResp{}
@@ -1261,7 +1271,7 @@ func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request)
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
 	glob := r.Form.Get(storageRESTGlob)
-	done := keepHTTPResponseAlive(w)
+	done := keepHTTPResponseAlive(r.Context(), w)
 	stats, err := s.getStorage().StatInfoFile(r.Context(), volume, filePath, glob == "true")
 	done(err)
 	if err != nil {

@@ -381,7 +381,7 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, origvolume, vol
 	if err != nil {
 		return err
 	}
-	_, err = waitForHTTPResponse(respBody)
+	_, err = waitForHTTPResponse(ctx, respBody)
 	return err
 }
 
@@ -675,7 +675,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 		return errs
 	}
 
-	reader, err := waitForHTTPResponse(respBody)
+	reader, err := waitForHTTPResponse(ctx, respBody)
 	if err != nil {
 		for i := range errs {
 			errs[i] = err
@@ -726,7 +726,7 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 		return err
 	}
 
-	respReader, err := waitForHTTPResponse(respBody)
+	respReader, err := waitForHTTPResponse(ctx, respBody)
 	if err != nil {
 		return err
 	}
@@ -749,7 +749,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 		return stat, err
 	}
 	defer xhttp.DrainBody(respBody)
-	respReader, err := waitForHTTPResponse(respBody)
+	respReader, err := waitForHTTPResponse(ctx, respBody)
 	if err != nil {
 		return stat, err
 	}
@@ -822,7 +822,7 @@ func (client *storageRESTClient) CleanAbandonedData(ctx context.Context, volume 
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
-	_, err = waitForHTTPResponse(respBody)
+	_, err = waitForHTTPResponse(ctx, respBody)
 	return err
 }
 

@@ -1283,7 +1283,7 @@ func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request
 		duration = time.Second * 10
 	}
 
-	done := keepHTTPResponseAlive(w)
+	done := keepHTTPResponseAlive(r.Context(), w)
 
 	result, err := selfSpeedTest(r.Context(), speedTestOpts{
 		objectSize:   size,
@@ -1350,7 +1350,7 @@ func (s *peerRESTServer) DriveSpeedTestHandler(w http.ResponseWriter, r *http.Re
 		FileSize:  fileSize,
 	}
 
-	done := keepHTTPResponseAlive(w)
+	done := keepHTTPResponseAlive(r.Context(), w)
 	result := driveSpeedTest(r.Context(), opts)
 	done(nil)
 

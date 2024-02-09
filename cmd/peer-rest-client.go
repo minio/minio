@@ -922,7 +922,7 @@ func (client *peerRESTClient) SpeedTest(ctx context.Context, opts speedTestOpts)
 		return SpeedTestResult{}, err
 	}
 	defer xhttp.DrainBody(respBody)
-	waitReader, err := waitForHTTPResponse(respBody)
+	waitReader, err := waitForHTTPResponse(ctx, respBody)
 	if err != nil {
 		return SpeedTestResult{}, err
 	}
@@ -951,7 +951,7 @@ func (client *peerRESTClient) DriveSpeedTest(ctx context.Context, opts madmin.Dr
 		return madmin.DriveSpeedTestResult{}, err
 	}
 	defer xhttp.DrainBody(respBody)
-	waitReader, err := waitForHTTPResponse(respBody)
+	waitReader, err := waitForHTTPResponse(ctx, respBody)
 	if err != nil {
 		return madmin.DriveSpeedTestResult{}, err
 	}
