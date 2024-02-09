@@ -2221,7 +2221,10 @@ func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]
 		return nil, errServerNotInitialized
 	}
 
-	z, _ := objectAPI.(*erasureServerPools)
+	z, ok := objectAPI.(*erasureServerPools)
+	if !ok {
+		return nil, errServerNotInitialized
+	}
 
 	poolsInfo := make(map[int]map[int]madmin.ErasureSetInfo)
 	for _, d := range allDisks {
@@ -2252,7 +2255,7 @@ func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]
 	return poolsInfo, nil
 }
 
-func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) madmin.InfoMessage {
+func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) madmin.InfoMessage {
 	ldap := madmin.LDAP{}
 	if globalIAMSys.LDAPConfig.Enabled() {
 		ldapConn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
@@ -2273,8 +2276,8 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 	// Get the notification target info
 	notifyTarget := fetchLambdaInfo()
 
-	local := getLocalServerProperty(globalEndpoints, r)
-	servers := globalNotificationSys.ServerInfo()
+	local := getLocalServerProperty(globalEndpoints, r, metrics)
+	servers := globalNotificationSys.ServerInfo(metrics)
 	servers = append(servers, local)
 
 	assignPoolNumbers(servers)
@@ -2328,7 +2331,7 @@ func getServerInfo(ctx context.Context, poolsInfoEnabled bool, r *http.Request) 
 			DrivesPerSet:     backendInfo.DrivesPerSet,
 		}
 
-		if poolsInfoEnabled {
+		if pools {
 			poolsInfo, _ = getPoolsInfo(ctx, allDisks)
 		}
 	}
@@ -2710,7 +2713,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		getAndWriteSysConfig()
 
 		if query.Get("minioinfo") == "true" {
-			infoMessage := getServerInfo(healthCtx, false, nil)
+			infoMessage := getServerInfo(healthCtx, false, true, nil)
 			servers := make([]madmin.ServerInfo, 0, len(infoMessage.Servers))
 			for _, server := range infoMessage.Servers {
 				anonEndpoint := anonAddr(server.Endpoint)
@@ -2898,8 +2901,10 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	metrics := r.Form.Get(peerRESTMetrics) == "true"
+
 	// Marshal API response
-	jsonBytes, err := json.Marshal(getServerInfo(ctx, true, r))
+	jsonBytes, err := json.Marshal(getServerInfo(ctx, true, metrics, r))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

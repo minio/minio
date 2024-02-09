@@ -270,16 +270,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
 
 	sys.Lock()
-	defer sys.Unlock()
-
 	sys.LDAPConfig = ldapConfig
 	sys.OpenIDConfig = openidConfig
 	sys.STSTLSConfig = stsTLSConfig
-
 	sys.iamRefreshInterval = iamRefreshInterval
-
 	// Initialize IAM store
 	sys.initStore(objAPI, etcdClient)
+	sys.Unlock()
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -529,7 +526,9 @@ func (sys *IAMSys) GetRolePolicy(arnStr string) (arn.ARN, string, error) {
 	return roleArn, rolePolicy, nil
 }
 
-// DeletePolicy - deletes a canned policy from backend or etcd.
+// DeletePolicy - deletes a canned policy from backend. `notifyPeers` is true
+// whenever this is called via the API. It is false when called via a
+// notification from another peer. This is to avoid infinite loops.
 func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
@@ -543,7 +542,7 @@ func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPe
 		}
 	}
 
-	err := sys.store.DeletePolicy(ctx, policyName)
+	err := sys.store.DeletePolicy(ctx, policyName, !notifyPeers)
 	if err != nil {
 		return err
 	}

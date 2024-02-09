@@ -170,8 +170,8 @@ func (client *peerRESTClient) LocalStorageInfo(metrics bool) (info StorageInfo, 
 }
 
 // ServerInfo - fetch server information for a remote node.
-func (client *peerRESTClient) ServerInfo() (info madmin.ServerProperties, err error) {
-	resp, err := serverInfoRPC.Call(context.Background(), client.gridConn(), grid.NewMSS())
+func (client *peerRESTClient) ServerInfo(metrics bool) (info madmin.ServerProperties, err error) {
+	resp, err := serverInfoRPC.Call(context.Background(), client.gridConn(), grid.NewMSSWith(map[string]string{peerRESTMetrics: strconv.FormatBool(metrics)}))
 	return resp.ValueOrZero(), err
 }
 

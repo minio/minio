@@ -362,9 +362,13 @@ func (s *peerRESTServer) LocalStorageInfoHandler(mss *grid.MSS) (*grid.JSON[madm
 }
 
 // ServerInfoHandler - returns Server Info
-func (s *peerRESTServer) ServerInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.ServerProperties], *grid.RemoteErr) {
+func (s *peerRESTServer) ServerInfoHandler(params *grid.MSS) (*grid.JSON[madmin.ServerProperties], *grid.RemoteErr) {
 	r := http.Request{Host: globalMinioHost}
-	info := getLocalServerProperty(globalEndpoints, &r)
+	metrics, err := strconv.ParseBool(params.Get(peerRESTMetrics))
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+	info := getLocalServerProperty(globalEndpoints, &r, metrics)
 	return madminServerProperties.NewJSONWith(&info), nil
 }
 

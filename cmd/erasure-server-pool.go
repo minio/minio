@@ -1840,12 +1840,6 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 		}
 	}
 
-	if err != nil && !isErrBucketNotFound(err) {
-		if !opts.NoRecreate {
-			z.s3Peer.MakeBucket(ctx, bucket, MakeBucketOptions{})
-		}
-	}
-
 	if err == nil {
 		// Purge the entire bucket metadata entirely.
 		z.deleteAll(context.Background(), minioMetaBucket, pathJoin(bucketMetaPrefix, bucket))
@@ -1958,11 +1952,7 @@ func (z *erasureServerPools) HealFormat(ctx context.Context, dryRun bool) (madmi
 }
 
 func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {
-	// Attempt heal on the bucket metadata, ignore any failures
-	hopts := opts
-	hopts.Recreate = false
-	defer z.HealObject(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, bucket, bucketMetadataFile), "", hopts)
-
+	// .metadata.bin healing is not needed here, it is automatically healed via read() call.
 	return z.s3Peer.HealBucket(ctx, bucket, opts)
 }
 

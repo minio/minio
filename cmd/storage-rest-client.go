@@ -313,7 +313,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 
 	infop, err := storageDiskInfoHandler.Call(ctx, client.gridConn, &opts)
 	if err != nil {
-		return info, err
+		return info, toStorageErr(err)
 	}
 	info = *infop
 	if info.Error != "" {
@@ -442,10 +442,6 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
 func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (sign uint64, err error) {
-	// Set a very long timeout for rename data.
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
 	resp, err := storageRenameDataHandler.Call(ctx, client.gridConn, &RenameDataHandlerParams{
 		DiskID:    client.diskID,
 		SrcVolume: srcVolume,
@@ -704,10 +700,6 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 
 // RenameFile - renames a file.
 func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
-	// Set a very long timeout for rename file
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
 	_, err = storageRenameFileHandler.Call(ctx, client.gridConn, &RenameFileHandlerParams{
 		DiskID:      client.diskID,
 		SrcVolume:   srcVolume,

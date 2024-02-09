@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v37" // Convert RPC calls
+	peerRESTVersion       = "v38" // Convert RPC calls
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
