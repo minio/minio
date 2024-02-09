@@ -18,7 +18,7 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v36" // Rewrite VerifyBinaryHandler()
+	peerRESTVersion       = "v37" // Add 'metrics' option for ServerInfo
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix

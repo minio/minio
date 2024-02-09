@@ -328,7 +328,19 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	ctx := newContext(r, w, "ServerInfo")
-	info := getLocalServerProperty(globalEndpoints, r)
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	metrics, err := strconv.ParseBool(r.Form.Get(peerRESTMetrics))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	info := getLocalServerProperty(globalEndpoints, r, metrics)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
@@ -1519,7 +1531,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter := router.PathPrefix(peerRESTPrefix).Subrouter()
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(h(server.GetLocksHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(h(server.ServerInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(h(server.ServerInfoHandler)).Queries(restQueries(peerRESTMetrics)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLocalStorageInfo).HandlerFunc(h(server.LocalStorageInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(h(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(h(server.GetMemInfoHandler))
