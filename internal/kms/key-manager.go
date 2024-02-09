@@ -20,7 +20,7 @@ package kms
 import (
 	"context"
 
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 )
 
 // KeyManager is the generic interface that handles KMS key operations
@@ -43,4 +43,8 @@ type KeyManager interface {
 	// EncryptKey Encrypts and authenticates a (small) plaintext with the cryptographic key
 	// The plaintext must not exceed 1 MB
 	EncryptKey(keyID string, plaintext []byte, context Context) ([]byte, error)
+
+	// HMAC computes the HMAC of the given msg and key with the given
+	// key ID.
+	HMAC(ctx context.Context, keyID string, msg []byte) ([]byte, error)
 }

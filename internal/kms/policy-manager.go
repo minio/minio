@@ -20,7 +20,7 @@ package kms
 import (
 	"context"
 
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 )
 
 // PolicyManager is the generic interface that handles KMS policy] operations
@@ -29,20 +29,9 @@ type PolicyManager interface {
 	// e.g. who created the policy at which point in time.
 	DescribePolicy(ctx context.Context, policy string) (*kes.PolicyInfo, error)
 
-	// AssignPolicy assigns a policy to an identity.
-	// An identity can have at most one policy while the same policy can be assigned to multiple identities.
-	// The assigned policy defines which API calls this identity can perform.
-	// It's not possible to assign a policy to the admin identity.
-	// Further, an identity cannot assign a policy to itself.
-	AssignPolicy(ctx context.Context, policy, identity string) error
-
 	// GetPolicy gets a policy from KMS.
 	GetPolicy(ctx context.Context, policy string) (*kes.Policy, error)
 
 	// ListPolicies lists all policies.
 	ListPolicies(ctx context.Context) (*kes.ListIter[string], error)
-
-	// DeletePolicy	deletes a policy from KMS.
-	// All identities that have been assigned to this policy will lose all authorization privileges.
-	DeletePolicy(ctx context.Context, policy string) error
 }

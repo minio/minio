@@ -28,7 +28,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/pkg/v2/certs"
 	"github.com/minio/pkg/v2/env"
 )
@@ -44,11 +44,6 @@ type Config struct {
 	// Endpoints contains a list of KMS server
 	// HTTP endpoints.
 	Endpoints []string
-
-	// Enclave is the KES server enclave. If empty,
-	// none resp. the default KES server enclave
-	// will be used.
-	Enclave string
 
 	// DefaultKeyID is the key ID used when
 	// no explicit key ID is specified for
@@ -106,7 +101,6 @@ func NewWithConfig(config Config) (KMS, error) {
 
 	c := &kesClient{
 		client:       client,
-		enclave:      client.Enclave(config.Enclave),
 		defaultKeyID: config.DefaultKeyID,
 	}
 	go func() {
@@ -138,7 +132,6 @@ func NewWithConfig(config Config) (KMS, error) {
 
 				c.lock.Lock()
 				c.client = client
-				c.enclave = c.client.Enclave(config.Enclave)
 				c.lock.Unlock()
 
 				prevCertificate = certificate
@@ -152,7 +145,6 @@ type kesClient struct {
 	lock         sync.RWMutex
 	defaultKeyID string
 	client       *kes.Client
-	enclave      *kes.Enclave
 }
 
 var ( // compiler checks
@@ -235,7 +227,7 @@ func (c *kesClient) CreateKey(ctx context.Context, keyID string) error {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.CreateKey(ctx, keyID)
+	return c.client.CreateKey(ctx, keyID)
 }
 
 // DeleteKey deletes a key at the KMS with the given key ID.
@@ -246,7 +238,7 @@ func (c *kesClient) DeleteKey(ctx context.Context, keyID string) error {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.DeleteKey(ctx, keyID)
+	return c.client.DeleteKey(ctx, keyID)
 }
 
 // ListKeys returns an iterator over all key names.
@@ -255,7 +247,7 @@ func (c *kesClient) ListKeys(ctx context.Context) (*kes.ListIter[string], error)
 	defer c.lock.RUnlock()
 
 	return &kes.ListIter[string]{
-		NextFunc: c.enclave.ListKeys,
+		NextFunc: c.client.ListKeys,
 	}, nil
 }
 
@@ -279,7 +271,7 @@ func (c *kesClient) GenerateKey(ctx context.Context, keyID string, cryptoCtx Con
 		return DEK{}, err
 	}
 
-	dek, err := c.enclave.GenerateKey(ctx, keyID, ctxBytes)
+	dek, err := c.client.GenerateKey(ctx, keyID, ctxBytes)
 	if err != nil {
 		return DEK{}, err
 	}
@@ -295,7 +287,7 @@ func (c *kesClient) ImportKey(ctx context.Context, keyID string, bytes []byte) e
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.ImportKey(ctx, keyID, &kes.ImportKeyRequest{
+	return c.client.ImportKey(ctx, keyID, &kes.ImportKeyRequest{
 		Key: bytes,
 	})
 }
@@ -310,7 +302,7 @@ func (c *kesClient) EncryptKey(keyID string, plaintext []byte, ctx Context) ([]b
 	if err != nil {
 		return nil, err
 	}
-	return c.enclave.Encrypt(context.Background(), keyID, plaintext, ctxBytes)
+	return c.client.Encrypt(context.Background(), keyID, plaintext, ctxBytes)
 }
 
 // DecryptKey decrypts the ciphertext with the key at the KES
@@ -324,7 +316,7 @@ func (c *kesClient) DecryptKey(keyID string, ciphertext []byte, ctx Context) ([]
 	if err != nil {
 		return nil, err
 	}
-	return c.enclave.Decrypt(context.Background(), keyID, ciphertext, ctxBytes)
+	return c.client.Decrypt(context.Background(), keyID, ciphertext, ctxBytes)
 }
 
 func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts [][]byte, contexts []Context) ([][]byte, error) {
@@ -337,7 +329,7 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 		if err != nil {
 			return nil, err
 		}
-		plaintext, err := c.enclave.Decrypt(ctx, keyID, ciphertexts[i], ctxBytes)
+		plaintext, err := c.client.Decrypt(ctx, keyID, ciphertexts[i], ctxBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -346,34 +338,22 @@ func (c *kesClient) DecryptAll(ctx context.Context, keyID string, ciphertexts []
 	return plaintexts, nil
 }
 
+// HMAC generates the HMAC checksum of the given msg using the key
+// with the given keyID at the KMS.
+func (c *kesClient) HMAC(ctx context.Context, keyID string, msg []byte) ([]byte, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	return c.client.HMAC(context.Background(), keyID, msg)
+}
+
 // DescribePolicy describes a policy by returning its metadata.
 // e.g. who created the policy at which point in time.
 func (c *kesClient) DescribePolicy(ctx context.Context, policy string) (*kes.PolicyInfo, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.DescribePolicy(ctx, policy)
-}
-
-// AssignPolicy assigns a policy to an identity.
-// An identity can have at most one policy while the same policy can be assigned to multiple identities.
-// The assigned policy defines which API calls this identity can perform.
-// It's not possible to assign a policy to the admin identity.
-// Further, an identity cannot assign a policy to itself.
-func (c *kesClient) AssignPolicy(ctx context.Context, policy, identity string) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.enclave.AssignPolicy(ctx, policy, kes.Identity(identity))
-}
-
-// DeletePolicy	deletes a policy from KMS.
-// All identities that have been assigned to this policy will lose all authorization privileges.
-func (c *kesClient) DeletePolicy(ctx context.Context, policy string) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.enclave.DeletePolicy(ctx, policy)
+	return c.client.DescribePolicy(ctx, policy)
 }
 
 // ListPolicies returns an iterator over all policy names.
@@ -382,7 +362,7 @@ func (c *kesClient) ListPolicies(ctx context.Context) (*kes.ListIter[string], er
 	defer c.lock.RUnlock()
 
 	return &kes.ListIter[string]{
-		NextFunc: c.enclave.ListPolicies,
+		NextFunc: c.client.ListPolicies,
 	}, nil
 }
 
@@ -391,7 +371,7 @@ func (c *kesClient) GetPolicy(ctx context.Context, policy string) (*kes.Policy, 
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.GetPolicy(ctx, policy)
+	return c.client.GetPolicy(ctx, policy)
 }
 
 // DescribeIdentity describes an identity by returning its metadata.
@@ -400,7 +380,7 @@ func (c *kesClient) DescribeIdentity(ctx context.Context, identity string) (*kes
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.DescribeIdentity(ctx, kes.Identity(identity))
+	return c.client.DescribeIdentity(ctx, kes.Identity(identity))
 }
 
 // DescribeSelfIdentity describes the identity issuing the request.
@@ -410,17 +390,7 @@ func (c *kesClient) DescribeSelfIdentity(ctx context.Context) (*kes.IdentityInfo
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.enclave.DescribeSelf(ctx)
-}
-
-// DeleteIdentity deletes an identity from KMS.
-// The client certificate that corresponds to the identity is no longer authorized to perform any API operations.
-// The admin identity cannot be deleted.
-func (c *kesClient) DeleteIdentity(ctx context.Context, identity string) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.enclave.DeleteIdentity(ctx, kes.Identity(identity))
+	return c.client.DescribeSelf(ctx)
 }
 
 // ListPolicies returns an iterator over all identities.
@@ -429,7 +399,7 @@ func (c *kesClient) ListIdentities(ctx context.Context) (*kes.ListIter[kes.Ident
 	defer c.lock.RUnlock()
 
 	return &kes.ListIter[kes.Identity]{
-		NextFunc: c.enclave.ListIdentities,
+		NextFunc: c.client.ListIdentities,
 	}, nil
 }
 
