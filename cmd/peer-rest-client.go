@@ -182,7 +182,7 @@ func (client *peerRESTClient) ServerInfo(metrics bool) (info madmin.ServerProper
 	values := make(url.Values)
 	values.Set(peerRESTMetrics, strconv.FormatBool(metrics))
 
-	respBody, err := client.call(peerRESTMethodServerInfo, nil, nil, -1)
+	respBody, err := client.call(peerRESTMethodServerInfo, values, nil, -1)
 	if err != nil {
 		return
 	}
