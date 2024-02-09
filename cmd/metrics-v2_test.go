@@ -80,7 +80,7 @@ func TestGetHistogramMetrics(t *testing.T) {
 		}
 	}
 
-	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD())
+	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(bucketMetricNamespace))
 	// additional labels for +Inf for all histogram metrics
 	if expPoints := len(labels) * (len(histBuckets) + 1); expPoints != len(metrics) {
 		t.Fatalf("Expected %v data points but got %v", expPoints, len(metrics))

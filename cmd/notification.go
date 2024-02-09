@@ -540,28 +540,33 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 }
 
 // GetClusterAllBucketStats - returns bucket stats for all buckets from all remote peers.
-func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []BucketStatsMap {
-	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
+func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context, onlyLocal bool) []BucketStatsMap {
+	fmt.Println("GetClusterAllBucketStats called...")
 	replicationStats := make([]BucketStatsMap, len(sys.peerClients))
-	for index, client := range sys.peerClients {
-		index := index
-		client := client
-		ng.Go(ctx, func() error {
-			if client == nil {
-				return errPeerNotReachable
+
+	if !onlyLocal {
+		ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
+		for index, client := range sys.peerClients {
+			index := index
+			client := client
+			ng.Go(ctx, func() error {
+				if client == nil {
+					return errPeerNotReachable
+				}
+				bsMap, err := client.GetAllBucketStats()
+				if err != nil {
+					return err
+				}
+				replicationStats[index] = bsMap
+				return nil
+			}, index, *client.host)
+		}
+
+		for _, nErr := range ng.Wait() {
+			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+			if nErr.Err != nil {
+				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 			}
-			bsMap, err := client.GetAllBucketStats()
-			if err != nil {
-				return err
-			}
-			replicationStats[index] = bsMap
-			return nil
-		}, index, *client.host)
-	}
-	for _, nErr := range ng.Wait() {
-		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
-		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 

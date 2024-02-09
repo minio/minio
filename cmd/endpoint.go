@@ -1251,3 +1251,10 @@ func updateDomainIPs(endPoints set.StringSet) {
 		return !net.ParseIP(host).IsLoopback() && host != "localhost"
 	}, "")
 }
+
+func getLocalNodePoolIdx(ep string) int {
+	server := getLocalServerProperty(globalEndpoints, &http.Request{
+		Host: ep,
+	}, false)
+	return server.PoolNumber
+}

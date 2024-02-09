@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/minio/internal/rest"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/procfs"
@@ -64,13 +65,13 @@ func init() {
 	}
 
 	peerMetricsGroups = []*MetricsGroup{
-		getGoMetrics(),
-		getHTTPMetrics(MetricsGroupOpts{}),
+		getGoMetrics(nodeMetricNamespace),
+		getHTTPMetrics(MetricsGroupOpts{}, s3MetricNamespace),
 		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
 		getMinioProcMetrics(),
 		getMinioVersionMetrics(),
-		getNetworkMetrics(),
-		getS3TTFBMetric(),
+		getNetworkMetrics(MetricsGroupOpts{}, s3MetricNamespace),
+		getS3TTFBMetric(s3MetricNamespace),
 		getILMNodeMetrics(),
 		getScannerNodeMetrics(),
 		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
@@ -88,27 +89,27 @@ func init() {
 
 	nodeGroups := []*MetricsGroup{
 		getNodeHealthMetrics(MetricsGroupOpts{dependGlobalNotificationSys: true}),
-		getHTTPMetrics(MetricsGroupOpts{}),
-		getNetworkMetrics(),
+		getHTTPMetrics(MetricsGroupOpts{}, s3MetricNamespace),
+		getNetworkMetrics(MetricsGroupOpts{}, s3MetricNamespace),
 		getMinioVersionMetrics(),
-		getS3TTFBMetric(),
+		getS3TTFBMetric(s3MetricNamespace),
 		getTierMetrics(),
 		getNotificationMetrics(MetricsGroupOpts{dependGlobalLambdaTargetList: true}),
 		getDistLockMetrics(MetricsGroupOpts{dependGlobalIsDistErasure: true, dependGlobalLockServer: true}),
 		getIAMNodeMetrics(MetricsGroupOpts{dependGlobalAuthNPlugin: true, dependGlobalIAMSys: true}),
 		getLocalStorageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
-		getReplicationNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}),
+		getReplicationNodeMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true, dependBucketTargetSys: true}, nodeMetricNamespace),
 	}
 
 	bucketMetricsGroups := []*MetricsGroup{
 		getBucketUsageMetrics(MetricsGroupOpts{dependGlobalObjectAPI: true}),
-		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
-		getBucketTTFBMetric(),
+		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}, bucketMetricNamespace),
+		getBucketTTFBMetric(bucketMetricNamespace),
 	}
 
 	bucketPeerMetricsGroups = []*MetricsGroup{
-		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}),
-		getBucketTTFBMetric(),
+		getHTTPMetrics(MetricsGroupOpts{bucketOnly: true}, bucketMetricNamespace),
+		getBucketTTFBMetric(bucketMetricNamespace),
 	}
 
 	nodeCollector = newMinioCollectorNode(nodeGroups)
@@ -347,6 +348,8 @@ type MetricsGroupOpts struct {
 	dependGlobalIsDistErasure       bool
 	dependGlobalBackgroundHealState bool
 	dependBucketTargetSys           bool
+	ioStatsOnly                     bool
+	replicationOnlyV3               bool
 }
 
 // RegisterRead register the metrics populator function to be used
@@ -686,9 +689,9 @@ func getBucketUsageQuotaTotalBytesMD() MetricDescription {
 	}
 }
 
-func getBucketTrafficReceivedBytes() MetricDescription {
+func getBucketTrafficReceivedBytes(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: trafficSubsystem,
 		Name:      receivedBytes,
 		Help:      "Total number of S3 bytes received for this bucket",
@@ -696,9 +699,9 @@ func getBucketTrafficReceivedBytes() MetricDescription {
 	}
 }
 
-func getBucketTrafficSentBytes() MetricDescription {
+func getBucketTrafficSentBytes(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: trafficSubsystem,
 		Name:      sentBytes,
 		Help:      "Total number of S3 bytes sent for this bucket",
@@ -806,9 +809,9 @@ func getClusterObjectVersionsMD() MetricDescription {
 	}
 }
 
-func getClusterRepLinkLatencyCurrMD() MetricDescription {
+func getClusterRepLinkLatencyCurrMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      currLinkLatency,
 		Help:      "Replication current link latency in milliseconds",
@@ -964,9 +967,9 @@ func getRepReceivedOperationsMD(namespace MetricNamespace) MetricDescription {
 	}
 }
 
-func getClusterReplMRFFailedOperationsMD() MetricDescription {
+func getClusterReplMRFFailedOperationsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      recentBacklogCount,
 		Help:      "Total number of objects seen in replication backlog in the last 5 minutes",
@@ -984,9 +987,9 @@ func getClusterRepCredentialErrorsMD(namespace MetricNamespace) MetricDescriptio
 	}
 }
 
-func getClusterReplCurrQueuedOperationsMD() MetricDescription {
+func getClusterReplCurrQueuedOperationsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      currInQueueCount,
 		Help:      "Total number of objects queued for replication in the last full minute",
@@ -994,9 +997,9 @@ func getClusterReplCurrQueuedOperationsMD() MetricDescription {
 	}
 }
 
-func getClusterReplCurrQueuedBytesMD() MetricDescription {
+func getClusterReplCurrQueuedBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      currInQueueBytes,
 		Help:      "Total number of bytes queued for replication in the last full minute",
@@ -1004,9 +1007,9 @@ func getClusterReplCurrQueuedBytesMD() MetricDescription {
 	}
 }
 
-func getClusterReplActiveWorkersCountMD() MetricDescription {
+func getClusterReplActiveWorkersCountMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      currActiveWorkers,
 		Help:      "Total number of active replication workers",
@@ -1014,9 +1017,9 @@ func getClusterReplActiveWorkersCountMD() MetricDescription {
 	}
 }
 
-func getClusterReplAvgActiveWorkersCountMD() MetricDescription {
+func getClusterReplAvgActiveWorkersCountMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      avgActiveWorkers,
 		Help:      "Average number of active replication workers",
@@ -1024,9 +1027,9 @@ func getClusterReplAvgActiveWorkersCountMD() MetricDescription {
 	}
 }
 
-func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
+func getClusterReplMaxActiveWorkersCountMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      maxActiveWorkers,
 		Help:      "Maximum number of active replication workers seen since server start",
@@ -1034,9 +1037,9 @@ func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
 	}
 }
 
-func getClusterReplCurrentTransferRateMD() MetricDescription {
+func getClusterReplCurrentTransferRateMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      currTransferRate,
 		Help:      "Current replication transfer rate in bytes/sec",
@@ -1044,9 +1047,9 @@ func getClusterReplCurrentTransferRateMD() MetricDescription {
 	}
 }
 
-func getClusterRepLinkLatencyMaxMD() MetricDescription {
+func getClusterRepLinkLatencyMaxMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      maxLinkLatency,
 		Help:      "Maximum replication link latency in milliseconds seen since server start",
@@ -1054,9 +1057,9 @@ func getClusterRepLinkLatencyMaxMD() MetricDescription {
 	}
 }
 
-func getClusterRepLinkLatencyAvgMD() MetricDescription {
+func getClusterRepLinkLatencyAvgMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      avgLinkLatency,
 		Help:      "Average replication link latency in milliseconds",
@@ -1064,9 +1067,9 @@ func getClusterRepLinkLatencyAvgMD() MetricDescription {
 	}
 }
 
-func getClusterReplAvgQueuedOperationsMD() MetricDescription {
+func getClusterReplAvgQueuedOperationsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      avgInQueueCount,
 		Help:      "Average number of objects queued for replication since server start",
@@ -1074,9 +1077,9 @@ func getClusterReplAvgQueuedOperationsMD() MetricDescription {
 	}
 }
 
-func getClusterReplAvgQueuedBytesMD() MetricDescription {
+func getClusterReplAvgQueuedBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      avgInQueueBytes,
 		Help:      "Average number of bytes queued for replication since server start",
@@ -1084,9 +1087,9 @@ func getClusterReplAvgQueuedBytesMD() MetricDescription {
 	}
 }
 
-func getClusterReplMaxQueuedOperationsMD() MetricDescription {
+func getClusterReplMaxQueuedOperationsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      maxInQueueCount,
 		Help:      "Maximum number of objects queued for replication since server start",
@@ -1094,9 +1097,9 @@ func getClusterReplMaxQueuedOperationsMD() MetricDescription {
 	}
 }
 
-func getClusterReplMaxQueuedBytesMD() MetricDescription {
+func getClusterReplMaxQueuedBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      maxInQueueBytes,
 		Help:      "Maximum number of bytes queued for replication since server start",
@@ -1104,9 +1107,9 @@ func getClusterReplMaxQueuedBytesMD() MetricDescription {
 	}
 }
 
-func getClusterReplAvgTransferRateMD() MetricDescription {
+func getClusterReplAvgTransferRateMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      avgTransferRate,
 		Help:      "Average replication transfer rate in bytes/sec",
@@ -1114,9 +1117,9 @@ func getClusterReplAvgTransferRateMD() MetricDescription {
 	}
 }
 
-func getClusterReplMaxTransferRateMD() MetricDescription {
+func getClusterReplMaxTransferRateMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: ns,
 		Subsystem: replicationSubsystem,
 		Name:      maxTransferRate,
 		Help:      "Maximum replication transfer rate in bytes/sec seen since server start",
@@ -1274,9 +1277,9 @@ func getInternodeTCPAvgDuration() MetricDescription {
 	}
 }
 
-func getInterNodeSentBytesMD() MetricDescription {
+func getInterNodeSentBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: interNodeMetricNamespace,
+		Namespace: ns,
 		Subsystem: trafficSubsystem,
 		Name:      sentBytes,
 		Help:      "Total number of bytes sent to the other peer nodes",
@@ -1284,9 +1287,9 @@ func getInterNodeSentBytesMD() MetricDescription {
 	}
 }
 
-func getInterNodeReceivedBytesMD() MetricDescription {
+func getInterNodeReceivedBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: interNodeMetricNamespace,
+		Namespace: ns,
 		Subsystem: trafficSubsystem,
 		Name:      receivedBytes,
 		Help:      "Total number of bytes received from other peer nodes",
@@ -1294,9 +1297,9 @@ func getInterNodeReceivedBytesMD() MetricDescription {
 	}
 }
 
-func getS3SentBytesMD() MetricDescription {
+func getS3SentBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: trafficSubsystem,
 		Name:      sentBytes,
 		Help:      "Total number of s3 bytes sent",
@@ -1304,9 +1307,9 @@ func getS3SentBytesMD() MetricDescription {
 	}
 }
 
-func getS3ReceivedBytesMD() MetricDescription {
+func getS3ReceivedBytesMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: trafficSubsystem,
 		Name:      receivedBytes,
 		Help:      "Total number of s3 bytes received",
@@ -1314,9 +1317,9 @@ func getS3ReceivedBytesMD() MetricDescription {
 	}
 }
 
-func getS3RequestsInFlightMD() MetricDescription {
+func getS3RequestsInFlightMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      inflightTotal,
 		Help:      "Total number of S3 requests currently in flight",
@@ -1324,9 +1327,9 @@ func getS3RequestsInFlightMD() MetricDescription {
 	}
 }
 
-func getS3RequestsInQueueMD() MetricDescription {
+func getS3RequestsInQueueMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      waitingTotal,
 		Help:      "Total number of S3 requests in the waiting queue",
@@ -1334,9 +1337,9 @@ func getS3RequestsInQueueMD() MetricDescription {
 	}
 }
 
-func getIncomingS3RequestsMD() MetricDescription {
+func getIncomingS3RequestsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      incomingTotal,
 		Help:      "Total number of incoming S3 requests",
@@ -1344,9 +1347,9 @@ func getIncomingS3RequestsMD() MetricDescription {
 	}
 }
 
-func getS3RequestsTotalMD() MetricDescription {
+func getS3RequestsTotalMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      total,
 		Help:      "Total number of S3 requests",
@@ -1354,9 +1357,9 @@ func getS3RequestsTotalMD() MetricDescription {
 	}
 }
 
-func getS3RequestsErrorsMD() MetricDescription {
+func getS3RequestsErrorsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      errorsTotal,
 		Help:      "Total number of S3 requests with (4xx and 5xx) errors",
@@ -1364,9 +1367,9 @@ func getS3RequestsErrorsMD() MetricDescription {
 	}
 }
 
-func getS3Requests4xxErrorsMD() MetricDescription {
+func getS3Requests4xxErrorsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      "4xx_" + errorsTotal,
 		Help:      "Total number of S3 requests with (4xx) errors",
@@ -1374,9 +1377,9 @@ func getS3Requests4xxErrorsMD() MetricDescription {
 	}
 }
 
-func getS3Requests5xxErrorsMD() MetricDescription {
+func getS3Requests5xxErrorsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      "5xx_" + errorsTotal,
 		Help:      "Total number of S3 requests with (5xx) errors",
@@ -1384,9 +1387,9 @@ func getS3Requests5xxErrorsMD() MetricDescription {
 	}
 }
 
-func getS3RequestsCanceledMD() MetricDescription {
+func getS3RequestsCanceledMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      canceledTotal,
 		Help:      "Total number of S3 requests that were canceled by the client",
@@ -1394,9 +1397,9 @@ func getS3RequestsCanceledMD() MetricDescription {
 	}
 }
 
-func getS3RejectedAuthRequestsTotalMD() MetricDescription {
+func getS3RejectedAuthRequestsTotalMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      authTotal,
 		Help:      "Total number of S3 requests rejected for auth failure",
@@ -1404,9 +1407,9 @@ func getS3RejectedAuthRequestsTotalMD() MetricDescription {
 	}
 }
 
-func getS3RejectedHeaderRequestsTotalMD() MetricDescription {
+func getS3RejectedHeaderRequestsTotalMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      headerTotal,
 		Help:      "Total number of S3 requests rejected for invalid header",
@@ -1414,9 +1417,9 @@ func getS3RejectedHeaderRequestsTotalMD() MetricDescription {
 	}
 }
 
-func getS3RejectedTimestampRequestsTotalMD() MetricDescription {
+func getS3RejectedTimestampRequestsTotalMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      timestampTotal,
 		Help:      "Total number of S3 requests rejected for invalid timestamp",
@@ -1424,9 +1427,9 @@ func getS3RejectedTimestampRequestsTotalMD() MetricDescription {
 	}
 }
 
-func getS3RejectedInvalidRequestsTotalMD() MetricDescription {
+func getS3RejectedInvalidRequestsTotalMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsRejectedSubsystem,
 		Name:      invalidTotal,
 		Help:      "Total number of invalid S3 requests",
@@ -1514,9 +1517,9 @@ func getMinIOCommitMD() MetricDescription {
 	}
 }
 
-func getS3TTFBDistributionMD() MetricDescription {
+func getS3TTFBDistributionMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: s3MetricNamespace,
+		Namespace: ns,
 		Subsystem: ttfbSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of time to first byte across API calls",
@@ -1524,9 +1527,9 @@ func getS3TTFBDistributionMD() MetricDescription {
 	}
 }
 
-func getBucketTTFBDistributionMD() MetricDescription {
+func getBucketTTFBDistributionMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: ttfbSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of time to first byte across API calls per bucket",
@@ -1614,9 +1617,9 @@ func getMinIOProcessSysCallWMD() MetricDescription {
 	}
 }
 
-func getMinIOGORoutineCountMD() MetricDescription {
+func getMinIOGORoutineCountMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: nodeMetricNamespace,
+		Namespace: ns,
 		Subsystem: goRoutines,
 		Name:      total,
 		Help:      "Total number of go routines running",
@@ -1806,13 +1809,13 @@ func getMinioProcMetrics() *MetricsGroup {
 	return mg
 }
 
-func getGoMetrics() *MetricsGroup {
+func getGoMetrics(ns MetricNamespace) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = append(metrics, Metric{
-			Description: getMinIOGORoutineCountMD(),
+			Description: getMinIOGORoutineCountMD(ns),
 			Value:       float64(runtime.NumGoroutine()),
 		})
 		return
@@ -1871,22 +1874,22 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) 
 	return metrics
 }
 
-func getBucketTTFBMetric() *MetricsGroup {
+func getBucketTTFBMetric(ns MetricNamespace) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketTTFBDistributionMD())
+		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketTTFBDistributionMD(ns))
 	})
 	return mg
 }
 
-func getS3TTFBMetric() *MetricsGroup {
+func getS3TTFBMetric(ns MetricNamespace) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD())
+		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD(ns))
 	})
 	return mg
 }
@@ -1941,9 +1944,9 @@ func getExpiryPendingTasksMD() MetricDescription {
 	}
 }
 
-func getBucketS3RequestsInFlightMD() MetricDescription {
+func getBucketS3RequestsInFlightMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      inflightTotal,
 		Help:      "Total number of S3 requests currently in flight on a bucket",
@@ -1951,9 +1954,9 @@ func getBucketS3RequestsInFlightMD() MetricDescription {
 	}
 }
 
-func getBucketS3RequestsTotalMD() MetricDescription {
+func getBucketS3RequestsTotalMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      total,
 		Help:      "Total number of S3 requests on a bucket",
@@ -1961,9 +1964,9 @@ func getBucketS3RequestsTotalMD() MetricDescription {
 	}
 }
 
-func getBucketS3Requests4xxErrorsMD() MetricDescription {
+func getBucketS3Requests4xxErrorsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      "4xx_" + errorsTotal,
 		Help:      "Total number of S3 requests with (4xx) errors on a bucket",
@@ -1971,9 +1974,9 @@ func getBucketS3Requests4xxErrorsMD() MetricDescription {
 	}
 }
 
-func getBucketS3Requests5xxErrorsMD() MetricDescription {
+func getBucketS3Requests5xxErrorsMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      "5xx_" + errorsTotal,
 		Help:      "Total number of S3 requests with (5xx) errors on a bucket",
@@ -1981,9 +1984,9 @@ func getBucketS3Requests5xxErrorsMD() MetricDescription {
 	}
 }
 
-func getBucketS3RequestsCanceledMD() MetricDescription {
+func getBucketS3RequestsCanceledMD(ns MetricNamespace) MetricDescription {
 	return MetricDescription{
-		Namespace: bucketMetricNamespace,
+		Namespace: ns,
 		Subsystem: requestsSubsystem,
 		Name:      canceledTotal,
 		Help:      "Total number of S3 requests that were canceled from the client while processing on a bucket",
@@ -2237,7 +2240,7 @@ func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 }
 
 // replication metrics for each node - published to the cluster endpoint with nodename as label
-func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
+func getReplicationNodeMetrics(opts MetricsGroupOpts, ns MetricNamespace) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval:    1 * time.Minute,
 		metricsGroupOpts: opts,
@@ -2254,44 +2257,44 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		if globalReplicationStats != nil {
 			qs := globalReplicationStats.getNodeQueueStatsSummary()
 			activeWorkersCount := Metric{
-				Description: getClusterReplActiveWorkersCountMD(),
+				Description: getClusterReplActiveWorkersCountMD(ns),
 			}
 			avgActiveWorkersCount := Metric{
-				Description: getClusterReplAvgActiveWorkersCountMD(),
+				Description: getClusterReplAvgActiveWorkersCountMD(ns),
 			}
 			maxActiveWorkersCount := Metric{
-				Description: getClusterReplMaxActiveWorkersCountMD(),
+				Description: getClusterReplMaxActiveWorkersCountMD(ns),
 			}
 			currInQueueCount := Metric{
-				Description: getClusterReplCurrQueuedOperationsMD(),
+				Description: getClusterReplCurrQueuedOperationsMD(ns),
 			}
 			currInQueueBytes := Metric{
-				Description: getClusterReplCurrQueuedBytesMD(),
+				Description: getClusterReplCurrQueuedBytesMD(ns),
 			}
 
 			currTransferRate := Metric{
-				Description: getClusterReplCurrentTransferRateMD(),
+				Description: getClusterReplCurrentTransferRateMD(ns),
 			}
 			avgQueueCount := Metric{
-				Description: getClusterReplAvgQueuedOperationsMD(),
+				Description: getClusterReplAvgQueuedOperationsMD(ns),
 			}
 			avgQueueBytes := Metric{
-				Description: getClusterReplAvgQueuedBytesMD(),
+				Description: getClusterReplAvgQueuedBytesMD(ns),
 			}
 			maxQueueCount := Metric{
-				Description: getClusterReplMaxQueuedOperationsMD(),
+				Description: getClusterReplMaxQueuedOperationsMD(ns),
 			}
 			maxQueueBytes := Metric{
-				Description: getClusterReplMaxQueuedBytesMD(),
+				Description: getClusterReplMaxQueuedBytesMD(ns),
 			}
 			avgTransferRate := Metric{
-				Description: getClusterReplAvgTransferRateMD(),
+				Description: getClusterReplAvgTransferRateMD(ns),
 			}
 			maxTransferRate := Metric{
-				Description: getClusterReplMaxTransferRateMD(),
+				Description: getClusterReplMaxTransferRateMD(ns),
 			}
 			mrfCount := Metric{
-				Description: getClusterReplMRFFailedOperationsMD(),
+				Description: getClusterReplMRFFailedOperationsMD(ns),
 				Value:       float64(qs.MRFStats.LastFailedCount),
 			}
 
@@ -2333,7 +2336,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		for ep, health := range globalBucketTargetSys.healthStats() {
 			// link latency current
 			m := Metric{
-				Description: getClusterRepLinkLatencyCurrMD(),
+				Description: getClusterRepLinkLatencyCurrMD(ns),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
 				},
@@ -2343,7 +2346,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 			// link latency average
 			m = Metric{
-				Description: getClusterRepLinkLatencyAvgMD(),
+				Description: getClusterRepLinkLatencyAvgMD(ns),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
 				},
@@ -2353,7 +2356,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 			// link latency max
 			m = Metric{
-				Description: getClusterRepLinkLatencyMaxMD(),
+				Description: getClusterRepLinkLatencyMaxMD(ns),
 				VariableLabels: map[string]string{
 					"endpoint": ep,
 				},
@@ -2413,7 +2416,7 @@ func getReplicationSiteMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	}
 	mg.RegisterRead(func(_ context.Context) []Metric {
 		ml := []Metric{}
-
+		fmt.Println("getReplicationSiteMetrics registered and read....")
 		// metrics pertinent to site replication - overall roll up.
 		if globalSiteReplicationSys.isEnabled() {
 			m, err := globalSiteReplicationSys.getSiteMetrics(GlobalContext)
@@ -2862,7 +2865,7 @@ func getNotificationMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	return mg
 }
 
-func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
+func getHTTPMetrics(opts MetricsGroupOpts, ns MetricNamespace) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval:    10 * time.Second,
 		metricsGroupOpts: opts,
@@ -2877,80 +2880,80 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				len(httpStats.TotalS35xxErrors.APIStats)+
 				len(httpStats.TotalS34xxErrors.APIStats))
 			metrics = append(metrics, Metric{
-				Description: getS3RejectedAuthRequestsTotalMD(),
+				Description: getS3RejectedAuthRequestsTotalMD(ns),
 				Value:       float64(httpStats.TotalS3RejectedAuth),
 			})
 			metrics = append(metrics, Metric{
-				Description: getS3RejectedTimestampRequestsTotalMD(),
+				Description: getS3RejectedTimestampRequestsTotalMD(ns),
 				Value:       float64(httpStats.TotalS3RejectedTime),
 			})
 			metrics = append(metrics, Metric{
-				Description: getS3RejectedHeaderRequestsTotalMD(),
+				Description: getS3RejectedHeaderRequestsTotalMD(ns),
 				Value:       float64(httpStats.TotalS3RejectedHeader),
 			})
 			metrics = append(metrics, Metric{
-				Description: getS3RejectedInvalidRequestsTotalMD(),
+				Description: getS3RejectedInvalidRequestsTotalMD(ns),
 				Value:       float64(httpStats.TotalS3RejectedInvalid),
 			})
 			metrics = append(metrics, Metric{
-				Description: getS3RequestsInQueueMD(),
+				Description: getS3RequestsInQueueMD(ns),
 				Value:       float64(httpStats.S3RequestsInQueue),
 			})
 			metrics = append(metrics, Metric{
-				Description: getIncomingS3RequestsMD(),
+				Description: getIncomingS3RequestsMD(ns),
 				Value:       float64(httpStats.S3RequestsIncoming),
 			})
 
 			for api, value := range httpStats.CurrentS3Requests.APIStats {
 				metrics = append(metrics, Metric{
-					Description:    getS3RequestsInFlightMD(),
+					Description:    getS3RequestsInFlightMD(ns),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
 			for api, value := range httpStats.TotalS3Requests.APIStats {
 				metrics = append(metrics, Metric{
-					Description:    getS3RequestsTotalMD(),
+					Description:    getS3RequestsTotalMD(ns),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
 			for api, value := range httpStats.TotalS3Errors.APIStats {
 				metrics = append(metrics, Metric{
-					Description:    getS3RequestsErrorsMD(),
+					Description:    getS3RequestsErrorsMD(ns),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
 			for api, value := range httpStats.TotalS35xxErrors.APIStats {
 				metrics = append(metrics, Metric{
-					Description:    getS3Requests5xxErrorsMD(),
+					Description:    getS3Requests5xxErrorsMD(ns),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
 			for api, value := range httpStats.TotalS34xxErrors.APIStats {
 				metrics = append(metrics, Metric{
-					Description:    getS3Requests4xxErrorsMD(),
+					Description:    getS3Requests4xxErrorsMD(ns),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
 			for api, value := range httpStats.TotalS3Canceled.APIStats {
 				metrics = append(metrics, Metric{
-					Description:    getS3RequestsCanceledMD(),
+					Description:    getS3RequestsCanceledMD(ns),
 					Value:          float64(value),
 					VariableLabels: map[string]string{"api": api},
 				})
 			}
 			return
 		}
-
+		fmt.Println("getHTTPMetrics: bucketOnly", globalBucketConnStats.getS3InOutBytes())
 		for bucket, inOut := range globalBucketConnStats.getS3InOutBytes() {
 			recvBytes := inOut.In
 			if recvBytes > 0 {
 				metrics = append(metrics, Metric{
-					Description:    getBucketTrafficReceivedBytes(),
+					Description:    getBucketTrafficReceivedBytes(ns),
 					Value:          float64(recvBytes),
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
@@ -2958,7 +2961,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 			sentBytes := inOut.Out
 			if sentBytes > 0 {
 				metrics = append(metrics, Metric{
-					Description:    getBucketTrafficSentBytes(),
+					Description:    getBucketTrafficSentBytes(ns),
 					Value:          float64(sentBytes),
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
@@ -2967,7 +2970,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 			httpStats := globalBucketHTTPStats.load(bucket)
 			for k, v := range httpStats.currentS3Requests.Load() {
 				metrics = append(metrics, Metric{
-					Description:    getBucketS3RequestsInFlightMD(),
+					Description:    getBucketS3RequestsInFlightMD(ns),
 					Value:          float64(v),
 					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
@@ -2975,7 +2978,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 			for k, v := range httpStats.totalS3Requests.Load() {
 				metrics = append(metrics, Metric{
-					Description:    getBucketS3RequestsTotalMD(),
+					Description:    getBucketS3RequestsTotalMD(ns),
 					Value:          float64(v),
 					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
@@ -2983,7 +2986,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 			for k, v := range httpStats.totalS3Canceled.Load() {
 				metrics = append(metrics, Metric{
-					Description:    getBucketS3RequestsCanceledMD(),
+					Description:    getBucketS3RequestsCanceledMD(ns),
 					Value:          float64(v),
 					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
@@ -2991,7 +2994,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 			for k, v := range httpStats.totalS34xxErrors.Load() {
 				metrics = append(metrics, Metric{
-					Description:    getBucketS3Requests4xxErrorsMD(),
+					Description:    getBucketS3Requests4xxErrorsMD(ns),
 					Value:          float64(v),
 					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
@@ -2999,7 +3002,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 			for k, v := range httpStats.totalS35xxErrors.Load() {
 				metrics = append(metrics, Metric{
-					Description:    getBucketS3Requests5xxErrorsMD(),
+					Description:    getBucketS3Requests5xxErrorsMD(ns),
 					Value:          float64(v),
 					VariableLabels: map[string]string{"bucket": bucket, "api": k},
 				})
@@ -3011,42 +3014,44 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	return mg
 }
 
-func getNetworkMetrics() *MetricsGroup {
+func getNetworkMetrics(opts MetricsGroupOpts, ns MetricNamespace) *MetricsGroup {
 	mg := &MetricsGroup{
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		metrics = make([]Metric, 0, 10)
 		connStats := globalConnStats.toServerConnStats()
-		rpcStats := rest.GetRPCStats()
-		if globalIsDistErasure {
-			metrics = append(metrics, Metric{
-				Description: getInternodeFailedRequests(),
-				Value:       float64(rpcStats.Errs),
-			})
-			metrics = append(metrics, Metric{
-				Description: getInternodeTCPDialTimeout(),
-				Value:       float64(rpcStats.DialErrs),
-			})
-			metrics = append(metrics, Metric{
-				Description: getInternodeTCPAvgDuration(),
-				Value:       float64(rpcStats.DialAvgDuration),
-			})
-			metrics = append(metrics, Metric{
-				Description: getInterNodeSentBytesMD(),
-				Value:       float64(connStats.internodeOutputBytes),
-			})
-			metrics = append(metrics, Metric{
-				Description: getInterNodeReceivedBytesMD(),
-				Value:       float64(connStats.internodeInputBytes),
-			})
+		if !opts.ioStatsOnly {
+			rpcStats := rest.GetRPCStats()
+			if globalIsDistErasure {
+				metrics = append(metrics, Metric{
+					Description: getInternodeFailedRequests(),
+					Value:       float64(rpcStats.Errs),
+				})
+				metrics = append(metrics, Metric{
+					Description: getInternodeTCPDialTimeout(),
+					Value:       float64(rpcStats.DialErrs),
+				})
+				metrics = append(metrics, Metric{
+					Description: getInternodeTCPAvgDuration(),
+					Value:       float64(rpcStats.DialAvgDuration),
+				})
+				metrics = append(metrics, Metric{
+					Description: getInterNodeSentBytesMD(interNodeMetricNamespace),
+					Value:       float64(connStats.internodeOutputBytes),
+				})
+				metrics = append(metrics, Metric{
+					Description: getInterNodeReceivedBytesMD(interNodeMetricNamespace),
+					Value:       float64(connStats.internodeInputBytes),
+				})
+			}
 		}
 		metrics = append(metrics, Metric{
-			Description: getS3SentBytesMD(),
+			Description: getS3SentBytesMD(ns),
 			Value:       float64(connStats.s3OutputBytes),
 		})
 		metrics = append(metrics, Metric{
-			Description: getS3ReceivedBytesMD(),
+			Description: getS3ReceivedBytesMD(ns),
 			Value:       float64(connStats.s3InputBytes),
 		})
 		return
@@ -3179,49 +3184,54 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		if dataUsageInfo.LastUpdate.IsZero() {
 			return
 		}
-
-		metrics = append(metrics, Metric{
-			Description: getUsageLastScanActivityMD(),
-			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
-		})
-
 		var bucketReplStats map[string]BucketStats
 		if !globalSiteReplicationSys.isEnabled() {
-			bucketReplStats = globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+			fmt.Println("getBucketUsageMetrics: globalSiteReplicationSys.isEnabled() is false")
+			bucketReplStats = globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage, opts.replicationOnlyV3)
 		}
+
+		if !opts.replicationOnlyV3 {
+			metrics = append(metrics, Metric{
+				Description: getUsageLastScanActivityMD(),
+				Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
+			})
+		}
+
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
-			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
+			if !opts.replicationOnlyV3 {
+				quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
-			metrics = append(metrics, Metric{
-				Description:    getBucketUsageTotalBytesMD(),
-				Value:          float64(usage.Size),
-				VariableLabels: map[string]string{"bucket": bucket},
-			})
-
-			metrics = append(metrics, Metric{
-				Description:    getBucketUsageObjectsTotalMD(),
-				Value:          float64(usage.ObjectsCount),
-				VariableLabels: map[string]string{"bucket": bucket},
-			})
-
-			metrics = append(metrics, Metric{
-				Description:    getBucketUsageVersionsTotalMD(),
-				Value:          float64(usage.VersionsCount),
-				VariableLabels: map[string]string{"bucket": bucket},
-			})
-
-			metrics = append(metrics, Metric{
-				Description:    getBucketUsageDeleteMarkersTotalMD(),
-				Value:          float64(usage.DeleteMarkersCount),
-				VariableLabels: map[string]string{"bucket": bucket},
-			})
-
-			if quota != nil && quota.Quota > 0 {
 				metrics = append(metrics, Metric{
-					Description:    getBucketUsageQuotaTotalBytesMD(),
-					Value:          float64(quota.Quota),
+					Description:    getBucketUsageTotalBytesMD(),
+					Value:          float64(usage.Size),
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
+
+				metrics = append(metrics, Metric{
+					Description:    getBucketUsageObjectsTotalMD(),
+					Value:          float64(usage.ObjectsCount),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getBucketUsageVersionsTotalMD(),
+					Value:          float64(usage.VersionsCount),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getBucketUsageDeleteMarkersTotalMD(),
+					Value:          float64(usage.DeleteMarkersCount),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+
+				if quota != nil && quota.Quota > 0 {
+					metrics = append(metrics, Metric{
+						Description:    getBucketUsageQuotaTotalBytesMD(),
+						Value:          float64(quota.Quota),
+						VariableLabels: map[string]string{"bucket": bucket},
+					})
+				}
 			}
 			if !globalSiteReplicationSys.isEnabled() {
 				var stats BucketReplicationStats
@@ -3342,19 +3352,21 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 					}
 				}
 			}
-			metrics = append(metrics, Metric{
-				Description:          getBucketObjectDistributionMD(),
-				Histogram:            usage.ObjectSizesHistogram,
-				HistogramBucketLabel: "range",
-				VariableLabels:       map[string]string{"bucket": bucket},
-			})
+			if !opts.replicationOnlyV3 {
+				metrics = append(metrics, Metric{
+					Description:          getBucketObjectDistributionMD(),
+					Histogram:            usage.ObjectSizesHistogram,
+					HistogramBucketLabel: "range",
+					VariableLabels:       map[string]string{"bucket": bucket},
+				})
 
-			metrics = append(metrics, Metric{
-				Description:          getBucketObjectVersionsMD(),
-				Histogram:            usage.ObjectVersionsHistogram,
-				HistogramBucketLabel: "range",
-				VariableLabels:       map[string]string{"bucket": bucket},
-			})
+				metrics = append(metrics, Metric{
+					Description:          getBucketObjectVersionsMD(),
+					Histogram:            usage.ObjectVersionsHistogram,
+					HistogramBucketLabel: "range",
+					VariableLabels:       map[string]string{"bucket": bucket},
+				})
+			}
 		}
 		return
 	})
@@ -4271,13 +4283,13 @@ func metricsNodeHandler() http.Handler {
 	registry := prometheus.NewRegistry()
 
 	logger.CriticalIf(GlobalContext, registry.Register(nodeCollector))
-	if err := registry.Register(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{
+	if err := registry.Register(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{
 		Namespace:    minioNamespace,
 		ReportErrors: true,
 	})); err != nil {
 		logger.CriticalIf(GlobalContext, err)
 	}
-	if err := registry.Register(prometheus.NewGoCollector()); err != nil {
+	if err := registry.Register(collectors.NewGoCollector()); err != nil {
 		logger.CriticalIf(GlobalContext, err)
 	}
 	gatherers := prometheus.Gatherers{

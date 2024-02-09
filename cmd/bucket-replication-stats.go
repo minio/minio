@@ -350,8 +350,8 @@ func NewReplicationStats(ctx context.Context, objectAPI ObjectLayer) *Replicatio
 	return &rs
 }
 
-func (r *ReplicationStats) getAllLatest(bucketsUsage map[string]BucketUsageInfo) (bucketsReplicationStats map[string]BucketStats) {
-	peerBucketStatsList := globalNotificationSys.GetClusterAllBucketStats(GlobalContext)
+func (r *ReplicationStats) getAllLatest(bucketsUsage map[string]BucketUsageInfo, onlyLocal bool) (bucketsReplicationStats map[string]BucketStats) {
+	peerBucketStatsList := globalNotificationSys.GetClusterAllBucketStats(GlobalContext, onlyLocal)
 	bucketsReplicationStats = make(map[string]BucketStats, len(bucketsUsage))
 
 	for bucket := range bucketsUsage {

@@ -284,6 +284,7 @@ var (
 	// The name of this local node, fetched from arguments
 	globalLocalNodeName    string
 	globalLocalNodeNameHex string
+	globalLocalPoolIdx     int
 	globalNodeNamesHex     = make(map[string]struct{})
 
 	// The global subnet config

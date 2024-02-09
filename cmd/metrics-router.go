@@ -25,11 +25,18 @@ import (
 )
 
 const (
-	prometheusMetricsPathLegacy     = "/prometheus/metrics"
-	prometheusMetricsV2ClusterPath  = "/v2/metrics/cluster"
-	prometheusMetricsV2BucketPath   = "/v2/metrics/bucket"
-	prometheusMetricsV2NodePath     = "/v2/metrics/node"
-	prometheusMetricsV2ResourcePath = "/v2/metrics/resource"
+	prometheusMetricsPathLegacy               = "/prometheus/metrics"
+	prometheusMetricsV2ClusterPath            = "/v2/metrics/cluster"
+	prometheusMetricsV2BucketPath             = "/v2/metrics/bucket"
+	prometheusMetricsV2NodePath               = "/v2/metrics/node"
+	prometheusMetricsV2ResourcePath           = "/v2/metrics/resource"
+	prometheusMetricsV3APIPath                = "/v3/metrics/api"
+	prometheusMetricsV3APIObjectPath          = "/v3/metrics/api/object"
+	prometheusMetricsV3APIBucketPath          = "/v3/metrics/api/bucket"
+	prometheusMetricsV3BucketReplicationPath  = "/v3/metrics/api/bucket/replication"
+	prometheusMetricsV3NodePath               = "/v3/metrics/node"
+	prometheusMetricsV3DebugPath              = "/v3/metrics/debug"
+	prometheusMetricsV3ClusterReplicationPath = "/v3/metrics/cluster/replication"
 )
 
 // Standard env prometheus auth type
@@ -59,4 +66,10 @@ func registerMetricsRouter(router *mux.Router) {
 	metricsRouter.Handle(prometheusMetricsV2BucketPath, auth(metricsBucketHandler()))
 	metricsRouter.Handle(prometheusMetricsV2NodePath, auth(metricsNodeHandler()))
 	metricsRouter.Handle(prometheusMetricsV2ResourcePath, auth(metricsResourceHandler()))
+	metricsRouter.Handle(prometheusMetricsV3APIPath, auth(metricsV3APIHandler()))
+	metricsRouter.Handle(prometheusMetricsV3APIObjectPath, auth(metricsV3APIObjectHandler()))
+	metricsRouter.Handle(prometheusMetricsV3APIBucketPath, auth(metricsV3APIBucketHandler()))
+	metricsRouter.Handle(prometheusMetricsV3DebugPath, auth(metricsV3DebugHandler()))
+	metricsRouter.Handle(prometheusMetricsV3BucketReplicationPath, auth(metricsV3BucketReplHandler()))
+	metricsRouter.Handle(prometheusMetricsV3NodePath, auth(metricsNodeV3Handler()))
 }

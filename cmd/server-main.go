@@ -336,6 +336,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	globalLocalNodeName = GetLocalPeer(globalEndpoints, globalMinioHost, globalMinioPort)
 	nodeNameSum := sha256.Sum256([]byte(globalLocalNodeName))
 	globalLocalNodeNameHex = hex.EncodeToString(nodeNameSum[:])
+	globalLocalPoolIdx = getLocalNodePoolIdx(globalLocalNodeName)
 
 	// Initialize, see which NIC the service is running on, and save it as global value
 	setGlobalInternodeInterface(ctxt.Interface)
