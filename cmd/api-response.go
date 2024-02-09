@@ -946,11 +946,13 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 
 // writeErrorRespone writes error headers
 func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
-	switch err.Code {
-	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
+	if err.HTTPStatusCode == http.StatusServiceUnavailable {
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 		w.Header().Set(xhttp.RetryAfter, "120")
+	}
+
+	switch err.Code {
 	case "InvalidRegion":
 		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region)
 	case "AuthorizationHeaderMalformed":
