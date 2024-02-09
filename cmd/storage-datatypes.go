@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+//go:generate msgp -file=$GOFILE
+
 // DeleteOptions represents the disk level delete options available for the APIs
 type DeleteOptions struct {
 	BaseOptions
@@ -43,8 +45,6 @@ type DiskInfoOptions struct {
 	Metrics bool   `msg:"m"`
 	NoOp    bool   `msg:"np"`
 }
-
-//go:generate msgp -file=$GOFILE
 
 // DiskInfo is an extended type which returns current
 // disk usage per path.
@@ -445,4 +445,9 @@ type RenameDataResp struct {
 // LocalDiskIDs - GetLocalIDs response.
 type LocalDiskIDs struct {
 	IDs []string
+}
+
+// ListDirResult - ListDir()'s response.
+type ListDirResult struct {
+	Entries []string `msg:"e"`
 }

@@ -636,6 +636,16 @@ func (j *Array[T]) Value() []T {
 	return j.val
 }
 
+// Append a value to the underlying array.
+// The returned Array is always the same as the one called.
+func (j *Array[T]) Append(v ...T) *Array[T] {
+	if j.val == nil {
+		j.val = j.p.newA(uint32(len(v)))
+	}
+	j.val = append(j.val, v...)
+	return j
+}
+
 // Set the underlying value.
 func (j *Array[T]) Set(val []T) {
 	j.val = val

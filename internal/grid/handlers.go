@@ -103,6 +103,7 @@ const (
 	HandlerGetPeerBucketMetrics
 	HandlerStorageInfo
 	HandlerConsoleLog
+	HandlerListDir
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -179,6 +180,7 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerGetPeerBucketMetrics:        peerPrefix,
 	HandlerStorageInfo:                 peerPrefix,
 	HandlerConsoleLog:                  peerPrefix,
+	HandlerListDir:                     storagePrefix,
 }
 
 const (
