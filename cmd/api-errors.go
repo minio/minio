@@ -2351,31 +2351,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case dns.ErrBucketConflict:
 		apiErr = ErrBucketAlreadyExists
 	default:
-		if _, ok := err.(tags.Error); ok {
-			// tag errors are not exported, so we check their custom interface to avoid logging.
-			// The correct type is inserted by toAPIError.
-			apiErr = ErrInternalError
-			break
-		}
-		var ie, iw int
-		// This work-around is to handle the issue golang/go#30648
-		//nolint:gocritic
-		if _, ferr := fmt.Fscanf(strings.NewReader(err.Error()),
-			"request declared a Content-Length of %d but only wrote %d bytes",
-			&ie, &iw); ferr != nil {
-			apiErr = ErrInternalError
-			// Make sure to log the errors which we cannot translate
-			// to a meaningful S3 API errors. This is added to aid in
-			// debugging unexpected/unhandled errors.
-			logger.LogIf(ctx, err)
-		} else if ie > iw {
+		if strings.Contains(err.Error(), "requested declared a Content-Length") {
 			apiErr = ErrIncompleteBody
 		} else {
 			apiErr = ErrInternalError
-			// Make sure to log the errors which we cannot translate
-			// to a meaningful S3 API errors. This is added to aid in
-			// debugging unexpected/unhandled errors.
-			logger.LogIf(ctx, err)
 		}
 	}
 
@@ -2517,6 +2496,13 @@ func toAPIError(ctx context.Context, err error) APIError {
 				}
 			}
 		}
+	}
+
+	if apiErr.Code == "InternalError" {
+		// Make sure to log the errors which we cannot translate
+		// to a meaningful S3 API errors. This is added to aid in
+		// debugging unexpected/unhandled errors.
+		logger.LogIf(ctx, err)
 	}
 
 	return apiErr
