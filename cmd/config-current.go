@@ -602,6 +602,8 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		// update dynamic scanner values.
 		scannerIdleMode.Store(scannerCfg.IdleMode)
 		scannerCycle.Store(scannerCfg.Cycle)
+		scannerExcessObjectVersions.Store(scannerCfg.ExcessVersions)
+		scannerExcessFolders.Store(scannerCfg.ExcessFolders)
 		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.LoggerWebhookSubSys)

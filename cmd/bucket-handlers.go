@@ -1395,7 +1395,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			// Notify object created events.
 			sendEvent(eventArgsList[i])
 
-			if eventArgsList[i].Object.NumVersions > dataScannerExcessiveVersionsThreshold {
+			if eventArgsList[i].Object.NumVersions > int(scannerExcessObjectVersions.Load()) {
 				// Send events for excessive versions.
 				sendEvent(eventArgs{
 					EventName:    event.ObjectManyVersions,
@@ -1405,6 +1405,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					RespElements: extractRespElements(w),
 					UserAgent:    r.UserAgent() + " " + "MinIO-Fan-Out",
 					Host:         handlers.GetSourceIP(r),
+				})
+
+				auditLogInternal(context.Background(), AuditLogOptions{
+					Event:     "scanner:manyversions",
+					APIName:   "PostPolicyBucket",
+					Bucket:    eventArgsList[i].Object.Bucket,
+					Object:    eventArgsList[i].Object.Name,
+					VersionID: eventArgsList[i].Object.VersionID,
+					Status:    http.StatusText(http.StatusOK),
 				})
 			}
 		}
@@ -1461,7 +1470,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		Host:         handlers.GetSourceIP(r),
 	})
 
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		defer sendEvent(eventArgs{
 			EventName:    event.ObjectManyVersions,
 			BucketName:   objInfo.Bucket,
@@ -1470,6 +1479,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			RespElements: extractRespElements(w),
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
+		})
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "PostPolicyBucket",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
 		})
 	}
 

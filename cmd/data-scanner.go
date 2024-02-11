@@ -57,18 +57,17 @@ const (
 
 	healDeleteDangling   = true
 	healObjectSelectProb = 1024 // Overall probability of a file being scanned; one in n.
-
-	dataScannerExcessiveVersionsThreshold = 100   // Issue a warning when a single object has more versions than this
-	dataScannerExcessiveFoldersThreshold  = 50000 // Issue a warning when a folder has more subfolders than this in a *set*
 )
 
 var (
 	globalHealConfig heal.Config
 
 	// Sleeper values are updated when config is loaded.
-	scannerSleeper  = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
-	scannerCycle    = uatomic.NewDuration(dataScannerStartDelay)
-	scannerIdleMode = uatomic.NewInt32(0) // default is throttled when idle
+	scannerSleeper              = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
+	scannerCycle                = uatomic.NewDuration(dataScannerStartDelay)
+	scannerIdleMode             = uatomic.NewInt32(0) // default is throttled when idle
+	scannerExcessObjectVersions = uatomic.NewInt64(100)
+	scannerExcessFolders        = uatomic.NewInt64(50000)
 )
 
 // initDataScanner will start the scanner in the background.
@@ -530,8 +529,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders ||
 			len(existingFolders)+len(newFolders) >= dataScannerForceCompactAtFolders
 
-		if len(existingFolders)+len(newFolders) > dataScannerExcessiveFoldersThreshold {
-			// Notify object accessed via a GET request.
+		if len(existingFolders)+len(newFolders) > int(scannerExcessFolders.Load()) {
 			sendEvent(eventArgs{
 				EventName:  event.PrefixManyFolders,
 				BucketName: f.root,
@@ -1101,7 +1099,7 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 	}
 
 	// Check if we have many versions after applyNewerNoncurrentVersionLimit.
-	if len(objInfos) > dataScannerExcessiveVersionsThreshold {
+	if len(objInfos) > int(scannerExcessObjectVersions.Load()) {
 		// Notify object accessed via a GET request.
 		sendEvent(eventArgs{
 			EventName:  event.ObjectManyVersions,
@@ -1112,6 +1110,16 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			UserAgent:    "Internal: [Scanner]",
 			Host:         globalLocalNodeName,
 			RespElements: map[string]string{"x-minio-versions": strconv.Itoa(len(fivs))},
+		})
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:   "scanner:manyversions",
+			APIName: ILMExpiry,
+			Bucket:  i.bucket,
+			Object:  i.objectPath(),
+			Tags: map[string]interface{}{
+				"x-minio-versions": strconv.Itoa(len(fivs)),
+			},
 		})
 	}
 
