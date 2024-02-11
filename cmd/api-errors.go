@@ -2351,7 +2351,7 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case dns.ErrBucketConflict:
 		apiErr = ErrBucketAlreadyExists
 	default:
-		if strings.Contains(err.Error(), "requested declared a Content-Length") {
+		if strings.Contains(err.Error(), "request declared a Content-Length") {
 			apiErr = ErrIncompleteBody
 		} else {
 			apiErr = ErrInternalError
