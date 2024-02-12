@@ -1085,6 +1085,11 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 	}
 
 	if len(buf) == 0 {
+		if errors.Is(err, errFileNotFound) && !skipAccessChecks(volume) {
+			if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
+				return errVolumeNotFound
+			}
+		}
 		return errFileNotFound
 	}
 
