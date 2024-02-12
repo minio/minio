@@ -3317,7 +3317,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 				globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, false)
 				// proxy to replication target if site replication is in place.
 				tags, gerr := proxyGetTaggingToRepTarget(ctx, bucket, object, opts, proxytgts)
-				if gerr.Err != nil {
+				if gerr.Err != nil || tags == nil {
 					globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, true)
 					writeErrorResponse(ctx, w, toAPIError(ctx, gerr.Err), r.URL)
 					return
