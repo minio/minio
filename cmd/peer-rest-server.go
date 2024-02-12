@@ -833,16 +833,19 @@ func (s *peerRESTServer) CommitBinaryHandler(w http.ResponseWriter, r *http.Requ
 var errUnsupportedSignal = fmt.Errorf("unsupported signal")
 
 func waitingDrivesNode() map[string]madmin.DiskMetrics {
-	errs := make([]error, len(globalLocalDrives))
-	infos := make([]DiskInfo, len(globalLocalDrives))
-	for i, drive := range globalLocalDrives {
+	globalLocalDrivesMu.RLock()
+	localDrives := globalLocalDrives
+	globalLocalDrivesMu.RUnlock()
+
+	errs := make([]error, len(localDrives))
+	infos := make([]DiskInfo, len(localDrives))
+	for i, drive := range localDrives {
 		infos[i], errs[i] = drive.DiskInfo(GlobalContext, DiskInfoOptions{})
 	}
 	infoMaps := make(map[string]madmin.DiskMetrics)
 	for i := range infos {
 		if infos[i].Metrics.TotalWaiting >= 1 && errors.Is(errs[i], errFaultyDisk) {
 			infoMaps[infos[i].Endpoint] = madmin.DiskMetrics{
-				TotalTokens:  infos[i].Metrics.TotalTokens,
 				TotalWaiting: infos[i].Metrics.TotalWaiting,
 			}
 		}
