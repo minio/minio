@@ -467,13 +467,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
 	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
 
-	// Before proceeding validate if bucket exists.
-	_, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
 	deleteObjectsFn := objectAPI.DeleteObjects
 
 	// Return Malformed XML as S3 spec if the number of objects is empty
@@ -611,6 +604,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		VersionSuspended: vc.Suspended(),
 	})
 
+	// Are all objects saying bucket not found?
+	if isAllBucketsNotFound(errs) {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errs[0]), r.URL)
+		return
+	}
+
 	for i := range errs {
 		// DeleteMarkerVersionID is not used specifically to avoid
 		// lookup errors, since DeleteMarkerVersionID is only
@@ -618,7 +617,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		// specify a versionID.
 		objToDel := ObjectToDelete{
 			ObjectV: ObjectV{
-				ObjectName: dObjects[i].ObjectName,
+				ObjectName: decodeDirObject(dObjects[i].ObjectName),
 				VersionID:  dObjects[i].VersionID,
 			},
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus(),
