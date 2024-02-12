@@ -3280,7 +3280,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 						Value:       float64(s.ProxyStats.GetTagFailedTotal),
 					})
 					metrics = append(metrics, Metric{
-						Description: getClusterReplProxiedRmvTaggingFailedOperationsMD(clusterMetricNamespace),
+						Description: getClusterReplProxiedRmvTaggingFailedOperationsMD(bucketMetricNamespace),
 						Value:       float64(s.ProxyStats.RmvTagFailedTotal),
 					})
 				}
