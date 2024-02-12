@@ -287,6 +287,8 @@ const (
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
+	ErrAdminNoAccessKey
+	ErrAdminNoSecretKey
 	ErrAdminConfigNoQuorum
 	ErrAdminConfigTooLarge
 	ErrAdminConfigBadJSON
@@ -1359,6 +1361,16 @@ var errorCodes = errorCodeMap{
 		Description:    "The secret key is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminNoAccessKey: {
+		Code:           "XMinioAdminNoAccessKey",
+		Description:    "No access key was provided.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminNoSecretKey: {
+		Code:           "XMinioAdminNoSecretKey",
+		Description:    "No secret key was provided.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminConfigNoQuorum: {
 		Code:           "XMinioAdminConfigNoQuorum",
 		Description:    "Configuration update failed because server quorum was not met",
@@ -2124,6 +2136,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:
 		apiErr = ErrAdminInvalidSecretKey
+	case auth.ErrNoAccessKeyWithSecretKey:
+		apiErr = ErrAdminNoAccessKey
+	case auth.ErrNoSecretKeyWithAccessKey:
+		apiErr = ErrAdminNoSecretKey
 	case errInvalidStorageClass:
 		apiErr = ErrInvalidStorageClass
 	case errErasureReadQuorum:
