@@ -72,15 +72,15 @@ func (z *erasureServerPools) SinglePool() bool {
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
 	var (
 		deploymentID       string
-		distributionAlgo   string
 		commonParityDrives int
 		err                error
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
 		z            = &erasureServerPools{
-			serverPools: make([]*erasureSets, len(endpointServerPools)),
-			s3Peer:      NewS3PeerSys(endpointServerPools),
+			serverPools:      make([]*erasureSets, len(endpointServerPools)),
+			s3Peer:           NewS3PeerSys(endpointServerPools),
+			distributionAlgo: formatErasureVersionV3DistributionAlgoV3,
 		}
 	)
 
@@ -126,7 +126,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		bootstrapTrace("waitForFormatErasure: loading disks", func() {
 			storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
-				ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
+				ep.SetCount, ep.DrivesPerSet, deploymentID)
 		})
 		if err != nil {
 			return nil, err
@@ -135,10 +135,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if deploymentID == "" {
 			// all pools should have same deployment ID
 			deploymentID = formats[i].ID
-		}
-
-		if distributionAlgo == "" {
-			distributionAlgo = formats[i].Erasure.DistributionAlgo
 		}
 
 		// Validate if users brought different DeploymentID pools.
@@ -155,10 +151,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		if deploymentID != "" && bytes.Equal(z.deploymentID[:], []byte{}) {
 			z.deploymentID = uuid.MustParse(deploymentID)
-		}
-
-		if distributionAlgo != "" && z.distributionAlgo == "" {
-			z.distributionAlgo = distributionAlgo
 		}
 
 		for _, storageDisk := range storageDisks[i] {
