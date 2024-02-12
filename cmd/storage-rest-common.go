@@ -20,9 +20,7 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	// Added orig-volume support for CreateFile, WriteMetadata, ReadVersion, ListDir
-	// this is needed for performance optimization on bucket checks.
-	storageRESTVersion       = "v56"
+	storageRESTVersion       = "v57" // Remove TotalTokens from DiskMetrics
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )

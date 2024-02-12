@@ -1155,9 +1155,17 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 				s.erasureDisks[m][n] = disk
 
-				if disk.IsLocal() && globalIsDistErasure {
+				if disk.IsLocal() {
 					globalLocalDrivesMu.Lock()
-					globalLocalSetDrives[s.poolIndex][m][n] = disk
+					if globalIsDistErasure {
+						globalLocalSetDrives[s.poolIndex][m][n] = disk
+					}
+					for i, ldisk := range globalLocalDrives {
+						_, k, l := ldisk.GetDiskLoc()
+						if k == m && l == n {
+							globalLocalDrives[i] = disk
+						}
+					}
 					globalLocalDrivesMu.Unlock()
 				}
 			}
