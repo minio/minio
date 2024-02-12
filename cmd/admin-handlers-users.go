@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/klauspost/compress/zip"
@@ -774,28 +775,6 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Permission checks:
-	//
-	// 1. Any type of account (i.e. access keys (previously/still called service
-	// accounts), STS accounts, internal IDP accounts, etc) with the
-	// policy.UpdateServiceAccountAdminAction permission can update any service
-	// account.
-	//
-	// 2. We would like to let a user update their own access keys, however it
-	// is currently blocked pending a re-design. Users are still able to delete
-	// and re-create them.
-	if !globalIAMSys.IsAllowed(policy.Args{
-		AccountName:     cred.AccessKey,
-		Groups:          cred.Groups,
-		Action:          policy.UpdateServiceAccountAdminAction,
-		ConditionValues: getConditionValues(r, "", cred),
-		IsOwner:         owner,
-		Claims:          cred.Claims,
-	}) {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-		return
-	}
-
 	password := cred.SecretKey
 	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
@@ -813,6 +792,31 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 		// Since this validation would happen client side as well, we only send
 		// a generic error message here.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
+	condValues := getConditionValues(r, "", cred)
+	addExpirationToCondValues(updateReq.NewExpiration, condValues)
+
+	// Permission checks:
+	//
+	// 1. Any type of account (i.e. access keys (previously/still called service
+	// accounts), STS accounts, internal IDP accounts, etc) with the
+	// policy.UpdateServiceAccountAdminAction permission can update any service
+	// account.
+	//
+	// 2. We would like to let a user update their own access keys, however it
+	// is currently blocked pending a re-design. Users are still able to delete
+	// and re-create them.
+	if !globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.UpdateServiceAccountAdminAction,
+		ConditionValues: condValues,
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 		return
 	}
 
@@ -2417,6 +2421,13 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) {
+	if exp == nil {
+		return
+	}
+	condValues["DurationSeconds"] = []string{strconv.FormatInt(int64(exp.Sub(time.Now()).Seconds()), 10)}
+}
+
 func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
 	ctx := r.Context()
 
@@ -2472,13 +2483,16 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 		claims:      make(map[string]interface{}),
 	}
 
+	condValues := getConditionValues(r, "", cred)
+	addExpirationToCondValues(createReq.Expiration, condValues)
+
 	// Check if action is allowed if creating access key for another user
 	// Check if action is explicitly denied if for self
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
 		Groups:          cred.Groups,
 		Action:          policy.CreateServiceAccountAdminAction,
-		ConditionValues: getConditionValues(r, "", cred),
+		ConditionValues: condValues,
 		IsOwner:         owner,
 		Claims:          cred.Claims,
 		DenyOnly:        (targetUser == cred.AccessKey || targetUser == cred.ParentUser),

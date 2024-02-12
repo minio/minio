@@ -467,13 +467,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
 	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
 
-	// Before proceeding validate if bucket exists.
-	_, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
-
 	deleteObjectsFn := objectAPI.DeleteObjects
 
 	// Return Malformed XML as S3 spec if the number of objects is empty
@@ -611,6 +604,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		VersionSuspended: vc.Suspended(),
 	})
 
+	// Are all objects saying bucket not found?
+	if isAllBucketsNotFound(errs) {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errs[0]), r.URL)
+		return
+	}
+
 	for i := range errs {
 		// DeleteMarkerVersionID is not used specifically to avoid
 		// lookup errors, since DeleteMarkerVersionID is only
@@ -618,7 +617,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		// specify a versionID.
 		objToDel := ObjectToDelete{
 			ObjectV: ObjectV{
-				ObjectName: dObjects[i].ObjectName,
+				ObjectName: decodeDirObject(dObjects[i].ObjectName),
 				VersionID:  dObjects[i].VersionID,
 			},
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus(),
@@ -1395,7 +1394,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			// Notify object created events.
 			sendEvent(eventArgsList[i])
 
-			if eventArgsList[i].Object.NumVersions > dataScannerExcessiveVersionsThreshold {
+			if eventArgsList[i].Object.NumVersions > int(scannerExcessObjectVersions.Load()) {
 				// Send events for excessive versions.
 				sendEvent(eventArgs{
 					EventName:    event.ObjectManyVersions,
@@ -1405,6 +1404,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					RespElements: extractRespElements(w),
 					UserAgent:    r.UserAgent() + " " + "MinIO-Fan-Out",
 					Host:         handlers.GetSourceIP(r),
+				})
+
+				auditLogInternal(context.Background(), AuditLogOptions{
+					Event:     "scanner:manyversions",
+					APIName:   "PostPolicyBucket",
+					Bucket:    eventArgsList[i].Object.Bucket,
+					Object:    eventArgsList[i].Object.Name,
+					VersionID: eventArgsList[i].Object.VersionID,
+					Status:    http.StatusText(http.StatusOK),
 				})
 			}
 		}
@@ -1461,7 +1469,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		Host:         handlers.GetSourceIP(r),
 	})
 
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		defer sendEvent(eventArgs{
 			EventName:    event.ObjectManyVersions,
 			BucketName:   objInfo.Bucket,
@@ -1470,6 +1478,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			RespElements: extractRespElements(w),
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
+		})
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "PostPolicyBucket",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
 		})
 	}
 

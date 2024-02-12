@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -1035,9 +1036,18 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		Metadata:     cleanReservedKeys(objInfo.UserDefined),
 	})
 
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		evt.EventName = event.ObjectManyVersions
 		sendEvent(evt)
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "CompleteMultipartUpload",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
+		})
 	}
 
 	// Remove the transitioned object whose object version is being overwritten.

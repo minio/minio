@@ -419,7 +419,7 @@ var (
 	globalServiceFreezeMu  sync.Mutex // Updates.
 
 	// List of local drives to this node, this is only set during server startup,
-	// and should never be mutated. Hold globalLocalDrivesMu to access.
+	// and is only mutated by HealFormat. Hold globalLocalDrivesMu to access.
 	globalLocalDrives   []StorageAPI
 	globalLocalDrivesMu sync.RWMutex
 

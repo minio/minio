@@ -28,9 +28,21 @@ var (
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         Speed,
-			Description: `scanner speed` + defaultHelpPostfix(Speed),
+			Description: `customize scanner speed (default|slowest|slow|fast|fastest)` + defaultHelpPostfix(Speed),
 			Optional:    true,
-			Type:        "default|slowest|slow|fast|fastest",
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         ExcessVersions,
+			Description: `alert per object beyond this many versions` + defaultHelpPostfix(ExcessVersions),
+			Optional:    true,
+			Type:        "int",
+		},
+		config.HelpKV{
+			Key:         ExcessFolders,
+			Description: `alert beyond this many sub-folders per folder in an erasure set` + defaultHelpPostfix(ExcessFolders),
+			Optional:    true,
+			Type:        "int",
 		},
 	}
 )
