@@ -47,6 +47,7 @@ const (
 	ObjectCreatedDeleteTagging
 	ObjectRemovedDelete
 	ObjectRemovedDeleteMarkerCreated
+	ObjectRemovedNoOP
 	BucketCreated
 	BucketRemoved
 	ObjectReplicationFailed
@@ -98,6 +99,7 @@ func (name Name) Expand() []Name {
 		return []Name{
 			ObjectRemovedDelete,
 			ObjectRemovedDeleteMarkerCreated,
+			ObjectRemovedNoOP,
 		}
 	case ObjectReplicationAll:
 		return []Name{
@@ -189,6 +191,8 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:Delete"
 	case ObjectRemovedDeleteMarkerCreated:
 		return "s3:ObjectRemoved:DeleteMarkerCreated"
+	case ObjectRemovedNoOP:
+		return "s3:ObjectRemoved:NoOP"
 	case ObjectReplicationAll:
 		return "s3:Replication:*"
 	case ObjectReplicationFailed:
@@ -307,6 +311,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedDelete, nil
 	case "s3:ObjectRemoved:DeleteMarkerCreated":
 		return ObjectRemovedDeleteMarkerCreated, nil
+	case "s3:ObjectRemoved:NoOP":
+		return ObjectRemovedNoOP, nil
 	case "s3:Replication:*":
 		return ObjectReplicationAll, nil
 	case "s3:Replication:OperationFailedReplication":

@@ -2882,6 +2882,18 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			// Send an event when the object is not found
+			objInfo.Name = object
+			objInfo.VersionID = opts.VersionID
+			sendEvent(eventArgs{
+				EventName:    event.ObjectRemovedNoOP,
+				BucketName:   bucket,
+				Object:       objInfo,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         handlers.GetSourceIP(r),
+			})
 			writeSuccessNoContent(w)
 			return
 		}
