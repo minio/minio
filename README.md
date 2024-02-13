@@ -123,7 +123,7 @@ You can also connect using any S3-compatible tool, such as the MinIO Client `mc`
 
 ## Install from Source
 
-Use the following commands to compile and run a standalone MinIO server from source. Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.19](https://golang.org/dl/#stable)
+Use the following commands to compile and run a standalone MinIO server from source. Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://golang.org/doc/install). Minimum version required is [go1.21](https://golang.org/dl/#stable)
 
 ```sh
 go install github.com/minio/minio@latest
