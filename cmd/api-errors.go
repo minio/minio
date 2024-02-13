@@ -287,8 +287,7 @@ const (
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
-	ErrAdminNoAccessKey
-	ErrAdminNoSecretKey
+
 	ErrAdminConfigNoQuorum
 	ErrAdminConfigTooLarge
 	ErrAdminConfigBadJSON
@@ -434,6 +433,9 @@ const (
 
 	// New Codes for GetObjectAttributes and GetObjectVersionAttributes
 	ErrInvalidAttributeName
+
+	ErrAdminNoAccessKey
+	ErrAdminNoSecretKey
 
 	apiErrCodeEnd // This is used only for the testing code
 )
