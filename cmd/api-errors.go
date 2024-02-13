@@ -287,7 +287,6 @@ const (
 	ErrAdminInvalidArgument
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
-
 	ErrAdminConfigNoQuorum
 	ErrAdminConfigTooLarge
 	ErrAdminConfigBadJSON
