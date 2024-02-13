@@ -540,6 +540,16 @@ func (client *peerRESTClient) LoadGroup(group string) error {
 	return err
 }
 
+func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) error {
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
+	}
+
+	_, err := reloadSiteReplicationConfigHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
+	return err
+}
+
 // VerifyBinary - sends verify binary message to remote peers.
 func (client *peerRESTClient) VerifyBinary(ctx context.Context, u *url.URL, sha256Sum []byte, releaseInfo string, reader io.Reader) error {
 	values := make(url.Values)
@@ -968,15 +978,6 @@ func (client *peerRESTClient) DriveSpeedTest(ctx context.Context, opts madmin.Dr
 		return result, errors.New(result.Error)
 	}
 	return result, nil
-}
-
-func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) error {
-	respBody, err := client.callWithContext(context.Background(), peerRESTMethodReloadSiteReplicationConfig, nil, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer xhttp.DrainBody(respBody)
-	return nil
 }
 
 func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (DailyAllTierStats, error) {
