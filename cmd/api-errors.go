@@ -2021,7 +2021,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrAddUserInvalidArgument: {
 		Code:           "XMinioInvalidIAMCredentials",
-		Description:    "User is not allowed to be same as admin access key",
+		Description:    "Credential is not allowed to be same as admin access key",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrAdminResourceInvalidArgument: {

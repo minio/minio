@@ -621,6 +621,11 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if createReq.AccessKey == globalActiveCred.AccessKey {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserInvalidArgument), r.URL)
+		return
+	}
+
 	var (
 		targetGroups []string
 		err          error
