@@ -264,13 +264,22 @@ func (s *erasureSets) connectDisks() {
 			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			disk.SetFormatData(formatData)
 			s.erasureDisks[setIndex][diskIndex] = disk
-			s.erasureDisksMu.Unlock()
 
-			if disk.IsLocal() && globalIsDistErasure {
+			if disk.IsLocal() {
 				globalLocalDrivesMu.Lock()
-				globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
+				if globalIsDistErasure {
+					globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
+				}
+				for i, ldisk := range globalLocalDrives {
+					_, k, l := ldisk.GetDiskLoc()
+					if k == setIndex && l == diskIndex {
+						globalLocalDrives[i] = disk
+						break
+					}
+				}
 				globalLocalDrivesMu.Unlock()
 			}
+			s.erasureDisksMu.Unlock()
 		}(endpoint)
 	}
 

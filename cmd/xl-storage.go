@@ -229,14 +229,24 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
-	path := ep.Path
-	if path, err = getValidPath(path); err != nil {
-		return nil, err
+	s = &xlStorage{
+		drivePath:  ep.Path,
+		endpoint:   ep,
+		globalSync: globalFSOSync,
+		poolIndex:  -1,
+		setIndex:   -1,
+		diskIndex:  -1,
 	}
 
-	info, err := disk.GetInfo(path, true)
+	s.drivePath, err = getValidPath(ep.Path)
 	if err != nil {
-		return nil, err
+		s.drivePath = ep.Path
+		return s, err
+	}
+
+	info, err := disk.GetInfo(s.drivePath, true)
+	if err != nil {
+		return s, err
 	}
 
 	if !globalIsCICD && !globalIsErasureSD {
@@ -247,7 +257,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 			// size less than or equal to the threshold as rootDrives.
 			rootDrive = info.Total <= globalRootDiskThreshold
 		} else {
-			rootDrive, err = disk.IsRootDisk(path, SlashSeparator)
+			rootDrive, err = disk.IsRootDisk(s.drivePath, SlashSeparator)
 			if err != nil {
 				return nil, err
 			}
@@ -255,15 +265,6 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		if rootDrive {
 			return nil, errDriveIsRoot
 		}
-	}
-
-	s = &xlStorage{
-		drivePath:  path,
-		endpoint:   ep,
-		globalSync: globalFSOSync,
-		poolIndex:  -1,
-		setIndex:   -1,
-		diskIndex:  -1,
 	}
 
 	// Sanitize before setting it
@@ -285,11 +286,11 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	formatData, formatFi, err := formatErasureMigrate(s.drivePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		if os.IsPermission(err) {
-			return nil, errDiskAccessDenied
+			return s, errDiskAccessDenied
 		} else if isSysErrIO(err) {
-			return nil, errFaultyDisk
+			return s, errFaultyDisk
 		}
-		return nil, err
+		return s, err
 	}
 	s.formatData = formatData
 	s.formatFileInfo = formatFi
@@ -297,7 +298,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 
 	// Create all necessary bucket folders if possible.
 	if err = makeFormatErasureMetaVolumes(s); err != nil {
-		return nil, err
+		return s, err
 	}
 
 	if len(s.formatData) > 0 {
