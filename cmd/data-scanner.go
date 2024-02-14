@@ -1246,7 +1246,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		opts.DeletePrefix = true
 	}
 
-	obj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
+	dobj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
@@ -1255,10 +1255,13 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		logger.LogOnceIf(ctx, err, "non-transition-expiry")
 		return false
 	}
+	if dobj.Name == "" {
+		dobj = obj
+	}
 
 	tags := newLifecycleAuditEvent(src, lcEvent).Tags()
 	// Send audit for the lifecycle delete operation
-	auditLogLifecycle(ctx, obj, ILMExpiry, tags, traceFn)
+	auditLogLifecycle(ctx, dobj, ILMExpiry, tags, traceFn)
 
 	eventName := event.ObjectRemovedDelete
 	if obj.DeleteMarker {
@@ -1268,8 +1271,8 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  eventName,
-		BucketName: obj.Bucket,
-		Object:     obj,
+		BucketName: dobj.Bucket,
+		Object:     dobj,
 		UserAgent:  "Internal: [ILM-Expiry]",
 		Host:       globalLocalNodeName,
 	})
