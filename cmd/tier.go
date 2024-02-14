@@ -23,6 +23,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"path"
 	"strings"
@@ -466,6 +467,9 @@ func (config *TierConfigMgr) Reload(ctx context.Context, objAPI ObjectLayer) err
 	case nil:
 		break
 	case errConfigNotFound: // nothing to reload
+		// To maintain the invariance that lastRefreshedAt records the
+		// timestamp of last successful refresh
+		config.lastRefreshedAt = UTCNow()
 		return nil
 	default:
 		return err
@@ -514,11 +518,16 @@ func NewTierConfigMgr() *TierConfigMgr {
 
 func (config *TierConfigMgr) refreshTierConfig(ctx context.Context, objAPI ObjectLayer) {
 	const tierCfgRefresh = 15 * time.Minute
-	t := time.NewTimer(tierCfgRefresh)
-	sleeper := newDynamicSleeper(2, 150*time.Millisecond, false)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randInterval := func() time.Duration {
+		return time.Duration(r.Float64() * 5 * float64(time.Second))
+	}
+
+	// To avoid all MinIO nodes reading the tier config object at the same
+	// time.
+	t := time.NewTimer(tierCfgRefresh + randInterval())
 	defer t.Stop()
 	for {
-		wait := sleeper.Timer(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -527,9 +536,8 @@ func (config *TierConfigMgr) refreshTierConfig(ctx context.Context, objAPI Objec
 			if err != nil {
 				logger.LogIf(ctx, err)
 			}
-			wait()
 		}
-		t.Reset(tierCfgRefresh)
+		t.Reset(tierCfgRefresh + randInterval())
 	}
 }
 
@@ -566,18 +574,6 @@ func loadTierConfig(ctx context.Context, objAPI ObjectLayer) (*TierConfigMgr, er
 	}
 
 	return cfg, nil
-}
-
-// Reset clears remote tier configured and clears tier driver cache.
-func (config *TierConfigMgr) Reset() {
-	config.Lock()
-	for k := range config.drivercache {
-		delete(config.drivercache, k)
-	}
-	for k := range config.Tiers {
-		delete(config.Tiers, k)
-	}
-	config.Unlock()
 }
 
 // Init initializes tier configuration reading from objAPI
