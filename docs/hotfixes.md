@@ -128,4 +128,10 @@ To add a hotfix tag to the binary version and embed the relevant `commit-id` fol
 λ CRED_DIR=/media/builder/minio make docker-hotfix-push
 ```
 
+#### Builds the hotfix container and pushes to registry.min.dev/<customer>/minio
+
+```
+λ REPO="registry.min.dev/<customer>" CRED_DIR=/media/builder/minio make docker-hotfix-push
+```
+
 Once this has been provided to the customer relevant binary will be uploaded from our *release server* securely, directly to <https://dl.minio.io/server/minio/hotfixes/archive/>
