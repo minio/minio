@@ -572,7 +572,11 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	}()
 
 	expireCh := make(chan []expireObjInfo, workerSize)
-	go batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
+	expireDoneCh := make(chan struct{})
+	go func() {
+		defer close(expireDoneCh)
+		batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
+	}()
 
 	var (
 		prevObj       ObjectInfo
@@ -651,7 +655,8 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	}
 	xioutil.SafeClose(expireCh)
 
-	wk.Wait() // waits for all expire goroutines to complete
+	<-expireDoneCh // waits for the expire goroutine to complete
+	wk.Wait()      // waits for all expire workers to retire
 
 	ri.Complete = ri.ObjectsFailed == 0
 	ri.Failed = ri.ObjectsFailed > 0
