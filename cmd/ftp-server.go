@@ -35,7 +35,7 @@ type minioLogger struct{}
 // Print implement Logger
 func (log *minioLogger) Print(sessionID string, message interface{}) {
 	if serverDebugLog {
-		logger.Info("%s %s", sessionID, message)
+		fmt.Printf("%s %s\n", sessionID, message)
 	}
 }
 
@@ -43,9 +43,9 @@ func (log *minioLogger) Print(sessionID string, message interface{}) {
 func (log *minioLogger) Printf(sessionID string, format string, v ...interface{}) {
 	if serverDebugLog {
 		if sessionID != "" {
-			logger.Info("%s %s", sessionID, fmt.Sprintf(format, v...))
+			fmt.Printf("%s %s\n", sessionID, fmt.Sprintf(format, v...))
 		} else {
-			logger.Info(format, v...)
+			fmt.Printf(format+"\n", v...)
 		}
 	}
 }
@@ -54,9 +54,9 @@ func (log *minioLogger) Printf(sessionID string, format string, v ...interface{}
 func (log *minioLogger) PrintCommand(sessionID string, command string, params string) {
 	if serverDebugLog {
 		if command == "PASS" {
-			logger.Info("%s > PASS ****", sessionID)
+			fmt.Printf("%s > PASS ****\n", sessionID)
 		} else {
-			logger.Info("%s > %s %s", sessionID, command, params)
+			fmt.Printf("%s > %s %s\n", sessionID, command, params)
 		}
 	}
 }
@@ -64,7 +64,7 @@ func (log *minioLogger) PrintCommand(sessionID string, command string, params st
 // PrintResponse implement Logger
 func (log *minioLogger) PrintResponse(sessionID string, code int, message string) {
 	if serverDebugLog {
-		logger.Info("%s < %d %s", sessionID, code, message)
+		fmt.Printf("%s < %d %s\n", sessionID, code, message)
 	}
 }
 

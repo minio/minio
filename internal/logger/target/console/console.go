@@ -62,6 +62,11 @@ func (c *Target) Send(e interface{}) error {
 		return nil
 	}
 
+	if entry.Level == logger.EventKind {
+		fmt.Println(entry.Message)
+		return nil
+	}
+
 	traceLength := len(entry.Trace.Source)
 	trace := make([]string, traceLength)
 
