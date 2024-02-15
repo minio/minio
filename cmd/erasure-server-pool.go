@@ -2412,8 +2412,8 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			result.HealthyRead = erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !result.HealthyRead {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
+					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
+						poolIdx, setIdx, poolReadQuorums[poolIdx]))
 			}
 		}
 	}
