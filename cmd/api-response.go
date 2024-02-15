@@ -891,7 +891,7 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	}
 	// Similar check to http.checkWriteHeaderCode
 	if statusCode < 100 || statusCode > 999 {
-		logger.Error(fmt.Sprintf("invalid WriteHeader code %v", statusCode))
+		logger.LogIf(context.Background(), fmt.Errorf("invalid WriteHeader code %v", statusCode))
 		statusCode = http.StatusInternalServerError
 	}
 	setCommonHeaders(w)
@@ -961,7 +961,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	// Similar check to http.checkWriteHeaderCode
 	if err.HTTPStatusCode < 100 || err.HTTPStatusCode > 999 {
-		logger.Error(fmt.Sprintf("invalid WriteHeader code %v from %v", err.HTTPStatusCode, err.Code))
+		logger.LogIf(ctx, fmt.Errorf("invalid WriteHeader code %v from %v", err.HTTPStatusCode, err.Code))
 		err.HTTPStatusCode = http.StatusInternalServerError
 	}
 

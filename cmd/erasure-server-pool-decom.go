@@ -1167,7 +1167,7 @@ func (z *erasureServerPools) doDecommissionInRoutine(ctx context.Context, idx in
 	z.poolMetaMutex.Unlock()
 
 	if !failed {
-		logger.Info("Decommissioning complete for pool '%s', verifying for any pending objects", poolCmdLine)
+		logger.Event(dctx, "Decommissioning complete for pool '%s', verifying for any pending objects", poolCmdLine)
 		err := z.checkAfterDecom(dctx, idx)
 		if err != nil {
 			logger.LogIf(ctx, err)

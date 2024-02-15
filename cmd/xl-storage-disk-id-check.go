@@ -912,7 +912,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string)
 		})
 
 		if err == nil {
-			logger.Info("node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
+			logger.Event(context.Background(), "node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
 			p.health.status.Store(diskHealthOK)
 			p.health.waiting.Add(-1)
 			return
