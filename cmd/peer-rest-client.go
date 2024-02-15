@@ -601,21 +601,6 @@ func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error)
 	return state, err
 }
 
-// GetLocalDiskIDs - get a peer's local disks' IDs.
-func (client *peerRESTClient) GetLocalDiskIDs(ctx context.Context) (diskIDs []string) {
-	conn := client.gridConn()
-	if conn == nil {
-		return
-	}
-
-	resp, err := getLocalDiskIDsHandler.Call(ctx, conn, grid.NewMSS())
-	if err != nil {
-		return
-	}
-
-	return resp.IDs
-}
-
 // GetMetacacheListing - get a new or existing metacache.
 func (client *peerRESTClient) GetMetacacheListing(ctx context.Context, o listPathOptions) (*metacache, error) {
 	if client == nil {
