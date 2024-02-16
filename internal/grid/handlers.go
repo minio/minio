@@ -62,7 +62,6 @@ const (
 	HandlerServerVerify
 	HandlerTrace
 	HandlerListen
-	HandlerGetLocalDiskIDs
 	HandlerDeleteBucketMetadata
 	HandlerLoadBucketMetadata
 	HandlerReloadSiteReplicationConfig
@@ -119,7 +118,6 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerServerVerify:                bootstrapPrefix,
 	HandlerTrace:                       peerPrefix,
 	HandlerListen:                      peerPrefix,
-	HandlerGetLocalDiskIDs:             peerPrefix,
 	HandlerDeleteBucketMetadata:        peerPrefix,
 	HandlerLoadBucketMetadata:          peerPrefix,
 	HandlerReloadSiteReplicationConfig: peerPrefix,
