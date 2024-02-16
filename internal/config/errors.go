@@ -224,6 +224,11 @@ Examples:
 		"",
 		"MINIO_API_TRANSITION_WORKERS: should be >= GOMAXPROCS/2",
 	)
+	ErrInvalidExpiryWorkersValue = newErrFn(
+		"Invalid value for expiry workers",
+		"",
+		"MINIO_API_EXPIRY_WORKERS: should be between 1 and 500",
+	)
 	ErrInvalidBatchKeyRotationWorkersWait = newErrFn(
 		"Invalid value for batch key rotation workers wait",
 		"Please input a non-negative duration",

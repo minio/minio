@@ -41,9 +41,7 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
-	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
-	"github.com/minio/pkg/v2/workers"
 	"github.com/zeebo/xxh3"
 )
 
@@ -136,37 +134,66 @@ func (e *expiryStats) NumWorkers() int32 {
 	return e.workers.Load()
 }
 
+type expiryOp interface {
+	OpHash() uint64
+}
+
+type freeVersionTask struct {
+	ObjectInfo
+}
+
+func (f freeVersionTask) OpHash() uint64 {
+	return xxh3.HashString(f.TransitionedObject.Tier + f.TransitionedObject.Name)
+}
+
+func (n newerNoncurrentTask) OpHash() uint64 {
+	return xxh3.HashString(n.bucket + n.versions[0].ObjectV.ObjectName)
+}
+
+func (j jentry) OpHash() uint64 {
+	return xxh3.HashString(j.TierName + j.ObjName)
+}
+
+func (e expiryTask) OpHash() uint64 {
+	return xxh3.HashString(e.objInfo.Bucket + e.objInfo.Name)
+}
+
 // expiryState manages all ILM related expiration activities.
 type expiryState struct {
-	once                sync.Once
-	byDaysCh            chan expiryTask
-	byNewerNoncurrentCh chan newerNoncurrentTask
-	freeVersionCh       chan ObjectInfo
-	tierJournalCh       chan jentry
-	stats               expiryStats
+	mu      sync.RWMutex
+	workers []chan expiryOp
+
+	ctx    context.Context
+	objAPI ObjectLayer
+
+	stats expiryStats
 }
 
 // PendingTasks returns the number of pending ILM expiry tasks.
 func (es *expiryState) PendingTasks() int {
-	return len(es.byDaysCh) + len(es.byNewerNoncurrentCh)
-}
+	es.mu.RLock()
+	defer es.mu.RUnlock()
 
-// close closes work channels exactly once.
-func (es *expiryState) close() {
-	es.once.Do(func() {
-		xioutil.SafeClose(es.byDaysCh)
-		xioutil.SafeClose(es.byNewerNoncurrentCh)
-	})
+	var tasks int
+	for _, wrkr := range es.workers {
+		tasks += len(wrkr)
+	}
+
+	return tasks
 }
 
 // enqueueTierJournalEntry enqueues a tier journal entry referring to a remote
 // object corresponding to a 'replaced' object versions. This applies only to
 // non-versioned or version suspended buckets.
 func (es *expiryState) enqueueTierJournalEntry(je jentry) {
+	wrkr := es.getWorkerCh(je.OpHash())
+	if wrkr == nil {
+		es.stats.missedTierJournalTasks.Add(1)
+		return
+	}
 	select {
 	case <-GlobalContext.Done():
-		es.close()
-	case es.tierJournalCh <- je:
+	case wrkr <- je:
 	default:
 		es.stats.missedTierJournalTasks.Add(1)
 	}
@@ -174,10 +201,15 @@ func (es *expiryState) enqueueTierJournalEntry(je jentry) {
 
 // enqueueFreeVersion enqueues a free version to be deleted
 func (es *expiryState) enqueueFreeVersion(oi ObjectInfo) {
+	task := freeVersionTask{ObjectInfo: oi}
+	wrkr := es.getWorkerCh(task.OpHash())
+	if wrkr == nil {
+		es.stats.missedFreeVersTasks.Add(1)
+		return
+	}
 	select {
 	case <-GlobalContext.Done():
-		es.close()
-	case es.freeVersionCh <- oi:
+	case wrkr <- task:
 	default:
 		es.stats.missedFreeVersTasks.Add(1)
 	}
@@ -185,10 +217,15 @@ func (es *expiryState) enqueueFreeVersion(oi ObjectInfo) {
 
 // enqueueByDays enqueues object versions expired by days for expiry.
 func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src lcEventSrc) {
+	task := expiryTask{objInfo: oi, event: event, src: src}
+	wrkr := es.getWorkerCh(task.OpHash())
+	if wrkr == nil {
+		es.stats.missedExpiryTasks.Add(1)
+		return
+	}
 	select {
 	case <-GlobalContext.Done():
-		es.close()
-	case es.byDaysCh <- expiryTask{objInfo: oi, event: event, src: src}:
+	case wrkr <- task:
 	default:
 		es.stats.missedExpiryTasks.Add(1)
 	}
@@ -197,12 +234,17 @@ func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src l
 // enqueueByNewerNoncurrent enqueues object versions expired by
 // NewerNoncurrentVersions limit for expiry.
 func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []ObjectToDelete, lcEvent lifecycle.Event) {
+	task := newerNoncurrentTask{bucket: bucket, versions: versions, event: lcEvent}
+	wrkr := es.getWorkerCh(task.OpHash())
+	if wrkr == nil {
+		es.stats.missedExpiryTasks.Add(1)
+		return
+	}
 	select {
 	case <-GlobalContext.Done():
-		es.close()
-	case es.byNewerNoncurrentCh <- newerNoncurrentTask{bucket: bucket, versions: versions, event: lcEvent}:
+	case wrkr <- task:
 	default:
-		es.stats.missedFreeVersTasks.Add(1)
+		es.stats.missedExpiryTasks.Add(1)
 	}
 }
 
@@ -211,94 +253,77 @@ var globalExpiryState *expiryState
 
 // newExpiryState creates an expiryState with buffered channels allocated for
 // each ILM expiry task type.
-func newExpiryState() *expiryState {
-	return &expiryState{
-		byDaysCh:            make(chan expiryTask, 100_000),
-		byNewerNoncurrentCh: make(chan newerNoncurrentTask, 100_000),
-		freeVersionCh:       make(chan ObjectInfo, 100_000),
-		tierJournalCh:       make(chan jentry, 100_000),
+func newExpiryState(ctx context.Context, objAPI ObjectLayer, n int) *expiryState {
+	es := &expiryState{
+		ctx:     ctx,
+		objAPI:  objAPI,
+		workers: make([]chan expiryOp, 0, n),
+	}
+	es.ResizeWorkers(n)
+	return es
+}
+
+func (es *expiryState) getWorkerCh(h uint64) chan<- expiryOp {
+	es.mu.RLock()
+	defer es.mu.RUnlock()
+
+	if len(es.workers) == 0 {
+		return nil
+	}
+	return es.workers[h%uint64(len(es.workers))]
+}
+
+func (es *expiryState) ResizeWorkers(n int) {
+	es.mu.Lock()
+	defer es.mu.Unlock()
+
+	if n == len(es.workers) || n < 1 {
+		return
+	}
+
+	for len(es.workers) < n {
+		input := make(chan expiryOp, 10000)
+		es.workers = append(es.workers, input)
+		go es.Worker(input)
+		es.stats.workers.Add(1)
+	}
+
+	for len(es.workers) > n {
+		worker := es.workers[len(es.workers)-1]
+		es.workers = es.workers[:len(es.workers)-1]
+		xioutil.SafeClose(worker)
+		es.stats.workers.Add(-1)
 	}
 }
 
-// handleTasks handles 4 types of expiration tasks.
+// Worker handles 4 types of expiration tasks.
 // 1. Expiry of objects, includes regular and transitioned objects
 // 2. Expiry of noncurrent versions due to NewerNoncurrentVersions
 // 3. Expiry of free-versions, for remote objects of transitioned object which have been expired since.
 // 4. Expiry of remote objects corresponding to objects in a
 // non-versioned/version suspended buckets
-func (es *expiryState) handleTasks(ctx context.Context, objectAPI ObjectLayer) {
-	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", "100"))
-	if workerSize == 0 {
-		workerSize = 100
-	}
-	wk, err := workers.New(workerSize)
-	if err != nil {
-		logger.LogIf(ctx, err)
-	}
-	defer wk.Wait()
-
+func (es *expiryState) Worker(input <-chan expiryOp) {
 	for {
-		var (
-			et *expiryTask
-			nt *newerNoncurrentTask
-			ft *ObjectInfo
-			je *jentry
-		)
 		select {
-		case <-ctx.Done():
+		case <-es.ctx.Done():
 			return
-		case t := <-es.byDaysCh:
-			et = &t
-		case t := <-es.byNewerNoncurrentCh:
-			nt = &t
-		case t := <-es.freeVersionCh:
-			ft = &t
-		case t := <-es.tierJournalCh:
-			je = &t
-		}
-		switch {
-		case et != nil:
-			wk.Take()
-			es.stats.workers.Add(1)
-			go func(t expiryTask) {
-				defer func() {
-					es.stats.workers.Add(-1)
-					wk.Give()
-				}()
-				if t.objInfo.TransitionedObject.Status != "" {
-					applyExpiryOnTransitionedObject(ctx, objectAPI, t.objInfo, t.event, t.src)
+		case v, ok := <-input:
+			if !ok {
+				return
+			}
+			switch v := v.(type) {
+			case expiryTask:
+				if v.objInfo.TransitionedObject.Status != "" {
+					applyExpiryOnTransitionedObject(es.ctx, es.objAPI, v.objInfo, v.event, v.src)
 				} else {
-					applyExpiryOnNonTransitionedObjects(ctx, objectAPI, t.objInfo, t.event, t.src)
+					applyExpiryOnNonTransitionedObjects(es.ctx, es.objAPI, v.objInfo, v.event, v.src)
 				}
-			}(*et)
-		case nt != nil:
-			wk.Take()
-			es.stats.workers.Add(1)
-			go func(t newerNoncurrentTask) {
-				defer func() {
-					wk.Give()
-					es.stats.workers.Add(-1)
-				}()
-				deleteObjectVersions(ctx, objectAPI, t.bucket, t.versions, t.event)
-			}(*nt)
-		case je != nil:
-			wk.Take()
-			es.stats.workers.Add(1)
-			go func(t jentry) {
-				defer func() {
-					wk.Give()
-					es.stats.workers.Add(-1)
-				}()
-				logger.LogIf(ctx, deleteObjectFromRemoteTier(ctx, je.ObjName, je.VersionID, je.TierName))
-			}(*je)
-		case ft != nil:
-			wk.Take()
-			es.stats.workers.Add(1)
-			go func(oi ObjectInfo) {
-				defer func() {
-					wk.Give()
-					es.stats.workers.Add(-1)
-				}()
+			case newerNoncurrentTask:
+				deleteObjectVersions(es.ctx, es.objAPI, v.bucket, v.versions, v.event)
+			case jentry:
+				logger.LogIf(es.ctx, deleteObjectFromRemoteTier(es.ctx, v.ObjName, v.VersionID, v.TierName))
+			case freeVersionTask:
+				oi := v.ObjectInfo
 				traceFn := globalLifecycleSys.trace(oi)
 				if !oi.TransitionedObject.FreeVersion {
 					// nothing to be done
@@ -313,31 +338,30 @@ func (es *expiryState) handleTasks(ctx context.Context, objectAPI ObjectLayer) {
 					return err
 				}
 				// Remove the remote object
-				err := deleteObjectFromRemoteTier(ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
+				err := deleteObjectFromRemoteTier(es.ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
 				if ignoreNotFoundErr(err) != nil {
-					logger.LogIf(ctx, err)
+					logger.LogIf(es.ctx, err)
 					return
 				}
 
 				// Remove this free version
-				_, err = objectAPI.DeleteObject(ctx, oi.Bucket, oi.Name, ObjectOptions{
+				_, err = es.objAPI.DeleteObject(es.ctx, oi.Bucket, oi.Name, ObjectOptions{
 					VersionID:        oi.VersionID,
 					InclFreeVersions: true,
 				})
 				if err == nil {
-					auditLogLifecycle(ctx, oi, ILMFreeVersionDelete, nil, traceFn)
+					auditLogLifecycle(es.ctx, oi, ILMFreeVersionDelete, nil, traceFn)
 				}
 				if ignoreNotFoundErr(err) != nil {
-					logger.LogIf(ctx, err)
+					logger.LogIf(es.ctx, err)
 				}
-			}(*ft)
+			}
 		}
 	}
 }
 
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
-	globalExpiryState = newExpiryState()
-	go globalExpiryState.handleTasks(ctx, objectAPI)
+	globalExpiryState = newExpiryState(ctx, objectAPI, globalAPIConfig.getExpiryWorkers())
 }
 
 // newerNoncurrentTask encapsulates arguments required by worker to expire objects

@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/config/ilm"
 	"github.com/minio/minio/internal/config/lambda"
 	"github.com/minio/minio/internal/config/notify"
 	"github.com/minio/minio/internal/config/policy/opa"
@@ -78,6 +79,7 @@ func initHelp() {
 		config.SubnetSubSys:         subnet.DefaultKVS,
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 		config.DriveSubSys:          drive.DefaultKVS,
+		config.ILMSubSys:            ilm.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.BatchSubSys:          batch.DefaultKVS,
 		config.BrowserSubSys:        browser.DefaultKVS,
@@ -716,6 +718,18 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply browser config: %w", err)
 		}
 		globalBrowserConfig.Update(browserCfg)
+	case config.ILMSubSys:
+		ilmCfg, err := ilm.LookupConfig(s[config.ILMSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply ilm config: %w", err)
+		}
+		if globalTransitionState != nil {
+			globalTransitionState.UpdateWorkers(ilmCfg.TransitionWorkers)
+		}
+		if globalExpiryState != nil {
+			globalExpiryState.ResizeWorkers(ilmCfg.ExpirationWorkers)
+		}
+
 	}
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
