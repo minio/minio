@@ -274,7 +274,7 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, d := range localDrives {

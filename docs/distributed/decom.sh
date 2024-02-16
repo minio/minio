@@ -210,7 +210,10 @@ if [ "${expected_checksum}" != "${got_checksum}" ]; then
 	exit 1
 fi
 
-go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
+(
+	cd ./docs/debugging/s3-check-md5
+	go install -v
+)
 
 s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket bucket2
 s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned

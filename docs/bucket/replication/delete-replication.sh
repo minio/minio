@@ -75,9 +75,13 @@ echo "=== myminio1"
 echo "=== myminio2"
 ./mc ls --versions myminio2/testbucket/dir/file
 
-versionId="$(mc ls --json --versions myminio1/testbucket/dir/ | tail -n1 | jq -r .versionId)"
+versionId="$(./mc ls --json --versions myminio1/testbucket/dir/ | tail -n1 | jq -r .versionId)"
 
-aws s3api --endpoint-url http://localhost:9001 --profile minio delete-object --bucket testbucket --key dir/file --version-id "$versionId"
+aws configure set aws_access_key_id minioadmin --profile minioadmin
+aws configure set aws_secret_access_key minioadmin --profile minioadmin
+aws configure set default.region us-east-1 --profile minioadmin
+
+aws s3api --endpoint-url http://localhost:9001 --profile minioadmin delete-object --bucket testbucket --key dir/file --version-id "$versionId"
 
 ./mc ls -r --versions myminio1/testbucket >/tmp/myminio1.txt
 ./mc ls -r --versions myminio2/testbucket >/tmp/myminio2.txt
