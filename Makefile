@@ -177,9 +177,9 @@ docker: build ## builds minio docker container
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
 
 install-race: checks ## builds minio to $(PWD)
-	@echo "Building minio binary to './minio'"
+	@echo "Building minio binary with -race to './minio'"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
-	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
+	@echo "Installing minio binary with -race to '$(GOPATH)/bin/minio'"
 	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
 
 install: build ## builds minio and installs it to $GOPATH/bin.
