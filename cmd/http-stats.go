@@ -269,6 +269,28 @@ func (s *bucketConnStats) getS3InOutBytes() map[string]inOutBytes {
 	return bucketStats
 }
 
+// Return S3 total input/output bytes for each
+func (s *bucketConnStats) getBucketS3InOutBytes(buckets []string) map[string]inOutBytes {
+	s.RLock()
+	defer s.RUnlock()
+
+	if len(s.stats) == 0 || len(buckets) == 0 {
+		return nil
+	}
+
+	bucketStats := make(map[string]inOutBytes, len(buckets))
+	for _, bucket := range buckets {
+		if stats, ok := s.stats[bucket]; ok {
+			bucketStats[bucket] = inOutBytes{
+				In:  stats.s3InputBytes,
+				Out: stats.s3OutputBytes,
+			}
+		}
+	}
+
+	return bucketStats
+}
+
 // delete metrics once bucket is deleted.
 func (s *bucketConnStats) delete(bucket string) {
 	s.Lock()
