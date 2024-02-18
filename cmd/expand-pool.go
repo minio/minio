@@ -425,7 +425,7 @@ func (s *peerRESTServer) SyncExpandPoolsStatus(w http.ResponseWriter, r *http.Re
 // HashConfig - return the highway hash of the passed config
 func HashConfig(config []byte) string {
 	hh, _ := highwayhash.New(magicHighwayHash256Key)
-	hh.Write([]byte(config))
+	hh.Write(config)
 	return base64.URLEncoding.EncodeToString(hh.Sum(nil))
 }
 
