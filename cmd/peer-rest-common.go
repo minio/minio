@@ -80,7 +80,6 @@ const (
 	peerRESTMethodResourceMetrics             = "/resourcemetrics"
 	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
 	peerRESTMethodGetSRMetrics                = "/getsrmetrics"
-	peerRESTMethodSyncExpandPoolStatus        = "/syncexpandpoolstatus"
 )
 
 const (
