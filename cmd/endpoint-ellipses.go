@@ -446,9 +446,9 @@ func buildDisksLayoutFromConfFile(enableExpandPools bool, pools [][]string, temp
 			for j, d := range s {
 				if enableExpandPools {
 					if !temporary {
-						d += "/0/"
+						d += expandPoolDataPathPrefix
 					} else {
-						d += "/1/"
+						d += expandPoolTempDataPathPrefix
 					}
 					setArgs[i][j] = d
 				}

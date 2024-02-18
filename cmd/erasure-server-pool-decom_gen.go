@@ -803,10 +803,10 @@ func (z *SelfPoolExpand) DecodeMsg(dc *msgp.Reader) (err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "FileMD5":
-			z.FileMD5, err = dc.ReadString()
+		case "HashConfig":
+			z.HashConfig, err = dc.ReadString()
 			if err != nil {
-				err = msgp.WrapError(err, "FileMD5")
+				err = msgp.WrapError(err, "HashConfig")
 				return
 			}
 		case "BeforePools":
@@ -873,14 +873,14 @@ func (z *SelfPoolExpand) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z *SelfPoolExpand) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 5
-	// write "FileMD5"
-	err = en.Append(0x85, 0xa7, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x44, 0x35)
+	// write "HashConfig"
+	err = en.Append(0x85, 0xaa, 0x48, 0x61, 0x73, 0x68, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67)
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.FileMD5)
+	err = en.WriteString(z.HashConfig)
 	if err != nil {
-		err = msgp.WrapError(err, "FileMD5")
+		err = msgp.WrapError(err, "HashConfig")
 		return
 	}
 	// write "BeforePools"
@@ -944,9 +944,9 @@ func (z *SelfPoolExpand) EncodeMsg(en *msgp.Writer) (err error) {
 func (z *SelfPoolExpand) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 5
-	// string "FileMD5"
-	o = append(o, 0x85, 0xa7, 0x46, 0x69, 0x6c, 0x65, 0x4d, 0x44, 0x35)
-	o = msgp.AppendString(o, z.FileMD5)
+	// string "HashConfig"
+	o = append(o, 0x85, 0xaa, 0x48, 0x61, 0x73, 0x68, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67)
+	o = msgp.AppendString(o, z.HashConfig)
 	// string "BeforePools"
 	o = append(o, 0xab, 0x42, 0x65, 0x66, 0x6f, 0x72, 0x65, 0x50, 0x6f, 0x6f, 0x6c, 0x73)
 	o = msgp.AppendArrayHeader(o, uint32(len(z.BeforePools)))
@@ -986,10 +986,10 @@ func (z *SelfPoolExpand) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			return
 		}
 		switch msgp.UnsafeString(field) {
-		case "FileMD5":
-			z.FileMD5, bts, err = msgp.ReadStringBytes(bts)
+		case "HashConfig":
+			z.HashConfig, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "FileMD5")
+				err = msgp.WrapError(err, "HashConfig")
 				return
 			}
 		case "BeforePools":
@@ -1056,7 +1056,7 @@ func (z *SelfPoolExpand) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SelfPoolExpand) Msgsize() (s int) {
-	s = 1 + 8 + msgp.StringPrefixSize + len(z.FileMD5) + 12 + msgp.ArrayHeaderSize
+	s = 1 + 11 + msgp.StringPrefixSize + len(z.HashConfig) + 12 + msgp.ArrayHeaderSize
 	for za0001 := range z.BeforePools {
 		s += msgp.StringPrefixSize + len(z.BeforePools[za0001])
 	}

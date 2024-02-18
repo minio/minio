@@ -1036,7 +1036,7 @@ func (client *peerRESTClient) GetReplicationMRF(ctx context.Context, bucket stri
 }
 
 // SyncExpandPoolsStatus - sync expand pool status on a remote peer dynamically.
-func (client *peerRESTClient) SyncExpandPoolsStatus(before, after []string, poolExpandStatus string) (rsl SelfPoolExpandResponse, err error) {
+func (client *peerRESTClient) SyncExpandPoolsStatus(before, after []string, poolExpandStatus string) (rsl SelfPoolExpandResponse, rerr error) {
 	values := make(url.Values)
 	values.Set("poolExpandStatus", poolExpandStatus)
 	if len(before) != 0 {
@@ -1052,11 +1052,14 @@ func (client *peerRESTClient) SyncExpandPoolsStatus(before, after []string, pool
 	defer xhttp.DrainBody(respBody)
 	body, err := io.ReadAll(respBody)
 	if err != nil {
-		return rsl, err
+		rerr = err
 	} else if err = json.Unmarshal(body, &rsl); err != nil {
-		return rsl, err
+		rerr = err
 	} else if !rsl.Success {
-		return rsl, fmt.Errorf("failed to sync expand pool status")
+		rerr = fmt.Errorf("failed to sync expand pool status")
+	}
+	if client.host != nil {
+		rsl.Host = *client.host
 	}
 	return rsl, err
 }

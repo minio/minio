@@ -1482,7 +1482,7 @@ func auditLogDecom(ctx context.Context, apiName, bucket, object, versionID strin
 
 // SelfPoolExpand - self pool expand info
 type SelfPoolExpand struct {
-	FileMD5     string   `json:"fileMD5"`
+	HashConfig  string   `json:"hashConfig"`
 	BeforePools []string `json:"beforePools"`
 	AfterPools  []string `json:"afterPools"`
 	// Status is the current status of the pool expand operation
