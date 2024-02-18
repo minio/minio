@@ -163,7 +163,7 @@ func main() {
 				continue
 			}
 			if v, ok := object.UserMetadata["X-Amz-Server-Side-Encryption"]; ok && v == "aws:kms" {
-				log.Println("FAILED: encrypted with SSE-KMS do not have md5sum as ETag:", objFullPath(object))
+				log.Println("SKIPPED: encrypted with SSE-KMS do not have md5sum as ETag:", objFullPath(object))
 				continue
 			}
 			parts := 1

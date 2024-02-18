@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	grid "github.com/minio/minio/internal/grid"
+	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/rest"
@@ -400,7 +400,7 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 
 	volInfo, err := headBucketHandler.Call(ctx, conn, mss)
 	if err != nil {
-		return BucketInfo{}, err
+		return BucketInfo{}, toStorageErr(err)
 	}
 
 	return BucketInfo{
@@ -474,9 +474,12 @@ func (sys *S3PeerSys) DeleteBucket(ctx context.Context, bucket string, opts Dele
 				perPoolErrs = append(perPoolErrs, errs[i])
 			}
 		}
-		if poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1); poolErr != nil && poolErr != errVolumeNotFound {
-			// re-create successful deletes, since we are return an error.
-			sys.MakeBucket(ctx, bucket, MakeBucketOptions{})
+		poolErr := reduceWriteQuorumErrs(ctx, perPoolErrs, bucketOpIgnoredErrs, len(perPoolErrs)/2+1)
+		if poolErr != nil && !errors.Is(poolErr, errVolumeNotFound) {
+			if !opts.NoRecreate {
+				// re-create successful deletes, since we are return an error.
+				sys.MakeBucket(ctx, bucket, MakeBucketOptions{})
+			}
 			return toObjectErr(poolErr, bucket)
 		}
 	}

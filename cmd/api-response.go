@@ -891,7 +891,7 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	}
 	// Similar check to http.checkWriteHeaderCode
 	if statusCode < 100 || statusCode > 999 {
-		logger.Error(fmt.Sprintf("invalid WriteHeader code %v", statusCode))
+		logger.LogIf(context.Background(), fmt.Errorf("invalid WriteHeader code %v", statusCode))
 		statusCode = http.StatusInternalServerError
 	}
 	setCommonHeaders(w)
@@ -946,11 +946,13 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 
 // writeErrorRespone writes error headers
 func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
-	switch err.Code {
-	case "SlowDown", "XMinioServerNotInitialized", "XMinioReadQuorum", "XMinioWriteQuorum":
+	if err.HTTPStatusCode == http.StatusServiceUnavailable {
 		// Set retry-after header to indicate user-agents to retry request after 120secs.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
 		w.Header().Set(xhttp.RetryAfter, "120")
+	}
+
+	switch err.Code {
 	case "InvalidRegion":
 		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region)
 	case "AuthorizationHeaderMalformed":
@@ -959,7 +961,7 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	// Similar check to http.checkWriteHeaderCode
 	if err.HTTPStatusCode < 100 || err.HTTPStatusCode > 999 {
-		logger.Error(fmt.Sprintf("invalid WriteHeader code %v from %v", err.HTTPStatusCode, err.Code))
+		logger.LogIf(ctx, fmt.Errorf("invalid WriteHeader code %v from %v", err.HTTPStatusCode, err.Code))
 		err.HTTPStatusCode = http.StatusInternalServerError
 	}
 

@@ -270,16 +270,13 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
 
 	sys.Lock()
-	defer sys.Unlock()
-
 	sys.LDAPConfig = ldapConfig
 	sys.OpenIDConfig = openidConfig
 	sys.STSTLSConfig = stsTLSConfig
-
 	sys.iamRefreshInterval = iamRefreshInterval
-
 	// Initialize IAM store
 	sys.initStore(objAPI, etcdClient)
+	sys.Unlock()
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
@@ -529,7 +526,9 @@ func (sys *IAMSys) GetRolePolicy(arnStr string) (arn.ARN, string, error) {
 	return roleArn, rolePolicy, nil
 }
 
-// DeletePolicy - deletes a canned policy from backend or etcd.
+// DeletePolicy - deletes a canned policy from backend. `notifyPeers` is true
+// whenever this is called via the API. It is false when called via a
+// notification from another peer. This is to avoid infinite loops.
 func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPeers bool) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
@@ -543,7 +542,7 @@ func (sys *IAMSys) DeletePolicy(ctx context.Context, policyName string, notifyPe
 		}
 	}
 
-	err := sys.store.DeletePolicy(ctx, policyName)
+	err := sys.store.DeletePolicy(ctx, policyName, !notifyPeers)
 	if err != nil {
 		return err
 	}
@@ -941,6 +940,13 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		return auth.Credentials{}, time.Time{}, errInvalidArgument
 	}
 
+	if len(opts.accessKey) > 0 && len(opts.secretKey) == 0 {
+		return auth.Credentials{}, time.Time{}, auth.ErrNoSecretKeyWithAccessKey
+	}
+	if len(opts.secretKey) > 0 && len(opts.accessKey) == 0 {
+		return auth.Credentials{}, time.Time{}, auth.ErrNoAccessKeyWithSecretKey
+	}
+
 	var policyBuf []byte
 	if opts.sessionPolicy != nil {
 		err := opts.sessionPolicy.Validate()
@@ -984,7 +990,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 
 	var accessKey, secretKey string
 	var err error
-	if len(opts.accessKey) > 0 {
+	if len(opts.accessKey) > 0 || len(opts.secretKey) > 0 {
 		accessKey, secretKey = opts.accessKey, opts.secretKey
 	} else {
 		accessKey, secretKey, err = auth.GenerateCredentials()

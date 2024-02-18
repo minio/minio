@@ -154,7 +154,7 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 // connect to list of endpoints and load all Erasure disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
+func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
 	// Initialize all storage disks
 	storageDisks, errs := initStorageDisksWithErrors(endpoints, storageOpts{cleanUp: true, healthCheck: true})
 
@@ -208,20 +208,13 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		return nil, nil, err
 	}
 
-	// Return error when quorum unformatted disks - indicating we are
-	// waiting for first server to be online.
-	unformattedDisks := quorumUnformattedDisks(sErrs)
-	if unformattedDisks && !firstDisk {
-		return nil, nil, errNotFirstDisk
-	}
-
 	// All disks report unformatted we should initialized everyone.
-	if unformattedDisks && firstDisk {
+	if shouldInitErasureDisks(sErrs) && firstDisk {
 		logger.Info("Formatting %s pool, %v set(s), %v drives per set.",
 			humanize.Ordinal(poolCount), setCount, setDriveCount)
 
 		// Initialize erasure code format on disks
-		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, deploymentID, distributionAlgo, sErrs)
+		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, deploymentID, sErrs)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -230,6 +223,19 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 		// minio server managing the first disk
 		globalDeploymentIDPtr.Store(&format.ID)
 		return storageDisks, format, nil
+	}
+
+	// Return error when quorum unformatted disks - indicating we are
+	// waiting for first server to be online.
+	unformattedDisks := quorumUnformattedDisks(sErrs)
+	if unformattedDisks && !firstDisk {
+		return nil, nil, errNotFirstDisk
+	}
+
+	// Return error when quorum unformatted disks but waiting for rest
+	// of the servers to be online.
+	if unformattedDisks && firstDisk {
+		return nil, nil, errFirstDiskWait
 	}
 
 	format, err = getFormatErasureInQuorum(formatConfigs)
@@ -260,7 +266,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID, distributionAlgo string) ([]StorageAPI, *formatErasureV3, error) {
+func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) ([]StorageAPI, *formatErasureV3, error) {
 	if len(endpoints) == 0 || setCount == 0 || setDriveCount == 0 {
 		return nil, nil, errInvalidArgument
 	}
@@ -277,7 +283,7 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 		verbose bool
 	)
 
-	storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+	storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID)
 	if err == nil {
 		return storageDisks, format, nil
 	}
@@ -295,7 +301,7 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 			tries = 1
 		}
 
-		storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID, distributionAlgo)
+		storageDisks, format, err := connectLoadInitFormats(verbose, firstDisk, endpoints, poolCount, setCount, setDriveCount, deploymentID)
 		if err == nil {
 			return storageDisks, format, nil
 		}

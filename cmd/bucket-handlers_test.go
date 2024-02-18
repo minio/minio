@@ -880,6 +880,15 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 			expectedContent:    encodedAnonResponseWithPartialPublicAccess,
 			expectedRespStatus: http.StatusOK,
 		},
+		// Test case - 7.
+		// Bucket does not exist.
+		7: {
+			bucket:             "unknown-bucket-name",
+			objects:            successRequest0,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusNotFound,
+		},
 	}
 
 	for i, testCase := range testCases {
@@ -888,13 +897,12 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 		// Generate a signed or anonymous request based on the testCase
 		if testCase.accessKey != "" {
-			req, err = newTestSignedRequestV4(http.MethodPost, getDeleteMultipleObjectsURL("", bucketName),
+			req, err = newTestSignedRequestV4(http.MethodPost, getDeleteMultipleObjectsURL("", testCase.bucket),
 				int64(len(testCase.objects)), bytes.NewReader(testCase.objects), testCase.accessKey, testCase.secretKey, nil)
 		} else {
-			req, err = newTestRequest(http.MethodPost, getDeleteMultipleObjectsURL("", bucketName),
+			req, err = newTestRequest(http.MethodPost, getDeleteMultipleObjectsURL("", testCase.bucket),
 				int64(len(testCase.objects)), bytes.NewReader(testCase.objects))
 		}
-
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request for DeleteMultipleObjects: <ERROR> %v", err)
 		}

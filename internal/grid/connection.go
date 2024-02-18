@@ -175,8 +175,8 @@ func (c ContextDialer) DialContext(ctx context.Context, network, address string)
 
 const (
 	defaultOutQueue    = 10000
-	readBufferSize     = 16 << 10
-	writeBufferSize    = 16 << 10
+	readBufferSize     = 32 << 10 // 32 KiB is the most optimal on Linux
+	writeBufferSize    = 32 << 10 // 32 KiB is the most optimal on Linux
 	defaultDialTimeout = 2 * time.Second
 	connPingInterval   = 10 * time.Second
 	connWriteTimeout   = 3 * time.Second
@@ -654,7 +654,7 @@ func (c *Connection) connect() {
 				fmt.Printf("%v Connecting to %v: %v. Retrying.\n", c.Local, toDial, err)
 			}
 			sleep := defaultDialTimeout + time.Duration(rng.Int63n(int64(defaultDialTimeout)))
-			next := dialStarted.Add(sleep)
+			next := dialStarted.Add(sleep / 2)
 			sleep = time.Until(next).Round(time.Millisecond)
 			if sleep < 0 {
 				sleep = 0
@@ -950,7 +950,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				cancel(ErrDisconnected)
 				return
 			}
-			if cap(msg) > readBufferSize*8 {
+			if cap(msg) > readBufferSize*4 {
 				// Don't keep too much memory around.
 				msg = nil
 			}
@@ -1587,6 +1587,18 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		c.clientPingInterval = args[0].(time.Duration)
 	case debugAddToDeadline:
 		c.addDeadline = args[0].(time.Duration)
+	case debugIsOutgoingClosed:
+		// params: muxID uint64, isClosed func(bool)
+		muxID := args[0].(uint64)
+		resp := args[1].(func(b bool))
+		mid, ok := c.outgoing.Load(muxID)
+		if !ok || mid == nil {
+			resp(true)
+			return
+		}
+		mid.respMu.Lock()
+		resp(mid.closed)
+		mid.respMu.Unlock()
 	}
 }
 

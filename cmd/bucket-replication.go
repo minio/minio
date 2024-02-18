@@ -2409,8 +2409,7 @@ func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *t
 			taggedCount++
 			continue
 		}
-		errCode := minio.ToErrorResponse(err).Code
-		if errCode != "NoSuchKey" && errCode != "NoSuchVersion" {
+		if err != nil {
 			terr = err
 		}
 	}
@@ -2469,6 +2468,9 @@ func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts
 		if err == nil {
 			tgs, _ = tags.MapToObjectTags(tagSlc[idx])
 		}
+	}
+	if len(errs) == 1 {
+		proxy.Err = errs[0]
 	}
 	return tgs, proxy
 }
@@ -3391,7 +3393,7 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {
@@ -3458,7 +3460,7 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {

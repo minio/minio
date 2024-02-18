@@ -299,12 +299,19 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOption
 	defer si(&err)
 
 	if opts.NoOp {
+		if opts.Metrics {
+			info.Metrics = p.getMetrics()
+		}
 		info.Metrics.TotalWrites = p.totalWrites.Load()
 		info.Metrics.TotalDeletes = p.totalDeletes.Load()
 		info.Metrics.TotalWaiting = uint32(p.health.waiting.Load())
 		info.Metrics.TotalErrorsTimeout = p.totalErrsTimeout.Load()
 		info.Metrics.TotalErrorsAvailability = p.totalErrsAvailability.Load()
-		return
+		if p.health.isFaulty() {
+			// if disk is already faulty return faulty for 'mc admin info' output and prometheus alerts.
+			return info, errFaultyDisk
+		}
+		return info, nil
 	}
 
 	defer func() {
@@ -905,7 +912,7 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string)
 		})
 
 		if err == nil {
-			logger.Info("node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
+			logger.Event(context.Background(), "node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
 			p.health.status.Store(diskHealthOK)
 			p.health.waiting.Add(-1)
 			return

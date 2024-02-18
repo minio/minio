@@ -15,11 +15,12 @@ func _() {
 	_ = x[debugSetConnPingDuration-4]
 	_ = x[debugSetClientPingDuration-5]
 	_ = x[debugAddToDeadline-6]
+	_ = x[debugIsOutgoingClosed-7]
 }
 
-const _debugMsg_name = "debugShutdowndebugKillInbounddebugKillOutbounddebugWaitForExitdebugSetConnPingDurationdebugSetClientPingDurationdebugAddToDeadline"
+const _debugMsg_name = "debugShutdowndebugKillInbounddebugKillOutbounddebugWaitForExitdebugSetConnPingDurationdebugSetClientPingDurationdebugAddToDeadlinedebugIsOutgoingClosed"
 
-var _debugMsg_index = [...]uint8{0, 13, 29, 46, 62, 86, 112, 130}
+var _debugMsg_index = [...]uint8{0, 13, 29, 46, 62, 86, 112, 130, 151}
 
 func (i debugMsg) String() string {
 	if i < 0 || i >= debugMsg(len(_debugMsg_index)-1) {

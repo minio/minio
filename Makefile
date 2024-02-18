@@ -6,7 +6,8 @@ GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 
 VERSION ?= $(shell git describe --tags)
-TAG ?= "quay.io/minio/minio:$(VERSION)"
+REPO ?= quay.io/minio
+TAG ?= $(REPO)/minio:$(VERSION)
 
 GOLANGCI_DIR = .bin/golangci/$(GOLANGCI_VERSION)
 GOLANGCI = $(GOLANGCI_DIR)/golangci-lint
@@ -144,12 +145,11 @@ hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
     sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#')))
 	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
-	$(eval TAG := "minio/minio:$(VERSION)")
 
 hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
-	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.0/pkger_2.2.0_linux_amd64.deb
+	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.1/pkger_2.2.1_linux_amd64.deb
 	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.1/linux-systemd/distributed/minio.service
-	@sudo apt install ./pkger_2.2.0_linux_amd64.deb --yes
+	@sudo apt install ./pkger_2.2.1_linux_amd64.deb --yes
 	@mkdir -p minio-release/$(GOOS)-$(GOARCH)/archive
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)
@@ -177,9 +177,9 @@ docker: build ## builds minio docker container
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
 
 install-race: checks ## builds minio to $(PWD)
-	@echo "Building minio binary to './minio'"
+	@echo "Building minio binary with -race to './minio'"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
-	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
+	@echo "Installing minio binary with -race to '$(GOPATH)/bin/minio'"
 	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
 
 install: build ## builds minio and installs it to $GOPATH/bin.

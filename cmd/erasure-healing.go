@@ -861,8 +861,12 @@ func isAllBucketsNotFound(errs []error) bool {
 	}
 	notFoundCount := 0
 	for _, err := range errs {
-		if err != nil && errors.Is(err, errVolumeNotFound) {
-			notFoundCount++
+		if err != nil {
+			if errors.Is(err, errVolumeNotFound) {
+				notFoundCount++
+			} else if isErrBucketNotFound(err) {
+				notFoundCount++
+			}
 		}
 	}
 	return len(errs) == notFoundCount
@@ -961,24 +965,18 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 		return validMeta, notFoundMetaErrs > dataBlocks
 	}
 
-	quorum := validMeta.Erasure.DataBlocks
-	if validMeta.Erasure.DataBlocks == validMeta.Erasure.ParityBlocks {
-		quorum++
-	}
-
 	// TODO: It is possible to replay the object via just single
 	// xl.meta file, considering quorum number of data-dirs are still
 	// present on other drives.
 	//
 	// However this requires a bit of a rewrite, leave this up for
 	// future work.
-
-	if notFoundMetaErrs > 0 && notFoundMetaErrs >= quorum {
+	if notFoundMetaErrs > 0 && notFoundMetaErrs > validMeta.Erasure.ParityBlocks {
 		// All xl.meta is beyond data blocks missing, this is dangling
 		return validMeta, true
 	}
 
-	if !validMeta.IsRemote() && notFoundPartsErrs > 0 && notFoundPartsErrs >= quorum {
+	if !validMeta.IsRemote() && notFoundPartsErrs > 0 && notFoundPartsErrs > validMeta.Erasure.ParityBlocks {
 		// All data-dir is beyond data blocks missing, this is dangling
 		return validMeta, true
 	}

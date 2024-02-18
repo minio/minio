@@ -1175,6 +1175,97 @@ func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
 	}
 }
 
+func (s *TestSuiteIAM) TestOpenIDSTSDurationSeconds(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity STS token by interacting with OpenID IDP.
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+	// fmt.Printf("TOKEN: %s\n", token)
+
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token:  token,
+				Expiry: 900,
+			}, nil
+		},
+	}
+
+	// Create policy - with name as one of the groups in OpenID the user is
+	// a member of.
+	policy := "projecta"
+	policyTmpl := `{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+    "Effect": "Deny",
+    "Action": ["sts:AssumeRoleWithWebIdentity"],
+    "Condition": {"NumericGreaterThan": {"sts:DurationSeconds": "%d"}}
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`
+
+	for i, testCase := range []struct {
+		durSecs     int
+		expectedErr bool
+	}{
+		{60, true},
+		{1800, false},
+	} {
+		policyBytes := []byte(fmt.Sprintf(policyTmpl, testCase.durSecs, bucket))
+		err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+		if err != nil {
+			c.Fatalf("Test %d: policy add error: %v", i+1, err)
+		}
+
+		value, err := webID.Retrieve()
+		if err != nil && !testCase.expectedErr {
+			c.Fatalf("Test %d: Expected to generate STS creds, got err: %#v", i+1, err)
+		}
+		if err == nil && testCase.expectedErr {
+			c.Fatalf("Test %d: An error is unexpected to generate STS creds, got err: %#v", i+1, err)
+		}
+
+		if err != nil && testCase.expectedErr {
+			continue
+		}
+
+		minioClient, err := minio.New(s.endpoint, &minio.Options{
+			Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+			Secure:    s.secure,
+			Transport: s.TestSuiteCommon.client.Transport,
+		})
+		if err != nil {
+			c.Fatalf("Test %d: Error initializing client: %v", i+1, err)
+		}
+
+		c.mustListObjects(ctx, minioClient, bucket)
+	}
+}
+
 func (s *TestSuiteIAM) TestOpenIDSTSAddUser(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -1440,6 +1531,7 @@ func TestIAMWithOpenIDServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpOpenID(c, openIDServer, "")
 				suite.TestOpenIDSTS(c)
+				suite.TestOpenIDSTSDurationSeconds(c)
 				suite.TestOpenIDServiceAcc(c)
 				suite.TestOpenIDSTSAddUser(c)
 				suite.TearDownSuite(c)

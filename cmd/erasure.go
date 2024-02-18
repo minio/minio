@@ -203,7 +203,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 				APICalls:                make(map[string]uint64, len(info.Metrics.APICalls)),
 				TotalErrorsAvailability: info.Metrics.TotalErrorsAvailability,
 				TotalErrorsTimeout:      info.Metrics.TotalErrorsTimeout,
-				TotalTokens:             info.Metrics.TotalTokens,
 				TotalWaiting:            info.Metrics.TotalWaiting,
 			}
 			for k, v := range info.Metrics.LastMinute {

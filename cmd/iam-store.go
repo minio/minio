@@ -1166,8 +1166,11 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 	return err
 }
 
-// DeletePolicy - deletes policy from storage and cache.
-func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error {
+// DeletePolicy - deletes policy from storage and cache. When this called in
+// response to a notification (i.e. isFromNotification = true), it skips the
+// validation of policy usage and the attempt to delete in the backend as well
+// (as this is already done by the notifying node).
+func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string, isFromNotification bool) error {
 	if policy == "" {
 		return errInvalidArgument
 	}
@@ -1175,42 +1178,44 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string) error
 	cache := store.lock()
 	defer store.unlock()
 
-	// Check if policy is mapped to any existing user or group. If so, we do not
-	// allow deletion of the policy. If the policy is mapped to an STS account,
-	// we do allow deletion.
-	users := []string{}
-	groups := []string{}
-	for u, mp := range cache.iamUserPolicyMap {
-		pset := mp.policySet()
-		if store.getUsersSysType() == MinIOUsersSysType {
-			if _, ok := cache.iamUsersMap[u]; !ok {
-				// This case can happen when a temporary account is
-				// deleted or expired - remove it from userPolicyMap.
-				delete(cache.iamUserPolicyMap, u)
-				continue
+	if !isFromNotification {
+		// Check if policy is mapped to any existing user or group. If so, we do not
+		// allow deletion of the policy. If the policy is mapped to an STS account,
+		// we do allow deletion.
+		users := []string{}
+		groups := []string{}
+		for u, mp := range cache.iamUserPolicyMap {
+			pset := mp.policySet()
+			if store.getUsersSysType() == MinIOUsersSysType {
+				if _, ok := cache.iamUsersMap[u]; !ok {
+					// This case can happen when a temporary account is
+					// deleted or expired - remove it from userPolicyMap.
+					delete(cache.iamUserPolicyMap, u)
+					continue
+				}
+			}
+			if pset.Contains(policy) {
+				users = append(users, u)
 			}
 		}
-		if pset.Contains(policy) {
-			users = append(users, u)
+		for g, mp := range cache.iamGroupPolicyMap {
+			pset := mp.policySet()
+			if pset.Contains(policy) {
+				groups = append(groups, g)
+			}
 		}
-	}
-	for g, mp := range cache.iamGroupPolicyMap {
-		pset := mp.policySet()
-		if pset.Contains(policy) {
-			groups = append(groups, g)
+		if len(users) != 0 || len(groups) != 0 {
+			return errPolicyInUse
 		}
-	}
-	if len(users) != 0 || len(groups) != 0 {
-		return errPolicyInUse
-	}
 
-	err := store.deletePolicyDoc(ctx, policy)
-	if errors.Is(err, errNoSuchPolicy) {
-		// Ignore error if policy is already deleted.
-		err = nil
-	}
-	if err != nil {
-		return err
+		err := store.deletePolicyDoc(ctx, policy)
+		if errors.Is(err, errNoSuchPolicy) {
+			// Ignore error if policy is already deleted.
+			err = nil
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	delete(cache.iamPolicyDocsMap, policy)
@@ -2424,17 +2429,11 @@ func (store *IAMStoreSys) GetSTSAndServiceAccounts() []auth.Credentials {
 	var res []auth.Credentials
 	for _, u := range cache.iamUsersMap {
 		cred := u.Credentials
-		if cred.IsTemp() {
-			panic("unexpected STS credential found in iamUsersMap")
-		}
 		if cred.IsServiceAccount() {
 			res = append(res, cred)
 		}
 	}
 	for _, u := range cache.iamSTSAccountsMap {
-		if !u.Credentials.IsTemp() {
-			panic("unexpected non STS credential found in iamSTSAccountsMap")
-		}
 		res = append(res, u.Credentials)
 	}
 

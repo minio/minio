@@ -83,6 +83,11 @@ var (
 	// resourceMetricsHelpMap maps metric name to its help string
 	resourceMetricsHelpMap map[MetricName]string
 	resourceMetricsGroups  []*MetricsGroup
+	// initial values for drives (at the time  of server startup)
+	// used for calculating avg values for drive metrics
+	initialDriveStats   map[string]madmin.DiskIOStats
+	initialDriveStatsMu sync.RWMutex
+	initialUptime       uint64
 )
 
 // PeerResourceMetrics represents the resource metrics
@@ -214,50 +219,67 @@ func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64,
 	resourceMetricsMap[subSys] = subsysMetrics
 }
 
-func collectDriveMetrics(m madmin.RealtimeMetrics) {
-	upt, _ := host.Uptime()
-	kib := 1 << 10
+// updateDriveIOStats - Updates the drive IO stats by calculating the difference between the current
+// and initial values. We cannot rely on host.Uptime here as it will not work in k8s environments, where
+// it will return the pod's uptime but the disk metrics are always from the host (/proc/diskstats)
+func updateDriveIOStats(currentStats madmin.DiskIOStats, initialStats madmin.DiskIOStats, labels map[string]string) {
 	sectorSize := uint64(512)
+	kib := float64(1 << 10)
+	uptime, _ := host.Uptime()
+	uptimeDiff := float64(uptime - initialUptime)
+	if uptimeDiff == 0 {
+		// too soon to update the stats
+		return
+	}
+	diffStats := madmin.DiskIOStats{
+		ReadIOs:      currentStats.ReadIOs - initialStats.ReadIOs,
+		WriteIOs:     currentStats.WriteIOs - initialStats.WriteIOs,
+		ReadTicks:    currentStats.ReadTicks - initialStats.ReadTicks,
+		WriteTicks:   currentStats.WriteTicks - initialStats.WriteTicks,
+		TotalTicks:   currentStats.TotalTicks - initialStats.TotalTicks,
+		ReadSectors:  currentStats.ReadSectors - initialStats.ReadSectors,
+		WriteSectors: currentStats.WriteSectors - initialStats.WriteSectors,
+	}
 
+	updateResourceMetrics(driveSubsystem, readsPerSec, float64(diffStats.ReadIOs)/uptimeDiff, labels, false)
+	readKib := float64(diffStats.ReadSectors*sectorSize) / kib
+	updateResourceMetrics(driveSubsystem, readsKBPerSec, readKib/uptimeDiff, labels, false)
+
+	updateResourceMetrics(driveSubsystem, writesPerSec, float64(diffStats.WriteIOs)/uptimeDiff, labels, false)
+	writeKib := float64(diffStats.WriteSectors*sectorSize) / kib
+	updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKib/uptimeDiff, labels, false)
+
+	rdAwait := 0.0
+	if diffStats.ReadIOs > 0 {
+		rdAwait = float64(diffStats.ReadTicks) / float64(diffStats.ReadIOs)
+	}
+	updateResourceMetrics(driveSubsystem, readsAwait, rdAwait, labels, false)
+
+	wrAwait := 0.0
+	if diffStats.WriteIOs > 0 {
+		wrAwait = float64(diffStats.WriteTicks) / float64(diffStats.WriteIOs)
+	}
+	updateResourceMetrics(driveSubsystem, writesAwait, wrAwait, labels, false)
+	updateResourceMetrics(driveSubsystem, percUtil, float64(diffStats.TotalTicks)/(uptimeDiff*10), labels, false)
+}
+
+func collectDriveMetrics(m madmin.RealtimeMetrics) {
 	for d, dm := range m.ByDisk {
-		stats := dm.IOStats
 		labels := map[string]string{"drive": d}
-		updateResourceMetrics(driveSubsystem, readsPerSec, float64(stats.ReadIOs)/float64(upt), labels, false)
-
-		readBytes := stats.ReadSectors * sectorSize
-		readKib := float64(readBytes) / float64(kib)
-		readKibPerSec := readKib / float64(upt)
-		updateResourceMetrics(driveSubsystem, readsKBPerSec, readKibPerSec, labels, false)
-
-		updateResourceMetrics(driveSubsystem, writesPerSec, float64(stats.WriteIOs)/float64(upt), labels, false)
-
-		writeBytes := stats.WriteSectors * sectorSize
-		writeKib := float64(writeBytes) / float64(kib)
-		writeKibPerSec := writeKib / float64(upt)
-		updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKibPerSec, labels, false)
-
-		rdAwait := 0.0
-		if stats.ReadIOs > 0 {
-			rdAwait = float64(stats.ReadTicks) / float64(stats.ReadIOs)
+		initialStats, ok := initialDriveStats[d]
+		if !ok {
+			continue
 		}
-		updateResourceMetrics(driveSubsystem, readsAwait, rdAwait, labels, false)
-
-		wrAwait := 0.0
-		if stats.WriteIOs > 0 {
-			wrAwait = float64(stats.WriteTicks) / float64(stats.WriteIOs)
-		}
-		updateResourceMetrics(driveSubsystem, writesAwait, wrAwait, labels, false)
-
-		updateResourceMetrics(driveSubsystem, percUtil, float64(stats.TotalTicks)/float64(upt*10), labels, false)
+		updateDriveIOStats(dm.IOStats, initialStats, labels)
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, d := range localDrives {
-		labels := map[string]string{"drive": d.Endpoint().RawPath}
 		di, err := d.DiskInfo(GlobalContext, DiskInfoOptions{})
+		labels := map[string]string{"drive": di.Endpoint}
 		if err == nil {
 			updateResourceMetrics(driveSubsystem, usedBytes, float64(di.Used), labels, false)
 			updateResourceMetrics(driveSubsystem, totalBytes, float64(di.Total), labels, false)
@@ -339,8 +361,30 @@ func collectLocalResourceMetrics() {
 	collectDriveMetrics(m)
 }
 
+// populateInitialValues - populates the initial values
+// for drive stats and host uptime
+func populateInitialValues() {
+	initialDriveStatsMu.Lock()
+
+	m := collectLocalMetrics(madmin.MetricsDisk, collectMetricsOpts{
+		hosts: map[string]struct{}{
+			globalLocalNodeName: {},
+		},
+	})
+
+	initialDriveStats = map[string]madmin.DiskIOStats{}
+	for d, dm := range m.ByDisk {
+		initialDriveStats[d] = dm.IOStats
+	}
+
+	initialUptime, _ = host.Uptime()
+	initialDriveStatsMu.Unlock()
+}
+
 // startResourceMetricsCollection - starts the job for collecting resource metrics
 func startResourceMetricsCollection() {
+	populateInitialValues()
+
 	resourceMetricsMapMu.Lock()
 	resourceMetricsMap = map[MetricSubsystem]ResourceMetrics{}
 	resourceMetricsMapMu.Unlock()

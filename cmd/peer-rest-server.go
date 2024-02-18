@@ -328,7 +328,19 @@ func (s *peerRESTServer) ServerInfoHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	ctx := newContext(r, w, "ServerInfo")
-	info := getLocalServerProperty(globalEndpoints, r)
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		s.writeErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	metrics, err := strconv.ParseBool(r.Form.Get(peerRESTMetrics))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	info := getLocalServerProperty(globalEndpoints, r, metrics)
 
 	logger.LogIf(ctx, gob.NewEncoder(w).Encode(info))
 }
@@ -703,57 +715,9 @@ func (s *peerRESTServer) PutBucketNotificationHandler(w http.ResponseWriter, r *
 	globalEventNotifier.AddRulesMap(bucketName, rulesMap)
 }
 
-// Return disk IDs of all the local disks.
-func getLocalDiskIDs(z *erasureServerPools) []string {
-	var ids []string
-
-	for poolIdx := range z.serverPools {
-		for _, set := range z.serverPools[poolIdx].sets {
-			disks := set.getDisks()
-			for _, disk := range disks {
-				if disk == nil {
-					continue
-				}
-				if disk.IsLocal() {
-					id, err := disk.GetDiskID()
-					if err != nil {
-						continue
-					}
-					if id == "" {
-						continue
-					}
-					ids = append(ids, id)
-				}
-			}
-		}
-	}
-
-	return ids
-}
-
 // HealthHandler - returns true of health
 func (s *peerRESTServer) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsValid(w, r)
-}
-
-var getLocalDiskIDsHandler = grid.NewSingleHandler[*grid.MSS, *LocalDiskIDs](grid.HandlerGetLocalDiskIDs, grid.NewMSS, func() *LocalDiskIDs {
-	return &LocalDiskIDs{}
-})
-
-// GetLocalDiskIDs - Return disk IDs of all the local disks.
-func (s *peerRESTServer) GetLocalDiskIDs(mss *grid.MSS) (*LocalDiskIDs, *grid.RemoteErr) {
-	objLayer := newObjectLayerFn()
-	// Service not initialized yet
-	if objLayer == nil {
-		return nil, grid.NewRemoteErr(errServerNotInitialized)
-	}
-
-	z, ok := objLayer.(*erasureServerPools)
-	if !ok {
-		return nil, grid.NewRemoteErr(errServerNotInitialized)
-	}
-
-	return &LocalDiskIDs{IDs: getLocalDiskIDs(z)}, nil
 }
 
 // VerifyBinary - verifies the downloaded binary is in-tact
@@ -821,16 +785,19 @@ func (s *peerRESTServer) CommitBinaryHandler(w http.ResponseWriter, r *http.Requ
 var errUnsupportedSignal = fmt.Errorf("unsupported signal")
 
 func waitingDrivesNode() map[string]madmin.DiskMetrics {
-	errs := make([]error, len(globalLocalDrives))
-	infos := make([]DiskInfo, len(globalLocalDrives))
-	for i, drive := range globalLocalDrives {
+	globalLocalDrivesMu.RLock()
+	localDrives := cloneDrives(globalLocalDrives)
+	globalLocalDrivesMu.RUnlock()
+
+	errs := make([]error, len(localDrives))
+	infos := make([]DiskInfo, len(localDrives))
+	for i, drive := range localDrives {
 		infos[i], errs[i] = drive.DiskInfo(GlobalContext, DiskInfoOptions{})
 	}
 	infoMaps := make(map[string]madmin.DiskMetrics)
 	for i := range infos {
 		if infos[i].Metrics.TotalWaiting >= 1 && errors.Is(errs[i], errFaultyDisk) {
 			infoMaps[infos[i].Endpoint] = madmin.DiskMetrics{
-				TotalTokens:  infos[i].Metrics.TotalTokens,
 				TotalWaiting: infos[i].Metrics.TotalWaiting,
 			}
 		}
@@ -1519,7 +1486,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	subrouter := router.PathPrefix(peerRESTPrefix).Subrouter()
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodGetLocks).HandlerFunc(h(server.GetLocksHandler))
-	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(h(server.ServerInfoHandler))
+	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodServerInfo).HandlerFunc(h(server.ServerInfoHandler)).Queries(restQueries(peerRESTMetrics)...)
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodLocalStorageInfo).HandlerFunc(h(server.LocalStorageInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodProcInfo).HandlerFunc(h(server.GetProcInfoHandler))
 	subrouter.Methods(http.MethodPost).Path(peerRESTVersionPrefix + peerRESTMethodMemInfo).HandlerFunc(h(server.GetMemInfoHandler))
@@ -1577,7 +1544,6 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	logger.FatalIf(reloadSiteReplicationConfigHandler.Register(gm, server.ReloadSiteReplicationConfigHandler), "unable to register handler")
 	logger.FatalIf(loadBucketMetadataHandler.Register(gm, server.LoadBucketMetadataHandler), "unable to register handler")
 	logger.FatalIf(deleteBucketMetadataHandler.Register(gm, server.DeleteBucketMetadataHandler), "unable to register handler")
-	logger.FatalIf(getLocalDiskIDsHandler.Register(gm, server.GetLocalDiskIDs), "unable to register handler")
 	logger.FatalIf(listenHandler.RegisterNoInput(gm, server.ListenHandler), "unable to register handler")
 	logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerTrace, grid.StreamHandler{
 		Handle:      server.TraceHandler,

@@ -460,6 +460,7 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
 		index := index
+		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -1079,7 +1080,7 @@ func (sys *NotificationSys) StorageInfo(objLayer ObjectLayer, metrics bool) Stor
 }
 
 // ServerInfo - calls ServerInfo RPC call on all peers.
-func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
+func (sys *NotificationSys) ServerInfo(metrics bool) []madmin.ServerProperties {
 	reply := make([]madmin.ServerProperties, len(sys.peerClients))
 	var wg sync.WaitGroup
 	for i, client := range sys.peerClients {
@@ -1089,7 +1090,7 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
-			info, err := client.ServerInfo()
+			info, err := client.ServerInfo(metrics)
 			if err != nil {
 				info.Endpoint = client.host.String()
 				info.State = string(madmin.ItemOffline)
@@ -1101,24 +1102,6 @@ func (sys *NotificationSys) ServerInfo() []madmin.ServerProperties {
 	wg.Wait()
 
 	return reply
-}
-
-// GetLocalDiskIDs - return disk ids of the local disks of the peers.
-func (sys *NotificationSys) GetLocalDiskIDs(ctx context.Context) (localDiskIDs [][]string) {
-	localDiskIDs = make([][]string, len(sys.peerClients))
-	var wg sync.WaitGroup
-	for idx, client := range sys.peerClients {
-		if client == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(idx int, client *peerRESTClient) {
-			defer wg.Done()
-			localDiskIDs[idx] = client.GetLocalDiskIDs(ctx)
-		}(idx, client)
-	}
-	wg.Wait()
-	return localDiskIDs
 }
 
 // returns all the peers that are currently online.

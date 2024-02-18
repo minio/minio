@@ -34,6 +34,12 @@ const (
 	IdleSpeed    = "idle_speed"
 	EnvIdleSpeed = "MINIO_SCANNER_IDLE_SPEED"
 
+	ExcessVersions    = "alert_excess_versions"
+	EnvExcessVersions = "MINIO_SCANNER_ALERT_EXCESS_VERSIONS"
+
+	ExcessFolders    = "alert_excess_folders"
+	EnvExcessFolders = "MINIO_SCANNER_ALERT_EXCESS_FOLDERS"
+
 	// All below are deprecated in October 2022 and
 	// replaced them with a single speed parameter
 	Delay            = "delay"
@@ -50,8 +56,16 @@ const (
 type Config struct {
 	// Delay is the sleep multiplier.
 	Delay float64 `json:"delay"`
-	// Behavior of the scanner when there is no other parallel S3 requests
-	IdleMode int32 // 0 => throttling, 1 => full speed
+
+	// Sleep always or based on incoming S3 requests.
+	IdleMode int32 // 0 => on, 1 => off
+
+	// Alert upon this many excess object versions
+	ExcessVersions int64 // 100
+
+	// Alert upon this many excess sub-folders per folder in an erasure set.
+	ExcessFolders int64 // 50000
+
 	// MaxWait is maximum wait time between operations
 	MaxWait time.Duration
 	// Cycle is the time.Duration between each scanner cycles
@@ -69,6 +83,15 @@ var DefaultKVS = config.KVS{
 		Value:         "",
 		HiddenIfEmpty: true,
 	},
+	config.KV{
+		Key:   ExcessVersions,
+		Value: "100",
+	},
+	config.KV{
+		Key:   ExcessFolders,
+		Value: "50000",
+	},
+
 	// Deprecated Oct 2022
 	config.KV{
 		Key:           Delay,
@@ -119,15 +142,27 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	switch idleSpeed := env.Get(EnvIdleSpeed, kvs.GetWithDefault(IdleSpeed, DefaultKVS)); idleSpeed {
-	case "", "throttled": // Empty is the default mode;
+	case "", config.EnableOn:
 		cfg.IdleMode = 0
-	case "full":
+	case config.EnableOff:
 		cfg.IdleMode = 1
 	default:
 		return cfg, fmt.Errorf("unknown value: '%s'", idleSpeed)
 	}
 
-	return
+	excessVersions, err := strconv.ParseInt(env.Get(EnvExcessVersions, kvs.GetWithDefault(ExcessVersions, DefaultKVS)), 10, 64)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.ExcessVersions = excessVersions
+
+	excessFolders, err := strconv.ParseInt(env.Get(EnvExcessFolders, kvs.GetWithDefault(ExcessFolders, DefaultKVS)), 10, 64)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.ExcessFolders = excessFolders
+
+	return cfg, nil
 }
 
 func lookupDeprecatedScannerConfig(kvs config.KVS) (cfg Config, err error) {
