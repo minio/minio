@@ -870,12 +870,12 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 }
 
 // GetResourceMetrics - gets the resource metrics from all nodes excluding self.
-func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) <-chan Metric {
+func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) <-chan MetricV2 {
 	if sys == nil {
 		return nil
 	}
 	g := errgroup.WithNErrs(len(sys.peerClients))
-	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	peerChannels := make([]<-chan MetricV2, len(sys.peerClients))
 	for index := range sys.peerClients {
 		index := index
 		g.Go(func() error {
@@ -1214,8 +1214,8 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 	return consolidatedReport
 }
 
-func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels []<-chan Metric, g *errgroup.Group) <-chan Metric {
-	ch := make(chan Metric)
+func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels []<-chan MetricV2, g *errgroup.Group) <-chan MetricV2 {
+	ch := make(chan MetricV2)
 	var wg sync.WaitGroup
 	for index, err := range g.Wait() {
 		if err != nil {
@@ -1229,7 +1229,7 @@ func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels
 			continue
 		}
 		wg.Add(1)
-		go func(ctx context.Context, peerChannel <-chan Metric, wg *sync.WaitGroup) {
+		go func(ctx context.Context, peerChannel <-chan MetricV2, wg *sync.WaitGroup) {
 			defer wg.Done()
 			for {
 				select {
@@ -1248,7 +1248,7 @@ func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels
 			}
 		}(ctx, peerChannels[index], &wg)
 	}
-	go func(wg *sync.WaitGroup, ch chan Metric) {
+	go func(wg *sync.WaitGroup, ch chan MetricV2) {
 		wg.Wait()
 		xioutil.SafeClose(ch)
 	}(&wg, ch)
@@ -1256,12 +1256,12 @@ func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels
 }
 
 // GetBucketMetrics - gets the cluster level bucket metrics from all nodes excluding self.
-func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric {
+func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan MetricV2 {
 	if sys == nil {
 		return nil
 	}
 	g := errgroup.WithNErrs(len(sys.peerClients))
-	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	peerChannels := make([]<-chan MetricV2, len(sys.peerClients))
 	for index := range sys.peerClients {
 		index := index
 		g.Go(func() error {
@@ -1277,12 +1277,12 @@ func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan Metric 
 }
 
 // GetClusterMetrics - gets the cluster metrics from all nodes excluding self.
-func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric {
+func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan MetricV2 {
 	if sys == nil {
 		return nil
 	}
 	g := errgroup.WithNErrs(len(sys.peerClients))
-	peerChannels := make([]<-chan Metric, len(sys.peerClients))
+	peerChannels := make([]<-chan MetricV2, len(sys.peerClients))
 	for index := range sys.peerClients {
 		index := index
 		g.Go(func() error {

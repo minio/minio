@@ -158,17 +158,17 @@ var (
 	}
 )
 
-func (t *tierMetrics) Report() []Metric {
+func (t *tierMetrics) Report() []MetricV2 {
 	metrics := getHistogramMetrics(t.histogram, tierTTLBMD, true)
 	t.RLock()
 	defer t.RUnlock()
 	for tier, stat := range t.requestsCount {
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    tierRequestsSuccessMD,
 			Value:          float64(stat.success),
 			VariableLabels: map[string]string{"tier": tier},
 		})
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    tierRequestsFailureMD,
 			Value:          float64(stat.failure),
 			VariableLabels: map[string]string{"tier": tier},

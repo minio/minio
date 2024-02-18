@@ -641,13 +641,13 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 	return getBandwidthRPC.Call(ctx, client.gridConn(), values)
 }
 
-func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Metric, error) {
+func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan MetricV2, error) {
 	resp, err := getResourceMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan Metric)
-	go func(ch chan<- Metric) {
+	ch := make(chan MetricV2)
+	go func(ch chan<- MetricV2) {
 		defer close(ch)
 		for _, m := range resp.Value() {
 			if m == nil {
@@ -663,12 +663,12 @@ func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Me
 	return ch, nil
 }
 
-func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric, error) {
+func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan MetricV2, error) {
 	resp, err := getPeerMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan Metric)
+	ch := make(chan MetricV2)
 	go func() {
 		defer close(ch)
 		for _, m := range resp.Value() {
@@ -685,12 +685,12 @@ func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric
 	return ch, nil
 }
 
-func (client *peerRESTClient) GetPeerBucketMetrics(ctx context.Context) (<-chan Metric, error) {
+func (client *peerRESTClient) GetPeerBucketMetrics(ctx context.Context) (<-chan MetricV2, error) {
 	resp, err := getPeerBucketMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan Metric)
+	ch := make(chan MetricV2)
 	go func() {
 		defer close(ch)
 		for _, m := range resp.Value() {
