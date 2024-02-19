@@ -113,6 +113,10 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 				return nil, errInvalidAccessKeyID
 			}
 			cred := u.Credentials
+			// Expired credentials return error.
+			if cred.IsTemp() && cred.IsExpired() {
+				return nil, errInvalidAccessKeyID
+			}
 			return []byte(cred.SecretKey), nil
 		} // this means claims.AccessKey == rootAccessKey
 		if !globalAPIConfig.permitRootAccess() {
