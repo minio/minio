@@ -36,6 +36,7 @@ import (
 // HandlerID is a handler identifier.
 // It is used to determine request routing on the server.
 // Handlers can be registered with a static subroute.
+// Do NOT remove or change the order of existing handlers.
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
@@ -103,6 +104,11 @@ const (
 	HandlerStorageInfo
 	HandlerConsoleLog
 	HandlerListDir
+	HandlerGetLocks
+	HandlerBackgroundHealStatus
+	HandlerGetLastDayTierStats
+	HandlerSignalService
+	HandlerGetBandwidth
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.

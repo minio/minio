@@ -27,7 +27,6 @@ import (
 	"io"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -151,14 +150,11 @@ func (client *peerRESTClient) Close() error {
 
 // GetLocks - fetch older locks for a remote node.
 func (client *peerRESTClient) GetLocks() (lockMap map[string][]lockRequesterInfo, err error) {
-	respBody, err := client.call(peerRESTMethodGetLocks, nil, nil, -1)
-	if err != nil {
-		return
+	resp, err := getLocksRPC.Call(context.Background(), client.gridConn(), grid.NewMSS())
+	if err != nil || resp == nil {
+		return nil, err
 	}
-	lockMap = map[string][]lockRequesterInfo{}
-	defer xhttp.DrainBody(respBody)
-	err = gob.NewDecoder(respBody).Decode(&lockMap)
-	return lockMap, err
+	return *resp, nil
 }
 
 // LocalStorageInfo - fetch server information for a remote node.
@@ -413,7 +409,7 @@ func (client *peerRESTClient) ReloadSiteReplicationConfig(ctx context.Context) e
 		return nil
 	}
 
-	_, err := reloadSiteReplicationConfigHandler.Call(ctx, conn, grid.NewMSSWith(map[string]string{}))
+	_, err := reloadSiteReplicationConfigRPC.Call(ctx, conn, grid.NewMSS())
 	return err
 }
 
@@ -444,28 +440,17 @@ func (client *peerRESTClient) CommitBinary(ctx context.Context) error {
 
 // SignalService - sends signal to peer nodes.
 func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string, dryRun bool) error {
-	values := make(url.Values)
+	values := grid.NewMSS()
 	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
 	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
 	values.Set(peerRESTSubSys, subSys)
-	respBody, err := client.call(peerRESTMethodSignalService, values, nil, -1)
-	if err != nil {
-		return err
-	}
-	defer xhttp.DrainBody(respBody)
-	return nil
+	_, err := signalServiceRPC.Call(context.Background(), client.gridConn(), values)
+	return err
 }
 
 func (client *peerRESTClient) BackgroundHealStatus() (madmin.BgHealState, error) {
-	respBody, err := client.call(peerRESTMethodBackgroundHealStatus, nil, nil, -1)
-	if err != nil {
-		return madmin.BgHealState{}, err
-	}
-	defer xhttp.DrainBody(respBody)
-
-	state := madmin.BgHealState{}
-	err = gob.NewDecoder(respBody).Decode(&state)
-	return state, err
+	resp, err := getBackgroundHealStatusRPC.Call(context.Background(), client.gridConn(), grid.NewMSS())
+	return resp.ValueOrZero(), err
 }
 
 // GetMetacacheListing - get a new or existing metacache.
@@ -670,18 +655,10 @@ func newPeerRestClients(endpoints EndpointServerPools) (remote, all []*peerRESTC
 
 // MonitorBandwidth - send http trace request to peer nodes
 func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []string) (*bandwidth.BucketBandwidthReport, error) {
-	values := make(url.Values)
-	values.Set(peerRESTBuckets, strings.Join(buckets, ","))
-	respBody, err := client.callWithContext(ctx, peerRESTMethodGetBandwidth, values, nil, -1)
-	if err != nil {
-		return nil, err
-	}
-	defer xhttp.DrainBody(respBody)
-
-	dec := gob.NewDecoder(respBody)
-	var bandwidthReport bandwidth.BucketBandwidthReport
-	err = dec.Decode(&bandwidthReport)
-	return &bandwidthReport, err
+	values := grid.NewURLValuesWith(map[string][]string{
+		peerRESTBuckets: buckets,
+	})
+	return getBandwidthRPC.Call(ctx, client.gridConn(), values)
 }
 
 func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric, error) {
@@ -788,18 +765,11 @@ func (client *peerRESTClient) DriveSpeedTest(ctx context.Context, opts madmin.Dr
 }
 
 func (client *peerRESTClient) GetLastDayTierStats(ctx context.Context) (DailyAllTierStats, error) {
-	var result map[string]lastDayTierStats
-	respBody, err := client.callWithContext(context.Background(), peerRESTMethodGetLastDayTierStats, nil, nil, -1)
-	if err != nil {
-		return result, err
-	}
-	defer xhttp.DrainBody(respBody)
-
-	err = gob.NewDecoder(respBody).Decode(&result)
-	if err != nil {
+	resp, err := getLastDayTierStatsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
+	if err != nil || resp == nil {
 		return DailyAllTierStats{}, err
 	}
-	return DailyAllTierStats(result), nil
+	return *resp, nil
 }
 
 // DevNull - Used by netperf to pump data to peer
