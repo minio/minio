@@ -713,7 +713,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		select {
 		case globalBackgroundHealRoutine.tasks <- task:
 			if serverDebugLog {
-				logger.Info("Task in the queue: %#v", task)
+				fmt.Printf("Task in the queue: %#v\n", task)
 			}
 		default:
 			// task queue is full, no more workers, we shall move on and heal later.
@@ -730,7 +730,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	select {
 	case globalBackgroundHealRoutine.tasks <- task:
 		if serverDebugLog {
-			logger.Info("Task in the queue: %#v", task)
+			fmt.Printf("Task in the queue: %#v\n", task)
 		}
 	case <-h.ctx.Done():
 		return nil

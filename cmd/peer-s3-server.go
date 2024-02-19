@@ -82,7 +82,7 @@ func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
 
 func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	// Initialize sync waitgroup.
@@ -206,7 +206,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 
 func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	quorum := (len(localDrives) / 2)
@@ -252,9 +252,15 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 	return buckets, nil
 }
 
+func cloneDrives(drives []StorageAPI) []StorageAPI {
+	newDrives := make([]StorageAPI, len(drives))
+	copy(newDrives, drives)
+	return newDrives
+}
+
 func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
@@ -303,7 +309,7 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 
 func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
@@ -341,7 +347,7 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)

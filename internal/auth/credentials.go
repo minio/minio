@@ -57,8 +57,10 @@ const (
 
 // Common errors generated for access and secret key validation.
 var (
-	ErrInvalidAccessKeyLength = fmt.Errorf("access key length should be between %d and %d", accessKeyMinLen, accessKeyMaxLen)
-	ErrInvalidSecretKeyLength = fmt.Errorf("secret key length should be between %d and %d", secretKeyMinLen, secretKeyMaxLen)
+	ErrInvalidAccessKeyLength   = fmt.Errorf("access key length should be between %d and %d", accessKeyMinLen, accessKeyMaxLen)
+	ErrInvalidSecretKeyLength   = fmt.Errorf("secret key length should be between %d and %d", secretKeyMinLen, secretKeyMaxLen)
+	ErrNoAccessKeyWithSecretKey = fmt.Errorf("access key must be specified if secret key is specified")
+	ErrNoSecretKeyWithAccessKey = fmt.Errorf("secret key must be specified if access key is specified")
 )
 
 // AnonymousCredentials simply points to empty credentials

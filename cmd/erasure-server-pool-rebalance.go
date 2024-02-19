@@ -432,6 +432,8 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		}
 	}()
 
+	logger.Event(ctx, "Pool %d rebalancing is started", poolIdx+1)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -455,6 +457,8 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		stopFn(nil)
 		z.bucketRebalanceDone(bucket, poolIdx)
 	}
+
+	logger.Event(ctx, "Pool %d rebalancing is done", poolIdx+1)
 
 	return err
 }

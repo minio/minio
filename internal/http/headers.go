@@ -192,6 +192,9 @@ const (
 	// Writes expected write quorum
 	MinIOWriteQuorum = "x-minio-write-quorum"
 
+	// Reads expected read quorum
+	MinIOReadQuorum = "x-minio-read-quorum"
+
 	// Indicates if we are using default storage class and there was problem loading config
 	// if this header is set to "true"
 	MinIOStorageClassDefaults = "x-minio-storage-class-defaults"

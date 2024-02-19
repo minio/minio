@@ -306,7 +306,12 @@ func countErrs(errs []error, err error) int {
 	return i
 }
 
-// Check if unformatted disks are equal to write quorum.
+// Does all errors indicate we need to initialize all disks?.
+func shouldInitErasureDisks(errs []error) bool {
+	return countErrs(errs, errUnformattedDisk) == len(errs)
+}
+
+// Check if unformatted disks are equal to 50%+1 of all the drives.
 func quorumUnformattedDisks(errs []error) bool {
 	return countErrs(errs, errUnformattedDisk) >= (len(errs)/2)+1
 }
@@ -761,7 +766,7 @@ func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats 
 }
 
 // initFormatErasure - save Erasure format configuration on all disks.
-func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID, distributionAlgo string, sErrs []error) (*formatErasureV3, error) {
+func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount, setDriveCount int, deploymentID string, sErrs []error) (*formatErasureV3, error) {
 	format := newFormatErasureV3(setCount, setDriveCount)
 	formats := make([]*formatErasureV3, len(storageDisks))
 	wantAtMost, err := ecDrivesNoConfig(setDriveCount)
@@ -773,14 +778,8 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 		hostCount := make(map[string]int, setDriveCount)
 		for j := 0; j < setDriveCount; j++ {
 			disk := storageDisks[i*setDriveCount+j]
-			if disk == nil {
-				continue
-			}
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
-			if distributionAlgo != "" {
-				newFormat.Erasure.DistributionAlgo = distributionAlgo
-			}
 			if deploymentID != "" {
 				newFormat.ID = deploymentID
 			}
@@ -803,14 +802,8 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 						logger.Info("   - Drive: %s", disk.String())
 					}
 				})
-				var warning string
-				if wantAtMost == 0 {
-					warning = fmt.Sprintf("Host %v has all drives of set. ", host)
-				} else {
-					warning = fmt.Sprintf("Host %v has more than %v drives of set. ", host, wantAtMost)
-				}
-				logger.Info(color.Yellow("WARNING: ") + warning +
-					"A host failure will result in data becoming unavailable.")
+				logger.Info(color.Yellow("WARNING:")+" Host %v has more than %v drives of set. "+
+					"A host failure will result in data becoming unavailable.", host, wantAtMost)
 			}
 		}
 	}

@@ -24,11 +24,6 @@ import (
 	"os"
 )
 
-// Rename2 is not implemented in a non linux environment
-func Rename2(src, dst string) (err error) {
-	return errSkipFile
-}
-
 // RenameSys is low level call in case of non-Linux this just uses os.Rename()
 func RenameSys(src, dst string) (err error) {
 	return os.Rename(src, dst)

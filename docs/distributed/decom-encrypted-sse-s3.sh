@@ -158,4 +158,12 @@ if [ $ret -ne 0 ]; then
 	exit 1
 fi
 
+(
+	cd ./docs/debugging/s3-check-md5
+	go install -v
+)
+
+s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket bucket2
+s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned
+
 kill $pid

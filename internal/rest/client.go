@@ -469,7 +469,7 @@ func (c *Client) MarkOffline(err error) bool {
 					if atomic.CompareAndSwapInt32(&c.connected, offline, online) {
 						now := time.Now()
 						disconnected := now.Sub(c.LastConn())
-						logger.Info("Client '%s' re-connected in %s", c.url.String(), disconnected)
+						logger.Event(context.Background(), "Client '%s' re-connected in %s", c.url.String(), disconnected)
 						atomic.StoreInt64(&c.lastConn, now.UnixNano())
 					}
 					return

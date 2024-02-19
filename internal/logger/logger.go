@@ -258,6 +258,20 @@ func LogIfNot(ctx context.Context, err error, ignored ...error) {
 }
 
 func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entry {
+	var l string
+	if anonFlag {
+		l = reflect.TypeOf(err).String()
+	} else {
+		l = fmt.Sprintf("%v (%T)", err, err)
+	}
+	return buildLogEntry(ctx, l, getTrace(3), errKind...)
+}
+
+func logToEntry(ctx context.Context, message string, errKind ...interface{}) log.Entry {
+	return buildLogEntry(ctx, message, nil, errKind...)
+}
+
+func buildLogEntry(ctx context.Context, message string, trace []string, errKind ...interface{}) log.Entry {
 	logKind := madmin.LogKindError
 	if len(errKind) > 0 {
 		if ek, ok := errKind[0].(madmin.LogKind); ok {
@@ -266,7 +280,6 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 	}
 
 	req := GetReqInfo(ctx)
-
 	if req == nil {
 		req = &ReqInfo{
 			API:       "SYSTEM",
@@ -287,11 +300,7 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 		tags[entry.Key] = entry.Val
 	}
 
-	// Get full stack trace
-	trace := getTrace(3)
-
 	// Get the cause for the Error
-	message := fmt.Sprintf("%v (%T)", err, err)
 	deploymentID := req.DeploymentID
 	if req.DeploymentID == "" {
 		deploymentID = xhttp.GlobalDeploymentID
@@ -322,18 +331,22 @@ func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entr
 				Objects:   objects,
 			},
 		},
-		Trace: &log.Trace{
+	}
+
+	if trace != nil {
+		entry.Trace = &log.Trace{
 			Message:   message,
 			Source:    trace,
 			Variables: tags,
-		},
+		}
+	} else {
+		entry.Message = message
 	}
 
 	if anonFlag {
 		entry.API.Args.Bucket = HashString(entry.API.Args.Bucket)
 		entry.API.Args.Object = HashString(entry.API.Args.Object)
 		entry.RemoteHost = HashString(entry.RemoteHost)
-		entry.Trace.Message = reflect.TypeOf(err).String()
 		entry.Trace.Variables = make(map[string]interface{})
 	}
 
@@ -346,7 +359,6 @@ func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
-
 	if consoleTgt != nil {
 		entry := errToEntry(ctx, err, errKind...)
 		consoleTgt.Send(ctx, entry)
@@ -359,22 +371,37 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
+	if err == nil {
+		return
+	}
+	entry := errToEntry(ctx, err, errKind...)
+	sendLog(ctx, entry)
+}
 
+func sendLog(ctx context.Context, entry log.Entry) {
 	systemTgts := SystemTargets()
 	if len(systemTgts) == 0 {
 		return
 	}
 
-	entry := errToEntry(ctx, err, errKind...)
 	// Iterate over all logger targets to send the log entry
 	for _, t := range systemTgts {
 		if err := t.Send(ctx, entry); err != nil {
-			if consoleTgt != nil {
+			if consoleTgt != nil { // Sending to the console never fails
 				entry.Trace.Message = fmt.Sprintf("event(%#v) was not sent to Logger target (%#v): %#v", entry, t, err)
 				consoleTgt.Send(ctx, entry)
 			}
 		}
 	}
+}
+
+// Event sends a event log to  log targets
+func Event(ctx context.Context, msg string, args ...interface{}) {
+	if DisableErrorLog {
+		return
+	}
+	entry := logToEntry(ctx, fmt.Sprintf(msg, args...), EventKind)
+	sendLog(ctx, entry)
 }
 
 // ErrCritical is the value panic'd whenever CriticalIf is called.

@@ -2429,17 +2429,11 @@ func (store *IAMStoreSys) GetSTSAndServiceAccounts() []auth.Credentials {
 	var res []auth.Credentials
 	for _, u := range cache.iamUsersMap {
 		cred := u.Credentials
-		if cred.IsTemp() {
-			panic("unexpected STS credential found in iamUsersMap")
-		}
 		if cred.IsServiceAccount() {
 			res = append(res, cred)
 		}
 	}
 	for _, u := range cache.iamSTSAccountsMap {
-		if !u.Credentials.IsTemp() {
-			panic("unexpected non STS credential found in iamSTSAccountsMap")
-		}
 		res = append(res, u.Credentials)
 	}
 
