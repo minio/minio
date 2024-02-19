@@ -250,7 +250,7 @@ func (m *Manager) RegisterSingleHandler(id HandlerID, h SingleHandlerFn, subrout
 
 	if len(subroute) == 0 {
 		if m.handlers.hasAny(id) && !id.isTestHandler() {
-			return ErrHandlerAlreadyExists
+			return fmt.Errorf("handler %v: %w", id.String(), ErrHandlerAlreadyExists)
 		}
 
 		m.handlers.single[id] = h
@@ -258,7 +258,7 @@ func (m *Manager) RegisterSingleHandler(id HandlerID, h SingleHandlerFn, subrout
 	}
 	subID := makeSubHandlerID(id, s)
 	if m.handlers.hasSubhandler(subID) && !id.isTestHandler() {
-		return ErrHandlerAlreadyExists
+		return fmt.Errorf("handler %v, subroute:%v: %w", id.String(), s, ErrHandlerAlreadyExists)
 	}
 	m.handlers.subSingle[subID] = h
 	// Copy so clients can also pick it up for other subpaths.

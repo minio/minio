@@ -17,6 +17,8 @@
 
 package bandwidth
 
+//go:generate msgp -file=$GOFILE -unexported
+
 import (
 	"context"
 	"sync"
@@ -24,6 +26,8 @@ import (
 
 	"golang.org/x/time/rate"
 )
+
+//msgp:ignore bucketThrottle Monitor
 
 type bucketThrottle struct {
 	*rate.Limiter

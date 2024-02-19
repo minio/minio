@@ -18,50 +18,29 @@
 package cmd
 
 const (
-	peerRESTVersion       = "v37" // Add 'metrics' option for ServerInfo
+	peerRESTVersion       = "v38" // Convert RPC calls
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
 	peerRESTPrefix        = minioReservedBucketPath + "/peer"
 	peerRESTPath          = peerRESTPrefix + peerRESTVersionPrefix
 )
 
 const (
-	peerRESTMethodHealth                 = "/health"
-	peerRESTMethodServerInfo             = "/serverinfo"
-	peerRESTMethodLocalStorageInfo       = "/localstorageinfo"
-	peerRESTMethodCPUInfo                = "/cpuinfo"
-	peerRESTMethodDiskHwInfo             = "/diskhwinfo"
-	peerRESTMethodNetHwInfo              = "/nethwinfo"
-	peerRESTMethodOsInfo                 = "/osinfo"
-	peerRESTMethodMemInfo                = "/meminfo"
-	peerRESTMethodProcInfo               = "/procinfo"
-	peerRESTMethodSysErrors              = "/syserrors"
-	peerRESTMethodSysServices            = "/sysservices"
-	peerRESTMethodSysConfig              = "/sysconfig"
-	peerRESTMethodGetBucketStats         = "/getbucketstats"
-	peerRESTMethodGetAllBucketStats      = "/getallbucketstats"
-	peerRESTMethodVerifyBinary           = "/verifybinary"
-	peerRESTMethodCommitBinary           = "/commitbinary"
-	peerRESTMethodSignalService          = "/signalservice"
-	peerRESTMethodBackgroundHealStatus   = "/backgroundhealstatus"
-	peerRESTMethodGetLocks               = "/getlocks"
-	peerRESTMethodStartProfiling         = "/startprofiling"
-	peerRESTMethodDownloadProfilingData  = "/downloadprofilingdata"
-	peerRESTMethodLog                    = "/log"
-	peerRESTMethodGetBandwidth           = "/bandwidth"
-	peerRESTMethodGetMetacacheListing    = "/getmetacache"
-	peerRESTMethodUpdateMetacacheListing = "/updatemetacache"
-	peerRESTMethodGetPeerMetrics         = "/peermetrics"
-	peerRESTMethodGetPeerBucketMetrics   = "/peerbucketmetrics"
-	peerRESTMethodSpeedTest              = "/speedtest"
-	peerRESTMethodDriveSpeedTest         = "/drivespeedtest"
-	peerRESTMethodStopRebalance          = "/stoprebalance"
-	peerRESTMethodGetLastDayTierStats    = "/getlastdaytierstats"
-	peerRESTMethodDevNull                = "/devnull"
-	peerRESTMethodNetperf                = "/netperf"
-	peerRESTMethodMetrics                = "/metrics"
-	peerRESTMethodResourceMetrics        = "/resourcemetrics"
-	peerRESTMethodGetReplicationMRF      = "/getreplicationmrf"
-	peerRESTMethodGetSRMetrics           = "/getsrmetrics"
+	peerRESTMethodHealth                      = "/health"
+	peerRESTMethodVerifyBinary                = "/verifybinary"
+	peerRESTMethodCommitBinary                = "/commitbinary"
+	peerRESTMethodSignalService               = "/signalservice"
+	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
+	peerRESTMethodGetLocks                    = "/getlocks"
+	peerRESTMethodStartProfiling              = "/startprofiling"
+	peerRESTMethodDownloadProfilingData       = "/downloadprofilingdata"
+	peerRESTMethodGetBandwidth                = "/bandwidth"
+	peerRESTMethodSpeedTest                   = "/speedtest"
+	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
+	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
+	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
+	peerRESTMethodDevNull                     = "/devnull"
+	peerRESTMethodNetperf                     = "/netperf"
+	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
 )
 
 const (
@@ -99,4 +78,5 @@ const (
 	peerRESTListenPrefix = "prefix"
 	peerRESTListenSuffix = "suffix"
 	peerRESTListenEvents = "events"
+	peerRESTLogMask      = "log-mask"
 )

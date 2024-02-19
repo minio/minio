@@ -23,6 +23,8 @@ import (
 	"github.com/minio/madmin-go/v3"
 )
 
+//go:generate msgp -file=$GOFILE -unexported
+
 type lastDayTierStats struct {
 	Bins      [24]tierStats
 	UpdatedAt time.Time

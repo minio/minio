@@ -376,7 +376,7 @@ func (client *remotePeerS3Client) HealBucket(ctx context.Context, bucket string,
 		peerS3BucketDeleted: strconv.FormatBool(opts.Remove),
 	})
 
-	_, err := healBucketHandler.Call(ctx, conn, mss)
+	_, err := healBucketRPC.Call(ctx, conn, mss)
 
 	// Initialize heal result info
 	return madmin.HealResultItem{
@@ -398,7 +398,7 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 		peerS3BucketDeleted: strconv.FormatBool(opts.Deleted),
 	})
 
-	volInfo, err := headBucketHandler.Call(ctx, conn, mss)
+	volInfo, err := headBucketRPC.Call(ctx, conn, mss)
 	if err != nil {
 		return BucketInfo{}, toStorageErr(err)
 	}
@@ -449,7 +449,7 @@ func (client *remotePeerS3Client) MakeBucket(ctx context.Context, bucket string,
 		peerS3BucketForceCreate: strconv.FormatBool(opts.ForceCreate),
 	})
 
-	_, err := makeBucketHandler.Call(ctx, conn, mss)
+	_, err := makeBucketRPC.Call(ctx, conn, mss)
 	return toStorageErr(err)
 }
 
@@ -498,7 +498,7 @@ func (client *remotePeerS3Client) DeleteBucket(ctx context.Context, bucket strin
 		peerS3BucketForceDelete: strconv.FormatBool(opts.Force),
 	})
 
-	_, err := deleteBucketHandler.Call(ctx, conn, mss)
+	_, err := deleteBucketRPC.Call(ctx, conn, mss)
 	return toStorageErr(err)
 }
 
