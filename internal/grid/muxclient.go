@@ -91,7 +91,13 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 		msg.Flags |= FlagSubroute
 	}
 	ch := make(chan Response, 1)
+	m.respMu.Lock()
+	if m.closed {
+		m.respMu.Unlock()
+		return nil, ErrDisconnected
+	}
 	m.respWait = ch
+	m.respMu.Unlock()
 	ctx := m.ctx
 
 	// Add deadline if none.
@@ -101,8 +107,8 @@ func (m *muxClient) roundtrip(h HandlerID, req []byte) ([]byte, error) {
 		ctx, cancel = context.WithTimeout(ctx, defaultSingleRequestTimeout)
 		defer cancel()
 	}
-	// Send... (no need for lock yet)
-	if err := m.sendLocked(msg); err != nil {
+	// Send request
+	if err := m.send(msg); err != nil {
 		return nil, err
 	}
 	if debugReqs {
@@ -215,7 +221,13 @@ func (m *muxClient) RequestStream(h HandlerID, payload []byte, requests chan []b
 		return nil, errors.New("RequestStream: responses channel is nil")
 	}
 	m.init = true
+	m.respMu.Lock()
+	if m.closed {
+		m.respMu.Unlock()
+		return nil, ErrDisconnected
+	}
 	m.respWait = responses // Route directly to output.
+	m.respMu.Unlock()
 
 	// Try to grab an initial block.
 	m.singleResp = false

@@ -2360,9 +2360,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		Host:         handlers.GetSourceIP(r),
 	}
 	sendEvent(evt)
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		evt.EventName = event.ObjectManyVersions
 		sendEvent(evt)
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "PutObject",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
+		})
 	}
 
 	// Do not send checksums in events to avoid leaks.
@@ -2882,6 +2891,18 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			// Send an event when the object is not found
+			objInfo.Name = object
+			objInfo.VersionID = opts.VersionID
+			sendEvent(eventArgs{
+				EventName:    event.ObjectRemovedNoOP,
+				BucketName:   bucket,
+				Object:       objInfo,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         handlers.GetSourceIP(r),
+			})
 			writeSuccessNoContent(w)
 			return
 		}
@@ -3317,7 +3338,7 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 				globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, false)
 				// proxy to replication target if site replication is in place.
 				tags, gerr := proxyGetTaggingToRepTarget(ctx, bucket, object, opts, proxytgts)
-				if gerr.Err != nil {
+				if gerr.Err != nil || tags == nil {
 					globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, true)
 					writeErrorResponse(ctx, w, toAPIError(ctx, gerr.Err), r.URL)
 					return

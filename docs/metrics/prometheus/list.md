@@ -194,7 +194,6 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_node_drive_errors_timeout`      | Total number of drive timeout errors since server start                             |
 | `minio_node_drive_errors_availability` | Total number of drive I/O errors, permission denied and timeouts since server start |
 | `minio_node_drive_io_waiting`          | Total number I/O operations waiting on drive                                        |
-| `minio_node_drive_io_tokens`           | Total number concurrent I/O operations configured on drive                          |
 
 ## Identity and Access Management (IAM) Metrics
 

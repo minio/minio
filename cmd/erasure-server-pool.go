@@ -72,15 +72,15 @@ func (z *erasureServerPools) SinglePool() bool {
 func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServerPools) (ObjectLayer, error) {
 	var (
 		deploymentID       string
-		distributionAlgo   string
 		commonParityDrives int
 		err                error
 
 		formats      = make([]*formatErasureV3, len(endpointServerPools))
 		storageDisks = make([][]StorageAPI, len(endpointServerPools))
 		z            = &erasureServerPools{
-			serverPools: make([]*erasureSets, len(endpointServerPools)),
-			s3Peer:      NewS3PeerSys(endpointServerPools),
+			serverPools:      make([]*erasureSets, len(endpointServerPools)),
+			s3Peer:           NewS3PeerSys(endpointServerPools),
+			distributionAlgo: formatErasureVersionV3DistributionAlgoV3,
 		}
 	)
 
@@ -126,7 +126,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		bootstrapTrace("waitForFormatErasure: loading disks", func() {
 			storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
-				ep.SetCount, ep.DrivesPerSet, deploymentID, distributionAlgo)
+				ep.SetCount, ep.DrivesPerSet, deploymentID)
 		})
 		if err != nil {
 			return nil, err
@@ -135,10 +135,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if deploymentID == "" {
 			// all pools should have same deployment ID
 			deploymentID = formats[i].ID
-		}
-
-		if distributionAlgo == "" {
-			distributionAlgo = formats[i].Erasure.DistributionAlgo
 		}
 
 		// Validate if users brought different DeploymentID pools.
@@ -155,10 +151,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 		if deploymentID != "" && bytes.Equal(z.deploymentID[:], []byte{}) {
 			z.deploymentID = uuid.MustParse(deploymentID)
-		}
-
-		if distributionAlgo != "" && z.distributionAlgo == "" {
-			z.distributionAlgo = distributionAlgo
 		}
 
 		for _, storageDisk := range storageDisks[i] {
@@ -2288,53 +2280,21 @@ type HealthOptions struct {
 // was queried
 type HealthResult struct {
 	Healthy       bool
+	HealthyRead   bool
 	HealingDrives int
 	ESHealth      []struct {
 		Maintenance   bool
 		PoolID, SetID int
 		Healthy       bool
+		HealthyRead   bool
 		HealthyDrives int
 		HealingDrives int
 		ReadQuorum    int
 		WriteQuorum   int
 	}
 	WriteQuorum   int
+	ReadQuorum    int
 	UsingDefaults bool
-}
-
-// ReadHealth returns if the cluster can serve read requests
-func (z *erasureServerPools) ReadHealth(ctx context.Context) bool {
-	erasureSetUpCount := make([][]int, len(z.serverPools))
-	for i := range z.serverPools {
-		erasureSetUpCount[i] = make([]int, len(z.serverPools[i].sets))
-	}
-
-	diskIDs := globalNotificationSys.GetLocalDiskIDs(ctx)
-	diskIDs = append(diskIDs, getLocalDiskIDs(z))
-
-	for _, localDiskIDs := range diskIDs {
-		for _, id := range localDiskIDs {
-			poolIdx, setIdx, _, err := z.getPoolAndSet(id)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				continue
-			}
-			erasureSetUpCount[poolIdx][setIdx]++
-		}
-	}
-
-	b := z.BackendInfo()
-	poolReadQuorums := make([]int, len(b.StandardSCData))
-	copy(poolReadQuorums, b.StandardSCData)
-
-	for poolIdx := range erasureSetUpCount {
-		for setIdx := range erasureSetUpCount[poolIdx] {
-			if erasureSetUpCount[poolIdx][setIdx] < poolReadQuorums[poolIdx] {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // Health - returns current status of the object layer health,
@@ -2405,9 +2365,20 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 		}
 	}
 
+	var maximumReadQuorum int
+	for _, readQuorum := range poolReadQuorums {
+		if maximumReadQuorum == 0 {
+			maximumReadQuorum = readQuorum
+		}
+		if readQuorum > maximumReadQuorum {
+			maximumReadQuorum = readQuorum
+		}
+	}
+
 	result := HealthResult{
 		Healthy:       true,
 		WriteQuorum:   maximumWriteQuorum,
+		ReadQuorum:    maximumReadQuorum,
 		UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
 	}
 
@@ -2417,6 +2388,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 				Maintenance                  bool
 				PoolID, SetID                int
 				Healthy                      bool
+				HealthyRead                  bool
 				HealthyDrives, HealingDrives int
 				ReadQuorum, WriteQuorum      int
 			}{
@@ -2424,6 +2396,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 				SetID:         setIdx,
 				PoolID:        poolIdx,
 				Healthy:       erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx],
+				HealthyRead:   erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx],
 				HealthyDrives: erasureSetUpCount[poolIdx][setIdx].online,
 				HealingDrives: erasureSetUpCount[poolIdx][setIdx].healing,
 				ReadQuorum:    poolReadQuorums[poolIdx],
@@ -2435,6 +2408,12 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
+			}
+			result.HealthyRead = erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
+			if !result.HealthyRead {
+				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
+					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
+						poolIdx, setIdx, poolReadQuorums[poolIdx]))
 			}
 		}
 	}

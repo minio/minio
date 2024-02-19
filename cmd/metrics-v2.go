@@ -558,16 +558,6 @@ func getNodeDriveWaitingIOMD() MetricDescription {
 	}
 }
 
-func getNodeDriveTokensIOMD() MetricDescription {
-	return MetricDescription{
-		Namespace: nodeMetricNamespace,
-		Subsystem: driveSubsystem,
-		Name:      "io_tokens",
-		Help:      "Total number concurrent I/O operations configured on drive",
-		Type:      counterMetric,
-	}
-}
-
 func getNodeDriveFreeBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -3292,7 +3282,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 						Value:       float64(s.ProxyStats.GetTagFailedTotal),
 					})
 					metrics = append(metrics, Metric{
-						Description: getClusterReplProxiedRmvTaggingFailedOperationsMD(clusterMetricNamespace),
+						Description: getClusterReplProxiedRmvTaggingFailedOperationsMD(bucketMetricNamespace),
 						Value:       float64(s.ProxyStats.RmvTagFailedTotal),
 					})
 				}
@@ -3484,12 +3474,6 @@ func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getNodeDriveWaitingIOMD(),
 					Value:          float64(disk.Metrics.TotalWaiting),
-					VariableLabels: map[string]string{"drive": disk.DrivePath},
-				})
-
-				metrics = append(metrics, Metric{
-					Description:    getNodeDriveTokensIOMD(),
-					Value:          float64(disk.Metrics.TotalTokens),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
 				})
 

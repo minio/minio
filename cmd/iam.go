@@ -940,6 +940,13 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		return auth.Credentials{}, time.Time{}, errInvalidArgument
 	}
 
+	if len(opts.accessKey) > 0 && len(opts.secretKey) == 0 {
+		return auth.Credentials{}, time.Time{}, auth.ErrNoSecretKeyWithAccessKey
+	}
+	if len(opts.secretKey) > 0 && len(opts.accessKey) == 0 {
+		return auth.Credentials{}, time.Time{}, auth.ErrNoAccessKeyWithSecretKey
+	}
+
 	var policyBuf []byte
 	if opts.sessionPolicy != nil {
 		err := opts.sessionPolicy.Validate()
@@ -983,7 +990,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 
 	var accessKey, secretKey string
 	var err error
-	if len(opts.accessKey) > 0 {
+	if len(opts.accessKey) > 0 || len(opts.secretKey) > 0 {
 		accessKey, secretKey = opts.accessKey, opts.secretKey
 	} else {
 		accessKey, secretKey, err = auth.GenerateCredentials()

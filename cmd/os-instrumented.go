@@ -51,7 +51,7 @@ const (
 	osMetricReadDirent
 	osMetricFdatasync
 	osMetricSync
-	osMetricRename2 // Linux specific
+
 	// .... add more
 
 	osMetricLast

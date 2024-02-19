@@ -1480,12 +1480,6 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.APICalls[za0003] = za0004
 			}
-		case "TotalTokens":
-			z.TotalTokens, err = dc.ReadUint32()
-			if err != nil {
-				err = msgp.WrapError(err, "TotalTokens")
-				return
-			}
 		case "TotalWaiting":
 			z.TotalWaiting, err = dc.ReadUint32()
 			if err != nil {
@@ -1529,9 +1523,9 @@ func (z *DiskMetrics) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 8
+	// map header, size 7
 	// write "LastMinute"
-	err = en.Append(0x88, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
+	err = en.Append(0x87, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
 	if err != nil {
 		return
 	}
@@ -1573,16 +1567,6 @@ func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "APICalls", za0003)
 			return
 		}
-	}
-	// write "TotalTokens"
-	err = en.Append(0xab, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint32(z.TotalTokens)
-	if err != nil {
-		err = msgp.WrapError(err, "TotalTokens")
-		return
 	}
 	// write "TotalWaiting"
 	err = en.Append(0xac, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x57, 0x61, 0x69, 0x74, 0x69, 0x6e, 0x67)
@@ -1640,9 +1624,9 @@ func (z *DiskMetrics) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *DiskMetrics) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 8
+	// map header, size 7
 	// string "LastMinute"
-	o = append(o, 0x88, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
+	o = append(o, 0x87, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x69, 0x6e, 0x75, 0x74, 0x65)
 	o = msgp.AppendMapHeader(o, uint32(len(z.LastMinute)))
 	for za0001, za0002 := range z.LastMinute {
 		o = msgp.AppendString(o, za0001)
@@ -1659,9 +1643,6 @@ func (z *DiskMetrics) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendString(o, za0003)
 		o = msgp.AppendUint64(o, za0004)
 	}
-	// string "TotalTokens"
-	o = append(o, 0xab, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x54, 0x6f, 0x6b, 0x65, 0x6e, 0x73)
-	o = msgp.AppendUint32(o, z.TotalTokens)
 	// string "TotalWaiting"
 	o = append(o, 0xac, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x57, 0x61, 0x69, 0x74, 0x69, 0x6e, 0x67)
 	o = msgp.AppendUint32(o, z.TotalWaiting)
@@ -1758,12 +1739,6 @@ func (z *DiskMetrics) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.APICalls[za0003] = za0004
 			}
-		case "TotalTokens":
-			z.TotalTokens, bts, err = msgp.ReadUint32Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "TotalTokens")
-				return
-			}
 		case "TotalWaiting":
 			z.TotalWaiting, bts, err = msgp.ReadUint32Bytes(bts)
 			if err != nil {
@@ -1822,7 +1797,7 @@ func (z *DiskMetrics) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0003) + msgp.Uint64Size
 		}
 	}
-	s += 12 + msgp.Uint32Size + 13 + msgp.Uint32Size + 24 + msgp.Uint64Size + 19 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
+	s += 13 + msgp.Uint32Size + 24 + msgp.Uint64Size + 19 + msgp.Uint64Size + 12 + msgp.Uint64Size + 13 + msgp.Uint64Size
 	return
 }
 
