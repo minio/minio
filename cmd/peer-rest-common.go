@@ -41,6 +41,7 @@ const (
 	peerRESTMethodDevNull                     = "/devnull"
 	peerRESTMethodNetperf                     = "/netperf"
 	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
+	peerRESTMethodSyncExpandPoolStatus        = "/syncexpandpoolstatus"
 )
 
 const (
