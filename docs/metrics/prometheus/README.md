@@ -67,14 +67,13 @@ scrape_configs:
 
 ##### Bucket centric
 
-```
+```yaml
 - job_name: minio-job-bucket
   bearer_token: <secret>
   metrics_path: /minio/v2/metrics/bucket
   scheme: http
   static_configs:
   - targets: ['localhost:9000']
-
 ```
 
 #### 3.2 Public Prometheus config
