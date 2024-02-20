@@ -2617,67 +2617,53 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	defer metaDataPoolPut(dstBuf)
 	if err != nil {
 		if legacyPreserved {
-			// Any failed rename calls un-roll previous transaction.
 			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 		}
 		return 0, errFileCorrupt
 	}
 
-	if srcDataPath != "" {
-		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
-			if legacyPreserved {
-				// Any failed rename calls un-roll previous transaction.
-				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-			}
-			return 0, osErrToFileErr(err)
+	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+		if legacyPreserved {
+			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 		}
-		diskHealthCheckOK(ctx, err)
+		return 0, osErrToFileErr(err)
+	}
+	diskHealthCheckOK(ctx, err)
 
+	if srcDataPath != "" && len(fi.Data) == 0 && fi.Size > 0 {
 		// renameAll only for objects that have xl.meta not saved inline.
-		if len(fi.Data) == 0 && fi.Size > 0 {
-			s.moveToTrash(dstDataPath, true, false)
-			if healing {
-				// If we are healing we should purge any legacyDataPath content,
-				// that was previously preserved during PutObject() call
-				// on a versioned bucket.
-				s.moveToTrash(legacyDataPath, true, false)
-			}
-			if err = renameAll(srcDataPath, dstDataPath, dstVolumeDir); err != nil {
-				if legacyPreserved {
-					// Any failed rename calls un-roll previous transaction.
-					s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-				}
-				s.deleteFile(dstVolumeDir, dstDataPath, false, false)
-				return 0, osErrToFileErr(err)
-			}
+		s.moveToTrash(dstDataPath, true, false)
+		if healing {
+			// If we are healing we should purge any legacyDataPath content,
+			// that was previously preserved during PutObject() call
+			// on a versioned bucket.
+			s.moveToTrash(legacyDataPath, true, false)
 		}
-
-		// Commit meta-file
-		if err = renameAll(srcFilePath, dstFilePath, dstVolumeDir); err != nil {
+		if err = renameAll(srcDataPath, dstDataPath, dstVolumeDir); err != nil {
 			if legacyPreserved {
 				// Any failed rename calls un-roll previous transaction.
 				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 			}
-			s.deleteFile(dstVolumeDir, dstFilePath, false, false)
+			s.deleteFile(dstVolumeDir, dstDataPath, false, false)
 			return 0, osErrToFileErr(err)
 		}
+	}
 
-		// additionally only purge older data at the end of the transaction of new data-dir
-		// movement, this is to ensure that previous data references can co-exist for
-		// any recoverability.
-		if oldDstDataPath != "" {
-			s.moveToTrash(oldDstDataPath, true, false)
+	// Commit meta-file
+	if err = renameAll(srcFilePath, dstFilePath, dstVolumeDir); err != nil {
+		if legacyPreserved {
+			// Any failed rename calls un-roll previous transaction.
+			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 		}
-	} else {
-		// Write meta-file directly, no data
-		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
-			if legacyPreserved {
-				// Any failed rename calls un-roll previous transaction.
-				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-			}
-			s.deleteFile(dstVolumeDir, dstFilePath, false, false)
-			return 0, err
-		}
+		s.deleteFile(dstVolumeDir, dstDataPath, false, false)
+		return 0, osErrToFileErr(err)
+	}
+
+	// additionally only purge older data at the end of the transaction of new data-dir
+	// movement, this is to ensure that previous data references can co-exist for
+	// any recoverability.
+	if oldDstDataPath != "" {
+		s.moveToTrash(oldDstDataPath, true, false)
 	}
 
 	if srcVolume != minioMetaMultipartBucket {
