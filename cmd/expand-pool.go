@@ -495,6 +495,8 @@ Step5: Restart every node. `, errRemote, errLocal)
 		}
 	}
 }
+
+//nolint:unused
 func configFileHandler(pools [][]string) error {
 	rd, err := Open(globalServerCtxt.ConfigPath)
 	if err != nil {
