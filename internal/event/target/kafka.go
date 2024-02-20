@@ -24,12 +24,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/internal/event"
@@ -154,16 +152,15 @@ func (k KafkaArgs) Validate() error {
 type KafkaTarget struct {
 	initOnce once.Init
 
-	id              event.TargetID
-	args            KafkaArgs
-	producer        sarama.SyncProducer
-	config          *sarama.Config
-	store           store.Store[event.Event]
-	batch           *store.Batch[string, *sarama.ProducerMessage]
-	loggerOnce      logger.LogOnce
-	brokerConnMutex sync.Mutex
-	brokerConns     map[string]net.Conn
-	quitCh          chan struct{}
+	id         event.TargetID
+	args       KafkaArgs
+	client     sarama.Client
+	producer   sarama.SyncProducer
+	config     *sarama.Config
+	store      store.Store[event.Event]
+	batch      *store.Batch[string, *sarama.ProducerMessage]
+	loggerOnce logger.LogOnce
+	quitCh     chan struct{}
 }
 
 // ID - returns target ID.
@@ -190,7 +187,9 @@ func (target *KafkaTarget) IsActive() (bool, error) {
 }
 
 func (target *KafkaTarget) isActive() (bool, error) {
-	if err := target.pingBrokers(); err != nil {
+	// Refer https://github.com/IBM/sarama/issues/1341
+	brokers := target.client.Brokers()
+	if len(brokers) == 0 {
 		return false, store.ErrNotConnected
 	}
 	return true, nil
@@ -319,61 +318,12 @@ func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.Pro
 func (target *KafkaTarget) Close() error {
 	close(target.quitCh)
 
-	target.brokerConnMutex.Lock()
-	for _, conn := range target.brokerConns {
-		if conn != nil {
-			conn.Close()
-		}
-	}
-	target.brokerConnMutex.Unlock()
-
 	if target.producer != nil {
-		return target.producer.Close()
+		target.producer.Close()
+		return target.client.Close()
 	}
 
 	return nil
-}
-
-// Check if at least one broker in cluster is active
-func (target *KafkaTarget) pingBrokers() (err error) {
-	d := net.Dialer{Timeout: 1 * time.Second}
-
-	errs := make([]error, len(target.args.Brokers))
-	var wg sync.WaitGroup
-	for idx, broker := range target.args.Brokers {
-		broker := broker
-		idx := idx
-		wg.Add(1)
-		go func(broker xnet.Host, idx int) {
-			defer wg.Done()
-
-			target.brokerConnMutex.Lock()
-			defer target.brokerConnMutex.Unlock()
-			conn, ok := target.brokerConns[broker.String()]
-			if !ok || conn == nil {
-				conn, errs[idx] = d.Dial("tcp", broker.String())
-				if errs[idx] != nil {
-					return
-				}
-				target.brokerConns[broker.String()] = conn
-			}
-			if _, errs[idx] = conn.Write([]byte("")); errs[idx] != nil {
-				conn.Close()
-				target.brokerConns[broker.String()] = nil
-			}
-		}(broker, idx)
-	}
-	wg.Wait()
-
-	var retErr error
-	for _, err := range errs {
-		if err == nil {
-			// if one of them is active we are good.
-			return nil
-		}
-		retErr = err
-	}
-	return retErr
 }
 
 func (target *KafkaTarget) init() error {
@@ -440,13 +390,22 @@ func (target *KafkaTarget) initKafka() error {
 		brokers = append(brokers, broker.String())
 	}
 
-	producer, err := sarama.NewSyncProducer(brokers, config)
+	client, err := sarama.NewClient(brokers, config)
 	if err != nil {
-		if err != sarama.ErrOutOfBrokers {
+		if !errors.Is(err, sarama.ErrOutOfBrokers) {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
 		return err
 	}
+
+	producer, err := sarama.NewSyncProducerFromClient(client)
+	if err != nil {
+		if !errors.Is(err, sarama.ErrOutOfBrokers) {
+			target.loggerOnce(context.Background(), err, target.ID().String())
+		}
+		return err
+	}
+	target.client = client
 	target.producer = producer
 
 	yes, err := target.isActive()
@@ -472,12 +431,11 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 	}
 
 	target := &KafkaTarget{
-		id:          event.TargetID{ID: id, Name: "kafka"},
-		args:        args,
-		store:       queueStore,
-		loggerOnce:  loggerOnce,
-		quitCh:      make(chan struct{}),
-		brokerConns: make(map[string]net.Conn, len(args.Brokers)),
+		id:         event.TargetID{ID: id, Name: "kafka"},
+		args:       args,
+		store:      queueStore,
+		loggerOnce: loggerOnce,
+		quitCh:     make(chan struct{}),
 	}
 
 	if target.store != nil {
