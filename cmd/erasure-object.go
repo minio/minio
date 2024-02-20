@@ -937,7 +937,11 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		onlineDisks[i] = nil
 	}
 
-	mrfCheck <- fi.ShallowCopy()
+	select {
+	case mrfCheck <- fi.ShallowCopy():
+	case <-ctx.Done():
+		return fi, onlineMeta, onlineDisks, toObjectErr(ctx.Err(), bucket, object)
+	}
 
 	return fi, onlineMeta, onlineDisks, nil
 }

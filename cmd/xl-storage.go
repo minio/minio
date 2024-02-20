@@ -2869,14 +2869,22 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		if req.MaxSize > 0 && int64(len(data)) > req.MaxSize {
 			r.Exists = true
 			r.Error = fmt.Sprintf("max size (%d) exceeded: %d", req.MaxSize, len(data))
-			resp <- r
-			continue
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case resp <- r:
+				continue
+			}
 		}
 		found++
 		r.Exists = true
 		r.Data = data
 		r.Modtime = mt
-		resp <- r
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case resp <- r:
+		}
 		if req.MaxResults > 0 && found >= req.MaxResults {
 			return nil
 		}
