@@ -18,7 +18,10 @@
 package grid
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"math"
 	"net/url"
 	"sort"
 	"strings"
@@ -394,6 +397,137 @@ func (u URLValues) Msgsize() (s int) {
 	return
 }
 
+// JSONPool is a pool for JSON objects that unmarshal into T.
+type JSONPool[T any] struct {
+	pool    sync.Pool
+	emptySz int
+}
+
+// NewJSONPool returns a new JSONPool.
+func NewJSONPool[T any]() *JSONPool[T] {
+	var t T
+	sz := 128
+	if b, err := json.Marshal(t); err != nil {
+		sz = len(b)
+	}
+	return &JSONPool[T]{
+		pool: sync.Pool{
+			New: func() interface{} {
+				var t T
+				return &t
+			},
+		},
+		emptySz: sz,
+	}
+}
+
+func (p *JSONPool[T]) new() *T {
+	var zero T
+	t := p.pool.Get().(*T)
+	*t = zero
+	return t
+}
+
+// JSON is a wrapper around a T object that can be serialized.
+// There is an internal value
+type JSON[T any] struct {
+	p   *JSONPool[T]
+	val *T
+}
+
+// NewJSON returns a new JSONPool.
+// No initial value is set.
+func (p *JSONPool[T]) NewJSON() *JSON[T] {
+	var j JSON[T]
+	j.p = p
+	return &j
+}
+
+// NewJSONWith returns a new JSON with the provided value.
+func (p *JSONPool[T]) NewJSONWith(val *T) *JSON[T] {
+	var j JSON[T]
+	j.p = p
+	j.val = val
+	return &j
+}
+
+// Value returns the underlying value.
+// If not set yet, a new value is created.
+func (j *JSON[T]) Value() *T {
+	if j.val == nil {
+		j.val = j.p.new()
+	}
+	return j.val
+}
+
+// ValueOrZero returns the underlying value.
+// If the underlying value is nil, a zero value is returned.
+func (j *JSON[T]) ValueOrZero() T {
+	if j == nil || j.val == nil {
+		var t T
+		return t
+	}
+	return *j.val
+}
+
+// Set the underlying value.
+func (j *JSON[T]) Set(v *T) {
+	j.val = v
+}
+
+// Recycle the underlying value.
+func (j *JSON[T]) Recycle() {
+	if j.val != nil {
+		j.p.pool.Put(j.val)
+		j.val = nil
+	}
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (j *JSON[T]) MarshalMsg(b []byte) (o []byte, err error) {
+	if j.val == nil {
+		return msgp.AppendNil(b), nil
+	}
+	buf := bytes.NewBuffer(GetByteBuffer()[:0])
+	defer func() {
+		PutByteBuffer(buf.Bytes())
+	}()
+	enc := json.NewEncoder(buf)
+	err = enc.Encode(j.val)
+	if err != nil {
+		return b, err
+	}
+	return msgp.AppendBytes(b, buf.Bytes()), nil
+}
+
+// UnmarshalMsg will JSON marshal the value and wrap as a msgp byte array.
+// Nil values are supported.
+func (j *JSON[T]) UnmarshalMsg(bytes []byte) ([]byte, error) {
+	if bytes, err := msgp.ReadNilBytes(bytes); err == nil {
+		if j.val != nil {
+			j.p.pool.Put(j.val)
+		}
+		j.val = nil
+		return bytes, nil
+	}
+	val, bytes, err := msgp.ReadBytesZC(bytes)
+	if err != nil {
+		return bytes, err
+	}
+	if j.val == nil {
+		j.val = j.p.new()
+	} else {
+		var t T
+		*j.val = t
+	}
+	return bytes, json.Unmarshal(val, j.val)
+}
+
+// Msgsize returns the size of an empty JSON object.
+func (j *JSON[T]) Msgsize() int {
+	return j.p.emptySz
+}
+
 // NoPayload is a type that can be used for handlers that do not use a payload.
 type NoPayload struct{}
 
@@ -419,3 +553,156 @@ func NewNoPayload() NoPayload {
 
 // Recycle is a no-op.
 func (NoPayload) Recycle() {}
+
+// ArrayOf wraps an array of Messagepack compatible objects.
+type ArrayOf[T RoundTripper] struct {
+	aPool sync.Pool // Arrays
+	ePool sync.Pool // Elements
+}
+
+// NewArrayOf returns a new ArrayOf.
+// You must provide a function that returns a new instance of T.
+func NewArrayOf[T RoundTripper](newFn func() T) *ArrayOf[T] {
+	return &ArrayOf[T]{
+		ePool: sync.Pool{New: func() any {
+			return newFn()
+		}},
+	}
+}
+
+// New returns a new empty Array.
+func (p *ArrayOf[T]) New() *Array[T] {
+	return &Array[T]{
+		p: p,
+	}
+}
+
+// NewWith returns a new Array with the provided value (not copied).
+func (p *ArrayOf[T]) NewWith(val []T) *Array[T] {
+	return &Array[T]{
+		p:   p,
+		val: val,
+	}
+}
+
+func (p *ArrayOf[T]) newA(sz uint32) []T {
+	t, ok := p.aPool.Get().(*[]T)
+	if !ok || t == nil {
+		return make([]T, 0, sz)
+	}
+	t2 := *t
+	return t2[:0]
+}
+
+func (p *ArrayOf[T]) putA(v []T) {
+	for _, t := range v {
+		p.ePool.Put(t)
+	}
+	if v != nil {
+		v = v[:0]
+		p.aPool.Put(&v)
+	}
+}
+
+func (p *ArrayOf[T]) newE() T {
+	return p.ePool.Get().(T)
+}
+
+// Array provides a wrapper for an underlying array of serializable objects.
+type Array[T RoundTripper] struct {
+	p   *ArrayOf[T]
+	val []T
+}
+
+// Msgsize returns the size of the array in bytes.
+func (j *Array[T]) Msgsize() int {
+	if j.val == nil {
+		return msgp.NilSize
+	}
+	sz := msgp.ArrayHeaderSize
+	for _, v := range j.val {
+		sz += v.Msgsize()
+	}
+	return sz
+}
+
+// Value returns the underlying value.
+// Regular append mechanics should be observed.
+// If no value has been set yet, a new array is created.
+func (j *Array[T]) Value() []T {
+	if j.val == nil {
+		j.val = j.p.newA(10)
+	}
+	return j.val
+}
+
+// Append a value to the underlying array.
+// The returned Array is always the same as the one called.
+func (j *Array[T]) Append(v ...T) *Array[T] {
+	if j.val == nil {
+		j.val = j.p.newA(uint32(len(v)))
+	}
+	j.val = append(j.val, v...)
+	return j
+}
+
+// Set the underlying value.
+func (j *Array[T]) Set(val []T) {
+	j.val = val
+}
+
+// Recycle the underlying value.
+func (j *Array[T]) Recycle() {
+	if j.val != nil {
+		j.p.putA(j.val)
+		j.val = nil
+	}
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (j *Array[T]) MarshalMsg(b []byte) (o []byte, err error) {
+	if j.val == nil {
+		return msgp.AppendNil(b), nil
+	}
+	if uint64(len(j.val)) > math.MaxUint32 {
+		return b, errors.New("array: length of array exceeds math.MaxUint32")
+	}
+	b = msgp.AppendArrayHeader(b, uint32(len(j.val)))
+	for _, v := range j.val {
+		b, err = v.MarshalMsg(b)
+		if err != nil {
+			return b, err
+		}
+	}
+	return b, err
+}
+
+// UnmarshalMsg will JSON marshal the value and wrap as a msgp byte array.
+// Nil values are supported.
+func (j *Array[T]) UnmarshalMsg(bytes []byte) ([]byte, error) {
+	if bytes, err := msgp.ReadNilBytes(bytes); err == nil {
+		if j.val != nil {
+			j.p.putA(j.val)
+		}
+		j.val = nil
+		return bytes, nil
+	}
+	l, bytes, err := msgp.ReadArrayHeaderBytes(bytes)
+	if err != nil {
+		return bytes, err
+	}
+	if j.val == nil {
+		j.val = j.p.newA(l)
+	} else {
+		j.val = j.val[:0]
+	}
+	for i := uint32(0); i < l; i++ {
+		v := j.p.newE()
+		bytes, err = v.UnmarshalMsg(bytes)
+		if err != nil {
+			return bytes, err
+		}
+		j.val = append(j.val, v)
+	}
+	return bytes, nil
+}

@@ -42,6 +42,8 @@ import (
 	"github.com/minio/pkg/v2/console"
 )
 
+//go:generate msgp -file $GOFILE -unexported
+
 type listPathOptions struct {
 	// ID of the listing.
 	// This will be used to persist the list.
@@ -99,18 +101,18 @@ type listPathOptions struct {
 
 	// Versioning config is used for if the path
 	// has versioning enabled.
-	Versioning *versioning.Versioning
+	Versioning *versioning.Versioning `msg:"-"`
 
 	// Lifecycle performs filtering based on lifecycle.
 	// This will filter out objects if the most recent version should be deleted by lifecycle.
 	// Is not transferred across request calls.
-	Lifecycle *lifecycle.Lifecycle
+	Lifecycle *lifecycle.Lifecycle `msg:"-"`
 
 	// Retention configuration, needed to be passed along with lifecycle if set.
-	Retention lock.Retention
+	Retention lock.Retention `msg:"-"`
 
 	// Replication configuration
-	Replication replicationConfig
+	Replication replicationConfig `msg:"-"`
 
 	// StopDiskAtLimit will stop listing on each disk when limit number off objects has been returned.
 	StopDiskAtLimit bool
@@ -767,6 +769,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	})
 }
 
+//msgp:ignore metaCacheRPC
 type metaCacheRPC struct {
 	o      listPathOptions
 	mu     sync.Mutex
@@ -917,6 +920,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 	return nil
 }
 
+//msgp:ignore listPathRawOptions
 type listPathRawOptions struct {
 	disks         []StorageAPI
 	fallbackDisks []StorageAPI

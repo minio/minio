@@ -294,6 +294,11 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 		return nil, ErrInvalidToken
 	}
 
+	// Expired credentials must return error right away.
+	if cred.IsTemp() && cred.IsExpired() {
+		return nil, toAPIErrorCode(r.Context(), errInvalidAccessKeyID)
+	}
+
 	secret := globalActiveCred.SecretKey
 	if cred.IsServiceAccount() {
 		token = cred.SessionToken
