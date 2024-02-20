@@ -1192,7 +1192,7 @@ type healInitParams struct {
 }
 
 // extractHealInitParams - Validates params for heal init API.
-func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reader) (hip healInitParams, err APIErrorCode) {
+func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Reader) (hip healInitParams, err APIErrorCode) {
 	hip.bucket = vars[mgmtBucket]
 	hip.objPrefix = vars[mgmtPrefix]
 
@@ -1213,13 +1213,13 @@ func extractHealInitParams(vars map[string]string, qParms url.Values, r io.Reade
 		return
 	}
 
-	if len(qParms[mgmtClientToken]) > 0 {
-		hip.clientToken = qParms[mgmtClientToken][0]
+	if len(qParams[mgmtClientToken]) > 0 {
+		hip.clientToken = qParams[mgmtClientToken][0]
 	}
-	if _, ok := qParms[mgmtForceStart]; ok {
+	if _, ok := qParams[mgmtForceStart]; ok {
 		hip.forceStart = true
 	}
-	if _, ok := qParms[mgmtForceStop]; ok {
+	if _, ok := qParams[mgmtForceStop]; ok {
 		hip.forceStop = true
 	}
 

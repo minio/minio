@@ -964,7 +964,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 	return objInfo, nil
 }
 
-// getObjectInfoAndQuroum - wrapper for reading object metadata and constructs ObjectInfo, additionally returns write quorum for the object.
+// getObjectInfoAndQuorum - wrapper for reading object metadata and constructs ObjectInfo, additionally returns write quorum for the object.
 func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, wquorum int, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {

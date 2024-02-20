@@ -237,7 +237,7 @@ func TestIsRequestPresignedSignatureV2(t *testing.T) {
 	}
 }
 
-// TestIsRequestPresignedSignatureV4 - Test validates the logic for presign signature verision v4 detection.
+// TestIsRequestPresignedSignatureV4 - Test validates the logic for presign signature version v4 detection.
 func TestIsRequestPresignedSignatureV4(t *testing.T) {
 	testCases := []struct {
 		inputQueryKey   string

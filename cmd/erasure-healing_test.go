@@ -614,7 +614,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	resetGlobalHealState()
 	defer resetGlobalHealState()
 
-	// Set globalStoragClass.STANDARD to EC:4 for this test
+	// Set globalStorageClass.STANDARD to EC:4 for this test
 	saveSC := globalStorageClass
 	defer func() {
 		globalStorageClass.Update(saveSC)

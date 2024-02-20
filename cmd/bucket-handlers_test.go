@@ -580,7 +580,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 			expectedRespStatus: http.StatusOK,
 		},
 		// Test case - 2.
-		// Test case with invalid accessKey to produce and validate Signature MisMatch error.
+		// Test case with invalid accessKey to produce and validate Signature Mismatch error.
 		{
 			bucketName:         bucketName,
 			accessKey:          "abcd",

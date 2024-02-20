@@ -25,11 +25,11 @@ import (
 )
 
 var (
-	errKeyLookup                 = errors.New("Cannot look up key in non-object value")
-	errIndexLookup               = errors.New("Cannot look up array index in non-array value")
-	errWildcardObjectLookup      = errors.New("Object wildcard used on non-object value")
-	errWildcardArrayLookup       = errors.New("Array wildcard used on non-array value")
-	errWilcardObjectUsageInvalid = errors.New("Invalid usage of object wildcard")
+	errKeyLookup                  = errors.New("Cannot look up key in non-object value")
+	errIndexLookup                = errors.New("Cannot look up array index in non-array value")
+	errWildcardObjectLookup       = errors.New("Object wildcard used on non-object value")
+	errWildcardArrayLookup        = errors.New("Array wildcard used on non-array value")
+	errWildcardObjectUsageInvalid = errors.New("Invalid usage of object wildcard")
 )
 
 // jsonpathEval evaluates a JSON path and returns the value at the path.
@@ -85,13 +85,13 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 		switch kvs := v.(type) {
 		case jstream.KVS:
 			if len(p[1:]) > 0 {
-				return nil, false, errWilcardObjectUsageInvalid
+				return nil, false, errWildcardObjectUsageInvalid
 			}
 
 			return kvs, false, nil
 		case simdjson.Object:
 			if len(p[1:]) > 0 {
-				return nil, false, errWilcardObjectUsageInvalid
+				return nil, false, errWildcardObjectUsageInvalid
 			}
 
 			return kvs, false, nil

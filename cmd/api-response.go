@@ -944,7 +944,7 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
-// writeErrorRespone writes error headers
+// writeErrorResponse writes error headers
 func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
 	if err.HTTPStatusCode == http.StatusServiceUnavailable {
 		// Set retry-after header to indicate user-agents to retry request after 120secs.

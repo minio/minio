@@ -299,7 +299,7 @@ func checkValidNotificationKeysForSubSys(subSys string, tgt map[string]config.KV
 	return nil
 }
 
-// DefaultKakfaKVS - default KV for kafka target
+// DefaultKafkaKVS - default KV for kafka target
 var (
 	DefaultKafkaKVS = config.KVS{
 		config.KV{
