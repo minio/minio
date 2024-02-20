@@ -89,6 +89,10 @@ func (h *Target) pingBrokers() (err error) {
 		wg.Add(1)
 		go func(broker xnet.Host, idx int) {
 			defer wg.Done()
+
+			h.brokerConnMutex.Lock()
+			defer h.brokerConnMutex.Unlock()
+
 			conn, ok := h.brokerConns[broker.String()]
 			if !ok || conn == nil {
 				conn, errs[idx] = d.Dial("tcp", broker.String())
@@ -139,10 +143,11 @@ type Target struct {
 	initKafkaOnce      once.Init
 	initQueueStoreOnce once.Init
 
-	producer    sarama.SyncProducer
-	kconfig     Config
-	config      *sarama.Config
-	brokerConns map[string]net.Conn
+	producer        sarama.SyncProducer
+	kconfig         Config
+	config          *sarama.Config
+	brokerConnMutex sync.Mutex
+	brokerConns     map[string]net.Conn
 }
 
 func (h *Target) validate() error {
@@ -411,11 +416,13 @@ func (h *Target) Cancel() {
 		h.producer.Close()
 	}
 
+	h.brokerConnMutex.Lock()
 	for _, conn := range h.brokerConns {
 		if conn != nil {
 			conn.Close()
 		}
 	}
+	h.brokerConnMutex.Unlock()
 
 	// Wait for messages to be sent...
 	h.wg.Wait()

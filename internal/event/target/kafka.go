@@ -154,15 +154,16 @@ func (k KafkaArgs) Validate() error {
 type KafkaTarget struct {
 	initOnce once.Init
 
-	id          event.TargetID
-	args        KafkaArgs
-	producer    sarama.SyncProducer
-	config      *sarama.Config
-	store       store.Store[event.Event]
-	batch       *store.Batch[string, *sarama.ProducerMessage]
-	loggerOnce  logger.LogOnce
-	brokerConns map[string]net.Conn
-	quitCh      chan struct{}
+	id              event.TargetID
+	args            KafkaArgs
+	producer        sarama.SyncProducer
+	config          *sarama.Config
+	store           store.Store[event.Event]
+	batch           *store.Batch[string, *sarama.ProducerMessage]
+	loggerOnce      logger.LogOnce
+	brokerConnMutex sync.Mutex
+	brokerConns     map[string]net.Conn
+	quitCh          chan struct{}
 }
 
 // ID - returns target ID.
@@ -317,14 +318,19 @@ func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.Pro
 // Close - closes underneath kafka connection.
 func (target *KafkaTarget) Close() error {
 	close(target.quitCh)
-	if target.producer != nil {
-		return target.producer.Close()
-	}
+
+	target.brokerConnMutex.Lock()
 	for _, conn := range target.brokerConns {
 		if conn != nil {
 			conn.Close()
 		}
 	}
+	target.brokerConnMutex.Unlock()
+
+	if target.producer != nil {
+		return target.producer.Close()
+	}
+
 	return nil
 }
 
@@ -340,6 +346,9 @@ func (target *KafkaTarget) pingBrokers() (err error) {
 		wg.Add(1)
 		go func(broker xnet.Host, idx int) {
 			defer wg.Done()
+
+			target.brokerConnMutex.Lock()
+			defer target.brokerConnMutex.Unlock()
 			conn, ok := target.brokerConns[broker.String()]
 			if !ok || conn == nil {
 				conn, errs[idx] = d.Dial("tcp", broker.String())
