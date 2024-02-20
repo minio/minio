@@ -314,7 +314,7 @@ func mergeServerCtxtFromConfigFile(args []string, configFile string, ctxt *serve
 		ctxt.Layout, err = buildDisksLayoutFromConfFile(cf.EnableExpandPools, cf.Pools, false)
 	}
 
-	initExpandPool(configFile, ctxt, cf.Pools)
+	initExpandPool(ctxt, cf.Pools)
 
 	return err
 }

@@ -239,9 +239,10 @@ type renamePath struct {
 	dataBackupPath string
 }
 
-func initExpandPool(configFile string, ctxt *serverCtxt, pools [][]string) error {
+func initExpandPool(ctxt *serverCtxt, pools [][]string) error {
 	if serverDebugLog {
 		log.Infof("[Expand pool]: Starting with: %v", ctxt.Layout)
+		log.Infof("[Expand pool]: Pools %v", ctxt.Layout)
 	}
 	if !ctxt.ExpandPools {
 		return nil
@@ -254,7 +255,6 @@ func initExpandPool(configFile string, ctxt *serverCtxt, pools [][]string) error
 			log.Infof("[Expand pool]: Starting pool expansion")
 		}
 		go expandPoolHandler()
-		go configFileHandler(configFile, ctxt, pools)
 	}
 	return nil
 }
@@ -421,8 +421,12 @@ func expandPoolHandler() {
 				}
 				err := z.Decommission(context.Background(), 0)
 				if err != nil {
-					log.Error("[Expand pool]: Decommission error:", err)
-					continue
+					if strings.Contains(err.Error(), "already in progress") {
+
+					} else {
+						log.Error("[Expand pool]: Decommission error:", err)
+						continue
+					}
 				}
 				_ = stats.saveNextStatus(false)
 			case PoolExpandStatusWaitForDecommissionComplete:
@@ -493,80 +497,53 @@ Step5: Restart every node. `, errRemote, errLocal)
 		}
 	}
 }
-func configFileHandler(configFile string, ctxt *serverCtxt, pools [][]string) {
-	stat, err := os.Stat(configFile)
+func configFileHandler(pools [][]string) error {
+	rd, err := Open(globalServerCtxt.ConfigPath)
 	if err != nil {
-		if serverDebugLog {
-			log.Errorf("[Expand pool]: Can't stat configFile")
-		}
-		return
+		return err
 	}
-	ltime := stat.ModTime()
-	ticker := time.NewTicker(time.Second * 10)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			lstat, err := os.Stat(configFile)
-			if err != nil {
-				continue
-			}
-			if !lstat.ModTime().After(ltime) {
-				continue
-			}
-			rd, err := Open(configFile)
-			if err != nil {
-				continue
-			}
-			cf := &config.ServerConfig{}
-			dec := yaml.NewDecoder(rd)
-			dec.SetStrict(true)
-			if err = dec.Decode(cf); err != nil {
-				_ = rd.Close()
-				continue
-			}
-			_ = rd.Close()
-			layout, err := buildDisksLayoutFromConfFile(true, cf.Pools, true)
-			if err != nil {
-				continue
-			}
-			if reflect.DeepEqual(layout, ctxt.Layout) || len(layout.pools) != 1 {
-				continue
-			}
-			// found the config.yaml has been changed
-			if !cf.EnableExpandPools || len(cf.Pools) != 1 {
-				// we only support one pool expand now
-				continue
-			}
-			// delay 5s to make sure the config.yaml has been loaded
-			time.Sleep(time.Second * 5)
-			hashConfig, _, err := getConfigFileInfo()
-			if err != nil {
-				continue
-			}
-			if len(ctxt.Layout.pools) != 1 {
-				continue
-			}
-			nowStatus, err := loadPoolExpandStats()
-			if err != nil {
-				continue
-			}
-			// before the change, the status should be empty or PoolExpandStatusComplete
-			if nowStatus.Status == "" && len(pools) == 1 && len(cf.Pools) == 1 && !reflect.DeepEqual(cf.Pools[0], pools[0]) {
-				err = writePoolExpandStats(&SelfPoolExpand{
-					Status:         nextPoolExpandStatus(""),
-					BeforePools:    pools[0],
-					AfterPools:     cf.Pools[0],
-					HashConfig:     hashConfig,
-					DirHaveRenamed: false,
-				})
-				if err == nil {
-					// exit the watcher
-					return
-				}
-			}
-		case <-GlobalContext.Done():
-			return
-		}
+	cf := &config.ServerConfig{}
+	dec := yaml.NewDecoder(rd)
+	dec.SetStrict(true)
+	if err = dec.Decode(cf); err != nil {
+		_ = rd.Close()
+		return err
 	}
+	_ = rd.Close()
+	layout, err := buildDisksLayoutFromConfFile(true, cf.Pools, true)
+	if err != nil {
+		return err
+	}
+	if reflect.DeepEqual(layout, globalServerCtxt.Layout) || len(layout.pools) != 1 {
+		return fmt.Errorf("config.yaml has not changed")
+	}
+	// found the config.yaml has been changed
+	if !cf.EnableExpandPools || len(cf.Pools) != 1 {
+		// we only support one pool expand now
+		return fmt.Errorf("support one pool expand now")
+	}
+	// delay 5s to make sure the config.yaml has been loaded
+	time.Sleep(time.Second * 5)
+	hashConfig, _, err := getConfigFileInfo()
+	if err != nil {
+		return err
+	}
+	if len(globalServerCtxt.Layout.pools) != 1 {
+		return fmt.Errorf("support one pool expand now")
+	}
+	nowStatus, err := loadPoolExpandStats()
+	if err != nil {
+		return err
+	}
+	// before the change, the status should be empty or PoolExpandStatusComplete
+	if nowStatus.Status == "" && len(pools) == 1 && len(cf.Pools) == 1 && !reflect.DeepEqual(cf.Pools[0], pools[0]) {
+		return writePoolExpandStats(&SelfPoolExpand{
+			Status:         nextPoolExpandStatus(""),
+			BeforePools:    pools[0],
+			AfterPools:     cf.Pools[0],
+			HashConfig:     hashConfig,
+			DirHaveRenamed: false,
+		})
+	}
+	return fmt.Errorf("Can't expand for now!")
 }
