@@ -299,7 +299,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			// If directory entry on stack before this, pop it now.
 			for len(dirStack) > 0 && dirStack[len(dirStack)-1] < meta.name {
 				pop := dirStack[len(dirStack)-1]
-				out <- metaCacheEntry{name: pop}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case out <- metaCacheEntry{name: pop}:
+				}
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
 					err := scanDir(pop)
@@ -368,7 +372,11 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return ctx.Err()
 			}
 			pop := dirStack[len(dirStack)-1]
-			out <- metaCacheEntry{name: pop}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case out <- metaCacheEntry{name: pop}:
+			}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
 				logger.LogIf(ctx, scanDir(pop))

@@ -219,7 +219,10 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 				// Do not return io.EOF
 				if resCh != nil {
 					resErr = nil
-					resCh <- results
+					select {
+					case resCh <- results:
+					case <-ctx.Done():
+					}
 					resCh = nil
 					returned = true
 				}
