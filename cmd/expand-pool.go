@@ -421,9 +421,7 @@ func expandPoolHandler() {
 				}
 				err := z.Decommission(context.Background(), 0)
 				if err != nil {
-					if strings.Contains(err.Error(), "already in progress") {
-
-					} else {
+					if !strings.Contains(err.Error(), "already in progress") {
 						log.Error("[Expand pool]: Decommission error:", err)
 						continue
 					}
