@@ -29,7 +29,7 @@ import (
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
-func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
+func (er *erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 	disks := er.getDisks()
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -62,7 +62,7 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 	return newDisks
 }
 
-func (er erasureObjects) getOnlineLocalDisks() (newDisks []StorageAPI) {
+func (er *erasureObjects) getOnlineLocalDisks() (newDisks []StorageAPI) {
 	disks := er.getOnlineDisks()
 
 	// Based on the random shuffling return back randomized disks.
@@ -77,7 +77,7 @@ func (er erasureObjects) getOnlineLocalDisks() (newDisks []StorageAPI) {
 	return newDisks
 }
 
-func (er erasureObjects) getLocalDisks() (newDisks []StorageAPI) {
+func (er *erasureObjects) getLocalDisks() (newDisks []StorageAPI) {
 	disks := er.getDisks()
 	// Based on the random shuffling return back randomized disks.
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))

@@ -65,8 +65,8 @@ func countOnlineDisks(onlineDisks []StorageAPI) (online int) {
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, err error) {
-	auditObjectErasureSet(ctx, dstObject, &er)
+func (er *erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, dstObject, er)
 
 	// This call shouldn't be used for anything other than metadata updates or adding self referential versions.
 	if !srcInfo.metadataOnly {
@@ -187,8 +187,8 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 // GetObjectNInfo - returns object info and an object
 // Read(Closer). When err != nil, the returned reader is always nil.
-func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	auditObjectErasureSet(ctx, object, &er)
+func (er *erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
+	auditObjectErasureSet(ctx, object, er)
 
 	var unlockOnDefer bool
 	nsUnlocker := func() {}
@@ -280,7 +280,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	return fn(pr, h, pipeCloser)
 }
 
-func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
+func (er *erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, object string, startOffset int64, length int64, writer io.Writer, fi FileInfo, metaArr []FileInfo, onlineDisks []StorageAPI) error {
 	// Reorder online disks based on erasure distribution order.
 	// Reorder parts metadata based on erasure distribution order.
 	onlineDisks, metaArr = shuffleDisksAndPartsMetadataByIndex(onlineDisks, metaArr, fi)
@@ -418,8 +418,8 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
-	auditObjectErasureSet(ctx, object, &er)
+func (er *erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, object, er)
 
 	if !opts.NoLock {
 		// Lock the object before reading.
@@ -463,7 +463,7 @@ func joinErrs(errs []error) []string {
 	return s
 }
 
-func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
+func (er *erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
 	var err error
 	m, ok := isObjectDangling(metaArr, errs, dataErrs)
 	if ok {
@@ -714,7 +714,7 @@ func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, r
 	return pickLatestQuorumFilesInfo(ctx, rawFileInfos, errs, bucket, object, readData, inclFreeVers, allParts)
 }
 
-func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object string, opts ObjectOptions, readData bool) (FileInfo, []FileInfo, []StorageAPI, error) {
+func (er *erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object string, opts ObjectOptions, readData bool) (FileInfo, []FileInfo, []StorageAPI, error) {
 	rawArr := make([]RawFileInfo, er.setDriveCount)
 	metaArr := make([]FileInfo, er.setDriveCount)
 	errs := make([]error, er.setDriveCount)
@@ -947,7 +947,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (er *erasureObjects) getObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
@@ -965,7 +965,7 @@ func (er erasureObjects) getObjectInfo(ctx context.Context, bucket, object strin
 }
 
 // getObjectInfoAndQuroum - wrapper for reading object metadata and constructs ObjectInfo, additionally returns write quorum for the object.
-func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, wquorum int, err error) {
+func (er *erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, wquorum int, err error) {
 	fi, _, _, err := er.getObjectFileInfo(ctx, bucket, object, opts, false)
 	if err != nil {
 		return objInfo, er.defaultWQuorum(), toObjectErr(err, bucket, object)
@@ -1068,7 +1068,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	return evalDisks(disks, errs), versionsDisparity, err
 }
 
-func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (er *erasureObjects) putMetacacheObject(ctx context.Context, key string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	data := r.Reader
 
 	// No metadata is set, allocate a new one.
@@ -1209,7 +1209,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.meta` which carries the necessary metadata for future
 // object operations.
-func (er erasureObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+func (er *erasureObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return er.putObject(ctx, bucket, object, data, opts)
 }
 
@@ -1252,8 +1252,8 @@ func healObjectVersionsDisparity(bucket string, entry metaCacheEntry, scanMode m
 }
 
 // putObject wrapper for erasureObjects PutObject
-func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	auditObjectErasureSet(ctx, object, &er)
+func (er *erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, object, er)
 
 	data := r.Reader
 
@@ -1577,7 +1577,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
-func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, fi FileInfo, forceDelMarker bool) error {
+func (er *erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, fi FileInfo, forceDelMarker bool) error {
 	disks := er.getDisks()
 	// Assume (N/2 + 1) quorum for Delete()
 	// this is a theoretical assumption such that
@@ -1604,9 +1604,9 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 // DeleteObjects deletes objects/versions in bulk, this function will still automatically split objects list
 // into smaller bulks if some object names are found to be duplicated in the delete list, splitting
 // into smaller bulks will avoid holding twice the write lock of the duplicated object names.
-func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
+func (er *erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	for _, obj := range objects {
-		auditObjectErasureSet(ctx, obj.ObjectV.ObjectName, &er)
+		auditObjectErasureSet(ctx, obj.ObjectV.ObjectName, er)
 	}
 
 	errs := make([]error, len(objects))
@@ -1772,7 +1772,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	return dobjects, errs
 }
 
-func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
+func (er *erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
 	dirPrefix := encodeDirObject(prefix)
@@ -1806,8 +1806,8 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 // DeleteObject - deletes an object, this call doesn't necessary reply
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
-func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
-	auditObjectErasureSet(ctx, object, &er)
+func (er *erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
+	auditObjectErasureSet(ctx, object, er)
 
 	if opts.DeletePrefix {
 		if globalCacheConfig.Enabled() {
@@ -2007,7 +2007,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
-func (er erasureObjects) addPartial(bucket, object, versionID string) {
+func (er *erasureObjects) addPartial(bucket, object, versionID string) {
 	globalMRFState.addPartialOp(partialOperation{
 		bucket:    bucket,
 		object:    object,
@@ -2016,7 +2016,7 @@ func (er erasureObjects) addPartial(bucket, object, versionID string) {
 	})
 }
 
-func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+func (er *erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	if !opts.NoLock {
 		// Lock the object before updating metadata.
 		lk := er.NewNSLock(bucket, object)
@@ -2091,7 +2091,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 }
 
 // PutObjectTags - replace or add tags to an existing object
-func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
+func (er *erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
 	// Lock the object before updating tags.
 	lk := er.NewNSLock(bucket, object)
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
@@ -2154,7 +2154,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
 }
 
-func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI, opts UpdateMetadataOpts) error {
+func (er *erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI, opts UpdateMetadataOpts) error {
 	if len(fi.Metadata) == 0 {
 		return nil
 	}
@@ -2179,17 +2179,17 @@ func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, o
 }
 
 // updateObjectMeta will update the metadata of a file.
-func (er erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI) error {
+func (er *erasureObjects) updateObjectMeta(ctx context.Context, bucket, object string, fi FileInfo, onlineDisks []StorageAPI) error {
 	return er.updateObjectMetaWithOpts(ctx, bucket, object, fi, onlineDisks, UpdateMetadataOpts{})
 }
 
 // DeleteObjectTags - delete object tags from an existing object
-func (er erasureObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
+func (er *erasureObjects) DeleteObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {
 	return er.PutObjectTags(ctx, bucket, object, "", opts)
 }
 
 // GetObjectTags - get object tags from an existing object
-func (er erasureObjects) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
+func (er *erasureObjects) GetObjectTags(ctx context.Context, bucket, object string, opts ObjectOptions) (*tags.Tags, error) {
 	// GetObjectInfo will return tag value as well
 	oi, err := er.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
@@ -2200,7 +2200,7 @@ func (er erasureObjects) GetObjectTags(ctx context.Context, bucket, object strin
 }
 
 // TransitionObject - transition object content to target tier.
-func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (er *erasureObjects) TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	tgtClient, err := globalTierConfigMgr.getDriver(opts.Transition.Tier)
 	if err != nil {
 		return err
@@ -2304,12 +2304,12 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 // storage class. When PostObjectRestore API is called, a temporary copy of the object
 // is restored locally to the bucket on source cluster until the restore expiry date.
 // The copy that was transitioned continues to reside in the transitioned tier.
-func (er erasureObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
+func (er *erasureObjects) RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error {
 	return er.restoreTransitionedObject(ctx, bucket, object, opts)
 }
 
 // update restore status header in the metadata
-func (er erasureObjects) updateRestoreMetadata(ctx context.Context, bucket, object string, objInfo ObjectInfo, opts ObjectOptions) error {
+func (er *erasureObjects) updateRestoreMetadata(ctx context.Context, bucket, object string, objInfo ObjectInfo, opts ObjectOptions) error {
 	oi := objInfo.Clone()
 	oi.metadataOnly = true // Perform only metadata updates.
 
@@ -2329,7 +2329,7 @@ func (er erasureObjects) updateRestoreMetadata(ctx context.Context, bucket, obje
 
 // restoreTransitionedObject for multipart object chunks the file stream from remote tier into the same number of parts
 // as in the xl.meta for this version and rehydrates the part.n into the fi.DataDir for this version as in the xl.meta
-func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket string, object string, opts ObjectOptions) error {
+func (er *erasureObjects) restoreTransitionedObject(ctx context.Context, bucket string, object string, opts ObjectOptions) error {
 	setRestoreHeaderFn := func(oi ObjectInfo, rerr error) error {
 		if rerr == nil {
 			return nil // nothing to do; restore object was successful
@@ -2401,7 +2401,7 @@ func (er erasureObjects) restoreTransitionedObject(ctx context.Context, bucket s
 }
 
 // DecomTieredObject - moves tiered object to another pool during decommissioning.
-func (er erasureObjects) DecomTieredObject(ctx context.Context, bucket, object string, fi FileInfo, opts ObjectOptions) error {
+func (er *erasureObjects) DecomTieredObject(ctx context.Context, bucket, object string, fi FileInfo, opts ObjectOptions) error {
 	if opts.UserDefined == nil {
 		opts.UserDefined = make(map[string]string)
 	}

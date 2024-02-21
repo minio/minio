@@ -43,7 +43,7 @@ const (
 	healingMetricCheckAbandonedParts
 )
 
-func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
+func (er *erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -985,7 +985,7 @@ func isObjectDangling(metaArr []FileInfo, errs []error, dataErrs []error) (valid
 }
 
 // HealObject - heal the given object, automatically deletes the object if stale/corrupted if `remove` is true.
-func (er erasureObjects) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (hr madmin.HealResultItem, err error) {
+func (er *erasureObjects) HealObject(ctx context.Context, bucket, object, versionID string, opts madmin.HealOpts) (hr madmin.HealResultItem, err error) {
 	// Create context that also contains information about the object and bucket.
 	// The top level handler might not have this information.
 	reqInfo := logger.GetReqInfo(ctx)

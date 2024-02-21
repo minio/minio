@@ -306,20 +306,20 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		// transport is already down.
 		return info, errDiskNotFound
 	}
+
+	opts.DiskID = client.diskID
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	opts.DiskID = client.diskID
-
 	infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &opts)
 	if err != nil {
-		return info, toStorageErr(err)
+		return DiskInfo{}, toStorageErr(err)
 	}
 	info = *infop
+	info.Scanning = atomic.LoadInt32(&client.scanning) == 1
 	if info.Error != "" {
 		return info, toStorageErr(errors.New(info.Error))
 	}
-	info.Scanning = atomic.LoadInt32(&client.scanning) == 1
 	return info, nil
 }
 
