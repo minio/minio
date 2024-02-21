@@ -1007,21 +1007,29 @@ func (s *peerRESTServer) GetBandwidth(params *grid.URLValues) (*bandwidth.Bucket
 
 // GetPeerMetrics gets the metrics to be federated across peers.
 func (s *peerRESTServer) GetPeerMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	m := ReportMetrics(context.Background(), peerMetricsGroups)
-	res := make([]*Metric, 0, len(m))
-	for m := range m {
+	res := make([]*Metric, 0, len(peerMetricsGroups))
+	populateAndPublish(peerMetricsGroups, func(m Metric) bool {
+		if m.VariableLabels == nil {
+			m.VariableLabels = make(map[string]string, 1)
+		}
+		m.VariableLabels[serverName] = globalLocalNodeName
 		res = append(res, &m)
-	}
+		return true
+	})
 	return aoMetricsGroup.NewWith(res), nil
 }
 
 // GetPeerBucketMetrics gets the metrics to be federated across peers.
 func (s *peerRESTServer) GetPeerBucketMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	m := ReportMetrics(context.Background(), bucketPeerMetricsGroups)
-	res := make([]*Metric, 0, len(m))
-	for m := range m {
+	res := make([]*Metric, 0, len(bucketPeerMetricsGroups))
+	populateAndPublish(bucketPeerMetricsGroups, func(m Metric) bool {
+		if m.VariableLabels == nil {
+			m.VariableLabels = make(map[string]string, 1)
+		}
+		m.VariableLabels[serverName] = globalLocalNodeName
 		res = append(res, &m)
-	}
+		return true
+	})
 	return aoMetricsGroup.NewWith(res), nil
 }
 

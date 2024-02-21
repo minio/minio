@@ -595,8 +595,10 @@ func (p *ArrayOf[T]) newA(sz uint32) []T {
 }
 
 func (p *ArrayOf[T]) putA(v []T) {
-	for _, t := range v {
+	var zero T // nil
+	for i, t := range v {
 		p.ePool.Put(t)
+		v[i] = zero
 	}
 	if v != nil {
 		v = v[:0]
