@@ -28,7 +28,7 @@ var (
 	errLifecycleInvalidExpiration   = Errorf("Exactly one of Days (positive integer) or Date (positive ISO 8601 format) should be present inside Expiration.")
 	errLifecycleInvalidDeleteMarker = Errorf("Delete marker cannot be specified with Days or Date in a Lifecycle Expiration Policy")
 	errLifecycleDateNotMidnight     = Errorf("'Date' must be at midnight GMT")
-	errLifecycleInvalidDeleteAll    = Errorf("Days (positive integer) should be present inside Expiration with DeleteAll.")
+	errLifecycleInvalidDeleteAll    = Errorf("Days (positive integer) should be present inside Expiration with ExpiredObjectAllVersions.")
 )
 
 // ExpirationDays is a type alias to unmarshal Days in Expiration
