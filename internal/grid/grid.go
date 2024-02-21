@@ -184,12 +184,12 @@ func (m *lockedClientMap) Delete(id uint64) {
 
 func (m *lockedClientMap) Range(fn func(key uint64, value *muxClient) bool) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	for k, v := range m.m {
 		if !fn(k, v) {
 			break
 		}
 	}
-	m.mu.Unlock()
 }
 
 func (m *lockedClientMap) Clear() {

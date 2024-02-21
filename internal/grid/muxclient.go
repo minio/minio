@@ -173,7 +173,7 @@ func (m *muxClient) sendLocked(msg message) error {
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
-	return m.parent.send(dst)
+	return m.parent.send(m.ctx, dst)
 }
 
 // RequestStateless will send a single payload request and stream back results.
@@ -552,7 +552,15 @@ func (m *muxClient) close() {
 	if debugPrint {
 		fmt.Println("closing outgoing mux", m.MuxID)
 	}
-	m.respMu.Lock()
+	if !m.respMu.TryLock() {
+		// Cancel before locking - will unblock any pending sends.
+		if m.cancelFn != nil {
+			m.cancelFn(context.Canceled)
+		}
+		// Wait for senders to release.
+		m.respMu.Lock()
+	}
+
 	defer m.respMu.Unlock()
 	m.closeLocked()
 }
