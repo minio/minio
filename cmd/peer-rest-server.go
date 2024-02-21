@@ -53,7 +53,6 @@ type peerRESTServer struct{}
 
 var (
 	// Types & Wrappers
-	aoMetricsGroup         = grid.NewArrayOf[*Metric](func() *Metric { return &Metric{} })
 	madminBgHealState      = grid.NewJSONPool[madmin.BgHealState]()
 	madminCPUs             = grid.NewJSONPool[madmin.CPUs]()
 	madminMemInfo          = grid.NewJSONPool[madmin.MemInfo]()
@@ -87,8 +86,6 @@ var (
 	getNetInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.NetInfo]](grid.HandlerGetNetInfo, grid.NewMSS, madminNetInfo.NewJSON)
 	getOSInfoRPC                   = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.OSInfo]](grid.HandlerGetOSInfo, grid.NewMSS, madminOSInfo.NewJSON)
 	getPartitionsRPC               = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.Partitions]](grid.HandlerGetPartitions, grid.NewMSS, madminPartitions.NewJSON)
-	getPeerBucketMetricsRPC        = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetPeerBucketMetrics, grid.NewMSS, aoMetricsGroup.New)
-	getPeerMetricsRPC              = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetPeerMetrics, grid.NewMSS, aoMetricsGroup.New)
 	getProcInfoRPC                 = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.ProcInfo]](grid.HandlerGetProcInfo, grid.NewMSS, madminProcInfo.NewJSON)
 	getSRMetricsRPC                = grid.NewSingleHandler[*grid.MSS, *SRMetricsSummary](grid.HandlerGetSRMetrics, grid.NewMSS, func() *SRMetricsSummary { return &SRMetricsSummary{} })
 	getSysConfigRPC                = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysConfig]](grid.HandlerGetSysConfig, grid.NewMSS, madminSysConfig.NewJSON)
@@ -116,9 +113,11 @@ var (
 	// STREAMS
 	// Set an output capacity of 100 for consoleLog and listenRPC
 	// There is another buffer that will buffer events.
-	consoleLogRPC         = grid.NewStream[*grid.MSS, grid.NoPayload, *grid.Bytes](grid.HandlerConsoleLog, grid.NewMSS, nil, grid.NewBytes).WithOutCapacity(100)
-	listenRPC             = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen, grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
-	getResourceMetricsRPC = grid.NewStream[*grid.MSS, grid.NoPayload, *Metric](grid.HandlerGetResourceMetrics, grid.NewMSS, nil, func() *Metric { return &Metric{} })
+	consoleLogRPC           = grid.NewStream[*grid.MSS, grid.NoPayload, *grid.Bytes](grid.HandlerConsoleLog, grid.NewMSS, nil, grid.NewBytes).WithOutCapacity(100)
+	listenRPC               = grid.NewStream[*grid.URLValues, grid.NoPayload, *grid.Bytes](grid.HandlerListen, grid.NewURLValues, nil, grid.NewBytes).WithOutCapacity(100)
+	getPeerMetricsRPC       = grid.NewStream[*grid.MSS, grid.NoPayload, *Metric](grid.HandlerGetPeerMetrics, grid.NewMSS, nil, func() *Metric { return &Metric{} })
+	getResourceMetricsRPC   = grid.NewStream[*grid.MSS, grid.NoPayload, *Metric](grid.HandlerGetResourceMetrics, grid.NewMSS, nil, func() *Metric { return &Metric{} })
+	getPeerBucketMetricsRPC = grid.NewStream[*grid.MSS, grid.NoPayload, *Metric](grid.HandlerGetPeerBucketMetrics, grid.NewMSS, nil, func() *Metric { return &Metric{} })
 )
 
 // GetLocksHandler - returns list of lock from the server.
@@ -442,7 +441,11 @@ func (s *peerRESTServer) GetMetricsHandler(v *grid.URLValues) (*grid.JSON[madmin
 
 func (s *peerRESTServer) GetResourceMetrics(ctx context.Context, _ *grid.MSS, out chan<- *Metric) *grid.RemoteErr {
 	for m := range ReportMetrics(ctx, resourceMetricsGroups) {
-		out <- &m
+		select {
+		case <-ctx.Done():
+			return grid.NewRemoteErr(ctx.Err())
+		case out <- &m:
+		}
 	}
 	return nil
 }
@@ -1006,23 +1009,27 @@ func (s *peerRESTServer) GetBandwidth(params *grid.URLValues) (*bandwidth.Bucket
 }
 
 // GetPeerMetrics gets the metrics to be federated across peers.
-func (s *peerRESTServer) GetPeerMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	m := ReportMetrics(context.Background(), peerMetricsGroups)
-	res := make([]*Metric, 0, len(m))
-	for m := range m {
-		res = append(res, &m)
+func (s *peerRESTServer) GetPeerMetrics(ctx context.Context, _ *grid.MSS, out chan<- *Metric) *grid.RemoteErr {
+	for m := range ReportMetrics(ctx, peerMetricsGroups) {
+		select {
+		case <-ctx.Done():
+			return grid.NewRemoteErr(ctx.Err())
+		case out <- &m:
+		}
 	}
-	return aoMetricsGroup.NewWith(res), nil
+	return nil
 }
 
 // GetPeerBucketMetrics gets the metrics to be federated across peers.
-func (s *peerRESTServer) GetPeerBucketMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	m := ReportMetrics(context.Background(), bucketPeerMetricsGroups)
-	res := make([]*Metric, 0, len(m))
-	for m := range m {
-		res = append(res, &m)
+func (s *peerRESTServer) GetPeerBucketMetrics(ctx context.Context, _ *grid.MSS, out chan<- *Metric) *grid.RemoteErr {
+	for m := range ReportMetrics(ctx, bucketPeerMetricsGroups) {
+		select {
+		case <-ctx.Done():
+			return grid.NewRemoteErr(ctx.Err())
+		case out <- &m:
+		}
 	}
-	return aoMetricsGroup.NewWith(res), nil
+	return nil
 }
 
 func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request) {
@@ -1308,10 +1315,10 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	logger.FatalIf(getNetInfoRPC.Register(gm, server.GetNetInfoHandler), "unable to register handler")
 	logger.FatalIf(getOSInfoRPC.Register(gm, server.GetOSInfoHandler), "unable to register handler")
 	logger.FatalIf(getPartitionsRPC.Register(gm, server.GetPartitionsHandler), "unable to register handler")
-	logger.FatalIf(getPeerBucketMetricsRPC.Register(gm, server.GetPeerBucketMetrics), "unable to register handler")
-	logger.FatalIf(getPeerMetricsRPC.Register(gm, server.GetPeerMetrics), "unable to register handler")
 	logger.FatalIf(getProcInfoRPC.Register(gm, server.GetProcInfoHandler), "unable to register handler")
 	logger.FatalIf(getResourceMetricsRPC.RegisterNoInput(gm, server.GetResourceMetrics), "unable to register handler")
+	logger.FatalIf(getPeerBucketMetricsRPC.RegisterNoInput(gm, server.GetPeerBucketMetrics), "unable to register handler")
+	logger.FatalIf(getPeerMetricsRPC.RegisterNoInput(gm, server.GetPeerMetrics), "unable to register handler")
 	logger.FatalIf(getSRMetricsRPC.Register(gm, server.GetSRMetricsHandler), "unable to register handler")
 	logger.FatalIf(getSysConfigRPC.Register(gm, server.GetSysConfigHandler), "unable to register handler")
 	logger.FatalIf(getSysErrorsRPC.Register(gm, server.GetSysErrorsHandler), "unable to register handler")

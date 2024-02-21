@@ -662,46 +662,42 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 }
 
 func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric, error) {
-	resp, err := getPeerMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
+	st, err := getPeerMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan Metric)
-	go func() {
+	ch := make(chan Metric, 1)
+	go func(ch chan<- Metric) {
 		defer close(ch)
-		for _, m := range resp.Value() {
-			if m == nil {
-				continue
-			}
+		st.Results(func(metric *Metric) error {
 			select {
 			case <-ctx.Done():
-				return
-			case ch <- *m:
+				return ctx.Err()
+			case ch <- *metric:
+				return nil
 			}
-		}
-	}()
+		})
+	}(ch)
 	return ch, nil
 }
 
 func (client *peerRESTClient) GetPeerBucketMetrics(ctx context.Context) (<-chan Metric, error) {
-	resp, err := getPeerBucketMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
+	st, err := getPeerBucketMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
 	if err != nil {
 		return nil, err
 	}
-	ch := make(chan Metric)
-	go func() {
+	ch := make(chan Metric, 1)
+	go func(ch chan<- Metric) {
 		defer close(ch)
-		for _, m := range resp.Value() {
-			if m == nil {
-				continue
-			}
+		st.Results(func(metric *Metric) error {
 			select {
 			case <-ctx.Done():
-				return
-			case ch <- *m:
+				return ctx.Err()
+			case ch <- *metric:
+				return nil
 			}
-		}
-	}()
+		})
+	}(ch)
 	return ch, nil
 }
 
