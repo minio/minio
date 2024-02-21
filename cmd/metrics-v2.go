@@ -420,14 +420,14 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 	})
 }
 
-func (m *Metric) copyMetric() Metric {
+func (m *Metric) clone() Metric {
 	metric := Metric{
 		Description:          m.Description,
 		Value:                m.Value,
 		HistogramBucketLabel: m.HistogramBucketLabel,
-		StaticLabels:         make(map[string]string),
-		VariableLabels:       make(map[string]string),
-		Histogram:            make(map[string]uint64),
+		StaticLabels:         make(map[string]string, len(m.StaticLabels)),
+		VariableLabels:       make(map[string]string, len(m.VariableLabels)),
+		Histogram:            make(map[string]uint64, len(m.Histogram)),
 	}
 	for k, v := range m.StaticLabels {
 		metric.StaticLabels[k] = v
@@ -453,7 +453,7 @@ func (g *MetricsGroup) Get() (metrics []Metric) {
 
 	metrics = make([]Metric, 0, len(m))
 	for i := range m {
-		metrics = append(metrics, m[i].copyMetric())
+		metrics = append(metrics, m[i].clone())
 	}
 	return metrics
 }
