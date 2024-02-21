@@ -46,6 +46,7 @@ import (
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/logger/message/log"
+	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
 // To abstract a node over network.
@@ -68,20 +69,24 @@ var (
 	madminSysServices      = grid.NewJSONPool[madmin.SysServices]()
 
 	// Request -> Response RPC calls
-	deleteBucketMetadataRPC        = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucketMetadata, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
-	deleteBucketRPC                = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucket, grid.NewMSS, grid.NewNoPayload)
-	deletePolicyRPC                = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeletePolicy, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
-	deleteSvcActRPC                = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteServiceAccount, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
-	deleteUserRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteUser, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
-	getAllBucketStatsRPC           = grid.NewSingleHandler[*grid.MSS, *BucketStatsMap](grid.HandlerGetAllBucketStats, grid.NewMSS, func() *BucketStatsMap { return &BucketStatsMap{} })
-	getBackgroundHealStatusRPC     = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.BgHealState]](grid.HandlerBackgroundHealStatus, grid.NewMSS, madminBgHealState.NewJSON)
-	getBandwidthRPC                = grid.NewSingleHandler[*grid.URLValues, *bandwidth.BucketBandwidthReport](grid.HandlerGetBandwidth, grid.NewURLValues, func() *bandwidth.BucketBandwidthReport { return &bandwidth.BucketBandwidthReport{} })
-	getBucketStatsRPC              = grid.NewSingleHandler[*grid.MSS, *BucketStats](grid.HandlerGetBucketStats, grid.NewMSS, func() *BucketStats { return &BucketStats{} })
-	getCPUsHandler                 = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.CPUs]](grid.HandlerGetCPUs, grid.NewMSS, madminCPUs.NewJSON)
-	getLastDayTierStatsRPC         = grid.NewSingleHandler[*grid.MSS, *DailyAllTierStats](grid.HandlerGetLastDayTierStats, grid.NewMSS, func() *DailyAllTierStats { return &DailyAllTierStats{} })
-	getLocksRPC                    = grid.NewSingleHandler[*grid.MSS, *localLockMap](grid.HandlerGetLocks, grid.NewMSS, func() *localLockMap { return &localLockMap{} })
-	getMemInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.MemInfo]](grid.HandlerGetMemInfo, grid.NewMSS, madminMemInfo.NewJSON)
-	getMetacacheListingRPC         = grid.NewSingleHandler[*listPathOptions, *metacache](grid.HandlerGetMetacacheListing, func() *listPathOptions { return &listPathOptions{} }, func() *metacache { return &metacache{} })
+	deleteBucketMetadataRPC    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucketMetadata, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	deleteBucketRPC            = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteBucket, grid.NewMSS, grid.NewNoPayload)
+	deletePolicyRPC            = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeletePolicy, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	deleteSvcActRPC            = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteServiceAccount, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	deleteUserRPC              = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerDeleteUser, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
+	getAllBucketStatsRPC       = grid.NewSingleHandler[*grid.MSS, *BucketStatsMap](grid.HandlerGetAllBucketStats, grid.NewMSS, func() *BucketStatsMap { return &BucketStatsMap{} })
+	getBackgroundHealStatusRPC = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.BgHealState]](grid.HandlerBackgroundHealStatus, grid.NewMSS, madminBgHealState.NewJSON)
+	getBandwidthRPC            = grid.NewSingleHandler[*grid.URLValues, *bandwidth.BucketBandwidthReport](grid.HandlerGetBandwidth, grid.NewURLValues, func() *bandwidth.BucketBandwidthReport {
+		return &bandwidth.BucketBandwidthReport{}
+	})
+	getBucketStatsRPC      = grid.NewSingleHandler[*grid.MSS, *BucketStats](grid.HandlerGetBucketStats, grid.NewMSS, func() *BucketStats { return &BucketStats{} })
+	getCPUsHandler         = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.CPUs]](grid.HandlerGetCPUs, grid.NewMSS, madminCPUs.NewJSON)
+	getLastDayTierStatsRPC = grid.NewSingleHandler[*grid.MSS, *DailyAllTierStats](grid.HandlerGetLastDayTierStats, grid.NewMSS, func() *DailyAllTierStats { return &DailyAllTierStats{} })
+	getLocksRPC            = grid.NewSingleHandler[*grid.MSS, *localLockMap](grid.HandlerGetLocks, grid.NewMSS, func() *localLockMap { return &localLockMap{} })
+	getMemInfoRPC          = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.MemInfo]](grid.HandlerGetMemInfo, grid.NewMSS, madminMemInfo.NewJSON)
+	getMetacacheListingRPC = grid.NewSingleHandler[*listPathOptions, *metacache](grid.HandlerGetMetacacheListing, func() *listPathOptions { return &listPathOptions{} }, func() *metacache {
+		return &metacache{}
+	})
 	getMetricsRPC                  = grid.NewSingleHandler[*grid.URLValues, *grid.JSON[madmin.RealtimeMetrics]](grid.HandlerGetMetrics, grid.NewURLValues, madminRealtimeMetrics.NewJSON)
 	getNetInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.NetInfo]](grid.HandlerGetNetInfo, grid.NewMSS, madminNetInfo.NewJSON)
 	getOSInfoRPC                   = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.OSInfo]](grid.HandlerGetOSInfo, grid.NewMSS, madminOSInfo.NewJSON)
@@ -102,6 +107,7 @@ var (
 	loadTransitionTierConfigRPC    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadTransitionTierConfig, grid.NewMSS, grid.NewNoPayload)
 	loadUserRPC                    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadUser, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
 	localStorageInfoRPC            = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.StorageInfo]](grid.HandlerStorageInfo, grid.NewMSS, madminStorageInfo.NewJSON)
+	loadFormatsRPC                 = grid.NewSingleHandler[*grid.MSS, *DrivesFormatResp](grid.HandlerLoadFormats, grid.NewMSS, func() *DrivesFormatResp { return &DrivesFormatResp{} })
 	makeBucketRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerMakeBucket, grid.NewMSS, grid.NewNoPayload)
 	reloadPoolMetaRPC              = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerReloadPoolMeta, grid.NewMSS, grid.NewNoPayload)
 	reloadSiteReplicationConfigRPC = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerReloadSiteReplicationConfig, grid.NewMSS, grid.NewNoPayload)
@@ -1008,6 +1014,55 @@ func (s *peerRESTServer) GetBandwidth(params *grid.URLValues) (*bandwidth.Bucket
 	return globalBucketMonitor.GetReport(selectBuckets), nil
 }
 
+func (s *peerRESTServer) LoadFormats(mss *grid.MSS) (*DrivesFormatResp, *grid.RemoteErr) {
+	globalLocalDrivesMu.RLock()
+	localDrives := cloneDrives(globalLocalDrives)
+	globalLocalDrivesMu.RUnlock()
+
+	// Initialize list of errors.
+	g := errgroup.WithNErrs(len(localDrives))
+
+	formatData := make([][]byte, len(localDrives))
+	// Load format from each disk in parallel
+	for index := range localDrives {
+		index := index
+		g.Go(func() error {
+			if localDrives[index] == nil {
+				return errDiskNotFound
+			}
+
+			data, err := localDrives[index].ReadAll(context.TODO(), minioMetaBucket, formatConfigFile)
+			if err != nil {
+				// 'file not found' and 'volume not found' as
+				// same. 'volume not found' usually means its a fresh disk.
+				if errors.Is(err, errFileNotFound) || errors.Is(err, errVolumeNotFound) {
+					return errUnformattedDisk
+				}
+				return err
+			}
+
+			formatData[index] = data
+
+			return nil
+		}, index)
+	}
+
+	dfr := &DrivesFormatResp{Formats: make(map[string]DriveFormatResult, len(localDrives))}
+	for idx, err := range g.Wait() {
+		if err != nil {
+			dfr.Formats[localDrives[idx].String()] = DriveFormatResult{
+				Error: err.Error(),
+			}
+		} else {
+			dfr.Formats[localDrives[idx].String()] = DriveFormatResult{
+				Data: formatData[idx],
+			}
+		}
+	}
+
+	return dfr, nil
+}
+
 // GetPeerMetrics gets the metrics to be federated across peers.
 func (s *peerRESTServer) GetPeerMetrics(ctx context.Context, _ *grid.MSS, out chan<- *Metric) *grid.RemoteErr {
 	for m := range ReportMetrics(ctx, peerMetricsGroups) {
@@ -1319,6 +1374,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	logger.FatalIf(getResourceMetricsRPC.RegisterNoInput(gm, server.GetResourceMetrics), "unable to register handler")
 	logger.FatalIf(getPeerBucketMetricsRPC.RegisterNoInput(gm, server.GetPeerBucketMetrics), "unable to register handler")
 	logger.FatalIf(getPeerMetricsRPC.RegisterNoInput(gm, server.GetPeerMetrics), "unable to register handler")
+	logger.FatalIf(loadFormatsRPC.Register(gm, server.LoadFormats), "unable to register handler")
 	logger.FatalIf(getSRMetricsRPC.Register(gm, server.GetSRMetricsHandler), "unable to register handler")
 	logger.FatalIf(getSysConfigRPC.Register(gm, server.GetSysConfigHandler), "unable to register handler")
 	logger.FatalIf(getSysErrorsRPC.Register(gm, server.GetSysErrorsHandler), "unable to register handler")

@@ -109,6 +109,7 @@ const (
 	HandlerGetLastDayTierStats
 	HandlerSignalService
 	HandlerGetBandwidth
+	HandlerLoadFormats
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.

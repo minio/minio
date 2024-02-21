@@ -110,7 +110,6 @@ type StorageAPI interface {
 	ReadAll(ctx context.Context, volume string, path string) (buf []byte, err error)
 	GetDiskLoc() (poolIdx, setIdx, diskIdx int) // Retrieve location indexes.
 	SetDiskLoc(poolIdx, setIdx, diskIdx int)    // Set location indexes.
-	SetFormatData(b []byte)                     // Set formatData cached value
 }
 
 type unrecognizedDisk struct {

@@ -450,3 +450,16 @@ type LocalDiskIDs struct {
 type ListDirResult struct {
 	Entries []string `msg:"e"`
 }
+
+// DriveFormatResult represents a drive and its 'format.json'
+// if unable to read 'format.json' Error is set.
+type DriveFormatResult struct {
+	Error string `msg:"e,omitempty"`
+	Data  []byte `msg:"d"`
+}
+
+// DrivesFormatResp returns 'format.json' for all local drives per peer.
+// each formats []byte is indexed via LocalDrives
+type DrivesFormatResp struct {
+	Formats map[string]DriveFormatResult `msg:"fmt"`
+}

@@ -247,10 +247,6 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	return p.storage.NSScanner(ctx, cache, updates, scanMode, weSleep)
 }
 
-func (p *xlStorageDiskIDCheck) SetFormatData(b []byte) {
-	p.storage.SetFormatData(b)
-}
-
 func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return p.storage.GetDiskLoc()
 }

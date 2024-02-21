@@ -268,14 +268,6 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 	return *final, nil
 }
 
-func (client *storageRESTClient) SetFormatData(b []byte) {
-	if client.IsOnline() {
-		client.formatMutex.Lock()
-		client.formatData = b
-		client.formatMutex.Unlock()
-	}
-}
-
 func (client *storageRESTClient) GetDiskID() (string, error) {
 	if !client.IsOnline() {
 		// make sure to check if the disk is offline, since the underlying
@@ -555,18 +547,6 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 
 // ReadAll - reads all contents of a file.
 func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, path string) ([]byte, error) {
-	// Specific optimization to avoid re-read from the drives for `format.json`
-	// in-case the caller is a network operation.
-	if volume == minioMetaBucket && path == formatConfigFile {
-		client.formatMutex.RLock()
-		formatData := make([]byte, len(client.formatData))
-		copy(formatData, client.formatData)
-		client.formatMutex.RUnlock()
-		if len(formatData) > 0 {
-			return formatData, nil
-		}
-	}
-
 	gridBytes, err := storageReadAllRPC.Call(ctx, client.gridConn, &ReadAllHandlerParams{
 		DiskID:   client.diskID,
 		Volume:   volume,

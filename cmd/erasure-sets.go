@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"math/rand"
 	"net/http"
 	"reflect"
 	"strings"
@@ -39,7 +38,6 @@ import (
 	"github.com/minio/minio/internal/dsync"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
@@ -193,128 +191,6 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 	}
 
 	return -1, -1, fmt.Errorf("DriveID: %s not found", format.Erasure.This)
-}
-
-// connectDisks - attempt to connect all the endpoints, loads format
-// and re-arranges the disks in proper position.
-func (s *erasureSets) connectDisks() {
-	defer func() {
-		s.lastConnectDisksOpTime = time.Now()
-	}()
-
-	var wg sync.WaitGroup
-	diskMap := s.getDiskMap()
-	for _, endpoint := range s.endpoints.Endpoints {
-		cdisk := diskMap[endpoint]
-		if cdisk != nil && cdisk.IsOnline() {
-			if s.lastConnectDisksOpTime.IsZero() {
-				continue
-			}
-
-			// An online-disk means its a valid disk but it may be a re-connected disk
-			// we verify that here based on LastConn(), however we make sure to avoid
-			// putting it back into the s.erasureDisks by re-placing the disk again.
-			_, setIndex, _ := cdisk.GetDiskLoc()
-			if setIndex != -1 {
-				continue
-			}
-		}
-		if cdisk != nil {
-			// Close previous offline disk.
-			cdisk.Close()
-		}
-
-		wg.Add(1)
-		go func(endpoint Endpoint) {
-			defer wg.Done()
-			disk, format, formatData, err := connectEndpoint(endpoint)
-			if err != nil {
-				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
-					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-				} else {
-					printEndpointError(endpoint, err, true)
-				}
-				return
-			}
-			if disk.IsLocal() && disk.Healing() != nil {
-				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
-			}
-			s.erasureDisksMu.Lock()
-			setIndex, diskIndex, err := findDiskIndex(s.format, format)
-			if err != nil {
-				printEndpointError(endpoint, err, false)
-				disk.Close()
-				s.erasureDisksMu.Unlock()
-				return
-			}
-
-			if currentDisk := s.erasureDisks[setIndex][diskIndex]; currentDisk != nil {
-				if !reflect.DeepEqual(currentDisk.Endpoint(), disk.Endpoint()) {
-					err = fmt.Errorf("Detected unexpected drive ordering refusing to use the drive: expecting %s, found %s, refusing to use the drive",
-						currentDisk.Endpoint(), disk.Endpoint())
-					printEndpointError(endpoint, err, false)
-					disk.Close()
-					s.erasureDisksMu.Unlock()
-					return
-				}
-				s.erasureDisks[setIndex][diskIndex].Close()
-			}
-
-			disk.SetDiskID(format.Erasure.This)
-			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
-			disk.SetFormatData(formatData)
-			s.erasureDisks[setIndex][diskIndex] = disk
-
-			if disk.IsLocal() {
-				globalLocalDrivesMu.Lock()
-				if globalIsDistErasure {
-					globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
-				}
-				for i, ldisk := range globalLocalDrives {
-					_, k, l := ldisk.GetDiskLoc()
-					if k == setIndex && l == diskIndex {
-						globalLocalDrives[i] = disk
-						break
-					}
-				}
-				globalLocalDrivesMu.Unlock()
-			}
-			s.erasureDisksMu.Unlock()
-		}(endpoint)
-	}
-
-	wg.Wait()
-}
-
-// monitorAndConnectEndpoints this is a monitoring loop to keep track of disconnected
-// endpoints by reconnecting them and making sure to place them into right position in
-// the set topology, this monitoring happens at a given monitoring interval.
-func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInterval time.Duration) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
-
-	// Pre-emptively connect the disks if possible.
-	s.connectDisks()
-
-	monitor := time.NewTimer(monitorInterval)
-	defer monitor.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-monitor.C:
-			if serverDebugLog {
-				console.Debugln("running drive monitoring")
-			}
-
-			s.connectDisks()
-
-			// Reset the timer for next interval
-			monitor.Reset(monitorInterval)
-		}
-	}
 }
 
 func (s *erasureSets) GetLockers(setIndex int) func() ([]dsync.NetLocker, string) {
@@ -490,11 +366,6 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 	// start cleanup of deleted objects.
 	go s.cleanupDeletedObjects(ctx)
-
-	// Start the disk monitoring and connect routine.
-	if !globalIsTesting {
-		go s.monitorAndConnectEndpoints(ctx, defaultMonitorConnectEndpointInterval)
-	}
 
 	return s, nil
 }

@@ -336,12 +336,6 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 				return err
 			}
 			formats[index] = format
-			if !heal {
-				// If no healing required, make the disks valid and
-				// online.
-				storageDisks[index].SetDiskID(format.Erasure.This)
-				storageDisks[index].SetFormatData(formatData)
-			}
 			return nil
 		}, index)
 	}
@@ -380,7 +374,6 @@ func saveFormatErasure(disk StorageAPI, format *formatErasureV3, healID string) 
 	}
 
 	disk.SetDiskID(format.Erasure.This)
-	disk.SetFormatData(formatData)
 	if healID != "" {
 		ctx := context.Background()
 		ht := initHealingTracker(disk, healID)

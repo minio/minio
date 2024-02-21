@@ -79,4 +79,6 @@ const (
 	peerRESTListenSuffix = "suffix"
 	peerRESTListenEvents = "events"
 	peerRESTLogMask      = "log-mask"
+
+	peerRESTHeal = "heal"
 )

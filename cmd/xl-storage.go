@@ -381,12 +381,6 @@ func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return s.poolIndex, s.setIndex, s.diskIndex
 }
 
-func (s *xlStorage) SetFormatData(b []byte) {
-	s.Lock()
-	defer s.Unlock()
-	s.formatData = b
-}
-
 // Set location indexes.
 func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
 	s.poolIndex = poolIdx
@@ -2178,6 +2172,14 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
+	// Specific optimization to avoid re-read from the drives for `format.json`
+	// in-case the caller is a network operation.
+	if volume == minioMetaBucket && path == formatConfigFile {
+		s.Lock()
+		defer s.Unlock()
+		s.formatData = b
+	}
+
 	return s.writeAll(ctx, volume, path, b, true)
 }
 
