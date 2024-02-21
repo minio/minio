@@ -1072,6 +1072,10 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if serviceAccount == siteReplicatorSvcAcc && globalSiteReplicationSys.isEnabled() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidArgument), r.URL)
+		return
+	}
 	// We do not care if service account is readable or not at this point,
 	// since this is a delete call we shall allow it to be deleted if possible.
 	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
