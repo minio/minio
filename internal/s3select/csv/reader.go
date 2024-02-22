@@ -307,7 +307,7 @@ func NewReader(readCloser io.ReadCloser, args *ReaderArgs) (*Reader, error) {
 		ret.Comment = []rune(args.CommentCharacter)[0]
 		ret.Quote = []rune{}
 		if len([]rune(args.QuoteCharacter)) > 0 {
-			// Add the first rune of args.QuoteChracter
+			// Add the first rune of args.QuoteCharacter
 			ret.Quote = append(ret.Quote, []rune(args.QuoteCharacter)[0])
 		}
 		ret.QuoteEscape = []rune(args.QuoteEscapeCharacter)[0]

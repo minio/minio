@@ -348,7 +348,7 @@ func TestExtractHealInitParams(t *testing.T) {
 		}
 		return v
 	}
-	qParmsArr := []url.Values{
+	qParamsArr := []url.Values{
 		// Invalid cases
 		mkParams("", true, true),
 		mkParams("111", true, true),
@@ -373,9 +373,9 @@ func TestExtractHealInitParams(t *testing.T) {
 	body := `{"recursive": false, "dryRun": true, "remove": false, "scanMode": 0}`
 
 	// Test all combinations!
-	for pIdx, parms := range qParmsArr {
+	for pIdx, params := range qParamsArr {
 		for vIdx, vars := range varsArr {
-			_, err := extractHealInitParams(vars, parms, bytes.NewReader([]byte(body)))
+			_, err := extractHealInitParams(vars, params, bytes.NewReader([]byte(body)))
 			isErrCase := false
 			if pIdx < 4 || vIdx < 1 {
 				isErrCase = true

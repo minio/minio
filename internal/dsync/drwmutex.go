@@ -254,7 +254,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 				log("lockBlocking %s/%s for %#v: granted\n", id, source, dm.Names)
 
 				// Refresh lock continuously and cancel if there is no quorum in the lock anymore
-				dm.startContinousLockRefresh(lockLossCallback, id, source, quorum)
+				dm.startContinuousLockRefresh(lockLossCallback, id, source, quorum)
 
 				return locked
 			}
@@ -272,7 +272,7 @@ func (dm *DRWMutex) lockBlocking(ctx context.Context, lockLossCallback func(), i
 	}
 }
 
-func (dm *DRWMutex) startContinousLockRefresh(lockLossCallback func(), id, source string, quorum int) {
+func (dm *DRWMutex) startContinuousLockRefresh(lockLossCallback func(), id, source string, quorum int) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	dm.m.Lock()

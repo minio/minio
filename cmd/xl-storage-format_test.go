@@ -147,7 +147,7 @@ func getSampleXLMeta(totalParts int) xlMetaV1Object {
 
 // Compare the unmarshaled XLMetaV1 with the one obtained from jsoniter parsing.
 func compareXLMetaV1(t *testing.T, unMarshalXLMeta, jsoniterXLMeta xlMetaV1Object) {
-	// Start comparing the fields of xlMetaV1Object obtained from jsoniter parsing with one parsed using json unmarshaling.
+	// Start comparing the fields of xlMetaV1Object obtained from jsoniter parsing with one parsed using json unmarshalling.
 	if unMarshalXLMeta.Version != jsoniterXLMeta.Version {
 		t.Errorf("Expected the Version to be \"%s\", but got \"%s\".", unMarshalXLMeta.Version, jsoniterXLMeta.Version)
 	}

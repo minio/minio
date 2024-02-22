@@ -390,7 +390,7 @@ const (
 	ErrParseExpectedIdentForGroupName
 	ErrParseExpectedIdentForAlias
 	ErrParseUnsupportedCallWithStar
-	ErrParseNonUnaryAgregateFunctionCall
+	ErrParseNonUnaryAggregateFunctionCall
 	ErrParseMalformedJoin
 	ErrParseExpectedIdentForAt
 	ErrParseAsteriskIsNotAloneInSelectList
@@ -1899,8 +1899,8 @@ var errorCodes = errorCodeMap{
 		Description:    "Only COUNT with (*) as a parameter is supported in the SQL expression.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrParseNonUnaryAgregateFunctionCall: {
-		Code:           "ParseNonUnaryAgregateFunctionCall",
+	ErrParseNonUnaryAggregateFunctionCall: {
+		Code:           "ParseNonUnaryAggregateFunctionCall",
 		Description:    "Only one argument is supported for aggregate functions in the SQL expression.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
