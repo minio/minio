@@ -85,7 +85,6 @@ var supportedHeaders = []string{
 	"expires",
 	xhttp.AmzBucketReplicationStatus,
 	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
-	"x-minio-Replication-inline-data",
 	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Replication-Server-Side-Encryption-Iv",
 	// Add more supported headers here.
@@ -94,7 +93,6 @@ var supportedHeaders = []string{
 // mapping of internal headers to allowed replication headers
 var validReplicationHeaders = map[string]string{
 	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
-	"x-minio-internal-inline-data":                           "x-minio-replication-inline-data",
 	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Internal-Server-Side-Encryption-Iv":             "X-Minio-Replication-Server-Side-Encryption-Iv",
 	// Add more supported headers here.
@@ -103,7 +101,6 @@ var validReplicationHeaders = map[string]string{
 // mapping of replication headers to internal headers
 var replicationToInternalHeaders = map[string]string{
 	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key":     "X-Minio-Internal-Server-Side-Encryption-Sealed-Key",
-	"x-minio-Replication-inline-data":                           "x-minio-Internal-inline-data",
 	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
 	// Add more supported headers here.
