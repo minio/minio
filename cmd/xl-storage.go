@@ -112,7 +112,7 @@ type xlStorage struct {
 	formatLegacy    bool
 	formatLastCheck time.Time
 
-	diskInfoCache timedValue
+	diskInfoCache *timedValue[DiskInfo]
 	sync.RWMutex
 
 	formatData []byte
@@ -230,12 +230,13 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	s = &xlStorage{
-		drivePath:  ep.Path,
-		endpoint:   ep,
-		globalSync: globalFSOSync,
-		poolIndex:  -1,
-		setIndex:   -1,
-		diskIndex:  -1,
+		drivePath:     ep.Path,
+		endpoint:      ep,
+		globalSync:    globalFSOSync,
+		diskInfoCache: newTimedValue[DiskInfo](),
+		poolIndex:     -1,
+		setIndex:      -1,
+		diskIndex:     -1,
 	}
 
 	s.drivePath, err = getValidPath(ep.Path)
@@ -732,7 +733,7 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
-		s.diskInfoCache.Update = func() (interface{}, error) {
+		s.diskInfoCache.Update = func() (DiskInfo, error) {
 			dcinfo := DiskInfo{}
 			di, err := getDiskInfo(s.drivePath)
 			if err != nil {
@@ -758,11 +759,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInf
 		}
 	})
 
-	v, err := s.diskInfoCache.Get()
-	if v != nil {
-		info = v.(DiskInfo)
-	}
-
+	info, err = s.diskInfoCache.Get()
 	info.MountPath = s.drivePath
 	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1

@@ -929,13 +929,13 @@ func iamPolicyClaimNameSA() string {
 // timedValue contains a synchronized value that is considered valid
 // for a specific amount of time.
 // An Update function must be set to provide an updated value when needed.
-type timedValue struct {
+type timedValue[I any] struct {
 	// Update must return an updated value.
 	// If an error is returned the cached value is not set.
 	// Only one caller will call this function at any time, others will be blocking.
 	// The returned value can no longer be modified once returned.
 	// Should be set before calling Get().
-	Update func() (interface{}, error)
+	Update func() (item I, err error)
 
 	// TTL for a cached value.
 	// If not set 1 second TTL is assumed.
@@ -951,20 +951,26 @@ type timedValue struct {
 	Once sync.Once
 
 	// Managed values.
-	value      interface{}
+	value      I
+	valueSet   bool
 	lastUpdate time.Time
 	mu         sync.RWMutex
 }
 
+// newTimedValue
+func newTimedValue[I any]() *timedValue[I] {
+	return &timedValue[I]{}
+}
+
 // Get will return a cached value or fetch a new one.
 // If the Update function returns an error the value is forwarded as is and not cached.
-func (t *timedValue) Get() (interface{}, error) {
-	v := t.get(t.ttl())
-	if v != nil {
-		return v, nil
+func (t *timedValue[I]) Get() (item I, err error) {
+	item, ok := t.get(t.ttl())
+	if ok {
+		return item, nil
 	}
 
-	v, err := t.Update()
+	item, err = t.Update()
 	if err != nil {
 		if t.Relax {
 			// if update fails, return current
@@ -973,17 +979,19 @@ func (t *timedValue) Get() (interface{}, error) {
 			// Let the caller decide if they want
 			// to use the returned value based
 			// on error.
-			v = t.get(0)
-			return v, err
+			item, ok = t.get(0)
+			if ok {
+				return item, err
+			}
 		}
-		return v, err
+		return item, err
 	}
 
-	t.update(v)
-	return v, nil
+	t.update(item)
+	return item, nil
 }
 
-func (t *timedValue) ttl() time.Duration {
+func (t *timedValue[_]) ttl() time.Duration {
 	ttl := t.TTL
 	if ttl <= 0 {
 		ttl = time.Second
@@ -991,23 +999,26 @@ func (t *timedValue) ttl() time.Duration {
 	return ttl
 }
 
-func (t *timedValue) get(ttl time.Duration) (v interface{}) {
+func (t *timedValue[I]) get(ttl time.Duration) (item I, ok bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	v = t.value
-	if ttl <= 0 {
-		return v
+	if t.valueSet {
+		item = t.value
+		if ttl <= 0 {
+			return item, true
+		}
+		if time.Since(t.lastUpdate) < ttl {
+			return item, true
+		}
 	}
-	if time.Since(t.lastUpdate) < ttl {
-		return v
-	}
-	return nil
+	return item, false
 }
 
-func (t *timedValue) update(v interface{}) {
+func (t *timedValue[I]) update(item I) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.value = v
+	t.value = item
+	t.valueSet = true
 	t.lastUpdate = time.Now()
 }
 

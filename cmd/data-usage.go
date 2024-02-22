@@ -62,7 +62,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 	}
 }
 
-var prefixUsageCache timedValue
+var prefixUsageCache = newTimedValue[map[string]uint64]()
 
 // loadPrefixUsageFromBackend returns prefix usages found in passed buckets
 //
@@ -81,7 +81,7 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 
 		// No need to fail upon Update() error, fallback to old value.
 		prefixUsageCache.Relax = true
-		prefixUsageCache.Update = func() (interface{}, error) {
+		prefixUsageCache.Update = func() (map[string]uint64, error) {
 			m := make(map[string]uint64)
 			for _, pool := range z.serverPools {
 				for _, er := range pool.sets {
@@ -109,12 +109,7 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 		}
 	})
 
-	v, _ := prefixUsageCache.Get()
-	if v != nil {
-		return v.(map[string]uint64), nil
-	}
-
-	return map[string]uint64{}, nil
+	return prefixUsageCache.Get()
 }
 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
