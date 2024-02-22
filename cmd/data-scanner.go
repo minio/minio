@@ -547,7 +547,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				Bucket:  f.root,
 				Object:  prefixName,
 				Tags: map[string]interface{}{
-					"x-minio-prefixes": strconv.Itoa(totalFolders),
+					"x-minio-prefixes-total": strconv.Itoa(totalFolders),
 				},
 			})
 		}
