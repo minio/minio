@@ -1255,7 +1255,6 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 		NoLock:               true,
 	}
 
-	fmt.Println(dstBucket, dstObject)
 	return z.serverPools[poolIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
