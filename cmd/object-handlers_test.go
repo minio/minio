@@ -2225,10 +2225,19 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusBadRequest,
 		},
-
 		// Test case - 3.
-		// Test case with new object name is same as object to be copied.
+		// Test case with invalid source object.
 		3: {
+			bucketName:         bucketName,
+			newObjectName:      "dir//newObject1",
+			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 4.
+		// Test case with new object name is same as object to be copied.
+		4: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2239,10 +2248,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 4.
+		// Test case - 5.
 		// Test case with new object name is same as object to be copied.
 		// But source copy is without leading slash
-		4: {
+		5: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceSame:   true,
@@ -2253,10 +2262,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 5.
+		// Test case - 6.
 		// Test case with new object name is same as object to be copied
 		// but metadata is updated.
-		5: {
+		6: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2270,9 +2279,9 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusOK,
 		},
 
-		// Test case - 6.
+		// Test case - 7.
 		// Test case with invalid metadata-directive.
-		6: {
+		7: {
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2286,10 +2295,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 7.
+		// Test case - 8.
 		// Test case with new object name is same as object to be copied
 		// fail with BadRequest.
-		7: {
+		8: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2304,11 +2313,11 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 8.
+		// Test case - 9.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.GetObjectInfo`.
 		// Expecting the response status code to http.StatusNotFound (404).
-		8: {
+		9: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + "non-existent-object"),
@@ -2318,11 +2327,11 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusNotFound,
 		},
 
-		// Test case - 9.
+		// Test case - 10.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.PutObject`.
 		// Expecting the response status code to http.StatusNotFound (404).
-		9: {
+		10: {
 			bucketName:       "non-existent-destination-bucket",
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2332,9 +2341,9 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusNotFound,
 		},
 
-		// Test case - 10.
+		// Test case - 11.
 		// Case with invalid AccessKey.
-		10: {
+		11: {
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2343,8 +2352,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusForbidden,
 		},
-		// Test case - 11, copy metadata from newObject1 with satisfying modified header.
-		11: {
+		// Test case - 12, copy metadata from newObject1 with satisfying modified header.
+		12: {
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
 			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2353,8 +2362,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
 		},
-		// Test case - 12, copy metadata from newObject1 with unsatisfying modified header.
-		12: {
+		// Test case - 13, copy metadata from newObject1 with unsatisfying modified header.
+		13: {
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
 			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2363,8 +2372,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusPreconditionFailed,
 		},
-		// Test case - 13, copy metadata from newObject1 with wrong modified header format
-		13: {
+		// Test case - 14, copy metadata from newObject1 with wrong modified header format
+		14: {
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
 			copySourceHeader:   url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2373,8 +2382,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
 		},
-		// Test case - 14, copy metadata from newObject1 with satisfying unmodified header.
-		14: {
+		// Test case - 15, copy metadata from newObject1 with satisfying unmodified header.
+		15: {
 			bucketName:           bucketName,
 			newObjectName:        "newObject1",
 			copySourceHeader:     url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2383,8 +2392,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:            credentials.SecretKey,
 			expectedRespStatus:   http.StatusOK,
 		},
-		// Test case - 15, copy metadata from newObject1 with unsatisfying unmodified header.
-		15: {
+		// Test case - 16, copy metadata from newObject1 with unsatisfying unmodified header.
+		16: {
 			bucketName:           bucketName,
 			newObjectName:        "newObject1",
 			copySourceHeader:     url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2393,8 +2402,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:            credentials.SecretKey,
 			expectedRespStatus:   http.StatusPreconditionFailed,
 		},
-		// Test case - 16, copy metadata from newObject1 with incorrect unmodified header format.
-		16: {
+		// Test case - 17, copy metadata from newObject1 with incorrect unmodified header format.
+		17: {
 			bucketName:           bucketName,
 			newObjectName:        "newObject1",
 			copySourceHeader:     url.QueryEscape(SlashSeparator + bucketName + SlashSeparator + objectName),
@@ -2403,8 +2412,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:            credentials.SecretKey,
 			expectedRespStatus:   http.StatusOK,
 		},
-		// Test case - 17, copy metadata from newObject1 with null versionId
-		17: {
+		// Test case - 18, copy metadata from newObject1 with null versionId
+		18: {
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
 			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=null",
@@ -2412,8 +2421,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
 		},
-		// Test case - 18, copy metadata from newObject1 with non null versionId
-		18: {
+		// Test case - 19, copy metadata from newObject1 with non null versionId
+		19: {
 			bucketName:         bucketName,
 			newObjectName:      "newObject1",
 			copySourceHeader:   url.QueryEscape(SlashSeparator+bucketName+SlashSeparator+objectName) + "?versionId=17",
