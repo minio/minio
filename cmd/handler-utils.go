@@ -33,6 +33,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -82,10 +84,28 @@ var supportedHeaders = []string{
 	xhttp.AmzObjectTagging,
 	"expires",
 	xhttp.AmzBucketReplicationStatus,
-	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key",
-	"x-minio-internal-inline-data",
-	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
-	"X-Minio-Internal-Server-Side-Encryption-Iv",
+	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+	"x-minio-Replication-inline-data",
+	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Replication-Server-Side-Encryption-Iv",
+	// Add more supported headers here.
+}
+
+// mapping of internal headers to allowed replication headers
+var validReplicationHeaders = map[string]string{
+	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+	"x-minio-internal-inline-data":                           "x-minio-replication-inline-data",
+	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Internal-Server-Side-Encryption-Iv":             "X-Minio-Replication-Server-Side-Encryption-Iv",
+	// Add more supported headers here.
+}
+
+// mapping of replication headers to internal headers
+var replicationToInternalHeaders = map[string]string{
+	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key":     "X-Minio-Internal-Server-Side-Encryption-Sealed-Key",
+	"x-minio-Replication-inline-data":                           "x-minio-Internal-inline-data",
+	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
 	// Add more supported headers here.
 }
 
@@ -182,7 +202,11 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 	for _, supportedHeader := range supportedHeaders {
 		value, ok := nv[http.CanonicalHeaderKey(supportedHeader)]
 		if ok {
-			m[supportedHeader] = strings.Join(value, ",")
+			if slices.Contains(maps.Keys(replicationToInternalHeaders), supportedHeader) {
+				m[replicationToInternalHeaders[supportedHeader]] = strings.Join(value, ",")
+			} else {
+				m[supportedHeader] = strings.Join(value, ",")
+			}
 		}
 	}
 

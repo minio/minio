@@ -51,6 +51,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
 
@@ -766,7 +767,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
 		// In case of SSE-C objects copy the allowed internal headers as well
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(supportedHeaders, k) {
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				continue
 			}
@@ -774,7 +775,11 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 				continue
 			}
 		}
-		meta[k] = v
+		if slices.Contains(maps.Keys(validReplicationHeaders), k) {
+			meta[validReplicationHeaders[k]] = v
+		} else {
+			meta[k] = v
+		}
 	}
 
 	if sc == "" && (objInfo.StorageClass == storageclass.STANDARD || objInfo.StorageClass == storageclass.RRS) {
