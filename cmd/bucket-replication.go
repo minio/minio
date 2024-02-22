@@ -78,11 +78,6 @@ const (
 	ReplicationWorkerMultiplier = 1.5
 )
 
-func isReplicationEnabled(ctx context.Context, bucketName string) bool {
-	rc, _ := getReplicationConfig(ctx, bucketName)
-	return rc != nil
-}
-
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	rCfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
