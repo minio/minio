@@ -275,9 +275,7 @@ func (er *erasureObjects) LocalStorageInfo(ctx context.Context, metrics bool) St
 // - Non-healing disks
 // - Healing disks (if inclHealing is true)
 func (er *erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (newDisks []StorageAPI, newInfos []DiskInfo, healing bool) {
-	disks := er.getDisks()
-
-	infos := func() []DiskInfo {
+	infos := func(disks []StorageAPI) []DiskInfo {
 		var wg sync.WaitGroup
 		dinfos := make([]DiskInfo, len(disks))
 		r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -313,17 +311,19 @@ func (er *erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (ne
 		er.onlineDisksHealingInfoCache.Once.Do(func() {
 			er.onlineDisksHealingInfoCache.TTL = time.Second
 			er.onlineDisksHealingInfoCache.Update = func() (interface{}, error) {
-				return infos(), nil
+				return infos(er.getDisks()), nil
 			}
 		})
 		v, _ := er.onlineDisksHealingInfoCache.Get()
 		dinfos = v.([]DiskInfo)
 	} else {
-		dinfos = infos()
+		dinfos = infos(er.getDisks())
 	}
 
 	var scanningDisks, healingDisks []StorageAPI
 	var scanningInfos, healingInfos []DiskInfo
+
+	disks := er.getDisks()
 
 	for i, info := range dinfos {
 		// Check if one of the drives in the set is being healed.
@@ -332,6 +332,12 @@ func (er *erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (ne
 		if info.Error != "" || disks[i] == nil {
 			continue
 		}
+
+		// Check if the disk is offline
+		if !disks[i].IsOnline() {
+			continue
+		}
+
 		if info.Healing {
 			healing = true
 			if inclHealing {
