@@ -27,6 +27,11 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+// Checks on CopyObject arguments, bucket and object.
+func checkCopyObjArgs(ctx context.Context, bucket, object string) error {
+	return checkBucketAndObjectNames(ctx, bucket, object)
+}
+
 // Checks on GetObject arguments, bucket and object.
 func checkGetObjArgs(ctx context.Context, bucket, object string) error {
 	return checkBucketAndObjectNames(ctx, bucket, object)
@@ -106,42 +111,42 @@ func checkListMultipartArgs(ctx context.Context, bucket, prefix, keyMarker, uplo
 }
 
 // Checks for NewMultipartUpload arguments validity, also validates if bucket exists.
-func checkNewMultipartArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
-	return checkObjectArgs(ctx, bucket, object, obj)
+func checkNewMultipartArgs(ctx context.Context, bucket, object string) error {
+	return checkObjectArgs(ctx, bucket, object)
 }
 
-func checkMultipartObjectArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
+func checkMultipartObjectArgs(ctx context.Context, bucket, object, uploadID string) error {
 	_, err := base64.RawURLEncoding.DecodeString(uploadID)
 	if err != nil {
 		return MalformedUploadID{
 			UploadID: uploadID,
 		}
 	}
-	return checkObjectArgs(ctx, bucket, object, obj)
+	return checkObjectArgs(ctx, bucket, object)
 }
 
 // Checks for PutObjectPart arguments validity, also validates if bucket exists.
-func checkPutObjectPartArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
-	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
+func checkPutObjectPartArgs(ctx context.Context, bucket, object, uploadID string) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID)
 }
 
 // Checks for ListParts arguments validity, also validates if bucket exists.
-func checkListPartsArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
-	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
+func checkListPartsArgs(ctx context.Context, bucket, object, uploadID string) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID)
 }
 
 // Checks for CompleteMultipartUpload arguments validity, also validates if bucket exists.
-func checkCompleteMultipartArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
-	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
+func checkCompleteMultipartArgs(ctx context.Context, bucket, object, uploadID string) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID)
 }
 
 // Checks for AbortMultipartUpload arguments validity, also validates if bucket exists.
-func checkAbortMultipartArgs(ctx context.Context, bucket, object, uploadID string, obj ObjectLayer) error {
-	return checkMultipartObjectArgs(ctx, bucket, object, uploadID, obj)
+func checkAbortMultipartArgs(ctx context.Context, bucket, object, uploadID string) error {
+	return checkMultipartObjectArgs(ctx, bucket, object, uploadID)
 }
 
 // Checks Object arguments validity.
-func checkObjectArgs(ctx context.Context, bucket, object string, obj ObjectLayer) error {
+func checkObjectArgs(ctx context.Context, bucket, object string) error {
 	// Verify if bucket is valid.
 	if !isMinioMetaBucketName(bucket) && s3utils.CheckValidBucketNameStrict(bucket) != nil {
 		return BucketNameInvalid{Bucket: bucket}
