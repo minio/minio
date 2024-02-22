@@ -190,6 +190,19 @@ func parseForm(r *http.Request) error {
 	return nil
 }
 
+// getTokenSigningKey returns secret key used to sign JWT session tokens
+func getTokenSigningKey() (string, error) {
+	secret := globalActiveCred.SecretKey
+	if globalSiteReplicationSys.isEnabled() {
+		c, err := globalSiteReplicatorCred.Get(GlobalContext)
+		if err != nil {
+			return "", err
+		}
+		return c.SecretKey, nil
+	}
+	return secret, nil
+}
+
 // AssumeRole - implementation of AWS STS API AssumeRole to get temporary
 // credentials for regular users on Minio.
 // https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -276,7 +289,12 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalActiveCred.SecretKey
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+
 	cred, err := auth.GetNewCredentialsWithMetadata(claims, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -453,7 +471,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalActiveCred.SecretKey
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
 	cred, err := auth.GetNewCredentialsWithMetadata(claims, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -676,7 +698,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalActiveCred.SecretKey
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+
 	cred, err := auth.GetNewCredentialsWithMetadata(claims, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -851,8 +878,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	claims[audClaim] = certificate.Subject.Organization
 	claims[issClaim] = certificate.Issuer.CommonName
 	claims[parentClaim] = parentUser
-
-	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+	secretKey, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, secretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -978,8 +1009,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 			claims[k] = v
 		}
 	}
-
-	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+	secretKey, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, secretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
