@@ -1001,20 +1001,10 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	}
 
 	object = encodeDirObject(object)
-
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) {
-			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size())
-			if err != nil {
-				logger.LogOnceIf(ctx, err, "erasure-write-quorum")
-				return ObjectInfo{}, toObjectErr(errErasureWriteQuorum)
-			}
-			if !avail {
-				return ObjectInfo{}, toObjectErr(errDiskFull)
-			}
-		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
+
 	if !opts.NoLock {
 		ns := z.NewNSLock(bucket, object)
 		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
@@ -1586,16 +1576,6 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) {
-			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return nil, toObjectErr(errErasureWriteQuorum)
-			}
-			if !avail {
-				return nil, toObjectErr(errDiskFull)
-			}
-		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 

@@ -73,12 +73,13 @@ func (sys *BucketQuotaSys) GetBucketUsageInfo(bucket string) (BucketUsageInfo, e
 		}
 	}
 
-	bui, ok := dui.BucketsUsage[bucket]
-	if !ok {
-		return BucketUsageInfo{}, nil
+	if len(dui.BucketsUsage) > 0 {
+		bui, ok := dui.BucketsUsage[bucket]
+		if ok {
+			return bui, nil
+		}
 	}
-
-	return bui, nil
+	return BucketUsageInfo{}, nil
 }
 
 // parseBucketQuota parses BucketQuota from json
