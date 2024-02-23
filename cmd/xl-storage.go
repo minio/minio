@@ -43,6 +43,7 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -112,7 +113,7 @@ type xlStorage struct {
 	formatLegacy    bool
 	formatLastCheck time.Time
 
-	diskInfoCache *timedValue[DiskInfo]
+	diskInfoCache *cachevalue.Cache[DiskInfo]
 	sync.RWMutex
 
 	formatData []byte
@@ -233,7 +234,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		drivePath:     ep.Path,
 		endpoint:      ep,
 		globalSync:    globalFSOSync,
-		diskInfoCache: newTimedValue[DiskInfo](),
+		diskInfoCache: cachevalue.New[DiskInfo](),
 		poolIndex:     -1,
 		setIndex:      -1,
 		diskIndex:     -1,
