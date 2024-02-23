@@ -58,9 +58,13 @@ type erasureObjects struct {
 	// getLockers returns list of remote and local lockers.
 	getLockers func() ([]dsync.NetLocker, string)
 
-	// getEndpoints returns list of endpoint strings belonging this set.
+	// getEndpoints returns list of endpoint belonging this set.
 	// some may be local and some remote.
 	getEndpoints func() []Endpoint
+
+	// getEndpoints returns list of endpoint strings belonging this set.
+	// some may be local and some remote.
+	getEndpointStrings func() []string
 
 	// Locker mutex map.
 	nsMutex *nsLockMap
