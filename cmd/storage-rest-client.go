@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -166,7 +167,7 @@ type storageRESTClient struct {
 	formatData  []byte
 	formatMutex sync.RWMutex
 
-	diskInfoCache *timedValue[DiskInfo]
+	diskInfoCache *cachevalue.Cache[DiskInfo]
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
@@ -893,6 +894,6 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 	return &storageRESTClient{
 		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
 		gridConn:      conn,
-		diskInfoCache: newTimedValue[DiskInfo](),
+		diskInfoCache: cachevalue.New[DiskInfo](),
 	}, nil
 }

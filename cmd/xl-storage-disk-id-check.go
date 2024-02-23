@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/cachevalue"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
@@ -89,7 +90,7 @@ type xlStorageDiskIDCheck struct {
 	health       *diskHealthTracker
 	healthCheck  bool
 
-	metricsCache *timedValue[DiskMetrics]
+	metricsCache *cachevalue.Cache[DiskMetrics]
 	diskCtx      context.Context
 	diskCancel   context.CancelFunc
 }
@@ -179,7 +180,7 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		storage:      storage,
 		health:       newDiskHealthTracker(),
 		healthCheck:  healthCheck && globalDriveMonitoring,
-		metricsCache: newTimedValue[DiskMetrics](),
+		metricsCache: cachevalue.New[DiskMetrics](),
 	}
 
 	xl.totalWrites.Store(xl.storage.getWriteAttribute())

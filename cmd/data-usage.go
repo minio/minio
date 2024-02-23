@@ -24,6 +24,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -62,7 +63,7 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 	}
 }
 
-var prefixUsageCache = newTimedValue[map[string]uint64]()
+var prefixUsageCache = cachevalue.New[map[string]uint64]()
 
 // loadPrefixUsageFromBackend returns prefix usages found in passed buckets
 //

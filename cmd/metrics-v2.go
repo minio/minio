@@ -32,6 +32,7 @@ import (
 	"github.com/minio/kes-go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/cachevalue"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
@@ -330,7 +331,7 @@ type Metric struct {
 
 // MetricsGroup are a group of metrics that are initialized together.
 type MetricsGroup struct {
-	metricsCache     *timedValue[[]Metric] `msg:"-"`
+	metricsCache     *cachevalue.Cache[[]Metric] `msg:"-"`
 	cacheInterval    time.Duration
 	metricsGroupOpts MetricsGroupOpts
 }
@@ -354,7 +355,7 @@ type MetricsGroupOpts struct {
 // RegisterRead register the metrics populator function to be used
 // to populate new values upon cache invalidation.
 func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
-	g.metricsCache = newTimedValue[[]Metric]()
+	g.metricsCache = cachevalue.New[[]Metric]()
 	g.metricsCache.Once.Do(func() {
 		g.metricsCache.Relax = true
 		g.metricsCache.TTL = g.cacheInterval
