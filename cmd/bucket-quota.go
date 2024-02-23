@@ -42,7 +42,7 @@ func NewBucketQuotaSys() *BucketQuotaSys {
 	return &BucketQuotaSys{}
 }
 
-var bucketStorageCache timedValue
+var bucketStorageCache = newTimedValue[DataUsageInfo]()
 
 // Init initialize bucket quota.
 func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
@@ -52,7 +52,7 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 		bucketStorageCache.TTL = 10 * time.Second
 		// Rely on older value if usage loading fails from disk.
 		bucketStorageCache.Relax = true
-		bucketStorageCache.Update = func() (interface{}, error) {
+		bucketStorageCache.Update = func() (DataUsageInfo, error) {
 			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
 			defer done()
 
@@ -63,23 +63,23 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 
 // GetBucketUsageInfo return bucket usage info for a given bucket
 func (sys *BucketQuotaSys) GetBucketUsageInfo(bucket string) (BucketUsageInfo, error) {
-	v, err := bucketStorageCache.Get()
+	dui, err := bucketStorageCache.Get()
 	timedout := OperationTimedOut{}
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &timedout) {
-		if v != nil {
+		if len(dui.BucketsUsage) > 0 {
 			logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to retrieve usage information for bucket: %s, relying on older value cached in-memory: err(%v)", bucket, err), "bucket-usage-cache-"+bucket)
 		} else {
 			logger.LogOnceIf(GlobalContext, errors.New("unable to retrieve usage information for bucket: %s, no reliable usage value available - quota will not be enforced"), "bucket-usage-empty-"+bucket)
 		}
 	}
 
-	var bui BucketUsageInfo
-	dui, ok := v.(DataUsageInfo)
-	if ok {
-		bui = dui.BucketsUsage[bucket]
+	if len(dui.BucketsUsage) > 0 {
+		bui, ok := dui.BucketsUsage[bucket]
+		if ok {
+			return bui, nil
+		}
 	}
-
-	return bui, nil
+	return BucketUsageInfo{}, nil
 }
 
 // parseBucketQuota parses BucketQuota from json

@@ -1204,7 +1204,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 		// Rely on older value if usage loading fails from disk.
 		bucketStorageCache.Relax = true
-		bucketStorageCache.Update = func() (interface{}, error) {
+		bucketStorageCache.Update = func() (DataUsageInfo, error) {
 			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
 			defer done()
 
@@ -1212,11 +1212,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		}
 	})
 
-	var dataUsageInfo DataUsageInfo
-	v, _ := bucketStorageCache.Get()
-	if v != nil {
-		dataUsageInfo, _ = v.(DataUsageInfo)
-	}
+	dataUsageInfo, _ := bucketStorageCache.Get()
 
 	// If etcd, dns federation configured list buckets from etcd.
 	var err error

@@ -166,6 +166,8 @@ type storageRESTClient struct {
 	formatData  []byte
 	formatMutex sync.RWMutex
 
+	diskInfoCache *timedValue[DiskInfo]
+
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
 }
@@ -306,21 +308,48 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		// transport is already down.
 		return info, errDiskNotFound
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 
-	opts.DiskID = client.diskID
+	// if metrics was asked, or it was a NoOp we do not need to cache the value.
+	if opts.Metrics || opts.NoOp {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-	infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &opts)
-	if err != nil {
-		return info, toStorageErr(err)
-	}
-	info = *infop
-	if info.Error != "" {
-		return info, toStorageErr(errors.New(info.Error))
-	}
+		opts.DiskID = client.diskID
+
+		infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &opts)
+		if err != nil {
+			return info, toStorageErr(err)
+		}
+		info = *infop
+		if info.Error != "" {
+			return info, toStorageErr(errors.New(info.Error))
+		}
+		info.Scanning = atomic.LoadInt32(&client.scanning) == 1
+		return info, nil
+	} // In all other cases cache the value upto 1sec.
+
+	client.diskInfoCache.Once.Do(func() {
+		client.diskInfoCache.TTL = time.Second
+		client.diskInfoCache.Update = func() (info DiskInfo, err error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			nopts := DiskInfoOptions{DiskID: client.diskID}
+			infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &nopts)
+			if err != nil {
+				return info, toStorageErr(err)
+			}
+			info = *infop
+			if info.Error != "" {
+				return info, toStorageErr(errors.New(info.Error))
+			}
+			return info, nil
+		}
+	})
+
+	info, err = client.diskInfoCache.Get()
 	info.Scanning = atomic.LoadInt32(&client.scanning) == 1
-	return info, nil
+	return info, err
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -863,6 +892,7 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 	}
 	return &storageRESTClient{
 		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
-		gridConn: conn,
+		gridConn:      conn,
+		diskInfoCache: newTimedValue[DiskInfo](),
 	}, nil
 }

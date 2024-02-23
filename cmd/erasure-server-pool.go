@@ -1001,20 +1001,10 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 	}
 
 	object = encodeDirObject(object)
-
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) {
-			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), data.Size())
-			if err != nil {
-				logger.LogOnceIf(ctx, err, "erasure-write-quorum")
-				return ObjectInfo{}, toObjectErr(errErasureWriteQuorum)
-			}
-			if !avail {
-				return ObjectInfo{}, toObjectErr(errDiskFull)
-			}
-		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
+
 	if !opts.NoLock {
 		ns := z.NewNSLock(bucket, object)
 		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
@@ -1586,16 +1576,6 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		if !isMinioMetaBucketName(bucket) {
-			avail, err := hasSpaceFor(getDiskInfos(ctx, z.serverPools[0].getHashedSet(object).getDisks()...), -1)
-			if err != nil {
-				logger.LogIf(ctx, err)
-				return nil, toObjectErr(errErasureWriteQuorum)
-			}
-			if !avail {
-				return nil, toObjectErr(errDiskFull)
-			}
-		}
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
 	}
 
@@ -1860,7 +1840,7 @@ func (z *erasureServerPools) deleteAll(ctx context.Context, bucket, prefix strin
 	}
 }
 
-var listBucketsCache timedValue
+var listBucketsCache = newTimedValue[[]BucketInfo]()
 
 // List all buckets from one of the serverPools, we are not doing merge
 // sort here just for simplification. As per design it is assumed
@@ -1871,7 +1851,7 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 			listBucketsCache.TTL = time.Second
 
 			listBucketsCache.Relax = true
-			listBucketsCache.Update = func() (interface{}, error) {
+			listBucketsCache.Update = func() ([]BucketInfo, error) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				buckets, err = z.s3Peer.ListBuckets(ctx, opts)
 				cancel()
@@ -1888,12 +1868,7 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 			}
 		})
 
-		v, _ := listBucketsCache.Get()
-		if v != nil {
-			return v.([]BucketInfo), nil
-		}
-
-		return buckets, nil
+		return listBucketsCache.Get()
 	}
 
 	buckets, err = z.s3Peer.ListBuckets(ctx, opts)

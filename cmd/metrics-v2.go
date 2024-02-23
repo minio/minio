@@ -330,7 +330,7 @@ type Metric struct {
 
 // MetricsGroup are a group of metrics that are initialized together.
 type MetricsGroup struct {
-	metricsCache     timedValue `msg:"-"`
+	metricsCache     *timedValue[[]Metric] `msg:"-"`
 	cacheInterval    time.Duration
 	metricsGroupOpts MetricsGroupOpts
 }
@@ -354,10 +354,11 @@ type MetricsGroupOpts struct {
 // RegisterRead register the metrics populator function to be used
 // to populate new values upon cache invalidation.
 func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
+	g.metricsCache = newTimedValue[[]Metric]()
 	g.metricsCache.Once.Do(func() {
 		g.metricsCache.Relax = true
 		g.metricsCache.TTL = g.cacheInterval
-		g.metricsCache.Update = func() (interface{}, error) {
+		g.metricsCache.Update = func() ([]Metric, error) {
 			if g.metricsGroupOpts.dependGlobalObjectAPI {
 				objLayer := newObjectLayerFn()
 				// Service not initialized yet
@@ -445,9 +446,8 @@ func (m *Metric) clone() Metric {
 // once the TTL expires "read()" registered function is called
 // to return the new values and updated.
 func (g *MetricsGroup) Get() (metrics []Metric) {
-	c, _ := g.metricsCache.Get()
-	m, ok := c.([]Metric)
-	if !ok {
+	m, _ := g.metricsCache.Get()
+	if len(m) == 0 {
 		return []Metric{}
 	}
 
