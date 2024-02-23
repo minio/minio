@@ -60,4 +60,4 @@ mc admin replicate info minio1
 ** Note **
 Previously, site replication required the root credentials of peer sites to be identical. This is no longer necessary because STS tokens are now signed with the site replicator service account credentials, thus allowing flexibility in the independent management of root accounts across sites and the ability to disable root accounts eventually.
 
- However, this means that STS tokens signed previously by root credentials will no longer be valid upon upgrade to the latest version with this change. Also, if site replication is ever removed - the STS tokens previously signed by site replicator service account credentials will no longer be valid.
+However, this means that STS tokens signed previously by root credentials will no longer be valid upon upgrading to the latest version with this change. Please re-generate them as you usually do. Additionally, if site replication is ever removed - the STS tokens will become invalid, regenerate them as you usually do.
