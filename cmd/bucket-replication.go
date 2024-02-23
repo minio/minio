@@ -1328,10 +1328,10 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{},
 		ObjectOptions{
-			VersionID:        ri.VersionID,
-			Versioned:        versioned,
-			VersionSuspended: versionSuspended,
-			NoDecryption:     true,
+			VersionID:          ri.VersionID,
+			Versioned:          versioned,
+			VersionSuspended:   versionSuspended,
+			ReplicationRequest: true,
 		})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {

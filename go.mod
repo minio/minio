@@ -259,4 +259,4 @@ require (
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 )
 
-replace github.com/minio/minio-go/v7 v7.0.67 => github.com/shtripat/minio-go/v7 v7.0.0-20240222092806-88284fc5d26a
+replace github.com/minio/minio-go/v7 v7.0.67 => github.com/shtripat/minio-go/v7 v7.0.0-20240222125058-d6cd8290d08f

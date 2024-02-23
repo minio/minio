@@ -245,6 +245,11 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		}, toObjectErr(errMethodNotAllowed, bucket, object)
 	}
 
+	// Set NoDecryption for SSE-C objects and if replication request
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) && opts.ReplicationRequest {
+		opts.NoDecryption = true
+	}
+
 	if objInfo.IsRemote() {
 		gr, err := getTransitionedObjectReader(ctx, bucket, object, rs, h, objInfo, opts)
 		if err != nil {
