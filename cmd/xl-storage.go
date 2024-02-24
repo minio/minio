@@ -1184,7 +1184,7 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 	}
 
 	// ENOSPC is a valid error from rename(); remove instead of rename in that case
-	if err == errDiskFull {
+	if errors.Is(err, errDiskFull) || isSysErrNoSpace(err) {
 		if recursive {
 			err = removeAll(filePath)
 		} else {
