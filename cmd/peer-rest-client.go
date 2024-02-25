@@ -242,26 +242,6 @@ func (client *peerRESTClient) GetMetrics(ctx context.Context, t madmin.MetricTyp
 	return v.ValueOrZero(), err
 }
 
-func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Metric, error) {
-	st, err := getResourceMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
-	if err != nil {
-		return nil, err
-	}
-	ch := make(chan Metric, 1)
-	go func(ch chan<- Metric) {
-		defer close(ch)
-		st.Results(func(metric *Metric) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case ch <- *metric:
-				return nil
-			}
-		})
-	}(ch)
-	return ch, nil
-}
-
 // GetProcInfo - fetch MinIO process information for a remote node.
 func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.ProcInfo, err error) {
 	resp, err := getProcInfoRPC.Call(ctx, client.gridConn(), grid.NewMSS())
@@ -659,6 +639,28 @@ func (client *peerRESTClient) MonitorBandwidth(ctx context.Context, buckets []st
 		peerRESTBuckets: buckets,
 	})
 	return getBandwidthRPC.Call(ctx, client.gridConn(), values)
+}
+
+func (client *peerRESTClient) GetResourceMetrics(ctx context.Context) (<-chan Metric, error) {
+	resp, err := getResourceMetricsRPC.Call(ctx, client.gridConn(), grid.NewMSS())
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan Metric)
+	go func(ch chan<- Metric) {
+		defer close(ch)
+		for _, m := range resp.Value() {
+			if m == nil {
+				continue
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case ch <- *m:
+			}
+		}
+	}(ch)
+	return ch, nil
 }
 
 func (client *peerRESTClient) GetPeerMetrics(ctx context.Context) (<-chan Metric, error) {
