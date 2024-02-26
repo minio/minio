@@ -238,15 +238,17 @@ func (f Filter) TestTags(userTags string) bool {
 		return false
 	}
 
-	// Both filter and object have tags, find a match,
-	// skip this object otherwise
+	// Both filter and object have tags, ensure that
+	// all lifecycle tags rules are satisfied
+	var matchCount int
 	for k, cv := range f.cachedTags {
 		v, ok := tagsMap[k]
 		if ok && v == cv {
-			return true
+			matchCount++
 		}
 	}
-	return false
+
+	return matchCount == len(f.cachedTags)
 }
 
 // BySize returns true if sz satisfies one of ObjectSizeGreaterThan,
