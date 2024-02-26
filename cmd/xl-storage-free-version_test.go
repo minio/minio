@@ -85,9 +85,7 @@ func TestFreeVersion(t *testing.T) {
 				Hash:       nil,
 			}},
 		},
-		MarkDeleted: false,
-		// DeleteMarkerReplicationStatus: "",
-		// VersionPurgeStatus:            "",
+		MarkDeleted:      false,
 		NumVersions:      1,
 		SuccessorModTime: time.Time{},
 	}

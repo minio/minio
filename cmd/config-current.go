@@ -725,9 +725,13 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		}
 		if globalTransitionState != nil {
 			globalTransitionState.UpdateWorkers(ilmCfg.TransitionWorkers)
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("ILM transition subsystem not initialized"))
 		}
 		if globalExpiryState != nil {
 			globalExpiryState.ResizeWorkers(ilmCfg.ExpirationWorkers)
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("ILM expiration subsystem not initialized"))
 		}
 
 	}

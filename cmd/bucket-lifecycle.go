@@ -38,7 +38,6 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
-	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
 	xnet "github.com/minio/pkg/v2/net"
@@ -161,7 +160,7 @@ func (e expiryTask) OpHash() uint64 {
 // expiryState manages all ILM related expiration activities.
 type expiryState struct {
 	mu      sync.RWMutex
-	workers []chan expiryOp
+	workers atomic.Pointer[[]chan expiryOp]
 
 	ctx    context.Context
 	objAPI ObjectLayer
@@ -171,14 +170,14 @@ type expiryState struct {
 
 // PendingTasks returns the number of pending ILM expiry tasks.
 func (es *expiryState) PendingTasks() int {
-	es.mu.RLock()
-	defer es.mu.RUnlock()
-
+	w := es.workers.Load()
+	if w == nil || len(*w) == 0 {
+		return 0
+	}
 	var tasks int
-	for _, wrkr := range es.workers {
+	for _, wrkr := range *w {
 		tasks += len(wrkr)
 	}
-
 	return tasks
 }
 
@@ -255,45 +254,53 @@ var globalExpiryState *expiryState
 // each ILM expiry task type.
 func newExpiryState(ctx context.Context, objAPI ObjectLayer, n int) *expiryState {
 	es := &expiryState{
-		ctx:     ctx,
-		objAPI:  objAPI,
-		workers: make([]chan expiryOp, 0, n),
+		ctx:    ctx,
+		objAPI: objAPI,
 	}
+	workers := make([]chan expiryOp, 0, n)
+	es.workers.Store(&workers)
 	es.ResizeWorkers(n)
 	return es
 }
 
 func (es *expiryState) getWorkerCh(h uint64) chan<- expiryOp {
-	es.mu.RLock()
-	defer es.mu.RUnlock()
-
-	if len(es.workers) == 0 {
+	w := es.workers.Load()
+	if w == nil || len(*w) == 0 {
 		return nil
 	}
-	return es.workers[h%uint64(len(es.workers))]
+	workers := *w
+	return workers[h%uint64(len(workers))]
 }
 
 func (es *expiryState) ResizeWorkers(n int) {
+	// Lock to avoid multiple resizes to happen at the same time.
 	es.mu.Lock()
 	defer es.mu.Unlock()
+	var workers []chan expiryOp
+	if v := es.workers.Load(); v != nil {
+		// Copy to new array.
+		workers = append(workers, *v...)
+	}
 
-	if n == len(es.workers) || n < 1 {
+	if n == len(workers) || n < 1 {
 		return
 	}
 
-	for len(es.workers) < n {
+	for len(workers) < n {
 		input := make(chan expiryOp, 10000)
-		es.workers = append(es.workers, input)
+		workers = append(workers, input)
 		go es.Worker(input)
 		es.stats.workers.Add(1)
 	}
 
-	for len(es.workers) > n {
-		worker := es.workers[len(es.workers)-1]
-		es.workers = es.workers[:len(es.workers)-1]
-		xioutil.SafeClose(worker)
+	for len(workers) > n {
+		worker := workers[len(workers)-1]
+		workers = workers[:len(workers)-1]
+		worker <- expiryOp(nil)
 		es.stats.workers.Add(-1)
 	}
+	// Atomically replace workers.
+	es.workers.Store(&workers)
 }
 
 // Worker handles 4 types of expiration tasks.
@@ -309,6 +316,10 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 			return
 		case v, ok := <-input:
 			if !ok {
+				return
+			}
+			if v == nil {
+				// ResizeWorkers signaling worker to quit
 				return
 			}
 			switch v := v.(type) {
@@ -355,6 +366,8 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				if ignoreNotFoundErr(err) != nil {
 					logger.LogIf(es.ctx, err)
 				}
+			default:
+				logger.LogIf(es.ctx, fmt.Errorf("Invalid work type - %v", v))
 			}
 		}
 	}
