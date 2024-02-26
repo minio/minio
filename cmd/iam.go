@@ -201,6 +201,13 @@ func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	atomic.StoreUint64(&sys.LastRefreshTimeUnixNano, uint64(loadStartTime.Add(loadDuration).UnixNano()))
 	atomic.AddUint64(&sys.TotalRefreshSuccesses, 1)
 
+	if !globalSiteReplicatorCred.IsValid() {
+		sa, _, err := sys.getServiceAccount(ctx, siteReplicatorSvcAcc)
+		if err == nil {
+			globalSiteReplicatorCred.Set(sa.Credentials)
+		}
+	}
+
 	if firstTime {
 		bootstrapTraceMsg(fmt.Sprintf("globalIAMSys.Load(): (duration: %s)", loadDuration))
 	}
@@ -1394,7 +1401,12 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 					jwtClaims, err = auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
 				}
 			} else {
-				jwtClaims, err = auth.ExtractClaims(cred.SessionToken, globalActiveCred.SecretKey)
+				var secretKey string
+				secretKey, err = getTokenSigningKey()
+				if err != nil {
+					continue
+				}
+				jwtClaims, err = auth.ExtractClaims(cred.SessionToken, secretKey)
 			}
 			if err != nil {
 				// skip this cred - session token seems invalid

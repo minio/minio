@@ -6,13 +6,10 @@ exit_1() {
 
 	echo "minio1 ============"
 	cat /tmp/minio1_1.log
-	cat /tmp/minio1_2.log
 	echo "minio2 ============"
 	cat /tmp/minio2_1.log
-	cat /tmp/minio2_2.log
 	echo "minio3 ============"
 	cat /tmp/minio3_1.log
-	cat /tmp/minio3_2.log
 
 	exit 1
 }

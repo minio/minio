@@ -306,6 +306,13 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	}
 
 	if token != "" {
+		var err error
+		if globalSiteReplicationSys.isEnabled() && cred.AccessKey != siteReplicatorSvcAcc {
+			secret, err = getTokenSigningKey()
+			if err != nil {
+				return nil, toAPIErrorCode(r.Context(), err)
+			}
+		}
 		claims, err := getClaimsFromTokenWithSecret(token, secret)
 		if err != nil {
 			return nil, toAPIErrorCode(r.Context(), err)

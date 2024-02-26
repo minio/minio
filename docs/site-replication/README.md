@@ -22,7 +22,7 @@ The following Bucket features will **not be replicated**, is designed to differ 
 ## Pre-requisites
 
 - Initially, only **one** of the sites added for replication may have data. After site-replication is successfully configured, this data is replicated to the other (initially empty) sites. Subsequently, objects may be written to any of the sites, and they will be replicated to all other sites.
-- All sites **must** have the same deployment credentials (i.e. `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`).
+
 - **Removing a site** is not allowed from a set of replicated sites once configured.
 - All sites must be using the **same** external IDP(s) if any.
 - For [SSE-S3 or SSE-KMS encryption via KMS](https://min.io/docs/minio/linux/operations/server-side-encryption.html "MinIO KMS Guide"), all sites **must**  have access to a central KMS deployment. This can be achieved via a central KES server or multiple KES servers (say one per site) connected via a central KMS (Vault) server.
@@ -56,3 +56,8 @@ mc admin replicate add minio1 minio2 minio3
 ```sh
 mc admin replicate info minio1
 ```
+
+** Note **
+Previously, site replication required the root credentials of peer sites to be identical. This is no longer necessary because STS tokens are now signed with the site replicator service account credentials, thus allowing flexibility in the independent management of root accounts across sites and the ability to disable root accounts eventually.
+
+However, this means that STS tokens signed previously by root credentials will no longer be valid upon upgrading to the latest version with this change. Please re-generate them as you usually do. Additionally, if site replication is ever removed - the STS tokens will become invalid, regenerate them as you usually do.

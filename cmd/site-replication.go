@@ -26,6 +26,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -227,19 +228,30 @@ type srStateData struct {
 // Init - initialize the site replication manager.
 func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error {
 	go c.startHealRoutine(ctx, objAPI)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		err := c.loadFromDisk(ctx, objAPI)
+		if err == errConfigNotFound {
+			return nil
+		}
+		if err == nil {
+			break
+		}
+		logger.LogOnceIf(context.Background(), fmt.Errorf("unable to initialize site replication subsystem: (%w)", err), "site-relication-init")
 
-	err := c.loadFromDisk(ctx, objAPI)
-	if err == errConfigNotFound {
-		return nil
+		duration := time.Duration(r.Float64() * float64(time.Minute))
+		if duration < time.Second {
+			// Make sure to sleep at least a second to avoid high CPU ticks.
+			duration = time.Second
+		}
+		time.Sleep(duration)
 	}
-
 	c.RLock()
 	defer c.RUnlock()
 	if c.enabled {
 		logger.Info("Cluster replication initialized")
 	}
-
-	return err
+	return nil
 }
 
 func (c *SiteReplicationSys) loadFromDisk(ctx context.Context, objAPI ObjectLayer) error {
@@ -582,6 +594,9 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		}, nil
 	}
 
+	if !globalSiteReplicatorCred.IsValid() {
+		globalSiteReplicatorCred.Set(svcCred)
+	}
 	result := madmin.ReplicateAddStatus{
 		Success: true,
 		Status:  madmin.ReplicateAddStatusSuccess,
@@ -607,9 +622,9 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		return errSRSelfNotFound
 	}
 
-	_, _, err := globalIAMSys.GetServiceAccount(ctx, arg.SvcAcctAccessKey)
+	sa, _, err := globalIAMSys.GetServiceAccount(ctx, arg.SvcAcctAccessKey)
 	if err == errNoSuchServiceAccount {
-		_, _, err = globalIAMSys.NewServiceAccount(ctx, arg.SvcAcctParent, nil, newServiceAccountOpts{
+		sa, _, err = globalIAMSys.NewServiceAccount(ctx, arg.SvcAcctParent, nil, newServiceAccountOpts{
 			accessKey:                  arg.SvcAcctAccessKey,
 			secretKey:                  arg.SvcAcctSecretKey,
 			allowSiteReplicatorAccount: arg.SvcAcctAccessKey == siteReplicatorSvcAcc,
@@ -641,6 +656,10 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 	if err = c.saveToDisk(ctx, state); err != nil {
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
+	if !globalSiteReplicatorCred.IsValid() {
+		globalSiteReplicatorCred.Set(sa)
+	}
+
 	return nil
 }
 
@@ -1417,9 +1436,13 @@ func (c *SiteReplicationSys) PeerSTSAccHandler(ctx context.Context, stsCred *mad
 			}
 		}
 	}
+	secretKey, err := getTokenSigningKey()
+	if err != nil {
+		return errSRInvalidRequest(err)
+	}
 
 	// Verify the session token of the stsCred
-	claims, err := auth.ExtractClaims(stsCred.SessionToken, globalActiveCred.SecretKey)
+	claims, err := auth.ExtractClaims(stsCred.SessionToken, secretKey)
 	if err != nil {
 		return fmt.Errorf("STS credential could not be verified: %w", err)
 	}
@@ -6169,4 +6192,38 @@ func ilmExpiryReplicationEnabled(sites map[string]madmin.PeerInfo) bool {
 		flag = flag && pi.ReplicateILMExpiry
 	}
 	return flag
+}
+
+type siteReplicatorCred struct {
+	Creds auth.Credentials
+	sync.RWMutex
+}
+
+// Get or attempt to load site replicator credentials from disk.
+func (s *siteReplicatorCred) Get(ctx context.Context) (auth.Credentials, error) {
+	s.RLock()
+	if s.Creds.IsValid() {
+		s.RUnlock()
+		return s.Creds, nil
+	}
+	s.RUnlock()
+	s.Lock()
+	defer s.Unlock()
+	var m map[string]UserIdentity
+	if err := globalIAMSys.store.loadUser(ctx, siteReplicatorSvcAcc, svcUser, m); err != nil {
+		return auth.Credentials{}, err
+	}
+	return m[siteReplicatorSvcAcc].Credentials, nil
+}
+
+func (s *siteReplicatorCred) Set(c auth.Credentials) {
+	s.Lock()
+	defer s.Unlock()
+	s.Creds = c
+}
+
+func (s *siteReplicatorCred) IsValid() bool {
+	s.RLock()
+	defer s.RUnlock()
+	return s.Creds.IsValid()
 }
