@@ -25,12 +25,11 @@ import (
 func TestCache(t *testing.T) {
 	cache := New[time.Time]()
 	t.Parallel()
-	cache.Once.Do(func() {
-		cache.TTL = 2 * time.Second
-		cache.Update = func() (time.Time, error) {
+	cache.InitOnce(2*time.Second, Opts{},
+		func() (time.Time, error) {
 			return time.Now(), nil
-		}
-	})
+		},
+	)
 
 	t1, _ := cache.Get()
 
@@ -50,12 +49,11 @@ func TestCache(t *testing.T) {
 
 func BenchmarkCache(b *testing.B) {
 	cache := New[time.Time]()
-	cache.Once.Do(func() {
-		cache.TTL = 1 * time.Millisecond
-		cache.Update = func() (time.Time, error) {
+	cache.InitOnce(1*time.Millisecond, Opts{},
+		func() (time.Time, error) {
 			return time.Now(), nil
-		}
-	})
+		},
+	)
 
 	b.ReportAllocs()
 	b.ResetTimer()
