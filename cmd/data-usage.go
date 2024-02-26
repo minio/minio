@@ -81,7 +81,8 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 		prefixUsageCache.TTL = 30 * time.Second
 
 		// No need to fail upon Update() error, fallback to old value.
-		prefixUsageCache.Relax = true
+		prefixUsageCache.ReturnLastGood = true
+		prefixUsageCache.NoWait = true
 		prefixUsageCache.Update = func() (map[string]uint64, error) {
 			m := make(map[string]uint64)
 			for _, pool := range z.serverPools {

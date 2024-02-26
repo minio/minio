@@ -51,7 +51,7 @@ func TestCache(t *testing.T) {
 func BenchmarkCache(b *testing.B) {
 	cache := New[time.Time]()
 	cache.Once.Do(func() {
-		cache.TTL = 1 * time.Microsecond
+		cache.TTL = 1 * time.Millisecond
 		cache.Update = func() (time.Time, error) {
 			return time.Now(), nil
 		}

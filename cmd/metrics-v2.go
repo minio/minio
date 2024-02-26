@@ -357,7 +357,7 @@ type MetricsGroupOpts struct {
 func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 	g.metricsCache = cachevalue.New[[]Metric]()
 	g.metricsCache.Once.Do(func() {
-		g.metricsCache.Relax = true
+		g.metricsCache.ReturnLastGood = true
 		g.metricsCache.TTL = g.cacheInterval
 		g.metricsCache.Update = func() ([]Metric, error) {
 			if g.metricsGroupOpts.dependGlobalObjectAPI {
