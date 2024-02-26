@@ -31,7 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -157,9 +156,6 @@ func toStorageErr(err error) error {
 
 // Abstracts a remote disk.
 type storageRESTClient struct {
-	// Indicate of NSScanner is in progress in this disk
-	scanning int32
-
 	endpoint    Endpoint
 	restClient  *rest.Client
 	gridConn    *grid.Subroute
@@ -236,8 +232,6 @@ func (client *storageRESTClient) Healing() *healingTracker {
 }
 
 func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, _ func() bool) (dataUsageCache, error) {
-	atomic.AddInt32(&client.scanning, 1)
-	defer atomic.AddInt32(&client.scanning, -1)
 	defer xioutil.SafeClose(updates)
 
 	st, err := storageNSScannerRPC.Call(ctx, client.gridConn, &nsScannerOptions{
@@ -310,8 +304,8 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		return info, errDiskNotFound
 	}
 
-	// if metrics was asked, or it was a NoOp we do not need to cache the value.
-	if opts.Metrics || opts.NoOp {
+	// if 'NoOp' we do not cache the value.
+	if opts.NoOp {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
@@ -325,17 +319,17 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		if info.Error != "" {
 			return info, toStorageErr(errors.New(info.Error))
 		}
-		info.Scanning = atomic.LoadInt32(&client.scanning) == 1
 		return info, nil
 	} // In all other cases cache the value upto 1sec.
 
 	client.diskInfoCache.Once.Do(func() {
 		client.diskInfoCache.TTL = time.Second
+		client.diskInfoCache.CacheError = true
 		client.diskInfoCache.Update = func() (info DiskInfo, err error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			nopts := DiskInfoOptions{DiskID: client.diskID}
+			nopts := DiskInfoOptions{DiskID: client.diskID, Metrics: true}
 			infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &nopts)
 			if err != nil {
 				return info, toStorageErr(err)
@@ -348,9 +342,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		}
 	})
 
-	info, err = client.diskInfoCache.Get()
-	info.Scanning = atomic.LoadInt32(&client.scanning) == 1
-	return info, err
+	return client.diskInfoCache.Get()
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.

@@ -52,7 +52,8 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 		// does not update the bucket usage values frequently.
 		bucketStorageCache.TTL = 10 * time.Second
 		// Rely on older value if usage loading fails from disk.
-		bucketStorageCache.Relax = true
+		bucketStorageCache.ReturnLastGood = true
+		bucketStorageCache.NoWait = true
 		bucketStorageCache.Update = func() (DataUsageInfo, error) {
 			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
 			defer done()

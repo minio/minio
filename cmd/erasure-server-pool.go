@@ -1851,7 +1851,8 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 		listBucketsCache.Once.Do(func() {
 			listBucketsCache.TTL = time.Second
 
-			listBucketsCache.Relax = true
+			listBucketsCache.ReturnLastGood = true
+			listBucketsCache.NoWait = true
 			listBucketsCache.Update = func() ([]BucketInfo, error) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				buckets, err = z.s3Peer.ListBuckets(ctx, opts)
