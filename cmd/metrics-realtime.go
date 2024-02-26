@@ -130,12 +130,6 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 	}
 
 	metrics := make(map[string]madmin.DiskMetric)
-
-	procStats, procErr := disk.GetAllDrivesIOStats()
-	if procErr != nil {
-		return metrics
-	}
-
 	storageInfo := objLayer.LocalStorageInfo(GlobalContext, true)
 	for _, d := range storageInfo.Disks {
 		if len(disks) != 0 {
@@ -170,9 +164,8 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 			}
 		}
 
-		// get disk
-		if procErr == nil {
-			st := procStats[disk.DevID{Major: d.Major, Minor: d.Minor}]
+		st, err := disk.GetDriveStats(d.Major, d.Minor)
+		if err == nil {
 			dm.IOStats = madmin.DiskIOStats{
 				ReadIOs:        st.ReadIOs,
 				ReadMerges:     st.ReadMerges,

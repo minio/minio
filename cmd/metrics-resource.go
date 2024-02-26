@@ -27,7 +27,6 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/shirou/gopsutil/v3/host"
 )
 
 const (
@@ -85,9 +84,9 @@ var (
 	resourceMetricsGroups  []*MetricsGroup
 	// initial values for drives (at the time  of server startup)
 	// used for calculating avg values for drive metrics
-	initialDriveStats   map[string]madmin.DiskIOStats
-	initialDriveStatsMu sync.RWMutex
-	initialUptime       uint64
+	latestDriveStats      map[string]madmin.DiskIOStats
+	latestDriveStatsMu    sync.RWMutex
+	lastDriveStatsRefresh time.Time
 )
 
 // PeerResourceMetrics represents the resource metrics
@@ -147,7 +146,7 @@ func init() {
 		writesKBPerSec:    "Kilobytes written per second on a drive",
 		readsAwait:        "Average time for read requests to be served on a drive",
 		writesAwait:       "Average time for write requests to be served on a drive",
-		percUtil:          "Percentage of time the disk was busy since uptime",
+		percUtil:          "Percentage of time the disk was busy",
 		usedBytes:         "Used bytes on a drive",
 		totalBytes:        "Total bytes on a drive",
 		usedInodes:        "Total inodes used on a drive",
@@ -219,35 +218,32 @@ func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64,
 	resourceMetricsMap[subSys] = subsysMetrics
 }
 
-// updateDriveIOStats - Updates the drive IO stats by calculating the difference between the current
-// and initial values. We cannot rely on host.Uptime here as it will not work in k8s environments, where
-// it will return the pod's uptime but the disk metrics are always from the host (/proc/diskstats)
-func updateDriveIOStats(currentStats madmin.DiskIOStats, initialStats madmin.DiskIOStats, labels map[string]string) {
+// updateDriveIOStats - Updates the drive IO stats by calculating the difference between the current and latest updated values.
+func updateDriveIOStats(currentStats madmin.DiskIOStats, latestStats madmin.DiskIOStats, labels map[string]string) {
 	sectorSize := uint64(512)
 	kib := float64(1 << 10)
-	uptime, _ := host.Uptime()
-	uptimeDiff := float64(uptime - initialUptime)
-	if uptimeDiff == 0 {
+	diffInSeconds := time.Now().UTC().Sub(lastDriveStatsRefresh).Seconds()
+	if diffInSeconds == 0 {
 		// too soon to update the stats
 		return
 	}
 	diffStats := madmin.DiskIOStats{
-		ReadIOs:      currentStats.ReadIOs - initialStats.ReadIOs,
-		WriteIOs:     currentStats.WriteIOs - initialStats.WriteIOs,
-		ReadTicks:    currentStats.ReadTicks - initialStats.ReadTicks,
-		WriteTicks:   currentStats.WriteTicks - initialStats.WriteTicks,
-		TotalTicks:   currentStats.TotalTicks - initialStats.TotalTicks,
-		ReadSectors:  currentStats.ReadSectors - initialStats.ReadSectors,
-		WriteSectors: currentStats.WriteSectors - initialStats.WriteSectors,
+		ReadIOs:      currentStats.ReadIOs - latestStats.ReadIOs,
+		WriteIOs:     currentStats.WriteIOs - latestStats.WriteIOs,
+		ReadTicks:    currentStats.ReadTicks - latestStats.ReadTicks,
+		WriteTicks:   currentStats.WriteTicks - latestStats.WriteTicks,
+		TotalTicks:   currentStats.TotalTicks - latestStats.TotalTicks,
+		ReadSectors:  currentStats.ReadSectors - latestStats.ReadSectors,
+		WriteSectors: currentStats.WriteSectors - latestStats.WriteSectors,
 	}
 
-	updateResourceMetrics(driveSubsystem, readsPerSec, float64(diffStats.ReadIOs)/uptimeDiff, labels, false)
+	updateResourceMetrics(driveSubsystem, readsPerSec, float64(diffStats.ReadIOs)/diffInSeconds, labels, false)
 	readKib := float64(diffStats.ReadSectors*sectorSize) / kib
-	updateResourceMetrics(driveSubsystem, readsKBPerSec, readKib/uptimeDiff, labels, false)
+	updateResourceMetrics(driveSubsystem, readsKBPerSec, readKib/diffInSeconds, labels, false)
 
-	updateResourceMetrics(driveSubsystem, writesPerSec, float64(diffStats.WriteIOs)/uptimeDiff, labels, false)
+	updateResourceMetrics(driveSubsystem, writesPerSec, float64(diffStats.WriteIOs)/diffInSeconds, labels, false)
 	writeKib := float64(diffStats.WriteSectors*sectorSize) / kib
-	updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKib/uptimeDiff, labels, false)
+	updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKib/diffInSeconds, labels, false)
 
 	rdAwait := 0.0
 	if diffStats.ReadIOs > 0 {
@@ -260,18 +256,23 @@ func updateDriveIOStats(currentStats madmin.DiskIOStats, initialStats madmin.Dis
 		wrAwait = float64(diffStats.WriteTicks) / float64(diffStats.WriteIOs)
 	}
 	updateResourceMetrics(driveSubsystem, writesAwait, wrAwait, labels, false)
-	updateResourceMetrics(driveSubsystem, percUtil, float64(diffStats.TotalTicks)/(uptimeDiff*10), labels, false)
+	updateResourceMetrics(driveSubsystem, percUtil, float64(diffStats.TotalTicks)/(diffInSeconds*10), labels, false)
 }
 
 func collectDriveMetrics(m madmin.RealtimeMetrics) {
+	latestDriveStatsMu.Lock()
 	for d, dm := range m.ByDisk {
 		labels := map[string]string{"drive": d}
-		initialStats, ok := initialDriveStats[d]
+		latestStats, ok := latestDriveStats[d]
 		if !ok {
+			latestDriveStats[d] = dm.IOStats
 			continue
 		}
-		updateDriveIOStats(dm.IOStats, initialStats, labels)
+		updateDriveIOStats(dm.IOStats, latestStats, labels)
+		latestDriveStats[d] = dm.IOStats
 	}
+	lastDriveStatsRefresh = time.Now().UTC()
+	latestDriveStatsMu.Unlock()
 
 	globalLocalDrivesMu.RLock()
 	localDrives := cloneDrives(globalLocalDrives)
@@ -361,29 +362,25 @@ func collectLocalResourceMetrics() {
 	collectDriveMetrics(m)
 }
 
-// populateInitialValues - populates the initial values
-// for drive stats and host uptime
-func populateInitialValues() {
-	initialDriveStatsMu.Lock()
-
+func initLatestValues() {
 	m := collectLocalMetrics(madmin.MetricsDisk, collectMetricsOpts{
 		hosts: map[string]struct{}{
 			globalLocalNodeName: {},
 		},
 	})
 
-	initialDriveStats = map[string]madmin.DiskIOStats{}
+	latestDriveStatsMu.Lock()
+	latestDriveStats = map[string]madmin.DiskIOStats{}
 	for d, dm := range m.ByDisk {
-		initialDriveStats[d] = dm.IOStats
+		latestDriveStats[d] = dm.IOStats
 	}
-
-	initialUptime, _ = host.Uptime()
-	initialDriveStatsMu.Unlock()
+	lastDriveStatsRefresh = time.Now().UTC()
+	latestDriveStatsMu.Unlock()
 }
 
 // startResourceMetricsCollection - starts the job for collecting resource metrics
 func startResourceMetricsCollection() {
-	populateInitialValues()
+	initLatestValues()
 
 	resourceMetricsMapMu.Lock()
 	resourceMetricsMap = map[MetricSubsystem]ResourceMetrics{}
