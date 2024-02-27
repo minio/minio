@@ -144,7 +144,7 @@ func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets 
 
 // Only heal on disks where we are sure that healing is needed. We can expand
 // this list as and when we figure out more errors can be added to this list safely.
-func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta FileInfo, doinline bool) bool {
+func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta FileInfo) bool {
 	switch {
 	case errors.Is(erErr, errFileNotFound) || errors.Is(erErr, errFileVersionNotFound):
 		return true
@@ -155,10 +155,6 @@ func shouldHealObjectOnDisk(erErr, dataErr error, meta FileInfo, latestMeta File
 		if meta.XLV1 {
 			// Legacy means heal always
 			// always check first.
-			return true
-		}
-		if doinline {
-			// convert small files to 'inline'
 			return true
 		}
 		if !meta.Deleted && !meta.IsRemote() {
@@ -308,7 +304,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		errs, latestMeta, bucket, object, scanMode)
 
 	var erasure Erasure
-	var recreate bool
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
 		// Initialize erasure coding
 		erasure, err = NewErasure(ctx, latestMeta.Erasure.DataBlocks,
@@ -316,15 +311,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		if err != nil {
 			return result, err
 		}
-
-		// Is only 'true' if the opts.Recreate is true and
-		// the object shardSize < smallFileThreshold do not
-		// set this to 'true' arbitrarily and must be only
-		// 'true' with caller ask.
-		recreate = (opts.Recreate &&
-			!latestMeta.InlineData() &&
-			len(latestMeta.Parts) == 1 &&
-			erasure.ShardFileSize(latestMeta.Parts[0].ActualSize) < smallFileThreshold)
 	}
 
 	result.ObjectSize, err = latestMeta.ToObjectInfo(bucket, object, true).GetActualSize()
@@ -353,7 +339,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			driveState = madmin.DriveStateCorrupt
 		}
 
-		if shouldHealObjectOnDisk(errs[i], dataErrs[i], partsMetadata[i], latestMeta, recreate) {
+		if shouldHealObjectOnDisk(errs[i], dataErrs[i], partsMetadata[i], latestMeta) {
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
 			result.Before.Drives = append(result.Before.Drives, madmin.HealDriveInfo{
@@ -401,7 +387,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		return result, nil
 	}
 
-	if !latestMeta.XLV1 && !latestMeta.Deleted && !recreate && disksToHealCount > latestMeta.Erasure.ParityBlocks {
+	if !latestMeta.XLV1 && !latestMeta.Deleted && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// Allow for dangling deletes, on versions that have DataDir missing etc.
 		// this would end up restoring the correct readable versions.
 		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, dataErrs, ObjectOptions{
@@ -499,7 +485,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	var inlineBuffers []*bytes.Buffer
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
-		if latestMeta.InlineData() || recreate {
+		if latestMeta.InlineData() {
 			inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
 		}
 
@@ -603,9 +589,8 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			return result, err
 		}
 
-		// - Remove any parts from healed disks after its been inlined.
 		// - Remove any remaining parts from outdated disks from before transition.
-		if recreate || partsMetadata[i].IsRemote() {
+		if partsMetadata[i].IsRemote() {
 			rmDataDir := partsMetadata[i].DataDir
 			disk.Delete(ctx, bucket, pathJoin(encodeDirObject(object), rmDataDir), DeleteOptions{
 				Immediate: true,
@@ -1047,10 +1032,9 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object strin
 	}
 	if opts != nil {
 		tr.Custom = map[string]string{
-			"dry":      fmt.Sprint(opts.DryRun),
-			"remove":   fmt.Sprint(opts.Remove),
-			"recreate": fmt.Sprint(opts.Recreate),
-			"mode":     fmt.Sprint(opts.ScanMode),
+			"dry":    fmt.Sprint(opts.DryRun),
+			"remove": fmt.Sprint(opts.Remove),
+			"mode":   fmt.Sprint(opts.ScanMode),
 		}
 		if result != nil {
 			tr.Custom["version-id"] = result.VersionID

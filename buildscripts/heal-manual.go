@@ -44,7 +44,6 @@ func main() {
 	opts := madmin.HealOpts{
 		Recursive: true,                  // recursively heal all objects at 'prefix'
 		Remove:    true,                  // remove content that has lost quorum and not recoverable
-		Recreate:  true,                  // rewrite all old non-inlined xl.meta to new xl.meta
 		ScanMode:  madmin.HealNormalScan, // by default do not do 'deep' scanning
 	}
 
