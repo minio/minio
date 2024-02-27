@@ -232,21 +232,20 @@ func (f Filter) TestTags(userTags string) bool {
 	}
 	tagsMap := parsedTags.ToMap()
 
-	// This filter has tags configured but this object
-	// does not have any tag, skip this object
-	if len(tagsMap) == 0 {
+	// Not enough tags on object to satisfy the rule filter's tags
+	if len(tagsMap) < len(f.cachedTags) {
 		return false
 	}
 
-	// Both filter and object have tags, find a match,
-	// skip this object otherwise
+	var mismatch bool
 	for k, cv := range f.cachedTags {
 		v, ok := tagsMap[k]
-		if ok && v == cv {
-			return true
+		if !ok || v != cv {
+			mismatch = true
+			break
 		}
 	}
-	return false
+	return !mismatch
 }
 
 // BySize returns true if sz satisfies one of ObjectSizeGreaterThan,

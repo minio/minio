@@ -241,3 +241,103 @@ func TestObjectSizeFilters(t *testing.T) {
 		})
 	}
 }
+
+func TestTestTags(t *testing.T) {
+	noTags := Filter{
+		set: true,
+		And: And{
+			Tags: []Tag{},
+		},
+		andSet: true,
+	}
+
+	oneTag := Filter{
+		set: true,
+		And: And{
+			Tags: []Tag{{Key: "FOO", Value: "1"}},
+		},
+		andSet: true,
+	}
+
+	twoTags := Filter{
+		set: true,
+		And: And{
+			Tags: []Tag{{Key: "FOO", Value: "1"}, {Key: "BAR", Value: "2"}},
+		},
+		andSet: true,
+	}
+
+	tests := []struct {
+		filter   Filter
+		userTags string
+		want     bool
+	}{
+		{
+			filter:   noTags,
+			userTags: "",
+			want:     true,
+		},
+		{
+			filter:   noTags,
+			userTags: "A=3",
+			want:     true,
+		},
+		{
+			filter:   oneTag,
+			userTags: "A=3",
+			want:     false,
+		},
+		{
+			filter:   oneTag,
+			userTags: "FOO=1",
+			want:     true,
+		},
+		{
+			filter:   oneTag,
+			userTags: "A=B&FOO=1",
+			want:     true,
+		},
+		{
+			filter:   twoTags,
+			userTags: "",
+			want:     false,
+		},
+		{
+			filter:   twoTags,
+			userTags: "FOO=1",
+			want:     false,
+		},
+		{
+			filter:   twoTags,
+			userTags: "BAR=2",
+			want:     false,
+		},
+		{
+			filter:   twoTags,
+			userTags: "FOO=2&BAR=2",
+			want:     false,
+		},
+		{
+			filter:   twoTags,
+			userTags: "F=1&B=2",
+			want:     false,
+		},
+		{
+			filter:   twoTags,
+			userTags: "FOO=1&BAR=2",
+			want:     true,
+		},
+		{
+			filter:   twoTags,
+			userTags: "BAR=2&FOO=1",
+			want:     true,
+		},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {
+			if got := test.filter.TestTags(test.userTags); got != test.want {
+				t.Errorf("Expected %v but got %v", test.want, got)
+			}
+		})
+	}
+}
