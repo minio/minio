@@ -740,7 +740,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		wg := sync.WaitGroup{}
+		var wg sync.WaitGroup
 		for i, disk := range disks {
 			if disk == nil {
 				done <- false

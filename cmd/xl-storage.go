@@ -376,24 +376,14 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	// If unset, see if we can locate it.
-	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
-		return getXLDiskLoc(s.diskID)
-	}
-	return s.poolIndex, s.setIndex, s.diskIndex
+	// this position never changes
+	return s.endpoint.PoolIdx, s.endpoint.SetIdx, s.endpoint.DiskIdx
 }
 
 func (s *xlStorage) SetFormatData(b []byte) {
 	s.Lock()
 	defer s.Unlock()
 	s.formatData = b
-}
-
-// Set location indexes.
-func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
-	s.poolIndex = poolIdx
-	s.setIndex = setIdx
-	s.diskIndex = diskIdx
 }
 
 func (s *xlStorage) Healing() *healingTracker {

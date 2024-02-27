@@ -253,10 +253,6 @@ func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return p.storage.GetDiskLoc()
 }
 
-func (p *xlStorageDiskIDCheck) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
-	p.storage.SetDiskLoc(poolIdx, setIdx, diskIdx)
-}
-
 func (p *xlStorageDiskIDCheck) Close() error {
 	p.diskCancel()
 	return p.storage.Close()

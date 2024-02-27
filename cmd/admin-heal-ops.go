@@ -168,21 +168,6 @@ func (ahs *allHealState) getLocalHealingDisks() map[string]madmin.HealingDisk {
 	return dst
 }
 
-// getHealLocalDiskEndpoints() returns the list of disks that need
-// to be healed but there is no healing routine in progress on them.
-func (ahs *allHealState) getHealLocalDiskEndpoints() Endpoints {
-	ahs.RLock()
-	defer ahs.RUnlock()
-
-	var endpoints Endpoints
-	for ep, healing := range ahs.healLocalDisks {
-		if !healing {
-			endpoints = append(endpoints, ep)
-		}
-	}
-	return endpoints
-}
-
 // Set, in the memory, the state of the disk as currently healing or not
 func (ahs *allHealState) setDiskHealingStatus(ep Endpoint, healing bool) {
 	ahs.Lock()

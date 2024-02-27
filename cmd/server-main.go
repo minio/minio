@@ -740,7 +740,12 @@ func serverMain(ctx *cli.Context) {
 		getCert = globalTLSCerts.GetCertificate
 	}
 
-	// Initialize gridn
+	// Initialize local drives
+	bootstrapTrace("initLocalDrives", func() {
+		registerStorageLocalDrives(globalEndpoints)
+	})
+
+	// Initialize grid
 	bootstrapTrace("initGrid", func() {
 		logger.FatalIf(initGlobalGrid(GlobalContext, globalEndpoints), "Unable to configure server grid RPC services")
 	})

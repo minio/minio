@@ -261,15 +261,12 @@ func (s *erasureSets) connectDisks() {
 			}
 
 			disk.SetDiskID(format.Erasure.This)
-			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			disk.SetFormatData(formatData)
 			s.erasureDisks[setIndex][diskIndex] = disk
 
 			if disk.IsLocal() {
 				globalLocalDrivesMu.Lock()
-				if globalIsDistErasure {
-					globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
-				}
+				globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
 				for i, ldisk := range globalLocalDrives {
 					_, k, l := ldisk.GetDiskLoc()
 					if k == setIndex && l == diskIndex {
@@ -465,7 +462,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 						s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
 						return
 					}
-					disk.SetDiskLoc(s.poolIndex, m, n)
+					disk.SetDiskID(diskID)
 					s.erasureDisks[m][n] = disk
 				}(disk, i, j)
 			}
@@ -1137,8 +1134,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 			if disk := storageDisks[index]; disk != nil {
 				if disk.IsLocal() {
-					disk.SetDiskLoc(s.poolIndex, m, n)
-
 					xldisk, ok := disk.(*xlStorageDiskIDCheck)
 					if ok {
 						_, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
@@ -1155,16 +1150,12 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 					if err != nil {
 						continue
 					}
-					disk.SetDiskLoc(s.poolIndex, m, n)
 				}
-
-				s.erasureDisks[m][n] = disk
+				disk.SetDiskID(format.Erasure.This)
 
 				if disk.IsLocal() {
 					globalLocalDrivesMu.Lock()
-					if globalIsDistErasure {
-						globalLocalSetDrives[s.poolIndex][m][n] = disk
-					}
+					globalLocalSetDrives[s.poolIndex][m][n] = disk
 					for i, ldisk := range globalLocalDrives {
 						_, k, l := ldisk.GetDiskLoc()
 						if k == m && l == n {
@@ -1174,6 +1165,8 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 					}
 					globalLocalDrivesMu.Unlock()
 				}
+
+				s.erasureDisks[m][n] = disk
 			}
 		}
 

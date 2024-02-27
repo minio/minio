@@ -54,7 +54,7 @@ var errDiskStale = errors.New("drive stale")
 
 // To abstract a disk over network.
 type storageRESTServer struct {
-	poolIndex, setIndex, diskIndex int
+	endpoint Endpoint
 }
 
 var (
@@ -74,10 +74,14 @@ var (
 	storageListDirRPC        = grid.NewStream[*grid.MSS, grid.NoPayload, *ListDirResult](grid.HandlerListDir, grid.NewMSS, nil, func() *ListDirResult { return &ListDirResult{} }).WithOutCapacity(1)
 )
 
-func (s *storageRESTServer) getStorage() StorageAPI {
+func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	globalLocalDrivesMu.RLock()
 	defer globalLocalDrivesMu.RUnlock()
-	return globalLocalSetDrives[s.poolIndex][s.setIndex][s.diskIndex]
+	return globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx]
+}
+
+func (s *storageRESTServer) getStorage() StorageAPI {
+	return getStorageViaEndpoint(s.endpoint)
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -1267,19 +1271,63 @@ func (s *storageRESTServer) ReadMultiple(w http.ResponseWriter, r *http.Request)
 // Any updates to this must be serialized via globalLocalDrivesMu (locker)
 var globalLocalSetDrives [][][]StorageAPI
 
+func registerStorageLocalDrives(endpointServerPools EndpointServerPools) {
+	createStorage := func(endpoint Endpoint) bool {
+		xl, err := newXLStorage(endpoint, true)
+		if err != nil {
+			// if supported errors don't fail, we proceed to
+			// printing message and moving forward.
+			logFatalErrs(err, endpoint, false)
+			return false
+		}
+		storage := newXLStorageDiskIDCheck(xl, true)
+		storage.SetDiskID(xl.diskID)
+		// We do not have to do SetFormatData() since 'xl'
+		// already captures formatData cached.
+
+		globalLocalDrivesMu.Lock()
+		defer globalLocalDrivesMu.Unlock()
+
+		globalLocalDrives = append(globalLocalDrives, storage)
+		globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
+		return true
+	}
+
+	globalLocalSetDrives = make([][][]StorageAPI, len(endpointServerPools))
+	for pool, serverPool := range endpointServerPools {
+		globalLocalSetDrives[pool] = make([][]StorageAPI, serverPool.SetCount)
+		for set := range globalLocalSetDrives[pool] {
+			globalLocalSetDrives[pool][set] = make([]StorageAPI, serverPool.DrivesPerSet)
+		}
+
+		for _, endpoint := range serverPool.Endpoints {
+			if !endpoint.IsLocal {
+				continue
+			}
+
+			if createStorage(endpoint) {
+				continue
+			}
+
+			// Start async goroutine to create storage.
+			go func(endpoint Endpoint) {
+				for {
+					time.Sleep(3 * time.Second)
+					if createStorage(endpoint) {
+						return
+					}
+				}
+			}(endpoint)
+		}
+	}
+}
+
 // registerStorageRESTHandlers - register storage rpc router.
 func registerStorageRESTHandlers(router *mux.Router, endpointServerPools EndpointServerPools, gm *grid.Manager) {
 	h := func(f http.HandlerFunc) http.HandlerFunc {
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
 
-	globalLocalSetDrives = make([][][]StorageAPI, len(endpointServerPools))
-	for pool := range globalLocalSetDrives {
-		globalLocalSetDrives[pool] = make([][]StorageAPI, endpointServerPools[pool].SetCount)
-		for set := range globalLocalSetDrives[pool] {
-			globalLocalSetDrives[pool][set] = make([]StorageAPI, endpointServerPools[pool].DrivesPerSet)
-		}
-	}
 	for _, serverPool := range endpointServerPools {
 		for _, endpoint := range serverPool.Endpoints {
 			if !endpoint.IsLocal {
@@ -1287,9 +1335,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			}
 
 			server := &storageRESTServer{
-				poolIndex: endpoint.PoolIdx,
-				setIndex:  endpoint.SetIdx,
-				diskIndex: endpoint.DiskIdx,
+				endpoint: endpoint,
 			}
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
@@ -1328,42 +1374,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				Handle:      server.WalkDirHandler,
 				OutCapacity: 1,
 			}), "unable to register handler")
-
-			createStorage := func(server *storageRESTServer) bool {
-				xl, err := newXLStorage(endpoint, false)
-				if err != nil {
-					// if supported errors don't fail, we proceed to
-					// printing message and moving forward.
-					logFatalErrs(err, endpoint, false)
-					return false
-				}
-				storage := newXLStorageDiskIDCheck(xl, true)
-				storage.SetDiskID(xl.diskID)
-				// We do not have to do SetFormatData() since 'xl'
-				// already captures formatData cached.
-
-				globalLocalDrivesMu.Lock()
-				defer globalLocalDrivesMu.Unlock()
-
-				globalLocalDrives = append(globalLocalDrives, storage)
-				globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
-				return true
-			}
-
-			if createStorage(server) {
-				continue
-			}
-
-			// Start async goroutine to create storage.
-			go func(server *storageRESTServer) {
-				for {
-					time.Sleep(3 * time.Second)
-					if createStorage(server) {
-						return
-					}
-				}
-			}(server)
-
 		}
 	}
 }

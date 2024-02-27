@@ -106,7 +106,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	globalBytePoolCap = bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
 	globalBytePoolCap.Populate()
 
-	var localDrives []StorageAPI
 	local := endpointServerPools.FirstLocal()
 	for i, ep := range endpointServerPools {
 		// If storage class is not set during startup, default values are used
@@ -153,18 +152,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		if deploymentID != "" && bytes.Equal(z.deploymentID[:], []byte{}) {
 			z.deploymentID = uuid.MustParse(deploymentID)
 		}
-
-		for _, storageDisk := range storageDisks[i] {
-			if storageDisk != nil && storageDisk.IsLocal() {
-				localDrives = append(localDrives, storageDisk)
-			}
-		}
-	}
-
-	if !globalIsDistErasure {
-		globalLocalDrivesMu.Lock()
-		globalLocalDrives = localDrives
-		globalLocalDrivesMu.Unlock()
 	}
 
 	z.decommissionCancelers = make([]context.CancelFunc, len(z.serverPools))
@@ -176,7 +163,24 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	z.poolMeta.dontSave = true
 
 	// initialize the object layer.
-	setObjectLayer(z)
+	defer setObjectLayer(z)
+
+	// Enable background operations on
+	//
+	// - Disk auto healing
+	// - MRF (most recently failed) healing
+	// - Background expiration routine for lifecycle policies
+	bootstrapTrace("initAutoHeal", func() {
+		initAutoHeal(GlobalContext, z)
+	})
+
+	bootstrapTrace("initHealMRF", func() {
+		initHealMRF(GlobalContext, z)
+	})
+
+	bootstrapTrace("initBackgroundExpiry", func() {
+		initBackgroundExpiry(GlobalContext, z)
+	})
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	attempt := 1
