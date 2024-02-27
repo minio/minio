@@ -189,7 +189,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	})
 
 	bootstrapTrace("initHealMRF", func() {
-		initHealMRF(GlobalContext, z)
+		go globalMRFState.healRoutine(z)
 	})
 
 	bootstrapTrace("initBackgroundExpiry", func() {

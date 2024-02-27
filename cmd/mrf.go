@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -44,26 +43,7 @@ type partialOperation struct {
 // mrfState sncapsulates all the information
 // related to the global background MRF.
 type mrfState struct {
-	ctx   context.Context
-	pools *erasureServerPools
-
-	mu   sync.RWMutex
 	opCh chan partialOperation
-}
-
-// Initialize healing MRF subsystem
-func (m *mrfState) init(ctx context.Context, objAPI ObjectLayer) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.ctx = ctx
-	m.opCh = make(chan partialOperation, mrfOpsQueueSize)
-
-	var ok bool
-	m.pools, ok = objAPI.(*erasureServerPools)
-	if ok {
-		go m.healRoutine()
-	}
 }
 
 // Add a partial S3 operation (put/delete) when one or more disks are offline.
@@ -71,9 +51,6 @@ func (m *mrfState) addPartialOp(op partialOperation) {
 	if m == nil {
 		return
 	}
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
 
 	select {
 	case m.opCh <- op:
@@ -86,10 +63,10 @@ var healSleeper = newDynamicSleeper(5, time.Second, false)
 // healRoutine listens to new disks reconnection events and
 // issues healing requests for queued objects belonging to the
 // corresponding erasure set
-func (m *mrfState) healRoutine() {
+func (m *mrfState) healRoutine(z *erasureServerPools) {
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-GlobalContext.Done():
 			return
 		case u, ok := <-m.opCh:
 			if !ok {
@@ -115,7 +92,7 @@ func (m *mrfState) healRoutine() {
 				healBucket(u.bucket, scan)
 			} else {
 				if u.allVersions {
-					m.pools.serverPools[u.poolIndex].sets[u.setIndex].listAndHeal(u.bucket, u.object, u.scanMode, healObjectVersionsDisparity)
+					z.serverPools[u.poolIndex].sets[u.setIndex].listAndHeal(u.bucket, u.object, u.scanMode, healObjectVersionsDisparity)
 				} else {
 					healObject(u.bucket, u.object, u.versionID, scan)
 				}
@@ -124,9 +101,4 @@ func (m *mrfState) healRoutine() {
 			wait()
 		}
 	}
-}
-
-// Initialize healing MRF
-func initHealMRF(ctx context.Context, obj ObjectLayer) {
-	globalMRFState.init(ctx, obj)
 }

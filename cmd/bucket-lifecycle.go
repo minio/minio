@@ -145,7 +145,7 @@ func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []Object
 	}
 }
 
-var globalExpiryState *expiryState
+var globalExpiryState = newExpiryState()
 
 func newExpiryState() *expiryState {
 	return &expiryState{
@@ -155,8 +155,6 @@ func newExpiryState() *expiryState {
 }
 
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
-	globalExpiryState = newExpiryState()
-
 	workerSize, _ := strconv.Atoi(env.Get("_MINIO_ILM_EXPIRY_WORKERS", strconv.Itoa((runtime.GOMAXPROCS(0)+1)/2)))
 	if workerSize == 0 {
 		workerSize = 4
@@ -185,6 +183,7 @@ func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
 		}
 		ewk.Wait()
 	}()
+
 	go func() {
 		for t := range globalExpiryState.byNewerNoncurrentCh {
 			nwk.Take()

@@ -102,7 +102,6 @@ func waitForLowHTTPReq() {
 
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
 	// Run the background healer
-	globalBackgroundHealRoutine = newHealRoutine()
 	for i := 0; i < globalBackgroundHealRoutine.workers; i++ {
 		go globalBackgroundHealRoutine.AddWorker(ctx, objAPI)
 	}

@@ -30,7 +30,6 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -372,15 +371,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	globalConnWriteDeadline = ctxt.ConnWriteDeadline
 }
 
-var globalHealStateLK sync.RWMutex
-
 func initAllSubsystems(ctx context.Context) {
-	globalHealStateLK.Lock()
-	// New global heal state
-	globalAllHealState = newHealState(ctx, true)
-	globalBackgroundHealState = newHealState(ctx, false)
-	globalHealStateLK.Unlock()
-
 	// Initialize notification peer targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 

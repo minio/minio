@@ -474,9 +474,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 func healBucket(bucket string, scan madmin.HealScanMode) error {
 	// Get background heal sequence to send elements to heal
-	globalHealStateLK.Lock()
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-	globalHealStateLK.Unlock()
 	if ok {
 		return bgSeq.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket)
 	}
@@ -486,9 +484,7 @@ func healBucket(bucket string, scan madmin.HealScanMode) error {
 // healObject sends the given object/version to the background healing workers
 func healObject(bucket, object, versionID string, scan madmin.HealScanMode) error {
 	// Get background heal sequence to send elements to heal
-	globalHealStateLK.Lock()
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-	globalHealStateLK.Unlock()
 	if ok {
 		return bgSeq.queueHealTask(healSource{
 			bucket:    bucket,

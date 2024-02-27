@@ -39,13 +39,13 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	globalBucketMetadataSys = NewBucketMetadataSys()
 	globalBucketObjectLockSys = &BucketObjectLockSys{}
 	globalBucketVersioningSys = &BucketVersioningSys{}
-	globalExpiryState = newExpiryState()
+	expiryState := newExpiryState()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	expired := make([]ObjectToDelete, 0, 5)
 	go func() {
 		defer wg.Done()
-		for t := range globalExpiryState.byNewerNoncurrentCh {
+		for t := range expiryState.byNewerNoncurrentCh {
 			expired = append(expired, t.versions...)
 		}
 	}()
@@ -116,7 +116,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	for i, fi := range fivs[:2] {
 		wants[i] = fi.ToObjectInfo(bucket, obj, versioned)
 	}
-	gots, err := item.applyNewerNoncurrentVersionLimit(context.TODO(), objAPI, fivs)
+	gots, err := item.applyNewerNoncurrentVersionLimit(context.TODO(), objAPI, fivs, expiryState)
 	if err != nil {
 		t.Fatalf("Failed with err: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	}
 
 	// Close expiry state's channel to inspect object versions enqueued for expiration
-	close(globalExpiryState.byNewerNoncurrentCh)
+	close(expiryState.byNewerNoncurrentCh)
 	wg.Wait()
 	for _, obj := range expired {
 		switch obj.ObjectV.VersionID {
