@@ -106,7 +106,7 @@ func TestInvalidExpiration(t *testing.T) {
 									<Date>2019-04-20T00:00:00Z</Date>
 			            <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
                                     </Expiration>`,
-			expectedErr: nil,
+			expectedErr: errLifecycleInvalidDeleteAll,
 		},
 	}
 	for i, tc := range validationTestCases {

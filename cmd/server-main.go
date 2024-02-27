@@ -679,6 +679,15 @@ func serverMain(ctx *cli.Context) {
 
 	setDefaultProfilerRates()
 
+	// Initialize globalConsoleSys system
+	bootstrapTrace("newConsoleLogger", func() {
+		globalConsoleSys = NewConsoleLogger(GlobalContext)
+		logger.AddSystemTarget(GlobalContext, globalConsoleSys)
+
+		// Set node name, only set for distributed setup.
+		globalConsoleSys.SetNodeName(globalLocalNodeName)
+	})
+
 	// Always load ENV variables from files first.
 	loadEnvVarsFromFiles()
 
@@ -699,15 +708,6 @@ func serverMain(ctx *cli.Context) {
 	// Load the root credentials from the shell environment or from
 	// the config file if not defined, set the default one.
 	loadRootCredentials()
-
-	// Initialize globalConsoleSys system
-	bootstrapTrace("newConsoleLogger", func() {
-		globalConsoleSys = NewConsoleLogger(GlobalContext)
-		logger.AddSystemTarget(GlobalContext, globalConsoleSys)
-
-		// Set node name, only set for distributed setup.
-		globalConsoleSys.SetNodeName(globalLocalNodeName)
-	})
 
 	// Perform any self-tests
 	bootstrapTrace("selftests", func() {

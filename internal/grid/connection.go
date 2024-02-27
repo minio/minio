@@ -531,10 +531,11 @@ func (c *Connection) shouldConnect() bool {
 	return h0 < h1
 }
 
-func (c *Connection) send(msg []byte) error {
+func (c *Connection) send(ctx context.Context, msg []byte) error {
 	select {
-	case <-c.ctx.Done():
-		return context.Cause(c.ctx)
+	case <-ctx.Done():
+		// Returning error here is too noisy.
+		return nil
 	case c.outQueue <- msg:
 		return nil
 	}
@@ -570,7 +571,7 @@ func (c *Connection) queueMsg(msg message, payload sender) error {
 		h := xxh3.Hash(dst)
 		dst = binary.LittleEndian.AppendUint32(dst, uint32(h))
 	}
-	return c.send(dst)
+	return c.send(c.ctx, dst)
 }
 
 // sendMsg will send

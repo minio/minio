@@ -529,16 +529,26 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			len(existingFolders)+len(newFolders) >= dataScannerCompactAtFolders ||
 			len(existingFolders)+len(newFolders) >= dataScannerForceCompactAtFolders
 
-		if len(existingFolders)+len(newFolders) > int(scannerExcessFolders.Load()) {
+		if totalFolders := len(existingFolders) + len(newFolders); totalFolders > int(scannerExcessFolders.Load()) {
+			prefixName := strings.TrimSuffix(folder.name, "/") + "/"
 			sendEvent(eventArgs{
 				EventName:  event.PrefixManyFolders,
 				BucketName: f.root,
 				Object: ObjectInfo{
-					Name: strings.TrimSuffix(folder.name, "/") + "/",
-					Size: int64(len(existingFolders) + len(newFolders)),
+					Name: prefixName,
+					Size: int64(totalFolders),
 				},
-				UserAgent: "scanner",
+				UserAgent: "Scanner",
 				Host:      globalMinioHost,
+			})
+			auditLogInternal(context.Background(), AuditLogOptions{
+				Event:   "scanner:manyprefixes",
+				APIName: "Scanner",
+				Bucket:  f.root,
+				Object:  prefixName,
+				Tags: map[string]interface{}{
+					"x-minio-prefixes-total": strconv.Itoa(totalFolders),
+				},
 			})
 		}
 		if !into.Compacted && shouldCompact {
@@ -953,15 +963,6 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q Initial scan: %v\n", i.objectPath(), lcEvt.Action)
 		}
 	}
-	defer func() {
-		if lcEvt.Action != lifecycle.NoneAction {
-			numVersions := uint64(1)
-			if lcEvt.Action == lifecycle.DeleteAllVersionsAction {
-				numVersions = uint64(oi.NumVersions)
-			}
-			globalScannerMetrics.timeILM(lcEvt.Action)(numVersions)
-		}
-	}()
 
 	switch lcEvt.Action {
 	// This version doesn't contribute towards sizeS only when it is permanently deleted.
@@ -1107,18 +1108,18 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			Object: ObjectInfo{
 				Name: i.objectPath(),
 			},
-			UserAgent:    "Internal: [Scanner]",
+			UserAgent:    "Scanner",
 			Host:         globalLocalNodeName,
-			RespElements: map[string]string{"x-minio-versions": strconv.Itoa(len(fivs))},
+			RespElements: map[string]string{"x-minio-versions": strconv.Itoa(len(objInfos))},
 		})
 
 		auditLogInternal(context.Background(), AuditLogOptions{
 			Event:   "scanner:manyversions",
-			APIName: ILMExpiry,
+			APIName: "Scanner",
 			Bucket:  i.bucket,
 			Object:  i.objectPath(),
 			Tags: map[string]interface{}{
-				"x-minio-versions": strconv.Itoa(len(fivs)),
+				"x-minio-versions": strconv.Itoa(len(objInfos)),
 			},
 		})
 	}
@@ -1218,7 +1219,17 @@ func applyTransitionRule(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) 
 }
 
 func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) bool {
-	if err := expireTransitionedObject(ctx, objLayer, &obj, obj.ToLifecycleOpts(), lcEvent, src); err != nil {
+	var err error
+	defer func() {
+		if err != nil {
+			return
+		}
+		// Note: DeleteAllVersions action is not supported for
+		// transitioned objects
+		globalScannerMetrics.timeILM(lcEvent.Action)(1)
+	}()
+
+	if err = expireTransitionedObject(ctx, objLayer, &obj, lcEvent, src); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
@@ -1245,8 +1256,25 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	if lcEvent.Action.DeleteAll() {
 		opts.DeletePrefix = true
 	}
+	var (
+		dobj ObjectInfo
+		err  error
+	)
+	defer func() {
+		if err != nil {
+			return
+		}
 
-	dobj, err := objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
+		if lcEvent.Action != lifecycle.NoneAction {
+			numVersions := uint64(1)
+			if lcEvent.Action == lifecycle.DeleteAllVersionsAction {
+				numVersions = uint64(obj.NumVersions)
+			}
+			globalScannerMetrics.timeILM(lcEvent.Action)(numVersions)
+		}
+	}()
+
+	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false

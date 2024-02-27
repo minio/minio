@@ -315,7 +315,8 @@ var (
 	// Time when the server is started
 	globalBootTime = UTCNow()
 
-	globalActiveCred auth.Credentials
+	globalActiveCred         auth.Credentials
+	globalSiteReplicatorCred siteReplicatorCred
 
 	// Captures if root credentials are set via ENV.
 	globalCredViaEnv bool

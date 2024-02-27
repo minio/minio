@@ -567,13 +567,6 @@ func (endpoints Endpoints) GetAllStrings() (all []string) {
 func hostResolveToLocalhost(endpoint Endpoint) bool {
 	hostIPs, err := getHostIP(endpoint.Hostname())
 	if err != nil {
-		// Log the message to console about the host resolving
-		reqInfo := (&logger.ReqInfo{}).AppendTags(
-			"host",
-			endpoint.Hostname(),
-		)
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.ErrorKind)
 		return false
 	}
 	var loopback int
@@ -867,7 +860,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.ErrorKind)
+							logger.LogOnceIf(ctx, fmt.Errorf("Unable to resolve DNS for %s: %w", endpoint, err), endpoint.Hostname(), logger.ErrorKind)
 						}
 					} else {
 						resolvedList[endpoint] = true

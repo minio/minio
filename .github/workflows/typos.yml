@@ -1,0 +1,15 @@
+---
+name: Test GitHub Action
+on: [pull_request]
+
+jobs:
+  run:
+    name: Spell Check with Typos
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Actions Repository
+      uses: actions/checkout@v4
+
+    - name: Check spelling of repo
+      uses: crate-ci/typos@master
+

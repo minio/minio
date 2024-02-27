@@ -43,6 +43,7 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -112,7 +113,7 @@ type xlStorage struct {
 	formatLegacy    bool
 	formatLastCheck time.Time
 
-	diskInfoCache timedValue
+	diskInfoCache *cachevalue.Cache[DiskInfo]
 	sync.RWMutex
 
 	formatData []byte
@@ -230,12 +231,13 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 // Initialize a new storage disk.
 func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	s = &xlStorage{
-		drivePath:  ep.Path,
-		endpoint:   ep,
-		globalSync: globalFSOSync,
-		poolIndex:  -1,
-		setIndex:   -1,
-		diskIndex:  -1,
+		drivePath:     ep.Path,
+		endpoint:      ep,
+		globalSync:    globalFSOSync,
+		diskInfoCache: cachevalue.New[DiskInfo](),
+		poolIndex:     -1,
+		setIndex:      -1,
+		diskIndex:     -1,
 	}
 
 	s.drivePath, err = getValidPath(ep.Path)
@@ -732,7 +734,7 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
 	s.diskInfoCache.Once.Do(func() {
 		s.diskInfoCache.TTL = time.Second
-		s.diskInfoCache.Update = func() (interface{}, error) {
+		s.diskInfoCache.Update = func() (DiskInfo, error) {
 			dcinfo := DiskInfo{}
 			di, err := getDiskInfo(s.drivePath)
 			if err != nil {
@@ -758,11 +760,7 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInf
 		}
 	})
 
-	v, err := s.diskInfoCache.Get()
-	if v != nil {
-		info = v.(DiskInfo)
-	}
-
+	info, err = s.diskInfoCache.Get()
 	info.MountPath = s.drivePath
 	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1
@@ -1186,7 +1184,7 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 	}
 
 	// ENOSPC is a valid error from rename(); remove instead of rename in that case
-	if err == errDiskFull {
+	if errors.Is(err, errDiskFull) || isSysErrNoSpace(err) {
 		if recursive {
 			err = removeAll(filePath)
 		} else {
@@ -1702,7 +1700,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, f
 	}
 
 	if discard {
-		// This discard is mostly true for DELETEs
+		// This discard is mostly true for DELETEEs
 		// so we need to make sure we do not keep
 		// page-cache references after.
 		defer disk.Fdatasync(f)
@@ -2617,67 +2615,53 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	defer metaDataPoolPut(dstBuf)
 	if err != nil {
 		if legacyPreserved {
-			// Any failed rename calls un-roll previous transaction.
 			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 		}
 		return 0, errFileCorrupt
 	}
 
-	if srcDataPath != "" {
-		if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
-			if legacyPreserved {
-				// Any failed rename calls un-roll previous transaction.
-				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-			}
-			return 0, osErrToFileErr(err)
+	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), dstBuf); err != nil {
+		if legacyPreserved {
+			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 		}
-		diskHealthCheckOK(ctx, err)
+		return 0, osErrToFileErr(err)
+	}
+	diskHealthCheckOK(ctx, err)
 
+	if srcDataPath != "" && len(fi.Data) == 0 && fi.Size > 0 {
 		// renameAll only for objects that have xl.meta not saved inline.
-		if len(fi.Data) == 0 && fi.Size > 0 {
-			s.moveToTrash(dstDataPath, true, false)
-			if healing {
-				// If we are healing we should purge any legacyDataPath content,
-				// that was previously preserved during PutObject() call
-				// on a versioned bucket.
-				s.moveToTrash(legacyDataPath, true, false)
-			}
-			if err = renameAll(srcDataPath, dstDataPath, dstVolumeDir); err != nil {
-				if legacyPreserved {
-					// Any failed rename calls un-roll previous transaction.
-					s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-				}
-				s.deleteFile(dstVolumeDir, dstDataPath, false, false)
-				return 0, osErrToFileErr(err)
-			}
+		s.moveToTrash(dstDataPath, true, false)
+		if healing {
+			// If we are healing we should purge any legacyDataPath content,
+			// that was previously preserved during PutObject() call
+			// on a versioned bucket.
+			s.moveToTrash(legacyDataPath, true, false)
 		}
-
-		// Commit meta-file
-		if err = renameAll(srcFilePath, dstFilePath, dstVolumeDir); err != nil {
+		if err = renameAll(srcDataPath, dstDataPath, dstVolumeDir); err != nil {
 			if legacyPreserved {
 				// Any failed rename calls un-roll previous transaction.
 				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 			}
-			s.deleteFile(dstVolumeDir, dstFilePath, false, false)
+			s.deleteFile(dstVolumeDir, dstDataPath, false, false)
 			return 0, osErrToFileErr(err)
 		}
+	}
 
-		// additionally only purge older data at the end of the transaction of new data-dir
-		// movement, this is to ensure that previous data references can co-exist for
-		// any recoverability.
-		if oldDstDataPath != "" {
-			s.moveToTrash(oldDstDataPath, true, false)
+	// Commit meta-file
+	if err = renameAll(srcFilePath, dstFilePath, dstVolumeDir); err != nil {
+		if legacyPreserved {
+			// Any failed rename calls un-roll previous transaction.
+			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
 		}
-	} else {
-		// Write meta-file directly, no data
-		if err = s.WriteAll(ctx, dstVolume, pathJoin(dstPath, xlStorageFormatFile), dstBuf); err != nil {
-			if legacyPreserved {
-				// Any failed rename calls un-roll previous transaction.
-				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-			}
-			s.deleteFile(dstVolumeDir, dstFilePath, false, false)
-			return 0, err
-		}
+		s.deleteFile(dstVolumeDir, dstDataPath, false, false)
+		return 0, osErrToFileErr(err)
+	}
+
+	// additionally only purge older data at the end of the transaction of new data-dir
+	// movement, this is to ensure that previous data references can co-exist for
+	// any recoverability.
+	if oldDstDataPath != "" {
+		s.moveToTrash(oldDstDataPath, true, false)
 	}
 
 	if srcVolume != minioMetaMultipartBucket {
@@ -2883,14 +2867,22 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 		if req.MaxSize > 0 && int64(len(data)) > req.MaxSize {
 			r.Exists = true
 			r.Error = fmt.Sprintf("max size (%d) exceeded: %d", req.MaxSize, len(data))
-			resp <- r
-			continue
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case resp <- r:
+				continue
+			}
 		}
 		found++
 		r.Exists = true
 		r.Data = data
 		r.Modtime = mt
-		resp <- r
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case resp <- r:
+		}
 		if req.MaxResults > 0 && found >= req.MaxResults {
 			return nil
 		}

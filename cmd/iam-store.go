@@ -1863,7 +1863,12 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 		if cred.IsServiceAccount() {
 			claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, cred.SecretKey)
 		} else if cred.IsTemp() {
-			claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, globalActiveCred.SecretKey)
+			var secretKey string
+			secretKey, err = getTokenSigningKey()
+			if err != nil {
+				continue
+			}
+			claims, err = getClaimsFromTokenWithSecret(cred.SessionToken, secretKey)
 		}
 
 		if err != nil {
@@ -2528,8 +2533,12 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {
 	jwtClaims, err := auth.ExtractClaims(u.Credentials.SessionToken, u.Credentials.SecretKey)
 	if err != nil {
-		// Session tokens for STS creds will be generated with root secret
-		jwtClaims, err = auth.ExtractClaims(u.Credentials.SessionToken, globalActiveCred.SecretKey)
+		secretKey, err := getTokenSigningKey()
+		if err != nil {
+			return nil, err
+		}
+		// Session tokens for STS creds will be generated with root secret or site-replicator-0 secret
+		jwtClaims, err = auth.ExtractClaims(u.Credentials.SessionToken, secretKey)
 		if err != nil {
 			return nil, err
 		}

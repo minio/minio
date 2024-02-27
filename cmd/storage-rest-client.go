@@ -31,10 +31,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -156,15 +156,14 @@ func toStorageErr(err error) error {
 
 // Abstracts a remote disk.
 type storageRESTClient struct {
-	// Indicate of NSScanner is in progress in this disk
-	scanning int32
-
 	endpoint    Endpoint
 	restClient  *rest.Client
 	gridConn    *grid.Subroute
 	diskID      string
 	formatData  []byte
 	formatMutex sync.RWMutex
+
+	diskInfoCache *cachevalue.Cache[DiskInfo]
 
 	// Indexes, will be -1 until assigned a set.
 	poolIndex, setIndex, diskIndex int
@@ -233,8 +232,6 @@ func (client *storageRESTClient) Healing() *healingTracker {
 }
 
 func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageCache, updates chan<- dataUsageEntry, scanMode madmin.HealScanMode, _ func() bool) (dataUsageCache, error) {
-	atomic.AddInt32(&client.scanning, 1)
-	defer atomic.AddInt32(&client.scanning, -1)
 	defer xioutil.SafeClose(updates)
 
 	st, err := storageNSScannerRPC.Call(ctx, client.gridConn, &nsScannerOptions{
@@ -306,21 +303,46 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		// transport is already down.
 		return info, errDiskNotFound
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 
-	opts.DiskID = client.diskID
+	// if 'NoOp' we do not cache the value.
+	if opts.NoOp {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-	infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &opts)
-	if err != nil {
-		return info, toStorageErr(err)
-	}
-	info = *infop
-	if info.Error != "" {
-		return info, toStorageErr(errors.New(info.Error))
-	}
-	info.Scanning = atomic.LoadInt32(&client.scanning) == 1
-	return info, nil
+		opts.DiskID = client.diskID
+
+		infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &opts)
+		if err != nil {
+			return info, toStorageErr(err)
+		}
+		info = *infop
+		if info.Error != "" {
+			return info, toStorageErr(errors.New(info.Error))
+		}
+		return info, nil
+	} // In all other cases cache the value upto 1sec.
+
+	client.diskInfoCache.Once.Do(func() {
+		client.diskInfoCache.TTL = time.Second
+		client.diskInfoCache.CacheError = true
+		client.diskInfoCache.Update = func() (info DiskInfo, err error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			nopts := DiskInfoOptions{DiskID: client.diskID, Metrics: true}
+			infop, err := storageDiskInfoRPC.Call(ctx, client.gridConn, &nopts)
+			if err != nil {
+				return info, toStorageErr(err)
+			}
+			info = *infop
+			if info.Error != "" {
+				return info, toStorageErr(errors.New(info.Error))
+			}
+			return info, nil
+		}
+	})
+
+	return client.diskInfoCache.Get()
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -863,6 +885,7 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 	}
 	return &storageRESTClient{
 		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
-		gridConn: conn,
+		gridConn:      conn,
+		diskInfoCache: cachevalue.New[DiskInfo](),
 	}, nil
 }

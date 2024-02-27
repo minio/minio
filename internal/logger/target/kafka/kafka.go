@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -78,44 +77,6 @@ type Config struct {
 	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
 }
 
-func (h *Target) pingBrokers() (err error) {
-	d := net.Dialer{Timeout: 1 * time.Second}
-
-	errs := make([]error, len(h.kconfig.Brokers))
-	var wg sync.WaitGroup
-	for idx, broker := range h.kconfig.Brokers {
-		broker := broker
-		idx := idx
-		wg.Add(1)
-		go func(broker xnet.Host, idx int) {
-			defer wg.Done()
-			conn, ok := h.brokerConns[broker.String()]
-			if !ok || conn == nil {
-				conn, errs[idx] = d.Dial("tcp", broker.String())
-				if errs[idx] != nil {
-					return
-				}
-				h.brokerConns[broker.String()] = conn
-			}
-			if _, errs[idx] = conn.Write([]byte("")); errs[idx] != nil {
-				conn.Close()
-				h.brokerConns[broker.String()] = nil
-			}
-		}(broker, idx)
-	}
-	wg.Wait()
-
-	var retErr error
-	for _, err := range errs {
-		if err == nil {
-			// if one of them is active we are good.
-			return nil
-		}
-		retErr = err
-	}
-	return retErr
-}
-
 // Target - Kafka target.
 type Target struct {
 	status int32
@@ -139,10 +100,10 @@ type Target struct {
 	initKafkaOnce      once.Init
 	initQueueStoreOnce once.Init
 
-	producer    sarama.SyncProducer
-	kconfig     Config
-	config      *sarama.Config
-	brokerConns map[string]net.Conn
+	client   sarama.Client
+	producer sarama.SyncProducer
+	kconfig  Config
+	config   *sarama.Config
 }
 
 func (h *Target) validate() error {
@@ -202,7 +163,7 @@ func (h *Target) Init(ctx context.Context) error {
 	if err := h.init(); err != nil {
 		return err
 	}
-	go h.startKakfaLogger()
+	go h.startKafkaLogger()
 	return nil
 }
 
@@ -220,7 +181,7 @@ func (h *Target) initQueueStore(ctx context.Context) (err error) {
 	return
 }
 
-func (h *Target) startKakfaLogger() {
+func (h *Target) startKafkaLogger() {
 	h.logChMu.RLock()
 	logCh := h.logCh
 	if logCh != nil {
@@ -273,10 +234,6 @@ func (h *Target) send(entry interface{}) error {
 
 // Init initialize kafka target
 func (h *Target) init() error {
-	if err := h.pingBrokers(); err != nil {
-		return err
-	}
-
 	sconfig := sarama.NewConfig()
 	if h.kconfig.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(h.kconfig.Version)
@@ -325,13 +282,23 @@ func (h *Target) init() error {
 		brokers = append(brokers, broker.String())
 	}
 
-	producer, err := sarama.NewSyncProducer(brokers, sconfig)
+	client, err := sarama.NewClient(brokers, sconfig)
 	if err != nil {
 		return err
 	}
 
+	producer, err := sarama.NewSyncProducerFromClient(client)
+	if err != nil {
+		return err
+	}
+	h.client = client
 	h.producer = producer
-	atomic.StoreInt32(&h.status, statusOnline)
+
+	if len(h.client.Brokers()) > 0 {
+		// Refer https://github.com/IBM/sarama/issues/1341
+		atomic.StoreInt32(&h.status, statusOnline)
+	}
+
 	return nil
 }
 
@@ -409,12 +376,7 @@ func (h *Target) Cancel() {
 
 	if h.producer != nil {
 		h.producer.Close()
-	}
-
-	for _, conn := range h.brokerConns {
-		if conn != nil {
-			conn.Close()
-		}
+		h.client.Close()
 	}
 
 	// Wait for messages to be sent...
@@ -425,10 +387,9 @@ func (h *Target) Cancel() {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	target := &Target{
-		logCh:       make(chan interface{}, config.QueueSize),
-		kconfig:     config,
-		status:      statusOffline,
-		brokerConns: make(map[string]net.Conn, len(config.Brokers)),
+		logCh:   make(chan interface{}, config.QueueSize),
+		kconfig: config,
+		status:  statusOffline,
 	}
 	return target
 }
