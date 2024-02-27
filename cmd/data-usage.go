@@ -77,13 +77,10 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 
 	cache := dataUsageCache{}
 
-	prefixUsageCache.Once.Do(func() {
-		prefixUsageCache.TTL = 30 * time.Second
-
+	prefixUsageCache.InitOnce(30*time.Second,
 		// No need to fail upon Update() error, fallback to old value.
-		prefixUsageCache.ReturnLastGood = true
-		prefixUsageCache.NoWait = true
-		prefixUsageCache.Update = func() (map[string]uint64, error) {
+		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
+		func() (map[string]uint64, error) {
 			m := make(map[string]uint64)
 			for _, pool := range z.serverPools {
 				for _, er := range pool.sets {
@@ -108,8 +105,8 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 				}
 			}
 			return m, nil
-		}
-	})
+		},
+	)
 
 	return prefixUsageCache.Get()
 }

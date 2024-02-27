@@ -354,12 +354,10 @@ type MetricsGroupOpts struct {
 
 // RegisterRead register the metrics populator function to be used
 // to populate new values upon cache invalidation.
-func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
-	g.metricsCache = cachevalue.New[[]Metric]()
-	g.metricsCache.Once.Do(func() {
-		g.metricsCache.ReturnLastGood = true
-		g.metricsCache.TTL = g.cacheInterval
-		g.metricsCache.Update = func() ([]Metric, error) {
+func (g *MetricsGroup) RegisterRead(read func(context.Context) []Metric) {
+	g.metricsCache = cachevalue.NewFromFunc(g.cacheInterval,
+		cachevalue.Opts{ReturnLastGood: true},
+		func() ([]Metric, error) {
 			if g.metricsGroupOpts.dependGlobalObjectAPI {
 				objLayer := newObjectLayerFn()
 				// Service not initialized yet
@@ -418,8 +416,8 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 				}
 			}
 			return read(GlobalContext), nil
-		}
-	})
+		},
+	)
 }
 
 func (m *Metric) clone() Metric {
