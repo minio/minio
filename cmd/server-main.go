@@ -814,27 +814,6 @@ func serverMain(ctx *cli.Context) {
 		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
 	}
 
-	bootstrapTrace("newSharedLock", func() {
-		globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
-	})
-
-	// Enable background operations on
-	//
-	// - Disk auto healing
-	// - MRF (most recently failed) healing
-	// - Background expiration routine for lifecycle policies
-	bootstrapTrace("initAutoHeal", func() {
-		initAutoHeal(GlobalContext, newObject)
-	})
-
-	bootstrapTrace("initHealMRF", func() {
-		initHealMRF(GlobalContext, newObject)
-	})
-
-	bootstrapTrace("initBackgroundExpiry", func() {
-		initBackgroundExpiry(GlobalContext, newObject)
-	})
-
 	var err error
 	bootstrapTrace("initServerConfig", func() {
 		if err = initServerConfig(GlobalContext, newObject); err != nil {

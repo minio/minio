@@ -376,26 +376,8 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 var newDiskHealingTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 
 func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint) error {
-	disk, format, _, err := connectEndpoint(endpoint)
-	if err != nil {
-		return fmt.Errorf("Error: %w, %s", err, endpoint)
-	}
-	defer disk.Close()
-	poolIdx := globalEndpoints.GetLocalPoolIdx(disk.Endpoint())
-	if poolIdx < 0 {
-		return fmt.Errorf("unexpected pool index (%d) found for %s", poolIdx, disk.Endpoint())
-	}
-
-	// Calculate the set index where the current endpoint belongs
-	z.serverPools[poolIdx].erasureDisksMu.RLock()
-	setIdx, _, err := findDiskIndex(z.serverPools[poolIdx].format, format)
-	z.serverPools[poolIdx].erasureDisksMu.RUnlock()
-	if err != nil {
-		return err
-	}
-	if setIdx < 0 {
-		return fmt.Errorf("unexpected set index (%d) found for  %s", setIdx, disk.Endpoint())
-	}
+	poolIdx, setIdx := endpoint.PoolIdx, endpoint.SetIdx
+	disk := getStorageViaEndpoint(endpoint)
 
 	// Prevent parallel erasure set healing
 	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-drive-healing/%d/%d", poolIdx, setIdx))
