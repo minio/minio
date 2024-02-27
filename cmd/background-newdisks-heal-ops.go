@@ -87,6 +87,8 @@ type healingTracker struct {
 	// ID of the current healing operation
 	HealID string
 
+	ItemsSkipped uint64
+	BytesSkipped uint64
 	// Add future tracking capabilities
 	// Be sure that they are included in toHealingDisk
 }
@@ -175,14 +177,18 @@ func (h *healingTracker) setObject(object string) {
 	h.Object = object
 }
 
-func (h *healingTracker) updateProgress(success bool, bytes uint64) {
+func (h *healingTracker) updateProgress(success, skipped bool, bytes uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if success {
+	switch {
+	case success:
 		h.ItemsHealed++
 		h.BytesDone += bytes
-	} else {
+	case skipped:
+		h.ItemsSkipped++
+		h.BytesSkipped += bytes
+	default:
 		h.ItemsFailed++
 		h.BytesFailed += bytes
 	}
@@ -323,8 +329,10 @@ func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
 		ObjectsTotalCount: h.ObjectsTotalCount,
 		ObjectsTotalSize:  h.ObjectsTotalSize,
 		ItemsHealed:       h.ItemsHealed,
+		ItemsSkipped:      h.ItemsSkipped,
 		ItemsFailed:       h.ItemsFailed,
 		BytesDone:         h.BytesDone,
+		BytesSkipped:      h.BytesSkipped,
 		BytesFailed:       h.BytesFailed,
 		Bucket:            h.Bucket,
 		Object:            h.Object,
@@ -459,11 +467,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		return err
 	}
 
-	if tracker.ItemsFailed > 0 {
-		logger.Event(ctx, "Healing of drive '%s' failed (healed: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsFailed)
-	} else {
-		logger.Event(ctx, "Healing of drive '%s' complete (healed: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsFailed)
-	}
+	logger.Event(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
 
 	if len(tracker.QueuedBuckets) > 0 {
 		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)

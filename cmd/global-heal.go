@@ -236,6 +236,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		type healEntryResult struct {
 			bytes     uint64
 			success   bool
+			skipped   bool
 			entryDone bool
 			name      string
 		}
@@ -254,6 +255,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		healEntryFailure := func(sz uint64) healEntryResult {
 			return healEntryResult{
 				bytes: sz,
+			}
+		}
+		healEntrySkipped := func(sz uint64) healEntryResult {
+			return healEntryResult{
+				bytes:   sz,
+				skipped: true,
 			}
 		}
 
@@ -289,13 +296,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					continue
 				}
 
-				tracker.updateProgress(res.success, res.bytes)
+				tracker.updateProgress(res.success, res.skipped, res.bytes)
 			}
 		}()
 
 		send := func(result healEntryResult) bool {
 			select {
 			case <-ctx.Done():
+				if !contextCanceled(ctx) {
+					logger.LogIf(ctx, ctx.Err())
+				}
 				return false
 			case results <- result:
 				return true
@@ -367,6 +377,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bucket, version.Name, version) {
 					versionNotFound++
+					if !send(healEntrySkipped(uint64(version.Size))) {
+						return
+					}
 					continue
 				}
 
