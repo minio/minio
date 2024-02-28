@@ -752,9 +752,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	pReader := NewPutObjReader(hashReader)
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
+	_, replicationStatus := mi.UserDefined[xhttp.AmzBucketReplicationStatus]
 	var objectEncryptionKey crypto.ObjectKey
 	if isEncrypted {
-		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
+		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) && !replicationStatus {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL)
 			return
 		}
@@ -774,52 +775,54 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 		}
 
-		// Calculating object encryption key
-		key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		copy(objectEncryptionKey[:], key)
+		if !replicationStatus {
+			// Calculating object encryption key
+			key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			copy(objectEncryptionKey[:], key)
 
-		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-		in := io.Reader(hashReader)
-		if size > encryptBufferThreshold {
-			// The encryption reads in blocks of 64KB.
-			// We add a buffer on bigger files to reduce the number of syscalls upstream.
-			in = bufio.NewReaderSize(hashReader, encryptBufferSize)
-		}
-		reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		wantSize := int64(-1)
-		if size >= 0 {
-			info := ObjectInfo{Size: size}
-			wantSize = info.EncryptedSize()
-		}
-		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(ctx, etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		if err := hashReader.AddChecksum(r, true); err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
-			return
-		}
+			partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
+			in := io.Reader(hashReader)
+			if size > encryptBufferThreshold {
+				// The encryption reads in blocks of 64KB.
+				// We add a buffer on bigger files to reduce the number of syscalls upstream.
+				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
+			}
+			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			wantSize := int64(-1)
+			if size >= 0 {
+				info := ObjectInfo{Size: size}
+				wantSize = info.EncryptedSize()
+			}
+			// do not try to verify encrypted content
+			hashReader, err = hash.NewReader(ctx, etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			if err := hashReader.AddChecksum(r, true); err != nil {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+				return
+			}
 
-		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
 
-		if idxCb != nil {
-			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
+			if idxCb != nil {
+				idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
+			}
+			opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 		}
-		opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 	}
 	opts.IndexCB = idxCb
 
