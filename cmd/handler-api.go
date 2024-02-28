@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,7 +71,7 @@ func cgroupMemLimit() (limit uint64) {
 	if err != nil {
 		return 0
 	}
-	limit, err = strconv.ParseUint(string(buf), 10, 64)
+	limit, err = strconv.ParseUint(strings.TrimSpace(string(buf)), 10, 64)
 	if err != nil {
 		// The kernel can return valid but non integer values
 		// but still, no need to interpret more
