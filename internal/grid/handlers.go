@@ -109,6 +109,7 @@ const (
 	HandlerGetLastDayTierStats
 	HandlerSignalService
 	HandlerGetBandwidth
+	HandlerWriteAll
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -141,6 +142,7 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerRenameData:                  storagePrefix,
 	HandlerRenameFile:                  storagePrefix,
 	HandlerReadAll:                     storagePrefix,
+	HandlerWriteAll:                    storagePrefix,
 	HandlerServerVerify:                bootstrapPrefix,
 	HandlerTrace:                       peerPrefix,
 	HandlerListen:                      peerPrefix,

@@ -436,6 +436,14 @@ type ReadAllHandlerParams struct {
 	FilePath string `msg:"fp"`
 }
 
+// WriteAllHandlerParams are parameters for WriteAllHandler.
+type WriteAllHandlerParams struct {
+	DiskID   string `msg:"id"`
+	Volume   string `msg:"v"`
+	FilePath string `msg:"fp"`
+	Buf      []byte `msg:"b"`
+}
+
 // RenameDataResp - RenameData()'s response.
 type RenameDataResp struct {
 	Signature uint64 `msg:"sig"`

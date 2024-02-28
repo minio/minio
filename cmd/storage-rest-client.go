@@ -205,7 +205,7 @@ func (client *storageRESTClient) String() string {
 
 // IsOnline - returns whether RPC client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
-	return client.restClient.IsOnline() && client.gridConn.State() == grid.StateConnected
+	return client.gridConn.State() == grid.StateConnected
 }
 
 // LastConn - returns when the disk is seen to be connected the last time
@@ -295,7 +295,7 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOptions) (info DiskInfo, err error) {
-	if client.gridConn.State() != grid.StateConnected {
+	if !client.IsOnline() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
 		// were attempted. This can lead to false success under certain conditions
@@ -442,12 +442,19 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 
 // WriteAll - write all data to a file.
 func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, path string, b []byte) error {
-	values := make(url.Values)
-	values.Set(storageRESTVolume, volume)
-	values.Set(storageRESTFilePath, path)
-	respBody, err := client.call(ctx, storageRESTMethodWriteAll, values, bytes.NewBuffer(b), int64(len(b)))
-	defer xhttp.DrainBody(respBody)
-	return err
+	// Specific optimization to avoid re-read from the drives for `format.json`
+	// in-case the caller is a network operation.
+	if volume == minioMetaBucket && path == formatConfigFile {
+		client.SetFormatData(b)
+	}
+
+	_, err := storageWriteAllRPC.Call(ctx, client.gridConn, &WriteAllHandlerParams{
+		DiskID:   client.diskID,
+		Volume:   volume,
+		FilePath: path,
+		Buf:      b,
+	})
+	return toStorageErr(err)
 }
 
 // CheckParts - stat all file parts.
@@ -883,7 +890,8 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 		return nil, fmt.Errorf("unable to find connection for %s in targets: %v", endpoint.GridHost(), gm.Targets())
 	}
 	return &storageRESTClient{
-		endpoint: endpoint, restClient: restClient, poolIndex: -1, setIndex: -1, diskIndex: -1,
+		endpoint:      endpoint,
+		restClient:    restClient,
 		gridConn:      conn,
 		diskInfoCache: cachevalue.New[DiskInfo](),
 	}, nil

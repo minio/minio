@@ -581,7 +581,12 @@ func setGlobalInternodeInterface(interfaceName string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
 
-				haddrs, err := globalDNSCache.LookupHost(ctx, host)
+				lookupHost := globalDNSCache.LookupHost
+				if IsKubernetes() || IsDocker() {
+					lookupHost = net.DefaultResolver.LookupHost
+				}
+
+				haddrs, err := lookupHost(ctx, host)
 				if err == nil {
 					ip = haddrs[0]
 				}
@@ -619,7 +624,12 @@ func getServerListenAddrs() []string {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		haddrs, err := globalDNSCache.LookupHost(ctx, host)
+		lookupHost := globalDNSCache.LookupHost
+		if IsKubernetes() || IsDocker() {
+			lookupHost = net.DefaultResolver.LookupHost
+		}
+
+		haddrs, err := lookupHost(ctx, host)
 		if err == nil {
 			for _, addr := range haddrs {
 				addrs.Add(net.JoinHostPort(addr, globalMinioPort))
