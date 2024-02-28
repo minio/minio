@@ -174,7 +174,7 @@ func (c ContextDialer) DialContext(ctx context.Context, network, address string)
 }
 
 const (
-	defaultOutQueue    = 10000
+	defaultOutQueue    = 65535    // kind of close to max open fds per user
 	readBufferSize     = 32 << 10 // 32 KiB is the most optimal on Linux
 	writeBufferSize    = 32 << 10 // 32 KiB is the most optimal on Linux
 	defaultDialTimeout = 2 * time.Second
