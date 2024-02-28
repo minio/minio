@@ -386,6 +386,9 @@ var newDiskHealingTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint) error {
 	poolIdx, setIdx := endpoint.PoolIdx, endpoint.SetIdx
 	disk := getStorageViaEndpoint(endpoint)
+	if disk == nil {
+		return fmt.Errorf("Unexpected error disk must be initialized by now after formatting: %s", endpoint)
+	}
 
 	// Prevent parallel erasure set healing
 	locker := z.NewNSLock(minioMetaBucket, fmt.Sprintf("new-drive-healing/%d/%d", poolIdx, setIdx))

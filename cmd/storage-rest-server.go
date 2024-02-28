@@ -78,6 +78,13 @@ var (
 func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	globalLocalDrivesMu.RLock()
 	defer globalLocalDrivesMu.RUnlock()
+	if len(globalLocalSetDrives) == 0 {
+		for _, drive := range globalLocalDrives {
+			if drive != nil && drive.Endpoint().Equal(endpoint) {
+                               return drive
+			}
+		}
+	}
 	return globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx]
 }
 
