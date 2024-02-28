@@ -323,7 +323,10 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 			if debugPrint {
 				fmt.Println("Client sending disconnect to mux", m.MuxID)
 			}
-			m.addErrorNonBlockingClose(respHandler, context.Cause(m.ctx))
+			err := context.Cause(m.ctx)
+			if !errors.Is(err, errStreamEOF) {
+				m.addErrorNonBlockingClose(respHandler, err)
+			}
 			return
 		case resp, ok := <-respServer:
 			if !ok {
@@ -463,6 +466,7 @@ func (m *muxClient) response(seq uint32, r Response) {
 			fmt.Println(m.MuxID, m.parent.String(), "CHECKSEQ FAIL", m.RecvSeq, seq)
 		}
 		PutByteBuffer(r.Msg)
+		r.Msg = nil
 		r.Err = ErrIncorrectSequence
 		m.addResponse(r)
 		return
@@ -473,6 +477,8 @@ func (m *muxClient) response(seq uint32, r Response) {
 		PutByteBuffer(r.Msg)
 	}
 }
+
+var errStreamEOF = errors.New("stream EOF")
 
 // error is a message from the server to disconnect.
 func (m *muxClient) error(err RemoteErr) {
