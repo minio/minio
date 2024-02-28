@@ -273,13 +273,14 @@ const (
 	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
-	expiryPendingTasks       MetricName = "expiry_pending_tasks"
-	expiryMissedTasks        MetricName = "expiry_missed_tasks"
-	expiryMissedFreeVersions MetricName = "expiry_missed_freeversions"
-	expiryNumWorkers         MetricName = "expiry_num_workers"
-	transitionPendingTasks   MetricName = "transition_pending_tasks"
-	transitionActiveTasks    MetricName = "transition_active_tasks"
-	transitionMissedTasks    MetricName = "transition_missed_immediate_tasks"
+	expiryPendingTasks           MetricName = "expiry_pending_tasks"
+	expiryMissedTasks            MetricName = "expiry_missed_tasks"
+	expiryMissedFreeVersions     MetricName = "expiry_missed_freeversions"
+	expiryMissedTierJournalTasks MetricName = "expiry_missed_tierjournal_tasks"
+	expiryNumWorkers             MetricName = "expiry_num_workers"
+	transitionPendingTasks       MetricName = "transition_pending_tasks"
+	transitionActiveTasks        MetricName = "transition_active_tasks"
+	transitionMissedTasks        MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
@@ -2009,7 +2010,7 @@ func getILMNodeMetrics() *MetricsGroup {
 				Subsystem: ilmSubsystem,
 				Name:      expiryMissedTasks,
 				Help:      "Number of object version expiry missed due to busy system",
-				Type:      gaugeMetric,
+				Type:      counterMetric,
 			},
 		}
 		expMissedFreeVersions := Metric{
@@ -2018,7 +2019,16 @@ func getILMNodeMetrics() *MetricsGroup {
 				Subsystem: ilmSubsystem,
 				Name:      expiryMissedFreeVersions,
 				Help:      "Number of free versions expiry missed due to busy system",
-				Type:      gaugeMetric,
+				Type:      counterMetric,
+			},
+		}
+		expMissedTierJournalTasks := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryMissedTierJournalTasks,
+				Help:      "Number of tier journal entries cleanup missed due to busy system",
+				Type:      counterMetric,
 			},
 		}
 		expNumWorkers := Metric{
@@ -2043,6 +2053,7 @@ func getILMNodeMetrics() *MetricsGroup {
 			expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
 			expMissedTasks.Value = float64(globalExpiryState.stats.MissedTasks())
 			expMissedFreeVersions.Value = float64(globalExpiryState.stats.MissedFreeVersTasks())
+			expMissedTierJournalTasks.Value = float64(globalExpiryState.stats.MissedTierJournalTasks())
 			expNumWorkers.Value = float64(globalExpiryState.stats.NumWorkers())
 		}
 		if globalTransitionState != nil {
@@ -2054,6 +2065,7 @@ func getILMNodeMetrics() *MetricsGroup {
 			expPendingTasks,
 			expMissedTasks,
 			expMissedFreeVersions,
+			expMissedTierJournalTasks,
 			expNumWorkers,
 			trPendingTasks,
 			trActiveTasks,
