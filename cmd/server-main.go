@@ -30,7 +30,6 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -372,15 +371,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	globalConnWriteDeadline = ctxt.ConnWriteDeadline
 }
 
-var globalHealStateLK sync.RWMutex
-
 func initAllSubsystems(ctx context.Context) {
-	globalHealStateLK.Lock()
-	// New global heal state
-	globalAllHealState = newHealState(ctx, true)
-	globalBackgroundHealState = newHealState(ctx, false)
-	globalHealStateLK.Unlock()
-
 	// Initialize notification peer targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
@@ -813,27 +804,6 @@ func serverMain(ctx *cli.Context) {
 		nodeNameSum := sha256.Sum256([]byte(nodeName + globalDeploymentID()))
 		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
 	}
-
-	bootstrapTrace("newSharedLock", func() {
-		globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
-	})
-
-	// Enable background operations on
-	//
-	// - Disk auto healing
-	// - MRF (most recently failed) healing
-	// - Background expiration routine for lifecycle policies
-	bootstrapTrace("initAutoHeal", func() {
-		initAutoHeal(GlobalContext, newObject)
-	})
-
-	bootstrapTrace("initHealMRF", func() {
-		initHealMRF(GlobalContext, newObject)
-	})
-
-	bootstrapTrace("initBackgroundExpiry", func() {
-		initBackgroundExpiry(GlobalContext, newObject)
-	})
 
 	var err error
 	bootstrapTrace("initServerConfig", func() {

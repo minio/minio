@@ -88,8 +88,6 @@ func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
-	initGlobalContext()
-
 	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
 	go globalBatchJobsMetrics.purgeJobMetrics()
 

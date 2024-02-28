@@ -83,7 +83,7 @@ function start_minio_3_node() {
 }
 
 function check_online() {
-	if grep -q 'Unable to initialize sub-systems' ${WORK_DIR}/dist-minio-*.log; then
+	if ! grep -q 'Status:' ${WORK_DIR}/dist-minio-*.log; then
 		echo "1"
 	fi
 }
@@ -109,6 +109,7 @@ function perform_test() {
 
 	rm -rf ${WORK_DIR}/${1}/*/
 
+	set -x
 	start_minio_3_node 120 $2
 
 	rv=$(check_online)

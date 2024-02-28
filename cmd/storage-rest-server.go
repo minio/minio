@@ -54,7 +54,7 @@ var errDiskStale = errors.New("drive stale")
 
 // To abstract a disk over network.
 type storageRESTServer struct {
-	poolIndex, setIndex, diskIndex int
+	endpoint Endpoint
 }
 
 var (
@@ -74,10 +74,14 @@ var (
 	storageListDirRPC        = grid.NewStream[*grid.MSS, grid.NoPayload, *ListDirResult](grid.HandlerListDir, grid.NewMSS, nil, func() *ListDirResult { return &ListDirResult{} }).WithOutCapacity(1)
 )
 
-func (s *storageRESTServer) getStorage() StorageAPI {
+func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	globalLocalDrivesMu.RLock()
 	defer globalLocalDrivesMu.RUnlock()
-	return globalLocalSetDrives[s.poolIndex][s.setIndex][s.diskIndex]
+	return globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx]
+}
+
+func (s *storageRESTServer) getStorage() StorageAPI {
+	return getStorageViaEndpoint(s.endpoint)
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -1287,9 +1291,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			}
 
 			server := &storageRESTServer{
-				poolIndex: endpoint.PoolIdx,
-				setIndex:  endpoint.SetIdx,
-				diskIndex: endpoint.DiskIdx,
+				endpoint: endpoint,
 			}
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()

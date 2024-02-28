@@ -581,7 +581,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
-		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions)
+		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions, globalExpiryState)
 		done()
 
 		if err != nil {
