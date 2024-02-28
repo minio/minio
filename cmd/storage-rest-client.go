@@ -322,10 +322,9 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		return info, nil
 	} // In all other cases cache the value upto 1sec.
 
-	client.diskInfoCache.Once.Do(func() {
-		client.diskInfoCache.TTL = time.Second
-		client.diskInfoCache.CacheError = true
-		client.diskInfoCache.Update = func() (info DiskInfo, err error) {
+	client.diskInfoCache.InitOnce(time.Second,
+		cachevalue.Opts{CacheError: true},
+		func() (info DiskInfo, err error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
@@ -339,8 +338,8 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 				return info, toStorageErr(errors.New(info.Error))
 			}
 			return info, nil
-		}
-	})
+		},
+	)
 
 	return client.diskInfoCache.Get()
 }

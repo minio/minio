@@ -96,9 +96,9 @@ type xlStorageDiskIDCheck struct {
 }
 
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
-	p.metricsCache.Once.Do(func() {
-		p.metricsCache.TTL = 5 * time.Second
-		p.metricsCache.Update = func() (DiskMetrics, error) {
+	p.metricsCache.InitOnce(5*time.Second,
+		cachevalue.Opts{},
+		func() (DiskMetrics, error) {
 			diskMetric := DiskMetrics{
 				LastMinute: make(map[string]AccElem, len(p.apiLatencies)),
 				APICalls:   make(map[string]uint64, len(p.apiCalls)),
@@ -110,8 +110,8 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 				diskMetric.APICalls[storageMetric(i).String()] = atomic.LoadUint64(&p.apiCalls[i])
 			}
 			return diskMetric, nil
-		}
-	})
+		},
+	)
 
 	diskMetric, _ := p.metricsCache.Get()
 	// Do not need this value to be cached.
