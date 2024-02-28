@@ -107,6 +107,8 @@ test-site-replication-oidc: install-race ## verify automatic site replication
 test-site-replication-minio: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with MinIO IDP)"
 	@(env bash $(PWD)/docs/site-replication/run-multi-site-minio-idp.sh)
+	@echo "Running tests for automatic site replication of SSE-C objects"
+	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
