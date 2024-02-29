@@ -190,9 +190,9 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 	}
 
-	etagMatch := opts.PreserveETag != "" && isETagEqual(objInfo.ETag, opts.PreserveETag)
-	vidMatch := opts.VersionID != "" && opts.VersionID == objInfo.VersionID
-	if etagMatch && vidMatch {
+	etagMismatch := opts.PreserveETag != "" && !isETagEqual(objInfo.ETag, opts.PreserveETag)
+	vidMismatch := opts.VersionID != "" && opts.VersionID != objInfo.VersionID
+	if etagMismatch || vidMismatch {
 		writeHeaders()
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 		return true
