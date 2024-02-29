@@ -388,7 +388,7 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 
 	// Transport is exactly same as Go default in https://golang.org/pkg/net/http/#RoundTripper
 	// except custom DialContext and TLSClientConfig.
-	return &Client{
+	clnt := &Client{
 		httpClient:               &http.Client{Transport: tr},
 		url:                      u,
 		lastErr:                  err,
@@ -400,6 +400,11 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 		HealthCheckReconnectUnit: 200 * time.Millisecond,
 		HealthCheckTimeout:       time.Second,
 	}
+	if clnt.HealthCheckFn != nil {
+		// make connection pre-emptively.
+		go clnt.HealthCheckFn()
+	}
+	return clnt
 }
 
 // IsOnline returns whether the client is likely to be online.
@@ -441,15 +446,7 @@ func exponentialBackoffWait(r *rand.Rand, unit, cap time.Duration) func(uint) ti
 	}
 }
 
-// MarkOffline - will mark a client as being offline and spawns
-// a goroutine that will attempt to reconnect if HealthCheckFn is set.
-// returns true if the node changed state from online to offline
-func (c *Client) MarkOffline(err error) bool {
-	c.Lock()
-	c.lastErr = err
-	c.lastErrTime = time.Now()
-	atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
-	c.Unlock()
+func (c *Client) runHealthCheck() bool {
 	// Start goroutine that will attempt to reconnect.
 	// If server is already trying to reconnect this will have no effect.
 	if c.HealthCheckFn != nil && atomic.CompareAndSwapInt32(&c.connected, online, offline) {
@@ -481,4 +478,17 @@ func (c *Client) MarkOffline(err error) bool {
 		return true
 	}
 	return false
+}
+
+// MarkOffline - will mark a client as being offline and spawns
+// a goroutine that will attempt to reconnect if HealthCheckFn is set.
+// returns true if the node changed state from online to offline
+func (c *Client) MarkOffline(err error) bool {
+	c.Lock()
+	c.lastErr = err
+	c.lastErrTime = time.Now()
+	atomic.StoreInt64(&c.lastConn, time.Now().UnixNano())
+	c.Unlock()
+
+	return c.runHealthCheck()
 }
