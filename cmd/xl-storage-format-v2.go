@@ -35,6 +35,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/storageclass"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
@@ -639,6 +640,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo
 		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
+		if equals(k, "x-amz-storage-class") && v == storageclass.STANDARD {
+			continue
+		}
 
 		fi.Metadata[k] = v
 	}
@@ -654,6 +658,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo
 			case tierFVIDKey, tierFVMarkerKey:
 				continue
 			}
+		}
+		if equals(k, "x-amz-storage-class") && string(v) == storageclass.STANDARD {
+			continue
 		}
 		switch {
 		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower), equals(k, VersionPurgeStatusKey):

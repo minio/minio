@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
@@ -1507,6 +1508,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// Guess content-type from the extension if possible.
 	if userDefined["content-type"] == "" {
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	}
+
+	// if storageClass is standard no need to save it as part of metadata.
+	if userDefined[xhttp.AmzStorageClass] == storageclass.STANDARD {
+		delete(userDefined, xhttp.AmzStorageClass)
 	}
 
 	// Fill all the necessary metadata.
