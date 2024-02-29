@@ -2322,6 +2322,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	storageInfo := z.StorageInfo(ctx, false)
 
 	for _, disk := range storageInfo.Disks {
+		if disk.Local && opts.Maintenance {
+			continue
+		}
+
 		if disk.PoolIndex > -1 && disk.SetIndex > -1 {
 			if disk.State == madmin.DriveStateOk {
 				si := erasureSetUpCount[disk.PoolIndex][disk.SetIndex]
