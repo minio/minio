@@ -81,7 +81,7 @@ func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	if len(globalLocalSetDrives) == 0 {
 		for _, drive := range globalLocalDrives {
 			if drive != nil && drive.Endpoint().Equal(endpoint) {
-                               return drive
+				return drive
 			}
 		}
 	}
