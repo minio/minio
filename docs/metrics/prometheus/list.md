@@ -65,12 +65,17 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 
 ## Cluster Health Metrics
 
-| Name                                | Description                                    |
-|:------------------------------------|:-----------------------------------------------|
-| `minio_cluster_nodes_offline_total` | Total number of MinIO nodes offline.           |
-| `minio_cluster_nodes_online_total`  | Total number of MinIO nodes online.            |
-| `minio_cluster_write_quorum`        | Maximum write quorum across all pools and sets |
-| `minio_cluster_health_status`       | Get current cluster health status              |
+| Name                                              | Description                                    |
+|:--------------------------------------------------|:-----------------------------------------------|
+| `minio_cluster_nodes_offline_total`               | Total number of MinIO nodes offline.           |
+| `minio_cluster_nodes_online_total`                | Total number of MinIO nodes online.            |
+| `minio_cluster_write_quorum`                      | Maximum write quorum across all pools and sets |
+| `minio_cluster_health_status`                     | Get current cluster health status              |
+| `minio_cluster_health_erasure_set_healing_drives` | Count of healing drives in the erasure set     |
+| `minio_cluster_health_erasure_set_online_drives`  | Count of online drives in the erasure set      |
+| `minio_cluster_health_erasure_set_read_quorum`    | Get read quorum of the erasure set             |
+| `minio_cluster_health_erasure_set_write_quorum`   | Get write quorum of the erasure set            |
+| `minio_cluster_health_erasure_set_status`         | Get current health status of the erasure set   |
 
 ## Cluster Replication Metrics
 
