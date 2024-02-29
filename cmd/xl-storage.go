@@ -1177,7 +1177,7 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
 	if recursive {
-		err = renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket))
+		err = renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaBucket))
 	} else {
 		err = Rename(filePath, targetPath)
 	}
