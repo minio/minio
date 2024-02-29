@@ -176,6 +176,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 				PoolIndex: endpoints[index].PoolIdx,
 				SetIndex:  endpoints[index].SetIdx,
 				DiskIndex: endpoints[index].DiskIdx,
+				Local:     endpoints[index].IsLocal,
 			}
 			if disks[index] == OfflineDisk {
 				di.State = diskErrToDriveState(errDiskNotFound)
