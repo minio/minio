@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -211,37 +212,68 @@ func ExpToInt64(expI interface{}) (expAt int64, err error) {
 // GenerateCredentials - creates randomly generated credentials of maximum
 // allowed length.
 func GenerateCredentials() (accessKey, secretKey string, err error) {
-	readBytes := func(size int) (data []byte, err error) {
-		data = make([]byte, size)
-		var n int
-		if n, err = rand.Read(data); err != nil {
-			return nil, err
-		} else if n != size {
-			return nil, fmt.Errorf("Not enough data. Expected to read: %v bytes, got: %v bytes", size, n)
-		}
-		return data, nil
-	}
-
-	// Generate access key.
-	keyBytes, err := readBytes(accessKeyMaxLen)
+	accessKey, err = GenerateAccessKey(accessKeyMaxLen, rand.Reader)
 	if err != nil {
 		return "", "", err
 	}
-	for i := 0; i < accessKeyMaxLen; i++ {
-		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
-	}
-	accessKey = string(keyBytes)
-
-	// Generate secret key.
-	keyBytes, err = readBytes(secretKeyMaxLen)
+	secretKey, err = GenerateSecretKey(secretKeyMaxLen, rand.Reader)
 	if err != nil {
 		return "", "", err
 	}
-
-	secretKey = strings.ReplaceAll(string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen]),
-		"/", "+")
-
 	return accessKey, secretKey, nil
+}
+
+// GenerateAccessKey returns a new access key generated randomly using
+// the given io.Reader. If random is nil, crypto/rand.Reader is used.
+// If length <= 0, the access key length is chosen automatically.
+//
+// GenerateAccessKey returns an error if length is too small for a valid
+// access key.
+func GenerateAccessKey(length int, random io.Reader) (string, error) {
+	if random == nil {
+		random = rand.Reader
+	}
+	if length <= 0 {
+		length = accessKeyMaxLen
+	}
+	if length < accessKeyMinLen {
+		return "", errors.New("auth: access key length is too short")
+	}
+
+	key := make([]byte, length)
+	if _, err := io.ReadFull(random, key); err != nil {
+		return "", err
+	}
+	for i := range key {
+		key[i] = alphaNumericTable[key[i]%alphaNumericTableLen]
+	}
+	return string(key), nil
+}
+
+// GenerateSecretKey returns a new secret key generated randomly using
+// the given io.Reader. If random is nil, crypto/rand.Reader is used.
+// If length <= 0, the secret key length is chosen automatically.
+//
+// GenerateSecretKey returns an error if length is too small for a valid
+// secret key.
+func GenerateSecretKey(length int, random io.Reader) (string, error) {
+	if random == nil {
+		random = rand.Reader
+	}
+	if length <= 0 {
+		length = secretKeyMaxLen
+	}
+	if length < secretKeyMinLen {
+		return "", errors.New("auth: secret key length is too short")
+	}
+
+	key := make([]byte, base64.RawStdEncoding.DecodedLen(length))
+	if _, err := io.ReadFull(random, key); err != nil {
+		return "", err
+	}
+
+	s := base64.RawStdEncoding.EncodeToString(key)
+	return strings.ReplaceAll(s, "/", "+"), nil
 }
 
 // GetNewCredentialsWithMetadata generates and returns new credential with expiry.

@@ -121,7 +121,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 	// Colorize the message and print.
 	logger.Info(color.Blue("S3-API: ") + color.Bold(fmt.Sprintf("%s ", apiEndpointStr)))
-	if color.IsTerminal() && (!globalServerCtxt.Anonymous && !globalServerCtxt.JSON) {
+	if color.IsTerminal() && (!globalServerCtxt.Anonymous && !globalServerCtxt.JSON && globalAPIConfig.permitRootAccess()) {
 		logger.Info(color.Blue("RootUser: ") + color.Bold("%s ", cred.AccessKey))
 		logger.Info(color.Blue("RootPass: ") + color.Bold("%s \n", cred.SecretKey))
 		if region != "" {
@@ -132,7 +132,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	if globalBrowserEnabled {
 		consoleEndpointStr := strings.Join(stripStandardPorts(getConsoleEndpoints(), globalMinioConsoleHost), " ")
 		logger.Info(color.Blue("Console: ") + color.Bold(fmt.Sprintf("%s ", consoleEndpointStr)))
-		if color.IsTerminal() && (!globalServerCtxt.Anonymous && !globalServerCtxt.JSON) {
+		if color.IsTerminal() && (!globalServerCtxt.Anonymous && !globalServerCtxt.JSON && globalAPIConfig.permitRootAccess()) {
 			logger.Info(color.Blue("RootUser: ") + color.Bold("%s ", cred.AccessKey))
 			logger.Info(color.Blue("RootPass: ") + color.Bold("%s ", cred.SecretKey))
 		}
@@ -187,7 +187,7 @@ func printCLIAccessMsg(endPoint string, alias string) {
 	const mcQuickStartGuide = "https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart"
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	if color.IsTerminal() && !globalServerCtxt.Anonymous {
+	if color.IsTerminal() && (!globalServerCtxt.Anonymous && globalAPIConfig.permitRootAccess()) {
 		logger.Info(color.Blue("\nCommand-line: ") + mcQuickStartGuide)
 		mcMessage := fmt.Sprintf("$ mc alias set '%s' '%s' '%s' '%s'", alias,
 			endPoint, cred.AccessKey, cred.SecretKey)

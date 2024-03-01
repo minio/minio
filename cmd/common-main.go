@@ -27,7 +27,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -50,7 +49,7 @@ import (
 	"github.com/minio/console/api/operations"
 	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
 	consoleCerts "github.com/minio/console/pkg/certs"
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -82,8 +81,6 @@ func init() {
 			os.Exit(1)
 		}
 	}
-
-	rand.Seed(time.Now().UTC().UnixNano())
 
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
@@ -900,7 +897,6 @@ func handleKMSConfig() {
 			}
 			kmsConf = kms.Config{
 				Endpoints:    endpoints,
-				Enclave:      env.Get(kms.EnvKESEnclave, ""),
 				DefaultKeyID: env.Get(kms.EnvKESKeyName, ""),
 				APIKey:       key,
 				RootCAs:      rootCAs,
@@ -946,7 +942,6 @@ func handleKMSConfig() {
 
 			kmsConf = kms.Config{
 				Endpoints:        endpoints,
-				Enclave:          env.Get(kms.EnvKESEnclave, ""),
 				DefaultKeyID:     env.Get(kms.EnvKESKeyName, ""),
 				Certificate:      certificate,
 				ReloadCertEvents: reloadCertEvents,
