@@ -276,7 +276,7 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("getobjectlegalhold", maxClients(gz(httpTraceAll(api.GetObjectLegalHoldHandler))))).Queries("legal-hold", "")
 		// GetObject with lambda ARNs
 		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
-			collectAPIStats("getobject", maxClients(gz(httpTraceHdrs(api.GetObjectLambdaHandler))))).Queries("lambdaArn", "{lambdaArn:.*}")
+			collectAPIStats("getobjectlambda", maxClients(gz(httpTraceHdrs(api.GetObjectLambdaHandler))))).Queries("lambdaArn", "{lambdaArn:.*}")
 		// GetObject
 		router.Methods(http.MethodGet).Path("/{object:.+}").HandlerFunc(
 			collectAPIStats("getobject", maxClients(gz(httpTraceHdrs(api.GetObjectHandler)))))
@@ -292,7 +292,7 @@ func registerAPIRouter(router *mux.Router) {
 
 		// PutObject with auto-extract support for zip
 		router.Methods(http.MethodPut).Path("/{object:.+}").HeadersRegexp(xhttp.AmzSnowballExtract, "true").HandlerFunc(
-			collectAPIStats("putobject", maxClients(gz(httpTraceHdrs(api.PutObjectExtractHandler)))))
+			collectAPIStats("putobjectextract", maxClients(gz(httpTraceHdrs(api.PutObjectExtractHandler)))))
 
 		// PutObject
 		router.Methods(http.MethodPut).Path("/{object:.+}").HandlerFunc(
@@ -304,7 +304,7 @@ func registerAPIRouter(router *mux.Router) {
 
 		// PostRestoreObject
 		router.Methods(http.MethodPost).Path("/{object:.+}").HandlerFunc(
-			collectAPIStats("restoreobject", maxClients(gz(httpTraceAll(api.PostRestoreObjectHandler))))).Queries("restore", "")
+			collectAPIStats("postrestoreobject", maxClients(gz(httpTraceAll(api.PostRestoreObjectHandler))))).Queries("restore", "")
 
 		// Bucket operations
 
@@ -322,10 +322,10 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("getbucketencryption", maxClients(gz(httpTraceAll(api.GetBucketEncryptionHandler))))).Queries("encryption", "")
 		// GetBucketObjectLockConfig
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("getbucketobjectlockconfiguration", maxClients(gz(httpTraceAll(api.GetBucketObjectLockConfigHandler))))).Queries("object-lock", "")
+			collectAPIStats("getbucketobjectlockconfig", maxClients(gz(httpTraceAll(api.GetBucketObjectLockConfigHandler))))).Queries("object-lock", "")
 		// GetBucketReplicationConfig
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("getbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.GetBucketReplicationConfigHandler))))).Queries("replication", "")
+			collectAPIStats("getbucketreplicationconfig", maxClients(gz(httpTraceAll(api.GetBucketReplicationConfigHandler))))).Queries("replication", "")
 		// GetBucketVersioning
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketversioning", maxClients(gz(httpTraceAll(api.GetBucketVersioningHandler))))).Queries("versioning", "")
@@ -382,19 +382,19 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("listobjectsv2", maxClients(gz(httpTraceAll(api.ListObjectsV2Handler))))).Queries("list-type", "2")
 		// ListObjectVersions
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsMHandler))))).Queries("versions", "", "metadata", "true")
+			collectAPIStats("listobjectversionsM", maxClients(gz(httpTraceAll(api.ListObjectVersionsMHandler))))).Queries("versions", "", "metadata", "true")
 		// ListObjectVersions
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("listobjectversions", maxClients(gz(httpTraceAll(api.ListObjectVersionsHandler))))).Queries("versions", "")
 		// GetBucketPolicyStatus
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("getpolicystatus", maxClients(gz(httpTraceAll(api.GetBucketPolicyStatusHandler))))).Queries("policyStatus", "")
+			collectAPIStats("getbucketpolicystatus", maxClients(gz(httpTraceAll(api.GetBucketPolicyStatusHandler))))).Queries("policyStatus", "")
 		// PutBucketLifecycle
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketlifecycle", maxClients(gz(httpTraceAll(api.PutBucketLifecycleHandler))))).Queries("lifecycle", "")
 		// PutBucketReplicationConfig
 		router.Methods(http.MethodPut).HandlerFunc(
-			collectAPIStats("putbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.PutBucketReplicationConfigHandler))))).Queries("replication", "")
+			collectAPIStats("putbucketreplicationconfig", maxClients(gz(httpTraceAll(api.PutBucketReplicationConfigHandler))))).Queries("replication", "")
 		// PutBucketEncryption
 		router.Methods(http.MethodPut).HandlerFunc(
 			collectAPIStats("putbucketencryption", maxClients(gz(httpTraceAll(api.PutBucketEncryptionHandler))))).Queries("encryption", "")
@@ -437,7 +437,7 @@ func registerAPIRouter(router *mux.Router) {
 			collectAPIStats("deletebucketpolicy", maxClients(gz(httpTraceAll(api.DeleteBucketPolicyHandler))))).Queries("policy", "")
 		// DeleteBucketReplication
 		router.Methods(http.MethodDelete).HandlerFunc(
-			collectAPIStats("deletebucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.DeleteBucketReplicationConfigHandler))))).Queries("replication", "")
+			collectAPIStats("deletebucketreplicationconfig", maxClients(gz(httpTraceAll(api.DeleteBucketReplicationConfigHandler))))).Queries("replication", "")
 		// DeleteBucketLifecycle
 		router.Methods(http.MethodDelete).HandlerFunc(
 			collectAPIStats("deletebucketlifecycle", maxClients(gz(httpTraceAll(api.DeleteBucketLifecycleHandler))))).Queries("lifecycle", "")
@@ -451,14 +451,14 @@ func registerAPIRouter(router *mux.Router) {
 		// MinIO extension API for replication.
 		//
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsV2Handler))))).Queries("replication-metrics", "2")
+			collectAPIStats("getbucketreplicationmetricsv2", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsV2Handler))))).Queries("replication-metrics", "2")
 		// deprecated handler
 		router.Methods(http.MethodGet).HandlerFunc(
 			collectAPIStats("getbucketreplicationmetrics", maxClients(gz(httpTraceAll(api.GetBucketReplicationMetricsHandler))))).Queries("replication-metrics", "")
 
 		// ValidateBucketReplicationCreds
 		router.Methods(http.MethodGet).HandlerFunc(
-			collectAPIStats("checkbucketreplicationconfiguration", maxClients(gz(httpTraceAll(api.ValidateBucketReplicationCredsHandler))))).Queries("replication-check", "")
+			collectAPIStats("validatebucketreplicationcreds", maxClients(gz(httpTraceAll(api.ValidateBucketReplicationCredsHandler))))).Queries("replication-check", "")
 
 		// Register rejected bucket APIs
 		for _, r := range rejectedBucketAPIs {
