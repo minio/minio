@@ -195,15 +195,6 @@ func getValidPath(path string) (string, error) {
 	return path, nil
 }
 
-// isDirEmpty - returns whether given directory is empty or not.
-func isDirEmpty(dirname string) bool {
-	entries, err := readDirN(dirname, 1)
-	if err != nil {
-		return false
-	}
-	return len(entries) == 0
-}
-
 // Initialize a new storage disk.
 func newLocalXLStorage(path string) (*xlStorage, error) {
 	u := url.URL{Path: path}
