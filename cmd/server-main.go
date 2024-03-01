@@ -910,6 +910,11 @@ func serverMain(ctx *cli.Context) {
 			initBackgroundReplication(GlobalContext, newObject)
 		})
 
+		// Initialize background ILM worker poool
+		bootstrapTrace("initBackgroundExpiry", func() {
+			initBackgroundExpiry(GlobalContext, newObject)
+		})
+
 		bootstrapTrace("globalTransitionState.Init", func() {
 			globalTransitionState.Init(newObject)
 		})
