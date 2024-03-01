@@ -19,6 +19,8 @@ package cmd
 
 import (
 	"time"
+
+	"github.com/minio/minio/internal/crypto"
 )
 
 //go:generate msgp -file=$GOFILE
@@ -281,10 +283,15 @@ func (fi FileInfo) ReadQuorum(dquorum int) int {
 
 // Equals checks if fi(FileInfo) matches ofi(FileInfo)
 func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
-	if !fi.MetadataEquals(ofi) {
+	typ1, ok1 := crypto.IsEncrypted(fi.Metadata)
+	typ2, ok2 := crypto.IsEncrypted(ofi.Metadata)
+	if ok1 != ok2 {
 		return false
 	}
-	if !fi.ReplicationInfoEquals(ofi) {
+	if typ1 != typ2 {
+		return false
+	}
+	if fi.IsCompressed() != ofi.IsCompressed() {
 		return false
 	}
 	if !fi.TransitionInfoEquals(ofi) {
@@ -309,6 +316,12 @@ func (fi FileInfo) GetDataDir() string {
 		return "legacy"
 	}
 	return fi.DataDir
+}
+
+// IsCompressed returns true if the object is marked as compressed.
+func (fi FileInfo) IsCompressed() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefix+"compression"]
+	return ok
 }
 
 // InlineData returns true if object contents are inlined alongside its metadata.

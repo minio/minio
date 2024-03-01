@@ -27,6 +27,7 @@ import (
 
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
@@ -300,17 +301,23 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 				fmt.Fprintf(h, "%v", meta.Erasure.Distribution)
 			}
 
-			// ILM transition fields
-			fmt.Fprint(h, meta.TransitionStatus)
-			fmt.Fprint(h, meta.TransitionTier)
-			fmt.Fprint(h, meta.TransitionedObjName)
-			fmt.Fprint(h, meta.TransitionVersionID)
+			if meta.IsRemote() {
+				// ILM transition fields
+				fmt.Fprint(h, meta.TransitionStatus)
+				fmt.Fprint(h, meta.TransitionTier)
+				fmt.Fprint(h, meta.TransitionedObjName)
+				fmt.Fprint(h, meta.TransitionVersionID)
+			}
 
-			// Server-side replication fields
-			fmt.Fprintf(h, "%v", meta.MarkDeleted)
-			fmt.Fprint(h, meta.Metadata[string(meta.ReplicationState.ReplicaStatus)])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.ReplicationStatusInternal])
-			fmt.Fprint(h, meta.Metadata[meta.ReplicationState.VersionPurgeStatusInternal])
+			// If metadata says encrypted, ask for it in quorum.
+			if etyp, ok := crypto.IsEncrypted(meta.Metadata); ok {
+				fmt.Fprint(h, etyp)
+			}
+
+			// If compressed, look for compressed FileInfo only
+			if meta.IsCompressed() {
+				fmt.Fprint(h, meta.Metadata[ReservedMetadataPrefix+"compression"])
+			}
 
 			metaHashes[i] = hex.EncodeToString(h.Sum(nil))
 			h.Reset()
