@@ -19,9 +19,6 @@ package cmd
 
 import (
 	"net/http"
-	"reflect"
-	"runtime"
-	"strings"
 
 	"github.com/klauspost/compress/gzhttp"
 	"github.com/klauspost/compress/gzip"
@@ -69,14 +66,6 @@ func (h hFlag) Has(flag hFlag) bool {
 	return h&flag != 0
 }
 
-func getHandlerName(f http.HandlerFunc) string {
-	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
-	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.adminAPIHandlers.")
-	name = strings.TrimSuffix(name, "Handler-fm")
-	name = strings.TrimSuffix(name, "-fm")
-	return name
-}
-
 // adminMiddleware performs some common admin handler functionality for all
 // handlers:
 //
@@ -86,9 +75,13 @@ func getHandlerName(f http.HandlerFunc) string {
 //
 // - sets up call to send AuditLog
 //
-// Note that, while this is a middleware function (i.e. it takes a handler
-// function and returns one), due to flags being passed based on required
-// conditions, it is done per-"handler function registration" in the router.
+// While this is a middleware function (i.e. it takes a handler function and
+// returns one), due to flags being passed based on required conditions, it is
+// done per-"handler function registration" in the router.
+//
+// The passed in handler function must be a method of `adminAPIHandlers` for the
+// name displayed in logs and trace to be accurate. The name is extracted via
+// reflection.
 //
 // When no flags are passed, gzip compression, http tracing of headers and
 // checking of object layer availability are all enabled. Use flags to modify
@@ -100,10 +93,8 @@ func adminMiddleware(f http.HandlerFunc, flags ...hFlag) http.HandlerFunc {
 		handlerFlags |= flag
 	}
 
-	// Get name of the handler using reflection. NOTE: The passed in handler
-	// function must be a method of `adminAPIHandlers` for this extraction to
-	// work as expected.
-	handlerName := getHandlerName(f)
+	// Get name of the handler using reflection.
+	handlerName := getHandlerName(f, "adminAPIHandlers")
 
 	var handler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 		// Update request context with `logger.ReqInfo`.
