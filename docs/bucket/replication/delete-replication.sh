@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+echo "Running $0"
+
 if [ -n "$TEST_DEBUG" ]; then
 	set -x
 fi

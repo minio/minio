@@ -159,7 +159,7 @@ var (
 )
 
 func (t *tierMetrics) Report() []Metric {
-	metrics := getHistogramMetrics(t.histogram, tierTTLBMD)
+	metrics := getHistogramMetrics(t.histogram, tierTTLBMD, true)
 	t.RLock()
 	defer t.RUnlock()
 	for tier, stat := range t.requestsCount {

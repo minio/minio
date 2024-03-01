@@ -190,7 +190,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects http metrics for MinIO server in Prometheus specific format
 // and sends to given channel
 func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
-	httpStats := globalHTTPStats.toServerHTTPStats()
+	httpStats := globalHTTPStats.toServerHTTPStats(true)
 
 	for api, value := range httpStats.CurrentS3Requests.APIStats {
 		ch <- prometheus.MustNewConstMetric(
