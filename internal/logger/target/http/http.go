@@ -416,7 +416,14 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 					go h.startHTTPLogger(ctx)
 				}
 			}
-			h.logCh <- entry
+			select {
+			case h.logCh <- entry:
+			case <-ctx.Done():
+				// return error only for context timedout.
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					return ctx.Err()
+				}
+			}
 			return nil
 		}
 		atomic.AddInt64(&h.totalMessages, 1)
