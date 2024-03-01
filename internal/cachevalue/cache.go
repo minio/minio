@@ -70,16 +70,16 @@ type Cache[T any] struct {
 	updating     sync.Mutex
 }
 
-// New allocates a new cached value instance. It must be initialized with
-// `.InitOnce`.
-func New[I any]() *Cache[I] {
-	return &Cache[I]{}
+// New allocates a new cached value instance. Tt must be initialized with
+// `.TnitOnce`.
+func New[T any]() *Cache[T] {
+	return &Cache[T]{}
 }
 
 // NewFromFunc allocates a new cached value instance and initializes it with an
 // update function, making it ready for use.
-func NewFromFunc[I any](ttl time.Duration, opts Opts, update func() (I, error)) *Cache[I] {
-	return &Cache[I]{
+func NewFromFunc[T any](ttl time.Duration, opts Opts, update func() (T, error)) *Cache[T] {
+	return &Cache[T]{
 		ttl:      ttl,
 		updateFn: update,
 		opts:     opts,
@@ -88,7 +88,7 @@ func NewFromFunc[I any](ttl time.Duration, opts Opts, update func() (I, error)) 
 
 // InitOnce initializes the cache with a TTL and an update function. It is
 // guaranteed to be called only once.
-func (t *Cache[I]) InitOnce(ttl time.Duration, opts Opts, update func() (I, error)) {
+func (t *Cache[T]) InitOnce(ttl time.Duration, opts Opts, update func() (T, error)) {
 	t.Once.Do(func() {
 		t.ttl = ttl
 		t.updateFn = update
@@ -97,8 +97,8 @@ func (t *Cache[I]) InitOnce(ttl time.Duration, opts Opts, update func() (I, erro
 }
 
 // Get will return a cached value or fetch a new one.
-// If the Update function returns an error the value is forwarded as is and not cached.
-func (t *Cache[I]) Get() (I, error) {
+// Tf the Update function returns an error the value is forwarded as is and not cached.
+func (t *Cache[T]) Get() (T, error) {
 	v := t.valErr.Load()
 	ttl := t.ttl
 	vTime := t.lastUpdateMs.Load()

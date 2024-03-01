@@ -296,27 +296,23 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		bucket, _ := path2BucketObject(resource)
 
-		globalHTTPStats.currentS3Requests.Inc(api)
-		defer globalHTTPStats.currentS3Requests.Dec(api)
-
 		_, err = globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
-		if bucket != "" && bucket != minioReservedBucket && err == nil {
+		countBktStat := bucket != "" && bucket != minioReservedBucket && err == nil
+		if countBktStat {
 			globalBucketHTTPStats.updateHTTPStats(bucket, api, nil)
 		}
 
+		globalHTTPStats.currentS3Requests.Inc(api)
 		f.ServeHTTP(w, r)
+		globalHTTPStats.currentS3Requests.Dec(api)
 
-		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
-		if !ok {
-			return
-		}
-
+		tc, _ := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if tc != nil {
 			globalHTTPStats.updateStats(api, tc.ResponseRecorder)
 			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
 			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
 
-			if bucket != "" && bucket != minioReservedBucket && err == nil {
+			if countBktStat {
 				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
 				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
 				globalBucketHTTPStats.updateHTTPStats(bucket, api, tc.ResponseRecorder)
