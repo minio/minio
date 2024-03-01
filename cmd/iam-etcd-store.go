@@ -143,6 +143,10 @@ func (ies *IAMEtcdStore) deleteIAMConfig(ctx context.Context, path string) error
 	return deleteKeyEtcd(ctx, ies.client, path)
 }
 
+func (ies *IAMEtcdStore) loadPolicyDocWithRetry(ctx context.Context, policy string, m map[string]PolicyDoc, _ int) error {
+	return ies.loadPolicyDoc(ctx, policy, m)
+}
+
 func (ies *IAMEtcdStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {
 	data, err := ies.loadIAMConfigBytes(ctx, getPolicyDocPath(policy))
 	if err != nil {
@@ -319,6 +323,10 @@ func (ies *IAMEtcdStore) loadGroups(ctx context.Context, m map[string]GroupInfo)
 		}
 	}
 	return nil
+}
+
+func (ies *IAMEtcdStore) loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, _ int) error {
+	return ies.loadMappedPolicy(ctx, name, userType, isGroup, m)
 }
 
 func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
