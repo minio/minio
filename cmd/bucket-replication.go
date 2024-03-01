@@ -1761,6 +1761,9 @@ const (
 
 	// LargeWorkerCount is default number of workers assigned to large uploads ( >= 128MiB)
 	LargeWorkerCount = 10
+
+	// DefaultReplicationPoolSize defines the default size of the replication pool.
+	DefaultReplicationPoolSize = 100000
 )
 
 // NewReplicationPool creates a pool of replication workers of specified size
@@ -1795,10 +1798,10 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 	pool := &ReplicationPool{
 		workers:         make([]chan ReplicationWorkerOperation, 0, workers),
 		lrgworkers:      make([]chan ReplicationWorkerOperation, 0, LargeWorkerCount),
-		mrfReplicaCh:    make(chan ReplicationWorkerOperation, 100000),
+		mrfReplicaCh:    make(chan ReplicationWorkerOperation, DefaultReplicationPoolSize),
 		mrfWorkerKillCh: make(chan struct{}, failedWorkers),
 		resyncer:        newresyncer(),
-		mrfSaveCh:       make(chan MRFReplicateEntry, 100000),
+		mrfSaveCh:       make(chan MRFReplicateEntry, DefaultReplicationPoolSize),
 		mrfStopCh:       make(chan struct{}, 1),
 		ctx:             ctx,
 		objLayer:        o,
