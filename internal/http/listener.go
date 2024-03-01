@@ -79,7 +79,8 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 	case result, ok := <-listener.acceptCh:
 		if ok {
 			return deadlineconn.New(result.conn).
-				WithReadDeadline(listener.opts.ClientReadTimeout), result.err
+				WithReadDeadline(listener.opts.ClientReadTimeout).
+				WithWriteDeadline(listener.opts.ClientWriteTimeout), result.err
 		}
 	case <-listener.ctx.Done():
 	}
@@ -124,10 +125,11 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 
 // TCPOptions specify customizable TCP optimizations on raw socket
 type TCPOptions struct {
-	UserTimeout       int              // this value is expected to be in milliseconds
-	ClientReadTimeout time.Duration    // When the net.Conn is idle for more than ReadTimeout duration, we close the connection on the client proactively.
-	Interface         string           // this is a VRF device passed via `--interface` flag
-	Trace             func(msg string) // Trace when starting.
+	UserTimeout        int              // this value is expected to be in milliseconds
+	ClientReadTimeout  time.Duration    // When the net.Conn is idle for more than ReadTimeout duration, we close the connection on the client proactively.
+	ClientWriteTimeout time.Duration    // When the net.Conn is idle for more than WriteTimeout duration, we close the connection on the client proactively.
+	Interface          string           // this is a VRF device passed via `--interface` flag
+	Trace              func(msg string) // Trace when starting.
 }
 
 // newHTTPListener - creates new httpListener object which is interface compatible to net.Listener.

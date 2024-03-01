@@ -107,6 +107,12 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_CONN_CLIENT_READ_DEADLINE",
 	},
 	cli.DurationFlag{
+		Name:   "conn-client-write-deadline",
+		Usage:  "custom connection WRITE deadline for outgoing requests",
+		Hidden: true,
+		EnvVar: "MINIO_CONN_CLIENT_WRITE_DEADLINE",
+	},
+	cli.DurationFlag{
 		Name:   "conn-read-deadline",
 		Usage:  "custom connection READ deadline",
 		Hidden: true,
@@ -356,9 +362,10 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	})
 
 	globalTCPOptions = xhttp.TCPOptions{
-		UserTimeout:       int(ctxt.UserTimeout.Milliseconds()),
-		ClientReadTimeout: ctxt.ConnClientReadDeadline,
-		Interface:         ctxt.Interface,
+		UserTimeout:        int(ctxt.UserTimeout.Milliseconds()),
+		ClientReadTimeout:  ctxt.ConnClientReadDeadline,
+		ClientWriteTimeout: ctxt.ConnClientWriteDeadline,
+		Interface:          ctxt.Interface,
 	}
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back

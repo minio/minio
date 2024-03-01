@@ -393,6 +393,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.ConnReadDeadline = ctx.Duration("conn-read-deadline")
 	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
 	ctxt.ConnClientReadDeadline = ctx.Duration("conn-client-read-deadline")
+	ctxt.ConnClientWriteDeadline = ctx.Duration("conn-client-write-deadline")
 
 	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
