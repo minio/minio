@@ -1975,6 +1975,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			ExpireRestored:   opts.Transition.ExpireRestored,
 		}
 		fi.SetTierFreeVersionID(fvID)
+		if opts.SkipFreeVersion {
+			fi.SetSkipTierFreeVersion()
+		}
 		if opts.VersionID != "" {
 			fi.VersionID = opts.VersionID
 		} else if opts.Versioned {
@@ -2004,6 +2007,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
+	if opts.SkipFreeVersion {
+		dfi.SetSkipTierFreeVersion()
+	}
 	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}

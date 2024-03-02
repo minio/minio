@@ -632,7 +632,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
-			item.applyTierObjSweep(ctx, objAPI, oi)
+			globalExpiryState.enqueueFreeVersion(oi)
 			done()
 		}
 

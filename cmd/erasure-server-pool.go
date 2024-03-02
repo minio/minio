@@ -192,10 +192,6 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		go globalMRFState.healRoutine(z)
 	})
 
-	bootstrapTrace("initBackgroundExpiry", func() {
-		initBackgroundExpiry(GlobalContext, z)
-	})
-
 	// initialize the object layer.
 	defer setObjectLayer(z)
 

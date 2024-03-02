@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
@@ -84,9 +85,7 @@ func TestFreeVersion(t *testing.T) {
 				Hash:       nil,
 			}},
 		},
-		MarkDeleted: false,
-		// DeleteMarkerReplicationStatus: "",
-		// VersionPurgeStatus:            "",
+		MarkDeleted:      false,
 		NumVersions:      1,
 		SuccessorModTime: time.Time{},
 	}
@@ -226,5 +225,57 @@ func TestFreeVersion(t *testing.T) {
 	}
 	if len(freeVersions) != 0 {
 		t.Fatalf("Expected zero free version but got %d", len(freeVersions))
+	}
+}
+
+func TestSkipFreeVersion(t *testing.T) {
+	fi := FileInfo{
+		Volume:           "volume",
+		Name:             "object-name",
+		VersionID:        "00000000-0000-0000-0000-000000000001",
+		IsLatest:         true,
+		Deleted:          false,
+		TransitionStatus: "",
+		DataDir:          "bffea160-ca7f-465f-98bc-9b4f1c3ba1ef",
+		XLV1:             false,
+		ModTime:          time.Now(),
+		Size:             0,
+		Mode:             0,
+		Metadata:         nil,
+		Parts:            nil,
+		Erasure: ErasureInfo{
+			Algorithm:    ReedSolomon.String(),
+			DataBlocks:   4,
+			ParityBlocks: 2,
+			BlockSize:    10000,
+			Index:        1,
+			Distribution: []int{1, 2, 3, 4, 5, 6, 7, 8},
+			Checksums: []ChecksumInfo{{
+				PartNumber: 1,
+				Algorithm:  HighwayHash256S,
+				Hash:       nil,
+			}},
+		},
+		MarkDeleted: false,
+		// DeleteMarkerReplicationStatus: "",
+		// VersionPurgeStatus:            "",
+		NumVersions:      1,
+		SuccessorModTime: time.Time{},
+	}
+	fi.SetTierFreeVersionID(uuid.New().String())
+	// Test if free version is created when SkipTier wasn't set on fi
+	j := xlMetaV2Object{}
+	j.MetaSys = make(map[string][]byte)
+	j.MetaSys[metaTierName] = []byte("WARM-1")
+	j.MetaSys[metaTierStatus] = []byte(lifecycle.TransitionComplete)
+	j.MetaSys[metaTierObjName] = []byte("obj-1")
+	if _, ok := j.InitFreeVersion(fi); !ok {
+		t.Fatal("Expected a free version to be created")
+	}
+
+	// Test if we skip creating a free version if SkipTier was set on fi
+	fi.SetSkipTierFreeVersion()
+	if _, ok := j.InitFreeVersion(fi); ok {
+		t.Fatal("Expected no free version to be created")
 	}
 }

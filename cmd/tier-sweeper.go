@@ -18,6 +18,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/minio/minio/internal/bucket/lifecycle"
 )
 
@@ -128,9 +130,26 @@ func (os *objSweeper) shouldRemoveRemoteObject() (jentry, bool) {
 }
 
 // Sweep removes the transitioned object if it's no longer referred to.
-func (os *objSweeper) Sweep() error {
+func (os *objSweeper) Sweep() {
 	if je, ok := os.shouldRemoveRemoteObject(); ok {
-		return globalTierJournal.AddEntry(je)
+		globalExpiryState.enqueueTierJournalEntry(je)
+	}
+}
+
+type jentry struct {
+	ObjName   string
+	VersionID string
+	TierName  string
+}
+
+func deleteObjectFromRemoteTier(ctx context.Context, objName, rvID, tierName string) error {
+	w, err := globalTierConfigMgr.getDriver(tierName)
+	if err != nil {
+		return err
+	}
+	err = w.Remove(ctx, objName, remoteVersionID(rvID))
+	if err != nil {
+		return err
 	}
 	return nil
 }

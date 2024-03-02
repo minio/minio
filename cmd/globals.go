@@ -411,8 +411,6 @@ var (
 
 	globalTierConfigMgr *TierConfigMgr
 
-	globalTierJournal *TierJournal
-
 	globalConsoleSrv *consoleapi.Server
 
 	// handles service freeze or un-freeze S3 API calls.

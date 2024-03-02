@@ -525,6 +525,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 const (
 	tierFVID     = "tier-free-versionID"
 	tierFVMarker = "tier-free-marker"
+	tierSkipFVID = "tier-skip-fvid"
 )
 
 // SetTierFreeVersionID sets free-version's versionID. This method is used by
@@ -549,6 +550,23 @@ func (fi *FileInfo) SetTierFreeVersion() {
 		fi.Metadata = make(map[string]string)
 	}
 	fi.Metadata[ReservedMetadataPrefixLower+tierFVMarker] = ""
+}
+
+// SetSkipTierFreeVersion indicates to skip adding a tier free version id.
+// Note: Used only when expiring tiered objects and the remote content has
+// already been scheduled for deletion
+func (fi *FileInfo) SetSkipTierFreeVersion() {
+	if fi.Metadata == nil {
+		fi.Metadata = make(map[string]string)
+	}
+	fi.Metadata[ReservedMetadataPrefixLower+tierSkipFVID] = ""
+}
+
+// SkipTierFreeVersion returns true if set, false otherwise.
+// See SetSkipTierVersion for its purpose.
+func (fi *FileInfo) SkipTierFreeVersion() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefixLower+tierSkipFVID]
+	return ok
 }
 
 // TierFreeVersion returns true if version is a free-version.

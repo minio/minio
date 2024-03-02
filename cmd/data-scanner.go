@@ -982,42 +982,6 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	return lcEvt.Action, size
 }
 
-// applyTierObjSweep removes remote object pending deletion and the free-version
-// tracking this information.
-func (i *scannerItem) applyTierObjSweep(ctx context.Context, o ObjectLayer, oi ObjectInfo) {
-	traceFn := globalLifecycleSys.trace(oi)
-	if !oi.TransitionedObject.FreeVersion {
-		// nothing to be done
-		return
-	}
-
-	ignoreNotFoundErr := func(err error) error {
-		switch {
-		case isErrVersionNotFound(err), isErrObjectNotFound(err):
-			return nil
-		}
-		return err
-	}
-	// Remove the remote object
-	err := deleteObjectFromRemoteTier(ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
-	if ignoreNotFoundErr(err) != nil {
-		logger.LogIf(ctx, err)
-		return
-	}
-
-	// Remove this free version
-	_, err = o.DeleteObject(ctx, oi.Bucket, oi.Name, ObjectOptions{
-		VersionID:        oi.VersionID,
-		InclFreeVersions: true,
-	})
-	if err == nil {
-		auditLogLifecycle(ctx, oi, ILMFreeVersionDelete, nil, traceFn)
-	}
-	if ignoreNotFoundErr(err) != nil {
-		logger.LogIf(ctx, err)
-	}
-}
-
 // applyNewerNoncurrentVersionLimit removes noncurrent versions older than the most recent NewerNoncurrentVersions configured.
 // Note: This function doesn't update sizeSummary since it always removes versions that it doesn't return.
 func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ ObjectLayer, fivs []FileInfo, expState *expiryState) ([]ObjectInfo, error) {
