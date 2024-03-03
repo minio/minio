@@ -115,10 +115,10 @@ type xlStorage struct {
 
 	diskInfoCache *cachevalue.Cache[DiskInfo]
 	sync.RWMutex
-
 	formatData []byte
 
-	nrRequests uint64
+	nrRequests   uint64
+	major, minor uint32
 
 	// mutex to prevent concurrent read operations overloading walks.
 	rotational bool
@@ -241,6 +241,8 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	if err != nil {
 		return s, err
 	}
+	s.major = info.Major
+	s.minor = info.Minor
 
 	if !globalIsCICD && !globalIsErasureSD {
 		var rootDrive bool
@@ -256,7 +258,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 			}
 		}
 		if rootDrive {
-			return nil, errDriveIsRoot
+			return s, errDriveIsRoot
 		}
 	}
 
@@ -738,8 +740,6 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInf
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
-			dcinfo.NRRequests = s.nrRequests
-			dcinfo.Rotational = s.rotational
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')
@@ -751,6 +751,8 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInf
 	)
 
 	info, err = s.diskInfoCache.Get()
+	info.NRRequests = s.nrRequests
+	info.Rotational = s.rotational
 	info.MountPath = s.drivePath
 	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1

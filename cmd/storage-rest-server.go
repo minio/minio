@@ -1330,6 +1330,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				if err != nil {
 					// if supported errors don't fail, we proceed to
 					// printing message and moving forward.
+					if errors.Is(err, errDriveIsRoot) {
+						err = fmt.Errorf("major: %v: minor: %v: %w", xl.major, xl.minor, err)
+					}
 					logFatalErrs(err, endpoint, false)
 					return false
 				}
