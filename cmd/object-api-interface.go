@@ -117,7 +117,13 @@ type ObjectOptions struct {
 	// Object must have been read at this point.
 	IndexCB func() []byte
 
+	// InclFreeVersions indicates that free versions need to be included
+	// when looking up a version by fi.VersionID
 	InclFreeVersions bool
+	// SkipFreeVersion skips adding a free version when a tiered version is
+	// being 'replaced'
+	// Note: Used only when a tiered object is being expired.
+	SkipFreeVersion bool
 
 	MetadataChg           bool                  // is true if it is a metadata update operation.
 	EvalRetentionBypassFn EvalRetentionBypassFn // only set for enforcing retention bypass on DeleteObject.

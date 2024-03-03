@@ -47,6 +47,7 @@ type apiConfig struct {
 	replicationPriority   string
 	replicationMaxWorkers int
 	transitionWorkers     int
+	expiryWorkers         int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
@@ -170,7 +171,9 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.replicationPriority = cfg.ReplicationPriority
 	t.replicationMaxWorkers = cfg.ReplicationMaxWorkers
-	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
+
+	// N B api.transition_workers will be deprecated
+	if globalTransitionState != nil {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
 	t.transitionWorkers = cfg.TransitionWorkers
@@ -363,6 +366,13 @@ func (t *apiConfig) getReplicationOpts() replicationPoolOpts {
 		Priority:   t.replicationPriority,
 		MaxWorkers: t.replicationMaxWorkers,
 	}
+}
+
+func (t *apiConfig) getExpiryWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.expiryWorkers
 }
 
 func (t *apiConfig) getTransitionWorkers() int {

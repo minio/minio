@@ -19,12 +19,12 @@ package api
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for storageclass feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
+	// Help holds configuration keys and their default values for api subsystem.
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         apiRequestsMax,
@@ -77,6 +77,12 @@ var (
 		config.HelpKV{
 			Key:         apiTransitionWorkers,
 			Description: `set the number of transition workers` + defaultHelpPostfix(apiTransitionWorkers),
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         apiExpiryWorkers,
+			Description: `set the number of expiry workers` + defaultHelpPostfix(apiExpiryWorkers),
 			Optional:    true,
 			Type:        "number",
 		},
