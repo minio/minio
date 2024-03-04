@@ -2406,18 +2406,21 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 				WriteQuorum:   poolWriteQuorums[poolIdx],
 			})
 
-			result.Healthy = erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
-			if !result.Healthy {
+			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
+			if !healthy {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx]))
 			}
-			result.HealthyRead = erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
-			if !result.HealthyRead {
+			result.Healthy = result.Healthy && healthy
+
+			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
+			if !healthyRead {
 				logger.LogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
 						poolIdx, setIdx, poolReadQuorums[poolIdx]))
 			}
+			result.HealthyRead = result.HealthyRead && healthyRead
 		}
 	}
 
