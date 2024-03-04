@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -374,7 +374,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 }
 
 func initBackgroundExpiry(ctx context.Context, objectAPI ObjectLayer) {
-	globalExpiryState = newExpiryState(ctx, objectAPI, globalAPIConfig.getExpiryWorkers())
+	globalExpiryState = newExpiryState(ctx, objectAPI, globalILMConfig.getExpirationWorkers())
 }
 
 // newerNoncurrentTask encapsulates arguments required by worker to expire objects
@@ -438,6 +438,10 @@ func newTransitionState(ctx context.Context) *transitionState {
 // of transition workers.
 func (t *transitionState) Init(objAPI ObjectLayer) {
 	n := globalAPIConfig.getTransitionWorkers()
+	// Prefer ilm.transition_workers over now deprecated api.transition_workers
+	if tw := globalILMConfig.getTransitionWorkers(); tw > 0 {
+		n = tw
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

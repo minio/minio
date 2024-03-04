@@ -81,12 +81,6 @@ var (
 			Type:        "number",
 		},
 		config.HelpKV{
-			Key:         apiExpiryWorkers,
-			Description: `set the number of expiry workers` + defaultHelpPostfix(apiExpiryWorkers),
-			Optional:    true,
-			Type:        "number",
-		},
-		config.HelpKV{
 			Key:         apiStaleUploadsExpiry,
 			Description: `set to expire stale multipart uploads older than this values` + defaultHelpPostfix(apiStaleUploadsExpiry),
 			Optional:    true,
