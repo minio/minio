@@ -18,6 +18,10 @@
 package cmd
 
 import (
+	"fmt"
+	"net/http"
+	"reflect"
+	"runtime"
 	"strings"
 )
 
@@ -98,5 +102,18 @@ func s3EncodeName(name, encodingType string) string {
 	if strings.ToLower(encodingType) == "url" {
 		return s3URLEncode(name)
 	}
+	return name
+}
+
+// getHandlerName returns the name of the handler function. It takes the type
+// name as a string to clean up the name retrieved via reflection. This function
+// only works correctly when the type is present in the cmd package.
+func getHandlerName(f http.HandlerFunc, cmdType string) string {
+	name := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+
+	packageName := fmt.Sprintf("github.com/minio/minio/cmd.%s.", cmdType)
+	name = strings.TrimPrefix(name, packageName)
+	name = strings.TrimSuffix(name, "Handler-fm")
+	name = strings.TrimSuffix(name, "-fm")
 	return name
 }

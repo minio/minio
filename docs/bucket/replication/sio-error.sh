@@ -1,11 +1,13 @@
 #!/bin/bash
 
+echo "Running $0"
+
 set -e
 set -x
 
 export CI=1
 
-make || exit -1
+make || exit 255
 
 killall -9 minio || true
 

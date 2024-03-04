@@ -1827,7 +1827,10 @@ func getGoMetrics() *MetricsGroup {
 
 // getHistogramMetrics fetches histogram metrics and returns it in a []Metric
 // Note: Typically used in MetricGroup.RegisterRead
-func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) []Metric {
+//
+// The last parameter is added for compatibility - if true it lowercases the
+// `api` label values.
+func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, toLowerAPILabels bool) []Metric {
 	ch := make(chan prometheus.Metric)
 	go func() {
 		defer xioutil.SafeClose(ch)
@@ -1851,7 +1854,11 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription) 
 		for _, b := range h.Bucket {
 			labels := make(map[string]string)
 			for _, lp := range dtoMetric.GetLabel() {
-				labels[*lp.Name] = *lp.Value
+				if *lp.Name == "api" && toLowerAPILabels {
+					labels[*lp.Name] = strings.ToLower(*lp.Value)
+				} else {
+					labels[*lp.Name] = *lp.Value
+				}
 			}
 			labels["le"] = fmt.Sprintf("%.3f", *b.UpperBound)
 			metric := Metric{
@@ -1881,7 +1888,8 @@ func getBucketTTFBMetric() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getHistogramMetrics(bucketHTTPRequestsDuration, getBucketTTFBDistributionMD())
+		return getHistogramMetrics(bucketHTTPRequestsDuration,
+			getBucketTTFBDistributionMD(), true)
 	})
 	return mg
 }
@@ -1891,7 +1899,8 @@ func getS3TTFBMetric() *MetricsGroup {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) []Metric {
-		return getHistogramMetrics(httpRequestsDuration, getS3TTFBDistributionMD())
+		return getHistogramMetrics(httpRequestsDuration,
+			getS3TTFBDistributionMD(), true)
 	})
 	return mg
 }
@@ -2918,7 +2927,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []Metric) {
 		if !mg.metricsGroupOpts.bucketOnly {
-			httpStats := globalHTTPStats.toServerHTTPStats()
+			httpStats := globalHTTPStats.toServerHTTPStats(true)
 			metrics = make([]Metric, 0, 3+
 				len(httpStats.CurrentS3Requests.APIStats)+
 				len(httpStats.TotalS3Requests.APIStats)+
@@ -3014,7 +3023,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 			}
 
 			httpStats := globalBucketHTTPStats.load(bucket)
-			for k, v := range httpStats.currentS3Requests.Load() {
+			for k, v := range httpStats.currentS3Requests.Load(true) {
 				metrics = append(metrics, Metric{
 					Description:    getBucketS3RequestsInFlightMD(),
 					Value:          float64(v),
@@ -3022,7 +3031,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				})
 			}
 
-			for k, v := range httpStats.totalS3Requests.Load() {
+			for k, v := range httpStats.totalS3Requests.Load(true) {
 				metrics = append(metrics, Metric{
 					Description:    getBucketS3RequestsTotalMD(),
 					Value:          float64(v),
@@ -3030,7 +3039,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				})
 			}
 
-			for k, v := range httpStats.totalS3Canceled.Load() {
+			for k, v := range httpStats.totalS3Canceled.Load(true) {
 				metrics = append(metrics, Metric{
 					Description:    getBucketS3RequestsCanceledMD(),
 					Value:          float64(v),
@@ -3038,7 +3047,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				})
 			}
 
-			for k, v := range httpStats.totalS34xxErrors.Load() {
+			for k, v := range httpStats.totalS34xxErrors.Load(true) {
 				metrics = append(metrics, Metric{
 					Description:    getBucketS3Requests4xxErrorsMD(),
 					Value:          float64(v),
@@ -3046,7 +3055,7 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				})
 			}
 
-			for k, v := range httpStats.totalS35xxErrors.Load() {
+			for k, v := range httpStats.totalS35xxErrors.Load(true) {
 				metrics = append(metrics, Metric{
 					Description:    getBucketS3Requests5xxErrorsMD(),
 					Value:          float64(v),

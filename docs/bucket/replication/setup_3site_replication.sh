@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+echo "Running $0"
+
 if [ -n "$TEST_DEBUG" ]; then
 	set -x
 fi
@@ -46,11 +48,11 @@ unset MINIO_KMS_KES_KEY_NAME
 	go install -v
 )
 
-wget -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
+wget -q -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
 	chmod +x mc
 
 if [ ! -f mc.RELEASE.2021-03-12T03-36-59Z ]; then
-	wget -O mc.RELEASE.2021-03-12T03-36-59Z https://dl.minio.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-03-12T03-36-59Z &&
+	wget -q -O mc.RELEASE.2021-03-12T03-36-59Z https://dl.minio.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-03-12T03-36-59Z &&
 		chmod +x mc.RELEASE.2021-03-12T03-36-59Z
 fi
 

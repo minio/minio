@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+echo "Running $0"
+
 set -x
 
 trap 'catch $LINENO' ERR
