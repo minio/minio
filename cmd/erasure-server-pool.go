@@ -2318,8 +2318,19 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	storageInfo := z.StorageInfo(ctx, false)
 
 	for _, disk := range storageInfo.Disks {
-		if disk.Local && opts.Maintenance {
-			continue
+		if opts.Maintenance {
+			var skip bool
+			globalLocalDrivesMu.RLock()
+			for _, drive := range globalLocalDrives {
+				if drive != nil && drive.Endpoint().String() == disk.Endpoint {
+					skip = true
+					break
+				}
+			}
+			globalLocalDrivesMu.RUnlock()
+			if skip {
+				continue
+			}
 		}
 
 		if disk.PoolIndex > -1 && disk.SetIndex > -1 {
@@ -2426,6 +2437,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	if opts.Maintenance {
 		result.Healthy = result.Healthy && drivesHealing == 0
+		result.HealthyRead = result.HealthyRead && drivesHealing == 0
 		result.HealingDrives = drivesHealing
 	}
 
