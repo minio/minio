@@ -115,10 +115,10 @@ type xlStorage struct {
 
 	diskInfoCache *cachevalue.Cache[DiskInfo]
 	sync.RWMutex
-
 	formatData []byte
 
-	nrRequests uint64
+	nrRequests   uint64
+	major, minor uint32
 
 	// mutex to prevent concurrent read operations overloading walks.
 	rotational bool
@@ -195,15 +195,6 @@ func getValidPath(path string) (string, error) {
 	return path, nil
 }
 
-// isDirEmpty - returns whether given directory is empty or not.
-func isDirEmpty(dirname string) bool {
-	entries, err := readDirN(dirname, 1)
-	if err != nil {
-		return false
-	}
-	return len(entries) == 0
-}
-
 // Initialize a new storage disk.
 func newLocalXLStorage(path string) (*xlStorage, error) {
 	u := url.URL{Path: path}
@@ -250,6 +241,8 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	if err != nil {
 		return s, err
 	}
+	s.major = info.Major
+	s.minor = info.Minor
 
 	if !globalIsCICD && !globalIsErasureSD {
 		var rootDrive bool
@@ -265,7 +258,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 			}
 		}
 		if rootDrive {
-			return nil, errDriveIsRoot
+			return s, errDriveIsRoot
 		}
 	}
 
@@ -581,7 +574,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		}
 
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
-		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions)
+		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions, globalExpiryState)
 		done()
 
 		if err != nil {
@@ -641,7 +634,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		for _, freeVersion := range fivs.FreeVersions {
 			oi := freeVersion.ToObjectInfo(item.bucket, item.objectPath(), versioned)
 			done = globalScannerMetrics.time(scannerMetricTierObjSweep)
-			item.applyTierObjSweep(ctx, objAPI, oi)
+			globalExpiryState.enqueueFreeVersion(oi)
 			done()
 		}
 
@@ -732,9 +725,8 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
-	s.diskInfoCache.Once.Do(func() {
-		s.diskInfoCache.TTL = time.Second
-		s.diskInfoCache.Update = func() (DiskInfo, error) {
+	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
+		func() (DiskInfo, error) {
 			dcinfo := DiskInfo{}
 			di, err := getDiskInfo(s.drivePath)
 			if err != nil {
@@ -748,8 +740,6 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInf
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
-			dcinfo.NRRequests = s.nrRequests
-			dcinfo.Rotational = s.rotational
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')
@@ -757,10 +747,12 @@ func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInf
 			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
 			dcinfo.ID = diskID
 			return dcinfo, err
-		}
-	})
+		},
+	)
 
 	info, err = s.diskInfoCache.Get()
+	info.NRRequests = s.nrRequests
+	info.Rotational = s.rotational
 	info.MountPath = s.drivePath
 	info.Endpoint = s.endpoint.String()
 	info.Scanning = atomic.LoadInt32(&s.scanning) == 1
@@ -1178,7 +1170,7 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
 	if recursive {
-		err = renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket))
+		err = renameAll(filePath, targetPath, pathutil.Join(s.drivePath, minioMetaBucket))
 	} else {
 		err = Rename(filePath, targetPath)
 	}

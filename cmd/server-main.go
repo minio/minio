@@ -30,7 +30,6 @@ import (
 	"os/signal"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -106,6 +105,12 @@ var ServerFlags = []cli.Flag{
 		Usage:  "custom connection READ deadline for incoming requests",
 		Hidden: true,
 		EnvVar: "MINIO_CONN_CLIENT_READ_DEADLINE",
+	},
+	cli.DurationFlag{
+		Name:   "conn-client-write-deadline",
+		Usage:  "custom connection WRITE deadline for outgoing requests",
+		Hidden: true,
+		EnvVar: "MINIO_CONN_CLIENT_WRITE_DEADLINE",
 	},
 	cli.DurationFlag{
 		Name:   "conn-read-deadline",
@@ -381,9 +386,10 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	})
 
 	globalTCPOptions = xhttp.TCPOptions{
-		UserTimeout:       int(ctxt.UserTimeout.Milliseconds()),
-		ClientReadTimeout: ctxt.ConnClientReadDeadline,
-		Interface:         ctxt.Interface,
+		UserTimeout:        int(ctxt.UserTimeout.Milliseconds()),
+		ClientReadTimeout:  ctxt.ConnClientReadDeadline,
+		ClientWriteTimeout: ctxt.ConnClientWriteDeadline,
+		Interface:          ctxt.Interface,
 	}
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
@@ -400,15 +406,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	}
 }
 
-var globalHealStateLK sync.RWMutex
-
 func initAllSubsystems(ctx context.Context) {
-	globalHealStateLK.Lock()
-	// New global heal state
-	globalAllHealState = newHealState(ctx, true)
-	globalBackgroundHealState = newHealState(ctx, false)
-	globalHealStateLK.Unlock()
-
 	// Initialize notification peer targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
@@ -457,7 +455,6 @@ func initAllSubsystems(ctx context.Context) {
 
 	// Create new ILM tier configuration subsystem
 	globalTierConfigMgr = NewTierConfigMgr()
-	globalTierJournal = NewTierJournal()
 
 	globalTransitionState = newTransitionState(GlobalContext)
 	globalSiteResyncMetrics = newSiteResyncMetrics(GlobalContext)
@@ -618,7 +615,12 @@ func setGlobalInternodeInterface(interfaceName string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
 
-				haddrs, err := globalDNSCache.LookupHost(ctx, host)
+				lookupHost := globalDNSCache.LookupHost
+				if IsKubernetes() || IsDocker() {
+					lookupHost = net.DefaultResolver.LookupHost
+				}
+
+				haddrs, err := lookupHost(ctx, host)
 				if err == nil {
 					ip = haddrs[0]
 				}
@@ -656,7 +658,12 @@ func getServerListenAddrs() []string {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		haddrs, err := globalDNSCache.LookupHost(ctx, host)
+		lookupHost := globalDNSCache.LookupHost
+		if IsKubernetes() || IsDocker() {
+			lookupHost = net.DefaultResolver.LookupHost
+		}
+
+		haddrs, err := lookupHost(ctx, host)
 		if err == nil {
 			for _, addr := range haddrs {
 				addrs.Add(net.JoinHostPort(addr, globalMinioPort))
@@ -842,27 +849,6 @@ func serverMain(ctx *cli.Context) {
 		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
 	}
 
-	bootstrapTrace("newSharedLock", func() {
-		globalLeaderLock = newSharedLock(GlobalContext, newObject, "leader.lock")
-	})
-
-	// Enable background operations on
-	//
-	// - Disk auto healing
-	// - MRF (most recently failed) healing
-	// - Background expiration routine for lifecycle policies
-	bootstrapTrace("initAutoHeal", func() {
-		initAutoHeal(GlobalContext, newObject)
-	})
-
-	bootstrapTrace("initHealMRF", func() {
-		initHealMRF(GlobalContext, newObject)
-	})
-
-	bootstrapTrace("initBackgroundExpiry", func() {
-		initBackgroundExpiry(GlobalContext, newObject)
-	})
-
 	var err error
 	bootstrapTrace("initServerConfig", func() {
 		if err = initServerConfig(GlobalContext, newObject); err != nil {
@@ -952,6 +938,11 @@ func serverMain(ctx *cli.Context) {
 			initBackgroundReplication(GlobalContext, newObject)
 		})
 
+		// Initialize background ILM worker poool
+		bootstrapTrace("initBackgroundExpiry", func() {
+			initBackgroundExpiry(GlobalContext, newObject)
+		})
+
 		bootstrapTrace("globalTransitionState.Init", func() {
 			globalTransitionState.Init(newObject)
 		})
@@ -971,8 +962,6 @@ func serverMain(ctx *cli.Context) {
 			bootstrapTrace("globalTierConfigMgr.Init", func() {
 				if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
 					logger.LogIf(GlobalContext, err)
-				} else {
-					logger.FatalIf(globalTierJournal.Init(GlobalContext), "Unable to initialize remote tier pending deletes journal")
 				}
 			})
 		}()

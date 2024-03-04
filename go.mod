@@ -45,14 +45,14 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.58
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v0.46.0
+	github.com/minio/console v1.0.0
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.5.3
 	github.com/minio/highwayhash v1.0.2
-	github.com/minio/kes-go v0.2.1
-	github.com/minio/madmin-go/v3 v3.0.46
-	github.com/minio/minio-go/v7 v7.0.67
+	github.com/minio/kms-go/kes v0.3.0
+	github.com/minio/madmin-go/v3 v3.0.49
+	github.com/minio/minio-go/v7 v7.0.68
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.9-0.20240209124402-7990a27fd79d
 	github.com/minio/selfupdate v0.6.0
@@ -224,7 +224,6 @@ require (
 	github.com/rs/xid v1.5.0 // indirect
 	github.com/safchain/ethtool v0.3.0 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.13 // indirect

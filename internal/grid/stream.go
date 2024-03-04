@@ -74,10 +74,15 @@ func (s *Stream) Results(next func(b []byte) error) (err error) {
 			}
 		}
 	}()
+	doneCh := s.ctx.Done()
 	for {
 		select {
-		case <-s.ctx.Done():
-			return context.Cause(s.ctx)
+		case <-doneCh:
+			if err := context.Cause(s.ctx); !errors.Is(err, errStreamEOF) {
+				return err
+			}
+			// Fall through to be sure we have returned all responses.
+			doneCh = nil
 		case resp, ok := <-s.responses:
 			if !ok {
 				done = true

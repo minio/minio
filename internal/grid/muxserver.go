@@ -103,14 +103,20 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		BaseFlags: c.baseFlags,
 	}
 	// Acknowledge Mux created.
-	var ack message
-	ack.Op = OpAckMux
-	ack.Flags = m.BaseFlags
-	ack.MuxID = m.ID
-	m.send(ack)
-	if debugPrint {
-		fmt.Println("connected stream mux:", ack.MuxID)
-	}
+	// Send async.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var ack message
+		ack.Op = OpAckMux
+		ack.Flags = m.BaseFlags
+		ack.MuxID = m.ID
+		m.send(ack)
+		if debugPrint {
+			fmt.Println("connected stream mux:", ack.MuxID)
+		}
+	}()
 
 	// Data inbound to the handler
 	var handlerIn chan []byte
@@ -118,6 +124,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		m.inbound = make(chan []byte, inboundCap)
 		handlerIn = make(chan []byte, 1)
 		go func(inbound <-chan []byte) {
+			wg.Wait()
 			defer xioutil.SafeClose(handlerIn)
 			// Send unblocks when we have delivered the message to the handler.
 			for in := range inbound {
@@ -133,6 +140,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	// Handler goroutine.
 	var handlerErr *RemoteErr
 	go func() {
+		wg.Wait()
 		start := time.Now()
 		defer func() {
 			if debugPrint {
@@ -154,6 +162,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}()
 	// Response sender gorutine...
 	go func(outBlock <-chan struct{}) {
+		wg.Wait()
 		defer m.parent.deleteMux(true, m.ID)
 		for {
 			// Process outgoing message.
@@ -196,6 +205,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	// Remote aliveness check.
 	if msg.DeadlineMS == 0 || msg.DeadlineMS > uint32(lastPingThreshold/time.Millisecond) {
 		go func() {
+			wg.Wait()
 			t := time.NewTicker(lastPingThreshold / 4)
 			defer t.Stop()
 			for {

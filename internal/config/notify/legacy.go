@@ -447,6 +447,10 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 			Value: cfg.Username,
 		},
 		config.KV{
+			Key:   target.NATSUserCredentials,
+			Value: cfg.UserCredentials,
+		},
+		config.KV{
 			Key:   target.NATSPassword,
 			Value: cfg.Password,
 		},

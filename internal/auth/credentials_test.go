@@ -148,11 +148,11 @@ func TestCreateCredentials(t *testing.T) {
 func TestCredentialsEqual(t *testing.T) {
 	cred, err := GetNewCredentials()
 	if err != nil {
-		t.Fatalf("Failed to get a new credential")
+		t.Fatalf("Failed to get a new credential: %v", err)
 	}
 	cred2, err := GetNewCredentials()
 	if err != nil {
-		t.Fatalf("Failed to get a new credential")
+		t.Fatalf("Failed to get a new credential: %v", err)
 	}
 	testCases := []struct {
 		cred           Credentials

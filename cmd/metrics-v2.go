@@ -29,7 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/cachevalue"
@@ -273,10 +273,14 @@ const (
 	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
-	expiryPendingTasks     MetricName = "expiry_pending_tasks"
-	transitionPendingTasks MetricName = "transition_pending_tasks"
-	transitionActiveTasks  MetricName = "transition_active_tasks"
-	transitionMissedTasks  MetricName = "transition_missed_immediate_tasks"
+	expiryPendingTasks           MetricName = "expiry_pending_tasks"
+	expiryMissedTasks            MetricName = "expiry_missed_tasks"
+	expiryMissedFreeVersions     MetricName = "expiry_missed_freeversions"
+	expiryMissedTierJournalTasks MetricName = "expiry_missed_tierjournal_tasks"
+	expiryNumWorkers             MetricName = "expiry_num_workers"
+	transitionPendingTasks       MetricName = "transition_pending_tasks"
+	transitionActiveTasks        MetricName = "transition_active_tasks"
+	transitionMissedTasks        MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"
 	transitionedObjects  MetricName = "transitioned_objects"
@@ -354,12 +358,10 @@ type MetricsGroupOpts struct {
 
 // RegisterRead register the metrics populator function to be used
 // to populate new values upon cache invalidation.
-func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
-	g.metricsCache = cachevalue.New[[]Metric]()
-	g.metricsCache.Once.Do(func() {
-		g.metricsCache.ReturnLastGood = true
-		g.metricsCache.TTL = g.cacheInterval
-		g.metricsCache.Update = func() ([]Metric, error) {
+func (g *MetricsGroup) RegisterRead(read func(context.Context) []Metric) {
+	g.metricsCache = cachevalue.NewFromFunc(g.cacheInterval,
+		cachevalue.Opts{ReturnLastGood: true},
+		func() ([]Metric, error) {
 			if g.metricsGroupOpts.dependGlobalObjectAPI {
 				objLayer := newObjectLayerFn()
 				// Service not initialized yet
@@ -418,8 +420,8 @@ func (g *MetricsGroup) RegisterRead(read func(ctx context.Context) []Metric) {
 				}
 			}
 			return read(GlobalContext), nil
-		}
-	})
+		},
+	)
 }
 
 func (m *Metric) clone() Metric {
@@ -2002,6 +2004,42 @@ func getILMNodeMetrics() *MetricsGroup {
 		expPendingTasks := Metric{
 			Description: getExpiryPendingTasksMD(),
 		}
+		expMissedTasks := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryMissedTasks,
+				Help:      "Number of object version expiry missed due to busy system",
+				Type:      counterMetric,
+			},
+		}
+		expMissedFreeVersions := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryMissedFreeVersions,
+				Help:      "Number of free versions expiry missed due to busy system",
+				Type:      counterMetric,
+			},
+		}
+		expMissedTierJournalTasks := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryMissedTierJournalTasks,
+				Help:      "Number of tier journal entries cleanup missed due to busy system",
+				Type:      counterMetric,
+			},
+		}
+		expNumWorkers := Metric{
+			Description: MetricDescription{
+				Namespace: nodeMetricNamespace,
+				Subsystem: ilmSubsystem,
+				Name:      expiryNumWorkers,
+				Help:      "Number of workers expiring object versions currently",
+				Type:      gaugeMetric,
+			},
+		}
 		trPendingTasks := Metric{
 			Description: getTransitionPendingTasksMD(),
 		}
@@ -2013,6 +2051,10 @@ func getILMNodeMetrics() *MetricsGroup {
 		}
 		if globalExpiryState != nil {
 			expPendingTasks.Value = float64(globalExpiryState.PendingTasks())
+			expMissedTasks.Value = float64(globalExpiryState.stats.MissedTasks())
+			expMissedFreeVersions.Value = float64(globalExpiryState.stats.MissedFreeVersTasks())
+			expMissedTierJournalTasks.Value = float64(globalExpiryState.stats.MissedTierJournalTasks())
+			expNumWorkers.Value = float64(globalExpiryState.stats.NumWorkers())
 		}
 		if globalTransitionState != nil {
 			trPendingTasks.Value = float64(globalTransitionState.PendingTasks())
@@ -2021,6 +2063,10 @@ func getILMNodeMetrics() *MetricsGroup {
 		}
 		return []Metric{
 			expPendingTasks,
+			expMissedTasks,
+			expMissedFreeVersions,
+			expMissedTierJournalTasks,
+			expNumWorkers,
 			trPendingTasks,
 			trActiveTasks,
 			trMissedTasks,

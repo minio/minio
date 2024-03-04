@@ -175,8 +175,25 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	z.poolMeta = newPoolMeta(z, poolMeta{})
 	z.poolMeta.dontSave = true
 
+	bootstrapTrace("newSharedLock", func() {
+		globalLeaderLock = newSharedLock(GlobalContext, z, "leader.lock")
+	})
+
+	// Enable background operations on
+	//
+	// - Disk auto healing
+	// - MRF (most recently failed) healing
+	// - Background expiration routine for lifecycle policies
+	bootstrapTrace("initAutoHeal", func() {
+		initAutoHeal(GlobalContext, z)
+	})
+
+	bootstrapTrace("initHealMRF", func() {
+		go globalMRFState.healRoutine(z)
+	})
+
 	// initialize the object layer.
-	setObjectLayer(z)
+	defer setObjectLayer(z)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	attempt := 1
@@ -1848,15 +1865,13 @@ var listBucketsCache = cachevalue.New[[]BucketInfo]()
 // that all buckets are present on all serverPools.
 func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
 	if opts.Cached {
-		listBucketsCache.Once.Do(func() {
-			listBucketsCache.TTL = time.Second
-
-			listBucketsCache.ReturnLastGood = true
-			listBucketsCache.NoWait = true
-			listBucketsCache.Update = func() ([]BucketInfo, error) {
+		listBucketsCache.InitOnce(time.Second,
+			cachevalue.Opts{ReturnLastGood: true, NoWait: true},
+			func() ([]BucketInfo, error) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
 				buckets, err = z.s3Peer.ListBuckets(ctx, opts)
-				cancel()
 				if err != nil {
 					return nil, err
 				}
@@ -1867,8 +1882,8 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 					}
 				}
 				return buckets, nil
-			}
-		})
+			},
+		)
 
 		return listBucketsCache.Get()
 	}
@@ -2303,6 +2318,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 	storageInfo := z.StorageInfo(ctx, false)
 
 	for _, disk := range storageInfo.Disks {
+		if disk.Local && opts.Maintenance {
+			continue
+		}
+
 		if disk.PoolIndex > -1 && disk.SetIndex > -1 {
 			if disk.State == madmin.DriveStateOk {
 				si := erasureSetUpCount[disk.PoolIndex][disk.SetIndex]

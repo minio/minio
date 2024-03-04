@@ -1,4 +1,7 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+//go:build linux && !appengine
+// +build linux,!appengine
+
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,23 +18,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package kms
+package cmd
 
-import (
-	"context"
+import "syscall"
 
-	"github.com/minio/kms-go/kes"
-)
-
-// PolicyManager is the generic interface that handles KMS policy] operations
-type PolicyManager interface {
-	// DescribePolicy describes a policy by returning its metadata.
-	// e.g. who created the policy at which point in time.
-	DescribePolicy(ctx context.Context, policy string) (*kes.PolicyInfo, error)
-
-	// GetPolicy gets a policy from KMS.
-	GetPolicy(ctx context.Context, policy string) (*kes.Policy, error)
-
-	// ListPolicies lists all policies.
-	ListPolicies(ctx context.Context) (*kes.ListIter[string], error)
+// Returns true if no error and there is no object or prefix inside this directory
+func isDirEmpty(dirname string) bool {
+	var stat syscall.Stat_t
+	if err := syscall.Stat(dirname, &stat); err != nil {
+		return false
+	}
+	return stat.Mode&syscall.S_IFMT == syscall.S_IFDIR && stat.Nlink < 3
 }

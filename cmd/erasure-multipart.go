@@ -33,6 +33,7 @@ import (
 
 	"github.com/klauspost/readahead"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -459,6 +460,11 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	// Guess content-type from the extension if possible.
 	if userDefined["content-type"] == "" {
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
+	}
+
+	// if storageClass is standard no need to save it as part of metadata.
+	if userDefined[xhttp.AmzStorageClass] == storageclass.STANDARD {
+		delete(userDefined, xhttp.AmzStorageClass)
 	}
 
 	if opts.WantChecksum != nil && opts.WantChecksum.Type.IsSet() {

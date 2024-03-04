@@ -27,7 +27,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -50,7 +49,7 @@ import (
 	"github.com/minio/console/api/operations"
 	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
 	consoleCerts "github.com/minio/console/pkg/certs"
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -83,12 +82,8 @@ func init() {
 		}
 	}
 
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
-
-	initGlobalContext()
 
 	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
 	go globalBatchJobsMetrics.purgeJobMetrics()
@@ -395,6 +390,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.ConnReadDeadline = ctx.Duration("conn-read-deadline")
 	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
 	ctxt.ConnClientReadDeadline = ctx.Duration("conn-client-read-deadline")
+	ctxt.ConnClientWriteDeadline = ctx.Duration("conn-client-write-deadline")
 
 	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
@@ -757,7 +753,12 @@ func serverHandleEnvVars() {
 		for _, endpoint := range minioEndpoints {
 			if net.ParseIP(endpoint) == nil {
 				// Checking if the IP is a DNS entry.
-				addrs, err := globalDNSCache.LookupHost(GlobalContext, endpoint)
+				lookupHost := globalDNSCache.LookupHost
+				if IsKubernetes() || IsDocker() {
+					lookupHost = net.DefaultResolver.LookupHost
+				}
+
+				addrs, err := lookupHost(GlobalContext, endpoint)
 				if err != nil {
 					logger.FatalIf(err, "Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
 				}
@@ -900,7 +901,6 @@ func handleKMSConfig() {
 			}
 			kmsConf = kms.Config{
 				Endpoints:    endpoints,
-				Enclave:      env.Get(kms.EnvKESEnclave, ""),
 				DefaultKeyID: env.Get(kms.EnvKESKeyName, ""),
 				APIKey:       key,
 				RootCAs:      rootCAs,
@@ -946,7 +946,6 @@ func handleKMSConfig() {
 
 			kmsConf = kms.Config{
 				Endpoints:        endpoints,
-				Enclave:          env.Get(kms.EnvKESEnclave, ""),
 				DefaultKeyID:     env.Get(kms.EnvKESKeyName, ""),
 				Certificate:      certificate,
 				ReloadCertEvents: reloadCertEvents,

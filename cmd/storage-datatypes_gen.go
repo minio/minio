@@ -5375,3 +5375,181 @@ func (z VolsInfo) Msgsize() (s int) {
 	}
 	return
 }
+
+// DecodeMsg implements msgp.Decodable
+func (z *WriteAllHandlerParams) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "b":
+			z.Buf, err = dc.ReadBytes(z.Buf)
+			if err != nil {
+				err = msgp.WrapError(err, "Buf")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *WriteAllHandlerParams) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
+	// write "id"
+	err = en.Append(0x84, 0xa2, 0x69, 0x64)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.DiskID)
+	if err != nil {
+		err = msgp.WrapError(err, "DiskID")
+		return
+	}
+	// write "v"
+	err = en.Append(0xa1, 0x76)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Volume)
+	if err != nil {
+		err = msgp.WrapError(err, "Volume")
+		return
+	}
+	// write "fp"
+	err = en.Append(0xa2, 0x66, 0x70)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.FilePath)
+	if err != nil {
+		err = msgp.WrapError(err, "FilePath")
+		return
+	}
+	// write "b"
+	err = en.Append(0xa1, 0x62)
+	if err != nil {
+		return
+	}
+	err = en.WriteBytes(z.Buf)
+	if err != nil {
+		err = msgp.WrapError(err, "Buf")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *WriteAllHandlerParams) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 4
+	// string "id"
+	o = append(o, 0x84, 0xa2, 0x69, 0x64)
+	o = msgp.AppendString(o, z.DiskID)
+	// string "v"
+	o = append(o, 0xa1, 0x76)
+	o = msgp.AppendString(o, z.Volume)
+	// string "fp"
+	o = append(o, 0xa2, 0x66, 0x70)
+	o = msgp.AppendString(o, z.FilePath)
+	// string "b"
+	o = append(o, 0xa1, 0x62)
+	o = msgp.AppendBytes(o, z.Buf)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *WriteAllHandlerParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "id":
+			z.DiskID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "DiskID")
+				return
+			}
+		case "v":
+			z.Volume, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Volume")
+				return
+			}
+		case "fp":
+			z.FilePath, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "FilePath")
+				return
+			}
+		case "b":
+			z.Buf, bts, err = msgp.ReadBytesBytes(bts, z.Buf)
+			if err != nil {
+				err = msgp.WrapError(err, "Buf")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *WriteAllHandlerParams) Msgsize() (s int) {
+	s = 1 + 3 + msgp.StringPrefixSize + len(z.DiskID) + 2 + msgp.StringPrefixSize + len(z.Volume) + 3 + msgp.StringPrefixSize + len(z.FilePath) + 2 + msgp.BytesPrefixSize + len(z.Buf)
+	return
+}

@@ -120,6 +120,7 @@ const (
 	DriveSubSys          = madmin.DriveSubSys
 	BatchSubSys          = madmin.BatchSubSys
 	BrowserSubSys        = madmin.BrowserSubSys
+	ILMSubSys            = madmin.ILMSubsys
 
 	// Add new constants here (similar to above) if you add new fields to config.
 )
@@ -188,6 +189,7 @@ var SubSystemsDynamic = set.CreateStringSet(
 	AuditKafkaSubSys,
 	StorageClassSubSys,
 	CacheSubSys,
+	ILMSubSys,
 	BatchSubSys,
 	BrowserSubSys,
 )
@@ -211,6 +213,7 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	SubnetSubSys,
 	CallhomeSubSys,
 	DriveSubSys,
+	ILMSubSys,
 	BatchSubSys,
 	BrowserSubSys,
 )

@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -46,6 +47,7 @@ type apiConfig struct {
 	replicationPriority   string
 	replicationMaxWorkers int
 	transitionWorkers     int
+	expiryWorkers         int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
@@ -70,7 +72,7 @@ func cgroupMemLimit() (limit uint64) {
 	if err != nil {
 		return 0
 	}
-	limit, err = strconv.ParseUint(string(buf), 10, 64)
+	limit, err = strconv.ParseUint(strings.TrimSpace(string(buf)), 10, 64)
 	if err != nil {
 		// The kernel can return valid but non integer values
 		// but still, no need to interpret more
@@ -169,7 +171,9 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.replicationPriority = cfg.ReplicationPriority
 	t.replicationMaxWorkers = cfg.ReplicationMaxWorkers
-	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
+
+	// N B api.transition_workers will be deprecated
+	if globalTransitionState != nil {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
 	t.transitionWorkers = cfg.TransitionWorkers
@@ -362,6 +366,13 @@ func (t *apiConfig) getReplicationOpts() replicationPoolOpts {
 		Priority:   t.replicationPriority,
 		MaxWorkers: t.replicationMaxWorkers,
 	}
+}
+
+func (t *apiConfig) getExpiryWorkers() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.expiryWorkers
 }
 
 func (t *apiConfig) getTransitionWorkers() int {

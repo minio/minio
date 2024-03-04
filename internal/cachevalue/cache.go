@@ -23,22 +23,8 @@ import (
 	"time"
 )
 
-// Cache contains a synchronized value that is considered valid
-// for a specific amount of time.
-// An Update function must be set to provide an updated value when needed.
-type Cache[T any] struct {
-	// Update must return an updated value.
-	// If an error is returned the cached value is not set.
-	// Only one caller will call this function at any time, others will be blocking.
-	// The returned value can no longer be modified once returned.
-	// Should be set before calling Get().
-	Update func() (T, error)
-
-	// TTL for a cached value.
-	// If not set 1 second TTL is assumed.
-	// Should be set before calling Get().
-	TTL time.Duration
-
+// Opts contains options for the cache.
+type Opts struct {
 	// When set to true, return the last cached value
 	// even if updating the value errors out.
 	// Returns the last good value AND the error.
@@ -53,6 +39,23 @@ type Cache[T any] struct {
 	// if TTL has expired but 2x TTL has not yet passed,
 	// but will fetch a new value in the background.
 	NoWait bool
+}
+
+// Cache contains a synchronized value that is considered valid
+// for a specific amount of time.
+// An Update function must be set to provide an updated value when needed.
+type Cache[T any] struct {
+	// updateFn must return an updated value.
+	// If an error is returned the cached value is not set.
+	// Only one caller will call this function at any time, others will be blocking.
+	// The returned value can no longer be modified once returned.
+	// Should be set before calling Get().
+	updateFn func() (T, error)
+
+	// ttl for a cached value.
+	ttl time.Duration
+
+	opts Opts
 
 	// Once can be used to initialize values for lazy initialization.
 	// Should be set before calling Get().
@@ -67,29 +70,50 @@ type Cache[T any] struct {
 	updating     sync.Mutex
 }
 
-// New initializes a new cached value instance.
-func New[I any]() *Cache[I] {
-	return &Cache[I]{}
+// New allocates a new cached value instance. Tt must be initialized with
+// `.TnitOnce`.
+func New[T any]() *Cache[T] {
+	return &Cache[T]{}
+}
+
+// NewFromFunc allocates a new cached value instance and initializes it with an
+// update function, making it ready for use.
+func NewFromFunc[T any](ttl time.Duration, opts Opts, update func() (T, error)) *Cache[T] {
+	return &Cache[T]{
+		ttl:      ttl,
+		updateFn: update,
+		opts:     opts,
+	}
+}
+
+// InitOnce initializes the cache with a TTL and an update function. It is
+// guaranteed to be called only once.
+func (t *Cache[T]) InitOnce(ttl time.Duration, opts Opts, update func() (T, error)) {
+	t.Once.Do(func() {
+		t.ttl = ttl
+		t.updateFn = update
+		t.opts = opts
+	})
 }
 
 // Get will return a cached value or fetch a new one.
-// If the Update function returns an error the value is forwarded as is and not cached.
-func (t *Cache[I]) Get() (item I, err error) {
+// Tf the Update function returns an error the value is forwarded as is and not cached.
+func (t *Cache[T]) Get() (T, error) {
 	v := t.valErr.Load()
-	ttl := t.ttl()
+	ttl := t.ttl
 	vTime := t.lastUpdateMs.Load()
 	tNow := time.Now().UnixMilli()
 	if v != nil && tNow-vTime < ttl.Milliseconds() {
 		if v.e == nil {
 			return v.v, nil
 		}
-		if v.e != nil && t.CacheError || t.ReturnLastGood {
+		if v.e != nil && t.opts.CacheError || t.opts.ReturnLastGood {
 			return v.v, v.e
 		}
 	}
 
 	// Fetch new value.
-	if t.NoWait && v != nil && tNow-vTime < ttl.Milliseconds()*2 && (v.e == nil || t.CacheError) {
+	if t.opts.NoWait && v != nil && tNow-vTime < ttl.Milliseconds()*2 && (v.e == nil || t.opts.CacheError) {
 		if t.updating.TryLock() {
 			go func() {
 				defer t.updating.Unlock()
@@ -113,18 +137,10 @@ func (t *Cache[I]) Get() (item I, err error) {
 	return v.v, v.e
 }
 
-func (t *Cache[_]) ttl() time.Duration {
-	ttl := t.TTL
-	if ttl <= 0 {
-		ttl = time.Second
-	}
-	return ttl
-}
-
 func (t *Cache[T]) update() {
-	val, err := t.Update()
+	val, err := t.updateFn()
 	if err != nil {
-		if t.ReturnLastGood {
+		if t.opts.ReturnLastGood {
 			// Keep last good value.
 			v := t.valErr.Load()
 			if v != nil {

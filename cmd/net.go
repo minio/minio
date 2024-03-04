@@ -98,7 +98,12 @@ func mustGetLocalIP6() (ipList set.StringSet) {
 
 // getHostIP returns IP address of given host.
 func getHostIP(host string) (ipList set.StringSet, err error) {
-	addrs, err := globalDNSCache.LookupHost(GlobalContext, host)
+	lookupHost := globalDNSCache.LookupHost
+	if IsKubernetes() || IsDocker() {
+		lookupHost = net.DefaultResolver.LookupHost
+	}
+
+	addrs, err := lookupHost(GlobalContext, host)
 	if err != nil {
 		return ipList, err
 	}

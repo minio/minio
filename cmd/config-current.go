@@ -18,13 +18,17 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 
+	"github.com/minio/kms-go/kes"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/browser"
+	"github.com/minio/minio/internal/kms"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
@@ -41,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/config/ilm"
 	"github.com/minio/minio/internal/config/lambda"
 	"github.com/minio/minio/internal/config/notify"
 	"github.com/minio/minio/internal/config/policy/opa"
@@ -74,6 +79,7 @@ func initHelp() {
 		config.SubnetSubSys:         subnet.DefaultKVS,
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 		config.DriveSubSys:          drive.DefaultKVS,
+		config.ILMSubSys:            ilm.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.BatchSubSys:          batch.DefaultKVS,
 		config.BrowserSubSys:        browser.DefaultKVS,
@@ -569,6 +575,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		}
 
 		globalAPIConfig.init(apiConfig, setDriveCounts)
+		autoGenerateRootCredentials() // Generate the KMS root credentials here since we don't know whether API root access is disabled until now.
 
 		// Initialize remote instance transport once.
 		getRemoteInstanceTransportOnce.Do(func() {
@@ -711,6 +718,22 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply browser config: %w", err)
 		}
 		globalBrowserConfig.Update(browserCfg)
+	case config.ILMSubSys:
+		ilmCfg, err := ilm.LookupConfig(s[config.ILMSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply ilm config: %w", err)
+		}
+		if globalTransitionState != nil {
+			globalTransitionState.UpdateWorkers(ilmCfg.TransitionWorkers)
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("ILM transition subsystem not initialized"))
+		}
+		if globalExpiryState != nil {
+			globalExpiryState.ResizeWorkers(ilmCfg.ExpirationWorkers)
+		} else {
+			logger.LogIf(ctx, fmt.Errorf("ILM expiration subsystem not initialized"))
+		}
+
 	}
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
@@ -718,6 +741,55 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		globalServerConfig[subSys] = s[subSys]
 	}
 	return nil
+}
+
+// autoGenerateRootCredentials generates root credentials deterministically if
+// a KMS is configured, no manual credentials have been specified and if root
+// access is disabled.
+func autoGenerateRootCredentials() {
+	if GlobalKMS == nil {
+		return
+	}
+	if globalAPIConfig.permitRootAccess() || !globalActiveCred.Equal(auth.DefaultCredentials) {
+		return
+	}
+
+	if manager, ok := GlobalKMS.(kms.KeyManager); ok {
+		stat, err := GlobalKMS.Stat(GlobalContext)
+		if err != nil {
+			logger.LogIf(GlobalContext, err, "Unable to generate root credentials using KMS")
+			return
+		}
+
+		aKey, err := manager.HMAC(GlobalContext, stat.DefaultKey, []byte("root access key"))
+		if errors.Is(err, kes.ErrNotAllowed) {
+			return // If we don't have permission to compute the HMAC, don't change the cred.
+		}
+		if err != nil {
+			logger.Fatal(err, "Unable to generate root access key using KMS")
+		}
+
+		sKey, err := manager.HMAC(GlobalContext, stat.DefaultKey, []byte("root secret key"))
+		if err != nil {
+			// Here, we must have permission. Otherwise, we would have failed earlier.
+			logger.Fatal(err, "Unable to generate root secret key using KMS")
+		}
+
+		accessKey, err := auth.GenerateAccessKey(20, bytes.NewReader(aKey))
+		if err != nil {
+			logger.Fatal(err, "Unable to generate root access key")
+		}
+		secretKey, err := auth.GenerateSecretKey(32, bytes.NewReader(sKey))
+		if err != nil {
+			logger.Fatal(err, "Unable to generate root secret key")
+		}
+
+		logger.Info("Automatically generated root access key and secret key with the KMS")
+		globalActiveCred = auth.Credentials{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+		}
+	}
 }
 
 // applyDynamicConfig will apply dynamic config values.

@@ -41,6 +41,7 @@ const (
 	apiReplicationMaxWorkers   = "replication_max_workers"
 
 	apiTransitionWorkers           = "transition_workers"
+	apiExpiryWorkers               = "expiry_workers"
 	apiStaleUploadsCleanupInterval = "stale_uploads_cleanup_interval"
 	apiStaleUploadsExpiry          = "stale_uploads_expiry"
 	apiDeleteCleanupInterval       = "delete_cleanup_interval"
@@ -56,6 +57,7 @@ const (
 	EnvAPICorsAllowOrigin             = "MINIO_API_CORS_ALLOW_ORIGIN"
 	EnvAPIRemoteTransportDeadline     = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
 	EnvAPITransitionWorkers           = "MINIO_API_TRANSITION_WORKERS"
+	EnvAPIExpiryWorkers               = "MINIO_API_EXPIRY_WORKERS"
 	EnvAPIListQuorum                  = "MINIO_API_LIST_QUORUM"
 	EnvAPISecureCiphers               = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
 	EnvAPIReplicationPriority         = "MINIO_API_REPLICATION_PRIORITY"
@@ -118,6 +120,10 @@ var (
 			Value: "100",
 		},
 		config.KV{
+			Key:   apiExpiryWorkers,
+			Value: "100",
+		},
+		config.KV{
 			Key:   apiStaleUploadsCleanupInterval,
 			Value: "6h",
 		},
@@ -164,6 +170,7 @@ type Config struct {
 	ReplicationPriority         string        `json:"replication_priority"`
 	ReplicationMaxWorkers       int           `json:"replication_max_workers"`
 	TransitionWorkers           int           `json:"transition_workers"`
+	ExpiryWorkers               int           `json:"expiry_workers"`
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
@@ -280,6 +287,15 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		return cfg, err
 	}
 	cfg.TransitionWorkers = transitionWorkers
+
+	expiryWorkers, err := strconv.Atoi(env.Get(EnvAPIExpiryWorkers, kvs.GetWithDefault(apiExpiryWorkers, DefaultKVS)))
+	if err != nil {
+		return cfg, err
+	}
+	if expiryWorkers <= 0 || expiryWorkers > 500 {
+		return cfg, config.ErrInvalidExpiryWorkersValue(nil).Msg("Number of expiry workers should be between 1 and 500")
+	}
+	cfg.ExpiryWorkers = expiryWorkers
 
 	v := env.Get(EnvAPIDeleteCleanupInterval, kvs.Get(apiDeleteCleanupInterval))
 	if v == "" {

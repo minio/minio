@@ -49,7 +49,7 @@ minio server ~/test
 
 > If MinIO is configured to expose metrics without authentication, you don't need to use `mc` to generate prometheus config. You can skip reading further and move to 3.2 section.
 
-The Prometheus endpoint in MinIO requires authentication by default. Prometheus supports a bearer token approach to authenticate prometheus scrape requests, override the default Prometheus config with the one generated using mc. To generate a Prometheus config for an alias, use [mc](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart) as follows `mc admin prometheus generate <alias>`.
+The Prometheus endpoint in MinIO requires authentication by default. Prometheus supports a bearer token approach to authenticate prometheus scrape requests, override the default Prometheus config with the one generated using mc. To generate a Prometheus config for an alias, use [mc](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart) as follows `mc admin prometheus generate <alias> [METRIC-TYPE]`. The valid values for METRIC-TYPE are `cluster`, `node`, `bucket` and `resource` and if not mentioned, it defaults to `cluster`.
 
 The command will generate the `scrape_configs` section of the prometheus.yml as follows:
 
@@ -71,6 +71,28 @@ scrape_configs:
 - job_name: minio-job-bucket
   bearer_token: <secret>
   metrics_path: /minio/v2/metrics/bucket
+  scheme: http
+  static_configs:
+  - targets: ['localhost:9000']
+```
+
+##### Node centric (optional)
+
+```yaml
+- job_name: minio-job-node
+  bearer_token: <secret>
+  metrics_path: /minio/v2/metrics/node
+  scheme: http
+  static_configs:
+  - targets: ['localhost:9000']
+```
+
+##### Resource centric (optional)
+
+```yaml
+- job_name: minio-job-resource
+  bearer_token: <secret>
+  metrics_path: /minio/v2/metrics/resource
   scheme: http
   static_configs:
   - targets: ['localhost:9000']
@@ -116,6 +138,19 @@ scrape_configs:
   - targets: ['localhost:9000']
 ```
 
+##### Resource (optional)
+
+Optionally you can also collect resource metrics.
+
+```yaml
+scrape_configs:
+- job_name: minio-job
+  metrics_path: /minio/v2/metrics/resource
+  scheme: http
+  static_configs:
+  - targets: ['localhost:9000']
+```
+
 ### 4. Update `scrape_configs` section in prometheus.yml
 
 To authorize every scrape request, copy and paste the generated `scrape_configs` section in the prometheus.yml and restart the Prometheus service.
@@ -140,6 +175,8 @@ After Prometheus is configured, you can use Grafana to visualize MinIO metrics. 
 
 - MinIO exports Prometheus compatible data by default as an authorized endpoint at `/minio/v2/metrics/cluster`. 
 - MinIO exports Prometheus compatible data by default which is bucket centric as an authorized endpoint at `/minio/v2/metrics/bucket`.
+- MinIO exports Prometheus compatible data by default which is node centric as an authorized endpoint at `/minio/v2/metrics/node`.
+- MinIO exports Prometheus compatible data by default which is resource centric as an authorized endpoint at `/minio/v2/metrics/resource`.
 
 All of these can be accessed via Prometheus dashboard. A sample list of exposed metrics along with their definition is available on our public demo server at
 

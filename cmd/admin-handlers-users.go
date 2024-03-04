@@ -33,6 +33,7 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
@@ -1197,21 +1198,15 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	bucketStorageCache.Once.Do(func() {
-		// Set this to 10 secs since its enough, as scanner
-		// does not update the bucket usage values frequently.
-		bucketStorageCache.TTL = 10 * time.Second
-
-		// Rely on older value if usage loading fails from disk.
-		bucketStorageCache.ReturnLastGood = true
-		bucketStorageCache.NoWait = true
-		bucketStorageCache.Update = func() (DataUsageInfo, error) {
+	bucketStorageCache.InitOnce(10*time.Second,
+		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
+		func() (DataUsageInfo, error) {
 			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
 			defer done()
 
 			return loadDataUsageFromBackend(ctx, objectAPI)
-		}
-	})
+		},
+	)
 
 	dataUsageInfo, _ := bucketStorageCache.Get()
 

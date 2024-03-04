@@ -37,6 +37,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
@@ -1509,6 +1510,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		userDefined["content-type"] = mimedb.TypeByExtension(path.Ext(object))
 	}
 
+	// if storageClass is standard no need to save it as part of metadata.
+	if userDefined[xhttp.AmzStorageClass] == storageclass.STANDARD {
+		delete(userDefined, xhttp.AmzStorageClass)
+	}
+
 	// Fill all the necessary metadata.
 	// Update `xl.meta` content on each disks.
 	for index := range partsMetadata {
@@ -1969,6 +1975,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			ExpireRestored:   opts.Transition.ExpireRestored,
 		}
 		fi.SetTierFreeVersionID(fvID)
+		if opts.SkipFreeVersion {
+			fi.SetSkipTierFreeVersion()
+		}
 		if opts.VersionID != "" {
 			fi.VersionID = opts.VersionID
 		} else if opts.Versioned {
@@ -1998,6 +2007,9 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		ExpireRestored:   opts.Transition.ExpireRestored,
 	}
 	dfi.SetTierFreeVersionID(fvID)
+	if opts.SkipFreeVersion {
+		dfi.SetSkipTierFreeVersion()
+	}
 	if err = er.deleteObjectVersion(ctx, bucket, object, dfi, opts.DeleteMarker); err != nil {
 		return objInfo, toObjectErr(err, bucket, object)
 	}

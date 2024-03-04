@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 )
 
 // KMS is the generic interface that abstracts over

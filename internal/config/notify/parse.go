@@ -946,6 +946,11 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			usernameEnv = usernameEnv + config.Default + k
 		}
 
+		userCredentialsEnv := target.NATSUserCredentials
+		if k != config.Default {
+			userCredentialsEnv = userCredentialsEnv + config.Default + k
+		}
+
 		passwordEnv := target.EnvNATSPassword
 		if k != config.Default {
 			passwordEnv = passwordEnv + config.Default + k
@@ -982,21 +987,22 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 		}
 
 		natsArgs := target.NATSArgs{
-			Enable:        true,
-			Address:       *address,
-			Subject:       env.Get(subjectEnv, kv.Get(target.NATSSubject)),
-			Username:      env.Get(usernameEnv, kv.Get(target.NATSUsername)),
-			Password:      env.Get(passwordEnv, kv.Get(target.NATSPassword)),
-			CertAuthority: env.Get(certAuthorityEnv, kv.Get(target.NATSCertAuthority)),
-			ClientCert:    env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
-			ClientKey:     env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
-			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
-			TLS:           env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
-			TLSSkipVerify: env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
-			PingInterval:  pingInterval,
-			QueueDir:      env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
-			QueueLimit:    queueLimit,
-			RootCAs:       rootCAs,
+			Enable:          true,
+			Address:         *address,
+			Subject:         env.Get(subjectEnv, kv.Get(target.NATSSubject)),
+			Username:        env.Get(usernameEnv, kv.Get(target.NATSUsername)),
+			UserCredentials: env.Get(userCredentialsEnv, kv.Get(target.NATSUserCredentials)),
+			Password:        env.Get(passwordEnv, kv.Get(target.NATSPassword)),
+			CertAuthority:   env.Get(certAuthorityEnv, kv.Get(target.NATSCertAuthority)),
+			ClientCert:      env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
+			ClientKey:       env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
+			Token:           env.Get(tokenEnv, kv.Get(target.NATSToken)),
+			TLS:             env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
+			TLSSkipVerify:   env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
+			PingInterval:    pingInterval,
+			QueueDir:        env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
+			QueueLimit:      queueLimit,
+			RootCAs:         rootCAs,
 		}
 		natsArgs.JetStream.Enable = env.Get(jetStreamEnableEnv, kv.Get(target.NATSJetStream)) == config.EnableOn
 

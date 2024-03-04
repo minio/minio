@@ -20,7 +20,7 @@ package kms
 import (
 	"context"
 
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 )
 
 // IdentityManager is the generic interface that handles KMS identity operations
@@ -33,11 +33,6 @@ type IdentityManager interface {
 	// It infers the identity from the TLS client certificate used to authenticate.
 	// It returns the identity and policy information for the client identity.
 	DescribeSelfIdentity(ctx context.Context) (*kes.IdentityInfo, *kes.Policy, error)
-
-	// 	DeleteIdentity deletes an identity from KMS.
-	// The client certificate that corresponds to the identity is no longer authorized to perform any API operations.
-	// The admin identity cannot be deleted.
-	DeleteIdentity(ctx context.Context, identity string) error
 
 	// ListIdentities lists all identities.
 	ListIdentities(ctx context.Context) (*kes.ListIter[kes.Identity], error)

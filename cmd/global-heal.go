@@ -224,7 +224,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 		disks, _ := er.getOnlineDisksWithHealing(false)
 		if len(disks) == 0 {
-			logger.LogIf(ctx, fmt.Errorf("no online disks found to heal the bucket `%s`", bucket))
+			// No object healing necessary
+			tracker.bucketDone(bucket)
+			logger.LogIf(ctx, tracker.update(ctx))
 			continue
 		}
 
@@ -236,6 +238,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		type healEntryResult struct {
 			bytes     uint64
 			success   bool
+			skipped   bool
 			entryDone bool
 			name      string
 		}
@@ -254,6 +257,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		healEntryFailure := func(sz uint64) healEntryResult {
 			return healEntryResult{
 				bytes: sz,
+			}
+		}
+		healEntrySkipped := func(sz uint64) healEntryResult {
+			return healEntryResult{
+				bytes:   sz,
+				skipped: true,
 			}
 		}
 
@@ -289,13 +298,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					continue
 				}
 
-				tracker.updateProgress(res.success, res.bytes)
+				tracker.updateProgress(res.success, res.skipped, res.bytes)
 			}
 		}()
 
 		send := func(result healEntryResult) bool {
 			select {
 			case <-ctx.Done():
+				if !contextCanceled(ctx) {
+					logger.LogIf(ctx, ctx.Err())
+				}
 				return false
 			case results <- result:
 				return true
@@ -367,6 +379,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bucket, version.Name, version) {
 					versionNotFound++
+					if !send(healEntrySkipped(uint64(version.Size))) {
+						return
+					}
 					continue
 				}
 
@@ -472,9 +487,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 func healBucket(bucket string, scan madmin.HealScanMode) error {
 	// Get background heal sequence to send elements to heal
-	globalHealStateLK.Lock()
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-	globalHealStateLK.Unlock()
 	if ok {
 		return bgSeq.queueHealTask(healSource{bucket: bucket}, madmin.HealItemBucket)
 	}
@@ -484,9 +497,7 @@ func healBucket(bucket string, scan madmin.HealScanMode) error {
 // healObject sends the given object/version to the background healing workers
 func healObject(bucket, object, versionID string, scan madmin.HealScanMode) error {
 	// Get background heal sequence to send elements to heal
-	globalHealStateLK.Lock()
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
-	globalHealStateLK.Unlock()
 	if ok {
 		return bgSeq.queueHealTask(healSource{
 			bucket:    bucket,

@@ -54,7 +54,7 @@ var errDiskStale = errors.New("drive stale")
 
 // To abstract a disk over network.
 type storageRESTServer struct {
-	poolIndex, setIndex, diskIndex int
+	endpoint Endpoint
 }
 
 var (
@@ -64,6 +64,7 @@ var (
 	storageDiskInfoRPC       = grid.NewSingleHandler[*DiskInfoOptions, *DiskInfo](grid.HandlerDiskInfo, func() *DiskInfoOptions { return &DiskInfoOptions{} }, func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse().AllowCallRequestPool(true)
 	storageNSScannerRPC      = grid.NewStream[*nsScannerOptions, grid.NoPayload, *nsScannerResp](grid.HandlerNSScanner, func() *nsScannerOptions { return &nsScannerOptions{} }, nil, func() *nsScannerResp { return &nsScannerResp{} })
 	storageReadAllRPC        = grid.NewSingleHandler[*ReadAllHandlerParams, *grid.Bytes](grid.HandlerReadAll, func() *ReadAllHandlerParams { return &ReadAllHandlerParams{} }, grid.NewBytes).AllowCallRequestPool(true)
+	storageWriteAllRPC       = grid.NewSingleHandler[*WriteAllHandlerParams, grid.NoPayload](grid.HandlerWriteAll, func() *WriteAllHandlerParams { return &WriteAllHandlerParams{} }, grid.NewNoPayload)
 	storageReadVersionRPC    = grid.NewSingleHandler[*grid.MSS, *FileInfo](grid.HandlerReadVersion, grid.NewMSS, func() *FileInfo { return &FileInfo{} })
 	storageReadXLRPC         = grid.NewSingleHandler[*grid.MSS, *RawFileInfo](grid.HandlerReadXL, grid.NewMSS, func() *RawFileInfo { return &RawFileInfo{} })
 	storageRenameDataRPC     = grid.NewSingleHandler[*RenameDataHandlerParams, *RenameDataResp](grid.HandlerRenameData, func() *RenameDataHandlerParams { return &RenameDataHandlerParams{} }, func() *RenameDataResp { return &RenameDataResp{} })
@@ -74,10 +75,21 @@ var (
 	storageListDirRPC        = grid.NewStream[*grid.MSS, grid.NoPayload, *ListDirResult](grid.HandlerListDir, grid.NewMSS, nil, func() *ListDirResult { return &ListDirResult{} }).WithOutCapacity(1)
 )
 
-func (s *storageRESTServer) getStorage() StorageAPI {
+func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	globalLocalDrivesMu.RLock()
 	defer globalLocalDrivesMu.RUnlock()
-	return globalLocalSetDrives[s.poolIndex][s.setIndex][s.diskIndex]
+	if len(globalLocalSetDrives) == 0 {
+		for _, drive := range globalLocalDrives {
+			if drive != nil && drive.Endpoint().Equal(endpoint) {
+				return drive
+			}
+		}
+	}
+	return globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx]
+}
+
+func (s *storageRESTServer) getStorage() StorageAPI {
+	return getStorageViaEndpoint(s.endpoint)
 }
 
 func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error) {
@@ -429,30 +441,6 @@ func (s *storageRESTServer) UpdateMetadataHandler(p *MetadataHandlerParams) (gri
 	return grid.NewNPErr(s.getStorage().UpdateMetadata(context.Background(), volume, filePath, p.FI, p.UpdateOpts))
 }
 
-// WriteAllHandler - write to file all content.
-func (s *storageRESTServer) WriteAllHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-	volume := r.Form.Get(storageRESTVolume)
-	filePath := r.Form.Get(storageRESTFilePath)
-
-	if r.ContentLength < 0 {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-	tmp := make([]byte, r.ContentLength)
-	_, err := io.ReadFull(r.Body, tmp)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-	err = s.getStorage().WriteAll(r.Context(), volume, filePath, tmp)
-	if err != nil {
-		s.writeErrorResponse(w, err)
-	}
-}
-
 // CheckPartsHandler - check if a file metadata exists.
 func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
 	if !s.checkID(p.DiskID) {
@@ -461,6 +449,17 @@ func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (grid.
 	volume := p.Volume
 	filePath := p.FilePath
 	return grid.NewNPErr(s.getStorage().CheckParts(context.Background(), volume, filePath, p.FI))
+}
+
+func (s *storageRESTServer) WriteAllHandler(p *WriteAllHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
+	if !s.checkID(p.DiskID) {
+		return grid.NewNPErr(errDiskNotFound)
+	}
+
+	volume := p.Volume
+	filePath := p.FilePath
+
+	return grid.NewNPErr(s.getStorage().WriteAll(context.Background(), volume, filePath, p.Buf))
 }
 
 // ReadAllHandler - read all the contents of a file.
@@ -1287,17 +1286,13 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			}
 
 			server := &storageRESTServer{
-				poolIndex: endpoint.PoolIdx,
-				setIndex:  endpoint.SetIdx,
-				diskIndex: endpoint.DiskIdx,
+				endpoint: endpoint,
 			}
 
 			subrouter := router.PathPrefix(path.Join(storageRESTPrefix, endpoint.Path)).Subrouter()
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodAppendFile).HandlerFunc(h(server.AppendFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodWriteAll).HandlerFunc(h(server.WriteAllHandler))
-
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadXL).HandlerFunc(h(server.ReadXLHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(h(server.CreateFileHandler))
@@ -1311,6 +1306,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
 			logger.FatalIf(storageListDirRPC.RegisterNoInput(gm, server.ListDirHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageReadAllRPC.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageWriteAllRPC.Register(gm, server.WriteAllHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageRenameFileRPC.Register(gm, server.RenameFileHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageRenameDataRPC.Register(gm, server.RenameDataHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageDeleteFileRPC.Register(gm, server.DeleteFileHandler, endpoint.Path), "unable to register handler")
@@ -1334,6 +1330,9 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				if err != nil {
 					// if supported errors don't fail, we proceed to
 					// printing message and moving forward.
+					if errors.Is(err, errDriveIsRoot) {
+						err = fmt.Errorf("major: %v: minor: %v: %w", xl.major, xl.minor, err)
+					}
 					logFatalErrs(err, endpoint, false)
 					return false
 				}

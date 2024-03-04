@@ -22,7 +22,6 @@ const (
 	EnvKMSSecretKey      = "MINIO_KMS_SECRET_KEY"
 	EnvKMSSecretKeyFile  = "MINIO_KMS_SECRET_KEY_FILE"
 	EnvKESEndpoint       = "MINIO_KMS_KES_ENDPOINT"     // One or multiple KES endpoints, separated by ','
-	EnvKESEnclave        = "MINIO_KMS_KES_ENCLAVE"      // Optional "namespace" within a KES cluster - not required for stateless KES
 	EnvKESKeyName        = "MINIO_KMS_KES_KEY_NAME"     // The default key name used for IAM data and when no key ID is specified on a bucket
 	EnvKESAPIKey         = "MINIO_KMS_KES_API_KEY"      // Access credential for KES - API keys and private key / certificate are mutually exclusive
 	EnvKESClientKey      = "MINIO_KMS_KES_KEY_FILE"     // Path to TLS private key for authenticating to KES with mTLS - usually prefer API keys

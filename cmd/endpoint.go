@@ -75,6 +75,16 @@ type Endpoint struct {
 	PoolIdx, SetIdx, DiskIdx int
 }
 
+// Equal returns true if endpoint == ep
+func (endpoint Endpoint) Equal(ep Endpoint) bool {
+	if endpoint.IsLocal == ep.IsLocal && endpoint.PoolIdx == ep.PoolIdx && endpoint.SetIdx == ep.SetIdx && endpoint.DiskIdx == ep.DiskIdx {
+		if endpoint.Path == ep.Path && endpoint.Host == ep.Host {
+			return true
+		}
+	}
+	return false
+}
+
 func (endpoint Endpoint) String() string {
 	if endpoint.Host == "" {
 		return endpoint.Path
