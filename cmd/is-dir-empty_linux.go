@@ -20,7 +20,9 @@
 
 package cmd
 
-import "syscall"
+import (
+	"syscall"
+)
 
 // Returns true if no error and there is no object or prefix inside this directory
 func isDirEmpty(dirname string) bool {
@@ -28,5 +30,17 @@ func isDirEmpty(dirname string) bool {
 	if err := syscall.Stat(dirname, &stat); err != nil {
 		return false
 	}
-	return stat.Mode&syscall.S_IFMT == syscall.S_IFDIR && stat.Nlink < 3
+	if stat.Mode&syscall.S_IFMT == syscall.S_IFDIR && stat.Nlink == 2 {
+		return true
+	}
+	// On filesystems such as btrfs, nfs this is not true, so fallback
+	// to performing readdir() instead.
+	if stat.Mode&syscall.S_IFMT == syscall.S_IFDIR && stat.Nlink < 2 {
+		entries, err := readDirN(dirname, 1)
+		if err != nil {
+			return false
+		}
+		return len(entries) == 0
+	}
+	return false
 }
