@@ -6207,12 +6207,11 @@ func (s *siteReplicatorCred) Get(ctx context.Context) (auth.Credentials, error) 
 		return s.Creds, nil
 	}
 	s.RUnlock()
-	s.Lock()
-	defer s.Unlock()
-	var m map[string]UserIdentity
+	m := make(map[string]UserIdentity)
 	if err := globalIAMSys.store.loadUser(ctx, siteReplicatorSvcAcc, svcUser, m); err != nil {
 		return auth.Credentials{}, err
 	}
+	s.Set(m[siteReplicatorSvcAcc].Credentials)
 	return m[siteReplicatorSvcAcc].Credentials, nil
 }
 
