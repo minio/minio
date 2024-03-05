@@ -235,7 +235,7 @@ const (
 	MinIOTaggingProxied = "X-Minio-Tagging-Proxied"
 	// Header indicates the actual replicated object size
 	// In case of SSEC objects getting replicated (multipart) actual size would be needed at target
-	MinIOReplicationObjectSize = "X-Minio-Replication-Object-Size"
+	MinIOReplicationActualObjectSize = "X-Minio-Replication-Actual-Object-Size"
 
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"
