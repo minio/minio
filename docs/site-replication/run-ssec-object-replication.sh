@@ -190,17 +190,17 @@ fi
 
 # Check content of replicated SSEC objects
 ./mc cat minio2/test-bucket/encrypted --encrypt-key "minio2/test-bucket/encrypted=iliketobecrazybutnotsomuchreally" --insecure
-./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure > /dev/null || exit_1
-./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure > /dev/null || exit_1
+./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure >/dev/null || exit_1
+./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure >/dev/null || exit_1
 
 # Check last line of multi part objects and if last line replicated well, object is replicated successfully
 rep_obj2_content=$(./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -10000000 | tail -1)
 rep_obj3_content=$(./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -10000000 | tail -1)
 if [ "${rep_obj2_content}" != "10000000 - The quick brown fox jumps over the lazy dog" ]; then
-       echo "BUG: Content: '${rep_obj2_content}' not valid for replicated object 'minio2/test-bucket/defpartsize'. Expected: '1 - The quick brown fox jumps over the lazy dog'"
-       exit_1
+	echo "BUG: Content: '${rep_obj2_content}' not valid for replicated object 'minio2/test-bucket/defpartsize'. Expected: '10000000 - The quick brown fox jumps over the lazy dog'"
+	exit_1
 fi
 if [ "${rep_obj3_content}" != "10000000 - An apple a day keeps the doctor away - if you throw it hard" ]; then
-       echo "BUG: Content: '${rep_obj3_content}' not valid for replicated object 'minio2/test-bucket/custpartsize'. Expected: '1 - An apple a day keeps the doctor away - if you throw it hard'"
-       exit_1
+	echo "BUG: Content: '${rep_obj3_content}' not valid for replicated object 'minio2/test-bucket/custpartsize'. Expected: '10000000 - An apple a day keeps the doctor away - if you throw it hard'"
+	exit_1
 fi
