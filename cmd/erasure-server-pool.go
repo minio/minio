@@ -2391,6 +2391,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	result := HealthResult{
 		Healthy:       true,
+		HealthyRead:   true,
 		WriteQuorum:   maximumWriteQuorum,
 		ReadQuorum:    maximumReadQuorum,
 		UsingDefaults: usingDefaults, // indicates if config was not initialized and we are using defaults on this node.
