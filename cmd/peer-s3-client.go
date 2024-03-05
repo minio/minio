@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"sort"
 	"strconv"
@@ -91,37 +90,12 @@ func (l localPeerS3Client) DeleteBucket(ctx context.Context, bucket string, opts
 
 // client to talk to peer Nodes.
 type remotePeerS3Client struct {
-	node       Node
-	pools      []int
-	restClient *rest.Client
+	node  Node
+	pools []int
 
 	// Function that returns the grid connection for this peer when initialized.
 	// Will return nil if the grid connection is not initialized yet.
 	gridConn func() *grid.Connection
-}
-
-// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
-// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
-// after verifying format.json
-func (client *remotePeerS3Client) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	return client.callWithContext(GlobalContext, method, values, body, length)
-}
-
-// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
-// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
-// after verifying format.json
-func (client *remotePeerS3Client) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if values == nil {
-		values = make(url.Values)
-	}
-
-	respBody, err = client.restClient.Call(ctx, method, values, body, length)
-	if err == nil {
-		return respBody, nil
-	}
-
-	err = toStorageErr(err)
-	return nil, err
 }
 
 // S3PeerSys - S3 peer call system.
@@ -560,7 +534,7 @@ func newPeerS3Client(node Node) peerS3Client {
 	var gridConn atomic.Pointer[grid.Connection]
 
 	return &remotePeerS3Client{
-		node: node, restClient: restClient,
+		node: node,
 		gridConn: func() *grid.Connection {
 			// Lazy initialization of grid connection.
 			// When we create this peer client, the grid connection is likely not yet initialized.
