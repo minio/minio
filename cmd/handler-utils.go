@@ -88,6 +88,7 @@ var supportedHeaders = []string{
 	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Replication-Server-Side-Encryption-Iv",
 	"X-Minio-Replication-Encrypted-Multipart",
+	"X-Minio-Replication-Object-Size",
 	// Add more supported headers here.
 }
 
@@ -97,6 +98,7 @@ var validReplicationHeaders = map[string]string{
 	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Internal-Server-Side-Encryption-Iv":             "X-Minio-Replication-Server-Side-Encryption-Iv",
 	"X-Minio-Internal-Encrypted-Multipart":                   "X-Minio-Replication-Encrypted-Multipart",
+	"X-Minio-Internal-Object-Size":                           "X-Minio-Replication-Object-Size",
 	// Add more supported headers here.
 }
 
@@ -106,6 +108,7 @@ var replicationToInternalHeaders = map[string]string{
 	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
 	"X-Minio-Replication-Encrypted-Multipart":                   "X-Minio-Internal-Encrypted-Multipart",
+	"X-Minio-Replication-Object-Size":                           "X-Minio-Internal-Object-Size",
 	// Add more supported headers here.
 }
 

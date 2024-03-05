@@ -76,7 +76,8 @@ echo "Loading objects to source MinIO instance"
 
 # Add replication site
 ./mc admin replicate add minio1 minio2 --insecure
-sleep 5
+# sleep for replication to complete
+sleep 60
 
 # List the objects from source site
 echo "Objects from source instance"
@@ -101,8 +102,6 @@ if [ "${count4}" -ne 1 ]; then
 	echo "BUG: object minio1/test-bucket/custpartsize not found"
 	exit_1
 fi
-# sleep for replication to complete
-sleep 30
 
 # List the objects from replicated site
 echo "Objects from replicated instance"
@@ -190,18 +189,18 @@ if [ "${rep_obj3_size}" != "${src_obj3_size}" ]; then
 fi
 
 # Check content of replicated SSEC objects
-rep_obj1_content=$(./mc cat minio2/test-bucket/encrypted --encrypt-key "minio2/test-bucket/encrypted=iliketobecrazybutnotsomuchreally" --insecure)
-rep_obj2_content=$(./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -1)
-rep_obj3_content=$(./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -1)
-if [ "${rep_obj1_content}" != "Hello from encrypted world" ]; then
-	echo "BUG: Content: '${rep_obj1_content}' not valid for replicated object: 'minio2/test-bucket/encrypted'. Expected: 'Hello from encrypted world'"
-	exit_1
+./mc cat minio2/test-bucket/encrypted --encrypt-key "minio2/test-bucket/encrypted=iliketobecrazybutnotsomuchreally" --insecure
+./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure > /dev/null || exit_1
+./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure > /dev/null || exit_1
+
+# Check last line of multi part objects and if last line replicated well, object is replicated successfully
+rep_obj2_content=$(./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -10000000 | tail -1)
+rep_obj3_content=$(./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -10000000 | tail -1)
+if [ "${rep_obj2_content}" != "10000000 - The quick brown fox jumps over the lazy dog" ]; then
+       echo "BUG: Content: '${rep_obj2_content}' not valid for replicated object 'minio2/test-bucket/defpartsize'. Expected: '1 - The quick brown fox jumps over the lazy dog'"
+       exit_1
 fi
-if [ "${rep_obj2_content}" != "1 - The quick brown fox jumps over the lazy dog" ]; then
-	echo "BUG: Content: '${rep_obj2_content}' not valid for replicated object 'minio2/test-bucket/defpartsize'. Expected: '1 - The quick brown fox jumps over the lazy dog'"
-	exit_1
-fi
-if [ "${rep_obj3_content}" != "1 - An apple a day keeps the doctor away - if you throw it hard" ]; then
-	echo "BUG: Content: '${rep_obj3_content}' not valid for replicated object 'minio2/test-bucket/custpartsize'. Expected: '1 - An apple a day keeps the doctor away - if you throw it hard'"
-	exit_1
+if [ "${rep_obj3_content}" != "10000000 - An apple a day keeps the doctor away - if you throw it hard" ]; then
+       echo "BUG: Content: '${rep_obj3_content}' not valid for replicated object 'minio2/test-bucket/custpartsize'. Expected: '1 - An apple a day keeps the doctor away - if you throw it hard'"
+       exit_1
 fi

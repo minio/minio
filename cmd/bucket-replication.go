@@ -1611,8 +1611,13 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		pInfo minio.ObjectPart
 	)
 
+	var objectSize int64
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.Size), partInfo.Size, "", "", partInfo.ActualSize)
+		} else {
+			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		}
 		if err != nil {
 			return err
 		}
@@ -1621,11 +1626,17 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			SSE: opts.ServerSideEncryption,
 		}
 
-		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+			objectSize += partInfo.Size
+			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, popts)
+		} else {
+			objectSize += partInfo.ActualSize
+			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+		}
 		if err != nil {
 			return err
 		}
-		if pInfo.Size != partInfo.ActualSize {
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) && pInfo.Size != partInfo.ActualSize {
 			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
@@ -1636,6 +1647,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
+		UserMetadata: map[string]string{validReplicationHeaders[ReservedMetadataPrefix+"Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside

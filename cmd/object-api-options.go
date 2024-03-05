@@ -480,7 +480,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	}
 	opts.MTime = mtime
 	opts.UserDefined = make(map[string]string)
-
+	opts.UserDefined[ReservedMetadataPrefix+"Object-Size"] = r.Header.Get(xhttp.MinIOReplicationObjectSize)
 	// Transfer SSEC key in opts.EncryptFn
 	if crypto.SSEC.IsRequested(r.Header) {
 		key, err := ParseSSECustomerRequest(r)
@@ -490,6 +490,9 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 				return key
 			}
 		}
+	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
+		opts.ReplicationRequest = true
 	}
 	return opts, nil
 }

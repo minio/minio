@@ -233,6 +233,9 @@ const (
 	// Header indicates a Tag operation was performed on one/more peers successfully, though the
 	// current cluster does not have the object yet. This is in a site/bucket replication scenario.
 	MinIOTaggingProxied = "X-Minio-Tagging-Proxied"
+	// Header indicates the actual replicated object size
+	// In case of SSEC objects getting replicated (multipart) actual size would be needed at target
+	MinIOReplicationObjectSize = "X-Minio-Replication-Object-Size"
 
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"
