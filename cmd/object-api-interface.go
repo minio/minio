@@ -32,6 +32,10 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
+//go:generate msgp -file $GOFILE -io=false -tests=false -unexported=false
+
+//msgp:ignore ObjectOptions TransitionOptions DeleteBucketOptions
+
 // CheckPreconditionFn returns true if precondition check failed.
 type CheckPreconditionFn func(o ObjectInfo) bool
 

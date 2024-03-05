@@ -110,6 +110,7 @@ const (
 	HandlerSignalService
 	HandlerGetBandwidth
 	HandlerWriteAll
+	HandlerListBuckets
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -187,6 +188,7 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerStorageInfo:                 peerPrefix,
 	HandlerConsoleLog:                  peerPrefix,
 	HandlerListDir:                     storagePrefix,
+	HandlerListBuckets:                 peerPrefixS3,
 }
 
 const (
