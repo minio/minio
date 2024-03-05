@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"io"
@@ -351,18 +350,18 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 }
 
 func (client *remotePeerS3Client) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
-	v := url.Values{}
-	v.Set(peerS3BucketDeleted, strconv.FormatBool(opts.Deleted))
-
-	respBody, err := client.call(peerS3MethodListBuckets, v, nil, -1)
+	bi, err := listBucketsRPC.Call(ctx, client.gridConn(), &opts)
 	if err != nil {
-		return nil, err
+		return nil, toStorageErr(err)
 	}
-	defer xhttp.DrainBody(respBody)
-
-	var buckets []BucketInfo
-	err = gob.NewDecoder(respBody).Decode(&buckets)
-	return buckets, err
+	buckets := make([]BucketInfo, 0, len(bi.Value()))
+	for _, b := range bi.Value() {
+		if b != nil {
+			buckets = append(buckets, *b)
+		}
+	}
+	bi.Recycle() // BucketInfo has no internal pointers, so it's safe to recycle.
+	return buckets, nil
 }
 
 func (client *remotePeerS3Client) HealBucket(ctx context.Context, bucket string, opts madmin.HealOpts) (madmin.HealResultItem, error) {

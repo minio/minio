@@ -25,22 +25,16 @@ const (
 )
 
 const (
-	peerRESTMethodHealth                      = "/health"
-	peerRESTMethodVerifyBinary                = "/verifybinary"
-	peerRESTMethodCommitBinary                = "/commitbinary"
-	peerRESTMethodSignalService               = "/signalservice"
-	peerRESTMethodBackgroundHealStatus        = "/backgroundhealstatus"
-	peerRESTMethodGetLocks                    = "/getlocks"
-	peerRESTMethodStartProfiling              = "/startprofiling"
-	peerRESTMethodDownloadProfilingData       = "/downloadprofilingdata"
-	peerRESTMethodGetBandwidth                = "/bandwidth"
-	peerRESTMethodSpeedTest                   = "/speedtest"
-	peerRESTMethodDriveSpeedTest              = "/drivespeedtest"
-	peerRESTMethodReloadSiteReplicationConfig = "/reloadsitereplicationconfig"
-	peerRESTMethodGetLastDayTierStats         = "/getlastdaytierstats"
-	peerRESTMethodDevNull                     = "/devnull"
-	peerRESTMethodNetperf                     = "/netperf"
-	peerRESTMethodGetReplicationMRF           = "/getreplicationmrf"
+	peerRESTMethodHealth                = "/health"
+	peerRESTMethodVerifyBinary          = "/verifybinary"
+	peerRESTMethodCommitBinary          = "/commitbinary"
+	peerRESTMethodStartProfiling        = "/startprofiling"
+	peerRESTMethodDownloadProfilingData = "/downloadprofilingdata"
+	peerRESTMethodSpeedTest             = "/speedtest"
+	peerRESTMethodDriveSpeedTest        = "/drivespeedtest"
+	peerRESTMethodDevNull               = "/devnull"
+	peerRESTMethodNetperf               = "/netperf"
+	peerRESTMethodGetReplicationMRF     = "/getreplicationmrf"
 )
 
 const (

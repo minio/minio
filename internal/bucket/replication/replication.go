@@ -118,9 +118,6 @@ func (c Config) Validate(bucket string, sameTarget bool) error {
 	return nil
 }
 
-// Type - replication type enum
-type Type int
-
 // Types of replication
 const (
 	UnsetReplicationType Type = 0 + iota

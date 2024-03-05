@@ -19,12 +19,10 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
 	"net/http"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
@@ -38,12 +36,7 @@ const (
 )
 
 const (
-	peerS3MethodHealth        = "/health"
-	peerS3MethodMakeBucket    = "/make-bucket"
-	peerS3MethodGetBucketInfo = "/get-bucket-info"
-	peerS3MethodDeleteBucket  = "/delete-bucket"
-	peerS3MethodListBuckets   = "/list-buckets"
-	peerS3MethodHealBucket    = "/heal-bucket"
+	peerS3MethodHealth = "/health"
 )
 
 const (
@@ -373,24 +366,6 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives)/2)+1)
 }
 
-func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
-
-	buckets, err := listBucketsLocal(r.Context(), BucketOptions{
-		Deleted: bucketDeleted,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
-}
-
 // registerPeerS3Handlers - register peer s3 router.
 func registerPeerS3Handlers(router *mux.Router) {
 	server := &peerS3Server{}
@@ -401,5 +376,4 @@ func registerPeerS3Handlers(router *mux.Router) {
 	}
 
 	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealth).HandlerFunc(h(server.HealthHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(h(server.ListBucketsHandler))
 }
