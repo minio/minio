@@ -515,7 +515,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
 	event := lc.eval(obj, time.Time{})
 	switch event.Action {
-	case DeleteAction, DeleteVersionAction:
+	case DeleteAction, DeleteVersionAction, DeleteAllVersionsAction:
 		w.Header()[xhttp.AmzExpiration] = []string{
 			fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, event.Due.Format(http.TimeFormat), event.RuleID),
 		}
