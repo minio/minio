@@ -47,7 +47,6 @@ type apiConfig struct {
 	replicationPriority   string
 	replicationMaxWorkers int
 	transitionWorkers     int
-	expiryWorkers         int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
@@ -366,13 +365,6 @@ func (t *apiConfig) getReplicationOpts() replicationPoolOpts {
 		Priority:   t.replicationPriority,
 		MaxWorkers: t.replicationMaxWorkers,
 	}
-}
-
-func (t *apiConfig) getExpiryWorkers() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	return t.expiryWorkers
 }
 
 func (t *apiConfig) getTransitionWorkers() int {
