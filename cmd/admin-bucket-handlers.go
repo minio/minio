@@ -687,7 +687,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 					rpt.SetStatus(bucket, fileName, err)
 					continue
 				}
-				v := newBucketMetadata(bucket)
+				v, _ := globalBucketMetadataSys.Get(bucket)
 				bucketMap[bucket] = &v
 			}
 
@@ -723,7 +723,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 					rpt.SetStatus(bucket, fileName, err)
 					continue
 				}
-				v := newBucketMetadata(bucket)
+				v, _ := globalBucketMetadataSys.Get(bucket)
 				bucketMap[bucket] = &v
 			}
 
@@ -776,7 +776,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				rpt.SetStatus(bucket, "", err)
 				continue
 			}
-			v := newBucketMetadata(bucket)
+			v, _ := globalBucketMetadataSys.Get(bucket)
 			bucketMap[bucket] = &v
 		}
 		if _, ok := bucketMap[bucket]; !ok {
