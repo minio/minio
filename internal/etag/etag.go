@@ -389,7 +389,7 @@ func parse(s string, strict bool) (ETag, error) {
 
 	// An S3 ETag may be a multipart ETag that
 	// contains a '-' followed by a number.
-	// If the ETag does not a '-' is is either
+	// If the ETag does not a '-' is either
 	// a singlepart or encrypted ETag.
 	n := strings.IndexRune(s, '-')
 	if n == -1 {

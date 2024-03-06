@@ -1851,7 +1851,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		// expected output.
 		expectedRespStatus int
 	}{
-		// Test case - 1, copy part 1 from from newObject1, ignore request headers.
+		// Test case - 1, copy part 1 from newObject1, ignore request headers.
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
@@ -2011,7 +2011,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
 		},
-		// Test case - 14, copy part 1 from from newObject1 with null versionId
+		// Test case - 14, copy part 1 from newObject1 with null versionId
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
@@ -2020,7 +2020,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
 		},
-		// Test case - 15, copy part 1 from from newObject1 with non null versionId
+		// Test case - 15, copy part 1 from newObject1 with non null versionId
 		{
 			bucketName:         bucketName,
 			uploadID:           uploadID,
