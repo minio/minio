@@ -134,6 +134,22 @@ func (r *ReqInfo) GetTagsMap() map[string]interface{} {
 	return m
 }
 
+// PopulateTagsMap - returns the user defined tags in a map structure
+func (r *ReqInfo) PopulateTagsMap(tagsMap map[string]interface{}) {
+	if r == nil {
+		return
+	}
+	if tagsMap == nil {
+		return
+	}
+	r.RLock()
+	defer r.RUnlock()
+	for _, t := range r.tags {
+		tagsMap[t.Key] = t.Val
+	}
+	return
+}
+
 // SetReqInfo sets ReqInfo in the context.
 func SetReqInfo(ctx context.Context, req *ReqInfo) context.Context {
 	if ctx == nil {

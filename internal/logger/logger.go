@@ -26,12 +26,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/v2/logger/message/log"
 )
@@ -104,15 +104,32 @@ func RegisterError(f func(string, error, bool) string) {
 	errorFmtFunc = f
 }
 
-// Remove any duplicates and return unique entries.
-func uniqueEntries(paths []string) []string {
-	m := make(set.StringSet)
-	for _, p := range paths {
-		if !m.Contains(p) {
-			m.Add(p)
+// uniq swaps away duplicate elements in data, returning the size of the
+// unique set. data is expected to be pre-sorted, and the resulting set in
+// the range [0:size] will remain in sorted order. Uniq, following a
+// sort.Sort call, can be used to prepare arbitrary inputs for use as sets.
+func uniq(data sort.Interface) (size int) {
+	p, l := 0, data.Len()
+	if l <= 1 {
+		return l
+	}
+	for i := 1; i < l; i++ {
+		if !data.Less(p, i) {
+			continue
+		}
+		p++
+		if p < i {
+			data.Swap(p, i)
 		}
 	}
-	return m.ToSlice()
+	return p + 1
+}
+
+// Remove any duplicates and return unique entries.
+func uniqueEntries(paths []string) []string {
+	sort.Strings(paths)
+	n := uniq(sort.StringSlice(paths))
+	return paths[:n]
 }
 
 // Init sets the trimStrings to possible GOPATHs
@@ -359,9 +376,11 @@ func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
+	if err == nil {
+		return
+	}
 	if consoleTgt != nil {
-		entry := errToEntry(ctx, err, errKind...)
-		consoleTgt.Send(ctx, entry)
+		consoleTgt.Send(ctx, errToEntry(ctx, err, errKind...))
 	}
 }
 

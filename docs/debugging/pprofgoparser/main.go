@@ -41,7 +41,6 @@ var (
 )
 
 func init() {
-
 	flag.DurationVar(&less, "less", 0, "goroutine waiting less than the specified time")
 	flag.DurationVar(&goTime, "time", 0, "goroutine waiting for exactly the specified time")
 	flag.DurationVar(&margin, "margin", 0, "margin time")

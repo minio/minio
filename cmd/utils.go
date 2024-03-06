@@ -984,18 +984,19 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	entry.API.Bucket = opts.Bucket
 	entry.API.Objects = []pkgAudit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
-	entry.Tags = opts.Tags
+	if len(opts.Tags) > 0 {
+		entry.Tags = make(map[string]interface{}, len(opts.Tags))
+		for k, v := range opts.Tags {
+			entry.Tags[k] = v
+		}
+	} else {
+		entry.Tags = make(map[string]interface{})
+	}
+
 	// Merge tag information if found - this is currently needed for tags
 	// set during decommissioning.
 	if reqInfo := logger.GetReqInfo(ctx); reqInfo != nil {
-		if tags := reqInfo.GetTagsMap(); len(tags) > 0 {
-			if entry.Tags == nil {
-				entry.Tags = make(map[string]interface{}, len(tags))
-			}
-			for k, v := range tags {
-				entry.Tags[k] = v
-			}
-		}
+		reqInfo.PopulateTagsMap(entry.Tags)
 	}
 	ctx = logger.SetAuditEntry(ctx, &entry)
 	logger.AuditLog(ctx, nil, nil, nil)
