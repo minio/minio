@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -33,12 +33,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/v2/net"
+	"github.com/valyala/bytebufferpool"
 )
 
 const (
@@ -47,6 +49,9 @@ const (
 
 	// maxWorkers is the maximum number of concurrent http loggers
 	maxWorkers = 16
+
+	// maxWorkers is the maximum number of concurrent batch http loggers
+	maxWorkersWithBatchEvents = 4
 
 	// the suffix for the configured queue dir where the logs will be persisted.
 	httpLoggerExtension = ".http.log"
@@ -67,6 +72,7 @@ type Config struct {
 	AuthToken  string            `json:"authToken"`
 	ClientCert string            `json:"clientCert"`
 	ClientKey  string            `json:"clientKey"`
+	BatchSize  int               `json:"batchSize"`
 	QueueSize  int               `json:"queueSize"`
 	QueueDir   string            `json:"queueDir"`
 	Proxy      string            `json:"string"`
@@ -98,6 +104,13 @@ type Target struct {
 	// Sending a value on logCh must hold read lock on logChMu (to avoid closing)
 	logCh   chan interface{}
 	logChMu sync.RWMutex
+
+	// Number of events per HTTP send to webhook target
+	// this is ideally useful only if your endpoint can
+	// support reading multiple events on a stream for example
+	// like : Splunk HTTP Event collector, if you are unsure
+	// set this to '1'.
+	batchSize int
 
 	// If the first init fails, this starts a goroutine that
 	// will attempt to establish the connection.
@@ -135,7 +148,7 @@ func (h *Target) IsOnline(ctx context.Context) bool {
 
 // ping returns true if the target is reachable.
 func (h *Target) ping(ctx context.Context) bool {
-	if err := h.send(ctx, []byte(`{}`), webhookCallTimeout); err != nil {
+	if err := h.send(ctx, []byte(`{}`), "application/json", webhookCallTimeout); err != nil {
 		return !xnet.IsNetworkOrHostDown(err, false) && !xnet.IsConnRefusedErr(err)
 	}
 	// We are online.
@@ -213,7 +226,7 @@ func (h *Target) init(ctx context.Context) (err error) {
 	return nil
 }
 
-func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration) (err error) {
+func (h *Target) send(ctx context.Context, payload []byte, payloadType string, timeout time.Duration) (err error) {
 	defer func() {
 		if err != nil {
 			atomic.StoreInt32(&h.status, statusOffline)
@@ -229,7 +242,9 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 	if err != nil {
 		return fmt.Errorf("invalid configuration for '%s'; %v", h.Endpoint(), err)
 	}
-	req.Header.Set(xhttp.ContentType, "application/json")
+	if payloadType != "" {
+		req.Header.Set(xhttp.ContentType, payloadType)
+	}
 	req.Header.Set(xhttp.MinIOVersion, xhttp.GlobalMinIOVersion)
 	req.Header.Set(xhttp.MinioDeploymentID, xhttp.GlobalDeploymentID)
 
@@ -260,13 +275,7 @@ func (h *Target) send(ctx context.Context, payload []byte, timeout time.Duration
 	}
 }
 
-func (h *Target) logEntry(ctx context.Context, entry interface{}) {
-	logJSON, err := json.Marshal(&entry)
-	if err != nil {
-		atomic.AddInt64(&h.failedMessages, 1)
-		return
-	}
-
+func (h *Target) logEntry(ctx context.Context, payload []byte, payloadType string) {
 	const maxTries = 3
 	tries := 0
 	for tries < maxTries {
@@ -281,7 +290,7 @@ func (h *Target) logEntry(ctx context.Context, entry interface{}) {
 		}
 		time.Sleep(sleep)
 		tries++
-		err := h.send(ctx, logJSON, webhookCallTimeout)
+		err := h.send(ctx, payload, payloadType, webhookCallTimeout)
 		if err == nil {
 			return
 		}
@@ -309,9 +318,57 @@ func (h *Target) startHTTPLogger(ctx context.Context) {
 		return
 	}
 
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	enc := json.NewEncoder(buf)
+	batchSize := h.batchSize
+	if batchSize <= 0 {
+		batchSize = 1
+	}
+
+	payloadType := "application/json"
+	if batchSize > 1 {
+		payloadType = ""
+	}
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+
+	var nevents int
 	// Send messages until channel is closed.
-	for entry := range logCh {
-		h.logEntry(ctx, entry)
+	for {
+		select {
+		case entry, ok := <-logCh:
+			if !ok {
+				return
+			}
+			atomic.AddInt64(&h.totalMessages, 1)
+			nevents++
+			if err := enc.Encode(&entry); err != nil {
+				atomic.AddInt64(&h.failedMessages, 1)
+				continue
+			}
+			if nevents == batchSize {
+				h.logEntry(ctx, buf.Bytes(), payloadType)
+				buf.Reset()
+				nevents = 0
+			}
+		case <-timer.C:
+			// Timer trigger to flush any pending events in the `buf.Bytes()`
+			// when there are no incoming events on logCh we should flush out
+			// the entries.
+			if len(logCh) > 0 {
+				continue
+			}
+			if buf.Len() > 0 {
+				h.logEntry(ctx, buf.Bytes(), payloadType)
+				buf.Reset()
+				nevents = 0
+			}
+			timer.Reset(3 * time.Second)
+		}
 	}
 }
 
@@ -319,9 +376,10 @@ func (h *Target) startHTTPLogger(ctx context.Context) {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	h := &Target{
-		logCh:  make(chan interface{}, config.QueueSize),
-		config: config,
-		status: statusOffline,
+		logCh:     make(chan interface{}, config.QueueSize),
+		config:    config,
+		status:    statusOffline,
+		batchSize: config.BatchSize,
 	}
 
 	// If proxy available, set the same
@@ -353,7 +411,7 @@ func (h *Target) SendFromStore(key store.Key) (err error) {
 		atomic.AddInt64(&h.failedMessages, 1)
 		return
 	}
-	if err := h.send(context.Background(), logJSON, webhookCallTimeout); err != nil {
+	if err := h.send(context.Background(), logJSON, "application/json", webhookCallTimeout); err != nil {
 		atomic.AddInt64(&h.failedMessages, 1)
 		if xnet.IsNetworkOrHostDown(err, true) {
 			return store.ErrNotConnected
@@ -382,6 +440,11 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 		return nil
 	}
 
+	mworkers := maxWorkers
+	if h.batchSize > 100 {
+		mworkers = maxWorkersWithBatchEvents
+	}
+
 retry:
 	select {
 	case h.logCh <- entry:
@@ -394,7 +457,7 @@ retry:
 		return nil
 	default:
 		nWorkers := atomic.LoadInt64(&h.workers)
-		if nWorkers < maxWorkers {
+		if nWorkers < int64(mworkers) {
 			// Only have one try to start at the same time.
 			h.workerStartMu.Lock()
 			if time.Since(h.lastStarted) > time.Second {
