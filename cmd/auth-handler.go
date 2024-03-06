@@ -300,19 +300,21 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	}
 
 	secret := globalActiveCred.SecretKey
+	var err error
+	if globalSiteReplicationSys.isEnabled() && cred.AccessKey != siteReplicatorSvcAcc {
+		if cred.ParentUser != globalActiveCred.AccessKey {
+			secret, err = getTokenSigningKey()
+			if err != nil {
+				return nil, toAPIErrorCode(r.Context(), err)
+			}
+		}
+	}
 	if cred.IsServiceAccount() {
 		token = cred.SessionToken
 		secret = cred.SecretKey
 	}
 
 	if token != "" {
-		var err error
-		if globalSiteReplicationSys.isEnabled() && cred.AccessKey != siteReplicatorSvcAcc {
-			secret, err = getTokenSigningKey()
-			if err != nil {
-				return nil, toAPIErrorCode(r.Context(), err)
-			}
-		}
 		claims, err := getClaimsFromTokenWithSecret(token, secret)
 		if err != nil {
 			return nil, toAPIErrorCode(r.Context(), err)
