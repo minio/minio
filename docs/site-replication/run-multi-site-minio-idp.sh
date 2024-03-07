@@ -164,7 +164,20 @@ if [ $? -ne 0 ]; then
 	exit_1
 fi
 
+./mc admin user svcacct add minio2 minio --access-key testsvc2 --secret-key testsvc123
+if [ $? -ne 0 ]; then
+	echo "adding root svc account testsvc2 failed, exiting.."
+	exit_1
+fi
+
 sleep 10
+
+export MC_HOST_rootsvc=http://testsvc2:testsvc123@localhost:9002
+./mc ls rootsvc
+if [ $? -ne 0 ]; then
+	echo "root service account not inherited root permissions, exiting.."
+	exit_1
+fi
 
 ./mc admin user svcacct info minio1 testsvc
 if [ $? -ne 0 ]; then
