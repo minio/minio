@@ -213,7 +213,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if objInfo.IsRemote() {
 		// Check if object is being restored. For more information on x-amz-restore header see
 		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
-		w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionedObject.Tier}
+		w.Header()[xhttp.AmzStorageClass] = []string{globalAPIConfig.storageClass(objInfo.TransitionedObject.Tier)}
 	}
 
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {

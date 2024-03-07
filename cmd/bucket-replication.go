@@ -2284,7 +2284,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 			DeleteMarker:              objInfo.IsDeleteMarker,
 			ContentType:               objInfo.ContentType,
 			Expires:                   objInfo.Expires,
-			StorageClass:              objInfo.StorageClass,
+			StorageClass:              globalAPIConfig.storageClass(objInfo.StorageClass),
 			ReplicationStatusInternal: objInfo.ReplicationStatus,
 			UserTags:                  tags.String(),
 			ReplicationStatus:         replication.StatusType(objInfo.ReplicationStatus),

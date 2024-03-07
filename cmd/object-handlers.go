@@ -775,7 +775,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	}
 
 	if _, ok := opts.ObjectAttributes[xhttp.StorageClass]; ok {
-		OA.StorageClass = objInfo.StorageClass
+		OA.StorageClass = globalAPIConfig.storageClass(objInfo.StorageClass)
 	}
 
 	objInfo.decryptPartsChecksums()

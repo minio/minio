@@ -49,6 +49,7 @@ const (
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
+	apiForceStorageClass           = "force_storage_class"
 
 	EnvAPIRequestsMax                 = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline            = "MINIO_API_REQUESTS_DEADLINE"
@@ -69,6 +70,7 @@ const (
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
 	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
+	EnvForceStorageClass              = "MINIO_FORCE_STORAGE_CLASS"
 )
 
 // Deprecated key and ENVs
@@ -130,6 +132,10 @@ var (
 			Value: "5m",
 		},
 		config.KV{
+			Key:   apiForceStorageClass,
+			Value: "",
+		},
+		config.KV{
 			Key:           apiDisableODirect,
 			Value:         "",
 			HiddenIfEmpty: true,
@@ -172,6 +178,7 @@ type Config struct {
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
 	SyncEvents                  bool          `json:"sync_events"`
+	ForceStorageClass           string        `json:"force_storage_class"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -233,6 +240,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if requestsMax < 0 {
 		return cfg, errors.New("invalid API max requests value")
 	}
+
+	cfg.ForceStorageClass = env.Get(EnvForceStorageClass, kvs.GetWithDefault(apiForceStorageClass, DefaultKVS))
 
 	requestsDeadline, err := time.ParseDuration(env.Get(EnvAPIRequestsDeadline, kvs.GetWithDefault(apiRequestsDeadline, DefaultKVS)))
 	if err != nil {

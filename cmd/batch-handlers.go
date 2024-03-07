@@ -526,7 +526,7 @@ func toObjectInfo(bucket, object string, objInfo miniogo.ObjectInfo) ObjectInfo 
 
 	_, ok = oi.UserDefined[xhttp.AmzStorageClass]
 	if !ok {
-		oi.UserDefined[xhttp.AmzStorageClass] = objInfo.StorageClass
+		oi.UserDefined[xhttp.AmzStorageClass] = globalAPIConfig.storageClass(objInfo.StorageClass)
 	}
 
 	for k, v := range objInfo.UserMetadata {

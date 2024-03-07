@@ -158,11 +158,11 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 
 	// Update storage class
 	if fi.TransitionTier != "" {
-		objInfo.StorageClass = fi.TransitionTier
+		objInfo.StorageClass = globalAPIConfig.storageClass(fi.TransitionTier)
 	} else if sc, ok := fi.Metadata[xhttp.AmzStorageClass]; ok {
-		objInfo.StorageClass = sc
+		objInfo.StorageClass = globalAPIConfig.storageClass(sc)
 	} else {
-		objInfo.StorageClass = globalMinioDefaultStorageClass
+		objInfo.StorageClass = globalAPIConfig.storageClass(globalMinioDefaultStorageClass)
 	}
 
 	// set restore status for transitioned object
