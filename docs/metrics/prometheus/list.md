@@ -325,13 +325,15 @@ For deployments with [Site Replication](https://min.io/docs/minio/linux/operatio
 	
 ## Usage Metrics
 
-| Name                                    | Description                                       |
-|:----------------------------------------|:--------------------------------------------------|
-| `minio_bucket_usage_object_total`       | Total number of objects.                          |
-| `minio_bucket_usage_version_total`      | Total number of versions (includes delete marker) |
-| `minio_bucket_usage_deletemarker_total` | Total number of delete markers.                   |
-| `minio_bucket_usage_total_bytes`        | Total bucket size in bytes.                       |
-| `minio_bucket_quota_total_bytes`        | Total bucket quota size in bytes.                 |
+| Name                                    | Description                                         |
+|:----------------------------------------|:----------------------------------------------------|
+| `minio_bucket_usage_object_total`       | Total number of objects.                            |
+| `minio_bucket_usage_version_total`      | Total number of versions (includes delete marker)   |
+| `minio_bucket_usage_deletemarker_total` | Total number of delete markers.                     |
+| `minio_bucket_usage_total_bytes`        | Total bucket size in bytes.                         |
+| `minio_bucket_quota_total_bytes`        | Total bucket quota size in bytes.                   |
+| `minio_bucket_quota_free_bytes`         | Total free bucket quota size in bytes.              |
+| `minio_bucket_quota_used_perc`          | Percentage of used bucket quota.                    |
 
 ## Requests Metrics
 

@@ -199,6 +199,7 @@ const (
 	writeTotal        MetricName = "write_total"
 	total             MetricName = "total"
 	freeInodes        MetricName = "free_inodes"
+	usedPerc          MetricName = "used_perc"
 
 	lastMinFailedCount  MetricName = "last_minute_failed_count"
 	lastMinFailedBytes  MetricName = "last_minute_failed_bytes"
@@ -687,6 +688,26 @@ func getBucketUsageQuotaTotalBytesMD() MetricDescription {
 		Subsystem: quotaSubsystem,
 		Name:      totalBytes,
 		Help:      "Total bucket quota size in bytes",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketUsageQuotaUsagePercMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: quotaSubsystem,
+		Name:      usedPerc,
+		Help:      "Percentage of used bucket quota",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketQuotaFreeBytesMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: quotaSubsystem,
+		Name:      freeBytes,
+		Help:      "Total free bucket quota size in bytes",
 		Type:      gaugeMetric,
 	}
 }
@@ -3278,6 +3299,18 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				metrics = append(metrics, Metric{
 					Description:    getBucketUsageQuotaTotalBytesMD(),
 					Value:          float64(quota.Quota),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getBucketQuotaFreeBytesMD(),
+					Value:          float64(quota.Quota) - float64(usage.Size),
+					VariableLabels: map[string]string{"bucket": bucket},
+				})
+
+				metrics = append(metrics, Metric{
+					Description:    getBucketUsageQuotaUsagePercMD(),
+					Value:          math.Round(float64(usage.Size*100*100)/float64(quota.Quota)) / 100,
 					VariableLabels: map[string]string{"bucket": bucket},
 				})
 			}
