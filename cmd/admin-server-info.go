@@ -19,10 +19,12 @@ package cmd
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,9 +44,13 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	if globalIsDistErasure {
 		addr = globalLocalNodeName
 	}
+	poolNumbers := make(map[int]struct{})
 	network := make(map[string]string)
 	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				poolNumbers[endpoint.PoolIdx+1] = struct{}{}
+			}
 			nodeName := endpoint.Host
 			if nodeName == "" {
 				nodeName = addr
@@ -111,6 +117,17 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		},
 		MinioEnvVars: make(map[string]string, 10),
 	}
+
+	for poolNumber := range poolNumbers {
+		props.PoolNumbers = append(props.PoolNumbers, poolNumber)
+	}
+	sort.Ints(props.PoolNumbers)
+	props.PoolNumber = func() int {
+		if len(props.PoolNumbers) == 1 {
+			return props.PoolNumbers[0]
+		}
+		return math.MaxInt // this indicates that its unset.
+	}()
 
 	sensitive := map[string]struct{}{
 		config.EnvAccessKey:         {},
