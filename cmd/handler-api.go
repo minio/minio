@@ -87,14 +87,14 @@ func cgroupMemLimit() (limit uint64) {
 }
 
 func availableMemory() (available uint64) {
-	available = 8 << 30 // Default to 8 GiB when we can't find the limits.
+	available = 2048 * blockSizeV2 * 2 // Default to 4 GiB when we can't find the limits.
 
 	if runtime.GOOS == "linux" {
 		// Useful in container mode
 		limit := cgroupMemLimit()
 		if limit > 0 {
-			// A valid value is found
-			available = limit
+			// A valid value is found, return its 75%
+			available = limit * (3 / 4)
 			return
 		}
 	} // for all other platforms limits are based on virtual memory.
@@ -103,7 +103,8 @@ func availableMemory() (available uint64) {
 	if err != nil {
 		return
 	}
-	available = memStats.Available / 2
+	// A valid value is available return its 75%
+	available = memStats.Available * (3 / 4)
 	return
 }
 
@@ -132,6 +133,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
+		// Returns 75% of max memory allowed
 		maxMem := availableMemory()
 
 		// max requests per node is calculated as
