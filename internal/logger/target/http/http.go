@@ -360,6 +360,7 @@ func (h *Target) startHTTPLogger(ctx context.Context) {
 			// when there are no incoming events on logCh we should flush out
 			// the entries.
 			if len(logCh) > 0 {
+				timer.Reset(3 * time.Second)
 				continue
 			}
 			if buf.Len() > 0 {
