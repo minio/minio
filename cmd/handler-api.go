@@ -45,6 +45,7 @@ type apiConfig struct {
 	// total drives per erasure set across pools.
 	totalDriveCount       int
 	replicationPriority   string
+	forceStorageClass     string
 	replicationMaxWorkers int
 	transitionWorkers     int
 
@@ -121,6 +122,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		corsAllowOrigin = []string{"*"}
 	}
 	t.corsAllowOrigins = corsAllowOrigin
+	t.forceStorageClass = cfg.ForceStorageClass
 
 	maxSetDrives := 0
 	for _, setDriveCount := range setDriveCounts {
@@ -191,6 +193,18 @@ func (t *apiConfig) odirectEnabled() bool {
 	defer t.mu.RUnlock()
 
 	return t.enableODirect
+}
+
+// storageClass will override the storage class if forceStorageClass is set.
+// Otherwise it will return the input storage class.
+func (t *apiConfig) storageClass(s string) string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.forceStorageClass != "" {
+		return t.forceStorageClass
+	}
+	return s
 }
 
 func (t *apiConfig) shouldGzipObjects() bool {

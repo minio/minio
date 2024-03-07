@@ -237,6 +237,8 @@ const (
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"
 	MinIOLifecycleCfgUpdatedAt = "X-Minio-LifecycleConfig-UpdatedAt"
+	// MinIOTierName - indicates name of tier where the object has been tiered to
+	MinIOTierName = "X-Minio-Tier"
 	// MinIOCompressed is returned when object is compressed
 	MinIOCompressed = "X-Minio-Compressed"
 
