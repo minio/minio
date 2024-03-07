@@ -53,6 +53,12 @@ var (
 			Sensitive:   true,
 		},
 		config.HelpKV{
+			Key:         BatchSize,
+			Description: "Number of events per HTTP send to webhook target",
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
 			Key:         QueueSize,
 			Description: "configure channel queue size for webhook targets",
 			Optional:    true,
@@ -106,6 +112,12 @@ var (
 			Optional:    true,
 			Type:        "string",
 			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         BatchSize,
+			Description: "Number of events per HTTP send to webhook target",
+			Optional:    true,
+			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         QueueSize,
