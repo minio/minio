@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"sync/atomic"
@@ -29,9 +28,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/rest"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"golang.org/x/exp/slices"
 )
@@ -506,31 +503,6 @@ func newPeerS3Clients(endpoints EndpointServerPools) (peers []peerS3Client) {
 
 // Returns a peer S3 client.
 func newPeerS3Client(node Node) peerS3Client {
-	scheme := "http"
-	if globalIsTLS {
-		scheme = "https"
-	}
-
-	serverURL := &url.URL{
-		Scheme: scheme,
-		Host:   node.Host,
-		Path:   peerS3Path,
-	}
-
-	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	// Use a separate client to avoid recursive calls.
-	healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-	healthClient.NoMetrics = true
-
-	// Construct a new health function.
-	restClient.HealthCheckFn = func() bool {
-		ctx, cancel := context.WithTimeout(context.Background(), restClient.HealthCheckTimeout)
-		defer cancel()
-		respBody, err := healthClient.Call(ctx, peerS3MethodHealth, nil, nil, -1)
-		xhttp.DrainBody(respBody)
-		return !isNetworkError(err)
-	}
-
 	var gridConn atomic.Pointer[grid.Connection]
 
 	return &remotePeerS3Client{
