@@ -333,42 +333,20 @@ func (h *Target) startHTTPLogger(ctx context.Context) {
 		payloadType = ""
 	}
 
-	timer := time.NewTimer(3 * time.Second)
-	defer timer.Stop()
-
 	var nevents int
 	// Send messages until channel is closed.
-	for {
-		select {
-		case entry, ok := <-logCh:
-			if !ok {
-				return
-			}
-			atomic.AddInt64(&h.totalMessages, 1)
-			nevents++
-			if err := enc.Encode(&entry); err != nil {
-				atomic.AddInt64(&h.failedMessages, 1)
-				continue
-			}
-			if nevents == batchSize {
-				h.logEntry(ctx, buf.Bytes(), payloadType)
-				buf.Reset()
-				nevents = 0
-			}
-		case <-timer.C:
-			// Timer trigger to flush any pending events in the `buf.Bytes()`
-			// when there are no incoming events on logCh we should flush out
-			// the entries.
-			if len(logCh) > 0 {
-				timer.Reset(3 * time.Second)
-				continue
-			}
-			if buf.Len() > 0 {
-				h.logEntry(ctx, buf.Bytes(), payloadType)
-				buf.Reset()
-				nevents = 0
-			}
-			timer.Reset(3 * time.Second)
+	for entry := range logCh {
+		atomic.AddInt64(&h.totalMessages, 1)
+		nevents++
+		if err := enc.Encode(&entry); err != nil {
+			atomic.AddInt64(&h.failedMessages, 1)
+			nevents--
+			continue
+		}
+		if (nevents == batchSize || len(logCh) == 0) && buf.Len() > 0 {
+			h.logEntry(ctx, buf.Bytes(), payloadType)
+			buf.Reset()
+			nevents = 0
 		}
 	}
 }
