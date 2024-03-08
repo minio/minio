@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -884,73 +883,6 @@ func Test_mergeXLV2Versions(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func Test_mergeXLV2Versions3(t *testing.T) {
-	dataZ, err := os.ReadFile("testdata/xl-meta-merge.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var vers [][]xlMetaV2ShallowVersion
-	var rfi []RawFileInfo
-	zr, err := zip.NewReader(bytes.NewReader(dataZ), int64(len(dataZ)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, file := range zr.File {
-		if file.UncompressedSize64 == 0 {
-			continue
-		}
-		in, err := file.Open()
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer in.Close()
-		buf, err := io.ReadAll(in)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rfi = append(rfi, RawFileInfo{
-			Buf: buf,
-		})
-		var xl xlMetaV2
-		err = xl.LoadOrConvert(buf)
-		if err != nil {
-			t.Fatal(err)
-		}
-		vers = append(vers, xl.versions)
-	}
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	rng.Shuffle(len(vers), func(i, j int) {
-		vers[i], vers[j] = vers[j], vers[i]
-	})
-	for _, v2 := range vers {
-		for _, ver := range v2 {
-			b, _ := json.Marshal(ver.header)
-			t.Log(string(b))
-			var x xlMetaV2Version
-			_, _ = x.unmarshalV(0, ver.meta)
-			b, _ = json.Marshal(x)
-			t.Log(string(b), x.getSignature())
-		}
-	}
-	lfi, _ := pickLatestQuorumFilesInfo(context.Background(), rfi, make([]error, len(rfi)), "a", "b", false, false, true)
-	for i, fi := range lfi {
-		t.Log("FI:", i, fi.VersionID, fi.Size)
-	}
-	merged := mergeXLV2Versions(3, true, 0, vers...)
-	if len(merged) == 0 {
-		t.Error("Did not get any results")
-		return
-	}
-	for _, ver := range merged {
-		if ver.header.Type == invalidVersionType {
-			t.Errorf("Invalid result returned: %v", ver.header)
-		}
-	}
-	for _, ver := range merged {
-		t.Log(ver.header)
 	}
 }
 
