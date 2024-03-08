@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -390,13 +389,13 @@ func xlMetaV2TrimData(buf []byte) []byte {
 	// Skip header
 	_, metaBuf, err = msgp.ReadBytesZC(metaBuf)
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
+		storageLogIf(GlobalContext, err)
 		return buf
 	}
 	// Skip CRC
 	if maj > 1 || min >= 2 {
 		_, metaBuf, err = msgp.ReadUint32Bytes(metaBuf)
-		logger.LogIf(GlobalContext, err)
+		storageLogIf(GlobalContext, err)
 	}
 	//   =  input - current pos
 	ends := len(buf) - len(metaBuf)

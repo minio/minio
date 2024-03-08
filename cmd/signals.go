@@ -51,16 +51,16 @@ func handleSignals() {
 
 		if httpServer := newHTTPServerFn(); httpServer != nil {
 			if err := httpServer.Shutdown(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.LogIf(context.Background(), err)
+				shutdownLogIf(context.Background(), err)
 			}
 		}
 
 		if objAPI := newObjectLayerFn(); objAPI != nil {
-			logger.LogIf(context.Background(), objAPI.Shutdown(context.Background()))
+			shutdownLogIf(context.Background(), objAPI.Shutdown(context.Background()))
 		}
 
 		if srv := newConsoleServerFn(); srv != nil {
-			logger.LogIf(context.Background(), srv.Shutdown())
+			shutdownLogIf(context.Background(), srv.Shutdown())
 		}
 
 		if globalEventNotifier != nil {
@@ -73,7 +73,7 @@ func handleSignals() {
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
-			logger.LogIf(context.Background(), err)
+			shutdownLogIf(context.Background(), err)
 			exit(stopProcess())
 		case osSignal := <-globalOSSignalCh:
 			logger.Info("Exiting on signal: %s", strings.ToUpper(osSignal.String()))
@@ -89,7 +89,7 @@ func handleSignals() {
 				if rerr == nil {
 					daemon.SdNotify(false, daemon.SdNotifyReady)
 				}
-				logger.LogIf(context.Background(), rerr)
+				shutdownLogIf(context.Background(), rerr)
 				exit(stop && rerr == nil)
 			case serviceStop:
 				logger.Info("Stopping on service signal")

@@ -31,7 +31,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	cfgldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/ldap"
 	"github.com/minio/pkg/v2/policy"
@@ -60,7 +59,7 @@ func addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.R
 	password := cred.SecretKey
 	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err, logger.ErrorKind)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}

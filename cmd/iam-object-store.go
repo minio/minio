@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -465,7 +464,7 @@ func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
 		// each time.
 		m := map[string]UserIdentity{}
 		if err := iamOS.loadUser(ctx, userName, stsUser, m); err != nil && err != errNoSuchUser {
-			logger.LogIf(GlobalContext, fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item.Item))
+			iamLogIf(GlobalContext, fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item.Item))
 		}
 
 	}

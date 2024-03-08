@@ -132,7 +132,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 				buf.Reset()
 				tmpEvt.Records[0] = ev
 				if err := enc.Encode(tmpEvt); err != nil {
-					logger.LogOnceIf(ctx, err, "event: Encode failed")
+					bugLogIf(ctx, err, "event: Encode failed")
 					continue
 				}
 				mergeCh <- append(grid.GetByteBuffer()[:0], buf.Bytes()...)

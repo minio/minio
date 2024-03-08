@@ -500,7 +500,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	errs := g.Wait()
 	for _, err := range errs {
 		if err != nil {
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err, logger.WarningKind)
 		}
 	}
 
@@ -542,7 +542,7 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 		case <-t.C:
 			buckets, err := sys.objAPI.ListBuckets(ctx, BucketOptions{})
 			if err != nil {
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err, logger.WarningKind)
 				break
 			}
 
@@ -560,7 +560,7 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 
 				meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[i].Name)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					internalLogIf(ctx, err, logger.WarningKind)
 					wait() // wait to proceed to next entry.
 					continue
 				}

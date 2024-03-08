@@ -34,6 +34,10 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+func hashLogIf(ctx context.Context, err error) {
+	logger.LogIf(ctx, "hash", err)
+}
+
 // MinIOMultipartChecksum is as metadata on multipart uploads to indicate checksum type.
 const MinIOMultipartChecksum = "x-minio-multipart-checksum"
 
@@ -323,7 +327,7 @@ func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 		var checksums int
 		// Ensure we don't divide by 0:
 		if c.Type.RawByteLen() == 0 || len(parts)%c.Type.RawByteLen() != 0 {
-			logger.LogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
+			hashLogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
 			checksums = 0
 			parts = nil
 		} else {

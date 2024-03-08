@@ -22,7 +22,6 @@ import (
 	"errors"
 	"hash/crc32"
 
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
@@ -284,7 +283,7 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 // the corresponding error in errs slice is not nil
 func evalDisks(disks []StorageAPI, errs []error) []StorageAPI {
 	if len(errs) != len(disks) {
-		logger.LogIf(GlobalContext, errors.New("unexpected drives/errors slice length"))
+		bugLogIf(GlobalContext, errors.New("unexpected drives/errors slice length"))
 		return nil
 	}
 	newDisks := make([]StorageAPI, len(disks))

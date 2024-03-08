@@ -38,7 +38,7 @@ type logOnceType struct {
 	sync.Mutex
 }
 
-func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func (l *logOnceType) logOnceConsoleIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
@@ -61,7 +61,7 @@ func (l *logOnceType) logOnceConsoleIf(ctx context.Context, err error, id string
 	l.Unlock()
 
 	if shouldLog {
-		consoleLogIf(ctx, err, errKind...)
+		consoleLogIf(ctx, subsystem, err, errKind...)
 	}
 }
 
@@ -92,7 +92,7 @@ func unwrapErrs(err error) (leafErr error) {
 }
 
 // One log message per error.
-func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func (l *logOnceType) logOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
@@ -115,7 +115,7 @@ func (l *logOnceType) logOnceIf(ctx context.Context, err error, id string, errKi
 	l.Unlock()
 
 	if shouldLog {
-		logIf(ctx, err, errKind...)
+		logIf(ctx, subsystem, err, errKind...)
 	}
 }
 
@@ -142,17 +142,17 @@ var logOnce = newLogOnceType()
 // LogOnceIf - Logs notification errors - once per error.
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
-func LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
 	if logIgnoreError(err) {
 		return
 	}
-	logOnce.logOnceIf(ctx, err, id, errKind...)
+	logOnce.logOnceIf(ctx, subsystem, err, id, errKind...)
 }
 
 // LogOnceConsoleIf - similar to LogOnceIf but exclusively only logs to console target.
-func LogOnceConsoleIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func LogOnceConsoleIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
 	if logIgnoreError(err) {
 		return
 	}
-	logOnce.logOnceConsoleIf(ctx, err, id, errKind...)
+	logOnce.logOnceConsoleIf(ctx, subsystem, err, id, errKind...)
 }

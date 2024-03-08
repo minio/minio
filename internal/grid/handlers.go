@@ -27,7 +27,6 @@ import (
 
 	"github.com/minio/minio/internal/hash/sha256"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -463,7 +462,7 @@ func (h *SingleHandler[Req, Resp]) AllowCallRequestPool(b bool) *SingleHandler[R
 // This may only be set ONCE before use.
 func (h *SingleHandler[Req, Resp]) IgnoreNilConn() *SingleHandler[Req, Resp] {
 	if h.ignoreNilConn {
-		logger.LogOnceIf(context.Background(), fmt.Errorf("%s: IgnoreNilConn called twice", h.id.String()), h.id.String()+"IgnoreNilConn")
+		gridLogOnceIf(context.Background(), fmt.Errorf("%s: IgnoreNilConn called twice", h.id.String()), h.id.String()+"IgnoreNilConn")
 	}
 	h.ignoreNilConn = true
 	return h
@@ -764,7 +763,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 							input := h.NewRequest()
 							_, err := input.UnmarshalMsg(v)
 							if err != nil {
-								logger.LogOnceIf(ctx, err, err.Error())
+								gridLogOnceIf(ctx, err, err.Error())
 							}
 							PutByteBuffer(v)
 							// Send input
@@ -789,7 +788,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 					dst := GetByteBuffer()
 					dst, err := v.MarshalMsg(dst[:0])
 					if err != nil {
-						logger.LogOnceIf(ctx, err, err.Error())
+						gridLogOnceIf(ctx, err, err.Error())
 					}
 					if !h.sharedResponse {
 						h.PutResponse(v)
@@ -875,7 +874,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 			for req := range reqT {
 				b, err := req.MarshalMsg(GetByteBuffer()[:0])
 				if err != nil {
-					logger.LogOnceIf(ctx, err, err.Error())
+					gridLogOnceIf(ctx, err, err.Error())
 				}
 				h.PutRequest(req)
 				stream.Requests <- b

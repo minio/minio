@@ -514,7 +514,7 @@ func (l EndpointServerPools) hostsSorted() []*xnet.Host {
 		}
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			internalLogIf(GlobalContext, err)
 			continue
 		}
 		hosts[i] = host
@@ -647,7 +647,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
+						bootLogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
 							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.ErrorKind)
 					}
 
@@ -677,7 +677,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
+						bootLogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
 					}
 				} else {
 					resolvedList[i] = true
@@ -841,7 +841,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
+							bootLogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
 								endpoint.Hostname()), endpoint.Hostname(), logger.ErrorKind)
 						}
 						continue
@@ -870,7 +870,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, fmt.Errorf("Unable to resolve DNS for %s: %w", endpoint, err), endpoint.Hostname(), logger.ErrorKind)
+							bootLogOnceIf(ctx, fmt.Errorf("Unable to resolve DNS for %s: %w", endpoint, err), endpoint.Hostname(), logger.ErrorKind)
 						}
 					} else {
 						resolvedList[endpoint] = true

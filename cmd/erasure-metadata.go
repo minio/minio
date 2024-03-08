@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
@@ -268,7 +267,7 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 		// Continue to towards the next part.
 		partOffset -= part.Size
 	}
-	logger.LogIf(ctx, InvalidRange{})
+	internalLogIf(ctx, InvalidRange{})
 	// Offset beyond the size of the object return InvalidRange.
 	return 0, 0, InvalidRange{}
 }

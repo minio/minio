@@ -1690,7 +1690,7 @@ func getMinioProcMetrics() *MetricsGroup {
 
 		p, err := procfs.Self()
 		if err != nil {
-			logger.LogOnceIf(ctx, err, string(nodeMetricNamespace))
+			internalLogOnceIf(ctx, err, string(nodeMetricNamespace))
 			return
 		}
 
@@ -1846,7 +1846,7 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 		if err != nil {
 			// Log error and continue to receive other metric
 			// values
-			logger.LogIf(GlobalContext, err)
+			bugLogIf(GlobalContext, err)
 			continue
 		}
 
@@ -2476,7 +2476,7 @@ func getReplicationSiteMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		if globalSiteReplicationSys.isEnabled() {
 			m, err := globalSiteReplicationSys.getSiteMetrics(GlobalContext)
 			if err != nil {
-				logger.LogIf(GlobalContext, err)
+				metricsLogIf(GlobalContext, err)
 				return ml
 			}
 			ml = append(ml, Metric{
@@ -3126,7 +3126,7 @@ func getClusterUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		metrics = make([]Metric, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			return
 		}
 
@@ -3229,7 +3229,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 		metrics = make([]Metric, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			return
 		}
 
@@ -3463,7 +3463,7 @@ func getClusterTierMetrics(opts MetricsGroupOpts) *MetricsGroup {
 
 		dui, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			return
 		}
 		// data usage has not captured any tier stats yet.
@@ -4013,7 +4013,7 @@ func collectMetric(metric Metric, labels []string, values []string, metricName s
 			if err != nil {
 				// Enable for debugging
 				if serverDebugLog {
-					logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), metricName+"-metrics-histogram")
+					bugLogIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram))
 				}
 			} else {
 				out <- pmetric
@@ -4040,7 +4040,7 @@ func collectMetric(metric Metric, labels []string, values []string, metricName s
 	if err != nil {
 		// Enable for debugging
 		if serverDebugLog {
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), metricName+"-metrics")
+			bugLogIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values))
 		}
 	} else {
 		out <- pmetric
@@ -4366,7 +4366,7 @@ func metricsNodeHandler() http.Handler {
 		enc := expfmt.NewEncoder(w, contentType)
 		for _, mf := range mfs {
 			if err := enc.Encode(mf); err != nil {
-				logger.LogIf(r.Context(), err)
+				metricsLogIf(r.Context(), err)
 				return
 			}
 		}

@@ -28,7 +28,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
 )
@@ -845,7 +844,7 @@ func (b metacacheBlock) headerKV() map[string]string {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	v, err := json.Marshal(b)
 	if err != nil {
-		logger.LogIf(context.Background(), err) // Unlikely
+		bugLogIf(context.Background(), err) // Unlikely
 		return nil
 	}
 	return map[string]string{fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, b.n): string(v)}

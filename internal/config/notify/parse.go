@@ -40,6 +40,14 @@ const (
 	formatNamespace = "namespace"
 )
 
+const (
+	logSubsys = "notify"
+)
+
+func logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, logSubsys, err, id, errKind...)
+}
+
 // ErrTargetsOffline - Indicates single/multiple target failures.
 var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
 
@@ -97,7 +105,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewAMQPTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewAMQPTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -112,7 +120,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewElasticsearchTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewElasticsearchTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +137,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 				continue
 			}
 			args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
-			t, err := target.NewKafkaTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewKafkaTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -147,7 +155,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 				continue
 			}
 			args.RootCAs = transport.TLSClientConfig.RootCAs
-			t, err := target.NewMQTTTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewMQTTTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -162,7 +170,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewMySQLTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewMySQLTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -177,7 +185,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewNATSTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewNATSTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +200,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewNSQTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewNSQTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -207,7 +215,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewPostgreSQLTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewPostgreSQLTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -222,7 +230,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewRedisTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewRedisTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -237,7 +245,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewWebhookTarget(ctx, id, args, logger.LogOnceIf, transport)
+			t, err := target.NewWebhookTarget(ctx, id, args, logOnceIf, transport)
 			if err != nil {
 				return nil, err
 			}
