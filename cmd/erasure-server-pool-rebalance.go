@@ -26,17 +26,17 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/hash"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v2/workers"
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -485,6 +485,41 @@ func (z *erasureServerPools) checkIfRebalanceDone(poolIdx int) bool {
 	return false
 }
 
+func (set *erasureObjects) listObjectsToRebalance(ctx context.Context, bucketName string, fn func(entry metaCacheEntry)) error {
+	disks, _ := set.getOnlineDisksWithHealing(false)
+	if len(disks) == 0 {
+		return fmt.Errorf("no online drives found for set with endpoints %s", set.getEndpoints())
+	}
+
+	// However many we ask, versions must exist on ~50%
+	listingQuorum := (set.setDriveCount + 1) / 2
+
+	// How to resolve partial results.
+	resolver := metadataResolutionParams{
+		dirQuorum: listingQuorum, // make sure to capture all quorum ratios
+		objQuorum: listingQuorum, // make sure to capture all quorum ratios
+		bucket:    bucketName,
+	}
+
+	err := listPathRaw(ctx, listPathRawOptions{
+		disks:          disks,
+		bucket:         bucketName,
+		recursive:      true,
+		forwardTo:      "",
+		minDisks:       listingQuorum,
+		reportNotFound: false,
+		agreed:         fn,
+		partial: func(entries metaCacheEntries, _ []error) {
+			entry, ok := entries.resolve(&resolver)
+			if ok {
+				fn(*entry)
+			}
+		},
+		finished: nil,
+	})
+	return err
+}
+
 // rebalanceBucket rebalances objects under bucket in poolIdx pool
 func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string, poolIdx int) error {
 	ctx = logger.SetReqInfo(ctx, &logger.ReqInfo{})
@@ -496,23 +531,25 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	rcfg, _ := getReplicationConfig(ctx, bucket)
 
 	pool := z.serverPools[poolIdx]
+
 	const envRebalanceWorkers = "_MINIO_REBALANCE_WORKERS"
-	wStr := env.Get(envRebalanceWorkers, strconv.Itoa(len(pool.sets)))
-	workerSize, err := strconv.Atoi(wStr)
+	workerSize, err := env.GetInt(envRebalanceWorkers, len(pool.sets))
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("invalid %s value: %s err: %v, defaulting to %d", envRebalanceWorkers, wStr, err, len(pool.sets)))
+		logger.LogIf(ctx, fmt.Errorf("invalid workers value err: %v, defaulting to %d", err, len(pool.sets)))
 		workerSize = len(pool.sets)
 	}
-	workers := make(chan struct{}, workerSize)
-	var wg sync.WaitGroup
-	for _, set := range pool.sets {
+
+	// Each decom worker needs one List() goroutine/worker
+	// add that many extra workers.
+	workerSize += len(pool.sets)
+
+	wk, err := workers.New(workerSize)
+	if err != nil {
+		return err
+	}
+
+	for setIdx, set := range pool.sets {
 		set := set
-		disks := set.getOnlineDisks()
-		if len(disks) == 0 {
-			logger.LogIf(ctx, fmt.Errorf("no online disks found for set with endpoints %s",
-				set.getEndpoints()))
-			continue
-		}
 
 		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 			if lc == nil {
@@ -531,10 +568,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 		}
 
 		rebalanceEntry := func(entry metaCacheEntry) {
-			defer func() {
-				<-workers
-				wg.Done()
-			}()
+			defer wk.Give()
 
 			if entry.isDir() {
 				return
@@ -592,6 +626,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 							DeleteReplication: version.ReplicationState,
 							DeleteMarker:      true, // make sure we create a delete marker
 							SkipRebalancing:   true, // make sure we skip the decommissioned pool
+							NoAuditLog:        true,
 						})
 					var failure bool
 					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -603,6 +638,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						z.updatePoolStats(poolIdx, bucket, version)
 						rebalanced++
 					}
+					auditLogRebalance(ctx, "Rebalance:DeleteMarker", bucket, version.Name, versionID, err)
 					continue
 				}
 
@@ -619,6 +655,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 							VersionID:    versionID,
 							NoDecryption: true,
 							NoLock:       true,
+							NoAuditLog:   true,
 						})
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.
@@ -663,6 +700,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					ObjectOptions{
 						DeletePrefix:       true, // use prefix delete to delete all versions at once.
 						DeletePrefixObject: true, // use prefix delete on exact object (this is an optimization to avoid fan-out calls)
+						NoAuditLog:         true,
 					},
 				)
 				stopFn(err)
@@ -673,44 +711,24 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 			}
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			listQuorum := (len(disks) + 1) / 2
-
-			// How to resolve partial results.
-			resolver := metadataResolutionParams{
-				dirQuorum: listQuorum, // make sure to capture all quorum ratios
-				objQuorum: listQuorum, // make sure to capture all quorum ratios
-				bucket:    bucket,
-			}
-			err := listPathRaw(ctx, listPathRawOptions{
-				disks:          disks,
-				bucket:         bucket,
-				recursive:      true,
-				forwardTo:      "",
-				minDisks:       listQuorum,
-				reportNotFound: false,
-				agreed: func(entry metaCacheEntry) {
-					workers <- struct{}{}
-					wg.Add(1)
+		wk.Take()
+		go func(setIdx int) {
+			defer wk.Give()
+			err := set.listObjectsToRebalance(ctx, bucket,
+				func(entry metaCacheEntry) {
+					wk.Take()
 					go rebalanceEntry(entry)
 				},
-				partial: func(entries metaCacheEntries, _ []error) {
-					entry, ok := entries.resolve(&resolver)
-					if ok {
-						workers <- struct{}{}
-						wg.Add(1)
-						go rebalanceEntry(*entry)
-					}
-				},
-				finished: nil,
-			})
-			logger.LogIf(ctx, err)
-		}()
+			)
+			if err == nil || errors.Is(err, context.Canceled) {
+				return
+			}
+			setN := humanize.Ordinal(setIdx + 1)
+			logger.LogOnceIf(ctx, fmt.Errorf("listing objects from %s set failed with %v", setN, err), "rebalance-listing-failed"+setN)
+		}(setIdx)
 	}
-	wg.Wait()
+
+	wk.Wait()
 	return nil
 }
 
@@ -783,11 +801,12 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		res, err := z.NewMultipartUpload(ctx, bucket, oi.Name, ObjectOptions{
 			VersionID:   oi.VersionID,
 			UserDefined: oi.UserDefined,
+			NoAuditLog:  true,
 		})
 		if err != nil {
 			return fmt.Errorf("rebalanceObject: NewMultipartUpload() %w", err)
 		}
-		defer z.AbortMultipartUpload(ctx, bucket, oi.Name, res.UploadID, ObjectOptions{})
+		defer z.AbortMultipartUpload(ctx, bucket, oi.Name, res.UploadID, ObjectOptions{NoAuditLog: true})
 
 		parts := make([]CompletePart, len(oi.Parts))
 		for i, part := range oi.Parts {
@@ -803,6 +822,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 					IndexCB: func() []byte {
 						return part.Index // Preserve part Index to ensure decompression works.
 					},
+					NoAuditLog: true,
 				})
 			if err != nil {
 				return fmt.Errorf("rebalanceObject: PutObjectPart() %w", err)
@@ -815,6 +835,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		_, err = z.CompleteMultipartUpload(ctx, bucket, oi.Name, res.UploadID, parts, ObjectOptions{
 			DataMovement: true,
 			MTime:        oi.ModTime,
+			NoAuditLog:   true,
 		})
 		if err != nil {
 			err = fmt.Errorf("rebalanceObject: CompleteMultipartUpload() %w", err)
@@ -840,6 +861,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 			IndexCB: func() []byte {
 				return oi.Parts[0].Index // Preserve part Index to ensure decompression works.
 			},
+			NoAuditLog: true,
 		})
 	if err != nil {
 		err = fmt.Errorf("rebalanceObject: PutObject() %w", err)

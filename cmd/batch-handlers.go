@@ -63,7 +63,6 @@ type BatchJobRequest struct {
 	ID        string               `yaml:"-" json:"name"`
 	User      string               `yaml:"-" json:"user"`
 	Started   time.Time            `yaml:"-" json:"started"`
-	Location  string               `yaml:"-" json:"location"`
 	Replicate *BatchJobReplicateV1 `yaml:"replicate" json:"replicate"`
 	KeyRotate *BatchJobKeyRotateV1 `yaml:"keyrotate" json:"keyrotate"`
 	Expire    *BatchJobExpire      `yaml:"expire" json:"expire"`
@@ -710,38 +709,52 @@ type batchJobInfo struct {
 }
 
 const (
-	batchReplName      = "batch-replicate.bin"
-	batchReplFormat    = 1
-	batchReplVersionV1 = 1
-	batchReplVersion   = batchReplVersionV1
-	batchJobName       = "job.bin"
-	batchJobPrefix     = "batch-jobs"
+	batchReplName         = "batch-replicate.bin"
+	batchReplFormat       = 1
+	batchReplVersionV1    = 1
+	batchReplVersion      = batchReplVersionV1
+	batchJobName          = "job.bin"
+	batchJobPrefix        = "batch-jobs"
+	batchJobReportsPrefix = batchJobPrefix + "/reports"
 
 	batchReplJobAPIVersion        = "v1"
 	batchReplJobDefaultRetries    = 3
 	batchReplJobDefaultRetryDelay = 250 * time.Millisecond
 )
 
-func (ri *batchJobInfo) load(ctx context.Context, api ObjectLayer, job BatchJobRequest) error {
+func getJobReportPath(job BatchJobRequest) string {
 	var fileName string
-	var format, version uint16
 	switch {
 	case job.Replicate != nil:
 		fileName = batchReplName
+	case job.KeyRotate != nil:
+		fileName = batchKeyRotationName
+	case job.Expire != nil:
+		fileName = batchExpireName
+	}
+	return pathJoin(batchJobReportsPrefix, job.ID, fileName)
+}
+
+func getJobPath(job BatchJobRequest) string {
+	return pathJoin(batchJobPrefix, job.ID)
+}
+
+func (ri *batchJobInfo) load(ctx context.Context, api ObjectLayer, job BatchJobRequest) error {
+	var format, version uint16
+	switch {
+	case job.Replicate != nil:
 		version = batchReplVersionV1
 		format = batchReplFormat
 	case job.KeyRotate != nil:
-		fileName = batchKeyRotationName
 		version = batchKeyRotateVersionV1
 		format = batchKeyRotationFormat
 	case job.Expire != nil:
-		fileName = batchExpireName
 		version = batchExpireVersionV1
 		format = batchExpireFormat
 	default:
 		return errors.New("no supported batch job request specified")
 	}
-	data, err := readConfig(ctx, api, pathJoin(job.Location, fileName))
+	data, err := readConfig(ctx, api, getJobReportPath(job))
 	if err != nil {
 		if errors.Is(err, errConfigNotFound) || isErrObjectNotFound(err) {
 			ri.Version = int(version)
@@ -852,8 +865,8 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 	now := UTCNow()
 	ri.mu.Lock()
 	var (
-		format, version  uint16
-		jobTyp, fileName string
+		format, version uint16
+		jobTyp          string
 	)
 
 	if now.Sub(ri.LastUpdate) >= duration {
@@ -862,19 +875,16 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 			format = batchReplFormat
 			version = batchReplVersion
 			jobTyp = string(job.Type())
-			fileName = batchReplName
 			ri.Version = batchReplVersionV1
 		case madmin.BatchJobKeyRotate:
 			format = batchKeyRotationFormat
 			version = batchKeyRotateVersion
 			jobTyp = string(job.Type())
-			fileName = batchKeyRotationName
 			ri.Version = batchKeyRotateVersionV1
 		case madmin.BatchJobExpire:
 			format = batchExpireFormat
 			version = batchExpireVersion
 			jobTyp = string(job.Type())
-			fileName = batchExpireName
 			ri.Version = batchExpireVersionV1
 		default:
 			return errInvalidArgument
@@ -895,7 +905,7 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 		if err != nil {
 			return err
 		}
-		return saveConfig(ctx, api, pathJoin(job.Location, fileName), buf)
+		return saveConfig(ctx, api, getJobReportPath(job), buf)
 	}
 	ri.mu.Unlock()
 	return nil
@@ -1417,15 +1427,8 @@ func (j BatchJobRequest) Validate(ctx context.Context, o ObjectLayer) error {
 }
 
 func (j BatchJobRequest) delete(ctx context.Context, api ObjectLayer) {
-	switch {
-	case j.Replicate != nil:
-		deleteConfig(ctx, api, pathJoin(j.Location, batchReplName))
-	case j.KeyRotate != nil:
-		deleteConfig(ctx, api, pathJoin(j.Location, batchKeyRotationName))
-	case j.Expire != nil:
-		deleteConfig(ctx, api, pathJoin(j.Location, batchExpireName))
-	}
-	deleteConfig(ctx, api, j.Location)
+	deleteConfig(ctx, api, getJobReportPath(j))
+	deleteConfig(ctx, api, getJobPath(j))
 }
 
 func (j *BatchJobRequest) save(ctx context.Context, api ObjectLayer) error {
@@ -1437,13 +1440,12 @@ func (j *BatchJobRequest) save(ctx context.Context, api ObjectLayer) error {
 		return err
 	}
 
-	j.Location = pathJoin(batchJobPrefix, j.ID)
 	job, err := j.MarshalMsg(nil)
 	if err != nil {
 		return err
 	}
 
-	return saveConfig(ctx, api, j.Location, job)
+	return saveConfig(ctx, api, getJobPath(*j), job)
 }
 
 func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string) error {
@@ -1671,8 +1673,7 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 	}
 
 	j := BatchJobRequest{
-		ID:       jobID,
-		Location: pathJoin(batchJobPrefix, jobID),
+		ID: jobID,
 	}
 
 	j.delete(ctx, objectAPI)

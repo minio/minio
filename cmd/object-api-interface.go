@@ -133,6 +133,7 @@ type ObjectOptions struct {
 	EvalRetentionBypassFn EvalRetentionBypassFn // only set for enforcing retention bypass on DeleteObject.
 
 	FastGetObjInfo bool // Only for S3 Head/Get Object calls for now
+	NoAuditLog     bool // Only set for decom, rebalance, to avoid double audits.
 }
 
 // WalkOptions provides filtering, marker and other Walk() specific options.

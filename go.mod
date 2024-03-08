@@ -51,7 +51,7 @@ require (
 	github.com/minio/dperf v0.5.3
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kms-go/kes v0.3.0
-	github.com/minio/madmin-go/v3 v3.0.49
+	github.com/minio/madmin-go/v3 v3.0.50-0.20240307080957-112c599cb563
 	github.com/minio/minio-go/v7 v7.0.68
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.9-0.20240209124402-7990a27fd79d
@@ -252,7 +252,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20240205150955-31a09d347014 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240205150955-31a09d347014 // indirect
 	google.golang.org/grpc v1.61.0 // indirect
-	google.golang.org/protobuf v1.32.0 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/h2non/filetype.v1 v1.0.5 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
