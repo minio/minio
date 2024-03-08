@@ -1234,7 +1234,8 @@ func (s *peerRESTServer) ListBucketsHandler(opts *BucketOptions) (*grid.Array[*B
 		return nil, grid.NewRemoteErr(err)
 	}
 	res := aoBucketInfo.New()
-	for _, bucket := range buckets {
+	for i := range buckets {
+		bucket := buckets[i]
 		res.Append(&bucket)
 	}
 	return res, nil
