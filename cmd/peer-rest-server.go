@@ -53,6 +53,7 @@ type peerRESTServer struct{}
 
 var (
 	// Types & Wrappers
+	aoBucketInfo           = grid.NewArrayOf[*BucketInfo](func() *BucketInfo { return &BucketInfo{} })
 	aoMetricsGroup         = grid.NewArrayOf[*Metric](func() *Metric { return &Metric{} })
 	madminBgHealState      = grid.NewJSONPool[madmin.BgHealState]()
 	madminCPUs             = grid.NewJSONPool[madmin.CPUs]()
@@ -97,6 +98,7 @@ var (
 	getSysServicesRPC              = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysServices]](grid.HandlerGetSysServices, grid.NewMSS, madminSysServices.NewJSON)
 	headBucketRPC                  = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerHeadBucket, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
 	healBucketRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerHealBucket, grid.NewMSS, grid.NewNoPayload)
+	listBucketsRPC                 = grid.NewSingleHandler[*BucketOptions, *grid.Array[*BucketInfo]](grid.HandlerListBuckets, func() *BucketOptions { return &BucketOptions{} }, aoBucketInfo.New)
 	loadBucketMetadataRPC          = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadBucketMetadata, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
 	loadGroupRPC                   = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadGroup, grid.NewMSS, grid.NewNoPayload)
 	loadPolicyMappingRPC           = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadPolicyMapping, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
@@ -1226,7 +1228,20 @@ func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np grid.NoPayload, ne
 	return np, nil
 }
 
-// HeadBucketHandler implements peer BuckeInfo call, returns bucket create date.
+func (s *peerRESTServer) ListBucketsHandler(opts *BucketOptions) (*grid.Array[*BucketInfo], *grid.RemoteErr) {
+	buckets, err := listBucketsLocal(context.Background(), *opts)
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+	res := aoBucketInfo.New()
+	for i := range buckets {
+		bucket := buckets[i]
+		res.Append(&bucket)
+	}
+	return res, nil
+}
+
+// HeadBucketHandler implements peer BucketInfo call, returns bucket create date.
 func (s *peerRESTServer) HeadBucketHandler(mss *grid.MSS) (info *VolInfo, nerr *grid.RemoteErr) {
 	bucket := mss.Get(peerS3Bucket)
 	if isMinioMetaBucket(bucket) {
@@ -1332,6 +1347,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	logger.FatalIf(getSysServicesRPC.Register(gm, server.GetSysServicesHandler), "unable to register handler")
 	logger.FatalIf(headBucketRPC.Register(gm, server.HeadBucketHandler), "unable to register handler")
 	logger.FatalIf(healBucketRPC.Register(gm, server.HealBucketHandler), "unable to register handler")
+	logger.FatalIf(listBucketsRPC.Register(gm, server.ListBucketsHandler), "unable to register handler")
 	logger.FatalIf(listenRPC.RegisterNoInput(gm, server.ListenHandler), "unable to register handler")
 	logger.FatalIf(loadBucketMetadataRPC.Register(gm, server.LoadBucketMetadataHandler), "unable to register handler")
 	logger.FatalIf(loadGroupRPC.Register(gm, server.LoadGroupHandler), "unable to register handler")

@@ -22,6 +22,9 @@ package replication
 // StatusType of Replication for x-amz-replication-status header
 type StatusType string
 
+// Type - replication type enum
+type Type int
+
 const (
 	// Pending - replication is pending.
 	Pending StatusType = "PENDING"
