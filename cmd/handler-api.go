@@ -94,7 +94,7 @@ func availableMemory() (available uint64) {
 		limit := cgroupMemLimit()
 		if limit > 0 {
 			// A valid value is found, return its 75%
-			available = limit * (3 / 4)
+			available = (limit * 3) / 4
 			return
 		}
 	} // for all other platforms limits are based on virtual memory.
@@ -104,7 +104,7 @@ func availableMemory() (available uint64) {
 		return
 	}
 	// A valid value is available return its 75%
-	available = memStats.Available * (3 / 4)
+	available = (memStats.Available * 3) / 4
 	return
 }
 
