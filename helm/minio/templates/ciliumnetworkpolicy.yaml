@@ -16,9 +16,9 @@ spec:
   ingress:
   - toPorts:
     - ports:
-      - port: {{ .Values.minioAPIPort }}
+      - port: "{{ .Values.minioAPIPort }}"
         protocol: TCP
-      - port: {{ .Values.minioConsolePort }}
+      - port: "{{ .Values.minioConsolePort }}"
         protocol: TCP
     {{- if not .Values.networkPolicy.allowExternal }}
     fromEndpoints:
