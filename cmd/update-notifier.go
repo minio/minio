@@ -95,8 +95,8 @@ func colorizeUpdateMessage(updateString string, newerThan string) string {
 
 	lines := []string{
 		color.YellowBold(topLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + topRightChar),
-		vertBarChar + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + vertBarChar,
-		vertBarChar + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + vertBarChar,
+		color.YellowBold(vertBarChar) + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + color.YellowBold(vertBarChar),
+		color.YellowBold(vertBarChar) + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + color.YellowBold(vertBarChar),
 		color.YellowBold(bottomLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + bottomRightChar),
 	}
 	return "\n" + strings.Join(lines, "\n") + "\n"

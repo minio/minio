@@ -159,7 +159,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
 					Host:           nerr.Host.String(),
 					CurrentVersion: Version,
-					UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+					UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 				}
 			}
 		}
@@ -176,7 +176,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 			peerResults[local] = madmin.ServerPeerUpdateStatus{
 				Host:           local,
 				CurrentVersion: Version,
-				UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+				UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 			}
 		}
 	} else {
@@ -212,7 +212,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 							Host:           nerr.Host.String(),
 							Err:            nerr.Err.Error(),
 							CurrentVersion: Version,
-							UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+							UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 						}
 					}
 				}
@@ -404,7 +404,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	updateStatus := madmin.ServerUpdateStatus{
 		CurrentVersion: Version,
-		UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+		UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 	}
 
 	// Marshal API response
