@@ -735,13 +735,13 @@ func serverMain(ctx *cli.Context) {
 
 	// Verify kernel release and version.
 	if oldLinux() {
-		warnings = append(warnings, color.RedBold("WARNING: Detected Linux kernel version older than 4.0.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x.x linux kernel version for best performance"))
+		warnings = append(warnings, color.YellowBold("- Detected Linux kernel version older than 4.0.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x.x linux kernel version for best performance"))
 	}
 
 	maxProcs := runtime.GOMAXPROCS(0)
 	cpuProcs := runtime.NumCPU()
 	if maxProcs < cpuProcs {
-		warnings = append(warnings, color.RedBoldf("WARNING: Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
+		warnings = append(warnings, color.YellowBold("- Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
 	var getCert certs.GetCertificateFunc
@@ -842,13 +842,13 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		if !globalServerCtxt.StrictS3Compat {
-			warnings = append(warnings, color.RedBold("WARNING: Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
+			warnings = append(warnings, color.YellowBold("- Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
 		}
 	})
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("WARNING: Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
+		msg := fmt.Sprintf("- Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
 			globalActiveCred)
-		warnings = append(warnings, color.RedBold(msg))
+		warnings = append(warnings, color.YellowBold(msg))
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
@@ -894,7 +894,7 @@ func serverMain(ctx *cli.Context) {
 		if !globalDisableFreezeOnBoot {
 			defer bootstrapTrace("unfreezeServices", unfreezeServices)
 			t := time.AfterFunc(5*time.Minute, func() {
-				warnings = append(warnings, color.Yellow("WARNING: Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+				warnings = append(warnings, color.YellowBold("- Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
 			})
 			defer t.Stop()
 		}
@@ -995,7 +995,7 @@ func serverMain(ctx *cli.Context) {
 
 		// Print a warning at the end of the startup banner so it is more noticeable
 		if newObject.BackendInfo().StandardSCParity == 0 {
-			warnings = append(warnings, ("Warning: The standard parity is set to 0. This can lead to data loss."))
+			warnings = append(warnings, color.YellowBold("- The standard parity is set to 0. This can lead to data loss."))
 		}
 		objAPI := newObjectLayerFn()
 		if objAPI != nil {
