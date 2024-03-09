@@ -848,7 +848,7 @@ func serverMain(ctx *cli.Context) {
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
 		msg := fmt.Sprintf("- Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
 			globalActiveCred)
-		warnings = append(warnings, color.Yellow(msg))
+		warnings = append(warnings, color.YellowBold(msg))
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
@@ -894,7 +894,7 @@ func serverMain(ctx *cli.Context) {
 		if !globalDisableFreezeOnBoot {
 			defer bootstrapTrace("unfreezeServices", unfreezeServices)
 			t := time.AfterFunc(5*time.Minute, func() {
-				warnings = append(warnings, color.Yellow("- Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+				warnings = append(warnings, color.YellowBold("- Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
 			})
 			defer t.Stop()
 		}
@@ -995,7 +995,7 @@ func serverMain(ctx *cli.Context) {
 
 		// Print a warning at the end of the startup banner so it is more noticeable
 		if newObject.BackendInfo().StandardSCParity == 0 {
-			warnings = append(warnings, color.Yellow("- The standard parity is set to 0. This can lead to data loss."))
+			warnings = append(warnings, color.YellowBold("- The standard parity is set to 0. This can lead to data loss."))
 		}
 		objAPI := newObjectLayerFn()
 		if objAPI != nil {
