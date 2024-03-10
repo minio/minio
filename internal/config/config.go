@@ -1332,18 +1332,23 @@ func (c Config) getTargetEnvs(subSys, target string, defKVS KVS, redactSecrets b
 	// Add all env vars that are set.
 	for _, kv := range defKVS {
 		envName := getEnvVarName(subSys, target, kv.Key)
-		envPair := EnvPair{
-			Name:  envName,
-			Value: env.Get(envName, ""),
-		}
-		if envPair.Value != "" {
+		v, ok, _, _, _ := env.LookupEnv(envName)
+		v = strings.TrimSpace(v)
+		if ok {
+			if kv.HiddenIfEmpty && v == "" {
+				// Skip empty values that should be hidden.
+				continue
+			}
 			hkv, _ := hkvs.Lookup(kv.Key)
 			if hkv.Secret && redactSecrets {
 				// Skip adding any secret to the returned value.
 				continue
 				// envPair.Value = redactedSecret
 			}
-			envMap[kv.Key] = envPair
+			envMap[kv.Key] = EnvPair{
+				Name:  envName,
+				Value: v,
+			}
 		}
 	}
 	return envMap

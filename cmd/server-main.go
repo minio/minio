@@ -222,13 +222,13 @@ EXAMPLES:
 }
 
 func serverCmdArgs(ctx *cli.Context) []string {
-	v, _, _, err := env.LookupEnv(config.EnvArgs)
+	v, _, _, _, err := env.LookupEnv(config.EnvArgs)
 	if err != nil {
 		logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
 			config.EnvArgs, os.Getenv(config.EnvArgs))
 	}
 	if v == "" {
-		v, _, _, err = env.LookupEnv(config.EnvVolumes)
+		v, _, _, _, err = env.LookupEnv(config.EnvVolumes)
 		if err != nil {
 			logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
 				config.EnvVolumes, os.Getenv(config.EnvVolumes))
@@ -236,7 +236,7 @@ func serverCmdArgs(ctx *cli.Context) []string {
 	}
 	if v == "" {
 		// Fall back to older environment value MINIO_ENDPOINTS
-		v, _, _, err = env.LookupEnv(config.EnvEndpoints)
+		v, _, _, _, err = env.LookupEnv(config.EnvEndpoints)
 		if err != nil {
 			logger.FatalIf(err, "Unable to validate passed arguments in %s:%s",
 				config.EnvEndpoints, os.Getenv(config.EnvEndpoints))

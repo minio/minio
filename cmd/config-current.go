@@ -477,7 +477,7 @@ func validateConfig(ctx context.Context, s config.Config, subSys string) error {
 func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	ctx := GlobalContext
 
-	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
+	dnsURL, _, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
 	if err != nil {
 		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 	}
