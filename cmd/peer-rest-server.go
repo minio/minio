@@ -54,7 +54,7 @@ type peerRESTServer struct{}
 var (
 	// Types & Wrappers
 	aoBucketInfo           = grid.NewArrayOf[*BucketInfo](func() *BucketInfo { return &BucketInfo{} })
-	aoMetricsGroup         = grid.NewArrayOf[*Metric](func() *Metric { return &Metric{} })
+	aoMetricsGroup         = grid.NewArrayOf[*MetricV2](func() *MetricV2 { return &MetricV2{} })
 	madminBgHealState      = grid.NewJSONPool[madmin.BgHealState]()
 	madminCPUs             = grid.NewJSONPool[madmin.CPUs]()
 	madminMemInfo          = grid.NewJSONPool[madmin.MemInfo]()
@@ -88,9 +88,9 @@ var (
 	getNetInfoRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.NetInfo]](grid.HandlerGetNetInfo, grid.NewMSS, madminNetInfo.NewJSON)
 	getOSInfoRPC                   = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.OSInfo]](grid.HandlerGetOSInfo, grid.NewMSS, madminOSInfo.NewJSON)
 	getPartitionsRPC               = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.Partitions]](grid.HandlerGetPartitions, grid.NewMSS, madminPartitions.NewJSON)
-	getPeerBucketMetricsRPC        = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetPeerBucketMetrics, grid.NewMSS, aoMetricsGroup.New)
-	getPeerMetricsRPC              = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetPeerMetrics, grid.NewMSS, aoMetricsGroup.New)
-	getResourceMetricsRPC          = grid.NewSingleHandler[*grid.MSS, *grid.Array[*Metric]](grid.HandlerGetResourceMetrics, grid.NewMSS, aoMetricsGroup.New)
+	getPeerBucketMetricsRPC        = grid.NewSingleHandler[*grid.MSS, *grid.Array[*MetricV2]](grid.HandlerGetPeerBucketMetrics, grid.NewMSS, aoMetricsGroup.New)
+	getPeerMetricsRPC              = grid.NewSingleHandler[*grid.MSS, *grid.Array[*MetricV2]](grid.HandlerGetPeerMetrics, grid.NewMSS, aoMetricsGroup.New)
+	getResourceMetricsRPC          = grid.NewSingleHandler[*grid.MSS, *grid.Array[*MetricV2]](grid.HandlerGetResourceMetrics, grid.NewMSS, aoMetricsGroup.New)
 	getProcInfoRPC                 = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.ProcInfo]](grid.HandlerGetProcInfo, grid.NewMSS, madminProcInfo.NewJSON)
 	getSRMetricsRPC                = grid.NewSingleHandler[*grid.MSS, *SRMetricsSummary](grid.HandlerGetSRMetrics, grid.NewMSS, func() *SRMetricsSummary { return &SRMetricsSummary{} })
 	getSysConfigRPC                = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysConfig]](grid.HandlerGetSysConfig, grid.NewMSS, madminSysConfig.NewJSON)
@@ -1000,9 +1000,9 @@ func (s *peerRESTServer) GetBandwidth(params *grid.URLValues) (*bandwidth.Bucket
 	return globalBucketMonitor.GetReport(selectBuckets), nil
 }
 
-func (s *peerRESTServer) GetResourceMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	res := make([]*Metric, 0, len(resourceMetricsGroups))
-	populateAndPublish(resourceMetricsGroups, func(m Metric) bool {
+func (s *peerRESTServer) GetResourceMetrics(_ *grid.MSS) (*grid.Array[*MetricV2], *grid.RemoteErr) {
+	res := make([]*MetricV2, 0, len(resourceMetricsGroups))
+	populateAndPublish(resourceMetricsGroups, func(m MetricV2) bool {
 		if m.VariableLabels == nil {
 			m.VariableLabels = make(map[string]string, 1)
 		}
@@ -1014,9 +1014,9 @@ func (s *peerRESTServer) GetResourceMetrics(_ *grid.MSS) (*grid.Array[*Metric], 
 }
 
 // GetPeerMetrics gets the metrics to be federated across peers.
-func (s *peerRESTServer) GetPeerMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	res := make([]*Metric, 0, len(peerMetricsGroups))
-	populateAndPublish(peerMetricsGroups, func(m Metric) bool {
+func (s *peerRESTServer) GetPeerMetrics(_ *grid.MSS) (*grid.Array[*MetricV2], *grid.RemoteErr) {
+	res := make([]*MetricV2, 0, len(peerMetricsGroups))
+	populateAndPublish(peerMetricsGroups, func(m MetricV2) bool {
 		if m.VariableLabels == nil {
 			m.VariableLabels = make(map[string]string, 1)
 		}
@@ -1028,9 +1028,9 @@ func (s *peerRESTServer) GetPeerMetrics(_ *grid.MSS) (*grid.Array[*Metric], *gri
 }
 
 // GetPeerBucketMetrics gets the metrics to be federated across peers.
-func (s *peerRESTServer) GetPeerBucketMetrics(_ *grid.MSS) (*grid.Array[*Metric], *grid.RemoteErr) {
-	res := make([]*Metric, 0, len(bucketPeerMetricsGroups))
-	populateAndPublish(bucketPeerMetricsGroups, func(m Metric) bool {
+func (s *peerRESTServer) GetPeerBucketMetrics(_ *grid.MSS) (*grid.Array[*MetricV2], *grid.RemoteErr) {
+	res := make([]*MetricV2, 0, len(bucketPeerMetricsGroups))
+	populateAndPublish(bucketPeerMetricsGroups, func(m MetricV2) bool {
 		if m.VariableLabels == nil {
 			m.VariableLabels = make(map[string]string, 1)
 		}

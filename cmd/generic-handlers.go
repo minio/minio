@@ -233,7 +233,8 @@ func guessIsMetricsReq(req *http.Request) bool {
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ClusterPath ||
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2NodePath ||
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2BucketPath ||
-		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ResourcePath
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ResourcePath ||
+		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+metricsV3Path)
 }
 
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
