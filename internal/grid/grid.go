@@ -38,7 +38,7 @@ const (
 	minBufferSize = 1 << 10
 
 	// defaultBufferSize is the default buffer allocation size.
-	defaultBufferSize = 4 << 10
+	defaultBufferSize = 8 << 10
 
 	// maxBufferSize is the maximum buffer size.
 	// Buffers larger than this is not reused.
