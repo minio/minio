@@ -59,8 +59,10 @@ echo -n "Preparing test data ..."
 mkdir -p /tmp/data
 echo "Hello world" >/tmp/data/plainfile
 echo "Hello from encrypted world" >/tmp/data/encrypted
-for index in {1..10000000}; do echo "$index - The quick brown fox jumps over the lazy dog" >>/tmp/data/defpartsize; done
-for index in {1..10000000}; do echo "$index - An apple a day keeps the doctor away - if you throw it hard" >>/tmp/data/custpartsize; done
+touch /tmp/data/defpartsize
+shred -s 500M /tmp/data/defpartsize
+touch /tmp/data/custpartsize
+shred -s 500M /tmp/data/custpartsize
 echo "done"
 
 # Create bucket in source cluster
@@ -77,7 +79,7 @@ echo "Loading objects to source MinIO instance"
 # Add replication site
 ./mc admin replicate add minio1 minio2 --insecure
 # sleep for replication to complete
-sleep 60
+sleep 120
 
 # List the objects from source site
 echo "Objects from source instance"
@@ -134,16 +136,19 @@ echo "Stat minio1/test-bucket/encrypted"
 stat_out1=$(./mc stat minio1/test-bucket/encrypted --encrypt-key "minio1/test-bucket/encrypted=iliketobecrazybutnotsomuchreally" --insecure --json)
 src_obj1_etag=$(echo "${stat_out1}" | jq '.etag')
 src_obj1_size=$(echo "${stat_out1}" | jq '.size')
+src_obj1_md5=$(echo "${stat_out1}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 echo "Stat minio1/test-bucket/defpartsize"
 ./mc stat minio1/test-bucket/defpartsize --encrypt-key "minio1/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure --json
 stat_out2=$(./mc stat minio1/test-bucket/defpartsize --encrypt-key "minio1/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure --json)
 src_obj2_etag=$(echo "${stat_out2}" | jq '.etag')
 src_obj2_size=$(echo "${stat_out2}" | jq '.size')
+src_obj2_md5=$(echo "${stat_out2}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 echo "Stat minio1/test-bucket/custpartsize"
 ./mc stat minio1/test-bucket/custpartsize --encrypt-key "minio1/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure --json
 stat_out3=$(./mc stat minio1/test-bucket/custpartsize --encrypt-key "minio1/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure --json)
 src_obj3_etag=$(echo "${stat_out3}" | jq '.etag')
 src_obj3_size=$(echo "${stat_out3}" | jq '.size')
+src_obj3_md5=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 
 # Stat the SSEC objects from replicated site
 echo "Stat minio2/test-bucket/encrypted"
@@ -151,16 +156,19 @@ echo "Stat minio2/test-bucket/encrypted"
 stat_out1_rep=$(./mc stat minio2/test-bucket/encrypted --encrypt-key "minio2/test-bucket/encrypted=iliketobecrazybutnotsomuchreally" --insecure --json)
 rep_obj1_etag=$(echo "${stat_out1_rep}" | jq '.etag')
 rep_obj1_size=$(echo "${stat_out1_rep}" | jq '.size')
+rep_obj1_md5=$(echo "${stat_out1_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 echo "Stat minio2/test-bucket/defpartsize"
 ./mc stat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure --json
 stat_out2_rep=$(./mc stat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure --json)
 rep_obj2_etag=$(echo "${stat_out2_rep}" | jq '.etag')
 rep_obj2_size=$(echo "${stat_out2_rep}" | jq '.size')
+rep_obj2_md5=$(echo "${stat_out2_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 echo "Stat minio2/test-bucket/custpartsize"
 ./mc stat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure --json
 stat_out3_rep=$(./mc stat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure --json)
 rep_obj3_etag=$(echo "${stat_out3_rep}" | jq '.etag')
 rep_obj3_size=$(echo "${stat_out3_rep}" | jq '.size')
+rep_obj3_md5=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 
 # Check the etag and size of replicated SSEC objects
 if [ "${rep_obj1_etag}" != "${src_obj1_etag}" ]; then
@@ -193,14 +201,16 @@ fi
 ./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure >/dev/null || exit_1
 
-# Check last line of multi part objects and if last line replicated well, object is replicated successfully
-rep_obj2_content=$(./mc cat minio2/test-bucket/defpartsize --encrypt-key "minio2/test-bucket/defpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -10000000 | tail -1)
-rep_obj3_content=$(./mc cat minio2/test-bucket/custpartsize --encrypt-key "minio2/test-bucket/custpartsize=iliketobecrazybutnotsomuchreally" --insecure | head -10000000 | tail -1)
-if [ "${rep_obj2_content}" != "10000000 - The quick brown fox jumps over the lazy dog" ]; then
-	echo "BUG: Content: '${rep_obj2_content}' not valid for replicated object 'minio2/test-bucket/defpartsize'. Expected: '10000000 - The quick brown fox jumps over the lazy dog'"
+# Check the MD5 checksums of encrypted objects from source and target
+if [ "${src_obj1_md5}" != "${rep_obj1_md5}" ]; then
+	echo "BUG: MD5 checksum of object 'minio2/test-bucket/encrypted' doesn't match with source. Expected: '${src_obj1_md5}', Found: '${rep_obj1_md5}'"
 	exit_1
 fi
-if [ "${rep_obj3_content}" != "10000000 - An apple a day keeps the doctor away - if you throw it hard" ]; then
-	echo "BUG: Content: '${rep_obj3_content}' not valid for replicated object 'minio2/test-bucket/custpartsize'. Expected: '10000000 - An apple a day keeps the doctor away - if you throw it hard'"
+if [ "${src_obj2_md5}" != "${rep_obj2_md5}" ]; then
+	echo "BUG: MD5 checksum of object 'minio2/test-bucket/defpartsize' doesn't match with source. Expected: '${src_obj2_md5}', Found: '${rep_obj2_md5}'"
+	exit_1
+fi
+if [ "${src_obj3_md5}" != "${rep_obj3_md5}" ]; then
+	echo "BUG: MD5 checksum of object 'minio2/test-bucket/custpartsize' doesn't match with source. Expected: '${src_obj3_md5}', Found: '${rep_obj3_md5}'"
 	exit_1
 fi
