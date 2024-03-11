@@ -296,8 +296,8 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		bucket, _ := path2BucketObject(resource)
 
-		_, err = globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
-		countBktStat := bucket != "" && bucket != minioReservedBucket && err == nil
+		meta, err := globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
+		countBktStat := bucket != "" && bucket != minioReservedBucket && err == nil && !meta.Created.IsZero()
 		if countBktStat {
 			globalBucketHTTPStats.updateHTTPStats(bucket, api, nil)
 		}
