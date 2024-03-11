@@ -577,22 +577,35 @@ func excludeForCompression(header http.Header, object string, cfg compress.Confi
 	}
 
 	// Filter compression includes.
-	exclude := len(cfg.Extensions) > 0 || len(cfg.MimeTypes) > 0
+	if len(cfg.Extensions) == 0 && len(cfg.MimeTypes) == 0 {
+		// Nothing to filter, include everything.
+		return false
+	}
+
 	if len(cfg.Extensions) > 0 && hasStringSuffixInSlice(objStr, cfg.Extensions) {
-		exclude = false
+		// Matched an extension to compress, do not exclude.
+		return false
 	}
 
 	if len(cfg.MimeTypes) > 0 && hasPattern(cfg.MimeTypes, contentType) {
-		exclude = false
+		// Matched an MIME type to compress, do not exclude.
+		return false
 	}
-	return exclude
+
+	// Did not match any inclusion filters, exclude from compression.
+	return true
 }
 
 // Utility which returns if a string is present in the list.
-// Comparison is case insensitive.
+// Comparison is case insensitive. Explicit short-circuit if
+// the list contains the wildcard "*".
 func hasStringSuffixInSlice(str string, list []string) bool {
 	str = strings.ToLower(str)
 	for _, v := range list {
+		if v == "*" {
+			return true
+		}
+
 		if strings.HasSuffix(str, strings.ToLower(v)) {
 			return true
 		}
