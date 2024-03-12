@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -137,10 +136,14 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}
 
 	// Handler goroutine.
-	var handlerErr *RemoteErr
+	var handlerErr atomic.Pointer[RemoteErr]
 	go func() {
 		wg.Wait()
-		handlerErr = m.handleRequests(ctx, msg, send, handler, handlerIn)
+		defer xioutil.SafeClose(send)
+		err := m.handleRequests(ctx, msg, send, handler, handlerIn)
+		if err != nil {
+			handlerErr.Store(err)
+		}
 	}()
 
 	// Response sender goroutine...
@@ -169,7 +172,7 @@ func (m *muxServer) handleInbound(c *Connection, inbound <-chan []byte, handlerI
 }
 
 // sendResponses will send responses to the client.
-func (m *muxServer) sendResponses(ctx context.Context, toSend <-chan []byte, c *Connection, handlerErr **RemoteErr) {
+func (m *muxServer) sendResponses(ctx context.Context, toSend <-chan []byte, c *Connection, handlerErr *atomic.Pointer[RemoteErr]) {
 	outBlock := m.outBlock
 	for {
 		// Process outgoing message.
@@ -191,7 +194,7 @@ func (m *muxServer) sendResponses(ctx context.Context, toSend <-chan []byte, c *
 			Flags: c.baseFlags,
 		}
 		if !ok {
-			hErr := *handlerErr
+			hErr := handlerErr.Load()
 			if debugPrint {
 				fmt.Println("muxServer: Mux", m.ID, "send EOF", hErr)
 			}
@@ -219,14 +222,12 @@ func (m *muxServer) handleRequests(ctx context.Context, msg message, send chan<-
 		}
 		if r := recover(); r != nil {
 			logger.LogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
-			debug.PrintStack()
-			err := RemoteErr(fmt.Sprintf("remote call panic: %v", r))
+			err := RemoteErr(fmt.Sprintf("handler panic: %v", r))
 			handlerErr = &err
 		}
 		if debugPrint {
 			fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
 		}
-		xioutil.SafeClose(send)
 	}()
 	// handlerErr is guarded by 'send' channel.
 	handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
