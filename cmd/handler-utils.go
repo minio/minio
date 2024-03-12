@@ -366,12 +366,6 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	desc := "Do not upgrade one server at a time - please follow the recommended guidelines mentioned here https://github.com/minio/minio#upgrading-minio for your environment"
 	switch {
-	case strings.HasPrefix(r.URL.Path, peerS3Prefix):
-		writeErrorResponseString(r.Context(), w, APIError{
-			Code:           "XMinioPeerS3VersionMismatch",
-			Description:    desc,
-			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioPeerVersionMismatch",

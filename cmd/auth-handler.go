@@ -298,15 +298,15 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 	if cred.IsTemp() && cred.IsExpired() {
 		return nil, toAPIErrorCode(r.Context(), errInvalidAccessKeyID)
 	}
-
 	secret := globalActiveCred.SecretKey
-	var err error
 	if globalSiteReplicationSys.isEnabled() && cred.AccessKey != siteReplicatorSvcAcc {
-		if cred.ParentUser != globalActiveCred.AccessKey {
-			secret, err = getTokenSigningKey()
-			if err != nil {
-				return nil, toAPIErrorCode(r.Context(), err)
-			}
+		nsecret, err := getTokenSigningKey()
+		if err != nil {
+			return nil, toAPIErrorCode(r.Context(), err)
+		}
+		// sign root's temporary accounts also with site replicator creds
+		if cred.ParentUser != globalActiveCred.AccessKey || cred.IsTemp() {
+			secret = nsecret
 		}
 	}
 	if cred.IsServiceAccount() {

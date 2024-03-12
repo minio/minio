@@ -1791,20 +1791,12 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
-	dirPrefix := encodeDirObject(prefix)
 	for index := range disks {
 		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return nil
 			}
-			// Deletes
-			// - The prefix and its children
-			// - The prefix__XLDIR__
-			defer disks[index].Delete(ctx, bucket, dirPrefix, DeleteOptions{
-				Recursive: true,
-				Immediate: true,
-			})
 			return disks[index].Delete(ctx, bucket, prefix, DeleteOptions{
 				Recursive: true,
 				Immediate: true,
@@ -1828,9 +1820,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	}
 
 	if opts.DeletePrefix {
-		if globalCacheConfig.Enabled() {
-			return ObjectInfo{}, toObjectErr(errMethodNotAllowed, bucket, object)
-		}
 		return ObjectInfo{}, toObjectErr(er.deletePrefix(ctx, bucket, object), bucket, object)
 	}
 

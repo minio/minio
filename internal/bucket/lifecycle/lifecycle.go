@@ -471,9 +471,11 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 
 	if len(events) > 0 {
 		sort.Slice(events, func(i, j int) bool {
-			if events[i].Due.Equal(events[j].Due) {
-				// Prefer Expiration over Transition for both current
-				// and noncurrent versions
+			// Prefer Expiration over Transition for both current
+			// and noncurrent versions when,
+			// - now is past the expected time to action
+			// - expected time to action is the same for both actions
+			if now.After(events[i].Due) && now.After(events[j].Due) || events[i].Due.Equal(events[j].Due) {
 				switch events[i].Action {
 				case DeleteAction, DeleteVersionAction:
 					return true

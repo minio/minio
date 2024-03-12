@@ -81,7 +81,7 @@ var (
 	resourceMetricsMapMu sync.RWMutex
 	// resourceMetricsHelpMap maps metric name to its help string
 	resourceMetricsHelpMap map[MetricName]string
-	resourceMetricsGroups  []*MetricsGroup
+	resourceMetricsGroups  []*MetricsGroupV2
 	// initial values for drives (at the time  of server startup)
 	// used for calculating avg values for drive metrics
 	latestDriveStats      map[string]madmin.DiskIOStats
@@ -164,7 +164,7 @@ func init() {
 		cpuLoad5Perc:      "CPU load average 5min (percentage)",
 		cpuLoad15Perc:     "CPU load average 15min (percentage)",
 	}
-	resourceMetricsGroups = []*MetricsGroup{
+	resourceMetricsGroups = []*MetricsGroupV2{
 		getResourceMetrics(),
 	}
 
@@ -405,7 +405,7 @@ func startResourceMetricsCollection() {
 
 // minioResourceCollector is the Collector for resource metrics
 type minioResourceCollector struct {
-	metricsGroups []*MetricsGroup
+	metricsGroups []*MetricsGroupV2
 	desc          *prometheus.Desc
 }
 
@@ -417,7 +417,7 @@ func (c *minioResourceCollector) Describe(ch chan<- *prometheus.Desc) {
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *minioResourceCollector) Collect(out chan<- prometheus.Metric) {
 	var wg sync.WaitGroup
-	publish := func(in <-chan Metric) {
+	publish := func(in <-chan MetricV2) {
 		defer wg.Done()
 		for metric := range in {
 			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
@@ -436,18 +436,18 @@ func (c *minioResourceCollector) Collect(out chan<- prometheus.Metric) {
 // and returns reference of minio resource Collector
 // It creates the Prometheus Description which is used
 // to define Metric and  help string
-func newMinioResourceCollector(metricsGroups []*MetricsGroup) *minioResourceCollector {
+func newMinioResourceCollector(metricsGroups []*MetricsGroupV2) *minioResourceCollector {
 	return &minioResourceCollector{
 		metricsGroups: metricsGroups,
 		desc:          prometheus.NewDesc("minio_resource_stats", "Resource statistics exposed by MinIO server", nil, nil),
 	}
 }
 
-func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []Metric {
+func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []MetricV2 {
 	help := resourceMetricsHelpMap[rm.Name]
 	name := rm.Name
-	metrics := make([]Metric, 0, 3)
-	metrics = append(metrics, Metric{
+	metrics := make([]MetricV2, 0, 3)
+	metrics = append(metrics, MetricV2{
 		Description:    getResourceMetricDescription(subSys, name, help),
 		Value:          rm.Current,
 		VariableLabels: cloneMSS(rm.Labels),
@@ -456,7 +456,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 	if requireAvgMax {
 		avgName := MetricName(fmt.Sprintf("%s_avg", name))
 		avgHelp := fmt.Sprintf("%s (avg)", help)
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getResourceMetricDescription(subSys, avgName, avgHelp),
 			Value:          math.Round(rm.Avg*100) / 100,
 			VariableLabels: cloneMSS(rm.Labels),
@@ -464,7 +464,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 
 		maxName := MetricName(fmt.Sprintf("%s_max", name))
 		maxHelp := fmt.Sprintf("%s (max)", help)
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getResourceMetricDescription(subSys, maxName, maxHelp),
 			Value:          rm.Max,
 			VariableLabels: cloneMSS(rm.Labels),
@@ -484,12 +484,12 @@ func getResourceMetricDescription(subSys MetricSubsystem, name MetricName, help 
 	}
 }
 
-func getResourceMetrics() *MetricsGroup {
-	mg := &MetricsGroup{
+func getResourceMetrics() *MetricsGroupV2 {
+	mg := &MetricsGroupV2{
 		cacheInterval: resourceMetricsCacheInterval,
 	}
-	mg.RegisterRead(func(ctx context.Context) []Metric {
-		metrics := []Metric{}
+	mg.RegisterRead(func(ctx context.Context) []MetricV2 {
+		metrics := []MetricV2{}
 
 		subSystems := []MetricSubsystem{interfaceSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
 		resourceMetricsMapMu.RLock()

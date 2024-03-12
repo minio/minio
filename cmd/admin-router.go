@@ -60,7 +60,7 @@ const (
 	noObjLayerFlag
 )
 
-// Has checks if the the given flag is enabled in `h`.
+// Has checks if the given flag is enabled in `h`.
 func (h hFlag) Has(flag hFlag) bool {
 	// Use bitwise-AND and check if the result is non-zero.
 	return h&flag != 0

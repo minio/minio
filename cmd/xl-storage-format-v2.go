@@ -1879,6 +1879,7 @@ func (x xlMetaV2) ListVersions(volume, path string, allParts bool) ([]FileInfo, 
 
 // mergeXLV2Versions will merge all versions, typically from different disks
 // that have at least quorum entries in all metas.
+// Each version slice should be sorted.
 // Quorum must be the minimum number of matching metadata files.
 // Quorum should be > 1 and <= len(versions).
 // If strict is set to false, entries that match type

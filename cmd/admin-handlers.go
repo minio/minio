@@ -159,7 +159,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
 					Host:           nerr.Host.String(),
 					CurrentVersion: Version,
-					UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+					UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 				}
 			}
 		}
@@ -176,7 +176,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 			peerResults[local] = madmin.ServerPeerUpdateStatus{
 				Host:           local,
 				CurrentVersion: Version,
-				UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+				UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 			}
 		}
 	} else {
@@ -212,7 +212,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 							Host:           nerr.Host.String(),
 							Err:            nerr.Err.Error(),
 							CurrentVersion: Version,
-							UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+							UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 						}
 					}
 				}
@@ -404,7 +404,7 @@ func (a adminAPIHandlers) ServerUpdateHandler(w http.ResponseWriter, r *http.Req
 
 	updateStatus := madmin.ServerUpdateStatus{
 		CurrentVersion: Version,
-		UpdatedVersion: lrTime.Format(minioReleaseTagTimeLayout),
+		UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 	}
 
 	// Marshal API response
@@ -2280,8 +2280,6 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 	servers := globalNotificationSys.ServerInfo(metrics)
 	servers = append(servers, local)
 
-	assignPoolNumbers(servers)
-
 	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
 	var backend madmin.ErasureBackend
 
@@ -2718,14 +2716,20 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 			for _, server := range infoMessage.Servers {
 				anonEndpoint := anonAddr(server.Endpoint)
 				servers = append(servers, madmin.ServerInfo{
-					State:      server.State,
-					Endpoint:   anonEndpoint,
-					Uptime:     server.Uptime,
-					Version:    server.Version,
-					CommitID:   server.CommitID,
-					Network:    anonymizeNetwork(server.Network),
-					Drives:     anonymizeDrives(server.Disks),
-					PoolNumber: server.PoolNumber,
+					State:    server.State,
+					Endpoint: anonEndpoint,
+					Uptime:   server.Uptime,
+					Version:  server.Version,
+					CommitID: server.CommitID,
+					Network:  anonymizeNetwork(server.Network),
+					Drives:   anonymizeDrives(server.Disks),
+					PoolNumber: func() int {
+						if len(server.PoolNumbers) == 1 {
+							return server.PoolNumbers[0]
+						}
+						return math.MaxInt // this indicates that its unset.
+					}(),
+					PoolNumbers: server.PoolNumbers,
 					MemStats: madmin.MemStats{
 						Alloc:      server.MemStats.Alloc,
 						TotalAlloc: server.MemStats.TotalAlloc,
@@ -2913,22 +2917,6 @@ func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Reque
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
-}
-
-func assignPoolNumbers(servers []madmin.ServerProperties) {
-	for i := range servers {
-		for idx, ge := range globalEndpoints {
-			for _, endpoint := range ge.Endpoints {
-				if servers[i].Endpoint == endpoint.Host {
-					servers[i].PoolNumber = idx + 1
-				} else if host, err := xnet.ParseHost(servers[i].Endpoint); err == nil {
-					if host.Name == endpoint.Hostname() {
-						servers[i].PoolNumber = idx + 1
-					}
-				}
-			}
-		}
-	}
 }
 
 func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {

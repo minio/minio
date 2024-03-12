@@ -30,6 +30,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+//go:generate msgp -file $GOFILE -io=false -tests=false -unexported=false
+
 // BackendType - represents different backend types.
 type BackendType int
 
@@ -187,9 +189,9 @@ type ObjectInfo struct {
 	Parts []ObjectPartInfo `json:"-"`
 
 	// Implements writer and reader used by CopyObject API
-	Writer       io.WriteCloser `json:"-"`
-	Reader       *hash.Reader   `json:"-"`
-	PutObjReader *PutObjReader  `json:"-"`
+	Writer       io.WriteCloser `json:"-" msg:"-"`
+	Reader       *hash.Reader   `json:"-" msg:"-"`
+	PutObjReader *PutObjReader  `json:"-" msg:"-"`
 
 	metadataOnly bool
 	versionOnly  bool // adds a new version, only used by CopyObject

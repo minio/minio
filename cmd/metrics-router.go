@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/minio/mux"
@@ -30,6 +31,9 @@ const (
 	prometheusMetricsV2BucketPath   = "/v2/metrics/bucket"
 	prometheusMetricsV2NodePath     = "/v2/metrics/node"
 	prometheusMetricsV2ResourcePath = "/v2/metrics/resource"
+
+	// Metrics v3 endpoints
+	metricsV3Path = "/metrics/v3"
 )
 
 // Standard env prometheus auth type
@@ -48,10 +52,10 @@ const (
 func registerMetricsRouter(router *mux.Router) {
 	// metrics router
 	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
-	authType := strings.ToLower(env.Get(EnvPrometheusAuthType, string(prometheusJWT)))
+	authType := prometheusAuthType(strings.ToLower(env.Get(EnvPrometheusAuthType, string(prometheusJWT))))
 
 	auth := AuthMiddleware
-	if prometheusAuthType(authType) == prometheusPublic {
+	if authType == prometheusPublic {
 		auth = NoAuthMiddleware
 	}
 	metricsRouter.Handle(prometheusMetricsPathLegacy, auth(metricsHandler()))
@@ -59,4 +63,11 @@ func registerMetricsRouter(router *mux.Router) {
 	metricsRouter.Handle(prometheusMetricsV2BucketPath, auth(metricsBucketHandler()))
 	metricsRouter.Handle(prometheusMetricsV2NodePath, auth(metricsNodeHandler()))
 	metricsRouter.Handle(prometheusMetricsV2ResourcePath, auth(metricsResourceHandler()))
+
+	// Metrics v3!
+	metricsV3Server := newMetricsV3Server(authType)
+
+	// Register metrics v3 handler. It also accepts an optional query
+	// parameter `?list` - see handler for details.
+	metricsRouter.Methods(http.MethodGet).Path(metricsV3Path + "{pathComps:.*}").Handler(metricsV3Server)
 }

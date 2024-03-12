@@ -46,16 +46,12 @@ import (
 )
 
 const (
-	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
-	minioOSARCH               = runtime.GOOS + "-" + runtime.GOARCH
-	minioReleaseURL           = "https://dl.min.io/server/minio/release/" + minioOSARCH + SlashSeparator
-
 	envMinisignPubKey = "MINIO_UPDATE_MINISIGN_PUBKEY"
 	updateTimeout     = 10 * time.Second
 )
 
 // For windows our files have .exe additionally.
-var minioReleaseWindowsInfoURL = minioReleaseURL + "minio.exe.sha256sum"
+var minioReleaseWindowsInfoURL = MinioReleaseURL + "minio.exe.sha256sum"
 
 // minioVersionToReleaseTime - parses a standard official release
 // MinIO version string.
@@ -72,7 +68,7 @@ func minioVersionToReleaseTime(version string) (releaseTime time.Time, err error
 // An official minio release tag looks like:
 // `RELEASE.2017-09-29T19-16-56Z`
 func releaseTimeToReleaseTag(releaseTime time.Time) string {
-	return "RELEASE." + releaseTime.Format(minioReleaseTagTimeLayout)
+	return "RELEASE." + releaseTime.Format(MinioReleaseTagTimeLayout)
 }
 
 // releaseTagToReleaseTime - reverse of `releaseTimeToReleaseTag()`
@@ -84,7 +80,7 @@ func releaseTagToReleaseTime(releaseTag string) (releaseTime time.Time, err erro
 	if fields[0] != "RELEASE" {
 		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
 	}
-	return time.Parse(minioReleaseTagTimeLayout, fields[1])
+	return time.Parse(MinioReleaseTagTimeLayout, fields[1])
 }
 
 // getModTime - get the file modification time of `path`
@@ -236,8 +232,8 @@ func getUserAgent(mode string) string {
 	uaAppend := func(p, q string) {
 		userAgentParts = append(userAgentParts, p, q)
 	}
-
-	uaAppend("MinIO (", runtime.GOOS)
+	uaAppend(MinioUAName, " (")
+	uaAppend("", runtime.GOOS)
 	uaAppend("; ", runtime.GOARCH)
 	if mode != "" {
 		uaAppend("; ", mode)
@@ -258,14 +254,14 @@ func getUserAgent(mode string) string {
 		uaAppend("; ", "source")
 	}
 
-	uaAppend(") MinIO/", Version)
-	uaAppend(" MinIO/", ReleaseTag)
-	uaAppend(" MinIO/", CommitID)
+	uaAppend(" ", Version)
+	uaAppend(" ", ReleaseTag)
+	uaAppend(" ", CommitID)
 	if IsDCOS() {
 		universePkgVersion := env.Get("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "")
 		// On DC/OS environment try to the get universe package version.
 		if universePkgVersion != "" {
-			uaAppend(" MinIO/universe-", universePkgVersion)
+			uaAppend(" universe-", universePkgVersion)
 		}
 	}
 
@@ -273,25 +269,26 @@ func getUserAgent(mode string) string {
 		// In Kubernetes environment, try to fetch the helm package version
 		helmChartVersion := getHelmVersion("/podinfo/labels")
 		if helmChartVersion != "" {
-			uaAppend(" MinIO/helm-", helmChartVersion)
+			uaAppend(" helm-", helmChartVersion)
 		}
 		// In Kubernetes environment, try to fetch the Operator, VSPHERE plugin version
 		opVersion := env.Get("MINIO_OPERATOR_VERSION", "")
 		if opVersion != "" {
-			uaAppend(" MinIO/operator-", opVersion)
+			uaAppend(" operator-", opVersion)
 		}
 		vsphereVersion := env.Get("MINIO_VSPHERE_PLUGIN_VERSION", "")
 		if vsphereVersion != "" {
-			uaAppend(" MinIO/vsphere-plugin-", vsphereVersion)
+			uaAppend(" vsphere-plugin-", vsphereVersion)
 		}
 	}
 
 	if IsPCFTile() {
 		pcfTileVersion := env.Get("MINIO_PCF_TILE_VERSION", "")
 		if pcfTileVersion != "" {
-			uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
+			uaAppend(" pcf-tile-", pcfTileVersion)
 		}
 	}
+	uaAppend("; ", "")
 
 	if cpus, err := gopsutilcpu.Info(); err == nil && len(cpus) > 0 {
 		cpuMap := make(map[string]struct{}, len(cpus))
@@ -304,6 +301,7 @@ func getUserAgent(mode string) string {
 		uaAppend(" CPU ", fmt.Sprintf("(total_cpus:%d, total_cores:%d; vendor:%s; family:%s; model:%s; stepping:%d; model_name:%s)",
 			len(cpuMap), len(coreMap), cpu.VendorID, cpu.Family, cpu.Model, cpu.Stepping, cpu.ModelName))
 	}
+	uaAppend(")", "")
 
 	return strings.Join(userAgentParts, "")
 }
@@ -474,10 +472,10 @@ func getDownloadURL(releaseTag string) (downloadURL string) {
 
 	// For binary only installations, we return link to the latest binary.
 	if runtime.GOOS == "windows" {
-		return minioReleaseURL + "minio.exe"
+		return MinioReleaseURL + "minio.exe"
 	}
 
-	return minioReleaseURL + "minio"
+	return MinioReleaseURL + "minio"
 }
 
 func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string) (io.ReadCloser, error) {

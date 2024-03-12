@@ -136,7 +136,7 @@ func startFTPServer(args []string) {
 
 	ftpServer, err := ftp.NewServer(&ftp.Options{
 		Name:           name,
-		WelcomeMessage: fmt.Sprintf("Welcome to MinIO FTP Server Version='%s' License='GNU AGPLv3'", Version),
+		WelcomeMessage: fmt.Sprintf("Welcome to '%s' FTP Server Version='%s' License='%s'", MinioStoreName, MinioLicense, Version),
 		Driver:         NewFTPDriver(),
 		Port:           port,
 		Perm:           ftp.NewSimplePerm("nobody", "nobody"),

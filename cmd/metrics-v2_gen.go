@@ -7,7 +7,223 @@ import (
 )
 
 // MarshalMsg implements msgp.Marshaler
-func (z *Metric) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *MetricDescription) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 5
+	// string "Namespace"
+	o = append(o, 0x85, 0xa9, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65)
+	o = msgp.AppendString(o, string(z.Namespace))
+	// string "Subsystem"
+	o = append(o, 0xa9, 0x53, 0x75, 0x62, 0x73, 0x79, 0x73, 0x74, 0x65, 0x6d)
+	o = msgp.AppendString(o, string(z.Subsystem))
+	// string "Name"
+	o = append(o, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = msgp.AppendString(o, string(z.Name))
+	// string "Help"
+	o = append(o, 0xa4, 0x48, 0x65, 0x6c, 0x70)
+	o = msgp.AppendString(o, z.Help)
+	// string "Type"
+	o = append(o, 0xa4, 0x54, 0x79, 0x70, 0x65)
+	o = msgp.AppendString(o, string(z.Type))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetricDescription) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "Namespace":
+			{
+				var zb0002 string
+				zb0002, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Namespace")
+					return
+				}
+				z.Namespace = MetricNamespace(zb0002)
+			}
+		case "Subsystem":
+			{
+				var zb0003 string
+				zb0003, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Subsystem")
+					return
+				}
+				z.Subsystem = MetricSubsystem(zb0003)
+			}
+		case "Name":
+			{
+				var zb0004 string
+				zb0004, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Name")
+					return
+				}
+				z.Name = MetricName(zb0004)
+			}
+		case "Help":
+			z.Help, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Help")
+				return
+			}
+		case "Type":
+			{
+				var zb0005 string
+				zb0005, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Type")
+					return
+				}
+				z.Type = MetricTypeV2(zb0005)
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MetricDescription) Msgsize() (s int) {
+	s = 1 + 10 + msgp.StringPrefixSize + len(string(z.Namespace)) + 10 + msgp.StringPrefixSize + len(string(z.Subsystem)) + 5 + msgp.StringPrefixSize + len(string(z.Name)) + 5 + msgp.StringPrefixSize + len(z.Help) + 5 + msgp.StringPrefixSize + len(string(z.Type))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z MetricName) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetricName) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 string
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = MetricName(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z MetricName) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z MetricNamespace) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetricNamespace) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 string
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = MetricNamespace(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z MetricNamespace) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z MetricSubsystem) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetricSubsystem) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 string
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = MetricSubsystem(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z MetricSubsystem) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z MetricTypeV2) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendString(o, string(z))
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetricTypeV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 string
+		zb0001, bts, err = msgp.ReadStringBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = MetricTypeV2(zb0001)
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z MetricTypeV2) Msgsize() (s int) {
+	s = msgp.StringPrefixSize + len(string(z))
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MetricV2) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 6
 	// string "Description"
@@ -48,7 +264,7 @@ func (z *Metric) MarshalMsg(b []byte) (o []byte, err error) {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Metric) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MetricV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	var field []byte
 	_ = field
 	var zb0001 uint32
@@ -186,7 +402,7 @@ func (z *Metric) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *Metric) Msgsize() (s int) {
+func (z *MetricV2) Msgsize() (s int) {
 	s = 1 + 12 + z.Description.Msgsize() + 13 + msgp.MapHeaderSize
 	if z.StaticLabels != nil {
 		for za0001, za0002 := range z.StaticLabels {
@@ -208,287 +424,6 @@ func (z *Metric) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0005) + msgp.Uint64Size
 		}
 	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *MetricDescription) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
-	// string "Namespace"
-	o = append(o, 0x85, 0xa9, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65)
-	o = msgp.AppendString(o, string(z.Namespace))
-	// string "Subsystem"
-	o = append(o, 0xa9, 0x53, 0x75, 0x62, 0x73, 0x79, 0x73, 0x74, 0x65, 0x6d)
-	o = msgp.AppendString(o, string(z.Subsystem))
-	// string "Name"
-	o = append(o, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
-	o = msgp.AppendString(o, string(z.Name))
-	// string "Help"
-	o = append(o, 0xa4, 0x48, 0x65, 0x6c, 0x70)
-	o = msgp.AppendString(o, z.Help)
-	// string "Type"
-	o = append(o, 0xa4, 0x54, 0x79, 0x70, 0x65)
-	o = msgp.AppendString(o, string(z.Type))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MetricDescription) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "Namespace":
-			{
-				var zb0002 string
-				zb0002, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Namespace")
-					return
-				}
-				z.Namespace = MetricNamespace(zb0002)
-			}
-		case "Subsystem":
-			{
-				var zb0003 string
-				zb0003, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Subsystem")
-					return
-				}
-				z.Subsystem = MetricSubsystem(zb0003)
-			}
-		case "Name":
-			{
-				var zb0004 string
-				zb0004, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Name")
-					return
-				}
-				z.Name = MetricName(zb0004)
-			}
-		case "Help":
-			z.Help, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Help")
-				return
-			}
-		case "Type":
-			{
-				var zb0005 string
-				zb0005, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Type")
-					return
-				}
-				z.Type = MetricType(zb0005)
-			}
-		default:
-			bts, err = msgp.Skip(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *MetricDescription) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(string(z.Namespace)) + 10 + msgp.StringPrefixSize + len(string(z.Subsystem)) + 5 + msgp.StringPrefixSize + len(string(z.Name)) + 5 + msgp.StringPrefixSize + len(z.Help) + 5 + msgp.StringPrefixSize + len(string(z.Type))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z MetricName) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MetricName) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = MetricName(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MetricName) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z MetricNamespace) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MetricNamespace) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = MetricNamespace(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MetricNamespace) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z MetricSubsystem) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MetricSubsystem) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = MetricSubsystem(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MetricSubsystem) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z MetricType) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MetricType) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = MetricType(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z MetricType) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *MetricsGroup) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
-	// string "cacheInterval"
-	o = append(o, 0x82, 0xad, 0x63, 0x61, 0x63, 0x68, 0x65, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x76, 0x61, 0x6c)
-	o = msgp.AppendDuration(o, z.cacheInterval)
-	// string "metricsGroupOpts"
-	o = append(o, 0xb0, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x4f, 0x70, 0x74, 0x73)
-	o, err = z.metricsGroupOpts.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "metricsGroupOpts")
-		return
-	}
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *MetricsGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 uint32
-	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	for zb0001 > 0 {
-		zb0001--
-		field, bts, err = msgp.ReadMapKeyZC(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		switch msgp.UnsafeString(field) {
-		case "cacheInterval":
-			z.cacheInterval, bts, err = msgp.ReadDurationBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "cacheInterval")
-				return
-			}
-		case "metricsGroupOpts":
-			bts, err = z.metricsGroupOpts.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "metricsGroupOpts")
-				return
-			}
-		default:
-			bts, err = msgp.Skip(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *MetricsGroup) Msgsize() (s int) {
-	s = 1 + 14 + msgp.DurationSize + 17 + z.metricsGroupOpts.Msgsize()
 	return
 }
 
@@ -640,5 +575,70 @@ func (z *MetricsGroupOpts) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MetricsGroupOpts) Msgsize() (s int) {
 	s = 1 + 22 + msgp.BoolSize + 24 + msgp.BoolSize + 31 + msgp.BoolSize + 28 + msgp.BoolSize + 16 + msgp.BoolSize + 11 + msgp.BoolSize + 29 + msgp.BoolSize + 19 + msgp.BoolSize + 23 + msgp.BoolSize + 26 + msgp.BoolSize + 32 + msgp.BoolSize + 22 + msgp.BoolSize
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *MetricsGroupV2) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 2
+	// string "cacheInterval"
+	o = append(o, 0x82, 0xad, 0x63, 0x61, 0x63, 0x68, 0x65, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x76, 0x61, 0x6c)
+	o = msgp.AppendDuration(o, z.cacheInterval)
+	// string "metricsGroupOpts"
+	o = append(o, 0xb0, 0x6d, 0x65, 0x74, 0x72, 0x69, 0x63, 0x73, 0x47, 0x72, 0x6f, 0x75, 0x70, 0x4f, 0x70, 0x74, 0x73)
+	o, err = z.metricsGroupOpts.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "metricsGroupOpts")
+		return
+	}
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *MetricsGroupV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "cacheInterval":
+			z.cacheInterval, bts, err = msgp.ReadDurationBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "cacheInterval")
+				return
+			}
+		case "metricsGroupOpts":
+			bts, err = z.metricsGroupOpts.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "metricsGroupOpts")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *MetricsGroupV2) Msgsize() (s int) {
+	s = 1 + 14 + msgp.DurationSize + 17 + z.metricsGroupOpts.Msgsize()
 	return
 }

@@ -19,31 +19,10 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
-	"net/http"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
-	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/sync/errgroup"
-)
-
-const (
-	peerS3Version = "v1" // First implementation
-
-	peerS3VersionPrefix = SlashSeparator + peerS3Version
-	peerS3Prefix        = minioReservedBucketPath + "/peer-s3"
-	peerS3Path          = peerS3Prefix + peerS3VersionPrefix
-)
-
-const (
-	peerS3MethodHealth        = "/health"
-	peerS3MethodMakeBucket    = "/make-bucket"
-	peerS3MethodGetBucketInfo = "/get-bucket-info"
-	peerS3MethodDeleteBucket  = "/delete-bucket"
-	peerS3MethodListBuckets   = "/list-buckets"
-	peerS3MethodHealBucket    = "/heal-bucket"
 )
 
 const (
@@ -52,33 +31,6 @@ const (
 	peerS3BucketForceCreate = "force-create"
 	peerS3BucketForceDelete = "force-delete"
 )
-
-type peerS3Server struct{}
-
-func (s *peerS3Server) writeErrorResponse(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusForbidden)
-	w.Write([]byte(err.Error()))
-}
-
-// IsValid - To authenticate and verify the time difference.
-func (s *peerS3Server) IsValid(w http.ResponseWriter, r *http.Request) bool {
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return false
-	}
-
-	if err := storageServerRequestValidate(r); err != nil {
-		s.writeErrorResponse(w, err)
-		return false
-	}
-	return true
-}
-
-// HealthHandler - returns true of health
-func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsValid(w, r)
-}
 
 func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
 	globalLocalDrivesMu.RLock()
@@ -371,35 +323,4 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 
 	errs := g.Wait()
 	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives)/2)+1)
-}
-
-func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
-
-	buckets, err := listBucketsLocal(r.Context(), BucketOptions{
-		Deleted: bucketDeleted,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
-}
-
-// registerPeerS3Handlers - register peer s3 router.
-func registerPeerS3Handlers(router *mux.Router) {
-	server := &peerS3Server{}
-	subrouter := router.PathPrefix(peerS3Prefix).Subrouter()
-
-	h := func(f http.HandlerFunc) http.HandlerFunc {
-		return collectInternodeStats(httpTraceHdrs(f))
-	}
-
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealth).HandlerFunc(h(server.HealthHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(h(server.ListBucketsHandler))
 }

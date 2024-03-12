@@ -745,10 +745,10 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 
 		// Merge any unmerged
 		if len(toMerge) > 0 {
-			versions := make([]xlMetaV2ShallowVersion, 0, len(toMerge)+1)
+			versions := make([][]xlMetaV2ShallowVersion, 0, len(toMerge)+1)
 			xl, err := best.xlmeta()
 			if err == nil {
-				versions = append(versions, xl.versions...)
+				versions = append(versions, xl.versions)
 			}
 			for _, idx := range toMerge {
 				other := top[idx]
@@ -776,11 +776,12 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 						return err
 					}
 				}
-				versions = append(versions, xl2.versions...)
+				versions = append(versions, xl2.versions)
 			}
+
 			if xl != nil && len(versions) > 0 {
 				// Merge all versions. 'strict' doesn't matter since we only need one.
-				xl.versions = mergeXLV2Versions(readQuorum, true, 0, versions)
+				xl.versions = mergeXLV2Versions(readQuorum, true, 0, versions...)
 				if meta, err := xl.AppendTo(metaDataPoolGet()); err == nil {
 					if best.reusable {
 						metaDataPoolPut(best.metadata)
