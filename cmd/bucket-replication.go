@@ -1170,9 +1170,10 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, ObjectOptions{
-		VersionID:        ri.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
+		VersionID:          ri.VersionID,
+		Versioned:          versioned,
+		VersionSuspended:   versionSuspended,
+		ReplicationRequest: true,
 	})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
@@ -1622,8 +1623,11 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			return err
 		}
 
+		cHeader := http.Header{}
+		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		popts := minio.PutObjectPartOptions{
-			SSE: opts.ServerSideEncryption,
+			SSE:          opts.ServerSideEncryption,
+			CustomHeader: cHeader,
 		}
 
 		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {

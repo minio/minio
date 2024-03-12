@@ -775,7 +775,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 		}
 
-		if !(replicationStatus && crypto.SSEC.IsEncrypted(mi.UserDefined)) {
+		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
+		if !(sourceReplReq && crypto.SSEC.IsEncrypted(mi.UserDefined)) {
 			// Calculating object encryption key
 			key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
 			if err != nil {
