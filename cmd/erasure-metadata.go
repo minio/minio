@@ -502,14 +502,6 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 		return -1, -1, errErasureReadQuorum
 	}
 
-	if parityBlocks == 0 {
-		// For delete markers do not use 'defaultParityCount' as it is not expected to be the case.
-		// Use maximum allowed read quorum instead, writeQuorum+1 is returned for compatibility sake
-		// but there are no callers that shall be using this.
-		readQuorum := len(partsMetaData) / 2
-		return readQuorum, readQuorum + 1, nil
-	}
-
 	dataBlocks := len(partsMetaData) - parityBlocks
 
 	writeQuorum := dataBlocks
