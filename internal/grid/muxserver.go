@@ -147,11 +147,11 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}()
 
 	// Response sender goroutine...
-	go func() {
+	go func(outBlock <-chan struct{}) {
 		wg.Wait()
 		defer m.parent.deleteMux(true, m.ID)
-		m.sendResponses(ctx, send, c, &handlerErr)
-	}()
+		m.sendResponses(ctx, send, c, &handlerErr, outBlock)
+	}(m.outBlock)
 
 	// Remote aliveness check if needed.
 	if msg.DeadlineMS == 0 || msg.DeadlineMS > uint32(lastPingThreshold/time.Millisecond) {
@@ -172,8 +172,7 @@ func (m *muxServer) handleInbound(c *Connection, inbound <-chan []byte, handlerI
 }
 
 // sendResponses will send responses to the client.
-func (m *muxServer) sendResponses(ctx context.Context, toSend <-chan []byte, c *Connection, handlerErr *atomic.Pointer[RemoteErr]) {
-	outBlock := m.outBlock
+func (m *muxServer) sendResponses(ctx context.Context, toSend <-chan []byte, c *Connection, handlerErr *atomic.Pointer[RemoteErr], outBlock <-chan struct{}) {
 	for {
 		// Process outgoing message.
 		var payload []byte
