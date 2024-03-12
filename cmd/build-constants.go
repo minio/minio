@@ -49,8 +49,11 @@ var (
 	// MinioOSARCH - OS and ARCH.
 	minioOSARCH = runtime.GOOS + "-" + runtime.GOARCH
 
+	// MinioReleaseBaseURL - release url without os and arch.
+	MinioReleaseBaseURL = "https://dl.min.io/server/minio/release/"
+
 	// MinioReleaseURL - release URL.
-	MinioReleaseURL = "https://dl.min.io/server/minio/release/" + minioOSARCH + SlashSeparator
+	MinioReleaseURL = MinioReleaseBaseURL + minioOSARCH + SlashSeparator
 
 	// MinioStoreName - MinIO store name.
 	MinioStoreName = "MinIO"

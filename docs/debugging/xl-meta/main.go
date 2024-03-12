@@ -37,6 +37,7 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/cli"
+	"github.com/minio/highwayhash"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -451,7 +452,6 @@ func (x xlMetaInlineData) json() ([]byte, error) {
 	if !x.versionOK() {
 		return nil, errors.New("xlMetaInlineData: unknown version")
 	}
-
 	sz, buf, err := msgp.ReadMapHeaderBytes(x.afterVersion())
 	if err != nil {
 		return nil, err
@@ -475,7 +475,23 @@ func (x xlMetaInlineData) json() ([]byte, error) {
 		if i > 0 {
 			res = append(res, ',')
 		}
-		s := fmt.Sprintf(`"%s":%d`, string(key), len(val))
+		s := fmt.Sprintf(`"%s": {"bytes": %d`, string(key), len(val))
+		// Check bitrot... We should only ever have one block...
+		if len(val) >= 32 {
+			want := val[:32]
+			data := val[32:]
+			const magicHighwayHash256Key = "\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0"
+
+			hh, _ := highwayhash.New([]byte(magicHighwayHash256Key))
+			hh.Write(data)
+			got := hh.Sum(nil)
+			if bytes.Equal(want, got) {
+				s += ", \"bitrot_valid\": true"
+			} else {
+				s += ", \"bitrot_valid\": false"
+			}
+			s += "}"
+		}
 		res = append(res, []byte(s)...)
 	}
 	res = append(res, '}')
