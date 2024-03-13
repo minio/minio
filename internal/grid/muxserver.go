@@ -122,11 +122,11 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	if inboundCap > 0 {
 		m.inbound = make(chan []byte, inboundCap)
 		handlerIn = make(chan []byte, 1)
-		go func() {
+		go func(inbound chan []byte) {
 			wg.Wait()
 			defer xioutil.SafeClose(handlerIn)
-			m.handleInbound(c, m.inbound, handlerIn)
-		}()
+			m.handleInbound(c, inbound, handlerIn)
+		}(m.inbound)
 	}
 	// Fill outbound block.
 	// Each token represents a message that can be sent to the client without blocking.
