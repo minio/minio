@@ -116,5 +116,11 @@ var (
 			Optional:    true,
 			Type:        "boolean",
 		},
+		config.HelpKV{
+			Key:         apiObjectMaxVersions,
+			Description: "set max allowed number of versions per object" + defaultHelpPostfix(apiObjectMaxVersions),
+			Optional:    true,
+			Type:        "number",
+		},
 	}
 )

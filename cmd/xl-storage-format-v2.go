@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,30 +37,11 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/env"
 	"github.com/tinylib/msgp/msgp"
 )
 
 // Reject creating new versions when a single object is cross maxObjectVersions
 var maxObjectVersions = 10000
-
-func init() {
-	v := env.Get("_MINIO_OBJECT_MAX_VERSIONS", "")
-	if v != "" {
-		maxv, err := strconv.Atoi(v)
-		if err != nil {
-			logger.Info("invalid _MINIO_OBJECT_MAX_VERSIONS value: %s, defaulting to '10000'", v)
-			maxObjectVersions = 10000
-		} else {
-			if maxv < 10 {
-				logger.Info("invalid _MINIO_OBJECT_MAX_VERSIONS value: %s, minimum allowed is '10' defaulting to '10000'", v)
-				maxObjectVersions = 10000
-			} else {
-				maxObjectVersions = maxv
-			}
-		}
-	}
-}
 
 var (
 	// XL header specifies the format
@@ -1112,7 +1092,7 @@ func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 	}
 
 	// returns error if we have exceeded maxObjectVersions
-	if len(x.versions)+1 > maxObjectVersions {
+	if len(x.versions)+1 > globalAPIConfig.getObjectMaxVersions() {
 		return errMaxVersionsExceeded
 	}
 
