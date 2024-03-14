@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -160,6 +160,12 @@ var ServerFlags = []cli.Flag{
 	cli.StringSliceFlag{
 		Name:  "sftp",
 		Usage: "enable and configure an SFTP server",
+	},
+	cli.StringFlag{
+		Name:   "crossdomain-xml",
+		Usage:  "provide a custom crossdomain-xml configuration to report at http://endpoint/crossdomain.xml",
+		Hidden: true,
+		EnvVar: "MINIO_CROSSDOMAIN_XML",
 	},
 }
 

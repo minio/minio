@@ -361,6 +361,14 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 		ctxt.ConsoleAddr = ctx.String("console-address")
 	}
 
+	if cxml := ctx.String("crossdomain-xml"); cxml != "" {
+		buf, err := os.ReadFile(cxml)
+		if err != nil {
+			return err
+		}
+		ctxt.CrossDomainXML = string(buf)
+	}
+
 	// Check "no-compat" flag from command line argument.
 	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
 
