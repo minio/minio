@@ -898,7 +898,9 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType
 	if mType != mimeNone {
 		w.Header().Set(xhttp.ContentType, string(mType))
 	}
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(len(response)))
+	mLength := strconv.Itoa(len(response))
+	w.Header().Set(xhttp.ContentLength, mLength)
+	w.Header().Set(xhttp.XContentLength, mLength)
 	w.WriteHeader(statusCode)
 	if response != nil {
 		w.Write(response)

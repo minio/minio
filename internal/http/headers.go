@@ -27,6 +27,7 @@ const (
 	ContentEncoding    = "Content-Encoding"
 	Expires            = "Expires"
 	ContentLength      = "Content-Length"
+	XContentLength     = "X-Content-Length"
 	ContentLanguage    = "Content-Language"
 	ContentRange       = "Content-Range"
 	Connection         = "Connection"
