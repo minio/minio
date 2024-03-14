@@ -1297,25 +1297,21 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	storageDisks := er.getDisks()
 
-	parityDrives := len(storageDisks) / 2
-	if !opts.MaxParity {
-		// Get parity and data drive count based on storage class metadata
-		parityDrives = globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
-		if parityDrives < 0 {
-			parityDrives = er.defaultParityCount
-		}
-
+	// Get parity and data drive count based on storage class metadata
+	parityDrives := globalStorageClass.GetParityForSC(userDefined[xhttp.AmzStorageClass])
+	if parityDrives < 0 {
+		parityDrives = er.defaultParityCount
+	}
+	if opts.MaxParity {
+		parityDrives = len(storageDisks) / 2
+	}
+	if !opts.MaxParity && globalStorageClass.AvailabilityOptimized() {
 		// If we have offline disks upgrade the number of erasure codes for this object.
 		parityOrig := parityDrives
 
 		var offlineDrives int
 		for _, disk := range storageDisks {
-			if disk == nil {
-				parityDrives++
-				offlineDrives++
-				continue
-			}
-			if !disk.IsOnline() {
+			if disk == nil || !disk.IsOnline() {
 				parityDrives++
 				offlineDrives++
 				continue

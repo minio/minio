@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -40,11 +40,14 @@ const (
 const (
 	ClassStandard = "standard"
 	ClassRRS      = "rrs"
+	ClassOptimize = "optimize"
 
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
 	// Standard storage class environment variable
 	StandardEnv = "MINIO_STORAGE_CLASS_STANDARD"
+	// Optimize storage class environment variable
+	OptimizeEnv = "MINIO_STORAGE_CLASS_OPTIMIZE"
 
 	// Supported storage class scheme is EC
 	schemePrefix = "EC"
@@ -67,6 +70,10 @@ var (
 			Key:   ClassRRS,
 			Value: "EC:1",
 		},
+		config.KV{
+			Key:   ClassOptimize,
+			Value: "availability",
+		},
 	}
 )
 
@@ -82,6 +89,7 @@ var ConfigLock sync.RWMutex
 type Config struct {
 	Standard    StorageClass `json:"standard"`
 	RRS         StorageClass `json:"rrs"`
+	Optimize    string       `json:"optimize"`
 	initialized bool
 }
 
@@ -245,12 +253,40 @@ func (sCfg *Config) GetParityForSC(sc string) (parity int) {
 	}
 }
 
+// CapacityOptimized - returns true if the storage-class is capacity optimized
+// meaning we will not use additional parities when drives are offline.
+//
+// Default is "availability" optimized, unless this is configured.
+func (sCfg *Config) CapacityOptimized() bool {
+	ConfigLock.RLock()
+	defer ConfigLock.RUnlock()
+	if !sCfg.initialized {
+		return false
+	}
+	return sCfg.Optimize == "capacity"
+}
+
+// AvailabilityOptimized - returns true if the storage-class is availability
+// optimized, meaning we will use additional parities when drives are offline
+// to retain parity SLA.
+//
+// Default is "availability" optimized.
+func (sCfg *Config) AvailabilityOptimized() bool {
+	ConfigLock.RLock()
+	defer ConfigLock.RUnlock()
+	if !sCfg.initialized {
+		return true
+	}
+	return sCfg.Optimize == "availability" || sCfg.Optimize == ""
+}
+
 // Update update storage-class with new config
 func (sCfg *Config) Update(newCfg Config) {
 	ConfigLock.Lock()
 	defer ConfigLock.Unlock()
 	sCfg.RRS = newCfg.RRS
 	sCfg.Standard = newCfg.Standard
+	sCfg.Optimize = newCfg.Optimize
 	sCfg.initialized = true
 }
 
@@ -320,5 +356,6 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	}
 
 	cfg.initialized = true
+	cfg.Optimize = env.Get(OptimizeEnv, kvs.Get(ClassOptimize))
 	return cfg, nil
 }
