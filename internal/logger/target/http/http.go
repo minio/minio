@@ -110,21 +110,26 @@ type Target struct {
 	// assign the new webhook target to this field.
 	// The Send() method will then re-direct entries
 	// to the new target when the current on has
-	// been seet to status "statusClosed".
-	// Once the glogal webhook slice has been update
+	// been set to status "statusClosed".
+	// Once the global webhook slice has been update
 	// the current target will stop receiving entries.
 	migrateTarget *Target
+
 	// This channel is used when migrating between webhook
 	// targets when targets are re-configured.
-	// There is a local variable isnide the logch processor
-	// which hold temporary entires which are in the
-	// process of being sent. If the context is canceled
-	// during a transport OR we exit out of the processor
-	// before those entries are sent, they will be drained
-	// into this logTmpCh. logTmpCh is then drained into
-	// the logTmpCh of the new target inside the Migrate
-	// method.
-	logTmpCh chan interface{}
+	// If the context is canceled during a transport or we exit out of the processor
+	// before those entries are sent, they will be drained into this channel.
+	// This will then be forwarded to the new target as logMigrateCh.
+	logDrainInto atomic.Pointer[chan interface{}]
+
+	// logMigrateCh is set to the incoming migration channel when this has been
+	// migrated from another running instance.
+	// Can only be accessed in Migrate and other sync methods.
+	// Any channel that is set will always be closed.
+	logMigrateCh chan interface{}
+
+	// logMigrateChCh will send any migration channels to be picked up by HTTP sender.
+	logMigrateChCh chan chan<- interface{}
 
 	// Number of events per HTTP send to webhook target
 	// this is ideally useful only if your endpoint can
@@ -161,68 +166,64 @@ func (h *Target) Type() types.TargetType {
 // Migrate moveds the logCh from the current target
 // to a new one and then closes the current target.
 func (h *Target) Migrate(newTgt *Target) {
-	h.migrateTarget = newTgt
-	atomic.StoreInt32(&h.status, statusClosed)
+	newTgt.logChMu.Lock()
+	existing := newTgt.logMigrateCh
+	newTgt.logChMu.Unlock()
+	if h.migrateTarget != nil || existing != nil {
+		// Already migrating or something else that is unexpected.
+		return
+	}
 
+	h.migrateTarget = newTgt
+	// Create a new channel for the new target.
+	x := make(chan interface{}, h.config.QueueSize+h.config.BatchSize*maxWorkers)
+	h.logDrainInto.Store(&x)
+
+	atomic.StoreInt32(&h.status, statusClosed)
 	h.storeCtxCancel()
 	h.logChMu.Lock()
 	xioutil.SafeClose(h.logCh)
 	h.logChMu.Unlock()
 
-	// wait for workers to exit and drain remaining
-	// log entries into the logTmpCh.
+	// Wait for workers to exit.
+	// When we are done or channels are no longer changing.
 	h.wg.Wait()
+	xioutil.SafeClose(x)
+	xioutil.SafeClose(h.logMigrateCh)
 
-	newLength := 200
-	if h.logTmpCh != nil {
-		newLength += len(h.logTmpCh)
-	}
-	if h.logCh != nil {
-		newLength += len(h.logCh)
-	}
+	// Neither of these channels are being read/written to anymore.
+	newLength := len(h.logMigrateCh) + len(h.logCh) + len(x)
 
-	// logTmpCh is already initialized inside
-	// New() but in rare cases it might not be big enough.
-	if cap(newTgt.logTmpCh) < newLength {
-		newTgt.logTmpCh = make(chan interface{}, newLength+1000)
-	} else {
-	}
-
-	if h.logTmpCh != nil {
-	tmpLoop:
-		for {
-			select {
-			case v, ok := <-h.logTmpCh:
-				if !ok {
-					break tmpLoop
-				}
-				newTgt.logTmpCh <- v
-			default:
-				break tmpLoop
-			}
+	// Migrate to the channel we created above.
+	// It should have enough capacity, but just in case we check.
+	migrateTo := x
+	if cap(x) < newLength-len(x) {
+		migrateTo = make(chan interface{}, newLength)
+		for v := range x {
+			migrateTo <- v
 		}
 	}
 
-	if h.logCh != nil {
-	logLoop:
-		for {
-			select {
-			case v, ok := <-h.logCh:
-				if !ok {
-					break logLoop
-				}
-				newTgt.logTmpCh <- v
-			default:
-				break logLoop
-			}
+	// Add anything from previous migration that may be unsent.
+	if h.logMigrateCh != nil {
+		for v := range h.logMigrateCh {
+			migrateTo <- v
 		}
 	}
 
-	h.logChMu.Lock()
-	xioutil.SafeClose(h.logTmpCh)
-	h.logCh = nil
-	h.logTmpCh = nil
-	h.logChMu.Unlock()
+	// Add queued entries.
+	if h.logCh != nil {
+		for v := range h.logCh {
+			migrateTo <- v
+		}
+	}
+
+	// Close the migration channel - it now has everything.
+	close(migrateTo)
+	newTgt.logChMu.Lock()
+	newTgt.logMigrateCh = migrateTo
+	newTgt.logMigrateChCh <- migrateTo
+	newTgt.logChMu.Unlock()
 }
 
 // Endpoint returns the backend endpoint
@@ -388,18 +389,18 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 		payloadType = ""
 	}
 
-	entries := make([]interface{}, 0)
-
+	entries := make([]interface{}, 0, batchSize)
 	defer func() {
 		if h.logCh == nil {
 			return
 		}
-		if h.logTmpCh == nil {
+		migrate := h.logDrainInto.Load()
+		if migrate == nil {
 			return
 		}
 		for _, v := range entries {
 			select {
-			case h.logTmpCh <- v:
+			case *migrate <- v:
 			default:
 			}
 		}
@@ -407,13 +408,22 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 
 	var entry interface{}
 	var ok bool
-
+	readFrom := (<-chan any)(h.logCh)
 	for {
 		select {
-		case entry, _ = <-h.logTmpCh:
-		case entry, ok = <-h.logCh:
+		case readFrom = <-h.logMigrateChCh:
+			continue
+		case entry, ok = <-readFrom:
 			if !ok {
-				return
+				if readFrom == h.logCh {
+					return
+				}
+				readFrom = h.logCh
+				// We drained logMigrateCh - release it.
+				h.logChMu.Lock()
+				h.logMigrateCh = nil
+				h.logChMu.Unlock()
+				continue
 			}
 		case <-ctx.Done():
 			return
@@ -448,9 +458,8 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 		}
 
 		entries = append(entries, entry)
-
 		if len(entries) != batchSize {
-			if len(h.logCh) > 0 || len(h.logTmpCh) > 0 {
+			if len(readFrom) > 0 {
 				continue
 			}
 		}
@@ -458,7 +467,7 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 	retry:
 		err := h.send(ctx, buf.Bytes(), payloadType, webhookCallTimeout)
 		if err == nil {
-			entries = make([]interface{}, 0)
+			entries = entries[:0]
 		}
 
 		select {
@@ -471,7 +480,7 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 			if !xnet.IsNetworkOrHostDown(err, false) && !xnet.IsConnResetErr(err) {
 				h.config.Error(fmt.Sprintf("unable to send log entry: %s", err))
 			}
-			time.Sleep(3 * time.Second)
+			time.Sleep(time.Second)
 			goto retry
 		}
 
@@ -482,7 +491,6 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 				return
 			}
 		}
-
 	}
 }
 
@@ -490,11 +498,11 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	h := &Target{
-		logCh:     make(chan interface{}, config.QueueSize),
-		logTmpCh:  make(chan interface{}, config.QueueSize+config.BatchSize+1000),
-		config:    config,
-		status:    statusOffline,
-		batchSize: config.BatchSize,
+		logCh:          make(chan interface{}, config.QueueSize),
+		logMigrateChCh: make(chan chan<- interface{}, 1),
+		config:         config,
+		status:         statusOffline,
+		batchSize:      config.BatchSize,
 	}
 
 	h.maxWorkers = maxWorkers
@@ -600,9 +608,7 @@ func (h *Target) Cancel() {
 	// All future ones will be discarded.
 	h.logChMu.Lock()
 	xioutil.SafeClose(h.logCh)
-	xioutil.SafeClose(h.logTmpCh)
 	h.logCh = nil
-	h.logTmpCh = nil
 	h.logChMu.Unlock()
 
 	// Wait for messages to be sent...
