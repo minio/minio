@@ -54,8 +54,6 @@ import (
 
 const (
 	nullVersionID = "null"
-	// Largest streams threshold per shard.
-	largestFileThreshold = 64 * humanize.MiByte // Optimized for HDDs
 
 	// Small file threshold below which data accompanies metadata from storage layer.
 	smallFileThreshold = 128 * humanize.KiByte // Optimized for NVMe/SSDs
@@ -2113,11 +2111,11 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 
 	var bufp *[]byte
 	switch {
-	case fileSize > 0 && fileSize >= largestFileThreshold:
+	case fileSize > 0 && fileSize >= xioutil.BlockSizeReallyLarge:
 		// use a larger 4MiB buffer for a really large streams.
 		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolXLarge.Put(bufp)
-	case fileSize <= smallFileThreshold:
+	case fileSize <= xioutil.BlockSizeSmall:
 		bufp = xioutil.ODirectPoolSmall.Get().(*[]byte)
 		defer xioutil.ODirectPoolSmall.Put(bufp)
 	default:

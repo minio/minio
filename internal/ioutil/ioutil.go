@@ -20,7 +20,6 @@
 package ioutil
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -36,8 +35,8 @@ import (
 // Block sizes constant.
 const (
 	BlockSizeSmall       = 32 * humanize.KiByte // Default r/w block size for smaller objects.
-	BlockSizeLarge       = 2 * humanize.MiByte  // Default r/w block size for larger objects.
-	BlockSizeReallyLarge = 4 * humanize.MiByte  // Default write block size for objects per shard >= 64MiB
+	BlockSizeLarge       = 1 * humanize.MiByte  // Default r/w block size for normal objects.
+	BlockSizeReallyLarge = 4 * humanize.MiByte  // Default r/w block size for very large objects.
 )
 
 // aligned sync.Pool's
@@ -341,19 +340,6 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 		return 0, nil
 	}
 
-	// Writes remaining bytes in the buffer.
-	writeUnaligned := func(w io.Writer, buf []byte) (remainingWritten int64, err error) {
-		// Disable O_DIRECT on fd's on unaligned buffer
-		// perform an amortized Fdatasync(fd) on the fd at
-		// the end, this is performed by the caller before
-		// closing 'w'.
-		if err = disk.DisableDirectIO(file); err != nil {
-			return remainingWritten, err
-		}
-		// Since w is *os.File io.Copy shall use ReadFrom() call.
-		return io.Copy(w, bytes.NewReader(buf))
-	}
-
 	var written int64
 	for {
 		buf := alignedBuf
@@ -371,15 +357,38 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 		}
 
 		buf = buf[:nr]
-		var nw int64
-		if len(buf)%DirectioAlignSize == 0 {
-			var n int
+		var (
+			n  int
+			un int
+			nw int64
+		)
+
+		remain := len(buf) % DirectioAlignSize
+		if remain == 0 {
 			// buf is aligned for directio write()
 			n, err = w.Write(buf)
 			nw = int64(n)
 		} else {
+			if remain < len(buf) {
+				n, err = w.Write(buf[:len(buf)-remain])
+				if err != nil {
+					return written, err
+				}
+				nw = int64(n)
+			}
+
+			// Disable O_DIRECT on fd's on unaligned buffer
+			// perform an amortized Fdatasync(fd) on the fd at
+			// the end, this is performed by the caller before
+			// closing 'w'.
+			if err = disk.DisableDirectIO(file); err != nil {
+				return written, err
+			}
+
 			// buf is not aligned, hence use writeUnaligned()
-			nw, err = writeUnaligned(w, buf)
+			// for the remainder
+			un, err = w.Write(buf[len(buf)-remain:])
+			nw += int64(un)
 		}
 
 		if nw > 0 {
