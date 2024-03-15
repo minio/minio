@@ -132,23 +132,6 @@ func AddSystemTarget(ctx context.Context, t Target) error {
 	return nil
 }
 
-func initSystemTargets(ctx context.Context, cfgMap map[string]http.Config) ([]Target, []error) {
-	tgts := []Target{}
-	errs := []error{}
-	for _, l := range cfgMap {
-		if l.Enabled {
-			t := http.New(l)
-			tgts = append(tgts, t)
-
-			e := t.Init(ctx)
-			if e != nil {
-				errs = append(errs, e)
-			}
-		}
-	}
-	return tgts, errs
-}
-
 func initKafkaTargets(ctx context.Context, cfgMap map[string]kafka.Config) ([]Target, []error) {
 	tgts := []Target{}
 	errs := []error{}
