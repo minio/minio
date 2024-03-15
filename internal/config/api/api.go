@@ -49,6 +49,7 @@ const (
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
+	apiObjectMaxVersions           = "object_max_versions"
 
 	EnvAPIRequestsMax                 = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline            = "MINIO_API_REQUESTS_DEADLINE"
@@ -69,6 +70,8 @@ const (
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
 	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
+	EnvAPIObjectMaxVersions           = "MINIO_API_OBJECT_MAX_VERSIONS"
+	EnvAPIObjectMaxVersionsLegacy     = "_MINIO_OBJECT_MAX_VERSIONS"
 )
 
 // Deprecated key and ENVs
@@ -150,6 +153,10 @@ var (
 			Key:   apiSyncEvents,
 			Value: config.EnableOff,
 		},
+		config.KV{
+			Key:   apiObjectMaxVersions,
+			Value: "10000",
+		},
 	}
 )
 
@@ -172,6 +179,7 @@ type Config struct {
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
 	SyncEvents                  bool          `json:"sync_events"`
+	ObjectMaxVersions           int           `json:"object_max_versions"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -306,6 +314,19 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	cfg.StaleUploadsExpiry = staleUploadsExpiry
 
 	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
+
+	maxVerStr := env.Get(EnvAPIObjectMaxVersions, "")
+	if maxVerStr == "" {
+		maxVerStr = env.Get(EnvAPIObjectMaxVersionsLegacy, kvs.GetWithDefault(apiObjectMaxVersions, DefaultKVS))
+	}
+	maxVersions, err := strconv.Atoi(maxVerStr)
+	if err != nil {
+		return cfg, err
+	}
+	if maxVersions <= 0 {
+		return cfg, fmt.Errorf("invalid object max versions value: %v", maxVersions)
+	}
+	cfg.ObjectMaxVersions = maxVersions
 
 	return cfg, nil
 }
