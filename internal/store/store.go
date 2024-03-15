@@ -116,9 +116,8 @@ func sendItems(target Target, keyCh <-chan Key, doneCh <-chan struct{}, logger l
 					target.Name())
 			}
 
-			// Retrying after 3secs back-off
-
 			select {
+			// Retrying after 3secs back-off
 			case <-retryTicker.C:
 			case <-doneCh:
 				return false

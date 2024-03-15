@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -34,6 +35,7 @@ import (
 
 func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "ListenNotification")
+	fmt.Println("MAJOR HERE!")
 
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
@@ -171,6 +173,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	)
 
 	if p := values.Get("ping"); p != "" {
+		fmt.Println("keepalive enabled")
 		pingInterval, err := strconv.Atoi(p)
 		if err != nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidQueryParams), r.URL)
@@ -180,11 +183,13 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidQueryParams), r.URL)
 			return
 		}
+		fmt.Println("new ping with custom time")
 		t := time.NewTicker(time.Duration(pingInterval) * time.Second)
 		defer t.Stop()
 		emptyEventTicker = t.C
 	} else {
 		// Deprecated Apr 2023
+		fmt.Println("new ping non custom")
 		t := time.NewTicker(500 * time.Millisecond)
 		defer t.Stop()
 		keepAliveTicker = t.C
@@ -194,6 +199,7 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 	for {
 		select {
 		case ev := <-mergeCh:
+			fmt.Println("merge chan")
 			_, err := w.Write(ev)
 			if err != nil {
 				return
@@ -204,16 +210,19 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 			}
 			grid.PutByteBuffer(ev)
 		case <-emptyEventTicker:
+			fmt.Println("empty event ticker")
 			if err := enc.Encode(struct{ Records []event.Event }{}); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
 		case <-keepAliveTicker:
+			fmt.Println("keepalive!")
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
 			w.(http.Flusher).Flush()
 		case <-ctx.Done():
+
 			return
 		}
 	}

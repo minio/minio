@@ -187,32 +187,50 @@ func cancelTargets(targets []Target) {
 	}
 }
 
-// UpdateSystemTargets swaps targets with newly loaded ones from the cfg
-func UpdateSystemTargets(ctx context.Context, cfg Config) []error {
-	newTgts, errs := initSystemTargets(ctx, cfg.HTTP)
+// UpdateHTTPTargets swaps audit webhook targets with newly loaded ones from the cfg
+func UpdateHTTPTargets(ctx context.Context, cfgs map[string]http.Config) (errs []error) {
+	tgts := make([]*http.Target, 0)
+	newWebhooks := make([]Target, 0)
+	for _, cfg := range cfgs {
+		if cfg.Enabled {
+			t := http.New(cfg)
+			tgts = append(tgts, t)
 
-	swapSystemMuRW.Lock()
-	consoleTargets, otherTargets := splitTargets(systemTargets, types.TargetConsole)
-	newTgts = append(newTgts, consoleTargets...)
-	systemTargets = newTgts
-	swapSystemMuRW.Unlock()
+			err := t.Init(ctx)
+			if err != nil {
+				errs = append(errs, err)
+			}
 
-	cancelTargets(otherTargets) // cancel running targets
-	return errs
-}
+			newWebhooks = append(newWebhooks, t)
+		}
+	}
 
-// UpdateAuditWebhookTargets swaps audit webhook targets with newly loaded ones from the cfg
-func UpdateAuditWebhookTargets(ctx context.Context, cfg Config) []error {
-	newWebhookTgts, errs := initSystemTargets(ctx, cfg.AuditWebhook)
+	for i := range auditTargets {
+		auditTgt, ok := auditTargets[i].(*http.Target)
+		if !ok {
+			continue
+		}
+		var newTgt *http.Target
+
+		for ii := range tgts {
+			fmt.Println(auditTgt.Name() == tgts[ii].Name())
+			if auditTgt.Name() == tgts[ii].Name() {
+				newTgt = tgts[ii]
+				break
+			}
+		}
+
+		if newTgt != nil {
+			auditTgt.Migrate(newTgt)
+		} else {
+			auditTgt.Cancel()
+		}
+	}
 
 	swapAuditMuRW.Lock()
-	// Retain kafka targets
-	oldWebhookTgts, otherTgts := splitTargets(auditTargets, types.TargetHTTP)
-	newWebhookTgts = append(newWebhookTgts, otherTgts...)
-	auditTargets = newWebhookTgts
+	auditTargets = newWebhooks
 	swapAuditMuRW.Unlock()
 
-	cancelTargets(oldWebhookTgts) // cancel running targets
 	return errs
 }
 

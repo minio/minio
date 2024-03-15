@@ -621,12 +621,13 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		for n, l := range loggerCfg.HTTP {
 			if l.Enabled {
 				l.LogOnce = logger.LogOnceConsoleIf
+				l.Error = logger.Error
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			}
 			loggerCfg.HTTP[n] = l
 		}
-		if errs := logger.UpdateSystemTargets(ctx, loggerCfg); len(errs) > 0 {
+		if errs := logger.UpdateHTTPTargets(ctx, loggerCfg.HTTP); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
@@ -638,13 +639,15 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		for n, l := range loggerCfg.AuditWebhook {
 			if l.Enabled {
 				l.LogOnce = logger.LogOnceConsoleIf
+				l.Error = logger.Error
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			}
 			loggerCfg.AuditWebhook[n] = l
 		}
 
-		if errs := logger.UpdateAuditWebhookTargets(ctx, loggerCfg); len(errs) > 0 {
+		fmt.Println("UPDATING AUDIT FOR SUBSYSTEM", subSys)
+		if errs := logger.UpdateHTTPTargets(ctx, loggerCfg.AuditWebhook); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
