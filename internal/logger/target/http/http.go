@@ -129,7 +129,7 @@ type Target struct {
 	logMigrateCh chan interface{}
 
 	// logMigrateChCh will send any migration channels to be picked up by HTTP sender.
-	logMigrateChCh chan chan<- interface{}
+	logMigrateChCh chan chan interface{}
 
 	// Number of events per HTTP send to webhook target
 	// this is ideally useful only if your endpoint can
@@ -408,7 +408,7 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 
 	var entry interface{}
 	var ok bool
-	readFrom := (<-chan any)(h.logCh)
+	readFrom := h.logCh
 	for {
 		select {
 		case readFrom = <-h.logMigrateChCh:
@@ -499,7 +499,7 @@ func (h *Target) startHTTPLogger(ctx context.Context, mainWorker bool) {
 func New(config Config) *Target {
 	h := &Target{
 		logCh:          make(chan interface{}, config.QueueSize),
-		logMigrateChCh: make(chan chan<- interface{}, 1),
+		logMigrateChCh: make(chan chan interface{}, 1),
 		config:         config,
 		status:         statusOffline,
 		batchSize:      config.BatchSize,
