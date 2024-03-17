@@ -19,13 +19,14 @@ package subnet
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	xhttp "github.com/minio/minio/internal/http"
 )

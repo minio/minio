@@ -22,7 +22,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,6 +29,8 @@ import (
 	"regexp"
 	"sync"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/config"

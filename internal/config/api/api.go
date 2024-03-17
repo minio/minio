@@ -18,12 +18,13 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/v2/env"

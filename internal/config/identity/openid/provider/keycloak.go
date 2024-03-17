@@ -18,7 +18,6 @@
 package provider
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -26,6 +25,8 @@ import (
 	"path"
 	"strings"
 	"sync"
+
+	"github.com/goccy/go-json"
 )
 
 // Token - parses the output from IDP id_token.

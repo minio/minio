@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/logger"
 )
@@ -46,7 +46,6 @@ const (
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan DataUsageInfo) {
 	attempts := 1
 	for dataUsageInfo := range dui {
-		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
 			logger.LogIf(ctx, err)
@@ -124,7 +123,6 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 	}
 
 	var dataUsageInfo DataUsageInfo
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(buf, &dataUsageInfo); err != nil {
 		return DataUsageInfo{}, err
 	}

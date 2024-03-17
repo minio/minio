@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +28,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"

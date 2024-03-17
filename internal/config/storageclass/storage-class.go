@@ -18,11 +18,12 @@
 package storageclass
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/v2/env"

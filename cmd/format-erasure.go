@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -27,8 +26,9 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/goccy/go-json"
+
 	"github.com/dustin/go-humanize"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -430,8 +430,6 @@ func loadFormatErasure(disk StorageAPI) (format *formatErasureV3, err error) {
 		}
 		return nil, err
 	}
-
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	// Try to decode format json into formatConfigV1 struct.
 	format = &formatErasureV3{}

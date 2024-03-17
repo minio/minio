@@ -18,11 +18,12 @@
 package sql
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/bcicen/jstream"
 	"github.com/minio/simdjson-go"

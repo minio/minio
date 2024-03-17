@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/gob"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +32,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zstd"

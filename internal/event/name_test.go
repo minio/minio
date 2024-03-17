@@ -18,10 +18,11 @@
 package event
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"reflect"
 	"testing"
+
+	"github.com/goccy/go-json"
 )
 
 func TestNameExpand(t *testing.T) {

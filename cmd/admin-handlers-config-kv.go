@@ -20,11 +20,12 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"

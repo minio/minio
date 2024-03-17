@@ -19,11 +19,12 @@ package cmd
 
 import (
 	"crypto/subtle"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"

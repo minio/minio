@@ -19,10 +19,11 @@ package openid
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/config"

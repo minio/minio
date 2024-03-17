@@ -18,8 +18,9 @@
 package event
 
 import (
-	"encoding/json"
 	"encoding/xml"
+
+	"github.com/goccy/go-json"
 )
 
 // Name - event type enum.

@@ -19,13 +19,14 @@ package grid
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"math"
 	"net/url"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/goccy/go-json"
 
 	"github.com/tinylib/msgp/msgp"
 )

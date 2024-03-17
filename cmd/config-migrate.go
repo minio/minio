@@ -19,10 +19,11 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"path"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/compress"

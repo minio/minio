@@ -22,12 +22,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"path"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"

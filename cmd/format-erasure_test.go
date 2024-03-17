@@ -20,11 +20,12 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/goccy/go-json"
 )
 
 // tests fixFormatErasureV3 - fix format.json on all disks.

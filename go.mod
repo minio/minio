@@ -29,6 +29,7 @@ require (
 	github.com/go-openapi/loads v0.22.0
 	github.com/go-sql-driver/mysql v1.8.0
 	github.com/gobwas/ws v1.3.2
+	github.com/goccy/go-json v0.10.2
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/gomodule/redigo v1.9.2
 	github.com/google/uuid v1.6.0
@@ -153,7 +154,6 @@ require (
 	github.com/go-openapi/validate v0.24.0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

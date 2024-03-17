@@ -18,13 +18,14 @@
 package json
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/bcicen/jstream"
 	csv "github.com/minio/csvparser"

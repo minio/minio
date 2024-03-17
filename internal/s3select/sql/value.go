@@ -18,7 +18,6 @@
 package sql
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -27,6 +26,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/goccy/go-json"
 )
 
 var (

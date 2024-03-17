@@ -19,13 +19,14 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/madmin-go/v3"
 	xioutil "github.com/minio/minio/internal/ioutil"

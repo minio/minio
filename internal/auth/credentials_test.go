@@ -18,9 +18,10 @@
 package auth
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/goccy/go-json"
 )
 
 func TestExpToInt64(t *testing.T) {

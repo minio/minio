@@ -21,11 +21,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/goccy/go-json"
 )
 
 func writeErrorResponse(w http.ResponseWriter, err error) {

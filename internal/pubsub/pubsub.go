@@ -19,10 +19,11 @@ package pubsub
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
+
+	"github.com/goccy/go-json"
 )
 
 // GetByteBuffer returns a byte buffer from the pool.

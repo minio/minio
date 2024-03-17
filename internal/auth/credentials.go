@@ -21,13 +21,14 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/jwt"

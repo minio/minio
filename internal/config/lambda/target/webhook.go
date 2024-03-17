@@ -21,13 +21,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/config/lambda/event"
 	xhttp "github.com/minio/minio/internal/http"

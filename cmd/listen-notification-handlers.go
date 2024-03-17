@@ -19,10 +19,11 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/grid"

@@ -19,7 +19,6 @@ package target
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -27,6 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/gomodule/redigo/redis"
 	"github.com/minio/minio/internal/event"

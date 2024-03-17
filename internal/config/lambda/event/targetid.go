@@ -18,9 +18,10 @@
 package event
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/goccy/go-json"
 )
 
 // TargetID - holds identification and name strings of notification target.

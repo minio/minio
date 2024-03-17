@@ -18,7 +18,6 @@
 package store
 
 import (
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -26,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/google/uuid"
 )

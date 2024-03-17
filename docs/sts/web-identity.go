@@ -25,7 +25,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -34,6 +33,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"golang.org/x/oauth2"
 

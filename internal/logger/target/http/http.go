@@ -20,7 +20,6 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -33,7 +32,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
+
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger/target/types"
@@ -321,7 +321,6 @@ func (h *Target) startHTTPLogger(ctx context.Context) {
 	buf := bytebufferpool.Get()
 	defer bytebufferpool.Put(buf)
 
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	enc := json.NewEncoder(buf)
 	batchSize := h.batchSize
 	if batchSize <= 0 {

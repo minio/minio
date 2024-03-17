@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -27,6 +26,8 @@ import (
 	"net/http"
 	"path"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio-go/v7"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"

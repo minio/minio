@@ -25,7 +25,6 @@ import (
 	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -43,6 +42,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zip"

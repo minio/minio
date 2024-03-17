@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"strings"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/secure-io/sio-go/sioutil"
 	"golang.org/x/crypto/chacha20"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -195,7 +195,6 @@ func (kms secretKey) GenerateKey(_ context.Context, keyID string, context Contex
 	associatedData, _ := context.MarshalText()
 	ciphertext := aead.Seal(nil, nonce, plaintext, associatedData)
 
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	ciphertext, err = json.Marshal(encryptedKey{
 		Algorithm: algorithm,
 		IV:        iv,
@@ -222,7 +221,6 @@ func (kms secretKey) DecryptKey(keyID string, ciphertext []byte, context Context
 	}
 
 	var encryptedKey encryptedKey
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(ciphertext, &encryptedKey); err != nil {
 		return nil, Error{
 			HTTPStatusCode: http.StatusBadRequest,

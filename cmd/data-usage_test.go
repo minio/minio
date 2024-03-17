@@ -20,12 +20,13 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
 	"testing"
+
+	"github.com/goccy/go-json"
 )
 
 type usageTestFile struct {

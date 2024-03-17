@@ -20,14 +20,14 @@ package cmd
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
+
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
@@ -241,7 +241,6 @@ func (d *PolicyDoc) update(p policy.Policy) {
 // from policy.Policy to PolicyDoc. To avoid a migration, loading supports
 // both the old and the new formats.
 func (d *PolicyDoc) parseJSON(data []byte) error {
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	var doc PolicyDoc
 	err := json.Unmarshal(data, &doc)
 	if err != nil {

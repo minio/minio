@@ -18,11 +18,12 @@
 package logger
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/color"
 	c "github.com/minio/pkg/v2/console"

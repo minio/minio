@@ -20,12 +20,13 @@ package main
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/cli"
 	"github.com/tinylib/msgp/msgp"

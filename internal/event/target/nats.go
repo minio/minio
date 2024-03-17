@@ -21,12 +21,13 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/goccy/go-json"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/event"

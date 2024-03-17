@@ -19,9 +19,10 @@ package opa
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/pkg/v2/env"

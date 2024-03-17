@@ -20,9 +20,9 @@ package kms
 import (
 	"context"
 	"encoding"
-	"encoding/json"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
+
 	"github.com/minio/kms-go/kes"
 )
 
@@ -141,7 +141,6 @@ func (d *DEK) UnmarshalText(text []byte) error {
 		Ciphertext []byte `json:"ciphertext"`
 	}
 	var v JSON
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(text, &v); err != nil {
 		return err
 	}

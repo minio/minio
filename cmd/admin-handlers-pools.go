@@ -18,12 +18,13 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"

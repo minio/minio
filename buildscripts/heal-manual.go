@@ -21,11 +21,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/madmin-go/v3"
 )

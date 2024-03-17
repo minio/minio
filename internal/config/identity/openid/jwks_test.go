@@ -23,8 +23,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
-	"encoding/json"
 	"testing"
+
+	"github.com/goccy/go-json"
 )
 
 func TestAzurePublicKey(t *testing.T) {

@@ -19,7 +19,6 @@ package target
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -27,6 +26,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"

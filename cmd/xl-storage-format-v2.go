@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/goccy/go-json"
 	"github.com/google/uuid"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -905,7 +905,6 @@ func (x *xlMetaV2) LoadOrConvert(buf []byte) error {
 	}
 
 	xlMeta := &xlMetaV1Object{}
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(buf, xlMeta); err != nil {
 		return errFileCorrupt
 	}

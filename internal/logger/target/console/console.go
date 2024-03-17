@@ -18,10 +18,11 @@
 package console
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"

@@ -19,9 +19,10 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"net/http"
+
+	"github.com/goccy/go-json"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"

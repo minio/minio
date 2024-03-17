@@ -19,7 +19,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -29,6 +28,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/goccy/go-json"
 
 	"github.com/minio/pkg/v2/ellipses"
 )

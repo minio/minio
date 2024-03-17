@@ -20,14 +20,14 @@ package cmd
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/goccy/go-json"
+
 	"github.com/dustin/go-humanize"
-	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -240,7 +240,6 @@ func TestGetXLMetaV1Jsoniter1(t *testing.T) {
 	}
 
 	var jsoniterXLMeta xlMetaV1Object
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(xlMetaJSON, &jsoniterXLMeta); err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}
@@ -258,7 +257,6 @@ func TestGetXLMetaV1Jsoniter10(t *testing.T) {
 	}
 
 	var jsoniterXLMeta xlMetaV1Object
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(xlMetaJSON, &jsoniterXLMeta); err != nil {
 		t.Errorf("jsoniter parsing of XLMeta failed: %v", err)
 	}

@@ -33,10 +33,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goccy/go-json"
+
 	"github.com/buger/jsonparser"
 	"github.com/dustin/go-humanize"
 	jwtgo "github.com/golang-jwt/jwt/v4"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // SigningMethodHMAC - Implements the HMAC-SHA family of signing methods signing methods
@@ -295,7 +296,6 @@ func (c *MapClaims) Map() map[string]interface{} {
 
 // MarshalJSON marshals the MapClaims struct
 func (c *MapClaims) MarshalJSON() ([]byte, error) {
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	return json.Marshal(c.MapClaims)
 }
 
@@ -494,7 +494,6 @@ func ParseUnverifiedMapClaims(token []byte, claims *MapClaims, buf []byte) (*Sig
 		return nil, &jwtgo.ValidationError{Inner: err, Errors: jwtgo.ValidationErrorMalformed}
 	}
 
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(buf[:n], &claims.MapClaims); err != nil {
 		return nil, &jwtgo.ValidationError{Inner: err, Errors: jwtgo.ValidationErrorMalformed}
 	}

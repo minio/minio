@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -735,7 +735,6 @@ func parseBucketTargetConfig(bucket string, cdata, cmetadata []byte) (*madmin.Bu
 		return nil, nil
 	}
 	data = cdata
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if len(cmetadata) != 0 {
 		if err := json.Unmarshal(cmetadata, &meta); err != nil {
 			return nil, err

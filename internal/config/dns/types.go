@@ -18,8 +18,9 @@
 package dns
 
 import (
-	"encoding/json"
 	"time"
+
+	"github.com/goccy/go-json"
 )
 
 const (

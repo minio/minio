@@ -18,12 +18,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/goccy/go-json"
+
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/mux"
@@ -85,7 +85,6 @@ func (api adminAPIHandlers) AddTierHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	var cfg madmin.TierConfig
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(reqBytes, &cfg); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -162,7 +161,6 @@ func (api adminAPIHandlers) EditTierHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	var creds madmin.TierCreds
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(reqBytes, &creds); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
