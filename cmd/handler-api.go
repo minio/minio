@@ -291,7 +291,11 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	defer t.mu.RUnlock()
 
 	if t.requestsPool == nil {
-		return nil, time.Duration(0)
+		return nil, 10 * time.Second
+	}
+
+	if t.requestsDeadline <= 0 {
+		return t.requestsPool, 10 * time.Second
 	}
 
 	return t.requestsPool, t.requestsDeadline
