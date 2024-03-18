@@ -37,45 +37,10 @@ mv public.crt ~/.minio/certs || sudo mv public.crt ~/.minio/certs
 mv private.key ~/.minio/certs || sudo mv private.key ~/.minio/certs
 echo "done"
 
-# Deploy KES and start
-echo "Setup KES for MinIO instances ..."
-wget -O kes https://github.com/minio/kes/releases/download/2024-03-13T17-52-13Z/kes-linux-amd64 && chmod +x kes
-./kes identity new --key private.key --cert public.crt --ip "127.0.0.1" localhost --force
-./kes identity new --key=minio.key --cert=minio.crt MinIO --force
-MINIO_KES_IDENTITY=$(kes identity of minio.crt | awk NF)
-cat >kes-config.yml <<EOF
-address: 0.0.0.0:7373
-
-admin:
-  identity: disabled
-
-tls:
-  key: private.key
-  cert: public.crt
-
-policy:
-  my-app:
-    allow:
-    - /v1/key/list/*
-    - /v1/key/generate/*
-    - /v1/key/decrypt/*
-    - /v1/key/create/*
-    - /v1/secret/list/*
-    - /v1/status
-    identities:
-    - ${MINIO_KES_IDENTITY}
-
-keystore:
-  fs:
-    path: ./keys
-EOF
-./kes server --config kes-config.yml --auth off >/tmp/kes.log 2>&1 &
-echo "done"
-
 # Start MinIO instances
 echo -n "Starting MinIO instances ..."
-CI=on MINIO_KMS_KES_ENDPOINT=https://127.0.0.1:7373 MINIO_KMS_KES_CERT_FILE=${PWD}/minio.crt MINIO_KMS_KES_KEY_FILE=${PWD}/minio.key MINIO_KMS_KES_KEY_NAME=minio-default-key MINIO_KMS_KES_CAPATH=${PWD}/public.crt MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --address ":9001" --console-address ":10000" /tmp/minio1/{1...4}/disk{1...4} /tmp/minio1/{5...8}/disk{1...4} >/tmp/minio1_1.log 2>&1 &
-CI=on MINIO_KMS_KES_ENDPOINT=https://127.0.0.1:7373 MINIO_KMS_KES_CERT_FILE=${PWD}/minio.crt MINIO_KMS_KES_KEY_FILE=${PWD}/minio.key MINIO_KMS_KES_KEY_NAME=minio-default-key MINIO_KMS_KES_CAPATH=${PWD}/public.crt MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --address ":9002" --console-address ":11000" /tmp/minio2/{1...4}/disk{1...4} /tmp/minio2/{5...8}/disk{1...4} >/tmp/minio2_1.log 2>&1 &
+CI=on MINIO_KMS_SECRET_KEY=minio-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --address ":9001" --console-address ":10000" /tmp/minio1/{1...4}/disk{1...4} /tmp/minio1/{5...8}/disk{1...4} >/tmp/minio1_1.log 2>&1 &
+CI=on MINIO_KMS_SECRET_KEY=minio-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --address ":9002" --console-address ":11000" /tmp/minio2/{1...4}/disk{1...4} /tmp/minio2/{5...8}/disk{1...4} >/tmp/minio2_1.log 2>&1 &
 echo "done"
 
 if [ ! -f ./mc ]; then
