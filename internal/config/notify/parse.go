@@ -1283,6 +1283,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.RedisUser,
+			Value: "",
+		},
+		config.KV{
 			Key:   target.RedisQueueDir,
 			Value: "",
 		},
@@ -1334,6 +1338,10 @@ func GetNotifyRedis(redisKVS map[string]config.KVS) (map[string]target.RedisArgs
 		if k != config.Default {
 			passwordEnv = passwordEnv + config.Default + k
 		}
+		userEnv := target.EnvRedisUser
+		if k != config.Default {
+			userEnv = userEnv + config.Default + k
+		}
 		keyEnv := target.EnvRedisKey
 		if k != config.Default {
 			keyEnv = keyEnv + config.Default + k
@@ -1347,6 +1355,7 @@ func GetNotifyRedis(redisKVS map[string]config.KVS) (map[string]target.RedisArgs
 			Format:     env.Get(formatEnv, kv.Get(target.RedisFormat)),
 			Addr:       *addr,
 			Password:   env.Get(passwordEnv, kv.Get(target.RedisPassword)),
+			User:       env.Get(userEnv, kv.Get(target.RedisUser)),
 			Key:        env.Get(keyEnv, kv.Get(target.RedisKey)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.RedisQueueDir)),
 			QueueLimit: uint64(queueLimit),
