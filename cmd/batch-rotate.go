@@ -274,7 +274,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	skip := func(info FileInfo) (ok bool) {
+	selectObj := func(info FileInfo) (ok bool) {
 		if r.Flags.Filter.OlderThan > 0 && time.Since(info.ModTime) < r.Flags.Filter.OlderThan {
 			// skip all objects that are newer than specified older duration
 			return false
@@ -360,7 +360,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	results := make(chan ObjectInfo, 100)
 	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
 		Marker: lastObject,
-		Filter: skip,
+		Filter: selectObj,
 	}); err != nil {
 		cancel()
 		// Do not need to retry if we can't list objects on source.
