@@ -93,7 +93,7 @@ var supportedHeaders = []string{
 }
 
 // mapping of internal headers to allowed replication headers
-var validReplicationHeaders = map[string]string{
+var validSSEReplicationHeaders = map[string]string{
 	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
 	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
 	"X-Minio-Internal-Server-Side-Encryption-Iv":             "X-Minio-Replication-Server-Side-Encryption-Iv",

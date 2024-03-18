@@ -215,3 +215,5 @@ if [ "${src_obj3_md5}" != "${rep_obj3_md5}" ]; then
 	echo "BUG: MD5 checksum of object 'minio2/test-bucket/custpartsize' doesn't match with source. Expected: '${src_obj3_md5}', Found: '${rep_obj3_md5}'"
 	exit_1
 fi
+
+cleanup

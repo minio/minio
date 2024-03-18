@@ -762,7 +762,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
 		// In case of SSE-C objects copy the allowed internal headers as well
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validReplicationHeaders), k) {
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				continue
 			}
@@ -770,8 +770,8 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 				continue
 			}
 		}
-		if slices.Contains(maps.Keys(validReplicationHeaders), k) {
-			meta[validReplicationHeaders[k]] = v
+		if slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+			meta[validSSEReplicationHeaders[k]] = v
 		} else {
 			meta[k] = v
 		}
@@ -1651,7 +1651,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
-		UserMetadata: map[string]string{validReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
+		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside

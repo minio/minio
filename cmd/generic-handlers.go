@@ -75,7 +75,7 @@ const (
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
-		if slices.Contains(maps.Keys(validReplicationHeaders), key) {
+		if slices.Contains(maps.Keys(validSSEReplicationHeaders), key) {
 			return false
 		}
 		if stringsHasPrefixFold(key, ReservedMetadataPrefix) {
