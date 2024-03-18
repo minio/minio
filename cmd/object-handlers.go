@@ -1721,7 +1721,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceTaggingTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastTaggingTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastTaggingTimestamp)
 				// update tagging metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp] = srcTimestamp.UTC().Format(time.RFC3339Nano)
@@ -1748,7 +1748,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceRetentionTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastretentionTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastretentionTimestamp)
 				// update retention metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
@@ -1768,7 +1768,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceLegalholdTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastLegalHoldTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastLegalHoldTimestamp)
 				// update legalhold metadata only if replica timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = string(legalHold.Status)
