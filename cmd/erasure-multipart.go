@@ -401,36 +401,33 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		parityDrives = er.defaultParityCount
 	}
 
-	// If we have offline disks upgrade the number of erasure codes for this object.
-	parityOrig := parityDrives
+	if globalStorageClass.AvailabilityOptimized() {
+		// If we have offline disks upgrade the number of erasure codes for this object.
+		parityOrig := parityDrives
 
-	var offlineDrives int
-	for _, disk := range onlineDisks {
-		if disk == nil {
-			parityDrives++
-			offlineDrives++
-			continue
+		var offlineDrives int
+		for _, disk := range onlineDisks {
+			if disk == nil || !disk.IsOnline() {
+				parityDrives++
+				offlineDrives++
+				continue
+			}
 		}
-		if !disk.IsOnline() {
-			parityDrives++
-			offlineDrives++
-			continue
+
+		if offlineDrives >= (len(onlineDisks)+1)/2 {
+			// if offline drives are more than 50% of the drives
+			// we have no quorum, we shouldn't proceed just
+			// fail at that point.
+			return nil, toObjectErr(errErasureWriteQuorum, bucket, object)
 		}
-	}
 
-	if offlineDrives >= (len(onlineDisks)+1)/2 {
-		// if offline drives are more than 50% of the drives
-		// we have no quorum, we shouldn't proceed just
-		// fail at that point.
-		return nil, toObjectErr(errErasureWriteQuorum, bucket, object)
-	}
+		if parityDrives >= len(onlineDisks)/2 {
+			parityDrives = len(onlineDisks) / 2
+		}
 
-	if parityDrives >= len(onlineDisks)/2 {
-		parityDrives = len(onlineDisks) / 2
-	}
-
-	if parityOrig != parityDrives {
-		userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+		if parityOrig != parityDrives {
+			userDefined[minIOErasureUpgraded] = strconv.Itoa(parityOrig) + "->" + strconv.Itoa(parityDrives)
+		}
 	}
 
 	dataDrives := len(onlineDisks) - parityDrives
