@@ -172,7 +172,8 @@ func (o *listPathOptions) debugln(data ...interface{}) {
 	}
 }
 
-// gatherResults will collect all results on the input channel and filter results according to the options.
+// gatherResults will collect all results on the input channel and filter results according
+// to the options or to the current bucket ILM expiry rules.
 // Caller should close the channel when done.
 // The returned function will return the results once there is enough or input is closed,
 // or the context is canceled.
@@ -213,6 +214,12 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 			}
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				continue
+			}
+			if o.Lifecycle != nil || o.Replication.Config != nil {
+				if skip := triggerExpiryAndRepl(ctx, *o, entry); skip == true {
+					results.lastSkippedEntry = entry.name
+					continue
+				}
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
 				// We have enough and we have more.

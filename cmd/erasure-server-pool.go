@@ -1556,6 +1556,17 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 		last := objects[len(objects)-1]
 		loi.NextMarker = opts.encodeMarker(last.Name)
 	}
+
+	if merged.lastSkippedEntry != "" {
+		if merged.lastSkippedEntry > loi.NextMarker {
+			// An object hidden by ILM was found during listing. Since the number of entries
+			// fetched from drives is limited, set IsTruncated to true to ask the s3 client
+			// to continue listing if it wishes in order to find if there is more objects.
+			loi.IsTruncated = true
+			loi.NextMarker = opts.encodeMarker(merged.lastSkippedEntry)
+		}
+	}
+
 	return loi, nil
 }
 
