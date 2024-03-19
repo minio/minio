@@ -41,6 +41,7 @@ const (
 	RedisFormat     = "format"
 	RedisAddress    = "address"
 	RedisPassword   = "password"
+	RedisUser       = "user"
 	RedisKey        = "key"
 	RedisQueueDir   = "queue_dir"
 	RedisQueueLimit = "queue_limit"
@@ -49,6 +50,7 @@ const (
 	EnvRedisFormat     = "MINIO_NOTIFY_REDIS_FORMAT"
 	EnvRedisAddress    = "MINIO_NOTIFY_REDIS_ADDRESS"
 	EnvRedisPassword   = "MINIO_NOTIFY_REDIS_PASSWORD"
+	EnvRedisUser       = "MINIO_NOTIFY_REDIS_USER"
 	EnvRedisKey        = "MINIO_NOTIFY_REDIS_KEY"
 	EnvRedisQueueDir   = "MINIO_NOTIFY_REDIS_QUEUE_DIR"
 	EnvRedisQueueLimit = "MINIO_NOTIFY_REDIS_QUEUE_LIMIT"
@@ -60,6 +62,7 @@ type RedisArgs struct {
 	Format     string    `json:"format"`
 	Addr       xnet.Host `json:"address"`
 	Password   string    `json:"password"`
+	User       string    `json:"user"`
 	Key        string    `json:"key"`
 	QueueDir   string    `json:"queueDir"`
 	QueueLimit uint64    `json:"queueLimit"`
@@ -334,9 +337,16 @@ func NewRedisTarget(id string, args RedisArgs, loggerOnce logger.LogOnce) (*Redi
 			}
 
 			if args.Password != "" {
-				if _, err = conn.Do("AUTH", args.Password); err != nil {
-					conn.Close()
-					return nil, err
+				if args.User != "" {
+					if _, err = conn.Do("AUTH", args.User, args.Password); err != nil {
+						conn.Close()
+						return nil, err
+					}
+				} else {
+					if _, err = conn.Do("AUTH", args.Password); err != nil {
+						conn.Close()
+						return nil, err
+					}
 				}
 			}
 
