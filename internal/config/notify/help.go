@@ -676,7 +676,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.RedisUser,
-			Description: "Redis server user",
+			Description: "Redis server user for the auth",
 			Optional:    true,
 			Type:        "string",
 		},
