@@ -214,7 +214,6 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 			}
 			w.(http.Flusher).Flush()
 		case <-ctx.Done():
-
 			return
 		}
 	}
