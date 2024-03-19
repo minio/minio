@@ -497,9 +497,7 @@ func New(config Config) (*Target, error) {
 		h.config.Transport = ctransport
 	}
 
-	ctransport := h.config.Transport.(*http.Transport).Clone()
-	ctransport.TLSClientConfig.InsecureSkipVerify = true
-	h.client = &http.Client{Transport: ctransport}
+	h.client = &http.Client{Transport: h.config.Transport}
 
 	if h.config.QueueDir != "" {
 
