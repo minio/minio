@@ -309,7 +309,7 @@ func (list *TargetList) sendAsync(event Event, targetIDset TargetIDSet) {
 		return
 	default:
 		list.eventsSkipped.Add(1)
-		err := fmt.Errorf("concurrent target notifications exceeded %d, notification endpoint is too slow to accept events on incoming requests", maxConcurrentAsyncSend)
+		err := fmt.Errorf("concurrent target notifications exceeded %d, configured notification target is too slow to accept events for the incoming request rate", maxConcurrentAsyncSend)
 		for id := range targetIDset {
 			reqInfo := &logger.ReqInfo{}
 			reqInfo.AppendTags("targetID", id.String())
