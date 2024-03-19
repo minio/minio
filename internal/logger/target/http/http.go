@@ -524,27 +524,27 @@ func CreateOrAdjustGlobalBuffer(currentTgt *Target, newTgt *Target) {
 			"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
 			fmt.Sprintf("|| new (%p)", newTgt),
 		)
+	}
 
-		if len(currentBuff) > 0 {
-		drain:
-			for {
-				select {
-				case v, ok := <-currentBuff:
-					if !ok {
-						break drain
-					}
-					logChBuffers[newTgt.Name()] <- v
-				default:
+	if len(currentBuff) > 0 {
+	drain:
+		for {
+			select {
+			case v, ok := <-currentBuff:
+				if !ok {
 					break drain
 				}
+				logChBuffers[newTgt.Name()] <- v
+			default:
+				break drain
 			}
-			fmt.Println(
-				"GLOBAL DRAIN ||",
-				fmt.Sprintf("name (%s)", newTgt.String()),
-				"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
-				fmt.Sprintf("|| cur. (%p) new (%p)", currentTgt, newTgt),
-			)
 		}
+		fmt.Println(
+			"GLOBAL DRAIN ||",
+			fmt.Sprintf("name (%s)", newTgt.String()),
+			"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
+			fmt.Sprintf("|| cur. (%p) new (%p)", currentTgt, newTgt),
+		)
 	}
 }
 

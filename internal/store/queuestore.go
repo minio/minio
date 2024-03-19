@@ -100,6 +100,7 @@ func (store *QueueStore[_]) Open() error {
 	return nil
 }
 
+// Delete - Remove the store directory from disk
 func (store *QueueStore[_]) Delete() error {
 	return os.Remove(store.directory)
 }
