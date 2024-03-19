@@ -122,7 +122,6 @@ func (store *QueueStore[I]) PutMultiple(item []I) error {
 
 // write - writes an item to the directory.
 func (store *QueueStore[I]) multiWrite(key string, item []I) error {
-	// Marshalls the item.
 
 	buf := bytebufferpool.Get()
 	defer bytebufferpool.Put(buf)

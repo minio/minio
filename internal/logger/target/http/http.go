@@ -508,7 +508,7 @@ func New(config Config) (*Target, error) {
 		)
 
 		if err := queueStore.Open(); err != nil {
-			return nil, fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
+			return h, fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
 		}
 
 		h.store = queueStore
