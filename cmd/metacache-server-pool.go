@@ -341,7 +341,7 @@ func triggerExpiryAndRepl(ctx context.Context, o listPathOptions, obj metaCacheE
 	// filter out between versions 'obj' cannot be truncated
 	// in such a manner, so look for skipping an object only
 	// for regular ListObjects() call only.
-	if !o.Versioned {
+	if !o.Versioned && !o.V1 {
 		fi, err := obj.fileInfo(o.Bucket)
 		if err != nil {
 			return

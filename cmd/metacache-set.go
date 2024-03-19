@@ -98,6 +98,8 @@ type listPathOptions struct {
 
 	// Versioned is this a ListObjectVersions call.
 	Versioned bool
+	// V1 listing type
+	V1 bool
 
 	// Versioning config is used for if the path
 	// has versioning enabled.
@@ -216,7 +218,7 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 				continue
 			}
 			if o.Lifecycle != nil || o.Replication.Config != nil {
-				if skip := triggerExpiryAndRepl(ctx, *o, entry); skip == true {
+				if skipped := triggerExpiryAndRepl(ctx, *o, entry); skipped == true {
 					results.lastSkippedEntry = entry.name
 					continue
 				}
