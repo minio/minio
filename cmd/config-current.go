@@ -644,7 +644,6 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			loggerCfg.AuditWebhook[n] = l
 		}
 
-		fmt.Println("UPDATING AUDIT FOR SUBSYSTEM", subSys)
 		if errs := logger.UpdateAuditWebhooks(ctx, loggerCfg.AuditWebhook); len(errs) > 0 {
 			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}

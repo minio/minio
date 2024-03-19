@@ -268,7 +268,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 	defer func() {
 		// re-load the global buffer pointer
 		// in case it was modified by a new target.
-
 		logChLock.Lock()
 		currentGlobalBuffer, ok := logChBuffers[name]
 		logChLock.Unlock()
@@ -276,19 +275,9 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 			return
 		}
 
-		fmt.Println(
-			"DRAIN ||",
-			"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-			"tmpBuff (", len(entries), ") || ",
-			"global (", len(currentGlobalBuffer), "/", cap(currentGlobalBuffer), ") || ",
-			fmt.Sprintf("|| P:%p", &h),
-		)
-
-		totalDrained := 0
 		for _, v := range entries {
 			select {
 			case currentGlobalBuffer <- v:
-				totalDrained++
 			default:
 			}
 		}
@@ -303,20 +292,11 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 					}
 
 					currentGlobalBuffer <- v
-					totalDrained++
 				default:
 					break drain
 				}
 			}
 		}
-		fmt.Println(
-			"--TARGET ||",
-			"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-			"tmpBuff (", len(entries), ") || ",
-			"global (", len(currentGlobalBuffer), "/", cap(currentGlobalBuffer), ") || ",
-			fmt.Sprintf("drained: (%d)", totalDrained),
-			fmt.Sprintf("|| P:%p", &h),
-		)
 	}()
 
 	var entry interface{}
@@ -338,13 +318,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 	logChLock.Lock()
 	globalBuffer := logChBuffers[name]
 	logChLock.Unlock()
-	fmt.Println(
-		"++TARGET ||",
-		"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-		"tmpBuff (", len(entries), ") || ",
-		"global (", len(globalBuffer), "/", cap(globalBuffer), ") || ",
-		fmt.Sprintf("|| P:%p", &h),
-	)
 
 	newTicker := time.NewTicker(time.Second)
 	isTick := false
@@ -399,26 +372,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 		lastBatchProcess = time.Now()
 
 	retry:
-		if isDirQueue {
-			le, _ := h.store.List()
-			fmt.Println(
-				"DIS ||",
-				"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-				"tmpBuff (", len(entries), ") || ",
-				"global (", len(globalBuffer), "/", cap(globalBuffer), ") || ",
-				"store (", len(le), "/ ", h.config.QueueSize, ")",
-				fmt.Sprintf("|| P:%p", &h),
-			)
-		} else {
-			fmt.Println(
-				"MEM ||",
-				"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-				"tmpBuff (", len(entries), ") || ",
-				"global (", len(globalBuffer), "/", cap(globalBuffer), ") || ",
-				fmt.Sprintf("|| P:%p", &h),
-			)
-		}
-
 		// If the channel reaches above half capacity
 		// we spawn more workers. The workers spawned
 		// from this main worker routine will exit
@@ -430,13 +383,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 			if nWorkers < h.maxWorkers {
 				if time.Since(h.lastStarted).Milliseconds() > 10 {
 					h.lastStarted = time.Now()
-					fmt.Println(
-						"++W ||",
-						"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-						"tmpBuff (", len(entries), ") || ",
-						"global (", len(globalBuffer), "/", cap(globalBuffer), ") || ",
-						fmt.Sprintf("|| P:%p", &h),
-					)
 					go h.startQueueProcessor(ctx, false)
 				}
 			}
@@ -472,13 +418,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 
 		if !mainWorker && len(h.logCh) < cap(h.logCh)/2 {
 			if time.Since(h.lastStarted).Seconds() > 30 {
-				fmt.Println(
-					"--W ||",
-					"logCh (", len(h.logCh), "/", cap(h.logCh), ") || ",
-					"tmpBuff (", len(entries), ") || ",
-					"global (", len(globalBuffer), "/", cap(globalBuffer), ") || ",
-					fmt.Sprintf("|| P:%p", &h),
-				)
 				return
 			}
 		}
@@ -508,13 +447,6 @@ func CreateOrAdjustGlobalBuffer(currentTgt *Target, newTgt *Target) {
 	if requiredCap > currentCap {
 		logChBuffers[name] = make(chan interface{}, requiredCap)
 
-		fmt.Println(
-			"NEW GLOBAL ||",
-			fmt.Sprintf("name (%s)", newTgt.Name()),
-			"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
-			fmt.Sprintf("|| new (%p)", newTgt),
-		)
-
 		if len(currentBuff) > 0 {
 		drain:
 			for {
@@ -528,12 +460,6 @@ func CreateOrAdjustGlobalBuffer(currentTgt *Target, newTgt *Target) {
 					break drain
 				}
 			}
-			fmt.Println(
-				"GLOBAL DRAIN ||",
-				fmt.Sprintf("name (%s)", newTgt.String()),
-				"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
-				fmt.Sprintf("|| cur. (%p) new (%p)", currentTgt, newTgt),
-			)
 		}
 	}
 }
@@ -575,17 +501,21 @@ func New(config Config) (*Target, error) {
 	ctransport.TLSClientConfig.InsecureSkipVerify = true
 	h.client = &http.Client{Transport: ctransport}
 
-	queueStore := store.NewQueueStore[interface{}](
-		filepath.Join(h.config.QueueDir, h.Name()),
-		uint64(h.config.QueueSize),
-		httpLoggerExtension,
-	)
+	if h.config.QueueDir != "" {
 
-	if err := queueStore.Open(); err != nil {
-		return nil, fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
+		queueStore := store.NewQueueStore[interface{}](
+			filepath.Join(h.config.QueueDir, h.Name()),
+			uint64(h.config.QueueSize),
+			httpLoggerExtension,
+		)
+
+		if err := queueStore.Open(); err != nil {
+			return nil, fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
+		}
+
+		h.store = queueStore
+
 	}
-
-	h.store = queueStore
 
 	return h, nil
 }
@@ -639,7 +569,6 @@ retry:
 		return nil
 	default:
 		if h.workers < h.maxWorkers {
-			fmt.Print(".")
 			goto retry
 		}
 		atomic.AddInt64(&h.totalMessages, 1)

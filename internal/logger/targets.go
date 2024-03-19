@@ -219,13 +219,6 @@ func updateHTTPTargets(ctx context.Context, cfgs map[string]http.Config, targetL
 	}
 
 	swapAuditMuRW.Lock()
-	for i := range newWebhooks {
-		fmt.Printf(
-			"NEW TARGETS: %s %p\n",
-			newWebhooks[i].String(),
-			newWebhooks[i],
-		)
-	}
 	*targetList = newWebhooks
 	swapAuditMuRW.Unlock()
 
