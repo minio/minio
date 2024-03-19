@@ -174,16 +174,6 @@ func (h *Target) Stats() types.TargetStats {
 	return stats
 }
 
-// // InitDiskStore initializes the disk storage option
-// func (h *Target) InitDiskStore(ctx context.Context) (err error) {
-// 	return h.initQueueOnce.DoWithContext(ctx, h.initDiskStore)
-// }
-//
-// // InitMemoryStore initializes the channel storage option
-// func (h *Target) InitMemoryStore(ctx context.Context) (err error) {
-// 	return h.initQueueOnce.DoWithContext(ctx, h.initMemoryStore)
-// }
-
 // Init validate and initialize the http target
 func (h *Target) Init(ctx context.Context) (err error) {
 	if h.config.QueueDir != "" {
@@ -524,27 +514,27 @@ func CreateOrAdjustGlobalBuffer(currentTgt *Target, newTgt *Target) {
 			"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
 			fmt.Sprintf("|| new (%p)", newTgt),
 		)
-	}
 
-	if len(currentBuff) > 0 {
-	drain:
-		for {
-			select {
-			case v, ok := <-currentBuff:
-				if !ok {
+		if len(currentBuff) > 0 {
+		drain:
+			for {
+				select {
+				case v, ok := <-currentBuff:
+					if !ok {
+						break drain
+					}
+					logChBuffers[newTgt.Name()] <- v
+				default:
 					break drain
 				}
-				logChBuffers[newTgt.Name()] <- v
-			default:
-				break drain
 			}
+			fmt.Println(
+				"GLOBAL DRAIN ||",
+				fmt.Sprintf("name (%s)", newTgt.String()),
+				"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
+				fmt.Sprintf("|| cur. (%p) new (%p)", currentTgt, newTgt),
+			)
 		}
-		fmt.Println(
-			"GLOBAL DRAIN ||",
-			fmt.Sprintf("name (%s)", newTgt.String()),
-			"gBuff (", len(logChBuffers[name]), "/", cap(logChBuffers[name]), ") || ",
-			fmt.Sprintf("|| cur. (%p) new (%p)", currentTgt, newTgt),
-		)
 	}
 }
 
