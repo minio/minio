@@ -100,7 +100,7 @@ spec:
           command: [
             "/bin/sh",
             "-ce",
-            "/usr/bin/docker-entrypoint.sh minio server {{- range $i := until $poolCount }}{{ $factor := mul $i $nodeCount }}{{ $endIndex := add $factor $nodeCount }}{{ $beginIndex := mul $i $nodeCount }}  {{ $scheme }}://{{ template `minio.fullname` $ }}-{{ `{` }}{{ $beginIndex }}...{{ sub $endIndex 1 }}{{ `}`}}.{{ template `minio.fullname` $ }}-svc.{{ $.Release.Namespace }}.svc.{{ $.Values.clusterDomain }}{{if (gt $drivesPerNode 1)}}{{ $bucketRoot }}-{{ `{` }}0...{{ sub $drivesPerNode 1 }}{{ `}` }}{{ else }}{{ $bucketRoot }}{{end }}{{- end }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template `minio.extraArgs` . }}"
+            "/usr/bin/docker-entrypoint.sh minio server {{- range $i := until $poolCount }}{{ $factor := mul $i $nodeCount }}{{ $endIndex := add $factor $nodeCount }}{{ $beginIndex := mul $i $nodeCount }} {{ $scheme }}://{{ template `minio.fullname` $ }}-{{ `{` }}{{ $beginIndex }}...{{ sub $endIndex 1 }}{{ `}`}}.{{ template `minio.fullname` $ }}-svc.{{ $.Release.Namespace }}.svc.{{ $.Values.clusterDomain }}{{if (gt $drivesPerNode 1)}}{{ $bucketRoot }}-{{ `{` }}0...{{ sub $drivesPerNode 1 }}{{ `}` }}{{ else }}{{ $bucketRoot }}{{end }}{{- end }} -S {{ .Values.certsPath }} --address :{{ .Values.minioAPIPort }} --console-address :{{ .Values.minioConsolePort }} {{- template `minio.extraArgs` . }}"
           ]
           volumeMounts:
             {{- if $penabled }}
@@ -228,8 +228,8 @@ spec:
   volumeClaimTemplates:
     {{- if gt $drivesPerNode 1 }}
     {{- range $diskId := until $drivesPerNode}}
-    - apiVersion: v1	
-      kind: PersistentVolumeClaim	
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
       metadata:
         name: export-{{ $diskId }}
         {{- if $.Values.persistence.annotations }}
@@ -245,8 +245,8 @@ spec:
             storage: {{ $psize }}
     {{- end }}
     {{- else }}
-    - apiVersion: v1	
-      kind: PersistentVolumeClaim	
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
       metadata:
         name: export
         {{- if $.Values.persistence.annotations }}
