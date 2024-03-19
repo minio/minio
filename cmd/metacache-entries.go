@@ -473,6 +473,8 @@ type metaCacheEntriesSorted struct {
 	listID string
 	// Reuse buffers
 	reuse bool
+	// Contain the last skipped object after an ILM expiry evaluation
+	lastSkippedEntry string
 }
 
 // shallowClone will create a shallow clone of the array objects,

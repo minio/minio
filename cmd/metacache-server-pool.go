@@ -291,14 +291,6 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	}
 	mu.Unlock()
 
-	// Do lifecycle filtering.
-	if o.Lifecycle != nil || o.Replication.Config != nil {
-		filterIn := make(chan metaCacheEntry, 10)
-		go applyBucketActions(ctx, o, filterIn, results)
-		// Replace results.
-		results = filterIn
-	}
-
 	// Gather results to a single channel.
 	// Quorum is one since we are merging across sets.
 	err := mergeEntryChannels(ctx, inputs, results, 1)
@@ -339,84 +331,50 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 	return nil
 }
 
-// applyBucketActions applies lifecycle and replication actions on the listing
-// It will filter out objects if the most recent version should be deleted by lifecycle.
-// Entries that failed replication will be queued if no lifecycle rules got applied.
-// out will be closed when there are no more results.
-// When 'in' is closed or the context is canceled the
-// function closes 'out' and exits.
-func applyBucketActions(ctx context.Context, o listPathOptions, in <-chan metaCacheEntry, out chan<- metaCacheEntry) {
-	defer xioutil.SafeClose(out)
+// triggerExpiryAndRepl applies lifecycle and replication actions on the listing
+// It returns true if the listing is non-versioned and the given object is expired.
+func triggerExpiryAndRepl(ctx context.Context, o listPathOptions, obj metaCacheEntry) (skip bool) {
+	versioned := o.Versioning != nil && o.Versioning.Versioned(obj.name)
 
-	for {
-		var obj metaCacheEntry
-		var ok bool
-		select {
-		case <-ctx.Done():
-			return
-		case obj, ok = <-in:
-			if !ok {
-				return
-			}
-		}
-
-		var skip bool
-
-		versioned := o.Versioning != nil && o.Versioning.Versioned(obj.name)
-
-		// skip latest object from listing only for regular
-		// listObjects calls, versioned based listing cannot
-		// filter out between versions 'obj' cannot be truncated
-		// in such a manner, so look for skipping an object only
-		// for regular ListObjects() call only.
-		if !o.Versioned {
-			fi, err := obj.fileInfo(o.Bucket)
-			if err != nil {
-				continue
-			}
-
-			objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
-			if o.Lifecycle != nil {
-				act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo).Action
-				skip = act.Delete()
-				if act.DeleteRestored() {
-					// do not skip DeleteRestored* actions
-					skip = false
-				}
-			}
-		}
-
-		// Skip entry only if needed via ILM, skipping is never true for versioned listing.
-		if !skip {
-			select {
-			case <-ctx.Done():
-				return
-			case out <- obj:
-			}
-		}
-
-		fiv, err := obj.fileInfoVersions(o.Bucket)
+	// skip latest object from listing only for regular
+	// listObjects calls, versioned based listing cannot
+	// filter out between versions 'obj' cannot be truncated
+	// in such a manner, so look for skipping an object only
+	// for regular ListObjects() call only.
+	if !o.Versioned && !o.V1 {
+		fi, err := obj.fileInfo(o.Bucket)
 		if err != nil {
-			continue
+			return
 		}
-
-		// Expire all versions if needed, if not attempt to queue for replication.
-		for _, version := range fiv.Versions {
-			objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
-
-			if o.Lifecycle != nil {
-				evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo)
-				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
-					if !evt.Action.DeleteRestored() {
-						continue
-					} // queue version for replication upon expired restored copies if needed.
-				}
-			}
-
-			queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication, 0)
+		objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
+		if o.Lifecycle != nil {
+			act := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo).Action
+			skip = act.Delete() && !act.DeleteRestored()
 		}
 	}
+
+	fiv, err := obj.fileInfoVersions(o.Bucket)
+	if err != nil {
+		return
+	}
+
+	// Expire all versions if needed, if not attempt to queue for replication.
+	for _, version := range fiv.Versions {
+		objInfo := version.ToObjectInfo(o.Bucket, obj.name, versioned)
+
+		if o.Lifecycle != nil {
+			evt := evalActionFromLifecycle(ctx, *o.Lifecycle, o.Retention, o.Replication.Config, objInfo)
+			if evt.Action.Delete() {
+				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
+				if !evt.Action.DeleteRestored() {
+					continue
+				} // queue version for replication upon expired restored copies if needed.
+			}
+		}
+
+		queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication, 0)
+	}
+	return
 }
 
 func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions) (entries metaCacheEntriesSorted, err error) {
