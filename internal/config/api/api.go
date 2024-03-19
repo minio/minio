@@ -171,7 +171,6 @@ type Config struct {
 	ReplicationPriority         string        `json:"replication_priority"`
 	ReplicationMaxWorkers       int           `json:"replication_max_workers"`
 	TransitionWorkers           int           `json:"transition_workers"`
-	ExpiryWorkers               int           `json:"expiry_workers"`
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
@@ -200,6 +199,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		"extend_list_cache_life",
 		apiReplicationWorkers,
 		apiReplicationFailedWorkers,
+		"expiry_workers",
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
