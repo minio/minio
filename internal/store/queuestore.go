@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/valyala/bytebufferpool"
 )
 
 const (
@@ -84,6 +86,7 @@ func (store *QueueStore[_]) Open() error {
 	if uint64(len(files)) > store.entryLimit {
 		files = files[:store.entryLimit]
 	}
+
 	for _, file := range files {
 		if file.IsDir() {
 			continue
@@ -93,6 +96,55 @@ func (store *QueueStore[_]) Open() error {
 			store.entries[key] = fi.ModTime().UnixNano()
 		}
 	}
+
+	return nil
+}
+
+func (store *QueueStore[_]) Delete() error {
+	return os.Remove(store.directory)
+}
+
+// PutMultiple - puts an item to the store.
+func (store *QueueStore[I]) PutMultiple(item []I) error {
+	store.Lock()
+	defer store.Unlock()
+	if uint64(len(store.entries)) >= store.entryLimit {
+		return errLimitExceeded
+	}
+	// Generate a new UUID for the key.
+	key, err := uuid.NewRandom()
+	if err != nil {
+		return err
+	}
+	return store.multiWrite(key.String(), item)
+}
+
+// write - writes an item to the directory.
+func (store *QueueStore[I]) multiWrite(key string, item []I) error {
+	// Marshalls the item.
+
+	buf := bytebufferpool.Get()
+	defer bytebufferpool.Put(buf)
+
+	enc := jsoniter.ConfigCompatibleWithStandardLibrary.NewEncoder(buf)
+
+	for i := range item {
+		err := enc.Encode(item[i])
+		if err != nil {
+			return err
+		}
+	}
+	b := buf.Bytes()
+
+	path := filepath.Join(store.directory, key+store.fileExt)
+	err := os.WriteFile(path, b, os.FileMode(0o770))
+	buf.Reset()
+	if err != nil {
+		return err
+	}
+
+	// Increment the item count.
+	store.entries[key] = time.Now().UnixNano()
 
 	return nil
 }
@@ -129,6 +181,30 @@ func (store *QueueStore[I]) Put(item I) error {
 		return err
 	}
 	return store.write(key.String(), item)
+}
+
+// GetRaw - gets an item from the store.
+func (store *QueueStore[I]) GetRaw(key string) (raw []byte, err error) {
+	store.RLock()
+
+	defer func(store *QueueStore[I]) {
+		store.RUnlock()
+		if err != nil {
+			// Upon error we remove the entry.
+			store.Del(key)
+		}
+	}(store)
+
+	raw, err = os.ReadFile(filepath.Join(store.directory, key+store.fileExt))
+	if err != nil {
+		return
+	}
+
+	if len(raw) == 0 {
+		return raw, os.ErrNotExist
+	}
+
+	return
 }
 
 // Get - gets an item from the store.
