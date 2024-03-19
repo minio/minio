@@ -343,7 +343,7 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 				if err := enc.Encode(&entry); err != nil {
 					h.config.LogOnceIf(
 						ctx,
-						fmt.Errorf("unable to decode webhook log entry, err  '%w' entry: %v\n", err, entry),
+						fmt.Errorf("unable to encode webhook log entry, err  '%w' entry: %v\n", err, entry),
 						h.Name(),
 					)
 					atomic.AddInt64(&h.failedMessages, 1)
