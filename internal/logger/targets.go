@@ -205,6 +205,7 @@ func updateHTTPTargets(ctx context.Context, cfgs map[string]http.Config, targetL
 		for ii := range tgts {
 			if currentTgt.Name() == tgts[ii].Name() {
 				newTgt = tgts[ii]
+				currentTgt.AssignMigrateTraget(newTgt)
 				http.CreateOrAdjustGlobalBuffer(currentTgt, newTgt)
 				break
 			}

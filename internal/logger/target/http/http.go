@@ -111,9 +111,9 @@ type Target struct {
 	// If this webhook is being re-configured we will
 	// assign the new webhook target to this field.
 	// The Send() method will then re-direct entries
-	// to the new target when the current on has
-	// been seet to status "statusClosed".
-	// Once the glogal webhook slice has been update
+	// to the new target when the current one
+	// has been set to status "statusClosed".
+	// Once the glogal target slice has been migrated
 	// the current target will stop receiving entries.
 	migrateTarget *Target
 
@@ -172,6 +172,12 @@ func (h *Target) Stats() types.TargetStats {
 	}
 
 	return stats
+}
+
+// AssignMigrateTraget assigns a target
+// which will eventually replcae the current target.
+func (h *Target) AssignMigrateTraget(migrateTgt *Target) {
+	h.migrateTarget = migrateTgt
 }
 
 // Init validate and initialize the http target
