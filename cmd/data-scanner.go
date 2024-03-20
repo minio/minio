@@ -1240,7 +1240,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		}
 	}()
 
-	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
+	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, encodeDirObject(obj.Name), opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
