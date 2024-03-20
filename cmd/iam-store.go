@@ -359,7 +359,13 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 		if store.getUsersSysType() == MinIOUsersSysType {
 			g, ok := c.iamGroupsMap[name]
 			if !ok {
-				return nil, time.Time{}, errNoSuchGroup
+				if err := store.loadGroup(context.Background(), name, c.iamGroupsMap); err != nil {
+					return nil, time.Time{}, err
+				}
+				g, ok = c.iamGroupsMap[name]
+				if !ok {
+					return nil, time.Time{}, errNoSuchGroup
+				}
 			}
 
 			// Group is disabled, so we return no policy - this
@@ -369,7 +375,15 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 			}
 		}
 
-		return c.iamGroupPolicyMap[name].toSlice(), c.iamGroupPolicyMap[name].UpdatedAt, nil
+		policy, ok := c.iamGroupPolicyMap[name]
+		if ok {
+			return policy.toSlice(), policy.UpdatedAt, nil
+		}
+		if err := store.loadMappedPolicy(context.TODO(), name, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+			return nil, time.Time{}, err
+		}
+		policy = c.iamGroupPolicyMap[name]
+		return policy.toSlice(), policy.UpdatedAt, nil
 	}
 
 	// When looking for a user's policies, we also check if the user
@@ -386,13 +400,22 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 	// passed here and we lookup the mapping in iamSTSPolicyMap.
 	mp, ok := c.iamUserPolicyMap[name]
 	if !ok {
-		// Since user "name" could be a parent user of an STS account, we lookup
-		// mappings for those too.
-		mp, ok = c.iamSTSPolicyMap[name]
+		if err := store.loadMappedPolicy(context.TODO(), name, regUser, false, c.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+			return nil, time.Time{}, err
+		}
+
+		mp, ok = c.iamUserPolicyMap[name]
 		if !ok {
-			// Attempt to load parent user mapping for STS accounts
-			store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap)
-			mp = c.iamSTSPolicyMap[name]
+			// Since user "name" could be a parent user of an STS account, we lookup
+			// mappings for those too.
+			mp, ok = c.iamSTSPolicyMap[name]
+			if !ok {
+				// Attempt to load parent user mapping for STS accounts
+				if err := store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+					return nil, time.Time{}, err
+				}
+				mp = c.iamSTSPolicyMap[name]
+			}
 		}
 	}
 
@@ -400,13 +423,34 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 	policies := mp.toSlice()
 
 	for _, group := range c.iamUserGroupMemberships[name].ToSlice() {
-		// Skip missing or disabled groups
-		gi, ok := c.iamGroupsMap[group]
-		if !ok || gi.Status == statusDisabled {
-			continue
+		if store.getUsersSysType() == MinIOUsersSysType {
+			g, ok := c.iamGroupsMap[group]
+			if !ok {
+				if err := store.loadGroup(context.Background(), group, c.iamGroupsMap); err != nil {
+					return nil, time.Time{}, err
+				}
+				g, ok = c.iamGroupsMap[group]
+				if !ok {
+					return nil, time.Time{}, errNoSuchGroup
+				}
+			}
+
+			// Group is disabled, so we return no policy - this
+			// ensures the request is denied.
+			if g.Status == statusDisabled {
+				return nil, time.Time{}, nil
+			}
 		}
 
-		policies = append(policies, c.iamGroupPolicyMap[group].toSlice()...)
+		policy, ok := c.iamGroupPolicyMap[group]
+		if ok {
+			if err := store.loadMappedPolicy(context.TODO(), group, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return nil, time.Time{}, err
+			}
+			policy = c.iamGroupPolicyMap[group]
+		}
+
+		policies = append(policies, policy.toSlice()...)
 	}
 
 	return policies, mp.UpdatedAt, nil
