@@ -72,9 +72,6 @@ func (pd *PoolDecommissionInfo) Clone() *PoolDecommissionInfo {
 	if pd == nil {
 		return nil
 	}
-	if pd.StartTime.IsZero() {
-		return nil
-	}
 	return &PoolDecommissionInfo{
 		StartTime:               pd.StartTime,
 		StartSize:               pd.StartSize,

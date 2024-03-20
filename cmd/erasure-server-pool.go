@@ -1266,13 +1266,17 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 	return z.serverPools[poolIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
 }
 
+func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+	return z.listObjectsGeneric(ctx, bucket, prefix, marker, delimiter, maxKeys, true)
+}
+
 func (z *erasureServerPools) ListObjectsV2(ctx context.Context, bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
 	marker := continuationToken
 	if marker == "" {
 		marker = startAfter
 	}
 
-	loi, err := z.ListObjects(ctx, bucket, prefix, marker, delimiter, maxKeys)
+	loi, err := z.listObjectsGeneric(ctx, bucket, prefix, marker, delimiter, maxKeys, false)
 	if err != nil {
 		return ListObjectsV2Info{}, err
 	}
@@ -1381,9 +1385,10 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 	return maxKeys
 }
 
-func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, v1 bool) (ListObjectsInfo, error) {
 	var loi ListObjectsInfo
 	opts := listPathOptions{
+		V1:          v1,
 		Bucket:      bucket,
 		Prefix:      prefix,
 		Separator:   delimiter,
@@ -1554,8 +1559,23 @@ func (z *erasureServerPools) ListObjects(ctx context.Context, bucket, prefix, ma
 	}
 	if loi.IsTruncated {
 		last := objects[len(objects)-1]
-		loi.NextMarker = opts.encodeMarker(last.Name)
+		loi.NextMarker = last.Name
 	}
+
+	if merged.lastSkippedEntry != "" {
+		if merged.lastSkippedEntry > loi.NextMarker {
+			// An object hidden by ILM was found during listing. Since the number of entries
+			// fetched from drives is limited, set IsTruncated to true to ask the s3 client
+			// to continue listing if it wishes in order to find if there is more objects.
+			loi.IsTruncated = true
+			loi.NextMarker = merged.lastSkippedEntry
+		}
+	}
+
+	if loi.NextMarker != "" {
+		loi.NextMarker = opts.encodeMarker(loi.NextMarker)
+	}
+
 	return loi, nil
 }
 

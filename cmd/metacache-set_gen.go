@@ -114,6 +114,12 @@ func (z *listPathOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Versioned")
 				return
 			}
+		case "V1":
+			z.V1, err = dc.ReadBool()
+			if err != nil {
+				err = msgp.WrapError(err, "V1")
+				return
+			}
 		case "StopDiskAtLimit":
 			z.StopDiskAtLimit, err = dc.ReadBool()
 			if err != nil {
@@ -145,9 +151,9 @@ func (z *listPathOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *listPathOptions) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 18
+	// map header, size 19
 	// write "ID"
-	err = en.Append(0xde, 0x0, 0x12, 0xa2, 0x49, 0x44)
+	err = en.Append(0xde, 0x0, 0x13, 0xa2, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -296,6 +302,16 @@ func (z *listPathOptions) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Versioned")
 		return
 	}
+	// write "V1"
+	err = en.Append(0xa2, 0x56, 0x31)
+	if err != nil {
+		return
+	}
+	err = en.WriteBool(z.V1)
+	if err != nil {
+		err = msgp.WrapError(err, "V1")
+		return
+	}
 	// write "StopDiskAtLimit"
 	err = en.Append(0xaf, 0x53, 0x74, 0x6f, 0x70, 0x44, 0x69, 0x73, 0x6b, 0x41, 0x74, 0x4c, 0x69, 0x6d, 0x69, 0x74)
 	if err != nil {
@@ -332,9 +348,9 @@ func (z *listPathOptions) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *listPathOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 18
+	// map header, size 19
 	// string "ID"
-	o = append(o, 0xde, 0x0, 0x12, 0xa2, 0x49, 0x44)
+	o = append(o, 0xde, 0x0, 0x13, 0xa2, 0x49, 0x44)
 	o = msgp.AppendString(o, z.ID)
 	// string "Bucket"
 	o = append(o, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
@@ -378,6 +394,9 @@ func (z *listPathOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Versioned"
 	o = append(o, 0xa9, 0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x65, 0x64)
 	o = msgp.AppendBool(o, z.Versioned)
+	// string "V1"
+	o = append(o, 0xa2, 0x56, 0x31)
+	o = msgp.AppendBool(o, z.V1)
 	// string "StopDiskAtLimit"
 	o = append(o, 0xaf, 0x53, 0x74, 0x6f, 0x70, 0x44, 0x69, 0x73, 0x6b, 0x41, 0x74, 0x4c, 0x69, 0x6d, 0x69, 0x74)
 	o = msgp.AppendBool(o, z.StopDiskAtLimit)
@@ -498,6 +517,12 @@ func (z *listPathOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Versioned")
 				return
 			}
+		case "V1":
+			z.V1, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "V1")
+				return
+			}
 		case "StopDiskAtLimit":
 			z.StopDiskAtLimit, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
@@ -530,6 +555,6 @@ func (z *listPathOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *listPathOptions) Msgsize() (s int) {
-	s = 3 + 3 + msgp.StringPrefixSize + len(z.ID) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 8 + msgp.StringPrefixSize + len(z.BaseDir) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 13 + msgp.StringPrefixSize + len(z.FilterPrefix) + 7 + msgp.StringPrefixSize + len(z.Marker) + 6 + msgp.IntSize + 9 + msgp.StringPrefixSize + len(z.AskDisks) + 12 + msgp.BoolSize + 10 + msgp.BoolSize + 10 + msgp.StringPrefixSize + len(z.Separator) + 7 + msgp.BoolSize + 19 + msgp.BoolSize + 10 + msgp.BoolSize + 10 + msgp.BoolSize + 16 + msgp.BoolSize + 5 + msgp.IntSize + 4 + msgp.IntSize
+	s = 3 + 3 + msgp.StringPrefixSize + len(z.ID) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 8 + msgp.StringPrefixSize + len(z.BaseDir) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 13 + msgp.StringPrefixSize + len(z.FilterPrefix) + 7 + msgp.StringPrefixSize + len(z.Marker) + 6 + msgp.IntSize + 9 + msgp.StringPrefixSize + len(z.AskDisks) + 12 + msgp.BoolSize + 10 + msgp.BoolSize + 10 + msgp.StringPrefixSize + len(z.Separator) + 7 + msgp.BoolSize + 19 + msgp.BoolSize + 10 + msgp.BoolSize + 10 + msgp.BoolSize + 3 + msgp.BoolSize + 16 + msgp.BoolSize + 5 + msgp.IntSize + 4 + msgp.IntSize
 	return
 }

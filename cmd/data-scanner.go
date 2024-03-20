@@ -1051,7 +1051,9 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		})
 	}
 
-	expState.enqueueByNewerNoncurrent(i.bucket, toDel, event)
+	if len(toDel) > 0 {
+		expState.enqueueByNewerNoncurrent(i.bucket, toDel, event)
+	}
 	return objectInfos, nil
 }
 

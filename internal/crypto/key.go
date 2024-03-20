@@ -51,10 +51,12 @@ func GenerateKey(extKey []byte, random io.Reader) (key ObjectKey) {
 	if _, err := io.ReadFull(random, nonce[:]); err != nil {
 		logger.CriticalIf(context.Background(), errOutOfEntropy)
 	}
-	sha := sha256.New()
-	sha.Write(extKey)
-	sha.Write(nonce[:])
-	sha.Sum(key[:0])
+
+	const Context = "object-encryption-key generation"
+	mac := hmac.New(sha256.New, extKey)
+	mac.Write([]byte(Context))
+	mac.Write(nonce[:])
+	mac.Sum(key[:0])
 	return key
 }
 

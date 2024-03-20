@@ -233,6 +233,10 @@ func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src l
 // enqueueByNewerNoncurrent enqueues object versions expired by
 // NewerNoncurrentVersions limit for expiry.
 func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []ObjectToDelete, lcEvent lifecycle.Event) {
+	if len(versions) == 0 {
+		return
+	}
+
 	task := newerNoncurrentTask{bucket: bucket, versions: versions, event: lcEvent}
 	wrkr := es.getWorkerCh(task.OpHash())
 	if wrkr == nil {

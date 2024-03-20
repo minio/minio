@@ -328,6 +328,32 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return s, err
 	}
 
+	// Initialize DiskInfo cache
+	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
+		func() (DiskInfo, error) {
+			dcinfo := DiskInfo{}
+			di, err := getDiskInfo(s.drivePath)
+			if err != nil {
+				return dcinfo, err
+			}
+			dcinfo.Major = di.Major
+			dcinfo.Minor = di.Minor
+			dcinfo.Total = di.Total
+			dcinfo.Free = di.Free
+			dcinfo.Used = di.Used
+			dcinfo.UsedInodes = di.Files - di.Ffree
+			dcinfo.FreeInodes = di.Ffree
+			dcinfo.FSType = di.FSType
+			diskID, err := s.GetDiskID()
+			// Healing is 'true' when
+			// - if we found an unformatted disk (no 'format.json')
+			// - if we found healing tracker 'healing.bin'
+			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
+			dcinfo.ID = diskID
+			return dcinfo, err
+		},
+	)
+
 	// Success.
 	return s, nil
 }
@@ -743,31 +769,6 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
-	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
-		func() (DiskInfo, error) {
-			dcinfo := DiskInfo{}
-			di, err := getDiskInfo(s.drivePath)
-			if err != nil {
-				return dcinfo, err
-			}
-			dcinfo.Major = di.Major
-			dcinfo.Minor = di.Minor
-			dcinfo.Total = di.Total
-			dcinfo.Free = di.Free
-			dcinfo.Used = di.Used
-			dcinfo.UsedInodes = di.Files - di.Ffree
-			dcinfo.FreeInodes = di.Ffree
-			dcinfo.FSType = di.FSType
-			diskID, err := s.GetDiskID()
-			// Healing is 'true' when
-			// - if we found an unformatted disk (no 'format.json')
-			// - if we found healing tracker 'healing.bin'
-			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
-			dcinfo.ID = diskID
-			return dcinfo, err
-		},
-	)
-
 	info, err = s.diskInfoCache.Get()
 	info.NRRequests = s.nrRequests
 	info.Rotational = s.rotational
@@ -1194,6 +1195,19 @@ func (s *xlStorage) cleanupTrashImmediateCallers(ctx context.Context) {
 	}
 }
 
+const almostFilledPercent = 0.05
+
+func (s *xlStorage) diskAlmostFilled() bool {
+	info, err := s.diskInfoCache.Get()
+	if err != nil {
+		return false
+	}
+	if info.Used == 0 || info.UsedInodes == 0 {
+		return false
+	}
+	return (float64(info.Free)/float64(info.Used)) < almostFilledPercent || (float64(info.FreeInodes)/float64(info.UsedInodes)) < almostFilledPercent
+}
+
 func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool) (err error) {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
@@ -1223,6 +1237,10 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 
 	if err != nil {
 		return err
+	}
+
+	if !immediatePurge && s.diskAlmostFilled() {
+		immediatePurge = true
 	}
 
 	// immediately purge the target

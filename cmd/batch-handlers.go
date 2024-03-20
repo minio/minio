@@ -277,7 +277,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 	}
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	isTags := len(r.Flags.Filter.Tags) != 0
+	hasTags := len(r.Flags.Filter.Tags) != 0
 	isMetadata := len(r.Flags.Filter.Metadata) != 0
 	isStorageClassOnly := len(r.Flags.Filter.Metadata) == 1 && strings.EqualFold(r.Flags.Filter.Metadata[0].Key, xhttp.AmzStorageClass)
 
@@ -302,7 +302,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 			return true
 		}
 
-		if isTags {
+		if hasTags {
 			// Only parse object tags if tags filter is specified.
 			tagMap := map[string]string{}
 			tagStr := oi.UserTags
@@ -407,7 +407,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 						continue
 					}
 				}
-				if isTags {
+				if hasTags {
 					tags, err := c.GetObjectTagging(ctx, r.Source.Bucket, obj.Key, minio.GetObjectTaggingOptions{})
 					if err == nil {
 						oi.UserTags = tags.String()
