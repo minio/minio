@@ -174,9 +174,9 @@ func (h *Target) Stats() types.TargetStats {
 	return stats
 }
 
-// AssignMigrateTraget assigns a target
-// which will eventually replcae the current target.
-func (h *Target) AssignMigrateTraget(migrateTgt *Target) {
+// AssignMigrateTarget assigns a target
+// which will eventually replace the current target.
+func (h *Target) AssignMigrateTarget(migrateTgt *Target) {
 	h.migrateTarget = migrateTgt
 }
 
