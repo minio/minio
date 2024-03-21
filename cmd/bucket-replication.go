@@ -1563,6 +1563,9 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		if err == nil {
 			break
 		}
+		if minio.ToErrorResponse(err).Code == "PreconditionFailed" {
+			return err
+		}
 		attempts++
 		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
 	}
