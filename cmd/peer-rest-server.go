@@ -368,7 +368,7 @@ func (s *peerRESTServer) LocalStorageInfoHandler(mss *grid.MSS) (*grid.JSON[madm
 
 // ServerInfoHandler - returns Server Info
 func (s *peerRESTServer) ServerInfoHandler(params *grid.MSS) (*grid.JSON[madmin.ServerProperties], *grid.RemoteErr) {
-	r := http.Request{Host: globalMinioHost}
+	r := http.Request{Host: globalLocalNodeName}
 	metrics, err := strconv.ParseBool(params.Get(peerRESTMetrics))
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
@@ -379,37 +379,37 @@ func (s *peerRESTServer) ServerInfoHandler(params *grid.MSS) (*grid.JSON[madmin.
 
 // GetCPUsHandler - returns CPU info.
 func (s *peerRESTServer) GetCPUsHandler(_ *grid.MSS) (*grid.JSON[madmin.CPUs], *grid.RemoteErr) {
-	info := madmin.GetCPUs(context.Background(), globalMinioHost)
+	info := madmin.GetCPUs(context.Background(), globalLocalNodeName)
 	return madminCPUs.NewJSONWith(&info), nil
 }
 
 // GetNetInfoHandler - returns network information.
 func (s *peerRESTServer) GetNetInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.NetInfo], *grid.RemoteErr) {
-	info := madmin.GetNetInfo(globalMinioHost, globalInternodeInterface)
+	info := madmin.GetNetInfo(globalLocalNodeName, globalInternodeInterface)
 	return madminNetInfo.NewJSONWith(&info), nil
 }
 
 // GetPartitionsHandler - returns disk partition information.
 func (s *peerRESTServer) GetPartitionsHandler(_ *grid.MSS) (*grid.JSON[madmin.Partitions], *grid.RemoteErr) {
-	info := madmin.GetPartitions(context.Background(), globalMinioHost)
+	info := madmin.GetPartitions(context.Background(), globalLocalNodeName)
 	return madminPartitions.NewJSONWith(&info), nil
 }
 
 // GetOSInfoHandler - returns operating system's information.
 func (s *peerRESTServer) GetOSInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.OSInfo], *grid.RemoteErr) {
-	info := madmin.GetOSInfo(context.Background(), globalMinioHost)
+	info := madmin.GetOSInfo(context.Background(), globalLocalNodeName)
 	return madminOSInfo.NewJSONWith(&info), nil
 }
 
 // GetProcInfoHandler - returns this MinIO process information.
 func (s *peerRESTServer) GetProcInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.ProcInfo], *grid.RemoteErr) {
-	info := madmin.GetProcInfo(context.Background(), globalMinioHost)
+	info := madmin.GetProcInfo(context.Background(), globalLocalNodeName)
 	return madminProcInfo.NewJSONWith(&info), nil
 }
 
 // GetMemInfoHandler - returns memory information.
 func (s *peerRESTServer) GetMemInfoHandler(_ *grid.MSS) (*grid.JSON[madmin.MemInfo], *grid.RemoteErr) {
-	info := madmin.GetMemInfo(context.Background(), globalMinioHost)
+	info := madmin.GetMemInfo(context.Background(), globalLocalNodeName)
 	return madminMemInfo.NewJSONWith(&info), nil
 }
 
@@ -445,20 +445,20 @@ func (s *peerRESTServer) GetMetricsHandler(v *grid.URLValues) (*grid.JSON[madmin
 // GetSysConfigHandler - returns system config information.
 // (only the config that are of concern to minio)
 func (s *peerRESTServer) GetSysConfigHandler(_ *grid.MSS) (*grid.JSON[madmin.SysConfig], *grid.RemoteErr) {
-	info := madmin.GetSysConfig(context.Background(), globalMinioHost)
+	info := madmin.GetSysConfig(context.Background(), globalLocalNodeName)
 	return madminSysConfig.NewJSONWith(&info), nil
 }
 
 // GetSysServicesHandler - returns system services information.
 // (only the services that are of concern to minio)
 func (s *peerRESTServer) GetSysServicesHandler(_ *grid.MSS) (*grid.JSON[madmin.SysServices], *grid.RemoteErr) {
-	info := madmin.GetSysServices(context.Background(), globalMinioHost)
+	info := madmin.GetSysServices(context.Background(), globalLocalNodeName)
 	return madminSysServices.NewJSONWith(&info), nil
 }
 
 // GetSysErrorsHandler - returns system level errors
 func (s *peerRESTServer) GetSysErrorsHandler(_ *grid.MSS) (*grid.JSON[madmin.SysErrors], *grid.RemoteErr) {
-	info := madmin.GetSysErrors(context.Background(), globalMinioHost)
+	info := madmin.GetSysErrors(context.Background(), globalLocalNodeName)
 	return madminSysErrors.NewJSONWith(&info), nil
 }
 
