@@ -427,7 +427,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 					default:
 					}
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
-					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
+					_, err := api.DeleteObject(ctx, exp.Bucket, encodeDirObject(exp.Name), ObjectOptions{
 						DeletePrefix: true,
 					})
 					if err != nil {
