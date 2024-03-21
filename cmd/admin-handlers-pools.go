@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
+	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/policy"
 )
 
@@ -106,20 +108,11 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 		poolIndices = append(poolIndices, idx)
 	}
 
-	if len(poolIndices) > 0 && !globalEndpoints[poolIndices[0]].Endpoints[0].IsLocal {
-		ep := globalEndpoints[poolIndices[0]].Endpoints[0]
-		for nodeIdx, proxyEp := range globalProxyEndpoints {
-			if proxyEp.Endpoint.Host == ep.Host {
-				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
-					return
-				}
-			}
+	if len(poolIndices) == 0 || !proxyDecommissionRequest(ctx, globalEndpoints[poolIndices[0]].Endpoints[0], w, r) {
+		if err := z.Decommission(r.Context(), poolIndices...); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
-	}
-
-	if err := z.Decommission(r.Context(), poolIndices...); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
 	}
 }
 
@@ -162,19 +155,11 @@ func (a adminAPIHandlers) CancelDecommission(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if ep := globalEndpoints[idx].Endpoints[0]; !ep.IsLocal {
-		for nodeIdx, proxyEp := range globalProxyEndpoints {
-			if proxyEp.Endpoint.Host == ep.Host {
-				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
-					return
-				}
-			}
+	if !proxyDecommissionRequest(ctx, globalEndpoints[idx].Endpoints[0], w, r) {
+		if err := pools.DecommissionCancel(ctx, idx); err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
 		}
-	}
-
-	if err := pools.DecommissionCancel(ctx, idx); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
 	}
 }
 
@@ -390,4 +375,19 @@ func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) 
 	globalNotificationSys.StopRebalance(r.Context())
 	writeSuccessResponseHeadersOnly(w)
 	logger.LogIf(ctx, pools.saveRebalanceStats(GlobalContext, 0, rebalSaveStoppedAt))
+}
+
+func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w http.ResponseWriter, r *http.Request) (proxy bool) {
+	host := env.Get("_MINIO_DECOM_ENDPOINT_HOST", defaultEndPoint.Host)
+	if host == "" {
+		return
+	}
+	for nodeIdx, proxyEp := range globalProxyEndpoints {
+		if proxyEp.Endpoint.Host == host && !proxyEp.IsLocal {
+			if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+				return true
+			}
+		}
+	}
+	return
 }
