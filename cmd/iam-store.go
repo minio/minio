@@ -379,7 +379,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 		if ok {
 			return policy.toSlice(), policy.UpdatedAt, nil
 		}
-		if err := store.loadMappedPolicy(context.TODO(), name, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+		if err := store.loadMappedPolicyWithRetry(context.TODO(), name, regUser, true, c.iamGroupPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return nil, time.Time{}, err
 		}
 		policy = c.iamGroupPolicyMap[name]
@@ -400,7 +400,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 	// passed here and we lookup the mapping in iamSTSPolicyMap.
 	mp, ok := c.iamUserPolicyMap[name]
 	if !ok {
-		if err := store.loadMappedPolicy(context.TODO(), name, regUser, false, c.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+		if err := store.loadMappedPolicyWithRetry(context.TODO(), name, regUser, false, c.iamUserPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return nil, time.Time{}, err
 		}
 
@@ -411,7 +411,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 			mp, ok = c.iamSTSPolicyMap[name]
 			if !ok {
 				// Attempt to load parent user mapping for STS accounts
-				if err := store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+				if err := store.loadMappedPolicyWithRetry(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
 					return nil, time.Time{}, err
 				}
 				mp = c.iamSTSPolicyMap[name]
@@ -444,7 +444,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 
 		policy, ok := c.iamGroupPolicyMap[group]
 		if ok {
-			if err := store.loadMappedPolicy(context.TODO(), group, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+			if err := store.loadMappedPolicyWithRetry(context.TODO(), group, regUser, true, c.iamGroupPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
 				return nil, time.Time{}, err
 			}
 			policy = c.iamGroupPolicyMap[group]
