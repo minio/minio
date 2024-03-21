@@ -193,7 +193,7 @@ func (h *Target) initDiskStore(ctx context.Context) (err error) {
 	h.storeCtxCancel = cancel
 	h.lastStarted = time.Now()
 	go h.startQueueProcessor(ctx, true)
-	go store.StreamItems(h.store, h, ctx.Done(), h.config.LogOnceIf)
+	store.StreamItems(h.store, h, ctx.Done(), h.config.LogOnceIf)
 	return nil
 }
 
