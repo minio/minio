@@ -1762,7 +1762,7 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(10)
 	var zb0001Mask uint16 /* 10 bits */
 	_ = zb0001Mask
@@ -1866,7 +1866,7 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x80) == 0 { // if not empty
+	if (zb0001Mask & 0x80) == 0 { // if not omitted
 		// write "rs"
 		err = en.Append(0xa2, 0x72, 0x73)
 		if err != nil {
@@ -1885,7 +1885,7 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x100) == 0 { // if not empty
+	if (zb0001Mask & 0x100) == 0 { // if not omitted
 		// write "ats"
 		err = en.Append(0xa3, 0x61, 0x74, 0x73)
 		if err != nil {
@@ -1920,7 +1920,7 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(10)
 	var zb0001Mask uint16 /* 10 bits */
 	_ = zb0001Mask
@@ -1968,7 +1968,7 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0002 := range z.ObjVersions {
 		o = msgp.AppendUint64(o, z.ObjVersions[za0002])
 	}
-	if (zb0001Mask & 0x80) == 0 { // if not empty
+	if (zb0001Mask & 0x80) == 0 { // if not omitted
 		// string "rs"
 		o = append(o, 0xa2, 0x72, 0x73)
 		if z.ReplicationStats == nil {
@@ -1981,7 +1981,7 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x100) == 0 { // if not empty
+	if (zb0001Mask & 0x100) == 0 { // if not omitted
 		// string "ats"
 		o = append(o, 0xa3, 0x61, 0x74, 0x73)
 		if z.AllTierStats == nil {
@@ -3243,7 +3243,7 @@ func (z *replicationAllStats) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *replicationAllStats) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 3 bits */
 	_ = zb0001Mask
@@ -3267,7 +3267,7 @@ func (z *replicationAllStats) EncodeMsg(en *msgp.Writer) (err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x1) == 0 { // if not empty
+	if (zb0001Mask & 0x1) == 0 { // if not omitted
 		// write "t"
 		err = en.Append(0xa1, 0x74)
 		if err != nil {
@@ -3291,7 +3291,7 @@ func (z *replicationAllStats) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not omitted
 		// write "r"
 		err = en.Append(0xa1, 0x72)
 		if err != nil {
@@ -3303,7 +3303,7 @@ func (z *replicationAllStats) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not omitted
 		// write "rc"
 		err = en.Append(0xa2, 0x72, 0x63)
 		if err != nil {
@@ -3321,7 +3321,7 @@ func (z *replicationAllStats) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *replicationAllStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 3 bits */
 	_ = zb0001Mask
@@ -3342,7 +3342,7 @@ func (z *replicationAllStats) MarshalMsg(b []byte) (o []byte, err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x1) == 0 { // if not empty
+	if (zb0001Mask & 0x1) == 0 { // if not omitted
 		// string "t"
 		o = append(o, 0xa1, 0x74)
 		o = msgp.AppendMapHeader(o, uint32(len(z.Targets)))
@@ -3355,12 +3355,12 @@ func (z *replicationAllStats) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not omitted
 		// string "r"
 		o = append(o, 0xa1, 0x72)
 		o = msgp.AppendUint64(o, z.ReplicaSize)
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not omitted
 		// string "rc"
 		o = append(o, 0xa2, 0x72, 0x63)
 		o = msgp.AppendUint64(o, z.ReplicaCount)
@@ -3478,6 +3478,8 @@ func (z *replicationAllStatsV1) DecodeMsg(dc *msgp.Reader) (err error) {
 			delete(z.Targets, key)
 		}
 	}
+	var field []byte
+	_ = field
 	for zb0002 > 0 {
 		zb0002--
 		var za0001 string
@@ -3588,6 +3590,8 @@ func (z *replicationAllStatsV1) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			delete(z.Targets, key)
 		}
 	}
+	var field []byte
+	_ = field
 	for zb0002 > 0 {
 		var za0001 string
 		var za0002 replicationStats

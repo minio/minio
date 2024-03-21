@@ -1261,7 +1261,9 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	if obj.DeleteMarker {
 		eventName = event.ObjectRemovedDeleteMarkerCreated
 	}
-
+	if lcEvent.Action.DeleteAll() {
+		eventName = event.ObjectRemovedDeleteAllVersions
+	}
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  eventName,
