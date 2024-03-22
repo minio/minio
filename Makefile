@@ -111,6 +111,8 @@ test-site-replication-minio: install-race ## verify automatic site replication
 	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication.sh)
 	@echo "Running tests for automatic site replication of SSE-C objects with SSE-KMS enabled for bucket"
 	@(env bash $(PWD)/docs/site-replication/run-sse-kms-object-replication.sh)
+	@echo "Running tests for automatic site replication of SSE-C objects with compression enabled for site"
+	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication-with-compression.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
