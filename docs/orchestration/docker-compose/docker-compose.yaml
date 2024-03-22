@@ -2,7 +2,7 @@ version: '3.7'
 
 # Settings and configurations that are common for all containers
 x-minio-common: &minio-common
-  image: quay.io/minio/minio:RELEASE.2024-03-15T01-07-19Z
+  image: quay.io/minio/minio:RELEASE.2024-03-21T23-13-43Z
   command: server --console-address ":9001" http://minio{1...4}/data{1...2}
   expose:
     - "9000"
