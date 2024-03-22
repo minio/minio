@@ -59,6 +59,8 @@ export MC_HOST_minio2=https://minio:minio123@localhost:9002
 echo -n "Preparing test data ..."
 mkdir -p /tmp/data
 echo "Hello from encrypted world" >/tmp/data/encrypted
+touch /tmp/data/mpartobj
+shred -s 500M /tmp/data/mpartobj
 touch /tmp/data/defpartsize
 shred -s 500M /tmp/data/defpartsize
 touch /tmp/data/custpartsize
@@ -80,6 +82,7 @@ echo "Create bucket in source MinIO instance"
 # Load objects to source site
 echo "Loading objects to source MinIO instance"
 ./mc cp /tmp/data/encrypted minio1/test-bucket --insecure
+./mc cp /tmp/data/mpartobj minio1/test-bucket --encrypt-key "minio1/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure
 ./mc cp /tmp/data/defpartsize minio1/test-bucket --insecure
 ./mc put /tmp/data/custpartsize minio1/test-bucket --insecure --part-size 50MiB
 sleep 120
@@ -92,13 +95,18 @@ if [ "${count1}" -ne 1 ]; then
 	echo "BUG: object minio1/test-bucket/encrypted not found"
 	exit_1
 fi
-count2=$(./mc ls minio1/test-bucket/defpartsize --insecure | wc -l)
+count2=$(./mc ls minio1/test-bucket/mpartobj --insecure | wc -l)
 if [ "${count2}" -ne 1 ]; then
+	echo "BUG: object minio1/test-bucket/mpartobj not found"
+	exit_1
+fi
+count3=$(./mc ls minio1/test-bucket/defpartsize --insecure | wc -l)
+if [ "${count3}" -ne 1 ]; then
 	echo "BUG: object minio1/test-bucket/defpartsize not found"
 	exit_1
 fi
-count3=$(./mc ls minio1/test-bucket/custpartsize --insecure | wc -l)
-if [ "${count3}" -ne 1 ]; then
+count4=$(./mc ls minio1/test-bucket/custpartsize --insecure | wc -l)
+if [ "${count4}" -ne 1 ]; then
 	echo "BUG: object minio1/test-bucket/custpartsize not found"
 	exit_1
 fi
@@ -111,14 +119,18 @@ if [ "${repcount1}" -ne 1 ]; then
 	echo "BUG: object test-bucket/encrypted not replicated"
 	exit_1
 fi
-repcount2=$(./mc ls minio2/test-bucket/defpartsize --insecure | wc -l)
+repcount2=$(./mc ls minio2/test-bucket/mpartobj --insecure | wc -l)
 if [ "${repcount2}" -ne 1 ]; then
+	echo "BUG: object test-bucket/mpartobj not replicated"
+	exit_1
+fi
+repcount3=$(./mc ls minio2/test-bucket/defpartsize --insecure | wc -l)
+if [ "${repcount3}" -ne 1 ]; then
 	echo "BUG: object test-bucket/defpartsize not replicated"
 	exit_1
 fi
-
-repcount3=$(./mc ls minio2/test-bucket/custpartsize --insecure | wc -l)
-if [ "${repcount3}" -ne 1 ]; then
+repcount4=$(./mc ls minio2/test-bucket/custpartsize --insecure | wc -l)
+if [ "${repcount4}" -ne 1 ]; then
 	echo "BUG: object test-bucket/custpartsize not replicated"
 	exit_1
 fi
@@ -139,6 +151,12 @@ echo "Stat minio1/test-bucket/custpartsize"
 stat_out3=$(./mc stat minio1/test-bucket/custpartsize --insecure --json)
 src_obj3_algo=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 src_obj3_keyid=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
+echo "Stat minio1/test-bucket/mpartobj"
+./mc stat minio1/test-bucket/mpartobj --encrypt-key "minio1/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json
+stat_out4=$(./mc stat minio1/test-bucket/mpartobj --encrypt-key "minio1/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json)
+src_obj4_etag=$(echo "${stat_out4}" | jq '.etag')
+src_obj4_size=$(echo "${stat_out4}" | jq '.size')
+src_obj4_md5=$(echo "${stat_out4}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 
 # Stat the objects from replicated site
 echo "Stat minio2/test-bucket/encrypted"
@@ -156,6 +174,12 @@ echo "Stat minio2/test-bucket/custpartsize"
 stat_out3_rep=$(./mc stat minio2/test-bucket/custpartsize --insecure --json)
 rep_obj3_algo=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 rep_obj3_keyid=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
+echo "Stat minio2/test-bucket/mpartobj"
+./mc stat minio2/test-bucket/mpartobj --encrypt-key "minio2/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json
+stat_out4_rep=$(./mc stat minio2/test-bucket/mpartobj --encrypt-key "minio2/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json)
+rep_obj4_etag=$(echo "${stat_out4}" | jq '.etag')
+rep_obj4_size=$(echo "${stat_out4}" | jq '.size')
+rep_obj4_md5=$(echo "${stat_out4}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 
 # Check the algo and keyId of replicated objects
 if [ "${rep_obj1_algo}" != "${src_obj1_algo}" ]; then
@@ -183,8 +207,23 @@ if [ "${rep_obj3_keyid}" != "${src_obj3_keyid}" ]; then
 	exit_1
 fi
 
+# Check the etag, size and md5 of replicated SSEC object
+if [ "${rep_obj4_etag}" != "${src_obj4_etag}" ]; then
+	echo "BUG: Etag: '${rep_obj4_etag}' of replicated object: 'minio2/test-bucket/mpartobj' doesn't match with source value: '${src_obj4_etag}'"
+	exit_1
+fi
+if [ "${rep_obj4_size}" != "${src_obj4_size}" ]; then
+	echo "BUG: Size: '${rep_obj4_size}' of replicated object: 'minio2/test-bucket/mpartobj' doesn't match with source value: '${src_obj4_size}'"
+	exit_1
+fi
+if [ "${src_obj4_md5}" != "${rep_obj4_md5}" ]; then
+	echo "BUG: MD5 checksum of object 'minio2/test-bucket/mpartobj' doesn't match with source. Expected: '${src_obj4_md5}', Found: '${rep_obj4_md5}'"
+	exit_1
+fi
+
 # Check content of replicated objects
 ./mc cat minio2/test-bucket/encrypted --insecure
+./mc cat minio2/test-bucket/mpartobj --encrypt-key "minio2/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/defpartsize --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/custpartsize --insecure >/dev/null || exit_1
 

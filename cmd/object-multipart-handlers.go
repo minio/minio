@@ -116,9 +116,24 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 			return
 		}
 
-		if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
+		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
+		ssecRepHeaders := []string{
+			"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+			"X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+			"X-Minio-Replication-Server-Side-Encryption-Iv",
+		}
+		ssecRep := false
+		for _, header := range ssecRepHeaders {
+			if val := r.Header.Get(header); val != "" {
+				ssecRep = true
+				break
+			}
+		}
+		if !(ssecRep && sourceReplReq) {
+			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
 		}
 		// Set this for multipart only operations, we need to differentiate during
 		// decryption if the file was actually multipart or not.
