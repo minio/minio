@@ -749,6 +749,7 @@ func (z *ReplicateDecision) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z ReplicateDecision) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 0
+	_ = z
 	err = en.Append(0x80)
 	if err != nil {
 		return
@@ -760,6 +761,7 @@ func (z ReplicateDecision) EncodeMsg(en *msgp.Writer) (err error) {
 func (z ReplicateDecision) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 0
+	_ = z
 	o = append(o, 0x80)
 	return
 }
@@ -1388,6 +1390,7 @@ func (z *ResyncDecision) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z ResyncDecision) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 0
+	_ = z
 	err = en.Append(0x80)
 	if err != nil {
 		return
@@ -1399,6 +1402,7 @@ func (z ResyncDecision) EncodeMsg(en *msgp.Writer) (err error) {
 func (z ResyncDecision) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 0
+	_ = z
 	o = append(o, 0x80)
 	return
 }

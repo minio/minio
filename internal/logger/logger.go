@@ -364,7 +364,9 @@ func buildLogEntry(ctx context.Context, message string, trace []string, errKind 
 		entry.API.Args.Bucket = HashString(entry.API.Args.Bucket)
 		entry.API.Args.Object = HashString(entry.API.Args.Object)
 		entry.RemoteHost = HashString(entry.RemoteHost)
-		entry.Trace.Variables = make(map[string]interface{})
+		if entry.Trace != nil {
+			entry.Trace.Variables = make(map[string]interface{})
+		}
 	}
 
 	return entry

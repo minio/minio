@@ -21,6 +21,8 @@ func (z *DailyAllTierStats) DecodeMsg(dc *msgp.Reader) (err error) {
 			delete((*z), key)
 		}
 	}
+	var field []byte
+	_ = field
 	for zb0004 > 0 {
 		zb0004--
 		var zb0001 string
@@ -30,8 +32,6 @@ func (z *DailyAllTierStats) DecodeMsg(dc *msgp.Reader) (err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		var field []byte
-		_ = field
 		var zb0005 uint32
 		zb0005, err = dc.ReadMapHeader()
 		if err != nil {
@@ -167,6 +167,8 @@ func (z *DailyAllTierStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			delete((*z), key)
 		}
 	}
+	var field []byte
+	_ = field
 	for zb0004 > 0 {
 		var zb0001 string
 		var zb0002 lastDayTierStats
@@ -176,8 +178,6 @@ func (z *DailyAllTierStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		var field []byte
-		_ = field
 		var zb0005 uint32
 		zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
 		if err != nil {
