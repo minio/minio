@@ -23,4 +23,8 @@ Bucket metrics can be viewed in the Grafana dashboard using [json file here](htt
 
 ![Grafana](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/bucket/grafana-bucket.png)
 
+Node metrics can be viewed in the Grafana dashboard using [json file here](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/node/minio-node.json)
+
+![Grafana](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/node/grafana-node.png)
+
 Note: All these dashboards are provided as an example and need basis they should be customized as well as new graphs should be added.
