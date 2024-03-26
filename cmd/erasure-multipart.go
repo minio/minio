@@ -1409,13 +1409,13 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	if !opts.Speedtest && len(versions) > 0 {
-		globalMRFState.addPartialOp(partialOperation{
-			bucket:    bucket,
-			object:    object,
-			queued:    time.Now(),
-			versions:  versions,
-			setIndex:  er.setIndex,
-			poolIndex: er.poolIndex,
+		globalMRFState.addPartialOp(PartialOperation{
+			Bucket:    bucket,
+			Object:    object,
+			Queued:    time.Now(),
+			Versions:  versions,
+			SetIndex:  er.setIndex,
+			PoolIndex: er.poolIndex,
 		})
 	}
 
