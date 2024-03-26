@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/klauspost/readahead"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -1396,20 +1397,25 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 
 	shardFileSize := erasure.ShardFileSize(data.Size())
+	inlineBlock := globalStorageClass.InlineBlock()
+	if inlineBlock <= 0 {
+		inlineBlock = 128 * humanize.KiByte
+	}
+
 	writers := make([]io.Writer, len(onlineDisks))
 	var inlineBuffers []*bytes.Buffer
 	if shardFileSize >= 0 {
-		if !opts.Versioned && shardFileSize < smallFileThreshold {
+		if !opts.Versioned && shardFileSize < inlineBlock {
 			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		} else if shardFileSize < smallFileThreshold/8 {
+		} else if shardFileSize < inlineBlock/8 {
 			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 		}
 	} else {
 		// If compressed, use actual size to determine.
 		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
-			if !opts.Versioned && sz < smallFileThreshold {
+			if !opts.Versioned && sz < inlineBlock {
 				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			} else if sz < smallFileThreshold/8 {
+			} else if sz < inlineBlock/8 {
 				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 			}
 		}

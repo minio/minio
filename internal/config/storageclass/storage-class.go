@@ -18,13 +18,16 @@
 package storageclass
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 )
 
@@ -40,7 +43,8 @@ const (
 const (
 	ClassStandard = "standard"
 	ClassRRS      = "rrs"
-	ClassOptimize = "optimize"
+	Optimize      = "optimize"
+	InlineBlock   = "inline_block"
 
 	// Reduced redundancy storage class environment variable
 	RRSEnv = "MINIO_STORAGE_CLASS_RRS"
@@ -48,6 +52,14 @@ const (
 	StandardEnv = "MINIO_STORAGE_CLASS_STANDARD"
 	// Optimize storage class environment variable
 	OptimizeEnv = "MINIO_STORAGE_CLASS_OPTIMIZE"
+	// Inline block indicates the size of the shard
+	// that is considered for inlining, remember this
+	// shard value is the value per drive shard it
+	// will vary based on the parity that is configured
+	// for the STANDARD storage_class.
+	// inlining means data and metadata are written
+	// together in a single file i.e xl.meta
+	InlineBlockEnv = "MINIO_STORAGE_CLASS_INLINE_BLOCK"
 
 	// Supported storage class scheme is EC
 	schemePrefix = "EC"
@@ -71,8 +83,13 @@ var (
 			Value: "EC:1",
 		},
 		config.KV{
-			Key:   ClassOptimize,
+			Key:   Optimize,
 			Value: "availability",
+		},
+		config.KV{
+			Key:           InlineBlock,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 	}
 )
@@ -90,6 +107,8 @@ type Config struct {
 	Standard    StorageClass `json:"standard"`
 	RRS         StorageClass `json:"rrs"`
 	Optimize    string       `json:"optimize"`
+	inlineBlock int64
+
 	initialized bool
 }
 
@@ -253,6 +272,19 @@ func (sCfg *Config) GetParityForSC(sc string) (parity int) {
 	}
 }
 
+// InlineBlock indicates the size of the block which will be used to inline
+// an erasure shard and written along with xl.meta on the drive, on a versioned
+// bucket this value is automatically chosen to 1/8th of the this value, make
+// sure to put this into consideration when choosing this value.
+func (sCfg *Config) InlineBlock() int64 {
+	ConfigLock.RLock()
+	defer ConfigLock.RUnlock()
+	if !sCfg.initialized {
+		return 128 * humanize.KiByte
+	}
+	return sCfg.inlineBlock
+}
+
 // CapacityOptimized - returns true if the storage-class is capacity optimized
 // meaning we will not use additional parities when drives are offline.
 //
@@ -355,7 +387,23 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 		return Config{}, err
 	}
 
+	cfg.Optimize = env.Get(OptimizeEnv, kvs.Get(Optimize))
+
+	inlineBlockStr := env.Get(InlineBlockEnv, kvs.Get(InlineBlock))
+	if inlineBlockStr != "" {
+		inlineBlock, err := humanize.ParseBytes(inlineBlockStr)
+		if err != nil {
+			return cfg, err
+		}
+		if inlineBlock > 128*humanize.KiByte {
+			logger.LogOnceIf(context.Background(), fmt.Errorf("inline block value bigger than recommended max of 128KiB -> %s, performance may degrade for PUT please benchmark the changes", inlineBlockStr), inlineBlockStr)
+		}
+		cfg.inlineBlock = int64(inlineBlock)
+	} else {
+		cfg.inlineBlock = 128 * humanize.KiByte
+	}
+
 	cfg.initialized = true
-	cfg.Optimize = env.Get(OptimizeEnv, kvs.Get(ClassOptimize))
+
 	return cfg, nil
 }
