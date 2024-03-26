@@ -35,6 +35,7 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -325,9 +326,7 @@ func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupI
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool,
-	m map[string]MappedPolicy, retries int,
-) error {
+func (iamOS *IAMObjectStore) loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy], retries int) error {
 	for {
 	retry:
 		var p MappedPolicy
@@ -344,14 +343,12 @@ func (iamOS *IAMObjectStore) loadMappedPolicyWithRetry(ctx context.Context, name
 			goto retry
 		}
 
-		m[name] = p
+		m.Store(name, p)
 		return nil
 	}
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool,
-	m map[string]MappedPolicy,
-) error {
+func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error {
 	var p MappedPolicy
 	err := iamOS.loadIAMConfig(ctx, &p, getMappedPolicyPath(name, userType, isGroup))
 	if err != nil {
@@ -361,11 +358,11 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, 
 		return err
 	}
 
-	m[name] = p
+	m.Store(name, p)
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
+func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error {
 	var basePath string
 	if isGroup {
 		basePath = iamConfigPolicyDBGroupsPrefix

@@ -42,6 +42,7 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
+	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 )
@@ -75,10 +76,10 @@ type Connection struct {
 	ctx context.Context
 
 	// Active mux connections.
-	outgoing *lockedClientMap
+	outgoing *xsync.MapOf[uint64, *muxClient]
 
 	// Incoming streams
-	inStream *lockedServerMap
+	inStream *xsync.MapOf[uint64, *muxServer]
 
 	// outQueue is the output queue
 	outQueue chan []byte
@@ -205,8 +206,8 @@ func newConnection(o connectionParams) *Connection {
 		Local:              o.local,
 		id:                 o.id,
 		ctx:                o.ctx,
-		outgoing:           &lockedClientMap{m: make(map[uint64]*muxClient, 1000)},
-		inStream:           &lockedServerMap{m: make(map[uint64]*muxServer, 1000)},
+		outgoing:           xsync.NewMapOfPresized[uint64, *muxClient](1000),
+		inStream:           xsync.NewMapOfPresized[uint64, *muxServer](1000),
 		outQueue:           make(chan []byte, defaultOutQueue),
 		dialer:             o.dial,
 		side:               ws.StateServerSide,
