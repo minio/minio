@@ -590,8 +590,6 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 
 // UpdateIsLocal - resolves the host and discovers the local host.
 func (endpoints Endpoints) UpdateIsLocal() error {
-	orchestrated := IsDocker() || IsKubernetes()
-
 	var epsResolved int
 	var foundLocal bool
 	resolvedList := make([]bool, len(endpoints))
@@ -775,8 +773,6 @@ type PoolEndpointList []Endpoints
 
 // UpdateIsLocal - resolves all hosts and discovers which are local
 func (p PoolEndpointList) UpdateIsLocal() error {
-	orchestrated := IsDocker() || IsKubernetes()
-
 	var epsResolved int
 	var epCount int
 
@@ -1034,7 +1030,6 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 			}
 		}
 
-		orchestrated := IsKubernetes() || IsDocker()
 		reverseProxy := (env.Get("_MINIO_REVERSE_PROXY", "") != "") && ((env.Get("MINIO_CI_CD", "") != "") || (env.Get("CI", "") != ""))
 		// If not orchestrated
 		// and not setup in reverse proxy
