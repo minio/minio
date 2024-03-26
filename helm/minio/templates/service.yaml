@@ -13,16 +13,18 @@ metadata:
   annotations: {{- toYaml .Values.service.annotations | nindent 4 }}
   {{- end }}
 spec:
-  {{- if (or (eq .Values.service.type "ClusterIP" "") (empty .Values.service.type)) }}
-  type: ClusterIP
-  {{- if not (empty .Values.service.clusterIP) }}
+  type: {{ .Values.service.type }}
+  {{- if and (eq .Values.service.type "ClusterIP") .Values.service.clusterIP }}
   clusterIP: {{ .Values.service.clusterIP }}
   {{- end }}
-  {{- else if eq .Values.service.type "LoadBalancer" }}
-  type: {{ .Values.service.type }}
-  loadBalancerIP: {{ default "" .Values.service.loadBalancerIP }}
-  {{- else }}
-  type: {{ .Values.service.type }}
+  {{- if or (eq .Values.service.type "LoadBalancer") (eq .Values.service.type "NodePort") }}
+  externalTrafficPolicy: {{ .Values.service.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{- if and (eq .Values.service.type "LoadBalancer") .Values.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges: {{ .Values.service.loadBalancerSourceRanges }}
+  {{ end }}
+  {{- if and (eq .Values.service.type "LoadBalancer") (not (empty .Values.service.loadBalancerIP)) }}
+  loadBalancerIP: {{ default "" .Values.service.loadBalancerIP | quote }}
   {{- end }}
   ports:
     - name: {{ $scheme }}
