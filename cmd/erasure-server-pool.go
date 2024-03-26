@@ -187,17 +187,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		globalLeaderLock = newSharedLock(GlobalContext, z, "leader.lock")
 	})
 
-	// Enable background operations on
-	//
-	// - Disk auto healing
-	// - MRF (most recently failed) healing
-	// - Background expiration routine for lifecycle policies
+	// Start self healing after the object initialization
+	// so various tasks will be useful
 	bootstrapTrace("initAutoHeal", func() {
 		initAutoHeal(GlobalContext, z)
-	})
-
-	bootstrapTrace("initHealMRF", func() {
-		go globalMRFState.healRoutine(z)
 	})
 
 	// initialize the object layer.
