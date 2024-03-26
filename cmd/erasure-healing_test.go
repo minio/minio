@@ -634,7 +634,7 @@ func TestHealingDanglingObject(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Everything is fine, should return nil
-	objLayer, disks, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
+	objLayer, _, err := initObjectLayer(ctx, mustGetPoolEndpoints(0, fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -650,7 +650,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
-	disks = objLayer.(*erasureServerPools).serverPools[0].erasureDisks[0]
+	disks := objLayer.(*erasureServerPools).serverPools[0].erasureDisks[0]
 	orgDisks := append([]StorageAPI{}, disks...)
 
 	// Enable versioning.
