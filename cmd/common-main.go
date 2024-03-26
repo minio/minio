@@ -66,9 +66,11 @@ import (
 )
 
 // serverDebugLog will enable debug printing
-var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
-
-var currentReleaseTime time.Time
+var (
+	serverDebugLog     = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
+	currentReleaseTime time.Time
+	orchestrated       = IsKubernetes() || IsDocker()
+)
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -494,7 +496,11 @@ func runDNSCache(ctx *cli.Context) {
 	dnsTTL := ctx.Duration("dns-cache-ttl")
 	// Check if we have configured a custom DNS cache TTL.
 	if dnsTTL <= 0 {
-		dnsTTL = 10 * time.Minute
+		if orchestrated {
+			dnsTTL = 30 * time.Second
+		} else {
+			dnsTTL = 10 * time.Minute
+		}
 	}
 
 	// Call to refresh will refresh names in cache.
@@ -757,12 +763,7 @@ func serverHandleEnvVars() {
 		for _, endpoint := range minioEndpoints {
 			if net.ParseIP(endpoint) == nil {
 				// Checking if the IP is a DNS entry.
-				lookupHost := globalDNSCache.LookupHost
-				if IsKubernetes() || IsDocker() {
-					lookupHost = net.DefaultResolver.LookupHost
-				}
-
-				addrs, err := lookupHost(GlobalContext, endpoint)
+				addrs, err := globalDNSCache.LookupHost(GlobalContext, endpoint)
 				if err != nil {
 					logger.FatalIf(err, "Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
 				}
