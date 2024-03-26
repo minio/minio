@@ -190,12 +190,10 @@ func (client *storageRESTClient) call(ctx context.Context, method string, values
 	}
 	values.Set(storageRESTDiskID, client.diskID)
 	respBody, err := client.restClient.Call(ctx, method, values, body, length)
-	if err == nil {
-		return respBody, nil
+	if err != nil {
+		return nil, toStorageErr(err)
 	}
-
-	err = toStorageErr(err)
-	return nil, err
+	return respBody, nil
 }
 
 // Stringer provides a canonicalized representation of network device.
@@ -403,7 +401,7 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, origvolume, vol
 		return err
 	}
 	_, err = waitForHTTPResponse(respBody)
-	return err
+	return toStorageErr(err)
 }
 
 func (client *storageRESTClient) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) error {
@@ -641,7 +639,7 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 	}
 	defer xhttp.DrainBody(respBody)
 	n, err := io.ReadFull(respBody, buf)
-	return int64(n), err
+	return int64(n), toStorageErr(err)
 }
 
 // ListDir - lists a directory.
@@ -709,7 +707,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	reader, err := waitForHTTPResponse(respBody)
 	if err != nil {
 		for i := range errs {
-			errs[i] = err
+			errs[i] = toStorageErr(err)
 		}
 		return errs
 	}
@@ -717,7 +715,7 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	dErrResp := &DeleteVersionsErrsResp{}
 	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
 		for i := range errs {
-			errs[i] = err
+			errs[i] = toStorageErr(err)
 		}
 		return errs
 	}
@@ -759,12 +757,12 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 
 	respReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return err
+		return toStorageErr(err)
 	}
 
 	verifyResp := &VerifyFileResp{}
 	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
-		return err
+		return toStorageErr(err)
 	}
 
 	return toStorageErr(verifyResp.Err)
@@ -782,7 +780,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 	defer xhttp.DrainBody(respBody)
 	respReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return stat, err
+		return stat, toStorageErr(err)
 	}
 	rd := msgpNewReader(respReader)
 	defer readMsgpReaderPoolPut(rd)
@@ -798,7 +796,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 		stat = append(stat, st)
 	}
 
-	return stat, err
+	return stat, toStorageErr(err)
 }
 
 // ReadMultiple will read multiple files and send each back as response.
@@ -816,9 +814,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 		return err
 	}
 	defer xhttp.DrainBody(respBody)
-	if err != nil {
-		return err
-	}
+
 	pr, pw := io.Pipe()
 	go func() {
 		pw.CloseWithError(waitForHTTPStream(respBody, pw))
@@ -832,7 +828,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 				err = nil
 			}
 			pr.CloseWithError(err)
-			return err
+			return toStorageErr(err)
 		}
 		select {
 		case <-ctx.Done():
@@ -854,7 +850,7 @@ func (client *storageRESTClient) CleanAbandonedData(ctx context.Context, volume 
 	}
 	defer xhttp.DrainBody(respBody)
 	_, err = waitForHTTPResponse(respBody)
-	return err
+	return toStorageErr(err)
 }
 
 // Close - marks the client as closed.
