@@ -46,6 +46,7 @@ import (
 	sreplication "github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/policy"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 const (
@@ -2044,26 +2045,28 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 	// Followed by group policy mapping
 	{
 		// Replicate policy mappings on local to all peers.
-		groupPolicyMap := make(map[string]MappedPolicy)
+		groupPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 		errG := globalIAMSys.store.loadMappedPolicies(ctx, unknownIAMUserType, true, groupPolicyMap)
 		if errG != nil {
 			return errSRBackendIssue(errG)
 		}
 
-		for group, mp := range groupPolicyMap {
-			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
+		var err error
+		groupPolicyMap.Range(func(k string, mp MappedPolicy) bool {
+			err = c.IAMChangeHook(ctx, madmin.SRIAMItem{
 				Type: madmin.SRIAMItemPolicyMapping,
 				PolicyMapping: &madmin.SRPolicyMapping{
-					UserOrGroup: group,
+					UserOrGroup: k,
 					UserType:    int(unknownIAMUserType),
 					IsGroup:     true,
 					Policy:      mp.Policies,
 				},
 				UpdatedAt: mp.UpdatedAt,
 			})
-			if err != nil {
-				return errSRIAMError(err)
-			}
+			return err == nil
+		})
+		if err != nil {
+			return errSRIAMError(err)
 		}
 	}
 
@@ -2128,14 +2131,14 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 	// Followed by policy mapping for the userAccounts we previously synced.
 	{
 		// Replicate policy mappings on local to all peers.
-		userPolicyMap := make(map[string]MappedPolicy)
+		userPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 		errU := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
 		if errU != nil {
 			return errSRBackendIssue(errU)
 		}
-
-		for user, mp := range userPolicyMap {
-			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
+		var err error
+		userPolicyMap.Range(func(user string, mp MappedPolicy) bool {
+			err = c.IAMChangeHook(ctx, madmin.SRIAMItem{
 				Type: madmin.SRIAMItemPolicyMapping,
 				PolicyMapping: &madmin.SRPolicyMapping{
 					UserOrGroup: user,
@@ -2145,23 +2148,25 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 				},
 				UpdatedAt: mp.UpdatedAt,
 			})
-			if err != nil {
-				return errSRIAMError(err)
-			}
+			return err == nil
+		})
+		if err != nil {
+			return errSRIAMError(err)
 		}
 	}
 
 	// and finally followed by policy mappings for for STS users.
 	{
 		// Replicate policy mappings on local to all peers.
-		stsPolicyMap := make(map[string]MappedPolicy)
+		stsPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 		errU := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, stsPolicyMap)
 		if errU != nil {
 			return errSRBackendIssue(errU)
 		}
 
-		for user, mp := range stsPolicyMap {
-			err := c.IAMChangeHook(ctx, madmin.SRIAMItem{
+		var err error
+		stsPolicyMap.Range(func(user string, mp MappedPolicy) bool {
+			err = c.IAMChangeHook(ctx, madmin.SRIAMItem{
 				Type: madmin.SRIAMItemPolicyMapping,
 				PolicyMapping: &madmin.SRPolicyMapping{
 					UserOrGroup: user,
@@ -2171,9 +2176,10 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 				},
 				UpdatedAt: mp.UpdatedAt,
 			})
-			if err != nil {
-				return errSRIAMError(err)
-			}
+			return err == nil
+		})
+		if err != nil {
+			return errSRIAMError(err)
 		}
 	}
 
@@ -3783,12 +3789,12 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 	if opts.Users || opts.Entity == madmin.SRUserEntity {
 		// Replicate policy mappings on local to all peers.
-		userPolicyMap := make(map[string]MappedPolicy)
-		stsPolicyMap := make(map[string]MappedPolicy)
-		svcPolicyMap := make(map[string]MappedPolicy)
+		userPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
+		stsPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
+		svcPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 		if opts.Entity == madmin.SRUserEntity {
 			if mp, ok := globalIAMSys.store.GetMappedPolicy(opts.EntityValue, false); ok {
-				userPolicyMap[opts.EntityValue] = mp
+				userPolicyMap.Store(opts.EntityValue, mp)
 			}
 		} else {
 			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, stsPolicyMap)
@@ -3804,34 +3810,23 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 				return info, errSRBackendIssue(svcErr)
 			}
 		}
-		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, len(userPolicyMap))
-		for user, mp := range userPolicyMap {
-			info.UserPolicies[user] = madmin.SRPolicyMapping{
-				IsGroup:     false,
-				UserOrGroup: user,
-				UserType:    int(regUser),
-				Policy:      mp.Policies,
-				UpdatedAt:   mp.UpdatedAt,
-			}
+		info.UserPolicies = make(map[string]madmin.SRPolicyMapping, userPolicyMap.Size())
+		addPolicy := func(t IAMUserType, mp *xsync.MapOf[string, MappedPolicy]) {
+			mp.Range(func(k string, mp MappedPolicy) bool {
+				info.UserPolicies[k] = madmin.SRPolicyMapping{
+					IsGroup:     false,
+					UserOrGroup: k,
+					UserType:    int(t),
+					Policy:      mp.Policies,
+					UpdatedAt:   mp.UpdatedAt,
+				}
+				return true
+			})
 		}
-		for stsU, mp := range stsPolicyMap {
-			info.UserPolicies[stsU] = madmin.SRPolicyMapping{
-				IsGroup:     false,
-				UserOrGroup: stsU,
-				UserType:    int(stsUser),
-				Policy:      mp.Policies,
-				UpdatedAt:   mp.UpdatedAt,
-			}
-		}
-		for svcU, mp := range svcPolicyMap {
-			info.UserPolicies[svcU] = madmin.SRPolicyMapping{
-				IsGroup:     false,
-				UserOrGroup: svcU,
-				UserType:    int(svcUser),
-				Policy:      mp.Policies,
-				UpdatedAt:   mp.UpdatedAt,
-			}
-		}
+		addPolicy(regUser, userPolicyMap)
+		addPolicy(stsUser, stsPolicyMap)
+		addPolicy(svcUser, svcPolicyMap)
+
 		info.UserInfoMap = make(map[string]madmin.UserInfo)
 		if opts.Entity == madmin.SRUserEntity {
 			if ui, err := globalIAMSys.GetUserInfo(ctx, opts.EntityValue); err == nil {
@@ -3875,10 +3870,10 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 
 	if opts.Groups || opts.Entity == madmin.SRGroupEntity {
 		// Replicate policy mappings on local to all peers.
-		groupPolicyMap := make(map[string]MappedPolicy)
+		groupPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 		if opts.Entity == madmin.SRGroupEntity {
 			if mp, ok := globalIAMSys.store.GetMappedPolicy(opts.EntityValue, true); ok {
-				groupPolicyMap[opts.EntityValue] = mp
+				groupPolicyMap.Store(opts.EntityValue, mp)
 			}
 		} else {
 			stsErr := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
@@ -3891,15 +3886,16 @@ func (c *SiteReplicationSys) SiteReplicationMetaInfo(ctx context.Context, objAPI
 			}
 		}
 
-		info.GroupPolicies = make(map[string]madmin.SRPolicyMapping, len(c.state.Peers))
-		for group, mp := range groupPolicyMap {
+		info.GroupPolicies = make(map[string]madmin.SRPolicyMapping, groupPolicyMap.Size())
+		groupPolicyMap.Range(func(group string, mp MappedPolicy) bool {
 			info.GroupPolicies[group] = madmin.SRPolicyMapping{
 				IsGroup:     true,
 				UserOrGroup: group,
 				Policy:      mp.Policies,
 				UpdatedAt:   mp.UpdatedAt,
 			}
-		}
+			return true
+		})
 		info.GroupDescMap = make(map[string]madmin.GroupDesc)
 		if opts.Entity == madmin.SRGroupEntity {
 			if gd, err := globalIAMSys.GetGroupDescription(opts.EntityValue); err == nil {
