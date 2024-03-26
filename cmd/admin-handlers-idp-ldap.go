@@ -193,6 +193,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 	// fail if ldap is not enabled
 	if !globalIAMSys.LDAPConfig.Enabled() {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("LDAP not enabled")), r.URL)
+		return
 	}
 
 	// Find the user for the request sender (as it may be sent via a service
