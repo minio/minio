@@ -25,7 +25,6 @@ import (
 	"time"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	xnet "github.com/minio/pkg/v2/net"
 )
 
 const (
@@ -46,12 +45,15 @@ type Target interface {
 // Store - Used to persist items.
 type Store[I any] interface {
 	Put(item I) error
+	PutMultiple(item []I) error
 	Get(key string) (I, error)
+	GetRaw(key string) ([]byte, error)
 	Len() int
 	List() ([]string, error)
 	Del(key string) error
 	DelList(key []string) error
 	Open() error
+	Delete() error
 	Extension() string
 }
 
@@ -110,15 +112,14 @@ func sendItems(target Target, keyCh <-chan Key, doneCh <-chan struct{}, logger l
 				break
 			}
 
-			if err != ErrNotConnected && !xnet.IsConnResetErr(err) {
-				logger(context.Background(),
-					fmt.Errorf("target.SendFromStore() failed with '%w'", err),
-					target.Name())
-			}
-
-			// Retrying after 3secs back-off
+			logger(
+				context.Background(),
+				fmt.Errorf("unable to send webhook log entry to '%s' err '%w'", target.Name(), err),
+				target.Name(),
+			)
 
 			select {
+			// Retrying after 3secs back-off
 			case <-retryTicker.C:
 			case <-doneCh:
 				return false
@@ -131,7 +132,6 @@ func sendItems(target Target, keyCh <-chan Key, doneCh <-chan struct{}, logger l
 		select {
 		case key, ok := <-keyCh:
 			if !ok {
-				// closed channel.
 				return
 			}
 
@@ -147,9 +147,7 @@ func sendItems(target Target, keyCh <-chan Key, doneCh <-chan struct{}, logger l
 // StreamItems reads the keys from the store and replays the corresponding item to the target.
 func StreamItems[I any](store Store[I], target Target, doneCh <-chan struct{}, logger logger) {
 	go func() {
-		// Replays the items from the store.
 		keyCh := replayItems(store, doneCh, logger, target.Name())
-		// Send items from the store.
 		sendItems(target, keyCh, doneCh, logger)
 	}()
 }
