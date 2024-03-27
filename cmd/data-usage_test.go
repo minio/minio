@@ -364,6 +364,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 			}
 			if e == nil {
 				t.Fatal("got nil result")
+				return
 			}
 			if e.Size != int64(w.size) {
 				t.Error("got size", e.Size, "want", w.size)
