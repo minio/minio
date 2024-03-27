@@ -233,12 +233,12 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		targetGroups = requestorGroups
 
 		// Deny if the target user is not LDAP
-		isLDAP, err := globalIAMSys.LDAPConfig.DoesUsernameExist(targetUser)
+		foundLDAPDN, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(targetUser)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		if isLDAP == "" {
+		if foundLDAPDN == "" {
 			err := errors.New("Specified user does not exist on LDAP server")
 			APIErr := errorCodes.ToAPIErrWithErr(ErrAdminNoSuchUser, err)
 			writeErrorResponseJSON(ctx, w, APIErr, r.URL)
@@ -374,7 +374,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	targetAccount, err := globalIAMSys.LDAPConfig.DoesUsernameExist(userDN)
+	targetAccount, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

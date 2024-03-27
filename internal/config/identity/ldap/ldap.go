@@ -27,6 +27,7 @@ import (
 	ldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
+	xldap "github.com/minio/pkg/v2/ldap"
 )
 
 // LookupUserDN searches for the full DN and groups of a given username
@@ -57,11 +58,16 @@ func (l *Config) LookupUserDN(username string) (string, []string, error) {
 	return bindDN, groups, nil
 }
 
-// DoesUsernameExist checks if the given username exists in the LDAP directory.
+// GetValidatedDNForUsername checks if the given username exists in the LDAP directory.
 // The given username could be just the short "login" username or the full DN.
-// When the username is found, the full DN is returned, otherwise the returned
-// string is empty. If the user is not found, err = nil, otherwise, err != nil.
-func (l *Config) DoesUsernameExist(username string) (string, error) {
+//
+// When the username/DN is found, the full DN returned by the **server** is
+// returned, otherwise the returned string is empty. The value returned here is
+// the value sent by the LDAP server and is used in minio as the server performs
+// LDAP specific normalization (including Unicode normalization).
+//
+// If the user is not found, err = nil, otherwise, err != nil.
+func (l *Config) GetValidatedDNForUsername(username string) (string, error) {
 	conn, err := l.LDAP.Connect()
 	if err != nil {
 		return "", err
@@ -107,7 +113,11 @@ func (l *Config) DoesUsernameExist(username string) (string, error) {
 				return "", err
 			}
 			for _, entry := range searchResult.Entries {
-				foundDistName = append(foundDistName, entry.DN)
+				normDN, err := xldap.NormalizeDN(entry.DN)
+				if err != nil {
+					return "", err
+				}
+				foundDistName = append(foundDistName, normDN)
 			}
 		}
 	}
@@ -123,26 +133,33 @@ func (l *Config) DoesUsernameExist(username string) (string, error) {
 	return "", nil
 }
 
-// DoesGroupDNExist checks if the given group DN exists in the LDAP directory.
-func (l *Config) DoesGroupDNExist(groupDN string) (bool, error) {
+// GetValidatedGroupDN checks if the given group DN exists in the LDAP directory
+// and returns the group DN sent by the LDAP server. The value returned by the
+// server may not be equal to the input group DN, as LDAP equality is not a
+// simple Golang string equality. However, we assume the value returned by the
+// LDAP server is canonical.
+//
+// If the group is not found in the LDAP directory, the returned string is empty
+// and err = nil.
+func (l *Config) GetValidatedGroupDN(groupDN string) (string, error) {
 	if len(l.LDAP.GroupSearchBaseDistNames) == 0 {
-		return false, errors.New("no group search Base DNs given")
+		return "", errors.New("no group search Base DNs given")
 	}
 
 	gdn, err := ldap.ParseDN(groupDN)
 	if err != nil {
-		return false, fmt.Errorf("Given group DN could not be parsed: %s", err)
+		return "", fmt.Errorf("Given group DN could not be parsed: %s", err)
 	}
 
 	conn, err := l.LDAP.Connect()
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	defer conn.Close()
 
 	// Bind to the lookup user account
 	if err = l.LDAP.LookupBind(conn); err != nil {
-		return false, err
+		return "", err
 	}
 
 	var foundDistName []string
@@ -158,22 +175,26 @@ func (l *Config) DoesGroupDNExist(groupDN string) (bool, error) {
 				if ldap.IsErrorWithCode(err, 32) {
 					continue
 				}
-				return false, err
+				return "", err
 			}
 			for _, entry := range searchResult.Entries {
-				foundDistName = append(foundDistName, entry.DN)
+				normDN, err := xldap.NormalizeDN(entry.DN)
+				if err != nil {
+					return "", err
+				}
+				foundDistName = append(foundDistName, normDN)
 			}
 		}
 	}
 	if len(foundDistName) == 1 {
-		return true, nil
+		return foundDistName[0], nil
 	} else if len(foundDistName) > 1 {
 		// FIXME: This error would happen if the multiple base DNs are given and
 		// some base DNs are subtrees of other base DNs - we should validate
 		// and error out in such cases.
-		return false, fmt.Errorf("found multiple DNs for the given group DN")
+		return "", fmt.Errorf("found multiple DNs for the given group DN")
 	}
-	return false, nil
+	return "", nil
 }
 
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the
