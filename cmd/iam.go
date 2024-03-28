@@ -362,13 +362,24 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 	}
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	// Add a random interval of up to 20% of the base interval.
-	randInterval := func() time.Duration {
-		return time.Duration(r.Float64() * float64(baseInterval) * 0.2)
+
+	// Calculate the waitInterval between periodic refreshes so that each server
+	// independently picks a (uniformly distributed) random time in an interval
+	// of size = baseInterval.
+	//
+	// For example:
+	//
+	//    - if baseInterval=10s, then 5s <= waitInterval() < 15s
+	//
+	//    - if baseInterval=10m, then 5m <= waitInterval() < 15m
+	waitInterval := func() time.Duration {
+		// Calculate a random value such that 0 <= value < baseInterval
+		randAmt := time.Duration(r.Float64() * float64(baseInterval))
+		return baseInterval/2 + randAmt
 	}
 
 	var maxDurationSecondsForLog float64 = 5
-	timer := time.NewTimer(baseInterval + randInterval())
+	timer := time.NewTimer(waitInterval())
 	defer timer.Stop()
 
 	for {
@@ -386,21 +397,21 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 				}
 			}
 
+			// Purge expired STS credentials.
+			purgeStart := time.Now()
+			if err := sys.store.PurgeExpiredSTS(ctx); err != nil {
+				logger.LogIf(ctx, fmt.Errorf("Failure in periodic STS purge for IAM (took %.2fs): %v", time.Since(purgeStart).Seconds(), err))
+			} else {
+				took := time.Since(purgeStart).Seconds()
+				if took > maxDurationSecondsForLog {
+					// Log if we took a lot of time to load.
+					logger.Info("IAM expired STS purge took %.2fs", took)
+				}
+			}
+
 			// The following actions are performed about once in 4 times that
 			// IAM is refreshed:
 			if r.Intn(4) == 0 {
-				// Purge expired STS credentials.
-				purgeStart := time.Now()
-				if err := sys.store.PurgeExpiredSTS(ctx); err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Failure in periodic STS purge for IAM (took %.2fs): %v", time.Since(purgeStart).Seconds(), err))
-				} else {
-					took := time.Since(purgeStart).Seconds()
-					if took > maxDurationSecondsForLog {
-						// Log if we took a lot of time to load.
-						logger.Info("IAM expired STS purge took %.2fs", took)
-					}
-				}
-
 				// Poll and remove accounts for those users who were removed
 				// from LDAP/OpenID.
 				if sys.LDAPConfig.Enabled() {
@@ -412,7 +423,7 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 				}
 			}
 
-			timer.Reset(baseInterval + randInterval())
+			timer.Reset(waitInterval())
 		case <-ctx.Done():
 			return
 		}
