@@ -30,11 +30,9 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -393,80 +391,34 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 }
 
 var (
-	usersListKey                   = "users/"
-	svcAccListKey                  = "service-accounts/"
-	groupsListKey                  = "groups/"
-	policiesListKey                = "policies/"
-	stsListKey                     = "sts/"
-	policyDBUsersListKey           = "policydb/users/"
-	policyDBSTSUsersListKey        = "policydb/sts-users/"
-	policyDBServiceAccountsListKey = "policydb/service-accounts/"
-	policyDBGroupsListKey          = "policydb/groups/"
-
-	// List of directories from which to read iam data into memory.
-	allListKeys = []string{
-		usersListKey,
-		svcAccListKey,
-		groupsListKey,
-		policiesListKey,
-		stsListKey,
-		policyDBUsersListKey,
-		policyDBSTSUsersListKey,
-		policyDBServiceAccountsListKey,
-		policyDBGroupsListKey,
-	}
-
-	// List of directories to skip: we do not read STS directories for better
-	// performance. STS credentials would be stored in memory when they are
-	// first used.
-	iamLoadSkipListKeySet = set.CreateStringSet(
-		stsListKey,
-		policyDBSTSUsersListKey,
-	)
+	usersListKey                   = "users"
+	svcAccListKey                  = "service-accounts"
+	groupsListKey                  = "groups"
+	policiesListKey                = "policies"
+	stsListKey                     = "sts"
+	policyDBUsersListKey           = "policydb/users"
+	policyDBSTSUsersListKey        = "policydb/sts-users"
+	policyDBServiceAccountsListKey = "policydb/service-accounts"
+	policyDBGroupsListKey          = "policydb/groups"
 )
 
 func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
 	res := make(map[string][]string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	for _, listKey := range allListKeys {
-		if iamLoadSkipListKeySet.Contains(listKey) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
+		if item.Err != nil {
+			return nil, item.Err
+		}
+
+		listKey, trimmedItem := path2BucketObjectWithBasePath(iamConfigPrefix+SlashSeparator, item.Item)
+		if listKey == iamFormatFile {
 			continue
 		}
-		for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+listKey) {
-			if item.Err != nil {
-				return nil, item.Err
-			}
-			res[listKey] = append(res[listKey], item.Item)
-		}
+
+		res[listKey] = append(res[listKey], trimmedItem)
 	}
 	return res, nil
-}
-
-// PurgeExpiredSTS - purge expired STS credentials from object store.
-func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
-	if iamOS.objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	bootstrapTraceMsg("purging expired STS credentials")
-	// Scan STS users on disk and purge expired ones. We do not need to hold a
-	// lock with store.lock() here.
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+stsListKey) {
-		if item.Err != nil {
-			return item.Err
-		}
-		userName := path.Dir(item.Item)
-		// loadUser() will delete expired user during the load - we do not need
-		// to keep the loaded user around in memory, so we reinitialize the map
-		// each time.
-		m := map[string]UserIdentity{}
-		if err := iamOS.loadUser(ctx, userName, stsUser, m); err != nil && err != errNoSuchUser {
-			logger.LogIf(GlobalContext, fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item.Item))
-		}
-
-	}
-	return nil
 }
 
 // Assumes cache is locked by caller.
@@ -483,7 +435,6 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	}
 
 	// Loads things in the same order as `LoadIAMCache()`
-
 	bootstrapTraceMsg("loading policy documents")
 
 	policiesList := listedConfigItems[policiesListKey]
@@ -566,6 +517,24 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	// Copy svcUsersMap to cache.iamUsersMap
 	for k, v := range svcUsersMap {
 		cache.iamUsersMap[k] = v
+	}
+
+	bootstrapTraceMsg("loading STS users")
+	stsUsersList := listedConfigItems[stsListKey]
+	for _, item := range stsUsersList {
+		userName := path.Dir(item)
+		if err := iamOS.loadUser(ctx, userName, stsUser, cache.iamSTSAccountsMap); err != nil && err != errNoSuchUser {
+			return fmt.Errorf("unable to load the STS user `%s`: %w", userName, err)
+		}
+	}
+
+	bootstrapTraceMsg("loading STS policy mapping")
+	stsPolicyMappingsList := listedConfigItems[policyDBSTSUsersListKey]
+	for _, item := range stsPolicyMappingsList {
+		stsName := strings.TrimSuffix(item, ".json")
+		if err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, cache.iamSTSPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+			return fmt.Errorf("unable to load the policy mapping for the STS user `%s`: %w", stsName, err)
+		}
 	}
 
 	cache.buildUserGroupMemberships()
