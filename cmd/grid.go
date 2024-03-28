@@ -35,13 +35,9 @@ var globalGrid atomic.Pointer[grid.Manager]
 var globalGridStart = make(chan struct{})
 
 func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
-	lookupHost := globalDNSCache.LookupHost
-	if IsKubernetes() || IsDocker() {
-		lookupHost = nil
-	}
 	hosts, local := eps.GridHosts()
 	g, err := grid.NewManager(ctx, grid.ManagerOptions{
-		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
+		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(globalDNSCache.LookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
 		Local:        local,
 		Hosts:        hosts,
 		AddAuth:      newCachedAuthToken(),

@@ -39,8 +39,8 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
-			Key:         ClassOptimize,
-			Description: `optimize parity calculation for standard storage class, set 'capacity' for capacity optimized (no additional parity)` + defaultHelpPostfix(ClassOptimize),
+			Key:         Optimize,
+			Description: `optimize parity calculation for standard storage class, set 'capacity' for capacity optimized (no additional parity)` + defaultHelpPostfix(Optimize),
 			Optional:    true,
 			Type:        "string",
 		},

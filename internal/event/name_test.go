@@ -36,7 +36,7 @@ func TestNameExpand(t *testing.T) {
 			ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut,
 			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold, ObjectCreatedPutTagging, ObjectCreatedDeleteTagging,
 		}},
-		{ObjectRemovedAll, []Name{ObjectRemovedDelete, ObjectRemovedDeleteMarkerCreated, ObjectRemovedNoOP}},
+		{ObjectRemovedAll, []Name{ObjectRemovedDelete, ObjectRemovedDeleteMarkerCreated, ObjectRemovedNoOP, ObjectRemovedDeleteAllVersions}},
 		{ObjectAccessedHead, []Name{ObjectAccessedHead}},
 	}
 

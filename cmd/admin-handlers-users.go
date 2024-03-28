@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/policy"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // RemoveUser - DELETE /minio/admin/v3/remove-user?accessKey=<access_key>
@@ -1936,13 +1937,13 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case userPolicyMappingsFile:
-			userPolicyMap := make(map[string]MappedPolicy)
+			userPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			userPolData, err := json.Marshal(userPolicyMap)
+			userPolData, err := json.Marshal(mappedPoliciesToMap(userPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -1953,13 +1954,13 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case groupPolicyMappingsFile:
-			groupPolicyMap := make(map[string]MappedPolicy)
+			groupPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			grpPolData, err := json.Marshal(groupPolicyMap)
+			grpPolData, err := json.Marshal(mappedPoliciesToMap(groupPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -1970,13 +1971,13 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case stsUserPolicyMappingsFile:
-			userPolicyMap := make(map[string]MappedPolicy)
+			userPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			userPolData, err := json.Marshal(userPolicyMap)
+			userPolData, err := json.Marshal(mappedPoliciesToMap(userPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -1986,13 +1987,13 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case stsGroupPolicyMappingsFile:
-			groupPolicyMap := make(map[string]MappedPolicy)
+			groupPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			grpPolData, err := json.Marshal(groupPolicyMap)
+			grpPolData, err := json.Marshal(mappedPoliciesToMap(groupPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return

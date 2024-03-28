@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/klauspost/readahead"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -1396,20 +1397,25 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 
 	shardFileSize := erasure.ShardFileSize(data.Size())
+	inlineBlock := globalStorageClass.InlineBlock()
+	if inlineBlock <= 0 {
+		inlineBlock = 128 * humanize.KiByte
+	}
+
 	writers := make([]io.Writer, len(onlineDisks))
 	var inlineBuffers []*bytes.Buffer
 	if shardFileSize >= 0 {
-		if !opts.Versioned && shardFileSize < smallFileThreshold {
+		if !opts.Versioned && shardFileSize < inlineBlock {
 			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		} else if shardFileSize < smallFileThreshold/8 {
+		} else if shardFileSize < inlineBlock/8 {
 			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 		}
 	} else {
 		// If compressed, use actual size to determine.
 		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
-			if !opts.Versioned && sz < smallFileThreshold {
+			if !opts.Versioned && sz < inlineBlock {
 				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			} else if sz < smallFileThreshold/8 {
+			} else if sz < inlineBlock/8 {
 				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 			}
 		}
@@ -1815,10 +1821,6 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		auditObjectErasureSet(ctx, object, &er)
 	}
 
-	if opts.DeletePrefix {
-		return ObjectInfo{}, toObjectErr(er.deletePrefix(ctx, bucket, object), bucket, object)
-	}
-
 	var lc *lifecycle.Lifecycle
 	var rcfg lock.Retention
 	var replcfg *replication.Config
@@ -1845,12 +1847,63 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		}
 	}
 
+	if opts.DeletePrefix {
+		if opts.Expiration.Expire {
+			// Expire all versions expiration must still verify the state() on disk
+			// via a getObjectInfo() call as follows, any read quorum issues we
+			// must not proceed further for safety reasons. attempt a MRF heal
+			// while we see such quorum errors.
+			goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+			if gerr != nil && goi.Name == "" {
+				if _, ok := gerr.(InsufficientReadQuorum); ok {
+					// Add an MRF heal for next time.
+					er.addPartial(bucket, object, opts.VersionID)
+
+					return objInfo, InsufficientWriteQuorum{}
+				}
+				return objInfo, gerr
+			}
+
+			// Add protection and re-verify the ILM rules for qualification
+			// based on the latest objectInfo and see if the object still
+			// qualifies for deletion.
+			if gerr == nil {
+				evt := evalActionFromLifecycle(ctx, *lc, rcfg, replcfg, goi)
+				var isErr bool
+				switch evt.Action {
+				case lifecycle.NoneAction:
+					isErr = true
+				case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+					isErr = true
+				}
+				if isErr {
+					if goi.VersionID != "" {
+						return goi, VersionNotFound{
+							Bucket:    bucket,
+							Object:    object,
+							VersionID: goi.VersionID,
+						}
+					}
+					return goi, ObjectNotFound{
+						Bucket: bucket,
+						Object: object,
+					}
+				}
+			}
+		} // Delete marker and any latest that qualifies shall be expired permanently.
+
+		return ObjectInfo{}, toObjectErr(er.deletePrefix(ctx, bucket, object), bucket, object)
+	}
+
 	storageDisks := er.getDisks()
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
 	if gerr != nil && goi.Name == "" {
 		if _, ok := gerr.(InsufficientReadQuorum); ok {
+			// Add an MRF heal for next time.
+			er.addPartial(bucket, object, opts.VersionID)
+
 			return objInfo, InsufficientWriteQuorum{}
 		}
 		// For delete marker replication, versionID being replicated will not exist on disk
@@ -1860,6 +1913,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			return objInfo, gerr
 		}
 	}
+
 	if opts.EvalMetadataFn != nil {
 		dsc, err := opts.EvalMetadataFn(&goi, err)
 		if err != nil {

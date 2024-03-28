@@ -381,7 +381,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		rctx := lkctx.Context()
 		obj, err := er.getObjectInfo(rctx, bucket, object, opts)
 		lk.RUnlock(lkctx)
-		if err != nil && !isErrVersionNotFound(err) {
+		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			return nil, err
 		}
 		if opts.CheckPrecondFn(obj) {

@@ -54,7 +54,7 @@ require (
 	github.com/minio/madmin-go/v3 v3.0.50
 	github.com/minio/minio-go/v7 v7.0.69
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg/v2 v2.0.11
+	github.com/minio/pkg/v2 v2.0.14
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5
@@ -76,6 +76,7 @@ require (
 	github.com/prometheus/client_model v0.6.0
 	github.com/prometheus/common v0.50.0
 	github.com/prometheus/procfs v0.13.0
+	github.com/puzpuzpuz/xsync/v3 v3.1.0
 	github.com/rabbitmq/amqp091-go v1.9.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/rs/cors v1.10.1
