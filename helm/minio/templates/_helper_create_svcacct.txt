@@ -93,7 +93,7 @@ echo {{ tpl .accessKey $global }} > $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- if .existingSecret }}
 cat /config/secrets-svc/{{ tpl .existingSecret $global }}/{{ tpl .existingSecretKey $global }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 # Add a new line if it doesn't exist
-sed -i '$a\' $MINIO_ACCESSKEY_SECRETKEY_TMP
+echo >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{ else }}
 echo {{ .secretKey }} >> $MINIO_ACCESSKEY_SECRETKEY_TMP
 {{- end }}
