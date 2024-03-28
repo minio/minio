@@ -917,23 +917,28 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "tenant1-ss-0-0.tenant1-hl.tenant-ns.svc.cluster.local:9000",
-          "value": "tenant1-ss-0-0.tenant1-hl.tenant-ns.svc.cluster.local:9000"
         },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(minio_node_drive_total,server)",
         "hide": 0,
+        "includeAll": false,
         "label": "Server",
+        "multi": false,
         "name": "server",
-        "options": [
-          {
-            "selected": true,
-            "text": "tenant1-ss-0-0.tenant1-hl.tenant-ns.svc.cluster.local:9000",
-            "value": "tenant1-ss-0-0.tenant1-hl.tenant-ns.svc.cluster.local:9000"
-          }
-        ],
-        "query": "tenant1-ss-0-0.tenant1-hl.tenant-ns.svc.cluster.local:9000",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(minio_node_drive_total,server)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
         "skipUrlSync": false,
-        "type": "textbox"
+        "sort": 0,
+        "type": "query"
       }
     ]
   },
