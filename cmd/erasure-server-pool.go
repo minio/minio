@@ -688,12 +688,17 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 		updates <- DataUsageInfo{} // no buckets found update data usage to reflect latest state
 		return nil
 	}
-
+	totalResults := 0
+	resultIndex := -1
+	for _, z := range z.serverPools {
+		totalResults += len(z.sets)
+	}
+	results = make([]dataUsageCache, totalResults)
 	// Collect for each set in serverPools.
 	for _, z := range z.serverPools {
 		for _, erObj := range z.sets {
+			resultIndex++
 			wg.Add(1)
-			results = append(results, dataUsageCache{})
 			go func(i int, erObj *erasureObjects) {
 				updates := make(chan dataUsageCache, 1)
 				defer xioutil.SafeClose(updates)
@@ -719,7 +724,7 @@ func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataU
 					mu.Unlock()
 					return
 				}
-			}(len(results)-1, erObj)
+			}(resultIndex, erObj)
 		}
 	}
 	updateCloser := make(chan chan struct{})
