@@ -60,7 +60,7 @@ import (
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/certs"
 	"github.com/minio/pkg/v2/env"
-	pkgAudit "github.com/minio/pkg/v2/logger/message/audit"
+	xaudit "github.com/minio/pkg/v2/logger/message/audit"
 	xnet "github.com/minio/pkg/v2/net"
 	"golang.org/x/oauth2"
 )
@@ -946,21 +946,18 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	if len(logger.AuditTargets()) == 0 {
 		return
 	}
+
 	entry := audit.NewEntry(globalDeploymentID())
 	entry.Trigger = opts.Event
 	entry.Event = opts.Event
 	entry.Error = opts.Error
 	entry.API.Name = opts.APIName
 	entry.API.Bucket = opts.Bucket
-	entry.API.Objects = []pkgAudit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
+	entry.API.Objects = []xaudit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
-	if len(opts.Tags) > 0 {
-		entry.Tags = make(map[string]interface{}, len(opts.Tags))
-		for k, v := range opts.Tags {
-			entry.Tags[k] = v
-		}
-	} else {
-		entry.Tags = make(map[string]interface{})
+	entry.Tags = make(map[string]interface{}, len(opts.Tags))
+	for k, v := range opts.Tags {
+		entry.Tags[k] = v
 	}
 
 	// Merge tag information if found - this is currently needed for tags
