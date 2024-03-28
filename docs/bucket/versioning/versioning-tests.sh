@@ -42,34 +42,34 @@ if [ ! -f ./mc ]; then
 		chmod +x mc
 fi
 
-minio server --address 127.0.0.1:9001 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
-	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
-minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
-	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+minio server --address ":9001" "https://localhost:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+	"https://localhost:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
+minio server --address ":9002" "https://localhost:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+	"https://localhost:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
 
 sleep 60
 
-export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
+export MC_HOST_sitea=https://minio:minio123@localhost:9001
 
-./mc mb sitea/delissue
+./mc mb sitea/delissue --insecure
 
-./mc version enable sitea/delissue
+./mc version enable sitea/delissue --insecure
 
-echo hello | ./mc pipe sitea/delissue/hello
+echo hello | ./mc pipe sitea/delissue/hello --insecure
 
-./mc version suspend sitea/delissue
+./mc version suspend sitea/delissue --insecure
 
-./mc rm sitea/delissue/hello
+./mc rm sitea/delissue/hello --insecure
 
-./mc version enable sitea/delissue
+./mc version enable sitea/delissue --insecure
 
-echo hello | ./mc pipe sitea/delissue/hello
+echo hello | ./mc pipe sitea/delissue/hello --insecure
 
-./mc version suspend sitea/delissue
+./mc version suspend sitea/delissue --insecure
 
-./mc rm sitea/delissue/hello
+./mc rm sitea/delissue/hello --insecure
 
-count=$(./mc ls --versions sitea/delissue | wc -l)
+count=$(./mc ls --versions sitea/delissue --insecure | wc -l)
 
 if [ ${count} -ne 3 ]; then
 	echo "BUG: expected number of versions to be '3' found ${count}"
@@ -78,6 +78,6 @@ if [ ${count} -ne 3 ]; then
 fi
 
 echo "SUCCESS:"
-./mc ls --versions sitea/delissue
+./mc ls --versions sitea/delissue --insecure
 
 catch
