@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -55,7 +56,7 @@ type apiConfig struct {
 	gzipObjects                 bool
 	rootAccess                  bool
 	syncEvents                  bool
-	objectMaxVersions           int
+	objectMaxVersions           int64
 }
 
 const (
@@ -393,13 +394,13 @@ func (t *apiConfig) isSyncEventsEnabled() bool {
 	return t.syncEvents
 }
 
-func (t *apiConfig) getObjectMaxVersions() int {
+func (t *apiConfig) getObjectMaxVersions() int64 {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if t.objectMaxVersions <= 0 {
-		// defaults to 'maxObjectVersions' when unset.
-		return maxObjectVersions
+		// defaults to 'IntMax' when unset.
+		return math.MaxInt64
 	}
 
 	return t.objectMaxVersions
