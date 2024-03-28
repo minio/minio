@@ -40,9 +40,6 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-// Reject creating new versions when a single object is cross maxObjectVersions
-var maxObjectVersions = 10000
-
 var (
 	// XL header specifies the format
 	xlHeader = [4]byte{'X', 'L', '2', ' '}
@@ -1091,8 +1088,8 @@ func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 		return err
 	}
 
-	// returns error if we have exceeded maxObjectVersions
-	if len(x.versions)+1 > globalAPIConfig.getObjectMaxVersions() {
+	// returns error if we have exceeded configured object max versions
+	if int64(len(x.versions)+1) > globalAPIConfig.getObjectMaxVersions() {
 		return errMaxVersionsExceeded
 	}
 
