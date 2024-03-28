@@ -623,7 +623,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	if err != nil {
 		return PartInfo{}, err
 	}
-	pctx := plkctx.Context()
+	ctx = plkctx.Context()
 	defer partIDLock.Unlock(plkctx)
 
 	onlineDisks := er.getDisks()
@@ -655,7 +655,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		}
 	}()
 
-	erasure, err := NewErasure(pctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
+	erasure, err := NewErasure(ctx, fi.Erasure.DataBlocks, fi.Erasure.ParityBlocks, fi.Erasure.BlockSize)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -707,7 +707,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		}
 	}
 
-	n, err := erasure.Encode(pctx, toEncode, writers, buffer, writeQuorum)
+	n, err := erasure.Encode(ctx, toEncode, writers, buffer, writeQuorum)
 	closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
