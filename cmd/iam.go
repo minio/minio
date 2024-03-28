@@ -389,18 +389,6 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 			// The following actions are performed about once in 4 times that
 			// IAM is refreshed:
 			if r.Intn(4) == 0 {
-				// Purge expired STS credentials.
-				purgeStart := time.Now()
-				if err := sys.store.PurgeExpiredSTS(ctx); err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Failure in periodic STS purge for IAM (took %.2fs): %v", time.Since(purgeStart).Seconds(), err))
-				} else {
-					took := time.Since(purgeStart).Seconds()
-					if took > maxDurationSecondsForLog {
-						// Log if we took a lot of time to load.
-						logger.Info("IAM expired STS purge took %.2fs", took)
-					}
-				}
-
 				// Poll and remove accounts for those users who were removed
 				// from LDAP/OpenID.
 				if sys.LDAPConfig.Enabled() {

@@ -533,16 +533,6 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 	}
 }
 
-// PurgeExpiredSTS - purges expired STS credentials.
-func (store *IAMStoreSys) PurgeExpiredSTS(ctx context.Context) error {
-	iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore)
-	if !ok {
-		// No purging is done for non-object storage.
-		return nil
-	}
-	return iamOS.PurgeExpiredSTS(ctx)
-}
-
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) error {
@@ -624,6 +614,7 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 		cache.iamUserGroupMemberships = newCache.iamUserGroupMemberships
 		cache.iamUserPolicyMap = newCache.iamUserPolicyMap
 		cache.iamUsersMap = newCache.iamUsersMap
+		cache.iamSTSAccountsMap = newCache.iamSTSAccountsMap
 		// For STS policy map, we need to merge the new cache with the existing
 		// cache because the periodic IAM reload is partial. The periodic load
 		// here is to account for STS policy mapping changes that should apply
