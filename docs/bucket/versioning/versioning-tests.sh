@@ -10,10 +10,10 @@ trap 'catch $LINENO' ERR
 catch() {
 	if [ $# -ne 0 ]; then
 		echo "error on line $1"
-		echo "$site server logs ========="
-		cat "/tmp/${site}_1.log"
+		echo "server logs ========="
+		cat "/tmp/sitea_1.log"
 		echo "==========================="
-		cat "/tmp/${site}_2.log"
+		cat "/tmp/sitea_2.log"
 	fi
 
 	echo "Cleaning up instances of MinIO"
@@ -46,6 +46,8 @@ minio server --address 127.0.0.1:9001 "http://127.0.0.1:9001/tmp/multisitea/data
 	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
 minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
 	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+
+sleep 60
 
 export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
 
