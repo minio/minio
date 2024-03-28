@@ -191,6 +191,22 @@ type replicationAllStatsV1 struct {
 	ReplicaCount uint64 `msg:"ReplicaCount,omitempty"`
 }
 
+// empty returns true if the replicationAllStats is empty (contains no entries).
+func (r *replicationAllStats) empty() bool {
+	if r == nil {
+		return true
+	}
+	if r.ReplicaSize != 0 || r.ReplicaCount != 0 {
+		return false
+	}
+	for _, v := range r.Targets {
+		if !v.Empty() {
+			return false
+		}
+	}
+	return true
+}
+
 // clone creates a deep-copy clone.
 func (r *replicationAllStats) clone() *replicationAllStats {
 	if r == nil {
@@ -899,6 +915,9 @@ func (d *dataUsageCache) sizeRecursive(path string) *dataUsageEntry {
 		return root
 	}
 	flat := d.flatten(*root)
+	if flat.ReplicationStats.empty() {
+		flat.ReplicationStats = nil
+	}
 	return &flat
 }
 
