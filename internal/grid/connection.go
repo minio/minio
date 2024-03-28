@@ -175,7 +175,7 @@ func (c ContextDialer) DialContext(ctx context.Context, network, address string)
 }
 
 const (
-	defaultOutQueue    = 65535    // kind of close to max open fds per user
+	defaultOutQueue    = 1048576  // (ulimit -Hn) - kind of close to max open fds per user
 	readBufferSize     = 32 << 10 // 32 KiB is the most optimal on Linux
 	writeBufferSize    = 32 << 10 // 32 KiB is the most optimal on Linux
 	defaultDialTimeout = 2 * time.Second
@@ -206,8 +206,8 @@ func newConnection(o connectionParams) *Connection {
 		Local:              o.local,
 		id:                 o.id,
 		ctx:                o.ctx,
-		outgoing:           xsync.NewMapOfPresized[uint64, *muxClient](1000),
-		inStream:           xsync.NewMapOfPresized[uint64, *muxServer](1000),
+		outgoing:           xsync.NewMapOfPresized[uint64, *muxClient](2000),
+		inStream:           xsync.NewMapOfPresized[uint64, *muxServer](2000),
 		outQueue:           make(chan []byte, defaultOutQueue),
 		dialer:             o.dial,
 		side:               ws.StateServerSide,
