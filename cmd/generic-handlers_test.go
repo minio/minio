@@ -108,15 +108,15 @@ var containsReservedMetadataTests = []struct {
 	},
 	{
 		header:     http.Header{crypto.MetaIV: []string{"iv"}},
-		shouldFail: true,
+		shouldFail: false,
 	},
 	{
 		header:     http.Header{crypto.MetaAlgorithm: []string{crypto.InsecureSealAlgorithm}},
-		shouldFail: true,
+		shouldFail: false,
 	},
 	{
 		header:     http.Header{crypto.MetaSealedKeySSEC: []string{"mac"}},
-		shouldFail: true,
+		shouldFail: false,
 	},
 	{
 		header:     http.Header{ReservedMetadataPrefix + "Key": []string{"value"}},

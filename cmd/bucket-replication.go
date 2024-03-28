@@ -51,6 +51,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -75,11 +77,6 @@ const (
 	// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
 	ReplicationWorkerMultiplier = 1.5
 )
-
-func isReplicationEnabled(ctx context.Context, bucketName string) bool {
-	rc, _ := getReplicationConfig(ctx, bucketName)
-	return rc != nil
-}
 
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
@@ -764,13 +761,20 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
-		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-			continue
+		// In case of SSE-C objects copy the allowed internal headers as well
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
+				continue
+			}
+			if isStandardHeader(k) {
+				continue
+			}
 		}
-		if isStandardHeader(k) {
-			continue
+		if slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+			meta[validSSEReplicationHeaders[k]] = v
+		} else {
+			meta[k] = v
 		}
-		meta[k] = v
 	}
 
 	if sc == "" && (objInfo.StorageClass == storageclass.STANDARD || objInfo.StorageClass == storageclass.RRS) {
@@ -1166,9 +1170,10 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, ObjectOptions{
-		VersionID:        ri.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
+		VersionID:          ri.VersionID,
+		Versioned:          versioned,
+		VersionSuspended:   versionSuspended,
+		ReplicationRequest: true,
 	})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
@@ -1322,11 +1327,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, ObjectOptions{
-		VersionID:        ri.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
-	})
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{},
+		ObjectOptions{
+			VersionID:          ri.VersionID,
+			Versioned:          versioned,
+			VersionSuspended:   versionSuspended,
+			ReplicationRequest: true,
+		})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			objInfo := ri.ToObjectInfo()
@@ -1344,6 +1351,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	defer gr.Close()
 
 	objInfo := gr.ObjInfo
+
 	// make sure we have the latest metadata for metrics calculation
 	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
@@ -1365,6 +1373,11 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			Host:       globalLocalNodeName,
 		})
 		return
+	}
+
+	// Set the encrypted size for SSE-C objects
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		size = objInfo.Size
 	}
 
 	if tgt.Bucket == "" {
@@ -1599,21 +1612,35 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		pInfo minio.ObjectPart
 	)
 
+	var objectSize int64
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.Size), partInfo.Size, "", "", partInfo.ActualSize)
+		} else {
+			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		}
 		if err != nil {
 			return err
 		}
 
+		cHeader := http.Header{}
+		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		popts := minio.PutObjectPartOptions{
-			SSE: opts.ServerSideEncryption,
+			SSE:          opts.ServerSideEncryption,
+			CustomHeader: cHeader,
 		}
 
-		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+			objectSize += partInfo.Size
+			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, popts)
+		} else {
+			objectSize += partInfo.ActualSize
+			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+		}
 		if err != nil {
 			return err
 		}
-		if pInfo.Size != partInfo.ActualSize {
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) && pInfo.Size != partInfo.ActualSize {
 			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
@@ -1624,6 +1651,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
+		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
