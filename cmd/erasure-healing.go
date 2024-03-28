@@ -210,6 +210,24 @@ func (fi FileInfo) DataMov() bool {
 	return ok
 }
 
+func auditHealObject(ctx context.Context, bucket, object, versionID string, err error) {
+	if len(logger.AuditTargets()) == 0 {
+		return
+	}
+
+	opts := AuditLogOptions{
+		Event:     "HealObject",
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+	}
+	if err != nil {
+		opts.Error = err.Error()
+	}
+
+	auditLogInternal(ctx, opts)
+}
+
 // Heals an object by re-writing corrupt/missing erasure blocks.
 func (er *erasureObjects) healObject(ctx context.Context, bucket string, object string, versionID string, opts madmin.HealOpts) (result madmin.HealResultItem, err error) {
 	dryRun := opts.DryRun
@@ -217,6 +235,8 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 
 	storageDisks := er.getDisks()
 	storageEndpoints := er.getEndpoints()
+
+	defer auditHealObject(ctx, bucket, object, versionID, err)
 
 	if globalTrace.NumSubscribers(madmin.TraceHealing) > 0 {
 		startTime := time.Now()
