@@ -110,7 +110,7 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 //
 // DecryptETags uses a KMS bulk decryption API, if available, which
 // is more efficient than decrypting ETags sequentually.
-func DecryptETags(ctx context.Context, k kms.KMS, objects []ObjectInfo) error {
+func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 	const BatchSize = 250 // We process the objects in batches - 250 is a reasonable default.
 	var (
 		metadata = make([]map[string]string, 0, BatchSize)
@@ -267,7 +267,11 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		if err != nil {
 			return err
 		}
-		oldKey, err := GlobalKMS.DecryptKey(keyID, kmsKey, kms.Context{bucket: path.Join(bucket, object)})
+		oldKey, err := GlobalKMS.Decrypt(ctx, &kms.DecryptRequest{
+			Name:           keyID,
+			Ciphertext:     kmsKey,
+			AssociatedData: kms.Context{bucket: path.Join(bucket, object)},
+		})
 		if err != nil {
 			return err
 		}
@@ -276,7 +280,10 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 			return err
 		}
 
-		newKey, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{bucket: path.Join(bucket, object)})
+		newKey, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{
+			Name:           GlobalKMS.DefaultKey,
+			AssociatedData: kms.Context{bucket: path.Join(bucket, object)},
+		})
 		if err != nil {
 			return err
 		}
@@ -312,7 +319,10 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
-		newKey, err := GlobalKMS.GenerateKey(ctx, newKeyID, kmsCtx)
+		newKey, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{
+			Name:           newKeyID,
+			AssociatedData: kmsCtx,
+		})
 		if err != nil {
 			return err
 		}
@@ -352,7 +362,9 @@ func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key
 		if GlobalKMS == nil {
 			return crypto.ObjectKey{}, errKMSNotConfigured
 		}
-		key, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{bucket: path.Join(bucket, object)})
+		key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{
+			AssociatedData: kms.Context{bucket: path.Join(bucket, object)},
+		})
 		if err != nil {
 			return crypto.ObjectKey{}, err
 		}
@@ -379,7 +391,10 @@ func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
-		key, err := GlobalKMS.GenerateKey(ctx, keyID, kmsCtx)
+		key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{
+			Name:           keyID,
+			AssociatedData: kmsCtx,
+		})
 		if err != nil {
 			if errors.Is(err, kes.ErrKeyNotFound) {
 				return crypto.ObjectKey{}, errKMSKeyNotFound
@@ -475,11 +490,10 @@ func EncryptRequest(content io.Reader, r *http.Request, bucket, object string, m
 func decryptObjectMeta(key []byte, bucket, object string, metadata map[string]string) ([]byte, error) {
 	switch kind, _ := crypto.IsEncrypted(metadata); kind {
 	case crypto.S3:
-		KMS := GlobalKMS
-		if KMS == nil {
+		if GlobalKMS == nil {
 			return nil, errKMSNotConfigured
 		}
-		objectKey, err := crypto.S3.UnsealObjectKey(KMS, metadata, bucket, object)
+		objectKey, err := crypto.S3.UnsealObjectKey(GlobalKMS, metadata, bucket, object)
 		if err != nil {
 			return nil, err
 		}

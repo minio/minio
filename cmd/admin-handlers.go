@@ -2096,7 +2096,9 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := GlobalKMS.CreateKey(ctx, r.Form.Get("key-id")); err != nil {
+	if err := GlobalKMS.CreateKey(ctx, &kms.CreateKeyRequest{
+		Name: r.Form.Get("key-id"),
+	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -2117,22 +2119,12 @@ func (a adminAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	stat, err := GlobalKMS.Stat(ctx)
+	stat, err := GlobalKMS.Status(ctx)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
 	}
-
-	status := madmin.KMSStatus{
-		Name:         stat.Name,
-		DefaultKeyID: stat.DefaultKey,
-		Endpoints:    make(map[string]madmin.ItemState, len(stat.Endpoints)),
-	}
-	for _, endpoint := range stat.Endpoints {
-		status.Endpoints[endpoint] = madmin.ItemOnline // TODO(aead): Implement an online check for mTLS
-	}
-
-	resp, err := json.Marshal(status)
+	resp, err := json.Marshal(stat)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
@@ -2154,15 +2146,9 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	stat, err := GlobalKMS.Stat(ctx)
-	if err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-		return
-	}
-
 	keyID := r.Form.Get("key-id")
 	if keyID == "" {
-		keyID = stat.DefaultKey
+		keyID = GlobalKMS.DefaultKey
 	}
 	response := madmin.KMSKeyStatus{
 		KeyID: keyID,
@@ -2170,7 +2156,10 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(ctx, keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{
+		Name:           keyID,
+		AssociatedData: kmsContext,
+	})
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -2183,7 +2172,11 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	decryptedKey, err := GlobalKMS.Decrypt(ctx, &kms.DecryptRequest{
+		Name:           key.KeyID,
+		Ciphertext:     key.Ciphertext,
+		AssociatedData: kmsContext,
+	})
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -2336,8 +2329,7 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		KMS:           fetchKMSStatus(),
-		KMSStatus:     fetchKMSStatusV2(ctx),
+		KMSStatus:     fetchKMSStatus(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
@@ -2947,66 +2939,25 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	return notify
 }
 
-// fetchKMSStatus fetches KMS-related status information.
-func fetchKMSStatus() madmin.KMS {
-	kmsStat := madmin.KMS{}
-	if GlobalKMS == nil {
-		kmsStat.Status = "disabled"
-		return kmsStat
-	}
-
-	stat, err := GlobalKMS.Stat(context.Background())
-	if err != nil {
-		kmsStat.Status = string(madmin.ItemOffline)
-		return kmsStat
-	}
-	if len(stat.Endpoints) == 0 {
-		kmsStat.Status = stat.Name
-		return kmsStat
-	}
-	kmsStat.Status = string(madmin.ItemOnline)
-
-	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(context.Background(), "", kmsContext)
-	if err != nil {
-		kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
-	} else {
-		kmsStat.Encrypt = "success"
-	}
-
-	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
-	switch {
-	case err != nil:
-		kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-	case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
-		kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-	default:
-		kmsStat.Decrypt = "success"
-	}
-	return kmsStat
-}
-
-// fetchKMSStatusV2 fetches KMS-related status information for all instances
-func fetchKMSStatusV2(ctx context.Context) []madmin.KMS {
+// fetchKMSStatus fetches KMS-related status information for all instances
+func fetchKMSStatus(ctx context.Context) []madmin.KMS {
 	if GlobalKMS == nil {
 		return []madmin.KMS{}
 	}
 
-	results := GlobalKMS.Verify(ctx)
-
-	stats := []madmin.KMS{}
-	for _, result := range results {
-		stats = append(stats, madmin.KMS{
-			Status:   result.Status,
-			Endpoint: result.Endpoint,
-			Encrypt:  result.Encrypt,
-			Decrypt:  result.Decrypt,
-			Version:  result.Version,
-		})
+	stat, err := GlobalKMS.Status(ctx)
+	if err != nil {
+		logger.LogIf(ctx, err, "failed to fetch KMS status information")
+		return []madmin.KMS{}
 	}
 
+	stats := make([]madmin.KMS, 0, len(stat.Endpoints))
+	for endpoint, state := range stat.Endpoints {
+		stats = append(stats, madmin.KMS{
+			Status:   string(state),
+			Endpoint: endpoint,
+		})
+	}
 	return stats
 }
 

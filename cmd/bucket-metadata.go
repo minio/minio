@@ -490,7 +490,7 @@ func encryptBucketMetadata(ctx context.Context, bucket string, input []byte, kms
 	}
 
 	metadata := make(map[string]string)
-	key, err := GlobalKMS.GenerateKey(ctx, "", kmsContext)
+	key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{AssociatedData: kmsContext})
 	if err != nil {
 		return
 	}
@@ -519,7 +519,11 @@ func decryptBucketMetadata(input []byte, bucket string, meta map[string]string, 
 	if err != nil {
 		return nil, err
 	}
-	extKey, err := GlobalKMS.DecryptKey(keyID, kmsKey, kmsContext)
+	extKey, err := GlobalKMS.Decrypt(context.TODO(), &kms.DecryptRequest{
+		Name:           keyID,
+		Ciphertext:     kmsKey,
+		AssociatedData: kmsContext,
+	})
 	if err != nil {
 		return nil, err
 	}

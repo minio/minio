@@ -134,7 +134,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 
-		if _, err := GlobalKMS.Stat(ctx); err != nil {
+		if _, err := GlobalKMS.Status(ctx); err != nil {
 			switch r.Method {
 			case http.MethodHead:
 				apiErr := toAPIError(r.Context(), err)

@@ -96,6 +96,7 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 	if e.Type == ssekms && spaces {
 		return crypto.ErrInvalidEncryptionKeyID
 	}
+
 	if e.Type == ssekms && GlobalKMS != nil {
 		ctx := kms.Context{}
 		if e.Context != "" {
@@ -114,7 +115,7 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 			e.kmsContext[k] = v
 		}
 		ctx["MinIO batch API"] = "batchrotate" // Context for a test key operation
-		if _, err := GlobalKMS.GenerateKey(GlobalContext, e.Key, ctx); err != nil {
+		if _, err := GlobalKMS.GenerateKey(GlobalContext, &kms.GenerateKeyRequest{Name: e.Key, AssociatedData: ctx}); err != nil {
 			return err
 		}
 	}
@@ -476,8 +477,5 @@ func (r *BatchJobKeyRotateV1) Validate(ctx context.Context, job BatchJobRequest,
 		}
 	}
 
-	if err := r.Flags.Retry.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return r.Flags.Retry.Validate()
 }
