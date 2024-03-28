@@ -1221,6 +1221,8 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 
 	if lcEvent.Action.DeleteAll() {
 		opts.DeletePrefix = true
+		// use prefix delete on exact object (this is an optimization to avoid fan-out calls)
+		opts.DeletePrefixObject = true
 	}
 	var (
 		dobj ObjectInfo

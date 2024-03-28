@@ -1701,7 +1701,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	var dn string
 	var isGroup bool
 	if r.User != "" {
-		dn, err = sys.LDAPConfig.DoesUsernameExist(r.User)
+		dn, err = sys.LDAPConfig.GetValidatedDNForUsername(r.User)
 		if err != nil {
 			logger.LogIf(ctx, err)
 			return
@@ -1718,22 +1718,26 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		isGroup = false
 	} else {
 		if isAttach {
-			var exists bool
-			if exists, err = sys.LDAPConfig.DoesGroupDNExist(r.Group); err != nil {
+			var foundGroupDN string
+			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(r.Group); err != nil {
 				logger.LogIf(ctx, err)
 				return
-			} else if !exists {
+			} else if foundGroupDN == "" {
 				err = errNoSuchGroup
 				return
 			}
+			// We use the group DN returned by the LDAP server (this may not
+			// equal the input group name, but we assume it is canonical).
+			dn = foundGroupDN
+		} else {
+			dn = r.Group
 		}
-		dn = r.Group
 		isGroup = true
 	}
 
 	userType := stsUser
-	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(ctx, dn, isGroup,
-		userType, r.Policies, isAttach)
+	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(
+		ctx, dn, isGroup, userType, r.Policies, isAttach)
 	if err != nil {
 		return
 	}
