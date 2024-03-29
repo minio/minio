@@ -28,12 +28,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/dsync"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
+
+// bigFileThreshold is the point where we add readahead to put operations.
+const bigFileThreshold = 64 * humanize.MiByte
 
 // list all errors that can be ignore in a bucket operation.
 var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errUnformattedDisk)

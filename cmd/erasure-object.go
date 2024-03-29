@@ -48,6 +48,7 @@ import (
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
 	"github.com/minio/pkg/v2/wildcard"
+	"github.com/valyala/bytebufferpool"
 )
 
 // list all errors which can be ignored in object operations.
@@ -1147,15 +1148,19 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 		buffer = buffer[:fi.Erasure.BlockSize]
 	}
 
-	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
-	inlineBuffers := make([]*bytes.Buffer, len(onlineDisks))
+	inlineBuffers := make([]*bytebufferpool.ByteBuffer, len(onlineDisks))
 	for i, disk := range onlineDisks {
 		if disk == nil {
 			continue
 		}
 		if disk.IsOnline() {
-			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, shardFileSize))
+			buf := bytebufferpool.Get()
+			defer func() {
+				buf.Reset()
+				bytebufferpool.Put(buf)
+			}()
+			inlineBuffers[i] = buf
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 	}
@@ -1408,20 +1413,20 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	writers := make([]io.Writer, len(onlineDisks))
-	var inlineBuffers []*bytes.Buffer
+	var inlineBuffers []*bytebufferpool.ByteBuffer
 	if shardFileSize >= 0 {
 		if !opts.Versioned && shardFileSize < inlineBlock {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+			inlineBuffers = make([]*bytebufferpool.ByteBuffer, len(onlineDisks))
 		} else if shardFileSize < inlineBlock/8 {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+			inlineBuffers = make([]*bytebufferpool.ByteBuffer, len(onlineDisks))
 		}
 	} else {
 		// If compressed, use actual size to determine.
 		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
 			if !opts.Versioned && sz < inlineBlock {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+				inlineBuffers = make([]*bytebufferpool.ByteBuffer, len(onlineDisks))
 			} else if sz < inlineBlock/8 {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
+				inlineBuffers = make([]*bytebufferpool.ByteBuffer, len(onlineDisks))
 			}
 		}
 	}
@@ -1435,11 +1440,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		if len(inlineBuffers) > 0 {
-			sz := shardFileSize
-			if sz < 0 {
-				sz = data.ActualSize()
-			}
-			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, sz))
+			buf := bytebufferpool.Get()
+			defer func() {
+				// Recycle inline buffers
+				buf.Reset()
+				bytebufferpool.Put(buf)
+			}()
+			inlineBuffers[i] = buf
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
@@ -1448,7 +1455,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	toEncode := io.Reader(data)
-	if data.Size() > bigFileThreshold {
+	if data.Size() >= bigFileThreshold {
 		// We use 2 buffers, so we always have a full buffer of input.
 		bufA := globalBytePoolCap.Get()
 		bufB := globalBytePoolCap.Get()

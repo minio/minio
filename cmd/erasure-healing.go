@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/valyala/bytebufferpool"
 )
 
 //go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE
@@ -503,10 +503,10 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		dstDataDir = migrateDataDir
 	}
 
-	var inlineBuffers []*bytes.Buffer
+	var inlineBuffers []*bytebufferpool.ByteBuffer
 	if !latestMeta.Deleted && !latestMeta.IsRemote() {
 		if latestMeta.InlineData() {
-			inlineBuffers = make([]*bytes.Buffer, len(outDatedDisks))
+			inlineBuffers = make([]*bytebufferpool.ByteBuffer, len(outDatedDisks))
 		}
 
 		erasureInfo := latestMeta.Erasure
@@ -539,7 +539,12 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				}
 				partPath := pathJoin(tmpID, dstDataDir, fmt.Sprintf("part.%d", partNumber))
 				if len(inlineBuffers) > 0 {
-					inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, erasure.ShardFileSize(latestMeta.Size)+32))
+					buf := bytebufferpool.Get()
+					defer func() {
+						buf.Reset()
+						bytebufferpool.Put(buf)
+					}()
+					inlineBuffers[i] = buf
 					writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 				} else {
 					writers[i] = newBitrotWriter(disk, bucket, minioMetaTmpBucket, partPath,

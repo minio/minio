@@ -61,9 +61,6 @@ const (
 	// For hardrives it is possible to set this to a lower value to avoid any
 	// spike in latency. But currently we are simply keeping it optimal for SSDs.
 
-	// bigFileThreshold is the point where we add readahead to put operations.
-	bigFileThreshold = 128 * humanize.MiByte
-
 	// XL metadata file carries per object metadata.
 	xlStorageFormatFile = "xl.meta"
 )
@@ -1415,6 +1412,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
 func (s *xlStorage) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) (err error) {
+	var xlMeta xlMetaV2
 	if fi.Fresh {
 		if origvolume != "" {
 			origvolumeDir, err := s.getVolDir(origvolume)
@@ -1430,10 +1428,10 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, origvolume, volume, path 
 			}
 		}
 
-		var xlMeta xlMetaV2
 		if err := xlMeta.AddVersion(fi); err != nil {
 			return err
 		}
+
 		buf, err := xlMeta.AppendTo(metaDataPoolGet())
 		defer metaDataPoolPut(buf)
 		if err != nil {
@@ -1452,33 +1450,21 @@ func (s *xlStorage) WriteMetadata(ctx context.Context, origvolume, volume, path 
 	}
 	defer metaDataPoolPut(buf)
 
-	var xlMeta xlMetaV2
-	if !isXL2V1Format(buf) {
-		// This is both legacy and without proper version.
-		if err = xlMeta.AddVersion(fi); err != nil {
-			return err
-		}
-
-		buf, err = xlMeta.AppendTo(metaDataPoolGet())
-		defer metaDataPoolPut(buf)
-		if err != nil {
-			return err
-		}
-	} else {
+	if isXL2V1Format(buf) {
 		if err = xlMeta.Load(buf); err != nil {
 			// Corrupted data, reset and write.
 			xlMeta = xlMetaV2{}
 		}
+	}
 
-		if err = xlMeta.AddVersion(fi); err != nil {
-			return err
-		}
+	if err = xlMeta.AddVersion(fi); err != nil {
+		return err
+	}
 
-		buf, err = xlMeta.AppendTo(metaDataPoolGet())
-		defer metaDataPoolPut(buf)
-		if err != nil {
-			return err
-		}
+	buf, err = xlMeta.AppendTo(metaDataPoolGet())
+	defer metaDataPoolPut(buf)
+	if err != nil {
+		return err
 	}
 
 	return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)

@@ -444,6 +444,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	fi := newFileInfo(pathJoin(bucket, object), dataDrives, parityDrives)
 	fi.VersionID = opts.VersionID
+	fi.Versioned = opts.Versioned || opts.VersionSuspended
 	if opts.Versioned && fi.VersionID == "" {
 		fi.VersionID = mustGetUUID()
 	}
@@ -693,7 +694,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	toEncode := io.Reader(data)
-	if data.Size() > bigFileThreshold {
+	if data.Size() >= bigFileThreshold {
 		// Add input readahead.
 		// We use 2 buffers, so we always have a full buffer of input.
 		bufA := globalBytePoolCap.Get()
