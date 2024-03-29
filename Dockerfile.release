@@ -54,7 +54,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /go/bin/minio /usr/bin/minio
 COPY --from=build /go/bin/mc /usr/bin/mc
-COPY --from=build /go/bin/curl /usr/bin/curl
+COPY --from=build /go/bin/cur* /usr/bin/
 
 COPY CREDITS /licenses/CREDITS
 COPY LICENSE /licenses/LICENSE
