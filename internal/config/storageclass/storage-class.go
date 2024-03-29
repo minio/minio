@@ -319,6 +319,7 @@ func (sCfg *Config) Update(newCfg Config) {
 	sCfg.RRS = newCfg.RRS
 	sCfg.Standard = newCfg.Standard
 	sCfg.Optimize = newCfg.Optimize
+	sCfg.inlineBlock = newCfg.inlineBlock
 	sCfg.initialized = true
 }
 
