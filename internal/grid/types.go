@@ -189,6 +189,12 @@ func NewBytes() *Bytes {
 	return &b
 }
 
+// NewBytesCap returns an empty Bytes with the given capacity.
+func NewBytesCap(size int) *Bytes {
+	b := Bytes(GetByteBufferCap(size))
+	return &b
+}
+
 // NewBytesWith returns a new Bytes with the provided content.
 // When sent as a parameter, the caller gives up ownership of the byte slice.
 // When returned as response, the handler also gives up ownership of the byte slice.
@@ -203,14 +209,9 @@ func NewBytesWithCopyOf(b []byte) *Bytes {
 		bb := Bytes(nil)
 		return &bb
 	}
-	if len(b) < maxBufferSize {
-		bb := NewBytes()
-		*bb = append(*bb, b...)
-		return bb
-	}
-	bb := Bytes(make([]byte, len(b)))
-	copy(bb, b)
-	return &bb
+	bb := NewBytesCap(len(b))
+	*bb = append(*bb, b...)
+	return bb
 }
 
 // Bytes provides a byte slice that can be serialized.
@@ -238,7 +239,7 @@ func (b *Bytes) UnmarshalMsg(bytes []byte) ([]byte, error) {
 		copy(*b, val)
 	} else {
 		if cap(*b) == 0 && len(val) <= maxBufferSize {
-			*b = GetByteBuffer()[:0]
+			*b = GetByteBufferCap(len(val))
 		} else {
 			PutByteBuffer(*b)
 			*b = make([]byte, 0, len(val))

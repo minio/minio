@@ -42,7 +42,13 @@ const (
 
 	// maxBufferSize is the maximum buffer size.
 	// Buffers larger than this is not reused.
-	maxBufferSize = 64 << 10
+	maxBufferSize = 96 << 10
+
+	// This is the assumed size of bigger buffers and allocation size.
+	biggerBufMin = 32 << 10
+
+	// This is the maximum size of bigger buffers.
+	biggerBufMax = maxBufferSize
 
 	// If there is a queue, merge up to this many messages.
 	maxMergeMessages = 30
@@ -63,6 +69,13 @@ var internalByteBuffer = sync.Pool{
 	},
 }
 
+var internal32KByteBuffer = sync.Pool{
+	New: func() any {
+		m := make([]byte, 0, biggerBufMin)
+		return &m
+	},
+}
+
 // GetByteBuffer can be replaced with a function that returns a small
 // byte buffer.
 // When replacing PutByteBuffer should also be replaced
@@ -72,10 +85,27 @@ var GetByteBuffer = func() []byte {
 	return b[:0]
 }
 
+// GetByteBufferCap returns a length 0 byte buffer with at least the given capacity.
+func GetByteBufferCap(wantSz int) []byte {
+	switch {
+	case wantSz <= defaultBufferSize:
+		return GetByteBuffer()[:0]
+	case wantSz <= maxBufferSize:
+		b := *internal32KByteBuffer.Get().(*[]byte)
+		return b[:0]
+	}
+	return make([]byte, 0, wantSz)
+}
+
 // PutByteBuffer is for returning byte buffers.
 var PutByteBuffer = func(b []byte) {
-	if cap(b) >= minBufferSize && cap(b) < maxBufferSize {
+	if cap(b) >= biggerBufMin && cap(b) < biggerBufMax {
+		internal32KByteBuffer.Put(&b)
+		return
+	}
+	if cap(b) >= minBufferSize && cap(b) < biggerBufMin {
 		internalByteBuffer.Put(&b)
+		return
 	}
 }
 
@@ -117,11 +147,7 @@ type writerWrapper struct {
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
-	buf := GetByteBuffer()
-	if cap(buf) < len(p) {
-		PutByteBuffer(buf)
-		buf = make([]byte, len(p))
-	}
+	buf := GetByteBufferCap(len(p))
 	buf = buf[:len(p)]
 	copy(buf, p)
 	select {

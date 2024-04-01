@@ -145,7 +145,7 @@ func (m *muxClient) send(msg message) error {
 // sendLocked the message. msg.Seq and msg.MuxID will be set.
 // m.respMu must be held.
 func (m *muxClient) sendLocked(msg message) error {
-	dst := GetByteBuffer()[:0]
+	dst := GetByteBufferCap(msg.Msgsize())
 	msg.Seq = m.SendSeq
 	msg.MuxID = m.MuxID
 	msg.Flags |= m.BaseFlags
