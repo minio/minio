@@ -189,6 +189,7 @@ func NewBytes() *Bytes {
 	return &b
 }
 
+// NewBytesCap returns an empty Bytes with the given capacity.
 func NewBytesCap(size int) *Bytes {
 	b := Bytes(GetByteBufferCap(size))
 	return &b
