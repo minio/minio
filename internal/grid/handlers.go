@@ -111,6 +111,7 @@ const (
 	HandlerGetBandwidth
 	HandlerWriteAll
 	HandlerListBuckets
+	HandlerRenameDataInline
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -546,7 +547,7 @@ func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Re
 		}
 		return resp, ErrDisconnected
 	}
-	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
+	payload, err := req.MarshalMsg(GetByteBufferCap(req.Msgsize()))
 	if err != nil {
 		return resp, err
 	}
@@ -788,8 +789,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 					if dropOutput {
 						continue
 					}
-					dst := GetByteBuffer()
-					dst, err := v.MarshalMsg(dst[:0])
+					dst, err := v.MarshalMsg(GetByteBufferCap(v.Msgsize()))
 					if err != nil {
 						logger.LogOnceIf(ctx, err, err.Error())
 					}
@@ -853,7 +853,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 	var payloadB []byte
 	if h.WithPayload {
 		var err error
-		payloadB, err = payload.MarshalMsg(GetByteBuffer()[:0])
+		payloadB, err = payload.MarshalMsg(GetByteBufferCap(payload.Msgsize()))
 		if err != nil {
 			return nil, err
 		}
@@ -875,7 +875,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 		go func() {
 			defer xioutil.SafeClose(stream.Requests)
 			for req := range reqT {
-				b, err := req.MarshalMsg(GetByteBuffer()[:0])
+				b, err := req.MarshalMsg(GetByteBufferCap(req.Msgsize()))
 				if err != nil {
 					logger.LogOnceIf(ctx, err, err.Error())
 				}

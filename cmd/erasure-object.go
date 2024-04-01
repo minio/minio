@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -1147,7 +1148,6 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 		buffer = buffer[:fi.Erasure.BlockSize]
 	}
 
-	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
 	inlineBuffers := make([]*bytes.Buffer, len(onlineDisks))
 	for i, disk := range onlineDisks {
@@ -1155,7 +1155,9 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 			continue
 		}
 		if disk.IsOnline() {
-			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, shardFileSize))
+			buf := grid.GetByteBufferCap(int(erasure.ShardFileSize(data.Size())) + 64)
+			inlineBuffers[i] = bytes.NewBuffer(buf[:0])
+			defer grid.PutByteBuffer(buf)
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
 	}
@@ -1435,11 +1437,9 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		if len(inlineBuffers) > 0 {
-			sz := shardFileSize
-			if sz < 0 {
-				sz = data.ActualSize()
-			}
-			inlineBuffers[i] = bytes.NewBuffer(make([]byte, 0, sz))
+			buf := grid.GetByteBufferCap(int(shardFileSize) + 64)
+			inlineBuffers[i] = bytes.NewBuffer(buf[:0])
+			defer grid.PutByteBuffer(buf)
 			writers[i] = newStreamingBitrotWriterBuffer(inlineBuffers[i], DefaultBitrotAlgorithm, erasure.ShardSize())
 			continue
 		}
@@ -1448,7 +1448,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	toEncode := io.Reader(data)
-	if data.Size() > bigFileThreshold {
+	if data.Size() >= bigFileThreshold {
 		// We use 2 buffers, so we always have a full buffer of input.
 		bufA := globalBytePoolCap.Get()
 		bufB := globalBytePoolCap.Get()

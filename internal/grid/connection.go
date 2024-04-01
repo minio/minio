@@ -550,10 +550,9 @@ func (c *Connection) queueMsg(msg message, payload sender) error {
 	// This cannot encode subroute.
 	msg.Flags.Clear(FlagSubroute)
 	if payload != nil {
-		if cap(msg.Payload) < payload.Msgsize() {
-			old := msg.Payload
-			msg.Payload = GetByteBuffer()[:0]
-			PutByteBuffer(old)
+		if sz := payload.Msgsize(); cap(msg.Payload) < sz {
+			PutByteBuffer(msg.Payload)
+			msg.Payload = GetByteBufferCap(sz)
 		}
 		var err error
 		msg.Payload, err = payload.MarshalMsg(msg.Payload[:0])
@@ -563,7 +562,7 @@ func (c *Connection) queueMsg(msg message, payload sender) error {
 		}
 	}
 	defer PutByteBuffer(msg.Payload)
-	dst := GetByteBuffer()[:0]
+	dst := GetByteBufferCap(msg.Msgsize())
 	dst, err := msg.MarshalMsg(dst)
 	if err != nil {
 		return err
@@ -578,9 +577,9 @@ func (c *Connection) queueMsg(msg message, payload sender) error {
 // sendMsg will send
 func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSizer) error {
 	if payload != nil {
-		if cap(msg.Payload) < payload.Msgsize() {
+		if sz := payload.Msgsize(); cap(msg.Payload) < sz {
 			PutByteBuffer(msg.Payload)
-			msg.Payload = GetByteBuffer()[:0]
+			msg.Payload = GetByteBufferCap(sz)[:0]
 		}
 		var err error
 		msg.Payload, err = payload.MarshalMsg(msg.Payload)
@@ -589,7 +588,7 @@ func (c *Connection) sendMsg(conn net.Conn, msg message, payload msgp.MarshalSiz
 		}
 		defer PutByteBuffer(msg.Payload)
 	}
-	dst := GetByteBuffer()[:0]
+	dst := GetByteBufferCap(msg.Msgsize())
 	dst, err := msg.MarshalMsg(dst)
 	if err != nil {
 		return err
