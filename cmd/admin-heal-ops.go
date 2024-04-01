@@ -329,12 +329,16 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence, objAPI ObjectLay
 	// Add heal state and start sequence
 	ahs.healSeqMap[hpath] = h
 
-	// Launch top-level background heal go-routine
-	go h.healSequenceStart(objAPI)
-
 	clientToken := h.clientToken
 	if globalIsDistErasure {
 		clientToken = fmt.Sprintf("%s:%d", h.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+	}
+
+	if h.clientToken == bgHealingUUID {
+		// For background heal do nothing, do not spawn an unnecessary goroutine.
+	} else {
+		// Launch top-level background heal go-routine
+		go h.healSequenceStart(objAPI)
 	}
 
 	b, err := json.Marshal(madmin.HealStartSuccess{
@@ -537,9 +541,9 @@ func (h *healSequence) getHealedItemsMap() map[madmin.HealItemType]int64 {
 	return retMap
 }
 
-// gethealFailedItemsMap - returns map of all items where heal failed against
+// getHealFailedItemsMap - returns map of all items where heal failed against
 // drive endpoint and status
-func (h *healSequence) gethealFailedItemsMap() map[string]int64 {
+func (h *healSequence) getHealFailedItemsMap() map[string]int64 {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
@@ -550,6 +554,32 @@ func (h *healSequence) gethealFailedItemsMap() map[string]int64 {
 	}
 
 	return retMap
+}
+
+func (h *healSequence) countFailed(res madmin.HealResultItem) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	for _, d := range res.After.Drives {
+		// For failed items we report the endpoint and drive state
+		// This will help users take corrective actions for drives
+		h.healFailedItemsMap[d.Endpoint+","+d.State]++
+	}
+
+	h.lastHealActivity = UTCNow()
+}
+
+func (h *healSequence) countHeals(healType madmin.HealItemType, healed bool) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	if !healed {
+		h.scannedItemsMap[healType]++
+	} else {
+		h.healedItemsMap[healType]++
+	}
+
+	h.lastHealActivity = UTCNow()
 }
 
 // isQuitting - determines if the heal sequence is quitting (due to an
@@ -704,10 +734,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		task.opts.ScanMode = madmin.HealNormalScan
 	}
 
-	h.mutex.Lock()
-	h.scannedItemsMap[healType]++
-	h.lastHealActivity = UTCNow()
-	h.mutex.Unlock()
+	h.countHeals(healType, false)
 
 	if source.noWait {
 		select {
@@ -744,32 +771,11 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 				return nil
 			}
 
-			h.mutex.Lock()
-			defer h.mutex.Unlock()
-
-			// Progress is not reported in case of background heal processing.
-			// Instead we increment relevant counter based on the heal result
-			// for prometheus reporting.
-			if res.err != nil {
-				for _, d := range res.result.After.Drives {
-					// For failed items we report the endpoint and drive state
-					// This will help users take corrective actions for drives
-					h.healFailedItemsMap[d.Endpoint+","+d.State]++
-				}
-			} else {
-				// Only object type reported for successful healing
-				h.healedItemsMap[res.result.Type]++
-			}
-
 			// Report caller of any failure
 			return res.err
 		}
 		res.result.Type = healType
 		if res.err != nil {
-			// Only report object error
-			if healType != madmin.HealItemObject {
-				return res.err
-			}
 			res.result.Detail = res.err.Error()
 		}
 		return h.pushHealResultItem(res.result)

@@ -2654,7 +2654,7 @@ func getMinioHealingMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 }
 
 func getFailedItems(seq *healSequence) (m []MetricV2) {
-	items := seq.gethealFailedItemsMap()
+	items := seq.getHealFailedItemsMap()
 	m = make([]MetricV2, 0, len(items))
 	for k, v := range items {
 		s := strings.Split(k, ",")
