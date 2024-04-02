@@ -101,16 +101,17 @@ func waitForLowHTTPReq() {
 }
 
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
+	bgSeq := newBgHealSequence()
 	// Run the background healer
 	for i := 0; i < globalBackgroundHealRoutine.workers; i++ {
-		go globalBackgroundHealRoutine.AddWorker(ctx, objAPI)
+		go globalBackgroundHealRoutine.AddWorker(ctx, objAPI, bgSeq)
 	}
 
-	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence(), objAPI)
+	globalBackgroundHealState.LaunchNewHealSequence(bgSeq, objAPI)
 }
 
 // Wait for heal requests and process them
-func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
+func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer, bgSeq *healSequence) {
 	for {
 		select {
 		case task, ok := <-h.tasks:
@@ -130,6 +131,15 @@ func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
 					res, err = objAPI.HealBucket(ctx, task.bucket, task.opts)
 				} else {
 					res, err = objAPI.HealObject(ctx, task.bucket, task.object, task.versionID, task.opts)
+				}
+			}
+
+			if bgSeq != nil {
+				// We increment relevant counter based on the heal result for prometheus reporting.
+				if err != nil {
+					bgSeq.countFailed(res)
+				} else {
+					bgSeq.countHeals(res.Type, false)
 				}
 			}
 
