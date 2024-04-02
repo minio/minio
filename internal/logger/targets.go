@@ -192,8 +192,8 @@ func updateHTTPTargets(ctx context.Context, cfgs map[string]http.Config, targetL
 		}
 	}
 
-	oldTargets := make([]Target, len(*targetList))
-	copy(oldTargets, *targetList)
+	oldTargets, others := splitTargets(*targetList, types.TargetHTTP)
+	newWebhooks = append(newWebhooks, others...)
 
 	for i := range oldTargets {
 		currentTgt, ok := oldTargets[i].(*http.Target)
@@ -218,9 +218,6 @@ func updateHTTPTargets(ctx context.Context, cfgs map[string]http.Config, targetL
 			errs = append(errs, err)
 		}
 	}
-
-	console, _ := splitTargets(oldTargets, types.TargetConsole)
-	newWebhooks = append(newWebhooks, console...)
 
 	swapAuditMuRW.Lock()
 	*targetList = newWebhooks
