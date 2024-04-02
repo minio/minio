@@ -49,8 +49,9 @@ func urlJoin(params ...string) string {
 	return u.String()
 }
 
-func setMantleHeaders() map[string]string {
+func setMantleHeaders(configId string) map[string]string {
 	return map[string]string{
-		"x-api-key": mantleConfig.ApiKey,
+		"x-api-key":    mantleConfig.ApiKey,
+		"s3-config-id": configId,
 	}
 }

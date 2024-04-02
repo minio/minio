@@ -3,38 +3,40 @@ package gateway
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/minio/minio/cmd/mantle/network"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/minio/minio/cmd/mantle/network"
 )
 
-func Put(f *os.File, fn string) (string, error) {
+func Put(f *os.File, fn string, configId string) (string, error) {
 	client := &http.Client{}
 	val := map[string]io.Reader{
 		"file":        f,
 		"DisplayName": strings.NewReader(fn),
 	}
 
-	putResp, err := network.UploadFormData(client, urlJoin("files"), val, setMantleHeaders())
+	putResp, err := network.UploadFormData(client, urlJoin("files"), val, setMantleHeaders(configId))
 	if err != nil {
 		//TODO:handle
-		return "", nil
+		fmt.Println(err.Error())
+		return "", err
 	}
 
 	return putResp.Id, nil
 }
 
-func Get(r io.Reader) (bb []byte, err error) {
+func Get(r io.Reader, configId string) (bb []byte, err error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
 		return
 	}
 
 	client := &http.Client{}
-	resp, err := network.Get(client, urlJoin("files", string(b)), setMantleHeaders())
+	resp, err := network.Get(client, urlJoin("files", string(b)), setMantleHeaders(configId))
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +58,7 @@ type sdsFileInfo struct {
 
 func GetFileSize(id string) (s int64, err error) {
 	client := &http.Client{}
-	resp, err := network.Get(client, urlJoin("files/info", id), setMantleHeaders())
+	resp, err := network.Get(client, urlJoin("files/info", id), setMantleHeaders(""))
 	if err != nil {
 		return 0, err
 	}

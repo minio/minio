@@ -21,13 +21,14 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/minio/minio/cmd/mantle/gateway"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	pathutil "path"
 	"time"
+
+	"github.com/minio/minio/cmd/mantle/gateway"
 
 	jsoniter "github.com/json-iterator/go"
 	xhttp "github.com/minio/minio/internal/http"

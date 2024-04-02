@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/minio/minio/cmd/mantle/gateway"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -34,6 +33,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/minio/minio/cmd/mantle/gateway"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
@@ -449,6 +450,44 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		return toObjectErr(err, bucket)
 	}
 
+	//TODO:only when file is passed from the frontend
+	if true {
+
+		b := []byte(`{"storage1": {"url": "localhost:9999","accessKey": "minioadmin","secretKey": "minioadmin","api": "s3v4","path": "auto"}}`)
+
+		filename := fmt.Sprintf(".sds-config.%s.json", bucket)
+		path := path.Join(bucketDir, filename)
+		f, err := os.CreateTemp("", "sds-")
+		defer func() {
+			f.Close()
+			err := os.Remove(f.Name())
+			if err != nil {
+				fmt.Println("Cannot delete temp config file.")
+			}
+		}()
+
+		if err != nil {
+			return toObjectErr(err, bucket)
+		}
+
+		_, err = f.Write(b)
+		if err != nil {
+			return toObjectErr(err, bucket)
+		}
+		f.Seek(0, 0)
+
+		id, err := gateway.Put(f, filename, "")
+		if err != nil {
+			return toObjectErr(err, bucket)
+		}
+
+		reader := bytes.NewReader([]byte(id))
+		_, err = fsCreateFile(ctx, path, reader, int64(len(id)))
+		if err != nil {
+			return toObjectErr(err, bucket)
+		}
+	}
+
 	meta := newBucketMetadata(bucket)
 	if err := meta.Save(ctx, fs); err != nil {
 		return toObjectErr(err, bucket)
@@ -782,7 +821,8 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	var bb []byte
 	if !isSysCall(bucket) {
-		bb, err = gateway.Get(readCloser)
+		configId := getConfigId(ctx, fs.fsPath, bucket)
+		bb, err = gateway.Get(readCloser, configId)
 
 		if err != nil {
 			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
@@ -1186,7 +1226,8 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		p := pathJoin(fs.fsPath, bucket, object)
 		f, _ := os.Open(p)
 
-		bId, err := gateway.Put(f, object)
+		configId := getConfigId(ctx, fs.fsPath, bucket)
+		bId, err := gateway.Put(f, object, configId)
 		if err != nil {
 			//TODO: handleHttp error
 		}
@@ -1201,6 +1242,22 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 
 	// Success.
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+}
+
+func getConfigId(ctx context.Context, fsPath string, bucket string) string {
+	configName := fmt.Sprintf(".sds-config.%s.json", bucket)
+	confPath := path.Join(fsPath, bucket, configName)
+	configId := ""
+	r, n, err := fsOpenFile(ctx, confPath, 0)
+	if err == nil {
+		defer r.Close()
+		//config file exist
+		id := make([]byte, n)
+		r.Read(id)
+		configId = string(id)
+	}
+
+	return configId
 }
 
 func isSysCall(path string) bool {
