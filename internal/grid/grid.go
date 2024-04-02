@@ -87,12 +87,19 @@ var GetByteBuffer = func() []byte {
 
 // GetByteBufferCap returns a length 0 byte buffer with at least the given capacity.
 func GetByteBufferCap(wantSz int) []byte {
-	switch {
-	case wantSz <= defaultBufferSize:
-		return GetByteBuffer()[:0]
-	case wantSz <= maxBufferSize:
+	if wantSz < defaultBufferSize {
+		b := GetByteBuffer()[:0]
+		if cap(b) >= wantSz {
+			return b
+		}
+		PutByteBuffer(b)
+	}
+	if wantSz <= maxBufferSize {
 		b := *internal32KByteBuffer.Get().(*[]byte)
-		return b[:0]
+		if cap(b) >= wantSz {
+			return b[:0]
+		}
+		internal32KByteBuffer.Put(&b)
 	}
 	return make([]byte, 0, wantSz)
 }
