@@ -6,13 +6,13 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/minio/minio/cmd/mantle/network"
+	"github.com/minio/minio/internal/hash"
 )
 
-func Put(f *os.File, fn string, configId string) (string, error) {
+func Put(f *hash.Reader, fn string, configId string) (string, error) {
 	client := &http.Client{}
 	val := map[string]io.Reader{
 		"file":        f,

@@ -1030,8 +1030,8 @@ github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/mantle-labs/console v0.0.1 h1:FEfF9/U8u+9++iHaMt62j1sbe4D+NdoEGYdPVeQyrYU=
-github.com/mantle-labs/console v0.0.1/go.mod h1:4Kyw8UD2MCpjdN4NLavfrUE60QX+k0tg1Jn4Ag+RMiA=
+github.com/mantle-labs/console v0.0.4 h1:HQWrCQ83W5ESM6moDs1i9uicayYEGQH381OpTMB42fE=
+github.com/mantle-labs/console v0.0.4/go.mod h1:4Kyw8UD2MCpjdN4NLavfrUE60QX+k0tg1Jn4Ag+RMiA=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=
 github.com/markbates/safe v1.0.1/go.mod h1:nAqgmRi7cY2nqMc92/bSEeQA+R4OheNU2T1kNSCBdG0=
@@ -1087,8 +1087,6 @@ github.com/minio/cli v1.22.0/go.mod h1:bYxnK0uS629N3Bq+AOZZ+6lwF77Sodk4+UL9vNuXh
 github.com/minio/colorjson v1.0.1/go.mod h1:oPM3zQQY8Gz9NGtgvuBEjQ+gPZLKAGc7T+kjMlwtOgs=
 github.com/minio/colorjson v1.0.2 h1:Em3IM68MTm3h+Oxa0nxrV9VQqDgbxvC5iq5A+pqzDeI=
 github.com/minio/colorjson v1.0.2/go.mod h1:JWxcL2n8T8JVf+NY6awl6kn5nK49aAzHOeQEM33dL0k=
-github.com/minio/console v0.15.14 h1:rYk1PnD++J7XL8NoNRTP8VLJ/Uooqfm6f0mFGkSyKPo=
-github.com/minio/console v0.15.14/go.mod h1:Cb2a1nMgQum6GXt3SGHX3rY41h7yagDiaRyLdGDl2ls=
 github.com/minio/csvparser v1.0.0 h1:xJEHcYK8ZAjeW4hNV9Zu30u+/2o4UyPnYgyjWp8b7ZU=
 github.com/minio/csvparser v1.0.0/go.mod h1:lKXskSLzPgC5WQyzP7maKH7Sl1cqvANXo9YCto8zbtM=
 github.com/minio/dperf v0.3.6 h1:EAe/OEEuFRGRbcGsfV0+2KsQkrmTvh51UOoCd/h4DDI=

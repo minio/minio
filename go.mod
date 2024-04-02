@@ -2,11 +2,9 @@ module github.com/minio/minio
 
 replace github.com/minio/minio/ => ./
 
-
 go 1.17
 
 require (
-	github.com/mantle-labs/console v0.0.1
 	cloud.google.com/go/storage v1.10.0
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
@@ -48,9 +46,9 @@ require (
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.9.15
 	github.com/lib/pq v1.10.4
+	github.com/mantle-labs/console v0.0.4
 	github.com/miekg/dns v1.1.46
 	github.com/minio/cli v1.22.0
-	github.com/minio/console v0.15.14
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dperf v0.3.6
 	github.com/minio/highwayhash v1.0.2

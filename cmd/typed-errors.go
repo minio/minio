@@ -24,6 +24,12 @@ import (
 // errInvalidArgument means that input argument is invalid.
 var errInvalidArgument = errors.New("Invalid arguments specified")
 
+var errNotEnoughCredit = errors.New("Please add credit to your account in order to complete this action")
+
+var errNoOpenBill = errors.New("No open bill")
+
+var errFileContentEmpty = errors.New("file content cannot be empty")
+
 // errMethodNotAllowed means that method is not allowed.
 var errMethodNotAllowed = errors.New("Method not allowed")
 

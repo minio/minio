@@ -42,6 +42,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/lock"
@@ -476,7 +477,12 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 		}
 		f.Seek(0, 0)
 
-		id, err := gateway.Put(f, filename, "")
+		hr, err := hash.NewReader(f, int64(len(b)), "", "", int64(len(b)))
+		if err != nil {
+			return toObjectErr(err, bucket)
+		}
+
+		id, err := gateway.Put(hr, filename, "")
 		if err != nil {
 			return toObjectErr(err, bucket)
 		}
@@ -940,7 +946,7 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 	}
 
 	//TODO:Place me in a func.
-	bId := ""
+	id := ""
 	if !isSysCall(bucket) {
 		// Read the object, doesn't exist returns an s3 compatible error.
 		fsObjPath := pathJoin(fs.fsPath, bucket, object)
@@ -949,15 +955,11 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		idB, err := ioutil.ReadAll(readCloser)
-		bId = string(idB)
 
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
+		id = gateway.GetId(readCloser)
 	}
 
-	return fsMeta.ToObjectInfo(bucket, object, fi, bId), nil
+	return fsMeta.ToObjectInfo(bucket, object, fi, id), nil
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
@@ -1008,7 +1010,7 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 	}
 
 	//TODO:Place me in a func :)
-	bId := ""
+	id := ""
 	if !isSysCall(bucket) {
 		// Read the object, doesn't exist returns an s3 compatible error.
 		fsObjPath := pathJoin(fs.fsPath, bucket, object)
@@ -1017,15 +1019,10 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		idB, err := ioutil.ReadAll(readCloser)
-		bId = string(idB)
-
-		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
-		}
+		id = gateway.GetId(readCloser)
 	}
 
-	return fsMeta.ToObjectInfo(bucket, object, fi, bId), nil
+	return fsMeta.ToObjectInfo(bucket, object, fi, id), nil
 }
 
 // getObjectInfoWithLock - reads object metadata and replies back ObjectInfo.
@@ -1150,6 +1147,31 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, errInvalidArgument
 	}
 
+	if !isSysCall(bucket) {
+		p := pathJoin(fs.fsPath, bucket, object)
+
+		configId := getConfigId(ctx, fs.fsPath, bucket)
+		bId, err := gateway.Put(data, object, configId)
+
+		fsMeta.Meta["etag"] = r.MD5CurrentHexString()
+
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+
+		if err := writeId(p, bId); err != nil {
+			return ObjectInfo{}, err
+		}
+		// Stat the file to fetch timestamp, size.
+		fi, err := fsStatFile(ctx, pathJoin(fs.fsPath, bucket, object))
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+
+		// Success.
+		return fsMeta.ToObjectInfo(bucket, object, fi), nil
+	}
+
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
@@ -1222,25 +1244,6 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	if !isSysCall(bucket) {
-		p := pathJoin(fs.fsPath, bucket, object)
-		f, _ := os.Open(p)
-
-		configId := getConfigId(ctx, fs.fsPath, bucket)
-		bId, err := gateway.Put(f, object, configId)
-		if err != nil {
-			//TODO: handleHttp error
-		}
-		err = f.Close()
-		if err != nil {
-			//TODO: handle
-		}
-		if err := writeId(p, bId); err != nil {
-			return ObjectInfo{}, err
-		}
-	}
-
-	// Success.
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
@@ -1265,9 +1268,6 @@ func isSysCall(path string) bool {
 }
 
 func writeId(path string, id string) error {
-	if err := os.Remove(path); err != nil {
-		return toObjectErr(err)
-	}
 
 	f, err := os.Create(path)
 	if err != nil {

@@ -389,6 +389,9 @@ const (
 	ErrPostPolicyConditionInvalidFormat
 
 	ErrSDSFileNotConfirm
+	ErrSDSNotEnoughCredit
+	ErrNoOpenBill
+	ErrFileContentEmpty
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -418,9 +421,24 @@ func (e errorCodeMap) ToAPIErr(errCode APIErrorCode) APIError {
 // error code to APIError structure, these fields carry respective
 // descriptions for all the error responses.
 var errorCodes = errorCodeMap{
+	ErrSDSNotEnoughCredit: {
+		Code:           "NotEnoughCredit",
+		Description:    "Please add credit to your account in order to complete this action",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrNoOpenBill: {
+		Code:           "NoOpenBill",
+		Description:    "No open bill",
+		HTTPStatusCode: http.StatusNotFound,
+	},
+	ErrFileContentEmpty: {
+		Code:           "FileContentEmpty",
+		Description:    "File content cannot be empty",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrSDSFileNotConfirm: {
 		Code:           "NotConfirm",
-		Description:    "The requested object is not confirm in the blockchin",
+		Description:    "The requested object is not confirm in the blockchain",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrInvalidCopyDest: {
@@ -1872,6 +1890,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	}
 
 	switch err {
+	case errFileContentEmpty:
+		apiErr = ErrFileContentEmpty
+	case errNoOpenBill:
+		apiErr = ErrNoOpenBill
+	case errNotEnoughCredit:
+		apiErr = ErrSDSNotEnoughCredit
 	case errInvalidArgument:
 		apiErr = ErrAdminInvalidArgument
 	case errNoSuchUser:
@@ -2283,12 +2307,6 @@ func toAPIError(ctx context.Context, err error) APIError {
 					Code:           "BadRequest",
 					Description:    err.Error(),
 					HTTPStatusCode: http.StatusBadRequest,
-				}
-			} else {
-				apiErr = APIError{
-					Code:           apiErr.Code,
-					Description:    fmt.Sprintf("%s: cause(%v)", apiErr.Description, err),
-					HTTPStatusCode: apiErr.HTTPStatusCode,
 				}
 			}
 		}
