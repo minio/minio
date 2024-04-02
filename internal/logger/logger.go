@@ -395,8 +395,7 @@ func logIf(ctx context.Context, err error, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
-	entry := errToEntry(ctx, err, errKind...)
-	sendLog(ctx, entry)
+	sendLog(ctx, errToEntry(ctx, err, errKind...))
 }
 
 func sendLog(ctx context.Context, entry log.Entry) {
@@ -421,8 +420,7 @@ func Event(ctx context.Context, msg string, args ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
-	entry := logToEntry(ctx, fmt.Sprintf(msg, args...), EventKind)
-	sendLog(ctx, entry)
+	sendLog(ctx, logToEntry(ctx, fmt.Sprintf(msg, args...), EventKind))
 }
 
 // ErrCritical is the value panic'd whenever CriticalIf is called.

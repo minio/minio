@@ -219,6 +219,9 @@ func updateHTTPTargets(ctx context.Context, cfgs map[string]http.Config, targetL
 		}
 	}
 
+	console, _ := splitTargets(oldTargets, types.TargetConsole)
+	newWebhooks = append(newWebhooks, console...)
+
 	swapAuditMuRW.Lock()
 	*targetList = newWebhooks
 	swapAuditMuRW.Unlock()
