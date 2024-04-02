@@ -1404,16 +1404,18 @@ func (z *erasureServerPools) getBucketsToDecommission(ctx context.Context) ([]de
 
 	// Buckets data are dispersed in multiple zones/sets, make
 	// sure to decommission the necessary metadata.
-	decomBuckets = append(decomBuckets, decomBucketInfo{
-		Name:   minioMetaBucket,
-		Prefix: minioConfigPrefix,
-	})
-	decomBuckets = append(decomBuckets, decomBucketInfo{
-		Name:   minioMetaBucket,
-		Prefix: bucketMetaPrefix,
-	})
+	decomMetaBuckets := []decomBucketInfo{
+		{
+			Name:   minioMetaBucket,
+			Prefix: minioConfigPrefix,
+		},
+		{
+			Name:   minioMetaBucket,
+			Prefix: bucketMetaPrefix,
+		},
+	}
 
-	return decomBuckets, nil
+	return append(decomMetaBuckets, decomBuckets...), nil
 }
 
 func (z *erasureServerPools) StartDecommission(ctx context.Context, indices ...int) (err error) {
