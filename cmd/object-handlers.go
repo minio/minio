@@ -34,7 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -1291,11 +1291,20 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	return defaultMeta, nil
 }
 
-// getRemoteInstanceTransport contains a singleton roundtripper.
-var (
-	getRemoteInstanceTransport     *http.Transport
-	getRemoteInstanceTransportOnce sync.Once
-)
+// getRemoteInstanceTransport contains a roundtripper for external (not peers) servers
+var remoteInstanceTransport atomic.Value
+
+func setRemoteInstanceTransport(tr http.RoundTripper) {
+	remoteInstanceTransport.Store(tr)
+}
+
+func getRemoteInstanceTransport() http.RoundTripper {
+	rt, ok := remoteInstanceTransport.Load().(http.RoundTripper)
+	if ok {
+		return rt
+	}
+	return nil
+}
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
@@ -1306,7 +1315,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: getRemoteInstanceTransport,
+		Transport: getRemoteInstanceTransport(),
 	})
 	if err != nil {
 		return nil, err
