@@ -452,7 +452,7 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 	}
 
 	//TODO:only when file is passed from the frontend
-	if true {
+	if false {
 
 		b := []byte(`{"storage1": {"url": "localhost:9999","accessKey": "minioadmin","secretKey": "minioadmin","api": "s3v4","path": "auto"}}`)
 
