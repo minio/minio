@@ -192,8 +192,8 @@ func updateHTTPTargets(ctx context.Context, cfgs map[string]http.Config, targetL
 		}
 	}
 
-	oldTargets := make([]Target, len(*targetList))
-	copy(oldTargets, *targetList)
+	oldTargets, others := splitTargets(*targetList, types.TargetHTTP)
+	newWebhooks = append(newWebhooks, others...)
 
 	for i := range oldTargets {
 		currentTgt, ok := oldTargets[i].(*http.Target)

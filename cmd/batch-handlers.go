@@ -92,7 +92,7 @@ func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token strin
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	clnt := http.Client{Transport: getRemoteInstanceTransport}
+	clnt := http.Client{Transport: getRemoteInstanceTransport()}
 	resp, err := clnt.Do(req)
 	if err != nil {
 		return err
@@ -351,7 +351,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 	c, err := miniogo.New(u.Host, &miniogo.Options{
 		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:       u.Scheme == "https",
-		Transport:    getRemoteInstanceTransport,
+		Transport:    getRemoteInstanceTransport(),
 		BucketLookup: lookupStyle(r.Source.Path),
 	})
 	if err != nil {
@@ -1048,7 +1048,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
 		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:       u.Scheme == "https",
-		Transport:    getRemoteInstanceTransport,
+		Transport:    getRemoteInstanceTransport(),
 		BucketLookup: lookupStyle(r.Target.Path),
 	})
 	if err != nil {
@@ -1068,7 +1068,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			cl, err := miniogo.New(u.Host, &miniogo.Options{
 				Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 				Secure:       u.Scheme == "https",
-				Transport:    getRemoteInstanceTransport,
+				Transport:    getRemoteInstanceTransport(),
 				BucketLookup: lookupStyle(r.Target.Path),
 			})
 			if err != nil {
@@ -1354,7 +1354,7 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
 		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:       u.Scheme == "https",
-		Transport:    getRemoteInstanceTransport,
+		Transport:    getRemoteInstanceTransport(),
 		BucketLookup: lookupStyle(pathStyle),
 	})
 	if err != nil {
