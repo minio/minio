@@ -172,6 +172,11 @@ var ServerFlags = []cli.Flag{
 		Hidden: true,
 		EnvVar: "MINIO_CROSSDOMAIN_XML",
 	},
+	cli.StringFlag{
+		Name:   "memlimit",
+		Usage:  "set debug memory limit instead of GOMEMLIMIT env",
+		Hidden: true,
+	},
 }
 
 var gatewayCmd = cli.Command{
@@ -731,7 +736,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Set system resources to maximum.
 	bootstrapTrace("setMaxResources", func() {
-		_ = setMaxResources()
+		_ = setMaxResources(ctx)
 	})
 
 	// Verify kernel release and version.

@@ -106,7 +106,7 @@ func TestMain(m *testing.M) {
 	// logger.AddTarget(console.New())
 
 	// Set system resources to maximum.
-	setMaxResources()
+	setMaxResources(nil)
 
 	// Initialize globalConsoleSys system
 	globalConsoleSys = NewConsoleLogger(context.Background())
