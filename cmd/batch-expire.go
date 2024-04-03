@@ -321,7 +321,7 @@ func (r BatchJobExpire) Notify(ctx context.Context, body io.Reader) error {
 		req.Header.Set("Authorization", r.NotificationCfg.Token)
 	}
 
-	clnt := http.Client{Transport: getRemoteInstanceTransport}
+	clnt := http.Client{Transport: getRemoteInstanceTransport()}
 	resp, err := clnt.Do(req)
 	if err != nil {
 		return err

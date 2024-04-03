@@ -576,11 +576,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 
 		globalAPIConfig.init(apiConfig, setDriveCounts)
 		autoGenerateRootCredentials() // Generate the KMS root credentials here since we don't know whether API root access is disabled until now.
-
-		// Initialize remote instance transport once.
-		getRemoteInstanceTransportOnce.Do(func() {
-			getRemoteInstanceTransport = NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline)
-		})
+		setRemoteInstanceTransport(NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline))
 	case config.CompressionSubSys:
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 		if err != nil {
