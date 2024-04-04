@@ -3708,6 +3708,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}, ObjectOptions{
 			VersionID: objInfo.VersionID,
+			MTime:     objInfo.ModTime,
 		}); err != nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidObjectState), r.URL)
 			return
