@@ -176,6 +176,7 @@ var ServerFlags = []cli.Flag{
 		Name:   "memlimit",
 		Usage:  "set global memory limit per server via GOMEMLIMIT",
 		Hidden: true,
+		EnvVar: "MINIO_MEMLIMIT",
 	},
 }
 
