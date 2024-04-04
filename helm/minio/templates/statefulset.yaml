@@ -181,6 +181,8 @@ spec:
               value: {{ .Values.oidc.scopes }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri }}
             - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
               value: {{ .Values.oidc.displayName }}
             {{- end }}
