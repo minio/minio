@@ -174,7 +174,7 @@ var ServerFlags = []cli.Flag{
 	},
 	cli.StringFlag{
 		Name:   "memlimit",
-		Usage:  "set debug memory limit instead of GOMEMLIMIT env",
+		Usage:  "set global memory limit per server via GOMEMLIMIT",
 		Hidden: true,
 	},
 }
