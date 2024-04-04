@@ -414,7 +414,7 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	logger.LogIf(r.Context(), msgp.Encode(w, &fi))
+	storageLogIf(r.Context(), msgp.Encode(w, &fi))
 }
 
 // WriteMetadataHandler rpc handler to write new updated metadata.
@@ -495,7 +495,7 @@ func (s *storageRESTServer) ReadXLHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logger.LogIf(r.Context(), msgp.Encode(w, &rf))
+	storageLogIf(r.Context(), msgp.Encode(w, &rf))
 }
 
 // ReadXLHandlerWS - read xl.meta for an object at path.
@@ -597,7 +597,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		if ok {
 			_, err = rf.ReadFrom(sr.Reader)
 			if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-				logger.LogIf(r.Context(), err)
+				storageLogIf(r.Context(), err)
 			}
 			if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
 				return
@@ -607,7 +607,7 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 
 	_, err = xioutil.Copy(w, rc)
 	if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-		logger.LogIf(r.Context(), err)
+		storageLogIf(r.Context(), err)
 	}
 }
 
@@ -1180,25 +1180,25 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 			hint = fmt.Sprintf("Run the following command to add write permissions: `sudo chown -R %s. <path> && sudo chmod u+rxw <path>`", username)
 		}
 		if !exit {
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("Drive is not writable %s, %s", endpoint, hint), "log-fatal-errs")
+			storageLogOnceIf(GlobalContext, fmt.Errorf("Drive is not writable %s, %s", endpoint, hint), "log-fatal-errs")
 		} else {
 			logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
 		}
 	case errors.Is(err, errFaultyDisk):
 		if !exit {
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("Drive is faulty at %s, please replace the drive - drive will be offline", endpoint), "log-fatal-errs")
+			storageLogOnceIf(GlobalContext, fmt.Errorf("Drive is faulty at %s, please replace the drive - drive will be offline", endpoint), "log-fatal-errs")
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}
 	case errors.Is(err, errDiskFull):
 		if !exit {
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("Drive is already full at %s, incoming I/O will fail - drive will be offline", endpoint), "log-fatal-errs")
+			storageLogOnceIf(GlobalContext, fmt.Errorf("Drive is already full at %s, incoming I/O will fail - drive will be offline", endpoint), "log-fatal-errs")
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}
 	default:
 		if !exit {
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("Drive %s returned an unexpected error: %w, please investigate - drive will be offline", endpoint, err), "log-fatal-errs")
+			storageLogOnceIf(GlobalContext, fmt.Errorf("Drive %s returned an unexpected error: %w, please investigate - drive will be offline", endpoint, err), "log-fatal-errs")
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}

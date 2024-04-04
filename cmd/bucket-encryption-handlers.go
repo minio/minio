@@ -114,7 +114,7 @@ func (api objectAPIHandlers) PutBucketEncryptionHandler(w http.ResponseWriter, r
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	replLogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeSSEConfig,
 		Bucket:    bucket,
 		SSEConfig: &cfgStr,
@@ -203,7 +203,7 @@ func (api objectAPIHandlers) DeleteBucketEncryptionHandler(w http.ResponseWriter
 	}
 
 	// Call site replication hook.
-	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	replLogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeSSEConfig,
 		Bucket:    bucket,
 		SSEConfig: nil,

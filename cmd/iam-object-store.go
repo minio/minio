@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -448,7 +447,7 @@ func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
 	iamListing, ok := iamOS.cachedIAMListing.Load().(map[string][]string)
 	if !ok {
 		// There has been no store yet. This should never happen!
-		logger.LogIf(GlobalContext, errors.New("WARNING: no cached IAM listing found"))
+		iamLogIf(GlobalContext, errors.New("WARNING: no cached IAM listing found"))
 		return nil
 	}
 
@@ -461,7 +460,7 @@ func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
 		// loadUser() will delete expired user during the load.
 		err := iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore)
 		if err != nil && !errors.Is(err, errNoSuchUser) {
-			logger.LogIf(GlobalContext,
+			iamLogIf(GlobalContext,
 				fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item))
 		}
 
@@ -472,7 +471,7 @@ func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
 		stsName := strings.TrimSuffix(item, ".json")
 		err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore)
 		if err != nil && !errors.Is(err, errNoSuchPolicy) {
-			logger.LogIf(GlobalContext,
+			iamLogIf(GlobalContext,
 				fmt.Errorf("unable to load policies during STS purge: %w (%s)", err, item))
 		}
 

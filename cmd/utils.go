@@ -624,7 +624,7 @@ func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transpo
 		defer cancel()
 		transport, err := s.NewHTTPTransportWithClientCerts(ctx, clientCert, clientKey)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load client key and cert, please check your client certificate configuration: %w", err))
+			internalLogIf(ctx, fmt.Errorf("Unable to load client key and cert, please check your client certificate configuration: %w", err))
 		}
 		return transport
 	}

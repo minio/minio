@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -136,7 +135,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 			}
 
 			// Call hook for site replication.
-			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+			replLogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
 				Type: madmin.SRIAMItemSTSAcc,
 				STSCredential: &madmin.SRSTSCredential{
 					AccessKey:    cred.AccessKey,

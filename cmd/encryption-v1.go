@@ -1089,7 +1089,7 @@ func (o *ObjectInfo) decryptPartsChecksums() {
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
 		decrypted, err := o.metadataDecrypter()("object-checksum", data)
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			encLogIf(GlobalContext, err)
 			return
 		}
 		data = decrypted
@@ -1151,7 +1151,7 @@ func (o *ObjectInfo) decryptChecksums(part int) map[string]string {
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
 		decrypted, err := o.metadataDecrypter()("object-checksum", data)
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			encLogIf(GlobalContext, err)
 			return nil
 		}
 		data = decrypted

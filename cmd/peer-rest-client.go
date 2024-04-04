@@ -83,7 +83,7 @@ func newPeerRESTClient(peer *xnet.Host, gridHost string) *peerRESTClient {
 			// Lazy initialization of grid connection.
 			// When we create this peer client, the grid connection is likely not yet initialized.
 			if gridHost == "" {
-				logger.LogOnceIf(context.Background(), fmt.Errorf("gridHost is empty for peer %s", peer.String()), peer.String()+":gridHost")
+				bugLogIf(context.Background(), fmt.Errorf("gridHost is empty for peer %s", peer.String()), peer.String()+":gridHost")
 				return nil
 			}
 			gc := gridConn.Load()
@@ -96,7 +96,7 @@ func newPeerRESTClient(peer *xnet.Host, gridHost string) *peerRESTClient {
 			}
 			gc = gm.Connection(gridHost)
 			if gc == nil {
-				logger.LogOnceIf(context.Background(), fmt.Errorf("gridHost %q not found for peer %s", gridHost, peer.String()), peer.String()+":gridHost")
+				bugLogIf(context.Background(), fmt.Errorf("gridHost %q not found for peer %s", gridHost, peer.String()), peer.String()+":gridHost")
 				return nil
 			}
 			gridConn.Store(gc)
@@ -500,7 +500,7 @@ func (client *peerRESTClient) doTrace(ctx context.Context, traceCh chan<- []byte
 
 	payload, err := json.Marshal(traceOpts)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		return
 	}
 
@@ -628,7 +628,7 @@ func newPeerRestClients(endpoints EndpointServerPools) (remote, all []*peerRESTC
 		remote = append(remote, all[i])
 	}
 	if len(all) != len(remote)+1 {
-		logger.LogIf(context.Background(), fmt.Errorf("WARNING: Expected number of all hosts (%v) to be remote +1 (%v)", len(all), len(remote)))
+		peersLogIf(context.Background(), fmt.Errorf("Expected number of all hosts (%v) to be remote +1 (%v)", len(all), len(remote)), logger.WarningKind)
 	}
 	return remote, all
 }

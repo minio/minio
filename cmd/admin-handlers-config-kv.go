@@ -58,7 +58,7 @@ func (a adminAPIHandlers) DelConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	password := cred.SecretKey
 	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err, logger.ErrorKind)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
@@ -162,7 +162,7 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 	password := cred.SecretKey
 	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err, logger.ErrorKind)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
@@ -443,7 +443,7 @@ func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Reques
 	password := cred.SecretKey
 	kvBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err, logger.ErrorKind)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}

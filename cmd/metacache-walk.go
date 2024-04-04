@@ -25,7 +25,6 @@ import (
 
 	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -171,7 +170,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if err != nil {
 			// Folder could have gone away in-between
 			if err != errVolumeNotFound && err != errFileNotFound {
-				logger.LogOnceIf(ctx, err, "metacache-walk-scan-dir")
+				internalLogOnceIf(ctx, err, "metacache-walk-scan-dir")
 			}
 			if opts.ReportNotFound && err == errFileNotFound && current == opts.BaseDir {
 				err = errFileNotFound
@@ -239,7 +238,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					// while being concurrently listed at the same time in
 					// such scenarios the 'xl.meta' might get truncated
 					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
-						logger.LogOnceIf(ctx, err, "metacache-walk-read-metadata")
+						internalLogOnceIf(ctx, err, "metacache-walk-read-metadata")
 					}
 					continue
 				}
@@ -257,7 +256,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
-						logger.LogIf(ctx, err)
+						internalLogIf(ctx, err)
 					}
 					continue
 				}
@@ -308,7 +307,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					// Scan folder we found. Should be in correct sort order where we are.
 					err := scanDir(pop)
 					if err != nil && !IsErrIgnored(err, context.Canceled) {
-						logger.LogIf(ctx, err)
+						internalLogIf(ctx, err)
 					}
 				}
 				dirStack = dirStack[:len(dirStack)-1]
@@ -379,7 +378,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
-				logger.LogIf(ctx, scanDir(pop))
+				internalLogIf(ctx, scanDir(pop))
 			}
 			dirStack = dirStack[:len(dirStack)-1]
 		}

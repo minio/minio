@@ -347,7 +347,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence, objAPI ObjectLay
 		StartTime:     h.startTime,
 	})
 	if err != nil {
-		logger.LogIf(h.ctx, err)
+		bugLogIf(h.ctx, err)
 		return nil, toAdminAPIErr(h.ctx, err), ""
 	}
 	return b, noError, ""
@@ -394,7 +394,7 @@ func (ahs *allHealState) PopHealStatusJSON(hpath string,
 	if err != nil {
 		h.currentStatus.Items = nil
 
-		logger.LogIf(h.ctx, err)
+		bugLogIf(h.ctx, err)
 		return nil, ErrInternalError
 	}
 

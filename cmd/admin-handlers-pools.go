@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/policy"
@@ -210,7 +209,7 @@ func (a adminAPIHandlers) StatusPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.LogIf(r.Context(), json.NewEncoder(w).Encode(&status))
+	adminLogIf(r.Context(), json.NewEncoder(w).Encode(&status))
 }
 
 func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +242,7 @@ func (a adminAPIHandlers) ListPools(w http.ResponseWriter, r *http.Request) {
 		poolsStatus[idx] = status
 	}
 
-	logger.LogIf(r.Context(), json.NewEncoder(w).Encode(poolsStatus))
+	adminLogIf(r.Context(), json.NewEncoder(w).Encode(poolsStatus))
 }
 
 func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request) {
@@ -350,11 +349,11 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceNotStarted), r.URL)
 			return
 		}
-		logger.LogIf(ctx, fmt.Errorf("failed to fetch rebalance status: %w", err))
+		adminLogIf(ctx, fmt.Errorf("failed to fetch rebalance status: %w", err))
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	logger.LogIf(r.Context(), json.NewEncoder(w).Encode(rs))
+	adminLogIf(r.Context(), json.NewEncoder(w).Encode(rs))
 }
 
 func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) {
@@ -374,7 +373,7 @@ func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) 
 	// Cancel any ongoing rebalance operation
 	globalNotificationSys.StopRebalance(r.Context())
 	writeSuccessResponseHeadersOnly(w)
-	logger.LogIf(ctx, pools.saveRebalanceStats(GlobalContext, 0, rebalSaveStoppedAt))
+	adminLogIf(ctx, pools.saveRebalanceStats(GlobalContext, 0, rebalSaveStoppedAt))
 }
 
 func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w http.ResponseWriter, r *http.Request) (proxy bool) {

@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/puzpuzpuz/xsync/v3"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
@@ -460,7 +459,7 @@ func (ies *IAMEtcdStore) watch(ctx context.Context, keyPath string) <-chan iamWa
 						goto outerLoop
 					}
 					if err := watchResp.Err(); err != nil {
-						logger.LogIf(ctx, err)
+						iamLogIf(ctx, err)
 						// log and retry.
 						time.Sleep(1 * time.Second)
 						// Upon an error on watch channel
