@@ -24,7 +24,7 @@ import (
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	jwtreq "github.com/golang-jwt/jwt/v4/request"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/minio/minio/internal/auth"
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
@@ -55,27 +55,21 @@ func cachedAuthenticateNode(ttl time.Duration) func(accessKey, secretKey, audien
 	type key struct {
 		accessKey, secretKey, audience string
 	}
-	type value struct {
-		created time.Time
-		res     string
-		err     error
-	}
-	cache, err := lru.NewARC(100)
-	if err != nil {
-		bugLogIf(GlobalContext, err)
-		return authenticateNode
-	}
-	return func(accessKey, secretKey, audience string) (string, error) {
+
+	cache := expirable.NewLRU[key, string](100, nil, ttl)
+	return func(accessKey, secretKey, audience string) (s string, err error) {
 		k := key{accessKey: accessKey, secretKey: secretKey, audience: audience}
-		v, ok := cache.Get(k)
-		if ok {
-			if val, ok := v.(*value); ok && time.Since(val.created) < ttl {
-				return val.res, val.err
+
+		var ok bool
+		s, ok = cache.Get(k)
+		if !ok {
+			s, err = authenticateNode(accessKey, secretKey, audience)
+			if err != nil {
+				return "", err
 			}
+			cache.Add(k, s)
 		}
-		s, err := authenticateNode(accessKey, secretKey, audience)
-		cache.Add(k, &value{created: time.Now(), res: s, err: err})
-		return s, err
+		return s, nil
 	}
 }
 
