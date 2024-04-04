@@ -55,6 +55,11 @@ __init__() {
 
 	go install github.com/minio/mc@latest
 
+	## this is needed because github actions don't have
+	## docker-compose on all runners
+	go install github.com/docker/compose/v2/cmd@latest
+	mv -v /tmp/gopath/bin/cmd /tmp/gopath/bin/docker-compose
+
 	TAG=minio/minio:dev make docker
 
 	MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z docker-compose \
