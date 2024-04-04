@@ -253,13 +253,16 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 			opts.claims[k] = v
 		}
 	} else {
-		isDN := globalIAMSys.LDAPConfig.IsLDAPUserDN(targetUser)
+		// We still need to ensure that the target user is a valid LDAP user.
+		//
+		// The target user may be supplied as a (short) username or a DN.
+		// However, for now, we only support using the short username.
 
 		opts.claims[ldapUserN] = targetUser // simple username
 		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
 		if err != nil {
 			// if not found, check if DN
-			if strings.Contains(err.Error(), "not found") && isDN {
+			if strings.Contains(err.Error(), "not found") && globalIAMSys.LDAPConfig.ParsesAsDN(targetUser) {
 				// warn user that DNs are not allowed
 				err = fmt.Errorf("Must use short username to add service account. %w", err)
 			}
@@ -377,7 +380,8 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
-	} else if userDN == "" {
+	}
+	if targetAccount == "" {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
 		return
 	}
