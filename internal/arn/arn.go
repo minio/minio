@@ -18,6 +18,7 @@
 package arn
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -31,30 +32,19 @@ import (
 //
 // Reference: https://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html
 
-type arnPartition string
-
 const (
-	arnPartitionMinio arnPartition = "minio"
-)
-
-type arnService string
-
-const (
-	arnServiceIAM arnService = "iam"
-)
-
-type arnResourceType string
-
-const (
-	arnResourceTypeRole arnResourceType = "role"
+	arnPrefixArn        = "arn"
+	arnPartitionMinio   = "minio"
+	arnServiceIAM       = "iam"
+	arnResourceTypeRole = "role"
 )
 
 // ARN - representation of resources based on AWS ARNs.
 type ARN struct {
-	Partition    arnPartition
-	Service      arnService
+	Partition    string
+	Service      string
 	Region       string
-	ResourceType arnResourceType
+	ResourceType string
 	ResourceID   string
 }
 
@@ -65,7 +55,7 @@ var validResourceIDRegex = regexp.MustCompile(`[A-Za-z0-9_/\.-]+$`)
 // NewIAMRoleARN - returns an ARN for a role in MinIO.
 func NewIAMRoleARN(resourceID, serverRegion string) (ARN, error) {
 	if !validResourceIDRegex.MatchString(resourceID) {
-		return ARN{}, fmt.Errorf("Invalid resource ID: %s", resourceID)
+		return ARN{}, fmt.Errorf("invalid resource ID: %s", resourceID)
 	}
 	return ARN{
 		Partition:    arnPartitionMinio,
@@ -80,12 +70,12 @@ func NewIAMRoleARN(resourceID, serverRegion string) (ARN, error) {
 func (arn ARN) String() string {
 	return strings.Join(
 		[]string{
-			"arn",
-			string(arn.Partition),
-			string(arn.Service),
+			arnPrefixArn,
+			arn.Partition,
+			arn.Service,
 			arn.Region,
 			"", // account-id is always empty in this implementation
-			string(arn.ResourceType) + "/" + arn.ResourceID,
+			arn.ResourceType + "/" + arn.ResourceID,
 		},
 		":",
 	)
@@ -94,43 +84,41 @@ func (arn ARN) String() string {
 // Parse - parses an ARN string into a type.
 func Parse(arnStr string) (arn ARN, err error) {
 	ps := strings.Split(arnStr, ":")
-	if len(ps) != 6 ||
-		ps[0] != "arn" {
-		err = fmt.Errorf("Invalid ARN string format")
+	if len(ps) != 6 || ps[0] != string(arnPrefixArn) {
+		err = errors.New("invalid ARN string format")
 		return
 	}
 
 	if ps[1] != string(arnPartitionMinio) {
-		err = fmt.Errorf("Invalid ARN - bad partition field")
+		err = errors.New("invalid ARN - bad partition field")
 		return
 	}
 
 	if ps[2] != string(arnServiceIAM) {
-		err = fmt.Errorf("Invalid ARN - bad service field")
+		err = errors.New("invalid ARN - bad service field")
 		return
 	}
 
 	// ps[3] is region and is not validated here. If the region is invalid,
 	// the ARN would not match any configured ARNs in the server.
-
 	if ps[4] != "" {
-		err = fmt.Errorf("Invalid ARN - unsupported account-id field")
+		err = errors.New("invalid ARN - unsupported account-id field")
 		return
 	}
 
 	res := strings.SplitN(ps[5], "/", 2)
 	if len(res) != 2 {
-		err = fmt.Errorf("Invalid ARN - resource does not contain a \"/\"")
+		err = errors.New("invalid ARN - resource does not contain a \"/\"")
 		return
 	}
 
 	if res[0] != string(arnResourceTypeRole) {
-		err = fmt.Errorf("Invalid ARN: resource type is invalid.")
+		err = errors.New("invalid ARN: resource type is invalid")
 		return
 	}
 
 	if !validResourceIDRegex.MatchString(res[1]) {
-		err = fmt.Errorf("Invalid resource ID: %s", res[1])
+		err = fmt.Errorf("invalid resource ID: %s", res[1])
 		return
 	}
 
