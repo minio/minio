@@ -188,7 +188,7 @@ func _() {
 	_ = x[ErrMalformedJSON-177]
 	_ = x[ErrAdminNoSuchUser-178]
 	_ = x[ErrAdminNoSuchUserLDAPWarn-179]
-	_ = x[ErrAdminLDAPExpectedShortName-180]
+	_ = x[ErrAdminLDAPExpectedLoginName-180]
 	_ = x[ErrAdminNoSuchGroup-181]
 	_ = x[ErrAdminGroupNotEmpty-182]
 	_ = x[ErrAdminGroupDisabled-183]

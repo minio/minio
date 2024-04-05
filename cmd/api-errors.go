@@ -278,7 +278,7 @@ const (
 	ErrMalformedJSON
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchUserLDAPWarn
-	ErrAdminLDAPExpectedShortName
+	ErrAdminLDAPExpectedLoginName
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
 	ErrAdminGroupDisabled
@@ -2086,8 +2086,8 @@ var errorCodes = errorCodeMap{
 		Description:    "LDAP is not enabled. LDAP must be enabled to make LDAP requests.",
 		HTTPStatusCode: http.StatusNotImplemented,
 	},
-	ErrAdminLDAPExpectedShortName: {
-		Code:           "XMinioLDAPExpectedShortName",
+	ErrAdminLDAPExpectedLoginName: {
+		Code:           "XMinioLDAPExpectedLoginName",
 		Description:    "Expected LDAP short username but was given full DN.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
