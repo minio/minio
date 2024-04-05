@@ -31,7 +31,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/dsync"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
@@ -384,7 +383,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 	// Collect disks we can use.
 	disks, healing := er.getOnlineDisksWithHealing(false)
 	if len(disks) == 0 {
-		logger.LogIf(ctx, errors.New("data-scanner: all drives are offline or being healed, skipping scanner cycle"))
+		scannerLogIf(ctx, errors.New("data-scanner: all drives are offline or being healed, skipping scanner cycle"))
 		return nil
 	}
 
@@ -449,7 +448,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				if cache.Info.LastUpdate.Equal(lastSave) {
 					continue
 				}
-				logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-cache-update")
+				scannerLogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-cache-update")
 				updates <- cache.clone()
 
 				lastSave = cache.Info.LastUpdate
@@ -458,7 +457,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 					// Save final state...
 					cache.Info.NextCycle = wantCycle
 					cache.Info.LastUpdate = time.Now()
-					logger.LogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-channel-closed")
+					scannerLogOnceIf(ctx, cache.save(ctx, er, dataUsageCacheName), "nsscanner-channel-closed")
 					updates <- cache.clone()
 					return
 				}
@@ -494,7 +493,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				// Load cache for bucket
 				cacheName := pathJoin(bucket.Name, dataUsageCacheName)
 				cache := dataUsageCache{}
-				logger.LogIf(ctx, cache.load(ctx, er, cacheName))
+				scannerLogIf(ctx, cache.load(ctx, er, cacheName))
 				if cache.Info.Name == "" {
 					cache.Info.Name = bucket.Name
 				}
@@ -530,9 +529,9 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				cache, err = disk.NSScanner(ctx, cache, updates, healScanMode, nil)
 				if err != nil {
 					if !cache.Info.LastUpdate.IsZero() && cache.Info.LastUpdate.After(before) {
-						logger.LogIf(ctx, cache.save(ctx, er, cacheName))
+						scannerLogIf(ctx, cache.save(ctx, er, cacheName))
 					} else {
-						logger.LogIf(ctx, err)
+						scannerLogIf(ctx, err)
 					}
 					// This ensures that we don't close
 					// bucketResults channel while the
@@ -562,7 +561,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				}
 
 				// Save cache
-				logger.LogIf(ctx, cache.save(ctx, er, cacheName))
+				scannerLogIf(ctx, cache.save(ctx, er, cacheName))
 			}
 		}(i)
 	}

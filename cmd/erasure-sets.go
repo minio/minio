@@ -448,7 +448,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 					diskID, err := disk.GetDiskID()
 					if err != nil {
 						if !errors.Is(err, errUnformattedDisk) {
-							logger.LogIf(ctx, err)
+							bootLogIf(ctx, err)
 						}
 						return
 					}
@@ -457,11 +457,11 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 					}
 					m, n, err := findDiskIndexByDiskID(format, diskID)
 					if err != nil {
-						logger.LogIf(ctx, err)
+						bootLogIf(ctx, err)
 						return
 					}
 					if m != i || n != j {
-						logger.LogIf(ctx, fmt.Errorf("Detected unexpected drive ordering refusing to use the drive - poolID: %s, found drive mounted at (set=%s, drive=%s) expected mount at (set=%s, drive=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
+						bootLogIf(ctx, fmt.Errorf("Detected unexpected drive ordering refusing to use the drive - poolID: %s, found drive mounted at (set=%s, drive=%s) expected mount at (set=%s, drive=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
 						s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
 						return
 					}
@@ -1083,7 +1083,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 	if !reflect.DeepEqual(s.format, refFormat) {
 		// Format is corrupted and unrecognized by the running instance.
-		logger.LogIf(ctx, fmt.Errorf("Unable to heal the newly replaced drives due to format.json inconsistencies, please engage MinIO support for further assistance: %w",
+		healingLogIf(ctx, fmt.Errorf("Unable to heal the newly replaced drives due to format.json inconsistencies, please engage MinIO support for further assistance: %w",
 			errCorruptedFormat))
 		return res, errCorruptedFormat
 	}
@@ -1112,7 +1112,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 				continue
 			}
 			if err := saveFormatErasure(storageDisks[index], format, formatOpID); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Drive %s failed to write updated 'format.json': %v", storageDisks[index], err))
+				healingLogIf(ctx, fmt.Errorf("Drive %s failed to write updated 'format.json': %v", storageDisks[index], err))
 				storageDisks[index].Close()
 				tmpNewFormats[index] = nil // this disk failed to write new format
 			}
@@ -1127,7 +1127,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 			m, n, err := findDiskIndexByDiskID(refFormat, format.Erasure.This)
 			if err != nil {
-				logger.LogIf(ctx, err)
+				healingLogIf(ctx, err)
 				continue
 			}
 

@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"time"
-
-	"github.com/minio/minio/internal/logger"
 )
 
 const (
@@ -60,7 +58,7 @@ var (
 func loadClusterUsageObjectMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
 	dataUsageInfo, err := c.dataUsageInfo.Get()
 	if err != nil {
-		logger.LogIf(ctx, err)
+		metricsLogIf(ctx, err)
 		return nil
 	}
 
@@ -144,7 +142,7 @@ var (
 func loadClusterUsageBucketMetrics(ctx context.Context, m MetricValues, c *metricsCache, buckets []string) error {
 	dataUsageInfo, err := c.dataUsageInfo.Get()
 	if err != nil {
-		logger.LogIf(ctx, err)
+		metricsLogIf(ctx, err)
 		return nil
 	}
 
@@ -164,7 +162,7 @@ func loadClusterUsageBucketMetrics(ctx context.Context, m MetricValues, c *metri
 		if err != nil {
 			// Log and continue if we are unable to retrieve metrics for this
 			// bucket.
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			continue
 		}
 

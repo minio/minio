@@ -24,6 +24,7 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/kms"
 )
 
 const unavailable = "offline"
@@ -134,7 +135,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 
-		if _, err := GlobalKMS.Stat(ctx); err != nil {
+		if _, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{"healthcheck": ""}); err != nil {
 			switch r.Method {
 			case http.MethodHead:
 				apiErr := toAPIError(r.Context(), err)

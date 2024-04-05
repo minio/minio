@@ -278,7 +278,7 @@ func formatErasureMigrateV2ToV3(data []byte, export, version string) ([]byte, er
 	tmpOld := pathJoin(export, minioMetaTmpDeletedBucket, mustGetUUID())
 	if err := renameAll(pathJoin(export, minioMetaMultipartBucket),
 		tmpOld, export); err != nil && err != errFileNotFound {
-		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
+		bootLogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
 			pathJoin(export, minioMetaMultipartBucket),
 			tmpOld,
 			osErrToFileErr(err)))
@@ -570,7 +570,7 @@ func formatErasureFixLocalDeploymentID(endpoints Endpoints, storageDisks []Stora
 				format.ID = refFormat.ID
 				// Heal the drive if we fixed its deployment ID.
 				if err := saveFormatErasure(storageDisks[index], format, mustGetUUID()); err != nil {
-					logger.LogIf(GlobalContext, err)
+					bootLogIf(GlobalContext, err)
 					return fmt.Errorf("Unable to save format.json, %w", err)
 				}
 			}

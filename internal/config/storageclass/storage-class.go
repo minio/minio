@@ -397,7 +397,7 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 			return cfg, err
 		}
 		if inlineBlock > 128*humanize.KiByte {
-			logger.LogOnceIf(context.Background(), fmt.Errorf("inline block value bigger than recommended max of 128KiB -> %s, performance may degrade for PUT please benchmark the changes", inlineBlockStr), inlineBlockStr)
+			configLogOnceIf(context.Background(), fmt.Errorf("inline block value bigger than recommended max of 128KiB -> %s, performance may degrade for PUT please benchmark the changes", inlineBlockStr), inlineBlockStr)
 		}
 		cfg.inlineBlock = int64(inlineBlock)
 	} else {
@@ -407,4 +407,8 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	cfg.initialized = true
 
 	return cfg, nil
+}
+
+func configLogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, "config", err, id, errKind...)
 }

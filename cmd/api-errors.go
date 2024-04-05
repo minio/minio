@@ -2530,7 +2530,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// Make sure to log the errors which we cannot translate
 		// to a meaningful S3 API errors. This is added to aid in
 		// debugging unexpected/unhandled errors.
-		logger.LogIf(ctx, err)
+		internalLogIf(ctx, err)
 	}
 
 	return apiErr

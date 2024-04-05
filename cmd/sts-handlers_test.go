@@ -663,6 +663,36 @@ func (s *TestSuiteIAM) SetUpLDAP(c *check, serverAddr string) {
 	s.RestartIAMSuite(c)
 }
 
+// SetUpLDAPWithNonNormalizedBaseDN - expects to setup an LDAP test server using
+// the test LDAP container and canned data from
+// https://github.com/minio/minio-ldap-testing
+//
+// Sets up non-normalized base DN configuration for testing.
+func (s *TestSuiteIAM) SetUpLDAPWithNonNormalizedBaseDN(c *check, serverAddr string) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	configCmds := []string{
+		"identity_ldap",
+		fmt.Sprintf("server_addr=%s", serverAddr),
+		"server_insecure=on",
+		"lookup_bind_dn=cn=admin,dc=min,dc=io",
+		"lookup_bind_password=admin",
+		// `DC` is intentionally capitalized here.
+		"user_dn_search_base_dn=DC=min,DC=io",
+		"user_dn_search_filter=(uid=%s)",
+		// `DC` is intentionally capitalized here.
+		"group_search_base_dn=ou=swengg,DC=min,dc=io",
+		"group_search_filter=(&(objectclass=groupofnames)(member=%d))",
+	}
+	_, err := s.adm.SetConfigKV(ctx, strings.Join(configCmds, " "))
+	if err != nil {
+		c.Fatalf("unable to setup LDAP for tests: %v", err)
+	}
+
+	s.RestartIAMSuite(c)
+}
+
 const (
 	EnvTestLDAPServer = "_MINIO_LDAP_TEST_SERVER"
 )
@@ -677,11 +707,40 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 
 				ldapServer := os.Getenv(EnvTestLDAPServer)
 				if ldapServer == "" {
-					c.Skip("Skipping LDAP test as no LDAP server is provided.")
+					c.Skipf("Skipping LDAP test as no LDAP server is provided via %s", EnvTestLDAPServer)
 				}
 
 				suite.SetUpSuite(c)
 				suite.SetUpLDAP(c, ldapServer)
+				suite.TestLDAPSTS(c)
+				suite.TestLDAPUnicodeVariations(c)
+				suite.TestLDAPSTSServiceAccounts(c)
+				suite.TestLDAPSTSServiceAccountsWithUsername(c)
+				suite.TestLDAPSTSServiceAccountsWithGroups(c)
+				suite.TearDownSuite(c)
+			},
+		)
+	}
+}
+
+// This test is for a fix added to handle non-normalized base DN values in the
+// LDAP configuration. It runs the existing LDAP sub-tests with a non-normalized
+// LDAP configuration.
+func TestIAMWithLDAPNonNormalizedBaseDNConfigServerSuite(t *testing.T) {
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				ldapServer := os.Getenv(EnvTestLDAPServer)
+				if ldapServer == "" {
+					c.Skipf("Skipping LDAP test as no LDAP server is provided via %s", EnvTestLDAPServer)
+				}
+
+				suite.SetUpSuite(c)
+				suite.SetUpLDAPWithNonNormalizedBaseDN(c, ldapServer)
 				suite.TestLDAPSTS(c)
 				suite.TestLDAPUnicodeVariations(c)
 				suite.TestLDAPSTSServiceAccounts(c)

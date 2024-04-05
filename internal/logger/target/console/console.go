@@ -88,22 +88,25 @@ func (c *Target) Send(e interface{}) error {
 
 	var apiString string
 	if entry.API != nil {
-		apiString = "API: " + entry.API.Name + "("
+		apiString = "API: " + entry.API.Name
 		if entry.API.Args != nil {
+			args := ""
 			if entry.API.Args.Bucket != "" {
-				apiString = apiString + "bucket=" + entry.API.Args.Bucket
+				args = args + "bucket=" + entry.API.Args.Bucket
 			}
 			if entry.API.Args.Object != "" {
-				apiString = apiString + ", object=" + entry.API.Args.Object
+				args = args + ", object=" + entry.API.Args.Object
 			}
 			if entry.API.Args.VersionID != "" {
-				apiString = apiString + ", versionId=" + entry.API.Args.VersionID
+				args = args + ", versionId=" + entry.API.Args.VersionID
 			}
 			if len(entry.API.Args.Objects) > 0 {
-				apiString = apiString + ", multiObject=true, numberOfObjects=" + strconv.Itoa(len(entry.API.Args.Objects))
+				args = args + ", multiObject=true, numberOfObjects=" + strconv.Itoa(len(entry.API.Args.Objects))
+			}
+			if len(args) > 0 {
+				apiString += "(" + args + ")"
 			}
 		}
-		apiString += ")"
 	} else {
 		apiString = "INTERNAL"
 	}

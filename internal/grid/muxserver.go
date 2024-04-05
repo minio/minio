@@ -26,7 +26,6 @@ import (
 	"time"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 )
 
 const lastPingThreshold = 4 * clientPingInterval
@@ -220,7 +219,7 @@ func (m *muxServer) handleRequests(ctx context.Context, msg message, send chan<-
 			fmt.Println("Mux", m.ID, "Handler took", time.Since(start).Round(time.Millisecond))
 		}
 		if r := recover(); r != nil {
-			logger.LogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
+			gridLogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
 			err := RemoteErr(fmt.Sprintf("handler panic: %v", r))
 			handlerErr = &err
 		}
@@ -244,7 +243,7 @@ func (m *muxServer) checkRemoteAlive() {
 		case <-t.C:
 			last := time.Since(time.Unix(atomic.LoadInt64(&m.LastPing), 0))
 			if last > lastPingThreshold {
-				logger.LogIf(m.ctx, fmt.Errorf("canceling remote connection %s not seen for %v", m.parent, last))
+				gridLogIf(m.ctx, fmt.Errorf("canceling remote connection %s not seen for %v", m.parent, last))
 				m.close()
 				return
 			}
@@ -281,7 +280,7 @@ func (m *muxServer) message(msg message) {
 	// Note, on EOF no value can be sent.
 	if msg.Flags&FlagEOF != 0 {
 		if len(msg.Payload) > 0 {
-			logger.LogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
+			gridLogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
 		}
 		if m.inbound != nil {
 			xioutil.SafeClose(m.inbound)
@@ -314,7 +313,7 @@ func (m *muxServer) unblockSend(seq uint32) {
 	select {
 	case m.outBlock <- struct{}{}:
 	default:
-		logger.LogIf(m.ctx, errors.New("output unblocked overflow"))
+		gridLogIf(m.ctx, errors.New("output unblocked overflow"))
 	}
 }
 
@@ -354,7 +353,7 @@ func (m *muxServer) send(msg message) {
 	if debugPrint {
 		fmt.Printf("Mux %d, Sending %+v\n", m.ID, msg)
 	}
-	logger.LogIf(m.ctx, m.parent.queueMsg(msg, nil))
+	gridLogIf(m.ctx, m.parent.queueMsg(msg, nil))
 }
 
 func (m *muxServer) close() {

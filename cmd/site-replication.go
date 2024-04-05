@@ -238,7 +238,7 @@ func (c *SiteReplicationSys) Init(ctx context.Context, objAPI ObjectLayer) error
 		if err == nil {
 			break
 		}
-		logger.LogOnceIf(context.Background(), fmt.Errorf("unable to initialize site replication subsystem: (%w)", err), "site-relication-init")
+		replLogOnceIf(context.Background(), fmt.Errorf("unable to initialize site replication subsystem: (%w)", err), "site-relication-init")
 
 		duration := time.Duration(r.Float64() * float64(time.Minute))
 		if duration < time.Second {
@@ -313,7 +313,7 @@ func (c *SiteReplicationSys) saveToDisk(ctx context.Context, state srState) erro
 	}
 
 	for _, err := range globalNotificationSys.ReloadSiteReplicationConfig(ctx) {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 	}
 
 	c.Lock()
@@ -334,7 +334,7 @@ func (c *SiteReplicationSys) removeFromDisk(ctx context.Context) error {
 	}
 
 	for _, err := range globalNotificationSys.ReloadSiteReplicationConfig(ctx) {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 	}
 
 	c.Lock()
@@ -1186,7 +1186,7 @@ func (c *SiteReplicationSys) PeerBucketDeleteHandler(ctx context.Context, bucket
 	if err != nil {
 		if globalDNSConfig != nil {
 			if err2 := globalDNSConfig.Put(bucket); err2 != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, please fix it manually", err2))
+				replLogIf(ctx, fmt.Errorf("Unable to restore bucket DNS entry %w, please fix it manually", err2))
 			}
 		}
 		return err
@@ -4074,7 +4074,7 @@ func (c *SiteReplicationSys) EditPeerCluster(ctx context.Context, peer madmin.Pe
 
 	wg.Wait()
 	for dID, err := range errs {
-		logger.LogOnceIf(ctx, fmt.Errorf("unable to update peer %s: %w", state.Peers[dID].Name, err), "site-relication-edit")
+		replLogOnceIf(ctx, fmt.Errorf("unable to update peer %s: %w", state.Peers[dID].Name, err), "site-relication-edit")
 	}
 
 	// we can now save the cluster replication configuration state.
@@ -4141,21 +4141,21 @@ func (c *SiteReplicationSys) updateTargetEndpoints(ctx context.Context, prevInfo
 				}
 				err := globalBucketTargetSys.SetTarget(ctx, bucket, &bucketTarget, true)
 				if err != nil {
-					logger.LogIf(ctx, c.annotatePeerErr(peer.Name, "Bucket target creation error", err))
+					replLogIf(ctx, c.annotatePeerErr(peer.Name, "Bucket target creation error", err))
 					continue
 				}
 				targets, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					replLogIf(ctx, err)
 					continue
 				}
 				tgtBytes, err := json.Marshal(&targets)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					bugLogIf(ctx, err)
 					continue
 				}
 				if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
-					logger.LogIf(ctx, err)
+					replLogIf(ctx, err)
 					continue
 				}
 			}
@@ -4390,7 +4390,7 @@ func (c *SiteReplicationSys) healILMExpiryConfig(ctx context.Context, objAPI Obj
 			return wrapSRErr(err)
 		}
 		if err = admClient.SRStateEdit(ctx, madmin.SRStateEditReq{Peers: latestPeers, UpdatedAt: lastUpdate}); err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(ps.Name, siteReplicationEdit,
+			replLogIf(ctx, c.annotatePeerErr(ps.Name, siteReplicationEdit,
 				fmt.Errorf("Unable to heal site replication state for peer %s from peer %s : %w",
 					ps.Name, latestPeerName, err)))
 		}
@@ -4493,7 +4493,7 @@ func (c *SiteReplicationSys) healBucketILMExpiry(ctx context.Context, objAPI Obj
 
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketLifecycleConfig, finalConfigData); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal bucket ILM expiry data from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal bucket ILM expiry data from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4509,7 +4509,7 @@ func (c *SiteReplicationSys) healBucketILMExpiry(ctx context.Context, objAPI Obj
 			ExpiryLCConfig: latestExpLCConfig,
 			UpdatedAt:      lastUpdate,
 		}); err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal bucket ILM expiry data for peer %s from peer %s : %w",
 					peerName, latestPeerName, err)))
 		}
@@ -4566,7 +4566,7 @@ func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectL
 		}
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketTaggingConfig, latestTaggingConfigBytes); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal tagging metadata from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal tagging metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4582,7 +4582,7 @@ func (c *SiteReplicationSys) healTagMetadata(ctx context.Context, objAPI ObjectL
 			Tags:   latestTaggingConfig,
 		})
 		if err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal tagging metadata for peer %s from peer %s : %w", peerName, latestPeerName, err)))
 		}
 	}
@@ -4630,7 +4630,7 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 		}
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketPolicyConfig, latestIAMPolicy); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal bucket policy metadata from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal bucket policy metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4646,7 +4646,7 @@ func (c *SiteReplicationSys) healBucketPolicies(ctx context.Context, objAPI Obje
 			Policy:    latestIAMPolicy,
 			UpdatedAt: lastUpdate,
 		}); err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal bucket policy metadata for peer %s from peer %s : %w",
 					peerName, latestPeerName, err)))
 		}
@@ -4705,7 +4705,7 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 		}
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, latestQuotaConfigBytes); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal quota metadata from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal quota metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4722,7 +4722,7 @@ func (c *SiteReplicationSys) healBucketQuotaConfig(ctx context.Context, objAPI O
 			Quota:     latestQuotaConfigBytes,
 			UpdatedAt: lastUpdate,
 		}); err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal quota config metadata for peer %s from peer %s : %w",
 					peerName, latestPeerName, err)))
 		}
@@ -4780,7 +4780,7 @@ func (c *SiteReplicationSys) healVersioningMetadata(ctx context.Context, objAPI 
 		}
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketVersioningConfig, latestVersioningConfigBytes); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal versioning metadata from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal versioning metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4797,7 +4797,7 @@ func (c *SiteReplicationSys) healVersioningMetadata(ctx context.Context, objAPI 
 			UpdatedAt:  lastUpdate,
 		})
 		if err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal versioning config metadata for peer %s from peer %s : %w",
 					peerName, latestPeerName, err)))
 		}
@@ -4855,7 +4855,7 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 		}
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, bucketSSEConfig, latestSSEConfigBytes); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal sse metadata from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal sse metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4872,7 +4872,7 @@ func (c *SiteReplicationSys) healSSEMetadata(ctx context.Context, objAPI ObjectL
 			UpdatedAt: lastUpdate,
 		})
 		if err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal SSE config metadata for peer %s from peer %s : %w",
 					peerName, latestPeerName, err)))
 		}
@@ -4930,7 +4930,7 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 		}
 		if dID == globalDeploymentID() {
 			if _, err := globalBucketMetadataSys.Update(ctx, bucket, objectLockConfig, latestObjLockConfigBytes); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal objectlock config metadata from peer site %s : %w", latestPeerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal objectlock config metadata from peer site %s : %w", latestPeerName, err))
 			}
 			continue
 		}
@@ -4947,7 +4947,7 @@ func (c *SiteReplicationSys) healOLockConfigMetadata(ctx context.Context, objAPI
 			UpdatedAt: lastUpdate,
 		})
 		if err != nil {
-			logger.LogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
+			replLogIf(ctx, c.annotatePeerErr(peerName, replicateBucketMetadata,
 				fmt.Errorf("Unable to heal object lock config metadata for peer %s from peer %s : %w",
 					peerName, latestPeerName, err)))
 		}
@@ -5184,7 +5184,7 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 	}
 
 	if replMismatch {
-		logger.LogIf(ctx, c.annotateErr(configureReplication, c.PeerBucketConfigureReplHandler(ctx, bucket)))
+		replLogIf(ctx, c.annotateErr(configureReplication, c.PeerBucketConfigureReplHandler(ctx, bucket)))
 	}
 	return nil
 }
@@ -5277,7 +5277,7 @@ func (c *SiteReplicationSys) healPolicies(ctx context.Context, objAPI ObjectLaye
 			UpdatedAt: lastUpdate,
 		})
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to heal IAM policy %s from peer site %s -> site %s : %w", policy, latestPeerName, peerName, err))
+			replLogIf(ctx, fmt.Errorf("Unable to heal IAM policy %s from peer site %s -> site %s : %w", policy, latestPeerName, peerName, err))
 		}
 	}
 	return nil
@@ -5338,7 +5338,7 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 			UpdatedAt: lastUpdate,
 		})
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to heal IAM user policy mapping for %s from peer site %s -> site %s : %w", user, latestPeerName, peerName, err))
+			replLogIf(ctx, fmt.Errorf("Unable to heal IAM user policy mapping for %s from peer site %s -> site %s : %w", user, latestPeerName, peerName, err))
 		}
 	}
 	return nil
@@ -5401,7 +5401,7 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 			UpdatedAt: lastUpdate,
 		})
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to heal IAM group policy mapping for %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err))
+			replLogIf(ctx, fmt.Errorf("Unable to heal IAM group policy mapping for %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err))
 		}
 	}
 	return nil
@@ -5462,13 +5462,13 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 		if creds.IsServiceAccount() {
 			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, creds.AccessKey)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 				continue
 			}
 
 			_, policy, err := globalIAMSys.GetServiceAccount(ctx, creds.AccessKey)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 				continue
 			}
 
@@ -5476,7 +5476,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			if policy != nil {
 				policyJSON, err = json.Marshal(policy)
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+					replLogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 					continue
 				}
 			}
@@ -5499,7 +5499,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				},
 				UpdatedAt: lastUpdate,
 			}); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 			}
 			continue
 		}
@@ -5512,7 +5512,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				// policy. The session token will contain info about policy to
 				// be applied.
 				if !errors.Is(err, errNoSuchUser) {
-					logger.LogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+					replLogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 					continue
 				}
 			} else {
@@ -5530,7 +5530,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				},
 				UpdatedAt: lastUpdate,
 			}); err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+				replLogIf(ctx, fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 			}
 			continue
 		}
@@ -5546,7 +5546,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			},
 			UpdatedAt: lastUpdate,
 		}); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to heal user %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
+			replLogIf(ctx, fmt.Errorf("Unable to heal user %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err))
 		}
 	}
 	return nil
@@ -5610,7 +5610,7 @@ func (c *SiteReplicationSys) healGroups(ctx context.Context, objAPI ObjectLayer,
 			},
 			UpdatedAt: lastUpdate,
 		}); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to heal group %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err))
+			replLogIf(ctx, fmt.Errorf("Unable to heal group %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err))
 		}
 	}
 	return nil

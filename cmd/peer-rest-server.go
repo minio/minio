@@ -349,7 +349,7 @@ func (s *peerRESTServer) DownloadProfilingDataHandler(w http.ResponseWriter, r *
 		s.writeErrorResponse(w, err)
 		return
 	}
-	logger.LogIf(ctx, gob.NewEncoder(w).Encode(profileData))
+	peersLogIf(ctx, gob.NewEncoder(w).Encode(profileData))
 }
 
 func (s *peerRESTServer) LocalStorageInfoHandler(mss *grid.MSS) (*grid.JSON[madmin.StorageInfo], *grid.RemoteErr) {
@@ -815,7 +815,7 @@ func (s *peerRESTServer) ListenHandler(ctx context.Context, v *grid.URLValues, o
 			buf.Reset()
 			tmpEvt.Records[0] = ev
 			if err := enc.Encode(tmpEvt); err != nil {
-				logger.LogOnceIf(ctx, err, "event: Encode failed")
+				peersLogOnceIf(ctx, err, "event: Encode failed")
 				continue
 			}
 			out <- grid.NewBytesWithCopyOf(buf.Bytes())
@@ -866,7 +866,7 @@ func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(mss *grid.MSS) (np g
 		return np, grid.NewRemoteErr(errServerNotInitialized)
 	}
 
-	logger.LogIf(context.Background(), globalSiteReplicationSys.Init(context.Background(), objAPI))
+	peersLogIf(context.Background(), globalSiteReplicationSys.Init(context.Background(), objAPI))
 	return
 }
 
@@ -939,7 +939,7 @@ func (s *peerRESTServer) LoadTransitionTierConfigHandler(mss *grid.MSS) (np grid
 	go func() {
 		err := globalTierConfigMgr.Reload(context.Background(), newObjectLayerFn())
 		if err != nil {
-			logger.LogIf(context.Background(), fmt.Errorf("Failed to reload remote tier config %s", err))
+			peersLogIf(context.Background(), fmt.Errorf("Failed to reload remote tier config %s", err))
 		}
 	}()
 
@@ -1090,7 +1090,7 @@ func (s *peerRESTServer) SpeedTestHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	done(nil)
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
+	peersLogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
 // GetLastDayTierStatsHandler - returns per-tier stats in the last 24hrs for this server
@@ -1139,7 +1139,7 @@ func (s *peerRESTServer) DriveSpeedTestHandler(w http.ResponseWriter, r *http.Re
 	result := driveSpeedTest(r.Context(), opts)
 	done(nil)
 
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
+	peersLogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
 // GetReplicationMRFHandler - returns replication MRF for bucket
@@ -1186,7 +1186,7 @@ func (s *peerRESTServer) DevNull(w http.ResponseWriter, r *http.Request) {
 			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)
 			// would mean the network is not stable. Logging here will help in debugging network issues.
 			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
-				logger.LogIf(ctx, err)
+				peersLogIf(ctx, err)
 			}
 		}
 		if err != nil {
@@ -1208,7 +1208,7 @@ func (s *peerRESTServer) NetSpeedTestHandler(w http.ResponseWriter, r *http.Requ
 		duration = time.Second * 10
 	}
 	result := netperf(r.Context(), duration.Round(time.Second))
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
+	peersLogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
 func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {

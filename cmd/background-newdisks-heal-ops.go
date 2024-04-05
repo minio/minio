@@ -33,7 +33,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 )
 
@@ -409,11 +408,11 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		if errors.Is(err, errFileNotFound) {
 			return nil
 		}
-		logger.LogIf(ctx, fmt.Errorf("Unable to load healing tracker on '%s': %w, re-initializing..", disk, err))
+		healingLogIf(ctx, fmt.Errorf("Unable to load healing tracker on '%s': %w, re-initializing..", disk, err))
 		tracker = initHealingTracker(disk, mustGetUUID())
 	}
 
-	logger.Event(ctx, "Healing drive '%s' - 'mc admin heal alias/ --verbose' to check the current status.", endpoint)
+	healingLogEvent(ctx, "Healing drive '%s' - 'mc admin heal alias/ --verbose' to check the current status.", endpoint)
 
 	buckets, _ := z.ListBuckets(ctx, BucketOptions{})
 	// Buckets data are dispersed in multiple pools/sets, make
@@ -452,7 +451,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		return err
 	}
 
-	logger.Event(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
+	healingLogEvent(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
 
 	if len(tracker.QueuedBuckets) > 0 {
 		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)
@@ -464,7 +463,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	if tracker.HealID == "" { // HealID was empty only before Feb 2023
-		logger.LogIf(ctx, tracker.delete(ctx))
+		bugLogIf(ctx, tracker.delete(ctx))
 		return nil
 	}
 
@@ -482,7 +481,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		t, err := loadHealingTracker(ctx, disk)
 		if err != nil {
 			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(ctx, err)
+				healingLogIf(ctx, err)
 			}
 			continue
 		}
@@ -517,7 +516,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 			// Reformat disks immediately
 			_, err := z.HealFormat(context.Background(), false)
 			if err != nil && !errors.Is(err, errNoHealRequired) {
-				logger.LogIf(ctx, err)
+				healingLogIf(ctx, err)
 				// Reset for next interval.
 				diskCheckTimer.Reset(defaultMonitorNewDiskInterval)
 				continue

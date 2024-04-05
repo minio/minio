@@ -29,7 +29,6 @@ import (
 	"time"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 )
 
 func renameAllBucketMetacache(epPath string) error {
@@ -136,7 +135,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			}
 			if !errors.Is(err, context.DeadlineExceeded) {
 				// Report error once per bucket, but continue listing.
-				logger.LogOnceIf(ctx, err, "GetMetacacheListing:"+o.Bucket)
+				storageLogOnceIf(ctx, err, "GetMetacacheListing:"+o.Bucket)
 			}
 			o.Transient = true
 			o.Create = false
@@ -322,7 +321,7 @@ func (z *erasureServerPools) listMerged(ctx context.Context, o listPathOptions, 
 			allAtEOF = false
 			continue
 		}
-		logger.LogIf(ctx, err)
+		storageLogIf(ctx, err)
 		return err
 	}
 	if allAtEOF {

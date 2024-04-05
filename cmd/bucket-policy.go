@@ -53,7 +53,7 @@ func (sys *PolicySys) IsAllowed(args policy.BucketPolicyArgs) bool {
 
 	// Log unhandled errors.
 	if _, ok := err.(BucketPolicyNotFound); !ok {
-		logger.LogIf(GlobalContext, err)
+		internalLogIf(GlobalContext, err, logger.WarningKind)
 	}
 
 	// As policy is not available for given bucket name, returns IsOwner i.e.
