@@ -15,6 +15,7 @@ extend-ignore-re = [
     "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.*",
     "MIIDBTCCAe2gAwIBAgIQWHw7h.*",
     'http\.Header\{"X-Amz-Server-Side-Encryptio":',
+    "ZoEoZdLlzVbOlT9rbhD7ZN7TLyiYXSAlB79uGEge",
 ]
 
 [default.extend-words]

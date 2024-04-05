@@ -96,76 +96,67 @@ func (l *Config) GetValidatedDNForUsername(username string) (string, error) {
 
 	// Since the username is a valid DN, check that it is under a configured
 	// base DN in the LDAP directory.
-
-	// Check that userDN exists in the LDAP directory.
-	validatedUserDN, err := xldap.LookupDN(conn, username)
-	if err != nil {
-		return "", fmt.Errorf("Error looking up user DN %s: %w", username, err)
-	}
-	if validatedUserDN == "" {
-		return "", nil
-	}
-
-	// This will return an error as the argument is validated to be a DN.
-	udn, _ := ldap.ParseDN(validatedUserDN)
-
-	// Check that the user DN is under a configured user base DN in the LDAP
-	// directory.
-	for _, baseDN := range l.LDAP.UserDNSearchBaseDistNames {
-		if baseDN.Parsed.AncestorOf(udn) {
-			return validatedUserDN, nil
-		}
-	}
-
-	return "", fmt.Errorf("User DN %s is not under any configured user base DN", validatedUserDN)
+	return l.GetValidatedUserDN(conn, username)
 }
 
-// GetValidatedGroupDN checks if the given group DN exists in the LDAP directory
-// and returns the group DN sent by the LDAP server. The value returned by the
-// server may not be equal to the input group DN, as LDAP equality is not a
-// simple Golang string equality. However, we assume the value returned by the
-// LDAP server is canonical.
+// GetValidatedUserDN validates the given user DN. Will error out if conn is nil.
+func (l *Config) GetValidatedUserDN(conn *ldap.Conn, userDN string) (string, error) {
+	return l.GetValidatedDNUnderBaseDN(conn, userDN, l.LDAP.UserDNSearchBaseDistNames)
+}
+
+// GetValidatedGroupDN validates the given group DN. If conn is nil, creates a
+// connection.
+func (l *Config) GetValidatedGroupDN(conn *ldap.Conn, groupDN string) (string, error) {
+	if conn == nil {
+		var err error
+		conn, err = l.LDAP.Connect()
+		if err != nil {
+			return "", err
+		}
+		defer conn.Close()
+
+		// Bind to the lookup user account
+		if err = l.LDAP.LookupBind(conn); err != nil {
+			return "", err
+		}
+	}
+
+	return l.GetValidatedDNUnderBaseDN(conn, groupDN, l.LDAP.GroupSearchBaseDistNames)
+}
+
+// GetValidatedDNUnderBaseDN checks if the given DN exists in the LDAP directory
+// and returns the DN value sent by the LDAP server. The value returned by the
+// server may not be equal to the input DN, as LDAP equality is not a simple
+// Golang string equality. However, we assume the value returned by the LDAP
+// server is canonical.
 //
-// If the group is not found in the LDAP directory, the returned string is empty
+// If the DN is not found in the LDAP directory, the returned string is empty
 // and err = nil.
-func (l *Config) GetValidatedGroupDN(groupDN string) (string, error) {
-	if len(l.LDAP.GroupSearchBaseDistNames) == 0 {
-		return "", errors.New("no group search Base DNs given")
+func (l *Config) GetValidatedDNUnderBaseDN(conn *ldap.Conn, dn string, baseDNList []xldap.BaseDNInfo) (string, error) {
+	if len(baseDNList) == 0 {
+		return "", errors.New("no Base DNs given")
 	}
 
-	conn, err := l.LDAP.Connect()
+	// Check that DN exists in the LDAP directory.
+	validatedDN, err := xldap.LookupDN(conn, dn)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Error looking up DN %s: %w", dn, err)
 	}
-	defer conn.Close()
-
-	// Bind to the lookup user account
-	if err = l.LDAP.LookupBind(conn); err != nil {
-		return "", err
-	}
-
-	// Check that groupDN exists in the LDAP directory.
-	validatedGroupDN, err := xldap.LookupDN(conn, groupDN)
-	if err != nil {
-		return "", fmt.Errorf("Error looking up group DN %s: %w", groupDN, err)
-	}
-	if validatedGroupDN == "" {
+	if validatedDN == "" {
 		return "", nil
 	}
 
-	gdn, err := ldap.ParseDN(validatedGroupDN)
-	if err != nil {
-		return "", fmt.Errorf("Given group DN %s could not be parsed: %w", validatedGroupDN, err)
-	}
+	// This will not return an error as the argument is validated to be a DN.
+	pdn, _ := ldap.ParseDN(validatedDN)
 
-	// Check that the group DN is under a configured group base DN in the LDAP
+	// Check that the DN is under a configured base DN in the LDAP
 	// directory.
-	for _, baseDN := range l.LDAP.GroupSearchBaseDistNames {
-		if baseDN.Parsed.AncestorOf(gdn) {
-			return validatedGroupDN, nil
+	for _, baseDN := range baseDNList {
+		if baseDN.Parsed.AncestorOf(pdn) {
+			return validatedDN, nil
 		}
 	}
-	return "", fmt.Errorf("Group DN %s is not under any configured group base DN", validatedGroupDN)
+	return "", fmt.Errorf("DN %s is not under any configured base DN", validatedDN)
 }
 
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the

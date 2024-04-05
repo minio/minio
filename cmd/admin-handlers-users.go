@@ -1763,8 +1763,19 @@ const (
 	userPolicyMappingsFile    = "user_mappings.json"
 	groupPolicyMappingsFile   = "group_mappings.json"
 	stsUserPolicyMappingsFile = "stsuser_mappings.json"
-	iamAssetsDir              = "iam-assets"
+
+	iamAssetsDir = "iam-assets"
 )
+
+var iamExportFiles = []string{
+	allPoliciesFile,
+	allUsersFile,
+	allGroupsFile,
+	allSvcAcctsFile,
+	userPolicyMappingsFile,
+	groupPolicyMappingsFile,
+	stsUserPolicyMappingsFile,
+}
 
 // ExportIAMHandler - exports all iam info as a zipped file
 func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
@@ -1804,16 +1815,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
-	iamFiles := []string{
-		allPoliciesFile,
-		allUsersFile,
-		allGroupsFile,
-		allSvcAcctsFile,
-		userPolicyMappingsFile,
-		groupPolicyMappingsFile,
-		stsUserPolicyMappingsFile,
-	}
-	for _, f := range iamFiles {
+	for _, f := range iamExportFiles {
 		iamFile := pathJoin(iamAssetsDir, f)
 		switch f {
 		case allPoliciesFile:
@@ -1898,7 +1900,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 					return
 				}
-				_, policy, err := globalIAMSys.GetServiceAccount(ctx, acc.Credentials.AccessKey)
+				sa, policy, err := globalIAMSys.GetServiceAccount(ctx, acc.Credentials.AccessKey)
 				if err != nil {
 					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 					return
@@ -1920,6 +1922,9 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					Claims:        claims,
 					SessionPolicy: json.RawMessage(policyJSON),
 					Status:        acc.Credentials.Status,
+					Name:          sa.Name,
+					Description:   sa.Description,
+					Expiration:    &sa.Expiration,
 				}
 			}
 
@@ -2184,6 +2189,16 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, allSvcAcctsFile, ""), r.URL)
 				return
 			}
+
+			// Validations for LDAP enabled deployments.
+			if globalIAMSys.LDAPConfig.Enabled() {
+				err := globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, ""), r.URL)
+					return
+				}
+			}
+
 			for user, svcAcctReq := range serviceAcctReqs {
 				var sp *policy.Policy
 				var err error
@@ -2220,20 +2235,14 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					updateReq = false
 				}
 				if updateReq {
-					opts := updateServiceAccountOpts{
-						secretKey:     svcAcctReq.SecretKey,
-						status:        svcAcctReq.Status,
-						name:          svcAcctReq.Name,
-						description:   svcAcctReq.Description,
-						expiration:    svcAcctReq.Expiration,
-						sessionPolicy: sp,
-					}
-					_, err = globalIAMSys.UpdateServiceAccount(ctx, svcAcctReq.AccessKey, opts)
+					// If the service account exists, we remove it to ensure a
+					// clean import.
+					err := globalIAMSys.DeleteServiceAccount(ctx, svcAcctReq.AccessKey, true)
 					if err != nil {
-						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+						delErr := fmt.Errorf("failed to delete existing service account(%s) before importing it: %w", svcAcctReq.AccessKey, err)
+						writeErrorResponseJSON(ctx, w, importError(ctx, delErr, allSvcAcctsFile, user), r.URL)
 						return
 					}
-					continue
 				}
 				opts := newServiceAccountOpts{
 					accessKey:                  user,
@@ -2244,18 +2253,6 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					description:                svcAcctReq.Description,
 					expiration:                 svcAcctReq.Expiration,
 					allowSiteReplicatorAccount: false,
-				}
-
-				// In case of LDAP we need to resolve the targetUser to a DN and
-				// query their groups:
-				if globalIAMSys.LDAPConfig.Enabled() {
-					opts.claims[ldapUserN] = svcAcctReq.AccessKey // simple username
-					targetUser, _, err := globalIAMSys.LDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
-					if err != nil {
-						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
-						return
-					}
-					opts.claims[ldapUser] = targetUser // username DN
 				}
 
 				if _, _, err = globalIAMSys.NewServiceAccount(ctx, svcAcctReq.Parent, svcAcctReq.Groups, opts); err != nil {
@@ -2326,6 +2323,17 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, groupPolicyMappingsFile, ""), r.URL)
 				return
 			}
+
+			// Validations for LDAP enabled deployments.
+			if globalIAMSys.LDAPConfig.Enabled() {
+				isGroup := true
+				err := globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, ""), r.URL)
+					return
+				}
+			}
+
 			for g, pm := range grpPolicyMap {
 				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
@@ -2354,6 +2362,16 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			if err = json.Unmarshal(data, &userPolicyMap); err != nil {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, stsUserPolicyMappingsFile, ""), r.URL)
 				return
+			}
+
+			// Validations for LDAP enabled deployments.
+			if globalIAMSys.LDAPConfig.Enabled() {
+				isGroup := true
+				err := globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, ""), r.URL)
+					return
+				}
 			}
 			for u, pm := range userPolicyMap {
 				// disallow setting policy mapping if user is a temporary user

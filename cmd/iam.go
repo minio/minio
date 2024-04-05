@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	libldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
@@ -48,6 +49,7 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/v2/ldap"
 	"github.com/minio/pkg/v2/policy"
 	etcd "go.etcd.io/etcd/client/v3"
 )
@@ -1475,6 +1477,164 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 }
 
+// NormalizeLDAPAccessKeypairs - normalize the access key pairs (service
+// accounts) for LDAP users. This normalizes the parent user and the group names
+// whenever the parent user parses validly as a DN.
+func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap map[string]madmin.SRSvcAccCreate,
+) (err error) {
+	conn, err := sys.LDAPConfig.LDAP.Connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = sys.LDAPConfig.LDAP.LookupBind(conn); err != nil {
+		return err
+	}
+
+	var collectedErrors []error
+	updatedKeysMap := make(map[string]madmin.SRSvcAccCreate)
+	for ak, createReq := range accessKeyMap {
+		parent := createReq.Parent
+		groups := createReq.Groups
+
+		_, err := ldap.NormalizeDN(parent)
+		if err != nil {
+			// not a valid DN, ignore.
+			continue
+		}
+
+		hasDiff := false
+
+		validatedParent, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
+		if err != nil {
+			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", parent, err))
+			continue
+		}
+		if validatedParent == "" {
+			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", parent)
+			collectedErrors = append(collectedErrors, err)
+			continue
+		}
+
+		if validatedParent != parent {
+			hasDiff = true
+		}
+
+		var validatedGroups []string
+		for _, group := range groups {
+			validatedGroup, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
+			if err != nil {
+				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", group, err))
+				continue
+			}
+			if validatedGroup == "" {
+				err := fmt.Errorf("DN `%s` was not found in the LDAP directory", group)
+				collectedErrors = append(collectedErrors, err)
+				continue
+			}
+
+			if validatedGroup != group {
+				hasDiff = true
+			}
+			validatedGroups = append(validatedGroups, validatedGroup)
+		}
+
+		if hasDiff {
+			updatedCreateReq := createReq
+			updatedCreateReq.Parent = validatedParent
+			updatedCreateReq.Groups = validatedGroups
+
+			updatedKeysMap[ak] = updatedCreateReq
+		}
+	}
+
+	// if there are any errors, return a collected error.
+	if len(collectedErrors) > 0 {
+		return fmt.Errorf("errors validating LDAP DN: %w", errors.Join(collectedErrors...))
+	}
+
+	for k, v := range updatedKeysMap {
+		// Replace the map values with the updated ones
+		accessKeyMap[k] = v
+	}
+
+	return nil
+}
+
+// NormalizeLDAPMappingImport - validates the LDAP policy mappings. Keys in the
+// given map may not correspond to LDAP DNs - these keys are ignored.
+//
+// For validated mappings, it updates the key in the given map to be in
+// normalized form.
+func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
+	policyMap map[string]MappedPolicy,
+) error {
+	conn, err := sys.LDAPConfig.LDAP.Connect()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = sys.LDAPConfig.LDAP.LookupBind(conn); err != nil {
+		return err
+	}
+
+	// We map keys that correspond to LDAP DNs and validate that they exist in
+	// the LDAP server.
+	var dnValidator func(*libldap.Conn, string) (string, error) = sys.LDAPConfig.GetValidatedUserDN
+	if isGroup {
+		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
+	}
+
+	// map of normalized DN keys to original keys.
+	normalizedDNKeysMap := make(map[string][]string)
+	var collectedErrors []error
+	for k := range policyMap {
+		_, err := ldap.NormalizeDN(k)
+		if err != nil {
+			// not a valid DN, ignore.
+			continue
+		}
+		validatedDN, err := dnValidator(conn, k)
+		if err != nil {
+			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", k, err))
+			continue
+		}
+		if validatedDN == "" {
+			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", k)
+			collectedErrors = append(collectedErrors, err)
+			continue
+		}
+
+		if validatedDN != k {
+			normalizedDNKeysMap[validatedDN] = append(normalizedDNKeysMap[validatedDN], k)
+		}
+	}
+
+	// if there are any errors, return a collected error.
+	if len(collectedErrors) > 0 {
+		return fmt.Errorf("errors validating LDAP DN: %w", errors.Join(collectedErrors...))
+	}
+
+	for normKey, origKeys := range normalizedDNKeysMap {
+		if len(origKeys) > 1 {
+			return fmt.Errorf("multiple DNs map to the same LDAP DN[%s]: %v; please remove DNs that are not needed",
+				normKey, origKeys)
+		}
+
+		// Replacing origKeys[0] with normKey in the policyMap
+
+		// len(origKeys) is always > 0, so here len(origKeys) == 1
+		mappingValue := policyMap[origKeys[0]]
+		delete(policyMap, origKeys[0])
+		policyMap[normKey] = mappingValue
+	}
+	return nil
+}
+
 // GetUser - get user credentials
 func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentity, ok bool) {
 	if !sys.Initialized() {
@@ -1605,7 +1765,7 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 	if sys.LDAPConfig.Enabled() {
 		if isGroup {
 			var foundGroupDN string
-			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(name); err != nil {
+			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, name); err != nil {
 				iamLogIf(ctx, err)
 				return
 			} else if foundGroupDN == "" {
@@ -1754,7 +1914,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	} else {
 		if isAttach {
 			var foundGroupDN string
-			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(r.Group); err != nil {
+			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
 				iamLogIf(ctx, err)
 				return
 			} else if foundGroupDN == "" {
