@@ -1918,7 +1918,7 @@ func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 	default:
 		// Otherwise, inherit parent user's policy
 		var err error
-		policies, err = sys.store.PolicyDBGet(parentUser, args.Groups...)
+		policies, err = sys.PolicyDBGet(parentUser, args.Groups...)
 		if err != nil {
 			iamLogIf(GlobalContext, fmt.Errorf("error fetching policies on %s: %v", parentUser, err))
 			return false
