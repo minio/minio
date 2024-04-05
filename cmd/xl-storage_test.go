@@ -190,7 +190,7 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 
 	// Should give false on non-existent directory.
 	dir1 := slashpath.Join(tmp, "non-existent-directory")
-	if isDirEmpty(dir1) {
+	if isDirEmpty(dir1, true) {
 		t.Error("expected false for non-existent directory, got true")
 	}
 
@@ -201,7 +201,7 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if isDirEmpty(dir2) {
+	if isDirEmpty(dir2, true) {
 		t.Error("expected false for a file, got true")
 	}
 
@@ -212,7 +212,7 @@ func TestXLStorageIsDirEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !isDirEmpty(dir3) {
+	if !isDirEmpty(dir3, true) {
 		t.Error("expected true for empty dir, got false")
 	}
 }
