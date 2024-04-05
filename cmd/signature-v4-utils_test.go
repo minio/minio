@@ -75,10 +75,13 @@ func TestCheckValid(t *testing.T) {
 		t.Fatalf("unable create credential, %s", err)
 	}
 
-	globalIAMSys.CreateUser(ctx, ucreds.AccessKey, madmin.AddOrUpdateUserReq{
+	_, err = globalIAMSys.CreateUser(ctx, ucreds.AccessKey, madmin.AddOrUpdateUserReq{
 		SecretKey: ucreds.SecretKey,
 		Status:    madmin.AccountEnabled,
 	})
+	if err != nil {
+		t.Fatalf("unable create credential, %s", err)
+	}
 
 	_, owner, s3Err = checkKeyValid(req, ucreds.AccessKey)
 	if s3Err != ErrNone {
@@ -87,6 +90,26 @@ func TestCheckValid(t *testing.T) {
 
 	if owner {
 		t.Fatalf("Expected owner to be 'false', found %t", owner)
+	}
+
+	_, err = globalIAMSys.PolicyDBSet(ctx, ucreds.AccessKey, "consoleAdmin", regUser, false)
+	if err != nil {
+		t.Fatalf("unable to attach policy to credential, %s", err)
+	}
+
+	time.Sleep(4 * time.Second)
+
+	policies, err := globalIAMSys.PolicyDBGet(ucreds.AccessKey)
+	if err != nil {
+		t.Fatalf("unable to get policy to credential, %s", err)
+	}
+
+	if len(policies) == 0 {
+		t.Fatal("no policies found")
+	}
+
+	if policies[0] != "consoleAdmin" {
+		t.Fatalf("expected 'consoleAdmin', %s", policies[0])
 	}
 }
 

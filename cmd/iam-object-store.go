@@ -399,6 +399,7 @@ var (
 	groupsListKey           = "groups/"
 	policiesListKey         = "policies/"
 	stsListKey              = "sts/"
+	policyDBPrefix          = "policydb/"
 	policyDBUsersListKey    = "policydb/users/"
 	policyDBSTSUsersListKey = "policydb/sts-users/"
 	policyDBGroupsListKey   = "policydb/groups/"
@@ -406,8 +407,13 @@ var (
 
 // splitPath splits a path into a top-level directory and a child item. The
 // parent directory retains the trailing slash.
-func splitPath(s string) (string, string) {
-	i := strings.Index(s, "/")
+func splitPath(s string, lastIndex bool) (string, string) {
+	var i int
+	if lastIndex {
+		i = strings.LastIndex(s, "/")
+	} else {
+		i = strings.Index(s, "/")
+	}
 	if i == -1 {
 		return s, ""
 	}
@@ -424,7 +430,8 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 			return nil, item.Err
 		}
 
-		listKey, trimmedItem := splitPath(item.Item)
+		lastIndex := strings.HasPrefix(item.Item, policyDBPrefix)
+		listKey, trimmedItem := splitPath(item.Item, lastIndex)
 		if listKey == iamFormatFile {
 			continue
 		}
