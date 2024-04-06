@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"runtime"
 	"sort"
 	"time"
@@ -204,6 +205,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		if _, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
+			// Set this such that when we return this function
+			// we let the caller retry this disk again for the
+			// buckets that failed healing.
+			retErr = err
 			healingLogIf(ctx, err)
 			continue
 		}
@@ -230,10 +235,13 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			continue
 		}
 
-		// Limit listing to 3 drives.
-		if len(disks) > 3 {
-			disks = disks[:3]
-		}
+		rand.Shuffle(len(disks), func(i, j int) {
+			disks[i], disks[j] = disks[j], disks[i]
+		})
+
+		expectedDisks := len(disks)/2 + 1
+		fallbackDisks := disks[expectedDisks:]
+		disks = disks[:expectedDisks]
 
 		type healEntryResult struct {
 			bytes     uint64
@@ -436,6 +444,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
+			fallbackDisks:  fallbackDisks,
 			bucket:         actualBucket,
 			path:           prefix,
 			recursive:      true,
