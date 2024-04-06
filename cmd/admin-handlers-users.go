@@ -1756,15 +1756,14 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 }
 
 const (
-	allPoliciesFile            = "policies.json"
-	allUsersFile               = "users.json"
-	allGroupsFile              = "groups.json"
-	allSvcAcctsFile            = "svcaccts.json"
-	userPolicyMappingsFile     = "user_mappings.json"
-	groupPolicyMappingsFile    = "group_mappings.json"
-	stsUserPolicyMappingsFile  = "stsuser_mappings.json"
-	stsGroupPolicyMappingsFile = "stsgroup_mappings.json"
-	iamAssetsDir               = "iam-assets"
+	allPoliciesFile           = "policies.json"
+	allUsersFile              = "users.json"
+	allGroupsFile             = "groups.json"
+	allSvcAcctsFile           = "svcaccts.json"
+	userPolicyMappingsFile    = "user_mappings.json"
+	groupPolicyMappingsFile   = "group_mappings.json"
+	stsUserPolicyMappingsFile = "stsuser_mappings.json"
+	iamAssetsDir              = "iam-assets"
 )
 
 // ExportIAMHandler - exports all iam info as a zipped file
@@ -1813,7 +1812,6 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 		userPolicyMappingsFile,
 		groupPolicyMappingsFile,
 		stsUserPolicyMappingsFile,
-		stsGroupPolicyMappingsFile,
 	}
 	for _, f := range iamFiles {
 		iamFile := pathJoin(iamAssetsDir, f)
@@ -1982,22 +1980,6 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err = rawDataFn(bytes.NewReader(userPolData), iamFile, len(userPolData)); err != nil {
-				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
-				return
-			}
-		case stsGroupPolicyMappingsFile:
-			groupPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
-			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
-			if err != nil {
-				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
-				return
-			}
-			grpPolData, err := json.Marshal(mappedPoliciesToMap(groupPolicyMap))
-			if err != nil {
-				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
-				return
-			}
-			if err = rawDataFn(bytes.NewReader(grpPolData), iamFile, len(grpPolData)); err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
@@ -2386,35 +2368,6 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
-					return
-				}
-			}
-		}
-	}
-
-	// import sts group policy mappings
-	{
-		f, err := zr.Open(pathJoin(iamAssetsDir, stsGroupPolicyMappingsFile))
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-		case err != nil:
-			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsGroupPolicyMappingsFile, ""), r.URL)
-			return
-		default:
-			defer f.Close()
-			var grpPolicyMap map[string]MappedPolicy
-			data, err := io.ReadAll(f)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsGroupPolicyMappingsFile, ""), r.URL)
-				return
-			}
-			if err = json.Unmarshal(data, &grpPolicyMap); err != nil {
-				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, stsGroupPolicyMappingsFile, ""), r.URL)
-				return
-			}
-			for g, pm := range grpPolicyMap {
-				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsGroupPolicyMappingsFile, g), r.URL)
 					return
 				}
 			}
