@@ -278,6 +278,7 @@ const (
 	ErrMalformedJSON
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchUserLDAPWarn
+	ErrAdminLDAPExpectedLoginName
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
 	ErrAdminGroupDisabled
@@ -300,6 +301,7 @@ const (
 	ErrAdminConfigIDPCfgNameDoesNotExist
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	ErrAdminLDAPNotEnabled
 
 	// Site-Replication errors
 	ErrSiteReplicationInvalidRequest
@@ -2079,7 +2081,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid attribute name specified.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	// Add your error structure here.
+	ErrAdminLDAPNotEnabled: {
+		Code:           "XMinioLDAPNotEnabled",
+		Description:    "LDAP is not enabled. LDAP must be enabled to make LDAP requests.",
+		HTTPStatusCode: http.StatusNotImplemented,
+	},
+	ErrAdminLDAPExpectedLoginName: {
+		Code:           "XMinioLDAPExpectedLoginName",
+		Description:    "Expected LDAP short username but was given full DN.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience

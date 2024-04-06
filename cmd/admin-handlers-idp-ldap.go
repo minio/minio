@@ -20,7 +20,6 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -101,6 +100,12 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 
 	objectAPI, cred := validateAdminReq(ctx, w, r, policy.UpdatePolicyAssociationAction)
 	if objectAPI == nil {
+		return
+	}
+
+	// fail if ldap is not enabled
+	if !globalIAMSys.LDAPConfig.Enabled() {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminLDAPNotEnabled), r.URL)
 		return
 	}
 
@@ -191,7 +196,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 
 	// fail if ldap is not enabled
 	if !globalIAMSys.LDAPConfig.Enabled() {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errors.New("LDAP not enabled")), r.URL)
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminLDAPNotEnabled), r.URL)
 		return
 	}
 
@@ -258,13 +263,18 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		// The target user may be supplied as a (short) username or a DN.
 		// However, for now, we only support using the short username.
 
+		isDN := globalIAMSys.LDAPConfig.ParsesAsDN(targetUser)
 		opts.claims[ldapUserN] = targetUser // simple username
 		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
 		if err != nil {
 			// if not found, check if DN
-			if strings.Contains(err.Error(), "not found") && globalIAMSys.LDAPConfig.ParsesAsDN(targetUser) {
-				// warn user that DNs are not allowed
-				err = fmt.Errorf("Must use short username to add service account. %w", err)
+			if strings.Contains(err.Error(), "User DN not found for:") {
+				if isDN {
+					// warn user that DNs are not allowed
+					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminLDAPExpectedLoginName, err), r.URL)
+				} else {
+					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminNoSuchUser, err), r.URL)
+				}
 			}
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
