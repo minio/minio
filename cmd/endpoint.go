@@ -807,7 +807,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 						continue
 					}
 
-					if endpoint.Host == "" {
+					if endpoint.Host == "" || (env.Get("_MINIO_SERVER_LOCAL", "") == endpoint.Host) {
 						if !foundLocal {
 							foundLocal = true
 						}
