@@ -1103,9 +1103,12 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			Object: ObjectInfo{
 				Name: i.objectPath(),
 			},
-			UserAgent:    "Scanner",
-			Host:         globalLocalNodeName,
-			RespElements: map[string]string{"x-minio-versions-size": strconv.FormatInt(cumulativeSize, 10)},
+			UserAgent: "Scanner",
+			Host:      globalLocalNodeName,
+			RespElements: map[string]string{
+				"x-minio-versions-count": strconv.Itoa(len(objInfos)),
+				"x-minio-versions-size":  strconv.FormatInt(cumulativeSize, 10),
+			},
 		})
 
 		auditLogInternal(context.Background(), AuditLogOptions{
@@ -1114,7 +1117,8 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			Bucket:  i.bucket,
 			Object:  i.objectPath(),
 			Tags: map[string]interface{}{
-				"x-minio-versions-size": strconv.FormatInt(cumulativeSize, 10),
+				"x-minio-versions-count": strconv.Itoa(len(objInfos)),
+				"x-minio-versions-size":  strconv.FormatInt(cumulativeSize, 10),
 			},
 		})
 	}
