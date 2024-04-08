@@ -1247,9 +1247,18 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		return errInvalidArgument
 	}
 
-	if r.Source.Bucket == "" {
+	if r.Source.Endpoint != "" && r.Target.Endpoint != "" {
 		return errInvalidArgument
 	}
+
+	if r.Source.Creds.Empty() && r.Target.Creds.Empty() {
+		return errInvalidArgument
+	}
+
+	if r.Source.Bucket == "" || r.Target.Bucket == "" {
+		return errInvalidArgument
+	}
+
 	var isRemoteToLocal bool
 	localBkt := r.Source.Bucket
 	if r.Source.Endpoint != "" {
@@ -1274,9 +1283,6 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	if err := r.Source.Snowball.Validate(); err != nil {
 		return err
 	}
-	if r.Source.Creds.Empty() && r.Target.Creds.Empty() {
-		return errInvalidArgument
-	}
 
 	if !r.Source.Creds.Empty() {
 		if err := r.Source.Creds.Validate(); err != nil {
@@ -1298,18 +1304,11 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 	if r.Target.Endpoint != "" && !r.Target.Type.isMinio() && !r.Target.ValidPath() {
 		return errInvalidArgument
 	}
-	if r.Target.Bucket == "" {
-		return errInvalidArgument
-	}
 
 	if !r.Target.Creds.Empty() {
 		if err := r.Target.Creds.Validate(); err != nil {
 			return err
 		}
-	}
-
-	if r.Source.Creds.Empty() && r.Target.Creds.Empty() {
-		return errInvalidArgument
 	}
 
 	if err := r.Target.Type.Validate(); err != nil {
