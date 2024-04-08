@@ -61,6 +61,7 @@ const (
 	ObjectTransitionFailed
 	ObjectTransitionComplete
 	ObjectManyVersions
+	ObjectLargeVersions
 	PrefixManyFolders
 
 	objectSingleTypesEnd
@@ -124,6 +125,7 @@ func (name Name) Expand() []Name {
 	case ObjectScannerAll:
 		return []Name{
 			ObjectManyVersions,
+			ObjectLargeVersions,
 			PrefixManyFolders,
 		}
 	case Everything:
@@ -223,6 +225,9 @@ func (name Name) String() string {
 		return "s3:ObjectTransition:Complete"
 	case ObjectManyVersions:
 		return "s3:Scanner:ManyVersions"
+	case ObjectLargeVersions:
+		return "s3:Scanner:LargeVersions"
+
 	case PrefixManyFolders:
 		return "s3:Scanner:BigPrefix"
 	}
@@ -345,6 +350,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectTransitionAll, nil
 	case "s3:Scanner:ManyVersions":
 		return ObjectManyVersions, nil
+	case "s3:Scanner:LargeVersions":
+		return ObjectLargeVersions, nil
 	case "s3:Scanner:BigPrefix":
 		return PrefixManyFolders, nil
 	default:
