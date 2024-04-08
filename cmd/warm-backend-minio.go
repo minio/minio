@@ -42,7 +42,7 @@ const (
 	maxMultipartPutObjectSize = 1024 * 1024 * 1024 * 1024 * 5
 	maxPartsCount             = 10000
 	maxPartSize               = 1024 * 1024 * 1024 * 5
-	minPartSize               = 1024 * 1024 * 64 // chosen by us to be optimal for HDDs
+	minPartSize               = 1024 * 1024 * 128 // chosen by us to be optimal for HDDs
 )
 
 // optimalPartInfo - calculate the optimal part info for a given

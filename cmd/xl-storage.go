@@ -2131,11 +2131,15 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 
 	var bufp *[]byte
 	switch {
-	case fileSize > 0 && fileSize >= xioutil.BlockSizeReallyLarge:
+	case fileSize > 0 && fileSize >= xioutil.XXLargeBlock*2:
+		// use a larger 8MiB buffer for a really really large streamsx.
+		bufp = xioutil.ODirectPoolXXLarge.Get().(*[]byte)
+		defer xioutil.ODirectPoolXXLarge.Put(bufp)
+	case fileSize > 0 && fileSize >= xioutil.XLargeBlock:
 		// use a larger 4MiB buffer for a really large streams.
 		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolXLarge.Put(bufp)
-	case fileSize <= xioutil.BlockSizeSmall:
+	case fileSize <= xioutil.SmallBlock:
 		bufp = xioutil.ODirectPoolSmall.Get().(*[]byte)
 		defer xioutil.ODirectPoolSmall.Put(bufp)
 	default:

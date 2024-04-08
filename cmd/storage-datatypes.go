@@ -450,7 +450,7 @@ func (r *RenameDataInlineHandlerParams) Recycle() {
 	if r == nil {
 		return
 	}
-	if cap(r.FI.Data) >= xioutil.BlockSizeSmall {
+	if cap(r.FI.Data) >= xioutil.SmallBlock {
 		grid.PutByteBuffer(r.FI.Data)
 		r.FI.Data = nil
 	}

@@ -595,6 +595,8 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		// Windows can lock up with this optimization, so we fall back to regular copy.
 		sr, ok := rc.(*sendFileReader)
 		if ok {
+			// Sendfile sends in 4MiB chunks per sendfile syscall which is more than enough
+			// for most setups.
 			_, err = rf.ReadFrom(sr.Reader)
 			if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
 				storageLogIf(r.Context(), err)
