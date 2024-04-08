@@ -53,6 +53,10 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.Heal
 		return errors.New("listAndHeal: No non-healing drives found")
 	}
 
+	expectedDisks := len(disks)/2 + 1
+	fallbackDisks := disks[expectedDisks:]
+	disks = disks[:expectedDisks]
+
 	// How to resolve partial results.
 	resolver := metadataResolutionParams{
 		dirQuorum: 1,
@@ -69,6 +73,7 @@ func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.Heal
 
 	lopts := listPathRawOptions{
 		disks:          disks,
+		fallbackDisks:  fallbackDisks,
 		bucket:         bucket,
 		path:           path,
 		filterPrefix:   filterPrefix,
