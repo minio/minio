@@ -31,6 +31,7 @@ spec:
   selector:
     app: {{ template "minio.name" . }}
     release: {{ .Release.Name }}
+{{- if not .Values.poolDefinitions }}
 ---
 apiVersion: {{ template "minio.statefulset.apiVersion" . }}
 kind: StatefulSet
@@ -268,4 +269,219 @@ spec:
             storage: {{ $psize }}
     {{- end }}
   {{- end }}
+{{- else }}
+{{- range $pool:=.Values.poolDefinitions }}
+apiVersion: {{ template "minio.statefulset.apiVersion" $ }}
+kind: StatefulSet
+metadata:
+  name: {{ template "minio.fullname" $ }}-{{ $pool.name }}
+  labels:
+    app: {{ template "minio.name" $ }}
+    chart: {{ template "minio.chart" $ }}
+    release: {{ $.Release.Name }}
+    heritage: {{ $.Release.Service }}
+    pool: {{ $pool.name }}
+    {{- if $.Values.additionalLabels }}
+      {{- toYaml $.Values.additionalLabels | nindent 4 }}
+    {{- end }}
+  {{- if $.Values.additionalAnnotations }}
+  annotations: {{- toYaml .Values.additionalAnnotations | nindent 4 }}
+  {{- end }}
+spec:
+  updateStrategy:
+    type: {{ $.Values.statefulSetUpdate.updateStrategy }}
+  podManagementPolicy: "Parallel"
+  serviceName: {{ template "minio.fullname" $ }}-svc
+  replicas: {{ $nodeCount }}
+  selector:
+    matchLabels:
+      app: {{ template "minio.name" $ }}
+      release: {{ $.Release.Name }}
+      pool: {{ $pool.name }}
+  template:
+    metadata:
+      name: {{ template "minio.fullname" $ }}-{{ $pool.name }}
+      labels:
+        app: {{ template "minio.name" $ }}
+        release: {{ $.Release.Name }}
+        pool: {{ $pool.name }}
+        {{- if $.Values.podLabels }}
+          {{- toYaml $.Values.podLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if not $.Values.ignoreChartChecksums }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml") $ | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") $ | sha256sum }}
+        {{- end }}
+        {{- if $.Values.podAnnotations }}
+          {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if $.Values.priorityClassName }}
+      priorityClassName: "{{ $.Values.priorityClassName }}"
+      {{- end }}
+      {{- if $.Values.runtimeClassName }}
+      runtimeClassName: "{{ $.Values.runtimeClassName }}"
+      {{- end }}
+      {{- if and $.Values.securityContext.enabled $.Values.persistence.enabled }}
+      securityContext:
+        runAsUser: {{ $.Values.securityContext.runAsUser }}
+        runAsGroup: {{ $.Values.securityContext.runAsGroup }}
+        fsGroup: {{ $.Values.securityContext.fsGroup }}
+        {{- if and (ge $.Capabilities.KubeVersion.Major "1") (ge $.Capabilities.KubeVersion.Minor "20") }}
+        fsGroupChangePolicy: {{ $.Values.securityContext.fsGroupChangePolicy }}
+        {{- end }}
+      {{- end }}
+      {{- if $.Values.serviceAccount.create }}
+      serviceAccountName: {{ $.Values.serviceAccount.name }}
+      {{- end }}
+      containers:
+        - name: {{ $.Chart.Name }}
+          image: {{ $.Values.image.repository }}:{{ $.Values.image.tag }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: [
+            "/bin/sh",
+            "-ce",
+            "/usr/bin/docker-entrypoint.sh minio server {{- range $i := $.Values.poolDefinitions}} {{ $scheme }}://{{ template `minio.fullname` $ }}-{{ $i.name }}-{{ `{` }}0...{{ sub $.Values.replicas 1 }}{{ `}`}}.{{ template `minio.fullname` $ }}-svc.{{ $.Release.Namespace }}.svc.{{ $.Values.clusterDomain }}{{if (gt $drivesPerNode 1)}}{{ $bucketRoot }}-{{ `{` }}0...{{ sub $drivesPerNode 1 }}{{ `}` }}{{ else }}{{ $bucketRoot }}-0{{end }} {{- end }} -S {{ $.Values.certsPath }} --address :{{ $.Values.minioAPIPort }} --console-address :{{ $.Values.minioConsolePort }} {{- template `minio.extraArgs` $ }}"
+          ]
+          volumeMounts:
+            {{- if $pool.persistence.enabled }}
+            {{- range $i := until $drivesPerNode }}
+            - name: export-{{ $i }}
+              mountPath: {{ $mountPath }}-{{ $i }}
+              {{- if and $pool.persistence.enabled $pool.persistence.subPath }}
+              subPath: {{ $pool.persistence.subPath }}
+              {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- if $.Values.extraSecret }}
+            - name: extra-secret
+              mountPath: "/tmp/minio-config-env"
+            {{- end }}
+            {{- include "minio.tlsKeysVolumeMount" $ | indent 12 }}
+            {{- if $.Values.extraVolumeMounts }}
+              {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: {{ $scheme }}
+              containerPort: {{ $.Values.minioAPIPort }}
+            - name: {{ $scheme }}-console
+              containerPort: {{ $.Values.minioConsolePort }}
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "minio.secretName" $ }}
+                  key: rootUser
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "minio.secretName" $ }}
+                  key: rootPassword
+            {{- if $.Values.extraSecret }}
+            - name: MINIO_CONFIG_ENV_FILE
+              value: "/tmp/minio-config-env/config.env"
+            {{- end }}
+            {{- if $.Values.metrics.serviceMonitor.public }}
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: "public"
+            {{- end }}
+            {{- if $.Values.oidc.enabled }}
+            - name: MINIO_IDENTITY_OPENID_CONFIG_URL
+              value: {{ $.Values.oidc.configUrl }}
+            - name: MINIO_IDENTITY_OPENID_CLIENT_ID
+            {{- if and $.Values.oidc.existingClientSecretName $.Values.oidc.existingClientIdKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.oidc.existingClientSecretName }}
+                  key: {{ $.Values.oidc.existingClientIdKey }}
+            {{- else }}
+              value: {{ $.Values.oidc.clientId }}
+            {{- end }}
+            - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
+            {{- if and $.Values.oidc.existingClientSecretName $.Values.oidc.existingClientSecretKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.oidc.existingClientSecretName }}
+                  key: {{ $.Values.oidc.existingClientSecretKey }}
+            {{- else }}
+              value: {{ $.Values.oidc.clientSecret }}
+            {{- end }}
+            - name: MINIO_IDENTITY_OPENID_CLAIM_NAME
+              value: {{ $.Values.oidc.claimName }}
+            - name: MINIO_IDENTITY_OPENID_CLAIM_PREFIX
+              value: {{ $.Values.oidc.claimPrefix }}
+            - name: MINIO_IDENTITY_OPENID_SCOPES
+              value: {{ $.Values.oidc.scopes }}
+            - name: MINIO_IDENTITY_OPENID_COMMENT
+              value: {{ $.Values.oidc.comment }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ $.Values.oidc.redirectUri }}
+            - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
+              value: {{ $.Values.oidc.displayName }}
+            {{- end }}
+            {{- range $key, $val := $.Values.environment }}
+            - name: {{ $key }}
+              value: {{ tpl $val $ | quote }}
+            {{- end }}
+          resources: {{- toYaml $pool.resources | nindent 12 }}
+          {{- if and $.Values.securityContext.enabled $.Values.persistence.enabled }}
+          securityContext:
+            readOnlyRootFilesystem: {{ $.Values.securityContext.readOnlyRootFilesystem | default false }}
+          {{- end }}
+        {{- with $.Values.extraContainers }}
+          {{- if eq (typeOf .) "string" }}
+            {{- tpl . $ | nindent 8 }}
+          {{- else }}
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+        {{- end }}
+      {{- with $pool.nodeSelector }}
+      nodeSelector: {{- toYaml $ | nindent 8 }}
+      {{- end }}
+      {{- include "minio.imagePullSecrets" $ | indent 6 }}
+      {{- with $pool.affinity }}
+      affinity: {{- toYaml $ | nindent 8 }}
+      {{- end }}
+      {{- with $pool.tolerations }}
+      tolerations: {{- toYaml $ | nindent 8 }}
+      {{- end }}
+      {{- if and (gt $replicas 1) (ge $.Capabilities.KubeVersion.Major "1") (ge $.Capabilities.KubeVersion.Minor "19") }}
+      {{- with $pool.topologySpreadConstraints }}
+      topologySpreadConstraints: {{- toYaml $ | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      volumes:
+        - name: minio-user
+          secret:
+            secretName: {{ template "minio.secretName" $ }}
+        {{- if $.Values.extraSecret }}
+        - name: extra-secret
+          secret:
+            secretName: {{ $.Values.extraSecret }}
+        {{- end }}
+        {{- include "minio.tlsKeysVolume" $ | indent 8 }}
+        {{- if $.Values.extraVolumes }}
+          {{- toYaml $.Values.extraVolumes | nindent 8 }}
+        {{- end }}
+  {{- if $pool.persistence.enabled }}
+  volumeClaimTemplates:
+    {{- range $diskId := until $drivesPerNode}}
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: export-{{ $diskId }}
+        {{- if $pool.persistence.annotations }}
+        annotations: {{- toYaml $pool.persistence.annotations | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes: [ {{ $pool.persistence.accessMode | quote }} ]
+        storageClassName: {{ $pool.persistence.storageClass }}
+        resources:
+          requests:
+            storage: {{ $pool.persistence.size }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end }}
 {{- end }}

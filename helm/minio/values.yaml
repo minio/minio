@@ -119,7 +119,26 @@ drivesPerNode: 1
 # Number of MinIO containers running
 replicas: 16
 # Number of expanded MinIO clusters
+# Mutually exclusive with "poolDefinitions"
 pools: 1
+
+## Define configuration per Minio pool. (Requires mode=distributed)
+## This configuration is mutually exclusive with the following settings:
+## pools, tolerations, nodeSelector, affinity, resources, persistence, topologySpreadConstraints
+poolDefinitions: []
+  # - name: pool1
+  #   nodeSelector: {}
+  #   tolerations: []
+  #   resources: {}
+  #   affinity: {}
+  #   topologySpreadConstraints: {}
+  #   persistence:
+  #     enabled: true
+  #     annotations: {}
+  #     size: 15Ti
+  #     storageClass: disk
+  #     accessMode: ReadWriteOnce
+  #     subPath: ""
 
 ## TLS Settings for MinIO
 tls:
