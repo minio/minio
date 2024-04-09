@@ -22,7 +22,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -166,10 +168,11 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	// New object info
 	fileObjInfo := ObjectInfo{
-		Bucket:  bucket,
-		Name:    object,
-		Size:    int64(file.UncompressedSize64),
-		ModTime: zipObjInfo.ModTime,
+		Bucket:      bucket,
+		Name:        object,
+		Size:        int64(file.UncompressedSize64),
+		ModTime:     zipObjInfo.ModTime,
+		ContentType: mime.TypeByExtension(filepath.Ext(object)),
 	}
 
 	var rc io.ReadCloser
