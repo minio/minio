@@ -185,7 +185,7 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
 			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 			return true
 		}
 	}
