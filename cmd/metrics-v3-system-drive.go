@@ -20,6 +20,8 @@ package cmd
 import (
 	"context"
 	"strconv"
+
+	"github.com/minio/madmin-go/v3"
 )
 
 // label constants
@@ -30,6 +32,9 @@ const (
 	driveIndexL = "drive_index"
 
 	apiL = "api"
+
+	sectorSize = uint64(512)
+	kib        = float64(1 << 10)
 )
 
 var allDriveLabels = []string{driveL, poolIndexL, setIndexL, driveIndexL}
@@ -38,15 +43,28 @@ const (
 	driveUsedBytes               = "used_bytes"
 	driveFreeBytes               = "free_bytes"
 	driveTotalBytes              = "total_bytes"
+	driveUsedInodes              = "used_inodes"
 	driveFreeInodes              = "free_inodes"
+	driveTotalInodes             = "total_inodes"
 	driveTimeoutErrorsTotal      = "timeout_errors_total"
 	driveAvailabilityErrorsTotal = "availability_errors_total"
 	driveWaitingIO               = "waiting_io"
 	driveAPILatencyMicros        = "api_latency_micros"
+	driveHealing                 = "healing"
+	driveOnline                  = "online"
 
 	driveOfflineCount = "offline_count"
 	driveOnlineCount  = "online_count"
 	driveCount        = "count"
+
+	// iostat related
+	driveReadsPerSec    = "reads_per_sec"
+	driveReadsKBPerSec  = "reads_kb_per_sec"
+	driveReadsAwait     = "reads_await"
+	driveWritesPerSec   = "writes_per_sec"
+	driveWritesKBPerSec = "writes_kb_per_sec"
+	driveWritesAwait    = "writes_await"
+	drivePercUtil       = "perc_util"
 )
 
 var (
@@ -56,8 +74,12 @@ var (
 		"Total storage free on a drive in bytes", allDriveLabels...)
 	driveTotalBytesMD = NewGaugeMD(driveTotalBytes,
 		"Total storage available on a drive in bytes", allDriveLabels...)
+	driveUsedInodesMD = NewGaugeMD(driveUsedInodes,
+		"Total used inodes on a drive", allDriveLabels...)
 	driveFreeInodesMD = NewGaugeMD(driveFreeInodes,
 		"Total free inodes on a drive", allDriveLabels...)
+	driveTotalInodesMD = NewGaugeMD(driveTotalInodes,
+		"Total inodes available on a drive", allDriveLabels...)
 	driveTimeoutErrorsMD = NewCounterMD(driveTimeoutErrorsTotal,
 		"Total timeout errors on a drive", allDriveLabels...)
 	driveAvailabilityErrorsMD = NewCounterMD(driveAvailabilityErrorsTotal,
@@ -68,6 +90,10 @@ var (
 	driveAPILatencyMD = NewGaugeMD(driveAPILatencyMicros,
 		"Average last minute latency in µs for drive API storage operations",
 		append(allDriveLabels, apiL)...)
+	driveHealingMD = NewGaugeMD(driveHealing,
+		"Is it healing?", allDriveLabels...)
+	driveOnlineMD = NewGaugeMD(driveOnline,
+		"Is it online?", allDriveLabels...)
 
 	driveOfflineCountMD = NewGaugeMD(driveOfflineCount,
 		"Count of offline drives")
@@ -75,7 +101,135 @@ var (
 		"Count of online drives")
 	driveCountMD = NewGaugeMD(driveCount,
 		"Count of all drives")
+
+	// iostat related
+	driveReadsPerSecMD = NewGaugeMD(driveReadsPerSec,
+		"Reads per second on a drive",
+		allDriveLabels...)
+	driveReadsKBPerSecMD = NewGaugeMD(driveReadsKBPerSec,
+		"Kilobytes read per second on a drive",
+		allDriveLabels...)
+	driveReadsAwaitMD = NewGaugeMD(driveReadsAwait,
+		"Average time for read requests served on a drive",
+		allDriveLabels...)
+	driveWritesPerSecMD = NewGaugeMD(driveWritesPerSec,
+		"Writes per second on a drive",
+		allDriveLabels...)
+	driveWritesKBPerSecMD = NewGaugeMD(driveWritesKBPerSec,
+		"Kilobytes written per second on a drive",
+		allDriveLabels...)
+	driveWritesAwaitMD = NewGaugeMD(driveWritesAwait,
+		"Average time for write requests served on a drive",
+		allDriveLabels...)
+	drivePercUtilMD = NewGaugeMD(drivePercUtil,
+		"Percentage of time the disk was busy",
+		allDriveLabels...)
 )
+
+func getCurrentDiskMetrics() map[string]madmin.DiskIOStats {
+	var types madmin.MetricType = madmin.MetricsDisk
+	driveRealtimeMetrics := collectLocalMetrics(types, collectMetricsOpts{
+		hosts: map[string]struct{}{
+			globalLocalNodeName: {},
+		},
+	})
+
+	stats := map[string]madmin.DiskIOStats{}
+	for d, m := range driveRealtimeMetrics.ByDisk {
+		stats[d] = m.IOStats
+	}
+	return stats
+}
+
+func setDriveBasicMetrics(m MetricValues, drive madmin.Disk, labels []string) {
+	m.Set(driveUsedBytes, float64(drive.UsedSpace), labels...)
+	m.Set(driveFreeBytes, float64(drive.AvailableSpace), labels...)
+	m.Set(driveTotalBytes, float64(drive.TotalSpace), labels...)
+	m.Set(driveUsedInodes, float64(drive.UsedInodes), labels...)
+	m.Set(driveFreeInodes, float64(drive.FreeInodes), labels...)
+	m.Set(driveTotalInodes, float64(drive.UsedInodes+drive.FreeInodes), labels...)
+
+	var healing, online float64
+	if drive.Healing {
+		healing = 1
+	}
+	m.Set(driveHealing, healing, labels...)
+
+	if drive.State == "ok" {
+		online = 1
+	}
+	m.Set(driveOnline, online, labels...)
+}
+
+func setDriveAPIMetrics(m MetricValues, disk madmin.Disk, labels []string) {
+	if disk.Metrics == nil {
+		return
+	}
+
+	m.Set(driveTimeoutErrorsTotal, float64(disk.Metrics.TotalErrorsTimeout), labels...)
+	m.Set(driveAvailabilityErrorsTotal, float64(disk.Metrics.TotalErrorsAvailability), labels...)
+	m.Set(driveWaitingIO, float64(disk.Metrics.TotalWaiting), labels...)
+
+	// Append the api label for the drive API latencies.
+	labels = append(labels, "api", "")
+	lastIdx := len(labels) - 1
+	for apiName, latency := range disk.Metrics.LastMinute {
+		labels[lastIdx] = "storage." + apiName
+		m.Set(driveAPILatencyMicros, float64(latency.Avg().Microseconds()),
+			labels...)
+	}
+}
+
+func setDriveIOStatMetrics(m MetricValues, ioStats *diskIOStats, disk madmin.Disk, labels []string) {
+	if ioStats == nil {
+		return
+	}
+
+	durationSecs := ioStats.collectedAt.Sub(initialDriveIOStats.collectedAt).Seconds()
+
+	if durationSecs <= 0 {
+		return
+	}
+
+	cachedStats, found := ioStats.stats[disk.DrivePath]
+	if !found {
+		return
+	}
+
+	readsPerSec := float64(cachedStats.ReadIOs) / durationSecs
+	if readsPerSec > 0 {
+		m.Set(driveReadsPerSec, readsPerSec, labels...)
+	}
+
+	if cachedStats.ReadSectors > 0 {
+		readsKBPerSec := float64(cachedStats.ReadSectors) * float64(sectorSize) / kib / durationSecs
+		m.Set(driveReadsKBPerSec, readsKBPerSec, labels...)
+	}
+
+	if cachedStats.ReadIOs > 0 {
+		readsAwait := float64(cachedStats.ReadTicks) / float64(cachedStats.ReadIOs)
+		m.Set(driveReadsAwait, readsAwait, labels...)
+	}
+
+	writesPerSec := float64(cachedStats.WriteIOs) / durationSecs
+	if writesPerSec > 0 {
+		m.Set(driveWritesPerSec, writesPerSec, labels...)
+	}
+
+	if cachedStats.WriteSectors > 0 {
+		writesKBPerSec := float64(cachedStats.WriteSectors) * float64(sectorSize) / kib / durationSecs
+		m.Set(driveWritesKBPerSec, writesKBPerSec, labels...)
+	}
+
+	if cachedStats.WriteIOs > 0 {
+		writesAwait := float64(cachedStats.WriteTicks) / float64(cachedStats.WriteIOs)
+		m.Set(driveWritesAwait, writesAwait, labels...)
+	}
+
+	// TotalTicks is in milliseconds
+	percUtil := float64(cachedStats.TotalTicks) * 100 / (durationSecs * 1000)
+	m.Set(drivePercUtil, percUtil, labels...)
+}
 
 // loadDriveMetrics - `MetricsLoaderFn` for node drive metrics.
 func loadDriveMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
@@ -85,9 +239,7 @@ func loadDriveMetrics(ctx context.Context, m MetricValues, c *metricsCache) erro
 		return nil
 	}
 
-	storageInfo := driveMetrics.storageInfo
-
-	for _, disk := range storageInfo.Disks {
+	for _, disk := range driveMetrics.storageInfo.Disks {
 		labels := []string{
 			driveL, disk.DrivePath,
 			poolIndexL, strconv.Itoa(disk.PoolIndex),
@@ -95,25 +247,9 @@ func loadDriveMetrics(ctx context.Context, m MetricValues, c *metricsCache) erro
 			driveIndexL, strconv.Itoa(disk.DiskIndex),
 		}
 
-		m.Set(driveUsedBytes, float64(disk.UsedSpace), labels...)
-		m.Set(driveFreeBytes, float64(disk.AvailableSpace), labels...)
-		m.Set(driveTotalBytes, float64(disk.TotalSpace), labels...)
-		m.Set(driveFreeInodes, float64(disk.FreeInodes), labels...)
-
-		if disk.Metrics != nil {
-			m.Set(driveTimeoutErrorsTotal, float64(disk.Metrics.TotalErrorsTimeout), labels...)
-			m.Set(driveAvailabilityErrorsTotal, float64(disk.Metrics.TotalErrorsAvailability), labels...)
-			m.Set(driveWaitingIO, float64(disk.Metrics.TotalWaiting), labels...)
-
-			// Append the api label for the drive API latencies.
-			labels = append(labels, "api", "")
-			lastIdx := len(labels) - 1
-			for apiName, latency := range disk.Metrics.LastMinute {
-				labels[lastIdx] = "storage." + apiName
-				m.Set(driveAPILatencyMicros, float64(latency.Avg().Microseconds()),
-					labels...)
-			}
-		}
+		setDriveBasicMetrics(m, disk, labels)
+		setDriveIOStatMetrics(m, driveMetrics.ioStats, disk, labels)
+		setDriveAPIMetrics(m, disk, labels)
 	}
 
 	m.Set(driveOfflineCount, float64(driveMetrics.offlineDrives))

@@ -117,15 +117,28 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			driveUsedBytesMD,
 			driveFreeBytesMD,
 			driveTotalBytesMD,
+			driveUsedInodesMD,
 			driveFreeInodesMD,
+			driveTotalInodesMD,
 			driveTimeoutErrorsMD,
 			driveAvailabilityErrorsMD,
 			driveWaitingIOMD,
 			driveAPILatencyMD,
+			driveHealingMD,
+			driveOnlineMD,
 
 			driveOfflineCountMD,
 			driveOnlineCountMD,
 			driveCountMD,
+
+			// iostat related
+			driveReadsPerSecMD,
+			driveReadsKBPerSecMD,
+			driveReadsAwaitMD,
+			driveWritesPerSecMD,
+			driveWritesKBPerSecMD,
+			driveWritesAwaitMD,
+			drivePercUtilMD,
 		},
 		loadDriveMetrics,
 	)

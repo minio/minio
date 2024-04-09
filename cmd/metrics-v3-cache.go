@@ -24,6 +24,10 @@ import (
 	"github.com/minio/minio/internal/cachevalue"
 )
 
+// initialDriveIOStats is used to calculate "per second"
+// values for IOStat related disk metrics e.g. reads/sec.
+var initialDriveIOStats *diskIOStats
+
 // metricsCache - cache for metrics.
 //
 // When serving metrics, this cache is passed to the MetricsLoaderFn.
@@ -61,8 +65,15 @@ func newNodesUpDownCache() *cachevalue.Cache[nodesOnline] {
 		loadNodesUpDown)
 }
 
+type diskIOStats struct {
+	stats       map[string]madmin.DiskIOStats
+	collectedAt time.Time
+}
+
+// storageMetrics - cached storage metrics.
 type storageMetrics struct {
 	storageInfo                              madmin.StorageInfo
+	ioStats                                  *diskIOStats
 	onlineDrives, offlineDrives, totalDrives int
 }
 
@@ -98,6 +109,18 @@ func newESetHealthResultCache() *cachevalue.Cache[HealthResult] {
 	)
 }
 
+func getDiffStats(initialStats, currentStats madmin.DiskIOStats) madmin.DiskIOStats {
+	return madmin.DiskIOStats{
+		ReadIOs:      currentStats.ReadIOs - initialStats.ReadIOs,
+		WriteIOs:     currentStats.WriteIOs - initialStats.WriteIOs,
+		ReadSectors:  currentStats.ReadSectors - initialStats.ReadSectors,
+		WriteSectors: currentStats.WriteSectors - initialStats.WriteSectors,
+		ReadTicks:    currentStats.ReadTicks - initialStats.ReadTicks,
+		WriteTicks:   currentStats.WriteTicks - initialStats.WriteTicks,
+		TotalTicks:   currentStats.TotalTicks - initialStats.TotalTicks,
+	}
+}
+
 func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 	loadDriveMetrics := func() (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
@@ -108,14 +131,35 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 		storageInfo := objLayer.LocalStorageInfo(GlobalContext, true)
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
+
+		var ioStats *diskIOStats
+		currentStats := getCurrentDiskMetrics()
+		if initialDriveIOStats == nil {
+			initialDriveIOStats = &diskIOStats{
+				stats:       currentStats,
+				collectedAt: time.Now().UTC(),
+			}
+		} else {
+			diffStats := map[string]madmin.DiskIOStats{}
+			for d, cs := range currentStats {
+				if is, found := initialDriveIOStats.stats[d]; found {
+					diffStats[d] = getDiffStats(is, cs)
+				}
+			}
+			ioStats = &diskIOStats{stats: diffStats, collectedAt: time.Now().UTC()}
+		}
+
 		v = storageMetrics{
 			storageInfo:   storageInfo,
 			onlineDrives:  onlineDrives.Sum(),
 			offlineDrives: offlineDrives.Sum(),
 			totalDrives:   totalDrives.Sum(),
+			ioStats:       ioStats,
 		}
+
 		return
 	}
+
 	return cachevalue.NewFromFunc(1*time.Minute,
 		cachevalue.Opts{ReturnLastGood: true},
 		loadDriveMetrics)
