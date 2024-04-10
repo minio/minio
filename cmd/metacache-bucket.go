@@ -221,7 +221,7 @@ func (b *bucketMetacache) deleteAll() {
 
 	ez, ok := objAPI.(deleteAllStorager)
 	if !ok {
-		logger.LogIf(ctx, errors.New("bucketMetacache: expected objAPI to be 'deleteAllStorager'"))
+		bugLogIf(ctx, errors.New("bucketMetacache: expected objAPI to be 'deleteAllStorager'"))
 		return
 	}
 

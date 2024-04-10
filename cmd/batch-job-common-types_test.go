@@ -83,6 +83,10 @@ func TestBatchJobSizeInRange(t *testing.T) {
 }
 
 func TestBatchJobSizeValidate(t *testing.T) {
+	errInvalidBatchJobSizeFilter := BatchJobYamlErr{
+		msg: "invalid batch-job size filter",
+	}
+
 	tests := []struct {
 		sizeFilter BatchJobSizeFilter
 		err        error
@@ -128,8 +132,16 @@ func TestBatchJobSizeValidate(t *testing.T) {
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("test-%d", i+1), func(t *testing.T) {
-			if err := test.sizeFilter.Validate(); err != test.err {
-				t.Fatalf("Expected %v but got %v", test.err, err)
+			err := test.sizeFilter.Validate()
+			if err != nil {
+				gotErr := err.(BatchJobYamlErr)
+				testErr := test.err.(BatchJobYamlErr)
+				if gotErr.message() != testErr.message() {
+					t.Fatalf("Expected %v but got %v", test.err, err)
+				}
+			}
+			if err == nil && test.err != nil {
+				t.Fatalf("Expected %v but got nil", test.err)
 			}
 		})
 	}

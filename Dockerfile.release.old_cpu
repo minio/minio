@@ -21,6 +21,11 @@ RUN curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc -o /go
     curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc.minisig -o /go/bin/mc.minisig && \
     chmod +x /go/bin/mc
 
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+       curl -L -s -q https://github.com/moparisthebest/static-curl/releases/latest/download/curl-${TARGETARCH} -o /go/bin/curl; \
+       chmod +x /go/bin/curl; \
+    fi
+
 # Verify binary signature using public key "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGavRUN"
 RUN minisign -Vqm /go/bin/minio -x /go/bin/minio.minisig -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav && \
     minisign -Vqm /go/bin/mc -x /go/bin/mc.minisig -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav
@@ -49,6 +54,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /go/bin/minio /usr/bin/minio
 COPY --from=build /go/bin/mc /usr/bin/mc
+COPY --from=build /go/bin/cur* /usr/bin/
 
 COPY CREDITS /licenses/CREDITS
 COPY LICENSE /licenses/LICENSE

@@ -67,6 +67,7 @@ const (
 	EnvNATSAddress       = "MINIO_NOTIFY_NATS_ADDRESS"
 	EnvNATSSubject       = "MINIO_NOTIFY_NATS_SUBJECT"
 	EnvNATSUsername      = "MINIO_NOTIFY_NATS_USERNAME"
+	NATSUserCredentials  = "MINIO_NOTIFY_NATS_USER_CREDENTIALS"
 	EnvNATSPassword      = "MINIO_NOTIFY_NATS_PASSWORD"
 	EnvNATSToken         = "MINIO_NOTIFY_NATS_TOKEN"
 	EnvNATSTLS           = "MINIO_NOTIFY_NATS_TLS"
@@ -90,22 +91,23 @@ const (
 
 // NATSArgs - NATS target arguments.
 type NATSArgs struct {
-	Enable        bool      `json:"enable"`
-	Address       xnet.Host `json:"address"`
-	Subject       string    `json:"subject"`
-	Username      string    `json:"username"`
-	Password      string    `json:"password"`
-	Token         string    `json:"token"`
-	TLS           bool      `json:"tls"`
-	TLSSkipVerify bool      `json:"tlsSkipVerify"`
-	Secure        bool      `json:"secure"`
-	CertAuthority string    `json:"certAuthority"`
-	ClientCert    string    `json:"clientCert"`
-	ClientKey     string    `json:"clientKey"`
-	PingInterval  int64     `json:"pingInterval"`
-	QueueDir      string    `json:"queueDir"`
-	QueueLimit    uint64    `json:"queueLimit"`
-	JetStream     struct {
+	Enable          bool      `json:"enable"`
+	Address         xnet.Host `json:"address"`
+	Subject         string    `json:"subject"`
+	Username        string    `json:"username"`
+	UserCredentials string    `json:"userCredentials"`
+	Password        string    `json:"password"`
+	Token           string    `json:"token"`
+	TLS             bool      `json:"tls"`
+	TLSSkipVerify   bool      `json:"tlsSkipVerify"`
+	Secure          bool      `json:"secure"`
+	CertAuthority   string    `json:"certAuthority"`
+	ClientCert      string    `json:"clientCert"`
+	ClientKey       string    `json:"clientKey"`
+	PingInterval    int64     `json:"pingInterval"`
+	QueueDir        string    `json:"queueDir"`
+	QueueLimit      uint64    `json:"queueLimit"`
+	JetStream       struct {
 		Enable bool `json:"enable"`
 	} `json:"jetStream"`
 	Streaming struct {
@@ -167,6 +169,9 @@ func (n NATSArgs) connectNats() (*nats.Conn, error) {
 	if n.Username != "" && n.Password != "" {
 		connOpts = append(connOpts, nats.UserInfo(n.Username, n.Password))
 	}
+	if n.UserCredentials != "" {
+		connOpts = append(connOpts, nats.UserCredentials(n.UserCredentials))
+	}
 	if n.Token != "" {
 		connOpts = append(connOpts, nats.Token(n.Token))
 	}
@@ -210,6 +215,9 @@ func (n NATSArgs) connectStan() (stan.Conn, error) {
 	connOpts := []stan.Option{stan.NatsURL(addressURL)}
 	if n.Streaming.MaxPubAcksInflight > 0 {
 		connOpts = append(connOpts, stan.MaxPubAcksInflight(n.Streaming.MaxPubAcksInflight))
+	}
+	if n.UserCredentials != "" {
+		connOpts = append(connOpts, stan.NatsOptions(nats.UserCredentials(n.UserCredentials)))
 	}
 
 	return stan.Connect(n.Streaming.ClusterID, clientID, connOpts...)

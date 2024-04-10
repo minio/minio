@@ -28,7 +28,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/v2/policy"
 )
@@ -83,7 +82,7 @@ func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
 	config.SetRegion(globalSite.Region)
 	if err := config.Validate(globalSite.Region, globalEventNotifier.targetList); err != nil {
 		if _, ok := err.(*event.ErrARNNotFound); !ok {
-			logger.LogIf(GlobalContext, err)
+			internalLogIf(GlobalContext, err)
 		}
 	}
 	evnot.AddRulesMap(bucket.Name, config.ToRulesMap())
@@ -225,7 +224,11 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 		},
 	}
 
-	if args.EventName != event.ObjectRemovedDelete && args.EventName != event.ObjectRemovedDeleteMarkerCreated {
+	isRemovedEvent := args.EventName == event.ObjectRemovedDelete ||
+		args.EventName == event.ObjectRemovedDeleteMarkerCreated ||
+		args.EventName == event.ObjectRemovedNoOP
+
+	if !isRemovedEvent {
 		newEvent.S3.Object.ETag = args.Object.ETag
 		newEvent.S3.Object.Size = args.Object.Size
 		newEvent.S3.Object.ContentType = args.Object.ContentType

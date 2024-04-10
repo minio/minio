@@ -18,8 +18,11 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -35,10 +38,64 @@ type warmBackendMinIO struct {
 
 var _ WarmBackend = (*warmBackendMinIO)(nil)
 
+const (
+	maxMultipartPutObjectSize = 1024 * 1024 * 1024 * 1024 * 5
+	maxPartsCount             = 10000
+	maxPartSize               = 1024 * 1024 * 1024 * 5
+	minPartSize               = 1024 * 1024 * 128 // chosen by us to be optimal for HDDs
+)
+
+// optimalPartInfo - calculate the optimal part info for a given
+// object size.
+//
+// NOTE: Assumption here is that for any object to be uploaded to any S3 compatible
+// object storage it will have the following parameters as constants.
+//
+//	maxPartsCount - 10000
+//	maxMultipartPutObjectSize - 5TiB
+func optimalPartSize(objectSize int64) (partSize int64, err error) {
+	// object size is '-1' set it to 5TiB.
+	if objectSize == -1 {
+		objectSize = maxMultipartPutObjectSize
+	}
+
+	// object size is larger than supported maximum.
+	if objectSize > maxMultipartPutObjectSize {
+		err = errors.New("entity too large")
+		return
+	}
+
+	configuredPartSize := minPartSize
+	// Use floats for part size for all calculations to avoid
+	// overflows during float64 to int64 conversions.
+	partSizeFlt := float64(objectSize / maxPartsCount)
+	partSizeFlt = math.Ceil(partSizeFlt/float64(configuredPartSize)) * float64(configuredPartSize)
+
+	// Part size.
+	partSize = int64(partSizeFlt)
+	if partSize == 0 {
+		return minPartSize, nil
+	}
+	return partSize, nil
+}
+
+func (m *warmBackendMinIO) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
+	partSize, err := optimalPartSize(length)
+	if err != nil {
+		return remoteVersionID(""), err
+	}
+	res, err := m.client.PutObject(ctx, m.Bucket, m.getDest(object), r, length, minio.PutObjectOptions{
+		StorageClass:         m.StorageClass,
+		PartSize:             uint64(partSize),
+		DisableContentSha256: true,
+	})
+	return remoteVersionID(res.VersionID), m.ToObjectError(err, object)
+}
+
 func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO, error) {
 	// Validation of credentials
 	if conf.AccessKey == "" || conf.SecretKey == "" {
-		return nil, errors.New("both access and secret keys are requied")
+		return nil, errors.New("both access and secret keys are required")
 	}
 
 	if conf.Bucket == "" {
@@ -56,9 +113,10 @@ func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO,
 		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)
 	})
 	opts := &minio.Options{
-		Creds:     creds,
-		Secure:    u.Scheme == "https",
-		Transport: getRemoteTierTargetInstanceTransport,
+		Creds:           creds,
+		Secure:          u.Scheme == "https",
+		Transport:       getRemoteTierTargetInstanceTransport,
+		TrailingHeaders: true,
 	}
 	client, err := minio.New(u.Host, opts)
 	if err != nil {

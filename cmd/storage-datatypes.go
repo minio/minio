@@ -19,7 +19,13 @@ package cmd
 
 import (
 	"time"
+
+	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/grid"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
+
+//go:generate msgp -file=$GOFILE
 
 // DeleteOptions represents the disk level delete options available for the APIs
 type DeleteOptions struct {
@@ -37,7 +43,12 @@ type RenameOptions struct {
 	BaseOptions
 }
 
-//go:generate msgp -file=$GOFILE
+// DiskInfoOptions options for requesting custom results.
+type DiskInfoOptions struct {
+	DiskID  string `msg:"id"`
+	Metrics bool   `msg:"m"`
+	NoOp    bool   `msg:"np"`
+}
 
 // DiskInfo is an extended type which returns current
 // disk usage per path.
@@ -73,6 +84,7 @@ type DiskInfo struct {
 type DiskMetrics struct {
 	LastMinute              map[string]AccElem `json:"apiLatencies,omitempty"`
 	APICalls                map[string]uint64  `json:"apiCalls,omitempty"`
+	TotalWaiting            uint32             `json:"totalWaiting,omitempty"`
 	TotalErrorsAvailability uint64             `json:"totalErrsAvailability"`
 	TotalErrorsTimeout      uint64             `json:"totalErrsTimeout"`
 	TotalWrites             uint64             `json:"totalWrites"`
@@ -154,11 +166,6 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 type RawFileInfo struct {
 	// Content of entire xl.meta (may contain data depending on what was requested by the caller.
 	Buf []byte `msg:"b,allownil"`
-
-	// DiskMTime indicates the mtime of the xl.meta on disk
-	// This is mainly used for detecting a particular issue
-	// reported in https://github.com/minio/minio/pull/13803
-	DiskMTime time.Time `msg:"dmt"`
 }
 
 // FileInfo - represents file stat information.
@@ -239,11 +246,6 @@ type FileInfo struct {
 	// usage in other calls in undefined please avoid.
 	Idx int `msg:"i"`
 
-	// DiskMTime indicates the mtime of the xl.meta on disk
-	// This is mainly used for detecting a particular issue
-	// reported in https://github.com/minio/minio/pull/13803
-	DiskMTime time.Time `msg:"dmt"`
-
 	// Combined checksum when object was uploaded.
 	Checksum []byte `msg:"cs,allownil"`
 
@@ -283,10 +285,15 @@ func (fi FileInfo) ReadQuorum(dquorum int) int {
 
 // Equals checks if fi(FileInfo) matches ofi(FileInfo)
 func (fi FileInfo) Equals(ofi FileInfo) (ok bool) {
-	if !fi.MetadataEquals(ofi) {
+	typ1, ok1 := crypto.IsEncrypted(fi.Metadata)
+	typ2, ok2 := crypto.IsEncrypted(ofi.Metadata)
+	if ok1 != ok2 {
 		return false
 	}
-	if !fi.ReplicationInfoEquals(ofi) {
+	if typ1 != typ2 {
+		return false
+	}
+	if fi.IsCompressed() != ofi.IsCompressed() {
 		return false
 	}
 	if !fi.TransitionInfoEquals(ofi) {
@@ -311,6 +318,12 @@ func (fi FileInfo) GetDataDir() string {
 		return "legacy"
 	}
 	return fi.DataDir
+}
+
+// IsCompressed returns true if the object is marked as compressed.
+func (fi FileInfo) IsCompressed() bool {
+	_, ok := fi.Metadata[ReservedMetadataPrefix+"compression"]
+	return ok
 }
 
 // InlineData returns true if object contents are inlined alongside its metadata.
@@ -384,6 +397,7 @@ type DeleteVersionHandlerParams struct {
 type MetadataHandlerParams struct {
 	DiskID     string             `msg:"id"`
 	Volume     string             `msg:"v"`
+	OrigVolume string             `msg:"ov"`
 	FilePath   string             `msg:"fp"`
 	UpdateOpts UpdateMetadataOpts `msg:"uo"`
 	FI         FileInfo           `msg:"fi"`
@@ -421,7 +435,62 @@ type RenameDataHandlerParams struct {
 	Opts      RenameOptions `msg:"ro"`
 }
 
+// RenameDataInlineHandlerParams are parameters for RenameDataHandler with a buffer for inline data.
+type RenameDataInlineHandlerParams struct {
+	RenameDataHandlerParams `msg:"p"`
+}
+
+func newRenameDataInlineHandlerParams() *RenameDataInlineHandlerParams {
+	buf := grid.GetByteBufferCap(32 + 16<<10)
+	return &RenameDataInlineHandlerParams{RenameDataHandlerParams{FI: FileInfo{Data: buf[:0]}}}
+}
+
+// Recycle will reuse the memory allocated for the FileInfo data.
+func (r *RenameDataInlineHandlerParams) Recycle() {
+	if r == nil {
+		return
+	}
+	if cap(r.FI.Data) >= xioutil.SmallBlock {
+		grid.PutByteBuffer(r.FI.Data)
+		r.FI.Data = nil
+	}
+}
+
+// RenameFileHandlerParams are parameters for RenameFileHandler.
+type RenameFileHandlerParams struct {
+	DiskID      string `msg:"id"`
+	SrcVolume   string `msg:"sv"`
+	SrcFilePath string `msg:"sp"`
+	DstVolume   string `msg:"dv"`
+	DstFilePath string `msg:"dp"`
+}
+
+// ReadAllHandlerParams are parameters for ReadAllHandler.
+type ReadAllHandlerParams struct {
+	DiskID   string `msg:"id"`
+	Volume   string `msg:"v"`
+	FilePath string `msg:"fp"`
+}
+
+// WriteAllHandlerParams are parameters for WriteAllHandler.
+type WriteAllHandlerParams struct {
+	DiskID   string `msg:"id"`
+	Volume   string `msg:"v"`
+	FilePath string `msg:"fp"`
+	Buf      []byte `msg:"b"`
+}
+
 // RenameDataResp - RenameData()'s response.
 type RenameDataResp struct {
 	Signature uint64 `msg:"sig"`
+}
+
+// LocalDiskIDs - GetLocalIDs response.
+type LocalDiskIDs struct {
+	IDs []string
+}
+
+// ListDirResult - ListDir()'s response.
+type ListDirResult struct {
+	Entries []string `msg:"e"`
 }

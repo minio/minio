@@ -55,6 +55,12 @@ const (
 	IfMatch           = "If-Match"
 	IfNoneMatch       = "If-None-Match"
 
+	// Request tags used in GetObjectAttributes
+	Checksum     = "Checksum"
+	StorageClass = "StorageClass"
+	ObjectSize   = "ObjectSize"
+	ObjectParts  = "ObjectParts"
+
 	// S3 storage class
 	AmzStorageClass = "x-amz-storage-class"
 
@@ -112,7 +118,7 @@ const (
 	// Dummy putBucketACL
 	AmzACL = "x-amz-acl"
 
-	// Signature V4 related contants.
+	// Signature V4 related constants.
 	AmzContentSha256        = "X-Amz-Content-Sha256"
 	AmzDate                 = "X-Amz-Date"
 	AmzAlgorithm            = "X-Amz-Algorithm"
@@ -123,6 +129,11 @@ const (
 	AmzSecurityToken        = "X-Amz-Security-Token"
 	AmzDecodedContentLength = "X-Amz-Decoded-Content-Length"
 	AmzTrailer              = "X-Amz-Trailer"
+	AmzMaxParts             = "X-Amz-Max-Parts"
+	AmzPartNumberMarker     = "X-Amz-Part-Number-Marker"
+
+	// Constants used for GetObjectAttributes and GetObjectVersionAttributes
+	AmzObjectAttributes = "X-Amz-Object-Attributes"
 
 	AmzMetaUnencryptedContentLength = "X-Amz-Meta-X-Amz-Unencrypted-Content-Length"
 	AmzMetaUnencryptedContentMD5    = "X-Amz-Meta-X-Amz-Unencrypted-Content-Md5"
@@ -181,6 +192,9 @@ const (
 	// Writes expected write quorum
 	MinIOWriteQuorum = "x-minio-write-quorum"
 
+	// Reads expected read quorum
+	MinIOReadQuorum = "x-minio-read-quorum"
+
 	// Indicates if we are using default storage class and there was problem loading config
 	// if this header is set to "true"
 	MinIOStorageClassDefaults = "x-minio-storage-class-defaults"
@@ -216,6 +230,13 @@ const (
 	MinIOSourceObjectRetentionTimestamp = "X-Minio-Source-Replication-Retention-Timestamp"
 	// Header indiicates last rtention update time on source
 	MinIOSourceObjectLegalHoldTimestamp = "X-Minio-Source-Replication-LegalHold-Timestamp"
+	// Header indicates a Tag operation was performed on one/more peers successfully, though the
+	// current cluster does not have the object yet. This is in a site/bucket replication scenario.
+	MinIOTaggingProxied = "X-Minio-Tagging-Proxied"
+	// Header indicates the actual replicated object size
+	// In case of SSEC objects getting replicated (multipart) actual size would be needed at target
+	MinIOReplicationActualObjectSize = "X-Minio-Replication-Actual-Object-Size"
+
 	// predicted date/time of transition
 	MinIOTransition            = "X-Minio-Transition"
 	MinIOLifecycleCfgUpdatedAt = "X-Minio-LifecycleConfig-UpdatedAt"

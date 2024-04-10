@@ -1,3 +1,6 @@
+//go:build !linux
+// +build !linux
+
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
@@ -17,40 +20,11 @@
 
 package cmd
 
-import (
-	"context"
-	"fmt"
-
-	"github.com/minio/minio/internal/logger"
-)
-
-type tierMemJournal struct {
-	entries chan jentry
-}
-
-func newTierMemJournal(nevents int) *tierMemJournal {
-	return &tierMemJournal{
-		entries: make(chan jentry, nevents),
+// isDirEmpty - returns true if there is no error and no object and prefix inside this directory
+func isDirEmpty(dirname string, _ bool) bool {
+	entries, err := readDirN(dirname, 1)
+	if err != nil {
+		return false
 	}
-}
-
-func (j *tierMemJournal) processEntries(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case entry := <-j.entries:
-			logger.LogIf(ctx, deleteObjectFromRemoteTier(ctx, entry.ObjName, entry.VersionID, entry.TierName))
-		}
-	}
-}
-
-func (j *tierMemJournal) AddEntry(je jentry) error {
-	select {
-	case j.entries <- je:
-	default:
-		return fmt.Errorf("failed to remove tiered content at %s with version %s from tier %s, will be retried later.",
-			je.ObjName, je.VersionID, je.TierName)
-	}
-	return nil
+	return len(entries) == 0
 }

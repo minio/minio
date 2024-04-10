@@ -27,7 +27,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
 )
@@ -550,7 +550,7 @@ func (r *metacacheReader) readAll(ctx context.Context, dst chan<- metaCacheEntry
 	if r.err != nil {
 		return r.err
 	}
-	defer close(dst)
+	defer xioutil.SafeClose(dst)
 	if r.current.name != "" {
 		select {
 		case <-ctx.Done():
@@ -844,7 +844,7 @@ func (b metacacheBlock) headerKV() map[string]string {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	v, err := json.Marshal(b)
 	if err != nil {
-		logger.LogIf(context.Background(), err) // Unlikely
+		bugLogIf(context.Background(), err) // Unlikely
 		return nil
 	}
 	return map[string]string{fmt.Sprintf("%s-metacache-part-%d", ReservedMetadataPrefixLower, b.n): string(v)}

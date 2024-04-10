@@ -19,12 +19,12 @@ package api
 
 import "github.com/minio/minio/internal/config"
 
-// Help template for storageclass feature.
 var (
 	defaultHelpPostfix = func(key string) string {
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
+	// Help holds configuration keys and their default values for api subsystem.
 	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         apiRequestsMax,
@@ -115,6 +115,12 @@ var (
 			Description: "set to enable synchronous bucket notifications" + defaultHelpPostfix(apiSyncEvents),
 			Optional:    true,
 			Type:        "boolean",
+		},
+		config.HelpKV{
+			Key:         apiObjectMaxVersions,
+			Description: "set max allowed number of versions per object" + defaultHelpPostfix(apiObjectMaxVersions),
+			Optional:    true,
+			Type:        "number",
 		},
 	}
 )

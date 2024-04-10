@@ -18,10 +18,12 @@
 package cmd
 
 import (
+	"math"
 	"net/http"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -54,44 +56,57 @@ type apiConfig struct {
 	gzipObjects                 bool
 	rootAccess                  bool
 	syncEvents                  bool
+	objectMaxVersions           int64
 }
 
-const cgroupLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+const (
+	cgroupV1MemLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+	cgroupV2MemLimitFile = "/sys/fs/cgroup/memory.max"
+	cgroupMemNoLimit     = 9223372036854771712
+)
 
-func cgroupLimit(limitFile string) (limit uint64) {
-	buf, err := os.ReadFile(limitFile)
+func cgroupMemLimit() (limit uint64) {
+	buf, err := os.ReadFile(cgroupV2MemLimitFile)
 	if err != nil {
-		return 9223372036854771712
+		buf, err = os.ReadFile(cgroupV1MemLimitFile)
 	}
-	limit, err = strconv.ParseUint(string(buf), 10, 64)
 	if err != nil {
-		return 9223372036854771712
+		return 0
+	}
+	limit, err = strconv.ParseUint(strings.TrimSpace(string(buf)), 10, 64)
+	if err != nil {
+		// The kernel can return valid but non integer values
+		// but still, no need to interpret more
+		return 0
+	}
+	if limit == cgroupMemNoLimit {
+		// No limit set, It's the highest positive signed 64-bit
+		// integer (2^63-1), rounded down to multiples of 4096 (2^12),
+		// the most common page size on x86 systems - for cgroup_limits.
+		return 0
 	}
 	return limit
 }
 
 func availableMemory() (available uint64) {
-	available = 8 << 30 // Default to 8 GiB when we can't find the limits.
+	available = 2048 * blockSizeV2 * 2 // Default to 4 GiB when we can't find the limits.
 
 	if runtime.GOOS == "linux" {
-		available = cgroupLimit(cgroupLimitFile)
-
-		// No limit set, It's the highest positive signed 64-bit
-		// integer (2^63-1), rounded down to multiples of 4096 (2^12),
-		// the most common page size on x86 systems - for cgroup_limits.
-		if available != 9223372036854771712 {
-			// This means cgroup memory limit is configured.
+		// Useful in container mode
+		limit := cgroupMemLimit()
+		if limit > 0 {
+			// A valid value is found, return its 75%
+			available = (limit * 3) / 4
 			return
-		} // no-limit set proceed to set the limits based on virtual memory.
-
+		}
 	} // for all other platforms limits are based on virtual memory.
 
 	memStats, err := mem.VirtualMemory()
 	if err != nil {
 		return
 	}
-
-	available = memStats.Available / 2
+	// A valid value is available return its 75%
+	available = (memStats.Available * 3) / 4
 	return
 }
 
@@ -120,21 +135,22 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
+		// Returns 75% of max memory allowed
 		maxMem := availableMemory()
 
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
 		// ram_per_request is (2MiB+128KiB) * driveCount \
 		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
-		blockSize := xioutil.BlockSizeLarge + xioutil.BlockSizeSmall
+		blockSize := xioutil.LargeBlock + xioutil.SmallBlock
 		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
 		if globalIsDistErasure {
 			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
 		}
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
-		if len(globalEndpoints.Hostnames()) > 0 {
-			apiRequestsMaxPerNode /= len(globalEndpoints.Hostnames())
+		if n := totalNodeCount(); n > 0 {
+			apiRequestsMaxPerNode /= n
 		}
 	}
 
@@ -158,7 +174,9 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.replicationPriority = cfg.ReplicationPriority
 	t.replicationMaxWorkers = cfg.ReplicationMaxWorkers
-	if globalTransitionState != nil && cfg.TransitionWorkers != t.transitionWorkers {
+
+	// N B api.transition_workers will be deprecated
+	if globalTransitionState != nil {
 		globalTransitionState.UpdateWorkers(cfg.TransitionWorkers)
 	}
 	t.transitionWorkers = cfg.TransitionWorkers
@@ -170,6 +188,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
+	t.objectMaxVersions = cfg.ObjectMaxVersions
 }
 
 func (t *apiConfig) odirectEnabled() bool {
@@ -273,7 +292,11 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	defer t.mu.RUnlock()
 
 	if t.requestsPool == nil {
-		return nil, time.Duration(0)
+		return nil, 10 * time.Second
+	}
+
+	if t.requestsDeadline <= 0 {
+		return t.requestsPool, 10 * time.Second
 	}
 
 	return t.requestsPool, t.requestsDeadline
@@ -369,4 +392,16 @@ func (t *apiConfig) isSyncEventsEnabled() bool {
 	defer t.mu.RUnlock()
 
 	return t.syncEvents
+}
+
+func (t *apiConfig) getObjectMaxVersions() int64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.objectMaxVersions <= 0 {
+		// defaults to 'IntMax' when unset.
+		return math.MaxInt64
+	}
+
+	return t.objectMaxVersions
 }

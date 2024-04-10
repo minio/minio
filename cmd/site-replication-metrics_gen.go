@@ -823,6 +823,12 @@ func (z *SRMetricsSummary) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Queued")
 				return
 			}
+		case "Proxied":
+			err = z.Proxied.DecodeMsg(dc)
+			if err != nil {
+				err = msgp.WrapError(err, "Proxied")
+				return
+			}
 		case "Metrics":
 			var zb0002 uint32
 			zb0002, err = dc.ReadMapHeader()
@@ -872,9 +878,9 @@ func (z *SRMetricsSummary) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *SRMetricsSummary) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 6
+	// map header, size 7
 	// write "ActiveWorkers"
-	err = en.Append(0x86, 0xad, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x73)
+	err = en.Append(0x87, 0xad, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x73)
 	if err != nil {
 		return
 	}
@@ -911,6 +917,16 @@ func (z *SRMetricsSummary) EncodeMsg(en *msgp.Writer) (err error) {
 	err = z.Queued.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "Queued")
+		return
+	}
+	// write "Proxied"
+	err = en.Append(0xa7, 0x50, 0x72, 0x6f, 0x78, 0x69, 0x65, 0x64)
+	if err != nil {
+		return
+	}
+	err = z.Proxied.EncodeMsg(en)
+	if err != nil {
+		err = msgp.WrapError(err, "Proxied")
 		return
 	}
 	// write "Metrics"
@@ -951,9 +967,9 @@ func (z *SRMetricsSummary) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *SRMetricsSummary) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 7
 	// string "ActiveWorkers"
-	o = append(o, 0x86, 0xad, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x73)
+	o = append(o, 0x87, 0xad, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x57, 0x6f, 0x72, 0x6b, 0x65, 0x72, 0x73)
 	o, err = z.ActiveWorkers.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "ActiveWorkers")
@@ -970,6 +986,13 @@ func (z *SRMetricsSummary) MarshalMsg(b []byte) (o []byte, err error) {
 	o, err = z.Queued.MarshalMsg(o)
 	if err != nil {
 		err = msgp.WrapError(err, "Queued")
+		return
+	}
+	// string "Proxied"
+	o = append(o, 0xa7, 0x50, 0x72, 0x6f, 0x78, 0x69, 0x65, 0x64)
+	o, err = z.Proxied.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Proxied")
 		return
 	}
 	// string "Metrics"
@@ -1031,6 +1054,12 @@ func (z *SRMetricsSummary) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Queued")
 				return
 			}
+		case "Proxied":
+			bts, err = z.Proxied.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Proxied")
+				return
+			}
 		case "Metrics":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -1081,7 +1110,7 @@ func (z *SRMetricsSummary) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SRMetricsSummary) Msgsize() (s int) {
-	s = 1 + 14 + z.ActiveWorkers.Msgsize() + 12 + msgp.Int64Size + 13 + msgp.Int64Size + 7 + z.Queued.Msgsize() + 8 + msgp.MapHeaderSize
+	s = 1 + 14 + z.ActiveWorkers.Msgsize() + 12 + msgp.Int64Size + 13 + msgp.Int64Size + 7 + z.Queued.Msgsize() + 8 + z.Proxied.Msgsize() + 8 + msgp.MapHeaderSize
 	if z.Metrics != nil {
 		for za0001, za0002 := range z.Metrics {
 			_ = za0002

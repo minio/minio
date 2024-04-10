@@ -32,6 +32,10 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
+//go:generate msgp -file $GOFILE -io=false -tests=false -unexported=false
+
+//msgp:ignore ObjectOptions TransitionOptions DeleteBucketOptions
+
 // CheckPreconditionFn returns true if precondition check failed.
 type CheckPreconditionFn func(o ObjectInfo) bool
 
@@ -69,6 +73,9 @@ type ObjectOptions struct {
 	Tagging                 bool // Is only in GET/HEAD operations to return tagging metadata along with regular metadata and body.
 
 	UserDefined         map[string]string   // only set in case of POST/PUT operations
+	ObjectAttributes    map[string]struct{} // Attribute tags defined by the users for the GetObjectAttributes request
+	MaxParts            int                 // used in GetObjectAttributes. Signals how many parts we should return
+	PartNumberMarker    int                 // used in GetObjectAttributes. Signals the part number after which results should be returned
 	PartNumber          int                 // only useful in case of GetObject/HeadObject
 	CheckPrecondFn      CheckPreconditionFn // only set during GetObject/HeadObject/CopyObjectPart preconditional valuation
 	EvalMetadataFn      EvalMetadataFn      // only set for retention settings, meant to be used only when updating metadata in-place.
@@ -106,18 +113,27 @@ type ObjectOptions struct {
 	// participating in a rebalance operation. Typically set for 'write' operations.
 	SkipRebalancing bool
 
+	DataMovement bool // indicates an going decommisionning or rebalacing
+
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
 
 	// IndexCB will return any index created but the compression.
 	// Object must have been read at this point.
 	IndexCB func() []byte
 
+	// InclFreeVersions indicates that free versions need to be included
+	// when looking up a version by fi.VersionID
 	InclFreeVersions bool
+	// SkipFreeVersion skips adding a free version when a tiered version is
+	// being 'replaced'
+	// Note: Used only when a tiered object is being expired.
+	SkipFreeVersion bool
 
 	MetadataChg           bool                  // is true if it is a metadata update operation.
 	EvalRetentionBypassFn EvalRetentionBypassFn // only set for enforcing retention bypass on DeleteObject.
 
 	FastGetObjInfo bool // Only for S3 Head/Get Object calls for now
+	NoAuditLog     bool // Only set for decom, rebalance, to avoid double audits.
 }
 
 // WalkOptions provides filtering, marker and other Walk() specific options.
@@ -282,7 +298,6 @@ type ObjectLayer interface {
 
 	// Returns health of the backend
 	Health(ctx context.Context, opts HealthOptions) HealthResult
-	ReadHealth(ctx context.Context) bool
 
 	// Metadata operations
 	PutObjectMetadata(context.Context, string, string, ObjectOptions) (ObjectInfo, error)

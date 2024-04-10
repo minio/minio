@@ -30,7 +30,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
 	xxml "github.com/minio/xxml"
 )
 
@@ -50,7 +49,7 @@ func setEventStreamHeaders(w http.ResponseWriter) {
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	// Set the "Server" http header.
-	w.Header().Set(xhttp.ServerInfo, "MinIO")
+	w.Header().Set(xhttp.ServerInfo, MinioStoreName)
 
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
@@ -68,7 +67,7 @@ func encodeResponse(response interface{}) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(xml.Header)
 	if err := xml.NewEncoder(&buf).Encode(response); err != nil {
-		logger.LogIf(GlobalContext, err)
+		bugLogIf(GlobalContext, err)
 		return nil
 	}
 	return buf.Bytes()
@@ -86,7 +85,7 @@ func encodeResponseList(response interface{}) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(xxml.Header)
 	if err := xxml.NewEncoder(&buf).Encode(response); err != nil {
-		logger.LogIf(GlobalContext, err)
+		bugLogIf(GlobalContext, err)
 		return nil
 	}
 	return buf.Bytes()

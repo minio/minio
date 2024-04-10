@@ -539,6 +539,46 @@ func TestEval(t *testing.T) {
 			objectModTime:  time.Now().UTC().Add(-15 * 24 * time.Hour),
 			expectedAction: DeleteAction,
 		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>Rule 1</ID>
+                              <Status>Enabled</Status>
+                              <Filter></Filter>
+                              <Transition>
+                                <StorageClass>WARM-1</StorageClass>
+                                <Days>30</Days>
+                              </Transition>
+                              <Expiration>
+                                <Days>60</Days>
+                              </Expiration>
+                            </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectModTime:  time.Now().UTC().Add(-90 * 24 * time.Hour),
+			expectedAction: DeleteAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>Rule 2</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <NoncurrentVersionExpiration>
+                                <NoncurrentDays>60</NoncurrentDays>
+                              </NoncurrentVersionExpiration>
+	                      <NoncurrentVersionTransition>
+                                <StorageClass>WARM-1</StorageClass>
+                                <NoncurrentDays>30</NoncurrentDays>
+                              </NoncurrentVersionTransition>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:             "obj-1",
+			isNoncurrent:           true,
+			objectModTime:          time.Now().UTC().Add(-90 * 24 * time.Hour),
+			objectSuccessorModTime: time.Now().UTC().Add(-90 * 24 * time.Hour),
+			expectedAction:         DeleteVersionAction,
+		},
 	}
 
 	for _, tc := range testCases {

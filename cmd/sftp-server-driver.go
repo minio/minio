@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -135,7 +135,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 			}
 
 			// Call hook for site replication.
-			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+			replLogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
 				Type: madmin.SRIAMItemSTSAcc,
 				STSCredential: &madmin.SRSTSCredential{
 					AccessKey:    cred.AccessKey,
@@ -357,7 +357,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 
 		// Send object names that are needed to be removed to objectsCh
 		go func() {
-			defer close(objectsCh)
+			defer xioutil.SafeClose(objectsCh)
 			opts := minio.ListObjectsOptions{
 				Prefix:    prefix,
 				Recursive: true,

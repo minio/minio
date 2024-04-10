@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -32,10 +32,14 @@ const crossDomainXMLEntity = "/crossdomain.xml"
 // policy file that grants access to the source domain, allowing the client to continue the transaction.
 func setCrossDomainPolicyMiddleware(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cxml := crossDomainXML
+		if globalServerCtxt.CrossDomainXML != "" {
+			cxml = globalServerCtxt.CrossDomainXML
+		}
 		// Look for 'crossdomain.xml' in the incoming request.
 		if r.URL.Path == crossDomainXMLEntity {
 			// Write the standard cross domain policy xml.
-			w.Write([]byte(crossDomainXML))
+			w.Write([]byte(cxml))
 			// Request completed, no need to serve to other handlers.
 			return
 		}

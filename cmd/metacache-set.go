@@ -37,9 +37,11 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/pkg/v2/console"
 )
+
+//go:generate msgp -file $GOFILE -unexported
 
 type listPathOptions struct {
 	// ID of the listing.
@@ -95,21 +97,23 @@ type listPathOptions struct {
 
 	// Versioned is this a ListObjectVersions call.
 	Versioned bool
+	// V1 listing type
+	V1 bool
 
 	// Versioning config is used for if the path
 	// has versioning enabled.
-	Versioning *versioning.Versioning
+	Versioning *versioning.Versioning `msg:"-"`
 
 	// Lifecycle performs filtering based on lifecycle.
 	// This will filter out objects if the most recent version should be deleted by lifecycle.
 	// Is not transferred across request calls.
-	Lifecycle *lifecycle.Lifecycle
+	Lifecycle *lifecycle.Lifecycle `msg:"-"`
 
 	// Retention configuration, needed to be passed along with lifecycle if set.
-	Retention lock.Retention
+	Retention lock.Retention `msg:"-"`
 
 	// Replication configuration
-	Replication replicationConfig
+	Replication replicationConfig `msg:"-"`
 
 	// StopDiskAtLimit will stop listing on each disk when limit number off objects has been returned.
 	StopDiskAtLimit bool
@@ -169,7 +173,8 @@ func (o *listPathOptions) debugln(data ...interface{}) {
 	}
 }
 
-// gatherResults will collect all results on the input channel and filter results according to the options.
+// gatherResults will collect all results on the input channel and filter results according
+// to the options or to the current bucket ILM expiry rules.
 // Caller should close the channel when done.
 // The returned function will return the results once there is enough or input is closed,
 // or the context is canceled.
@@ -211,12 +216,21 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				continue
 			}
+			if o.Lifecycle != nil || o.Replication.Config != nil {
+				if skipped := triggerExpiryAndRepl(ctx, *o, entry); skipped == true {
+					results.lastSkippedEntry = entry.name
+					continue
+				}
+			}
 			if o.Limit > 0 && results.len() >= o.Limit {
 				// We have enough and we have more.
 				// Do not return io.EOF
 				if resCh != nil {
 					resErr = nil
-					resCh <- results
+					select {
+					case resCh <- results:
+					case <-ctx.Done():
+					}
 					resCh = nil
 					returned = true
 				}
@@ -270,7 +284,7 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 		}
 		err := json.Unmarshal([]byte(v), &tmp)
 		if !ok {
-			logger.LogIf(context.Background(), err)
+			bugLogIf(context.Background(), err)
 			return -1, err
 		}
 		if tmp.First == "" && tmp.Last == "" && tmp.EOS {
@@ -426,7 +440,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				if !disk.IsOnline() {
 					continue
 				}
-				_, err := disk.ReadVersion(ctx, minioMetaBucket,
+				_, err := disk.ReadVersion(ctx, "", minioMetaBucket,
 					o.objectPath(0), "", ReadOptions{})
 				if err != nil {
 					time.Sleep(retryDelay250)
@@ -503,7 +517,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 						if !disk.IsOnline() {
 							continue
 						}
-						_, err := disk.ReadVersion(ctx, minioMetaBucket,
+						_, err := disk.ReadVersion(ctx, "", minioMetaBucket,
 							o.objectPath(partN), "", ReadOptions{})
 						if err != nil {
 							time.Sleep(retryDelay250)
@@ -523,7 +537,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				}
 				loadedPart = partN
 				bi, err := getMetacacheBlockInfo(fi, partN)
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err)
 				if err == nil {
 					if bi.pastPrefix(o.Prefix) {
 						return entries, io.EOF
@@ -562,7 +576,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					time.Sleep(retryDelay250)
 					continue
 				default:
-					logger.LogIf(ctx, err)
+					internalLogIf(ctx, err)
 					return entries, err
 				}
 			}
@@ -570,7 +584,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			// We finished at the end of the block.
 			// And should not expect any more results.
 			bi, err := getMetacacheBlockInfo(fi, partN)
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err)
 			if err != nil || bi.EOS {
 				// We are done and there are no more parts.
 				return entries, io.EOF
@@ -679,7 +693,7 @@ func getQuorumDisks(disks []StorageAPI, infos []DiskInfo, readQuorum int) (newDi
 
 // Will return io.EOF if continuing would not yield more results.
 func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, results chan<- metaCacheEntry) (err error) {
-	defer close(results)
+	defer xioutil.SafeClose(results)
 	o.debugf(color.Green("listPath:")+" with options: %#v", o)
 
 	// get prioritized non-healing disks for listing
@@ -766,6 +780,7 @@ func (er *erasureObjects) listPath(ctx context.Context, o listPathOptions, resul
 	})
 }
 
+//msgp:ignore metaCacheRPC
 type metaCacheRPC struct {
 	o      listPathOptions
 	mu     sync.Mutex
@@ -852,7 +867,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 		}
 		o.debugln(color.Green("saveMetaCacheStream:")+" saving block", b.n, "to", o.objectPath(b.n))
 		r, err := hash.NewReader(ctx, bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		custom := b.headerKV()
 		_, err = er.putMetacacheObject(ctx, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
 			UserDefined: custom,
@@ -886,7 +901,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 				return err
 			case InsufficientReadQuorum:
 			default:
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err)
 			}
 			if retries >= maxTries {
 				return err
@@ -916,6 +931,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 	return nil
 }
 
+//msgp:ignore listPathRawOptions
 type listPathRawOptions struct {
 	disks         []StorageAPI
 	fallbackDisks []StorageAPI
@@ -1056,7 +1072,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 	for {
 		// Get the top entry from each
 		var current metaCacheEntry
-		var atEOF, fnf, hasErr, agree int
+		var atEOF, fnf, vnf, hasErr, agree int
 		for i := range topEntries {
 			topEntries[i] = metaCacheEntry{}
 		}
@@ -1082,6 +1098,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 					errDiskNotFound.Error():
 					atEOF++
 					fnf++
+					// This is a special case, to handle bucket does
+					// not exist situations.
+					if errors.Is(err, errVolumeNotFound) {
+						vnf++
+					}
 					continue
 				}
 				hasErr++
@@ -1139,6 +1160,10 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			return errors.New(strings.Join(combinedErr, ", "))
 		}
 
+		if vnf == len(readers) {
+			return errVolumeNotFound
+		}
+
 		// Break if all at EOF or error.
 		if atEOF+hasErr == len(readers) {
 			if hasErr > 0 && opts.finished != nil {
@@ -1146,9 +1171,11 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			}
 			break
 		}
+
 		if fnf == len(readers) {
 			return errFileNotFound
 		}
+
 		if agree == len(readers) {
 			// Everybody agreed
 			for _, r := range readers {

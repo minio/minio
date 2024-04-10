@@ -33,6 +33,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -49,7 +51,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	locationConstraint := createBucketLocationConfiguration{}
 	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
 	if err != nil && r.ContentLength != 0 {
-		logger.LogOnceIf(GlobalContext, err, "location-constraint-xml-parsing")
+		internalLogOnceIf(GlobalContext, err, "location-constraint-xml-parsing")
 		// Treat all other failures as XML parsing errors.
 		return "", ErrMalformedXML
 	} // else for both err as nil or io.EOF
@@ -82,6 +84,31 @@ var supportedHeaders = []string{
 	xhttp.AmzObjectTagging,
 	"expires",
 	xhttp.AmzBucketReplicationStatus,
+	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Replication-Server-Side-Encryption-Iv",
+	"X-Minio-Replication-Encrypted-Multipart",
+	"X-Minio-Replication-Actual-Object-Size",
+	// Add more supported headers here.
+}
+
+// mapping of internal headers to allowed replication headers
+var validSSEReplicationHeaders = map[string]string{
+	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Internal-Server-Side-Encryption-Iv":             "X-Minio-Replication-Server-Side-Encryption-Iv",
+	"X-Minio-Internal-Encrypted-Multipart":                   "X-Minio-Replication-Encrypted-Multipart",
+	"X-Minio-Internal-Actual-Object-Size":                    "X-Minio-Replication-Actual-Object-Size",
+	// Add more supported headers here.
+}
+
+// mapping of replication headers to internal headers
+var replicationToInternalHeaders = map[string]string{
+	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key":     "X-Minio-Internal-Server-Side-Encryption-Sealed-Key",
+	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
+	"X-Minio-Replication-Encrypted-Multipart":                   "X-Minio-Internal-Encrypted-Multipart",
+	"X-Minio-Replication-Actual-Object-Size":                    "X-Minio-Internal-Actual-Object-Size",
 	// Add more supported headers here.
 }
 
@@ -164,7 +191,7 @@ func extractMetadata(ctx context.Context, mimesHeader ...textproto.MIMEHeader) (
 // extractMetadata extracts metadata from map values.
 func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[string]string) error {
 	if v == nil {
-		logger.LogIf(ctx, errInvalidArgument)
+		bugLogIf(ctx, errInvalidArgument)
 		return errInvalidArgument
 	}
 
@@ -178,7 +205,11 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 	for _, supportedHeader := range supportedHeaders {
 		value, ok := nv[http.CanonicalHeaderKey(supportedHeader)]
 		if ok {
-			m[supportedHeader] = strings.Join(value, ",")
+			if slices.Contains(maps.Keys(replicationToInternalHeaders), supportedHeader) {
+				m[replicationToInternalHeaders[supportedHeader]] = strings.Join(value, ",")
+			} else {
+				m[supportedHeader] = strings.Join(value, ",")
+			}
 		}
 	}
 
@@ -206,7 +237,7 @@ func getReqAccessCred(r *http.Request, region string) (cred auth.Credentials) {
 	return cred
 }
 
-// Extract request params to be sent with event notifiation.
+// Extract request params to be sent with event notification.
 func extractReqParams(r *http.Request) map[string]string {
 	if r == nil {
 		return nil
@@ -237,7 +268,7 @@ func extractReqParams(r *http.Request) map[string]string {
 	return m
 }
 
-// Extract response elements to be sent with event notifiation.
+// Extract response elements to be sent with event notification.
 func extractRespElements(w http.ResponseWriter) map[string]string {
 	if w == nil {
 		return map[string]string{}
@@ -296,27 +327,23 @@ func collectAPIStats(api string, f http.HandlerFunc) http.HandlerFunc {
 
 		bucket, _ := path2BucketObject(resource)
 
-		globalHTTPStats.currentS3Requests.Inc(api)
-		defer globalHTTPStats.currentS3Requests.Dec(api)
-
-		_, err = globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
-		if bucket != "" && bucket != minioReservedBucket && err == nil {
+		meta, err := globalBucketMetadataSys.Get(bucket) // check if this bucket exists.
+		countBktStat := bucket != "" && bucket != minioReservedBucket && err == nil && !meta.Created.IsZero()
+		if countBktStat {
 			globalBucketHTTPStats.updateHTTPStats(bucket, api, nil)
 		}
 
+		globalHTTPStats.currentS3Requests.Inc(api)
 		f.ServeHTTP(w, r)
+		globalHTTPStats.currentS3Requests.Dec(api)
 
-		tc, ok := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
-		if !ok {
-			return
-		}
-
+		tc, _ := r.Context().Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 		if tc != nil {
 			globalHTTPStats.updateStats(api, tc.ResponseRecorder)
 			globalConnStats.incS3InputBytes(int64(tc.RequestRecorder.Size()))
 			globalConnStats.incS3OutputBytes(int64(tc.ResponseRecorder.Size()))
 
-			if bucket != "" && bucket != minioReservedBucket && err == nil {
+			if countBktStat {
 				globalBucketConnStats.incS3InputBytes(bucket, int64(tc.RequestRecorder.Size()))
 				globalBucketConnStats.incS3OutputBytes(bucket, int64(tc.ResponseRecorder.Size()))
 				globalBucketHTTPStats.updateHTTPStats(bucket, api, tc.ResponseRecorder)
@@ -370,12 +397,6 @@ func errorResponseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	desc := "Do not upgrade one server at a time - please follow the recommended guidelines mentioned here https://github.com/minio/minio#upgrading-minio for your environment"
 	switch {
-	case strings.HasPrefix(r.URL.Path, peerS3Prefix):
-		writeErrorResponseString(r.Context(), w, APIError{
-			Code:           "XMinioPeerS3VersionMismatch",
-			Description:    desc,
-			HTTPStatusCode: http.StatusUpgradeRequired,
-		}, r.URL)
 	case strings.HasPrefix(r.URL.Path, peerRESTPrefix):
 		writeErrorResponseString(r.Context(), w, APIError{
 			Code:           "XMinioPeerVersionMismatch",
@@ -440,7 +461,7 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			success = false
 			if err != nil && !errors.Is(err, context.Canceled) {
-				logger.LogIf(GlobalContext, err)
+				replLogIf(GlobalContext, err)
 			}
 		},
 	})

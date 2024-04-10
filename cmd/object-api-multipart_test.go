@@ -52,16 +52,16 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	}
 
 	errMsg := "Bucket not found: minio-bucket"
-	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
+	// operation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
 	_, err = obj.NewMultipartUpload(context.Background(), bucket, object, opts)
 	if err == nil {
-		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
+		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is initialized on a non-existent bucket.", instanceType)
 	}
 	if errMsg != err.Error() {
 		t.Errorf("%s, Expected to fail with Error \"%s\", but instead found \"%s\".", instanceType, errMsg, err.Error())
 	}
 
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err = obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
@@ -94,7 +94,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// failed to create newbucket, abort.
@@ -113,7 +113,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		uploadID        string
 		expectedErrType error
 	}{
-		{"--", object, uploadID, BucketNotFound{}},
+		{"--", object, uploadID, BucketNameInvalid{}},
 		{"foo", object, uploadID, BucketNotFound{}},
 		{bucket, object, "foo-foo", InvalidUploadID{}},
 		{bucket, object, uploadID, nil},
@@ -150,7 +150,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	bucket := "minio-bucket"
 	object := "minio-object"
 
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -182,7 +182,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	bucket := "minio-bucket"
 	object := "minio-object"
 	opts := ObjectOptions{}
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -194,6 +194,19 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
+
+	err = obj.MakeBucket(context.Background(), "abc", MakeBucketOptions{})
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	resN, err := obj.NewMultipartUpload(context.Background(), "abc", "def", opts)
+	if err != nil {
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
 	uploadID := res.UploadID
 	// Creating a dummy bucket for tests.
 	err = obj.MakeBucket(context.Background(), "unused-bucket", MakeBucketOptions{})
@@ -201,6 +214,8 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
+
+	obj.DeleteBucket(context.Background(), "abc", DeleteBucketOptions{})
 
 	// Collection of non-exhaustive PutObjectPart test cases, valid errors
 	// and success responses.
@@ -212,7 +227,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		inputReaderData string
 		inputMd5        string
 		inputSHA256     string
-		intputDataSize  int64
+		inputDataSize   int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
@@ -221,19 +236,19 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	}{
 		// Test case  1-4.
 		// Cases with invalid bucket name.
-		{bucketName: ".test", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: .test")},
-		{bucketName: "------", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: ------")},
+		{bucketName: ".test", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket name invalid: .test")},
+		{bucketName: "------", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket name invalid: ------")},
 		{
 			bucketName: "$this-is-not-valid-too", objName: "obj", PartID: 1,
-			expectedError: fmt.Errorf("%s", "Bucket not found: $this-is-not-valid-too"),
+			expectedError: fmt.Errorf("%s", "Bucket name invalid: $this-is-not-valid-too"),
 		},
-		{bucketName: "a", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: a")},
+		{bucketName: "a", objName: "obj", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket name invalid: a")},
 		// Test case - 5.
 		// Case with invalid object names.
 		{bucketName: bucket, PartID: 1, expectedError: fmt.Errorf("%s", "Object name invalid: minio-bucket/")},
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
-		{bucketName: "abc", objName: "def", PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: abc")},
+		{bucketName: "abc", objName: "def", uploadID: resN.UploadID, PartID: 1, expectedError: fmt.Errorf("%s", "Bucket not found: abc")},
 		// Test Case - 7.
 		// Existing bucket, but using a bucket on which NewMultipartUpload is not Initiated.
 		{bucketName: "unused-bucket", objName: "def", uploadID: "xyz", PartID: 1, expectedError: fmt.Errorf("%s", "Invalid upload id xyz")},
@@ -272,27 +287,27 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Test case - 14.
 		// Input with size more than the size of actual data inside the reader.
 		{
-			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "e2fc714c4727ee9395f324cd2e7f3335", intputDataSize: int64(len("abcd") + 1),
+			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "e2fc714c4727ee9395f324cd2e7f3335", inputDataSize: int64(len("abcd") + 1),
 			expectedError: hash.BadDigest{ExpectedMD5: "e2fc714c4727ee9395f324cd2e7f3335", CalculatedMD5: "e2fc714c4727ee9395f324cd2e7f331f"},
 		},
 		// Test case - 15.
 		// Input with size less than the size of actual data inside the reader.
 		{
-			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "900150983cd24fb0d6963f7d28e17f73", intputDataSize: int64(len("abcd") - 1),
+			bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "900150983cd24fb0d6963f7d28e17f73", inputDataSize: int64(len("abcd") - 1),
 			expectedError: ioutil.ErrOverread,
 		},
 
 		// Test case - 16-19.
 		// Validating for success cases.
-		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "e2fc714c4727ee9395f324cd2e7f331f", inputSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", intputDataSize: int64(len("abcd")), shouldPass: true},
-		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 2, inputReaderData: "efgh", inputMd5: "1f7690ebdd9b4caf8fab49ca1757bf27", inputSHA256: "e5e088a0b66163a0a26a5e053d2a4496dc16ab6e0e3dd1adf2d16aa84a078c9d", intputDataSize: int64(len("efgh")), shouldPass: true},
-		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 3, inputReaderData: "ijkl", inputMd5: "09a0877d04abf8759f99adec02baf579", inputSHA256: "005c19658919186b85618c5870463eec8d9b8c1a9d00208a5352891ba5bbe086", intputDataSize: int64(len("abcd")), shouldPass: true},
-		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 4, inputReaderData: "mnop", inputMd5: "e132e96a5ddad6da8b07bba6f6131fef", inputSHA256: "f1afc31479522d6cff1ed068f93998f05a8cd3b22f5c37d7f307084f62d1d270", intputDataSize: int64(len("abcd")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 1, inputReaderData: "abcd", inputMd5: "e2fc714c4727ee9395f324cd2e7f331f", inputSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", inputDataSize: int64(len("abcd")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 2, inputReaderData: "efgh", inputMd5: "1f7690ebdd9b4caf8fab49ca1757bf27", inputSHA256: "e5e088a0b66163a0a26a5e053d2a4496dc16ab6e0e3dd1adf2d16aa84a078c9d", inputDataSize: int64(len("efgh")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 3, inputReaderData: "ijkl", inputMd5: "09a0877d04abf8759f99adec02baf579", inputSHA256: "005c19658919186b85618c5870463eec8d9b8c1a9d00208a5352891ba5bbe086", inputDataSize: int64(len("abcd")), shouldPass: true},
+		{bucketName: bucket, objName: object, uploadID: uploadID, PartID: 4, inputReaderData: "mnop", inputMd5: "e132e96a5ddad6da8b07bba6f6131fef", inputSHA256: "f1afc31479522d6cff1ed068f93998f05a8cd3b22f5c37d7f307084f62d1d270", inputDataSize: int64(len("abcd")), shouldPass: true},
 	}
 
 	// Validate all the test cases.
 	for i, testCase := range testCases {
-		actualInfo, actualErr := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, testCase.inputSHA256), opts)
+		actualInfo, actualErr := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.inputDataSize, testCase.inputMd5, testCase.inputSHA256), opts)
 		// All are test cases above are expected to fail.
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
@@ -348,7 +363,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// bucketnames[1].
 	// objectNames[0].
 	// uploadIds [1-3].
-	// Bucket to test for mutiple upload Id's for a given object.
+	// Bucket to test for multiple upload Id's for a given object.
 	err = obj.MakeBucket(context.Background(), bucketNames[1], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -366,7 +381,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		uploadIDs = append(uploadIDs, res.UploadID)
 	}
 
-	// Bucket to test for mutiple objects, each with unique UUID.
+	// Bucket to test for multiple objects, each with unique UUID.
 	// bucketnames[2].
 	// objectNames[0-2].
 	// uploadIds [4-9].
@@ -395,7 +410,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		PartID          int
 		inputReaderData string
 		inputMd5        string
-		intputDataSize  int64
+		inputDataSize   int64
 		expectedMd5     string
 	}{
 		// Case 1-4.
@@ -424,7 +439,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), opts)
+		_, err := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.inputDataSize, testCase.inputMd5, sha256sum), opts)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1041,11 +1056,11 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{".test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Valid bucket names, but they donot exist (Test number 5-7).
+		{".test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", "", "", 0, ListMultipartsInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", "", "", 0, ListMultipartsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", "", "", 0, ListMultipartsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
+		// Valid bucket names, but they do not exist (Test number 5-7).
 		{"volatile-bucket-1", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
 		{"volatile-bucket-2", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
 		{"volatile-bucket-3", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
@@ -1210,7 +1225,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1248,7 +1263,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		PartID          int
 		inputReaderData string
 		inputMd5        string
-		intputDataSize  int64
+		inputDataSize   int64
 		expectedMd5     string
 	}{
 		// Case 1-4.
@@ -1262,7 +1277,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), opts)
+		_, err := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.inputDataSize, testCase.inputMd5, sha256sum), opts)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1357,15 +1372,15 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
+		{".test", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		// Valid bucket names, but they do not exist (Test number 5-7).
+		{"volatile-bucket-1", "test1", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "test1", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "test1", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Test case for Asserting for invalid objectName (Test number 8).
 		{bucketNames[0], "", "", 0, 0, ListPartsInfo{}, ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
@@ -1461,7 +1476,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err := obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1485,7 +1500,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		PartID          int
 		inputReaderData string
 		inputMd5        string
-		intputDataSize  int64
+		inputDataSize   int64
 		expectedMd5     string
 	}{
 		// Case 1-4.
@@ -1499,7 +1514,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum), opts)
+		_, err := obj.PutObjectPart(context.Background(), testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, mustGetPutObjReader(t, bytes.NewBufferString(testCase.inputReaderData), testCase.inputDataSize, testCase.inputMd5, sha256sum), opts)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1594,15 +1609,15 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "ad"}, false},
+		{".test", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", 0, 0, ListPartsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		// Valid bucket names, but they do not exist (Test number 5-7).
+		{"volatile-bucket-1", "test1", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "test1", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "test1", "", 0, 0, ListPartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Test case for Asserting for invalid objectName (Test number 8).
 		{bucketNames[0], "", "", 0, 0, ListPartsInfo{}, ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).
@@ -1702,7 +1717,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
-	// Create bucket before intiating NewMultipartUpload.
+	// Create bucket before initiating NewMultipartUpload.
 	err = obj.MakeBucket(context.Background(), bucketNames[0], MakeBucketOptions{})
 	if err != nil {
 		// Failed to create newbucket, abort.
@@ -1729,7 +1744,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		PartID          int
 		inputReaderData string
 		inputMd5        string
-		intputDataSize  int64
+		inputDataSize   int64
 	}{
 		// Case 1-4.
 		// Creating sequence of parts for same uploadID.
@@ -1746,7 +1761,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	var opts ObjectOptions
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(context.Background(), part.bucketName, part.objName, part.uploadID, part.PartID, mustGetPutObjReader(t, bytes.NewBufferString(part.inputReaderData), part.intputDataSize, part.inputMd5, sha256sum), opts)
+		_, err = obj.PutObjectPart(context.Background(), part.bucketName, part.objName, part.uploadID, part.PartID, mustGetPutObjReader(t, bytes.NewBufferString(part.inputReaderData), part.inputDataSize, part.inputMd5, sha256sum), opts)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -1809,15 +1824,15 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names (Test number 1-4).
-		{".test", "", "", []CompletePart{}, "", BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "ad"}, false},
+		{".test", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", []CompletePart{}, "", BucketNameInvalid{Bucket: "ad"}, false},
 		// Test cases for listing uploadID with single part.
-		// Valid bucket names, but they donot exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		// Valid bucket names, but they do not exist (Test number 5-7).
+		{"volatile-bucket-1", "test1", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "test1", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "test1", "", []CompletePart{}, "", BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// Test case for Asserting for invalid objectName (Test number 8).
 		{bucketNames[0], "", "", []CompletePart{}, "", ObjectNameInvalid{Bucket: bucketNames[0]}, false},
 		// Asserting for Invalid UploadID (Test number 9).

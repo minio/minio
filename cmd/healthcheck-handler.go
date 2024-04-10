@@ -24,6 +24,7 @@ import (
 	"time"
 
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/kms"
 )
 
 const unavailable = "offline"
@@ -81,12 +82,28 @@ func ClusterReadCheckHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(ctx, globalAPIConfig.getClusterDeadline())
 	defer cancel()
 
-	result := objLayer.ReadHealth(ctx)
-	if !result {
-		writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+	opts := HealthOptions{
+		Maintenance:    r.Form.Get("maintenance") == "true",
+		DeploymentType: r.Form.Get("deployment-type"),
+	}
+	result := objLayer.Health(ctx, opts)
+	w.Header().Set(xhttp.MinIOReadQuorum, strconv.Itoa(result.ReadQuorum))
+	w.Header().Set(xhttp.MinIOStorageClassDefaults, strconv.FormatBool(result.UsingDefaults))
+	// return how many drives are being healed if any
+	if result.HealingDrives > 0 {
+		w.Header().Set(xhttp.MinIOHealingDrives, strconv.Itoa(result.HealingDrives))
+	}
+	if !result.HealthyRead {
+		// As a maintenance call we are purposefully asked to be taken
+		// down, this is for orchestrators to know if we can safely
+		// take this server down, return appropriate error.
+		if opts.Maintenance {
+			writeResponse(w, http.StatusPreconditionFailed, nil, mimeNone)
+		} else {
+			writeResponse(w, http.StatusServiceUnavailable, nil, mimeNone)
+		}
 		return
 	}
-
 	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
@@ -118,7 +135,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 
-		if _, err := GlobalKMS.Stat(ctx); err != nil {
+		if _, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{"healthcheck": ""}); err != nil {
 			switch r.Method {
 			case http.MethodHead:
 				apiErr := toAPIError(r.Context(), err)
@@ -152,7 +169,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 // LivenessCheckHandler checks whether MinIO is up. It differs from the
 // readiness handler since a failing liveness check causes pod restarts
-// in K8S enviromnents. Therefore, it does not contact external systems.
+// in K8S environments. Therefore, it does not contact external systems.
 func LivenessCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if objLayer := newObjectLayerFn(); objLayer == nil {
 		w.Header().Set(xhttp.MinIOServerStatus, unavailable) // Service not initialized yet

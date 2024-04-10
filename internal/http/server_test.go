@@ -58,16 +58,9 @@ func TestNewServer(t *testing.T) {
 		}
 		if server == nil {
 			t.Fatalf("Case %v: server: expected: <non-nil>, got: <nil>", (i + 1))
-		}
-
-		if !reflect.DeepEqual(server.Addrs, testCase.addrs) {
+		} else if !reflect.DeepEqual(server.Addrs, testCase.addrs) {
 			t.Fatalf("Case %v: server.Addrs: expected: %v, got: %v", (i + 1), testCase.addrs, server.Addrs)
 		}
-
-		// Interfaces are not comparable even with reflection.
-		// if !reflect.DeepEqual(server.Handler, testCase.handler) {
-		// 	t.Fatalf("Case %v: server.Handler: expected: %v, got: %v", (i + 1), testCase.handler, server.Handler)
-		// }
 
 		if testCase.certFn == nil {
 			if server.TLSConfig != nil {

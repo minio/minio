@@ -40,6 +40,14 @@ const (
 	formatNamespace = "namespace"
 )
 
+const (
+	logSubsys = "notify"
+)
+
+func logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, logSubsys, err, id, errKind...)
+}
+
 // ErrTargetsOffline - Indicates single/multiple target failures.
 var ErrTargetsOffline = errors.New("one or more targets are offline. Please use `mc admin info --json` to check the offline targets")
 
@@ -97,7 +105,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewAMQPTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewAMQPTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -112,7 +120,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewElasticsearchTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewElasticsearchTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -129,7 +137,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 				continue
 			}
 			args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
-			t, err := target.NewKafkaTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewKafkaTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -147,7 +155,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 				continue
 			}
 			args.RootCAs = transport.TLSClientConfig.RootCAs
-			t, err := target.NewMQTTTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewMQTTTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -162,7 +170,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewMySQLTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewMySQLTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -177,7 +185,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewNATSTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewNATSTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +200,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewNSQTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewNSQTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -207,7 +215,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewPostgreSQLTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewPostgreSQLTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -222,7 +230,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewRedisTarget(id, args, logger.LogOnceIf)
+			t, err := target.NewRedisTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
 			}
@@ -237,7 +245,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
-			t, err := target.NewWebhookTarget(ctx, id, args, logger.LogOnceIf, transport)
+			t, err := target.NewWebhookTarget(ctx, id, args, logOnceIf, transport)
 			if err != nil {
 				return nil, err
 			}
@@ -299,7 +307,7 @@ func checkValidNotificationKeysForSubSys(subSys string, tgt map[string]config.KV
 	return nil
 }
 
-// DefaultKakfaKVS - default KV for kafka target
+// DefaultKafkaKVS - default KV for kafka target
 var (
 	DefaultKafkaKVS = config.KVS{
 		config.KV{
@@ -946,6 +954,11 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			usernameEnv = usernameEnv + config.Default + k
 		}
 
+		userCredentialsEnv := target.NATSUserCredentials
+		if k != config.Default {
+			userCredentialsEnv = userCredentialsEnv + config.Default + k
+		}
+
 		passwordEnv := target.EnvNATSPassword
 		if k != config.Default {
 			passwordEnv = passwordEnv + config.Default + k
@@ -982,21 +995,22 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 		}
 
 		natsArgs := target.NATSArgs{
-			Enable:        true,
-			Address:       *address,
-			Subject:       env.Get(subjectEnv, kv.Get(target.NATSSubject)),
-			Username:      env.Get(usernameEnv, kv.Get(target.NATSUsername)),
-			Password:      env.Get(passwordEnv, kv.Get(target.NATSPassword)),
-			CertAuthority: env.Get(certAuthorityEnv, kv.Get(target.NATSCertAuthority)),
-			ClientCert:    env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
-			ClientKey:     env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
-			Token:         env.Get(tokenEnv, kv.Get(target.NATSToken)),
-			TLS:           env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
-			TLSSkipVerify: env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
-			PingInterval:  pingInterval,
-			QueueDir:      env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
-			QueueLimit:    queueLimit,
-			RootCAs:       rootCAs,
+			Enable:          true,
+			Address:         *address,
+			Subject:         env.Get(subjectEnv, kv.Get(target.NATSSubject)),
+			Username:        env.Get(usernameEnv, kv.Get(target.NATSUsername)),
+			UserCredentials: env.Get(userCredentialsEnv, kv.Get(target.NATSUserCredentials)),
+			Password:        env.Get(passwordEnv, kv.Get(target.NATSPassword)),
+			CertAuthority:   env.Get(certAuthorityEnv, kv.Get(target.NATSCertAuthority)),
+			ClientCert:      env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
+			ClientKey:       env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
+			Token:           env.Get(tokenEnv, kv.Get(target.NATSToken)),
+			TLS:             env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
+			TLSSkipVerify:   env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
+			PingInterval:    pingInterval,
+			QueueDir:        env.Get(queueDirEnv, kv.Get(target.NATSQueueDir)),
+			QueueLimit:      queueLimit,
+			RootCAs:         rootCAs,
 		}
 		natsArgs.JetStream.Enable = env.Get(jetStreamEnableEnv, kv.Get(target.NATSJetStream)) == config.EnableOn
 
@@ -1277,6 +1291,10 @@ var (
 			Value: "",
 		},
 		config.KV{
+			Key:   target.RedisUser,
+			Value: "",
+		},
+		config.KV{
 			Key:   target.RedisQueueDir,
 			Value: "",
 		},
@@ -1328,6 +1346,10 @@ func GetNotifyRedis(redisKVS map[string]config.KVS) (map[string]target.RedisArgs
 		if k != config.Default {
 			passwordEnv = passwordEnv + config.Default + k
 		}
+		userEnv := target.EnvRedisUser
+		if k != config.Default {
+			userEnv = userEnv + config.Default + k
+		}
 		keyEnv := target.EnvRedisKey
 		if k != config.Default {
 			keyEnv = keyEnv + config.Default + k
@@ -1341,6 +1363,7 @@ func GetNotifyRedis(redisKVS map[string]config.KVS) (map[string]target.RedisArgs
 			Format:     env.Get(formatEnv, kv.Get(target.RedisFormat)),
 			Addr:       *addr,
 			Password:   env.Get(passwordEnv, kv.Get(target.RedisPassword)),
+			User:       env.Get(userEnv, kv.Get(target.RedisUser)),
 			Key:        env.Get(keyEnv, kv.Get(target.RedisKey)),
 			QueueDir:   env.Get(queueDirEnv, kv.Get(target.RedisQueueDir)),
 			QueueLimit: uint64(queueLimit),

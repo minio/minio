@@ -58,7 +58,7 @@ site3_pid=$!
 minio server --config /tmp/minio.configfile.4 >/tmp/minio4_1.log 2>&1 &
 site4_pid=$!
 
-sleep 5
+sleep 30
 
 export MC_HOST_minio1=http://minr0otUS2r:pBU94AGAY85e@localhost:9001
 export MC_HOST_minio3=http://minr0otUS2r:pBU94AGAY85e@localhost:9003
@@ -80,7 +80,7 @@ if [ "${expected_checksum}" != "${actual_checksum}" ]; then
 	exit
 fi
 
-# Compare the difference of the list of disks and their location, with the below exected output
+# Compare the difference of the list of disks and their location, with the below expected output
 diff <(./mc admin info minio1 --json | jq -r '.info.servers[].drives[] | "\(.pool_index),\(.set_index),\(.disk_index) \(.endpoint)"' | sort) <(
 	cat <<EOF
 0,0,0 http://localhost:9001/tmp/xl/node9001/mnt/disk1

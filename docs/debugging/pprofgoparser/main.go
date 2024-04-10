@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -33,16 +33,18 @@ import (
 )
 
 var (
-	re                   *regexp.Regexp
+	goroutinesRE, searchRE *regexp.Regexp
+
+	// User input flags
+	searchText           string
 	goTime, less, margin time.Duration
 )
 
 func init() {
-	re = regexp.MustCompile(`^goroutine [0-9]+ \[[^,]+(, ([0-9]+) minutes)?\]:$`)
-
 	flag.DurationVar(&less, "less", 0, "goroutine waiting less than the specified time")
 	flag.DurationVar(&goTime, "time", 0, "goroutine waiting for exactly the specified time")
 	flag.DurationVar(&margin, "margin", 0, "margin time")
+	flag.StringVar(&searchText, "search", "", "Regex to search for a text in one goroutine stacktrace")
 }
 
 func parseGoroutineType2(path string) (map[time.Duration][]string, error) {
@@ -77,13 +79,16 @@ func parseGoroutineType2(path string) (map[time.Duration][]string, error) {
 		case skip && line == "":
 			skip = false
 		case record && line == "":
-			record = false
-			ret[t] = append(ret[t], bf.String())
+			stackTrace := bf.String()
 			reset()
+			record = false
+			if searchRE == nil || searchRE.MatchString(stackTrace) {
+				ret[t] = append(ret[t], stackTrace)
+			}
 		case record:
 			save(line)
 		default:
-			z := re.FindStringSubmatch(line)
+			z := goroutinesRE.FindStringSubmatch(line)
 			if len(z) == 3 {
 				if z[2] != "" {
 					a, _ := strconv.Atoi(z[2])
@@ -113,6 +118,17 @@ func main() {
 
 	if len(flag.Args()) == 0 {
 		log.Fatal(helpUsage)
+	}
+
+	var err error
+
+	goroutinesRE = regexp.MustCompile(`^goroutine [0-9]+ \[[^,]+(, ([0-9]+) minutes)?\]:$`)
+
+	if searchText != "" {
+		searchRE, err = regexp.Compile(searchText)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	for _, arg := range flag.Args() {

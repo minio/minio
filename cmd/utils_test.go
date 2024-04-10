@@ -26,7 +26,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 )
 
 // Tests maximum object size.
@@ -399,33 +398,4 @@ func TestGetMinioMode(t *testing.T) {
 
 	globalIsDistErasure, globalIsErasure = false, false
 	testMinioMode(globalMinioModeFS)
-}
-
-func TestTimedValue(t *testing.T) {
-	var cache timedValue
-	t.Parallel()
-	cache.Once.Do(func() {
-		cache.TTL = 2 * time.Second
-		cache.Update = func() (interface{}, error) {
-			return time.Now(), nil
-		}
-	})
-
-	i, _ := cache.Get()
-	t1 := i.(time.Time)
-
-	j, _ := cache.Get()
-	t2 := j.(time.Time)
-
-	if !t1.Equal(t2) {
-		t.Fatalf("expected time to be equal: %s != %s", t1, t2)
-	}
-
-	time.Sleep(3 * time.Second)
-	k, _ := cache.Get()
-	t3 := k.(time.Time)
-
-	if t1.Equal(t3) {
-		t.Fatalf("expected time to be un-equal: %s == %s", t1, t3)
-	}
 }

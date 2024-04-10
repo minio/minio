@@ -22,6 +22,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -482,11 +483,11 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	for index := range buckets {
 		index := index
 		g.Go(func() error {
-			_, _ = sys.objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{
-				// Ensure heal opts for bucket metadata be deep healed all the time.
-				ScanMode: madmin.HealDeepScan,
-				Recreate: true,
-			})
+			// Sleep and stagger to avoid blocked CPU and thundering
+			// herd upon start up sequence.
+			time.Sleep(25*time.Millisecond + time.Duration(rand.Int63n(int64(100*time.Millisecond))))
+
+			_, _ = sys.objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true})
 			meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[index].Name)
 			if err != nil {
 				return err
@@ -499,7 +500,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	errs := g.Wait()
 	for _, err := range errs {
 		if err != nil {
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err, logger.WarningKind)
 		}
 	}
 
@@ -541,7 +542,7 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 		case <-t.C:
 			buckets, err := sys.objAPI.ListBuckets(ctx, BucketOptions{})
 			if err != nil {
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err, logger.WarningKind)
 				break
 			}
 
@@ -559,7 +560,7 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 
 				meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[i].Name)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					internalLogIf(ctx, err, logger.WarningKind)
 					wait() // wait to proceed to next entry.
 					continue
 				}

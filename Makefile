@@ -6,7 +6,8 @@ GOARCH := $(shell go env GOARCH)
 GOOS := $(shell go env GOOS)
 
 VERSION ?= $(shell git describe --tags)
-TAG ?= "quay.io/minio/minio:$(VERSION)"
+REPO ?= quay.io/minio
+TAG ?= $(REPO)/minio:$(VERSION)
 
 GOLANGCI_DIR = .bin/golangci/$(GOLANGCI_VERSION)
 GOLANGCI = $(GOLANGCI_DIR)/golangci-lint
@@ -23,7 +24,7 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_DIR)
-	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@6ac204f0b4d48d17ab4fa442134c7fba13127a4e
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.10-0.20240227114326-6d6f813fff1b
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
 crosscompile: ## cross compile minio
@@ -46,7 +47,7 @@ lint-fix: getdeps ## runs golangci-lint suite of linters with automatic fixes
 check: test
 test: verifiers build build-debugging ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue ./...
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -v -tags kqueue ./...
 
 test-root-disable: install-race
 	@echo "Running minio root lockdown tests"
@@ -58,6 +59,10 @@ test-decom: install-race
 	@env bash $(PWD)/docs/distributed/decom-encrypted.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
 	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
+
+test-versioning: install-race
+	@echo "Running minio versioning tests"
+	@env bash $(PWD)/docs/bucket/versioning/versioning-tests.sh
 
 test-configfile: install-race
 	@env bash $(PWD)/docs/distributed/distributed-from-config-file.sh
@@ -102,6 +107,12 @@ test-site-replication-oidc: install-race ## verify automatic site replication
 test-site-replication-minio: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of IAM (with MinIO IDP)"
 	@(env bash $(PWD)/docs/site-replication/run-multi-site-minio-idp.sh)
+	@echo "Running tests for automatic site replication of SSE-C objects"
+	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication.sh)
+	@echo "Running tests for automatic site replication of SSE-C objects with SSE-KMS enabled for bucket"
+	@(env bash $(PWD)/docs/site-replication/run-sse-kms-object-replication.sh)
+	@echo "Running tests for automatic site replication of SSE-C objects with compression enabled for site"
+	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication-with-compression.sh)
 
 verify: ## verify minio various setups
 	@echo "Verifying build with race"
@@ -112,7 +123,6 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@echo "Verify healing build with race"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
-	@(env bash $(PWD)/buildscripts/unaligned-healing.sh)
 	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
 verify-healing-with-root-disks: ## verify healing root disks
@@ -141,12 +151,11 @@ hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
     sed 's#RELEASE\.\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)T\([0-9]\+\)-\([0-9]\+\)-\([0-9]\+\)Z#\1-\2-\3T\4:\5:\6Z#')))
 	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
-	$(eval TAG := "minio/minio:$(VERSION)")
 
 hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
-	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.0/pkger_2.2.0_linux_amd64.deb
-	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.0/linux-systemd/distributed/minio.service
-	@sudo apt install ./pkger_2.2.0_linux_amd64.deb --yes
+	@wget -q -c https://github.com/minio/pkger/releases/download/v2.2.9/pkger_2.2.9_linux_amd64.deb
+	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.1/linux-systemd/distributed/minio.service
+	@sudo apt install ./pkger_2.2.9_linux_amd64.deb --yes
 	@mkdir -p minio-release/$(GOOS)-$(GOARCH)/archive
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)
@@ -174,9 +183,9 @@ docker: build ## builds minio docker container
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
 
 install-race: checks ## builds minio to $(PWD)
-	@echo "Building minio binary to './minio'"
+	@echo "Building minio binary with -race to './minio'"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
-	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
+	@echo "Installing minio binary with -race to '$(GOPATH)/bin/minio'"
 	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
 
 install: build ## builds minio and installs it to $GOPATH/bin.

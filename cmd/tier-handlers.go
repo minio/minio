@@ -140,6 +140,7 @@ func (api adminAPIHandlers) ListTierHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	w.Header().Set(tierCfgRefreshAtHdr, globalTierConfigMgr.refreshedAt().String())
 	writeSuccessResponseJSON(w, data)
 }
 

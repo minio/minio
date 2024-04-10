@@ -156,7 +156,14 @@ spec:
             - name: MINIO_IDENTITY_OPENID_CONFIG_URL
               value: {{ .Values.oidc.configUrl }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_ID
+            {{- if and .Values.oidc.existingClientSecretName .Values.oidc.existingClientIdKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.oidc.existingClientSecretName }}
+                  key: {{ .Values.oidc.existingClientIdKey }}
+            {{- else }}
               value: {{ .Values.oidc.clientId }}
+            {{- end }}
             - name: MINIO_IDENTITY_OPENID_CLIENT_SECRET
             {{- if and .Values.oidc.existingClientSecretName .Values.oidc.existingClientSecretKey }}
               valueFrom:
@@ -174,12 +181,20 @@ spec:
               value: {{ .Values.oidc.scopes }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri }}
+            - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
+              value: {{ .Values.oidc.displayName }}
             {{- end }}
             {{- range $key, $val := .Values.environment }}
             - name: {{ $key }}
               value: {{ tpl $val $ | quote }}
             {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
+          securityContext:
+            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem | default false }}
+          {{- end }}
         {{- with .Values.extraContainers }}
           {{- if eq (typeOf .) "string" }}
             {{- tpl . $ | nindent 8 }}
@@ -219,7 +234,9 @@ spec:
   volumeClaimTemplates:
     {{- if gt $drivesPerNode 1 }}
     {{- range $diskId := until $drivesPerNode}}
-    - metadata:
+    - apiVersion: v1	
+      kind: PersistentVolumeClaim	
+      metadata:
         name: export-{{ $diskId }}
         {{- if $.Values.persistence.annotations }}
         annotations: {{- toYaml $.Values.persistence.annotations | nindent 10 }}
@@ -234,7 +251,9 @@ spec:
             storage: {{ $psize }}
     {{- end }}
     {{- else }}
-    - metadata:
+    - apiVersion: v1	
+      kind: PersistentVolumeClaim	
+      metadata:
         name: export
         {{- if $.Values.persistence.annotations }}
         annotations: {{- toYaml $.Values.persistence.annotations | nindent 10 }}

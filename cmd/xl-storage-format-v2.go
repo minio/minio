@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,32 +34,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/config/storageclass"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/env"
 	"github.com/tinylib/msgp/msgp"
 )
-
-// Reject creating new versions when a single object is cross maxObjectVersions
-var maxObjectVersions = 10000
-
-func init() {
-	v := env.Get("_MINIO_OBJECT_MAX_VERSIONS", "")
-	if v != "" {
-		maxv, err := strconv.Atoi(v)
-		if err != nil {
-			logger.Info("invalid _MINIO_OBJECT_MAX_VERSIONS value: %s, defaulting to '10000'", v)
-			maxObjectVersions = 10000
-		} else {
-			if maxv < 10 {
-				logger.Info("invalid _MINIO_OBJECT_MAX_VERSIONS value: %s, minimum allowed is '10' defaulting to '10000'", v)
-				maxObjectVersions = 10000
-			} else {
-				maxObjectVersions = maxv
-			}
-		}
-	}
-}
 
 var (
 	// XL header specifies the format
@@ -639,6 +616,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo
 		if equals(k, xhttp.AmzMetaUnencryptedContentLength, xhttp.AmzMetaUnencryptedContentMD5) {
 			continue
 		}
+		if equals(k, "x-amz-storage-class") && v == storageclass.STANDARD {
+			continue
+		}
 
 		fi.Metadata[k] = v
 	}
@@ -654,6 +634,9 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo
 			case tierFVIDKey, tierFVMarkerKey:
 				continue
 			}
+		}
+		if equals(k, "x-amz-storage-class") && string(v) == storageclass.STANDARD {
+			continue
 		}
 		switch {
 		case strings.HasPrefix(strings.ToLower(k), ReservedMetadataPrefixLower), equals(k, VersionPurgeStatusKey):
@@ -770,7 +753,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 		case 1, 2, 3:
 			sz, tmp, err := msgp.ReadBytesHeader(tmp)
 			if err != nil {
-				return nil, fmt.Errorf("readXLMetaNoData(read_meta): uknown metadata version %w", err)
+				return nil, fmt.Errorf("readXLMetaNoData(read_meta): unknown metadata version %w", err)
 			}
 			want := int64(sz) + int64(len(buf)-len(tmp))
 
@@ -955,7 +938,7 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 	x.metaV = metaV
 	if err = x.data.validate(); err != nil {
 		x.data.repair()
-		logger.LogIf(GlobalContext, fmt.Errorf("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries()))
+		storageLogIf(GlobalContext, fmt.Errorf("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries()))
 	}
 	return decodeVersions(buf, versions, func(i int, hdr, meta []byte) error {
 		ver := &x.versions[i]
@@ -1022,7 +1005,7 @@ func (x *xlMetaV2) loadLegacy(buf []byte) error {
 			x.data = buf
 			if err = x.data.validate(); err != nil {
 				x.data.repair()
-				logger.LogIf(GlobalContext, fmt.Errorf("xlMetaV2.Load: data validation failed: %v. %d entries after repair", err, x.data.entries()))
+				storageLogIf(GlobalContext, fmt.Errorf("xlMetaV2.Load: data validation failed: %v. %d entries after repair", err, x.data.entries()))
 			}
 		default:
 			return errors.New("unknown minor metadata version")
@@ -1104,8 +1087,8 @@ func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 		return err
 	}
 
-	// returns error if we have exceeded maxObjectVersions
-	if len(x.versions)+1 > maxObjectVersions {
+	// returns error if we have exceeded configured object max versions
+	if int64(len(x.versions)+1) > globalAPIConfig.getObjectMaxVersions() {
 		return errMaxVersionsExceeded
 	}
 
@@ -1410,15 +1393,13 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				err = x.setIdx(i, *ver)
 				return "", err
 			}
-			var err error
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
 			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
 				err = x.addVersion(ventry)
+			} else if fi.Deleted && uv.String() == emptyUUID {
+				return "", x.addVersion(ventry)
 			}
-			// if we remove null version. we should try to add null version to top layer.
-			if uv.String() != emptyUUID {
-				return "", err
-			}
+			return "", err
 		case ObjectType:
 			if updateVersion && !fi.Deleted {
 				ver, err := x.getIdx(i)
@@ -1640,9 +1621,9 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			if len(k) > len(ReservedMetadataPrefixLower) && strings.EqualFold(k[:len(ReservedMetadataPrefixLower)], ReservedMetadataPrefixLower) {
 				// Skip tierFVID, tierFVMarker keys; it's used
 				// only for creating free-version.
-				// Skip xMinIOHealing, it's used only in RenameData
+				// Also skip xMinIOHealing, xMinIODataMov as used only in RenameData
 				switch k {
-				case tierFVIDKey, tierFVMarkerKey, xMinIOHealing:
+				case tierFVIDKey, tierFVMarkerKey, xMinIOHealing, xMinIODataMov:
 					continue
 				}
 
@@ -1763,7 +1744,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers, allPa
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
+			storageLogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return fi, errFileVersionNotFound
 		}
 	}
@@ -1874,6 +1855,7 @@ func (x xlMetaV2) ListVersions(volume, path string, allParts bool) ([]FileInfo, 
 
 // mergeXLV2Versions will merge all versions, typically from different disks
 // that have at least quorum entries in all metas.
+// Each version slice should be sorted.
 // Quorum must be the minimum number of matching metadata files.
 // Quorum should be > 1 and <= len(versions).
 // If strict is set to false, entries that match type
@@ -2068,7 +2050,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string, allParts bool) (fi
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
+			storageLogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return fi, errFileVersionNotFound
 		}
 	}

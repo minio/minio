@@ -24,8 +24,6 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"github.com/minio/minio/internal/logger"
 )
 
 type scanStatus uint8
@@ -148,16 +146,17 @@ func (m *metacache) update(update metacache) {
 // delete all cache data on disks.
 func (m *metacache) delete(ctx context.Context) {
 	if m.bucket == "" || m.id == "" {
-		logger.LogIf(ctx, fmt.Errorf("metacache.delete: bucket (%s) or id (%s) empty", m.bucket, m.id))
+		bugLogIf(ctx, fmt.Errorf("metacache.delete: bucket (%s) or id (%s) empty", m.bucket, m.id))
+		return
 	}
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		logger.LogIf(ctx, errors.New("metacache.delete: no object layer"))
+		internalLogIf(ctx, errors.New("metacache.delete: no object layer"))
 		return
 	}
 	ez, ok := objAPI.(deleteAllStorager)
 	if !ok {
-		logger.LogIf(ctx, errors.New("metacache.delete: expected objAPI to be 'deleteAllStorager'"))
+		bugLogIf(ctx, errors.New("metacache.delete: expected objAPI to be 'deleteAllStorager'"))
 		return
 	}
 	ez.deleteAll(ctx, minioMetaBucket, metacachePrefixForID(m.bucket, m.id))

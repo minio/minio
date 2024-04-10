@@ -9,8 +9,8 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-func TestMarshalUnmarshaljentry(t *testing.T) {
-	v := jentry{}
+func TestMarshalUnmarshalDailyAllTierStats(t *testing.T) {
+	v := DailyAllTierStats{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -32,8 +32,8 @@ func TestMarshalUnmarshaljentry(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgjentry(b *testing.B) {
-	v := jentry{}
+func BenchmarkMarshalMsgDailyAllTierStats(b *testing.B) {
+	v := DailyAllTierStats{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -41,8 +41,8 @@ func BenchmarkMarshalMsgjentry(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgjentry(b *testing.B) {
-	v := jentry{}
+func BenchmarkAppendMsgDailyAllTierStats(b *testing.B) {
+	v := DailyAllTierStats{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -53,8 +53,8 @@ func BenchmarkAppendMsgjentry(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshaljentry(b *testing.B) {
-	v := jentry{}
+func BenchmarkUnmarshalDailyAllTierStats(b *testing.B) {
+	v := DailyAllTierStats{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -67,17 +67,17 @@ func BenchmarkUnmarshaljentry(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodejentry(t *testing.T) {
-	v := jentry{}
+func TestEncodeDecodeDailyAllTierStats(t *testing.T) {
+	v := DailyAllTierStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodejentry Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodeDailyAllTierStats Msgsize() is inaccurate")
 	}
 
-	vn := jentry{}
+	vn := DailyAllTierStats{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -91,8 +91,8 @@ func TestEncodeDecodejentry(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodejentry(b *testing.B) {
-	v := jentry{}
+func BenchmarkEncodeDailyAllTierStats(b *testing.B) {
+	v := DailyAllTierStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -105,8 +105,8 @@ func BenchmarkEncodejentry(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodejentry(b *testing.B) {
-	v := jentry{}
+func BenchmarkDecodeDailyAllTierStats(b *testing.B) {
+	v := DailyAllTierStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -122,8 +122,8 @@ func BenchmarkDecodejentry(b *testing.B) {
 	}
 }
 
-func TestMarshalUnmarshaljentryV1(t *testing.T) {
-	v := jentryV1{}
+func TestMarshalUnmarshallastDayTierStats(t *testing.T) {
+	v := lastDayTierStats{}
 	bts, err := v.MarshalMsg(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -145,8 +145,8 @@ func TestMarshalUnmarshaljentryV1(t *testing.T) {
 	}
 }
 
-func BenchmarkMarshalMsgjentryV1(b *testing.B) {
-	v := jentryV1{}
+func BenchmarkMarshalMsglastDayTierStats(b *testing.B) {
+	v := lastDayTierStats{}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -154,8 +154,8 @@ func BenchmarkMarshalMsgjentryV1(b *testing.B) {
 	}
 }
 
-func BenchmarkAppendMsgjentryV1(b *testing.B) {
-	v := jentryV1{}
+func BenchmarkAppendMsglastDayTierStats(b *testing.B) {
+	v := lastDayTierStats{}
 	bts := make([]byte, 0, v.Msgsize())
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
@@ -166,8 +166,8 @@ func BenchmarkAppendMsgjentryV1(b *testing.B) {
 	}
 }
 
-func BenchmarkUnmarshaljentryV1(b *testing.B) {
-	v := jentryV1{}
+func BenchmarkUnmarshallastDayTierStats(b *testing.B) {
+	v := lastDayTierStats{}
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
@@ -180,17 +180,17 @@ func BenchmarkUnmarshaljentryV1(b *testing.B) {
 	}
 }
 
-func TestEncodeDecodejentryV1(t *testing.T) {
-	v := jentryV1{}
+func TestEncodeDecodelastDayTierStats(t *testing.T) {
+	v := lastDayTierStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 
 	m := v.Msgsize()
 	if buf.Len() > m {
-		t.Log("WARNING: TestEncodeDecodejentryV1 Msgsize() is inaccurate")
+		t.Log("WARNING: TestEncodeDecodelastDayTierStats Msgsize() is inaccurate")
 	}
 
-	vn := jentryV1{}
+	vn := lastDayTierStats{}
 	err := msgp.Decode(&buf, &vn)
 	if err != nil {
 		t.Error(err)
@@ -204,8 +204,8 @@ func TestEncodeDecodejentryV1(t *testing.T) {
 	}
 }
 
-func BenchmarkEncodejentryV1(b *testing.B) {
-	v := jentryV1{}
+func BenchmarkEncodelastDayTierStats(b *testing.B) {
+	v := lastDayTierStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))
@@ -218,8 +218,8 @@ func BenchmarkEncodejentryV1(b *testing.B) {
 	en.Flush()
 }
 
-func BenchmarkDecodejentryV1(b *testing.B) {
-	v := jentryV1{}
+func BenchmarkDecodelastDayTierStats(b *testing.B) {
+	v := lastDayTierStats{}
 	var buf bytes.Buffer
 	msgp.Encode(&buf, &v)
 	b.SetBytes(int64(buf.Len()))

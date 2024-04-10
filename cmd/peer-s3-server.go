@@ -19,29 +19,10 @@ package cmd
 
 import (
 	"context"
-	"encoding/gob"
 	"errors"
-	"net/http"
 
-	"github.com/minio/minio/internal/logger"
-	"github.com/minio/mux"
+	"github.com/minio/madmin-go/v3"
 	"github.com/minio/pkg/v2/sync/errgroup"
-)
-
-const (
-	peerS3Version = "v1" // First implementation
-
-	peerS3VersionPrefix = SlashSeparator + peerS3Version
-	peerS3Prefix        = minioReservedBucketPath + "/peer-s3"
-	peerS3Path          = peerS3Prefix + peerS3VersionPrefix
-)
-
-const (
-	peerS3MethodHealth        = "/health"
-	peerS3MethodMakeBucket    = "/make-bucket"
-	peerS3MethodGetBucketInfo = "/get-bucket-info"
-	peerS3MethodDeleteBucket  = "/delete-bucket"
-	peerS3MethodListBuckets   = "/list-buckets"
 )
 
 const (
@@ -51,36 +32,133 @@ const (
 	peerS3BucketForceDelete = "force-delete"
 )
 
-type peerS3Server struct{}
+func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (res madmin.HealResultItem, err error) {
+	globalLocalDrivesMu.RLock()
+	localDrives := cloneDrives(globalLocalDrives)
+	globalLocalDrivesMu.RUnlock()
 
-func (s *peerS3Server) writeErrorResponse(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusForbidden)
-	w.Write([]byte(err.Error()))
-}
+	// Initialize sync waitgroup.
+	g := errgroup.WithNErrs(len(localDrives))
 
-// IsValid - To authenticate and verify the time difference.
-func (s *peerS3Server) IsValid(w http.ResponseWriter, r *http.Request) bool {
-	objAPI := newObjectLayerFn()
-	if objAPI == nil {
-		s.writeErrorResponse(w, errServerNotInitialized)
-		return false
+	// Disk states slices
+	beforeState := make([]string, len(localDrives))
+	afterState := make([]string, len(localDrives))
+
+	// Make a volume entry on all underlying storage disks.
+	for index := range localDrives {
+		index := index
+		g.Go(func() (serr error) {
+			if localDrives[index] == nil {
+				beforeState[index] = madmin.DriveStateOffline
+				afterState[index] = madmin.DriveStateOffline
+				return errDiskNotFound
+			}
+
+			beforeState[index] = madmin.DriveStateOk
+			afterState[index] = madmin.DriveStateOk
+
+			if bucket == minioReservedBucket {
+				return nil
+			}
+
+			_, serr = localDrives[index].StatVol(ctx, bucket)
+			if serr != nil {
+				if serr == errDiskNotFound {
+					beforeState[index] = madmin.DriveStateOffline
+					afterState[index] = madmin.DriveStateOffline
+					return serr
+				}
+				if serr != errVolumeNotFound {
+					beforeState[index] = madmin.DriveStateCorrupt
+					afterState[index] = madmin.DriveStateCorrupt
+					return serr
+				}
+
+				beforeState[index] = madmin.DriveStateMissing
+				afterState[index] = madmin.DriveStateMissing
+
+				return serr
+			}
+			return nil
+		}, index)
 	}
 
-	if err := storageServerRequestValidate(r); err != nil {
-		s.writeErrorResponse(w, err)
-		return false
-	}
-	return true
-}
+	errs := g.Wait()
 
-// HealthHandler - returns true of health
-func (s *peerS3Server) HealthHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsValid(w, r)
+	// Initialize heal result info
+	res = madmin.HealResultItem{
+		Type:      madmin.HealItemBucket,
+		Bucket:    bucket,
+		DiskCount: len(localDrives),
+		SetCount:  -1, // explicitly set an invalid value -1, for bucket heal scenario
+	}
+
+	// mutate only if not a dry-run
+	if opts.DryRun {
+		return res, nil
+	}
+
+	for i := range beforeState {
+		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: localDrives[i].String(),
+			State:    beforeState[i],
+		})
+	}
+
+	// check dangling and delete bucket only if its not a meta bucket
+	if !isMinioMetaBucketName(bucket) && !isAllBucketsNotFound(errs) && opts.Remove {
+		g := errgroup.WithNErrs(len(localDrives))
+		for index := range localDrives {
+			index := index
+			g.Go(func() error {
+				if localDrives[index] == nil {
+					return errDiskNotFound
+				}
+				localDrives[index].DeleteVol(ctx, bucket, false)
+				return nil
+			}, index)
+		}
+
+		g.Wait()
+	}
+
+	// Create the quorum lost volume only if its nor makred for delete
+	if !opts.Remove {
+		// Initialize sync waitgroup.
+		g = errgroup.WithNErrs(len(localDrives))
+
+		// Make a volume entry on all underlying storage disks.
+		for index := range localDrives {
+			index := index
+			g.Go(func() error {
+				if beforeState[index] == madmin.DriveStateMissing {
+					err := localDrives[index].MakeVol(ctx, bucket)
+					if err == nil {
+						afterState[index] = madmin.DriveStateOk
+					}
+					return err
+				}
+				return errs[index]
+			}, index)
+		}
+
+		errs = g.Wait()
+	}
+
+	for i := range afterState {
+		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
+			UUID:     "",
+			Endpoint: localDrives[i].String(),
+			State:    afterState[i],
+		})
+	}
+	return res, nil
 }
 
 func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []BucketInfo, err error) {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	quorum := (len(localDrives) / 2)
@@ -126,9 +204,15 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 	return buckets, nil
 }
 
+func cloneDrives(drives []StorageAPI) []StorageAPI {
+	newDrives := make([]StorageAPI, len(drives))
+	copy(newDrives, drives)
+	return newDrives
+}
+
 func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) (BucketInfo, error) {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
@@ -177,7 +261,7 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 
 func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
@@ -215,7 +299,7 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	g := errgroup.WithNErrs(len(localDrives)).WithConcurrency(32)
@@ -239,98 +323,4 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 
 	errs := g.Wait()
 	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives)/2)+1)
-}
-
-func (s *peerS3Server) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
-
-	buckets, err := listBucketsLocal(r.Context(), BucketOptions{
-		Deleted: bucketDeleted,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(buckets))
-}
-
-// GetBucketInfoHandler implements peer BuckeInfo call, returns bucket create date.
-func (s *peerS3Server) GetBucketInfoHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucket := r.Form.Get(peerS3Bucket)
-	bucketDeleted := r.Form.Get(peerS3BucketDeleted) == "true"
-	bucketInfo, err := getBucketInfoLocal(r.Context(), bucket, BucketOptions{
-		Deleted: bucketDeleted,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(bucketInfo))
-}
-
-// DeleteBucketHandler implements peer delete bucket call.
-func (s *peerS3Server) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucket := r.Form.Get(peerS3Bucket)
-	if isMinioMetaBucket(bucket) {
-		s.writeErrorResponse(w, errInvalidArgument)
-		return
-	}
-
-	forceDelete := r.Form.Get(peerS3BucketForceDelete) == "true"
-
-	err := deleteBucketLocal(r.Context(), bucket, DeleteBucketOptions{
-		Force: forceDelete,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-}
-
-// MakeBucketHandler implements peer create bucket call.
-func (s *peerS3Server) MakeBucketHandler(w http.ResponseWriter, r *http.Request) {
-	if !s.IsValid(w, r) {
-		return
-	}
-
-	bucket := r.Form.Get(peerS3Bucket)
-	forceCreate := r.Form.Get(peerS3BucketForceCreate) == "true"
-
-	err := makeBucketLocal(r.Context(), bucket, MakeBucketOptions{
-		ForceCreate: forceCreate,
-	})
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
-}
-
-// registerPeerS3Handlers - register peer s3 router.
-func registerPeerS3Handlers(router *mux.Router) {
-	server := &peerS3Server{}
-	subrouter := router.PathPrefix(peerS3Prefix).Subrouter()
-
-	h := func(f http.HandlerFunc) http.HandlerFunc {
-		return collectInternodeStats(httpTraceHdrs(f))
-	}
-
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodHealth).HandlerFunc(h(server.HealthHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodMakeBucket).HandlerFunc(h(server.MakeBucketHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodDeleteBucket).HandlerFunc(h(server.DeleteBucketHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodGetBucketInfo).HandlerFunc(h(server.GetBucketInfoHandler))
-	subrouter.Methods(http.MethodPost).Path(peerS3VersionPrefix + peerS3MethodListBuckets).HandlerFunc(h(server.ListBucketsHandler))
 }

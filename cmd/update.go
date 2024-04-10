@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"crypto"
 	"crypto/tls"
 	"encoding/hex"
@@ -36,25 +35,23 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
 	"github.com/minio/selfupdate"
 	gopsutilcpu "github.com/shirou/gopsutil/v3/cpu"
+	"github.com/valyala/bytebufferpool"
 )
 
 const (
-	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
-	minioOSARCH               = runtime.GOOS + "-" + runtime.GOARCH
-	minioReleaseURL           = "https://dl.min.io/server/minio/release/" + minioOSARCH + SlashSeparator
-
 	envMinisignPubKey = "MINIO_UPDATE_MINISIGN_PUBKEY"
 	updateTimeout     = 10 * time.Second
 )
 
 // For windows our files have .exe additionally.
-var minioReleaseWindowsInfoURL = minioReleaseURL + "minio.exe.sha256sum"
+var minioReleaseWindowsInfoURL = MinioReleaseURL + "minio.exe.sha256sum"
 
 // minioVersionToReleaseTime - parses a standard official release
 // MinIO version string.
@@ -71,7 +68,7 @@ func minioVersionToReleaseTime(version string) (releaseTime time.Time, err error
 // An official minio release tag looks like:
 // `RELEASE.2017-09-29T19-16-56Z`
 func releaseTimeToReleaseTag(releaseTime time.Time) string {
-	return "RELEASE." + releaseTime.Format(minioReleaseTagTimeLayout)
+	return "RELEASE." + releaseTime.Format(MinioReleaseTagTimeLayout)
 }
 
 // releaseTagToReleaseTime - reverse of `releaseTimeToReleaseTag()`
@@ -83,7 +80,7 @@ func releaseTagToReleaseTime(releaseTag string) (releaseTime time.Time, err erro
 	if fields[0] != "RELEASE" {
 		return releaseTime, fmt.Errorf("%s is not a valid release tag", releaseTag)
 	}
-	return time.Parse(minioReleaseTagTimeLayout, fields[1])
+	return time.Parse(MinioReleaseTagTimeLayout, fields[1])
 }
 
 // getModTime - get the file modification time of `path`
@@ -145,7 +142,7 @@ func IsDocker() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	logger.LogIf(GlobalContext, err)
+	internalLogIf(GlobalContext, err)
 
 	return err == nil
 }
@@ -175,7 +172,7 @@ func IsBOSH() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	logger.LogIf(GlobalContext, err)
+	internalLogIf(GlobalContext, err)
 
 	return err == nil
 }
@@ -192,7 +189,7 @@ func getHelmVersion(helmInfoFilePath string) string {
 		if !osIsNotExist(err) {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("helmInfoFilePath", helmInfoFilePath)
 			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err)
 		}
 		return ""
 	}
@@ -235,8 +232,8 @@ func getUserAgent(mode string) string {
 	uaAppend := func(p, q string) {
 		userAgentParts = append(userAgentParts, p, q)
 	}
-
-	uaAppend("MinIO (", runtime.GOOS)
+	uaAppend(MinioUAName, " (")
+	uaAppend("", runtime.GOOS)
 	uaAppend("; ", runtime.GOARCH)
 	if mode != "" {
 		uaAppend("; ", mode)
@@ -257,14 +254,14 @@ func getUserAgent(mode string) string {
 		uaAppend("; ", "source")
 	}
 
-	uaAppend(") MinIO/", Version)
-	uaAppend(" MinIO/", ReleaseTag)
-	uaAppend(" MinIO/", CommitID)
+	uaAppend(" ", Version)
+	uaAppend(" ", ReleaseTag)
+	uaAppend(" ", CommitID)
 	if IsDCOS() {
 		universePkgVersion := env.Get("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "")
 		// On DC/OS environment try to the get universe package version.
 		if universePkgVersion != "" {
-			uaAppend(" MinIO/universe-", universePkgVersion)
+			uaAppend(" universe-", universePkgVersion)
 		}
 	}
 
@@ -272,25 +269,26 @@ func getUserAgent(mode string) string {
 		// In Kubernetes environment, try to fetch the helm package version
 		helmChartVersion := getHelmVersion("/podinfo/labels")
 		if helmChartVersion != "" {
-			uaAppend(" MinIO/helm-", helmChartVersion)
+			uaAppend(" helm-", helmChartVersion)
 		}
 		// In Kubernetes environment, try to fetch the Operator, VSPHERE plugin version
 		opVersion := env.Get("MINIO_OPERATOR_VERSION", "")
 		if opVersion != "" {
-			uaAppend(" MinIO/operator-", opVersion)
+			uaAppend(" operator-", opVersion)
 		}
 		vsphereVersion := env.Get("MINIO_VSPHERE_PLUGIN_VERSION", "")
 		if vsphereVersion != "" {
-			uaAppend(" MinIO/vsphere-plugin-", vsphereVersion)
+			uaAppend(" vsphere-plugin-", vsphereVersion)
 		}
 	}
 
 	if IsPCFTile() {
 		pcfTileVersion := env.Get("MINIO_PCF_TILE_VERSION", "")
 		if pcfTileVersion != "" {
-			uaAppend(" MinIO/pcf-tile-", pcfTileVersion)
+			uaAppend(" pcf-tile-", pcfTileVersion)
 		}
 	}
+	uaAppend("; ", "")
 
 	if cpus, err := gopsutilcpu.Info(); err == nil && len(cpus) > 0 {
 		cpuMap := make(map[string]struct{}, len(cpus))
@@ -303,6 +301,7 @@ func getUserAgent(mode string) string {
 		uaAppend(" CPU ", fmt.Sprintf("(total_cpus:%d, total_cores:%d; vendor:%s; family:%s; model:%s; stepping:%d; model_name:%s)",
 			len(cpuMap), len(coreMap), cpu.VendorID, cpu.Family, cpu.Model, cpu.Stepping, cpu.ModelName))
 	}
+	uaAppend(")", "")
 
 	return strings.Join(userAgentParts, "")
 }
@@ -363,6 +362,25 @@ func downloadReleaseURL(u *url.URL, timeout time.Duration, mode string) (content
 	return string(contentBytes), nil
 }
 
+func releaseInfoToReleaseTime(releaseInfo string) (releaseTime time.Time, err error) {
+	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
+	nfields := strings.SplitN(releaseInfo, ".", 2)
+	if len(nfields) != 2 {
+		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
+		return releaseTime, err
+	}
+	if nfields[0] != "minio" {
+		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
+		return releaseTime, err
+	}
+
+	releaseTime, err = releaseTagToReleaseTime(nfields[1])
+	if err != nil {
+		err = fmt.Errorf("Unknown release tag format. %w", err)
+	}
+	return releaseTime, err
+}
+
 // parseReleaseData - parses release info file content fetched from
 // official minio download server.
 //
@@ -395,22 +413,7 @@ func parseReleaseData(data string) (sha256Sum []byte, releaseTime time.Time, rel
 
 	releaseInfo = fields[1]
 
-	// Split release of style minio.RELEASE.2019-08-21T19-40-07Z.<hotfix>
-	nfields := strings.SplitN(releaseInfo, ".", 2)
-	if len(nfields) != 2 {
-		err = fmt.Errorf("Unknown release information `%s`", releaseInfo)
-		return sha256Sum, releaseTime, releaseInfo, err
-	}
-	if nfields[0] != "minio" {
-		err = fmt.Errorf("Unknown release `%s`", releaseInfo)
-		return sha256Sum, releaseTime, releaseInfo, err
-	}
-
-	releaseTime, err = releaseTagToReleaseTime(nfields[1])
-	if err != nil {
-		err = fmt.Errorf("Unknown release tag format. %w", err)
-	}
-
+	releaseTime, err = releaseInfoToReleaseTime(releaseInfo)
 	return sha256Sum, releaseTime, releaseInfo, err
 }
 
@@ -469,10 +472,10 @@ func getDownloadURL(releaseTag string) (downloadURL string) {
 
 	// For binary only installations, we return link to the latest binary.
 	if runtime.GOOS == "windows" {
-		return minioReleaseURL + "minio.exe"
+		return MinioReleaseURL + "minio.exe"
 	}
 
-	return minioReleaseURL + "minio"
+	return MinioReleaseURL + "minio"
 }
 
 func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string) (io.ReadCloser, error) {
@@ -508,28 +511,43 @@ func getUpdateReaderFromURL(u *url.URL, transport http.RoundTripper, mode string
 	return resp.Body, nil
 }
 
-var updateInProgress uint32
+var updateInProgress atomic.Uint32
 
 // Function to get the reader from an architecture
-func downloadBinary(u *url.URL, mode string) (readerReturn []byte, err error) {
+func downloadBinary(u *url.URL, mode string) (binCompressed []byte, bin []byte, err error) {
 	transport := getUpdateTransport(30 * time.Second)
 	var reader io.ReadCloser
 	if u.Scheme == "https" || u.Scheme == "http" {
 		reader, err = getUpdateReaderFromURL(u, transport, mode)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
-		return nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
+		return nil, nil, fmt.Errorf("unsupported protocol scheme: %s", u.Scheme)
 	}
 	defer xhttp.DrainBody(reader)
-	// convert a Reader to bytes
-	binaryFile, err := io.ReadAll(reader)
+
+	b := bytebufferpool.Get()
+	bc := bytebufferpool.Get()
+	defer func() {
+		b.Reset()
+		bc.Reset()
+
+		bytebufferpool.Put(b)
+		bytebufferpool.Put(bc)
+	}()
+
+	w, err := zstd.NewWriter(bc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return binaryFile, nil
+	if _, err = io.Copy(w, io.TeeReader(reader, b)); err != nil {
+		return nil, nil, err
+	}
+
+	w.Close()
+	return bc.Bytes(), b.Bytes(), nil
 }
 
 const (
@@ -537,11 +555,11 @@ const (
 	defaultMinisignPubkey = "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav"
 )
 
-func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader []byte) (err error) {
-	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader io.Reader) (err error) {
+	if !updateInProgress.CompareAndSwap(0, 1) {
 		return errors.New("update already in progress")
 	}
-	defer atomic.StoreUint32(&updateInProgress, 0)
+	defer updateInProgress.Store(0)
 
 	transport := getUpdateTransport(30 * time.Second)
 	opts := selfupdate.Options{
@@ -571,7 +589,7 @@ func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader
 		opts.Verifier = v
 	}
 
-	if err = selfupdate.PrepareAndCheckBinary(bytes.NewReader(reader), opts); err != nil {
+	if err = selfupdate.PrepareAndCheckBinary(reader, opts); err != nil {
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
 			return AdminError{
@@ -592,10 +610,10 @@ func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader
 }
 
 func commitBinary() (err error) {
-	if !atomic.CompareAndSwapUint32(&updateInProgress, 0, 1) {
+	if !updateInProgress.CompareAndSwap(0, 1) {
 		return errors.New("update already in progress")
 	}
-	defer atomic.StoreUint32(&updateInProgress, 0)
+	defer updateInProgress.Store(0)
 
 	opts := selfupdate.Options{}
 

@@ -47,9 +47,12 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -74,11 +77,6 @@ const (
 	// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
 	ReplicationWorkerMultiplier = 1.5
 )
-
-func isReplicationEnabled(ctx context.Context, bucketName string) bool {
-	rc, _ := getReplicationConfig(ctx, bucketName)
-	return rc != nil
-}
 
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
@@ -178,7 +176,7 @@ func checkRemoteEndpoint(ctx context.Context, epURL *url.URL) error {
 	}
 
 	client := &http.Client{
-		Transport: NewHTTPTransport(),
+		Transport: globalRemoteTargetTransport,
 		Timeout:   10 * time.Second,
 	}
 
@@ -425,7 +423,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
-		logger.LogOnceIf(ctx, fmt.Errorf("unable to obtain replication config for bucket: %s: err: %s", bucket, err), bucket)
+		replLogOnceIf(ctx, fmt.Errorf("unable to obtain replication config for bucket: %s: err: %s", bucket, err), bucket)
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -442,7 +440,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	}
 	dsc, err := parseReplicateDecision(ctx, bucket, dobj.ReplicationState.ReplicateDecisionStr)
 	if err != nil {
-		logger.LogOnceIf(ctx, fmt.Errorf("unable to parse replication decision parameters for bucket: %s, err: %s, decision: %s",
+		replLogOnceIf(ctx, fmt.Errorf("unable to parse replication decision parameters for bucket: %s, err: %s, decision: %s",
 			bucket, err, dobj.ReplicationState.ReplicateDecisionStr), dobj.ReplicationState.ReplicateDecisionStr)
 		sendEvent(eventArgs{
 			BucketName: bucket,
@@ -495,8 +493,8 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 		}
 		tgtClnt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtEntry.Arn)
 		if tgtClnt == nil {
-			// Skip stale targets if any and log them to be missing atleast once.
-			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtEntry.Arn), tgtEntry.Arn)
+			// Skip stale targets if any and log them to be missing at least once.
+			replLogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtEntry.Arn), tgtEntry.Arn)
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
@@ -608,7 +606,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		return
 	}
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", dobj.Bucket, tgt.ARN), "replication-target-offline-delete-"+tgt.ARN)
+		replLogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", dobj.Bucket, tgt.ARN), "replication-target-offline-delete-"+tgt.ARN)
 		sendEvent(eventArgs{
 			BucketName: dobj.Bucket,
 			Object: ObjectInfo{
@@ -683,7 +681,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		} else {
 			rinfo.VersionPurgeStatus = Failed
 		}
-		logger.LogIf(ctx, fmt.Errorf("Unable to replicate delete marker to %s/%s(%s): %s", tgt.Bucket, dobj.ObjectName, versionID, rmErr))
+		replLogIf(ctx, fmt.Errorf("unable to replicate delete marker to %s: %s/%s(%s): %w", tgt.EndpointURL(), tgt.Bucket, dobj.ObjectName, versionID, rmErr))
 		if rmErr != nil && minio.IsNetworkOrHostDown(rmErr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
@@ -763,13 +761,20 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	for k, v := range objInfo.UserDefined {
-		if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-			continue
+		// In case of SSE-C objects copy the allowed internal headers as well
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
+				continue
+			}
+			if isStandardHeader(k) {
+				continue
+			}
 		}
-		if isStandardHeader(k) {
-			continue
+		if slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+			meta[validSSEReplicationHeaders[k]] = v
+		} else {
+			meta[k] = v
 		}
-		meta[k] = v
 	}
 
 	if sc == "" && (objInfo.StorageClass == storageclass.STANDARD || objInfo.StorageClass == storageclass.RRS) {
@@ -989,7 +994,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
-		logger.LogOnceIf(ctx, err, "get-replication-config-"+bucket)
+		replLogOnceIf(ctx, err, "get-replication-config-"+bucket)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1028,7 +1033,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	for _, tgtArn := range tgtArns {
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, tgtArn)
 		if tgt == nil {
-			logger.LogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn), tgtArn)
+			replLogOnceIf(ctx, fmt.Errorf("failed to get target for bucket:%s arn:%s", bucket, tgtArn), tgtArn)
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
@@ -1150,7 +1155,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	}
 
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline"+tgt.ARN)
+		replLogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline"+tgt.ARN)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1165,9 +1170,10 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
 	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, ObjectOptions{
-		VersionID:        ri.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
+		VersionID:          ri.VersionID,
+		Versioned:          versioned,
+		VersionSuspended:   versionSuspended,
+		ReplicationRequest: true,
 	})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
@@ -1179,7 +1185,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 				UserAgent:  "Internal: [Replication]",
 				Host:       globalLocalNodeName,
 			})
-			logger.LogOnceIf(ctx, fmt.Errorf("unable to read source object %s/%s(%s): %w", bucket, object, objInfo.VersionID, err), object+":"+objInfo.VersionID)
+			replLogOnceIf(ctx, fmt.Errorf("unable to read source object %s/%s(%s): %w", bucket, object, objInfo.VersionID, err), object+":"+objInfo.VersionID)
 		}
 		return
 	}
@@ -1192,7 +1198,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 
 	size, err := objInfo.GetActualSize()
 	if err != nil {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1204,7 +1210,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	}
 
 	if tgt.Bucket == "" {
-		logger.LogIf(ctx, fmt.Errorf("unable to replicate object %s(%s), bucket is empty", objInfo.Name, objInfo.VersionID))
+		replLogIf(ctx, fmt.Errorf("unable to replicate object %s(%s), bucket is empty for target %s", objInfo.Name, objInfo.VersionID, tgt.EndpointURL()))
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1230,7 +1236,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 
 	putOpts, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s err:%w", bucket, err))
+		replLogIf(ctx, fmt.Errorf("failure setting options for replication bucket:%s err:%w", bucket, err))
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1265,14 +1271,14 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			r, objInfo, putOpts); rinfo.Err != nil {
 			if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
 				rinfo.ReplicationStatus = replication.Failed
-				logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err))
+				replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s (target: %s)", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err, tgt.EndpointURL()))
 			}
 		}
 	} else {
 		if _, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts); rinfo.Err != nil {
 			if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
 				rinfo.ReplicationStatus = replication.Failed
-				logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err))
+				replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s (target: %s)", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err, tgt.EndpointURL()))
 			}
 		}
 	}
@@ -1307,7 +1313,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	}
 
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-		logger.LogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline-heal"+tgt.ARN)
+		replLogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline-heal"+tgt.ARN)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1321,11 +1327,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	versioned := globalBucketVersioningSys.PrefixEnabled(bucket, object)
 	versionSuspended := globalBucketVersioningSys.PrefixSuspended(bucket, object)
 
-	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, ObjectOptions{
-		VersionID:        ri.VersionID,
-		Versioned:        versioned,
-		VersionSuspended: versionSuspended,
-	})
+	gr, err := objectAPI.GetObjectNInfo(ctx, bucket, object, nil, http.Header{},
+		ObjectOptions{
+			VersionID:          ri.VersionID,
+			Versioned:          versioned,
+			VersionSuspended:   versionSuspended,
+			ReplicationRequest: true,
+		})
 	if err != nil {
 		if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
 			objInfo := ri.ToObjectInfo()
@@ -1336,13 +1344,14 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				UserAgent:  "Internal: [Replication]",
 				Host:       globalLocalNodeName,
 			})
-			logger.LogIf(ctx, fmt.Errorf("unable to update replicate metadata for %s/%s(%s): %w", bucket, object, objInfo.VersionID, err))
+			replLogIf(ctx, fmt.Errorf("unable to replicate to target %s for %s/%s(%s): %w", tgt.EndpointURL(), bucket, object, objInfo.VersionID, err))
 		}
 		return
 	}
 	defer gr.Close()
 
 	objInfo := gr.ObjInfo
+
 	// make sure we have the latest metadata for metrics calculation
 	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
@@ -1355,7 +1364,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 
 	size, err := objInfo.GetActualSize()
 	if err != nil {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1366,8 +1375,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		return
 	}
 
+	// Set the encrypted size for SSE-C objects
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		size = objInfo.Size
+	}
+
 	if tgt.Bucket == "" {
-		logger.LogIf(ctx, fmt.Errorf("unable to replicate object %s(%s), bucket is empty", objInfo.Name, objInfo.VersionID))
+		replLogIf(ctx, fmt.Errorf("unable to replicate object %s(%s) to %s, target bucket is missing", objInfo.Name, objInfo.VersionID, tgt.EndpointURL()))
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
 			BucketName: bucket,
@@ -1397,7 +1411,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		if rAction == replicateNone {
 			if ri.OpType == replication.ExistingObjectReplicationType &&
 				objInfo.ModTime.Unix() > oi.LastModified.Unix() && objInfo.VersionID == nullVersionID {
-				logger.LogIf(ctx, fmt.Errorf("unable to replicate %s/%s (null). Newer version exists on target", bucket, object))
+				replLogIf(ctx, fmt.Errorf("unable to replicate %s/%s (null). Newer version exists on target %s", bucket, object, tgt.EndpointURL()))
 				sendEvent(eventArgs{
 					EventName:  event.ObjectReplicationNotTracked,
 					BucketName: bucket,
@@ -1437,7 +1451,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			rAction = replicateAll
 		default:
 			rinfo.Err = cerr
-			logger.LogIf(ctx, fmt.Errorf("unable to replicate %s/%s (%s). Target (%s) returned %s error on HEAD",
+			replLogIf(ctx, fmt.Errorf("unable to replicate %s/%s (%s). Target (%s) returned %s error on HEAD",
 				bucket, object, objInfo.VersionID, tgt.EndpointURL(), cerr))
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
@@ -1487,13 +1501,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 		if _, rinfo.Err = c.CopyObject(ctx, tgt.Bucket, object, tgt.Bucket, object, getCopyObjMetadata(objInfo, tgt.StorageClass), srcOpts, dstOpts); rinfo.Err != nil {
 			rinfo.ReplicationStatus = replication.Failed
-			logger.LogIf(ctx, fmt.Errorf("unable to replicate metadata for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err))
+			replLogIf(ctx, fmt.Errorf("unable to replicate metadata for object %s/%s(%s) to target %s: %w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
 		}
 	} else {
 		var putOpts minio.PutObjectOptions
 		putOpts, err = putReplicationOpts(ctx, tgt.StorageClass, objInfo)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("failed to get target for replication bucket:%s err:%w", bucket, err))
+			replLogIf(ctx, fmt.Errorf("failed to set replicate options for object %s/%s(%s) (target %s) err:%w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), err))
 			sendEvent(eventArgs{
 				EventName:  event.ObjectReplicationNotTracked,
 				BucketName: bucket,
@@ -1527,7 +1541,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 				r, objInfo, putOpts); rinfo.Err != nil {
 				if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
 					rinfo.ReplicationStatus = replication.Failed
-					logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err))
+					replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
 				} else {
 					rinfo.ReplicationStatus = replication.Completed
 				}
@@ -1536,7 +1550,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			if _, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts); rinfo.Err != nil {
 				if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
 					rinfo.ReplicationStatus = replication.Failed
-					logger.LogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): %s", bucket, objInfo.Name, objInfo.VersionID, rinfo.Err))
+					replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
 				} else {
 					rinfo.ReplicationStatus = replication.Completed
 				}
@@ -1562,6 +1576,9 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		if err == nil {
 			break
 		}
+		if minio.ToErrorResponse(err).Code == "PreconditionFailed" {
+			return err
+		}
 		attempts++
 		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
 	}
@@ -1576,14 +1593,10 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			for attempts <= 3 {
 				actx, acancel := context.WithTimeout(ctx, time.Minute)
 				aerr := c.AbortMultipartUpload(actx, bucket, object, uploadID)
+				acancel()
 				if aerr == nil {
-					acancel()
 					return
 				}
-				acancel()
-				logger.LogIf(actx,
-					fmt.Errorf("trying %s: Unable to cleanup failed multipart replication %s on remote %s/%s: %w - this may consume space on remote cluster",
-						humanize.Ordinal(attempts), uploadID, bucket, object, aerr))
 				attempts++
 				time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
 			}
@@ -1595,21 +1608,35 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		pInfo minio.ObjectPart
 	)
 
+	var objectSize int64
 	for _, partInfo := range objInfo.Parts {
-		hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.Size), partInfo.Size, "", "", partInfo.ActualSize)
+		} else {
+			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
+		}
 		if err != nil {
 			return err
 		}
 
+		cHeader := http.Header{}
+		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		popts := minio.PutObjectPartOptions{
-			SSE: opts.ServerSideEncryption,
+			SSE:          opts.ServerSideEncryption,
+			CustomHeader: cHeader,
 		}
 
-		pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+			objectSize += partInfo.Size
+			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, popts)
+		} else {
+			objectSize += partInfo.ActualSize
+			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+		}
 		if err != nil {
 			return err
 		}
-		if pInfo.Size != partInfo.ActualSize {
+		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) && pInfo.Size != partInfo.ActualSize {
 			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
@@ -1617,9 +1644,12 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			ETag:       pInfo.ETag,
 		})
 	}
+
+	// really big value but its okay on heavily loaded systems. This is just tail end timeout.
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
+		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			// always set this to distinguish between `mc mirror` replication and serverside
@@ -1834,7 +1864,7 @@ func (p *ReplicationPool) AddMRFWorker() {
 				globalReplicationStats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 
 			default:
-				logger.LogOnceIf(p.ctx, fmt.Errorf("unknown mrf replication type: %T", oi), "unknown-mrf-replicate-type")
+				bugLogIf(p.ctx, fmt.Errorf("unknown mrf replication type: %T", oi), "unknown-mrf-replicate-type")
 			}
 		case <-p.mrfWorkerKillCh:
 			return
@@ -1878,7 +1908,7 @@ func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opT
 					atomic.AddInt32(opTracker, -1)
 				}
 			default:
-				logger.LogOnceIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
+				bugLogIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
 			}
 		}
 	}
@@ -1894,7 +1924,7 @@ func (p *ReplicationPool) AddLargeWorkers() {
 	go func() {
 		<-p.ctx.Done()
 		for i := 0; i < LargeWorkerCount; i++ {
-			close(p.lrgworkers[i])
+			xioutil.SafeClose(p.lrgworkers[i])
 		}
 	}()
 }
@@ -1917,7 +1947,7 @@ func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation
 			case DeletedObjectReplicationInfo:
 				replicateDelete(p.ctx, v, p.objLayer)
 			default:
-				logger.LogOnceIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
+				bugLogIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
 			}
 		}
 	}
@@ -1953,7 +1983,7 @@ func (p *ReplicationPool) ResizeWorkers(n, checkOld int) {
 	for len(p.workers) > n {
 		worker := p.workers[len(p.workers)-1]
 		p.workers = p.workers[:len(p.workers)-1]
-		close(worker)
+		xioutil.SafeClose(worker)
 	}
 }
 
@@ -2064,9 +2094,9 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		p.mu.RUnlock()
 		switch prio {
 		case "fast":
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic"), string(replicationSubsystem))
+			replLogOnceIf(GlobalContext, fmt.Errorf("Unable to keep up with incoming traffic"), string(replicationSubsystem), logger.WarningKind)
 		case "slow":
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming traffic - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
+			replLogOnceIf(GlobalContext, fmt.Errorf("Unable to keep up with incoming traffic - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem), logger.WarningKind)
 		default:
 			maxWorkers = min(maxWorkers, WorkerMaxLimit)
 			if p.ActiveWorkers() < maxWorkers {
@@ -2121,9 +2151,9 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 		p.mu.RUnlock()
 		switch prio {
 		case "fast":
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes"), string(replicationSubsystem))
+			replLogOnceIf(GlobalContext, fmt.Errorf("Unable to keep up with incoming deletes"), string(replicationSubsystem), logger.WarningKind)
 		case "slow":
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("WARNING: Unable to keep up with incoming deletes - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem))
+			replLogOnceIf(GlobalContext, fmt.Errorf("Unable to keep up with incoming deletes - we recommend increasing replication priority with `mc admin config set api replication_priority=auto`"), string(replicationSubsystem), logger.WarningKind)
 		default:
 			maxWorkers = min(maxWorkers, WorkerMaxLimit)
 			if p.ActiveWorkers() < maxWorkers {
@@ -2234,6 +2264,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
 		return nil, oi, proxy
 	}
+	var perr error
 	for _, t := range proxyTargets.Targets {
 		tgt = globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
 		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
@@ -2255,7 +2286,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 		if rs != nil {
 			h, err := rs.ToHeader()
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Invalid range header for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
+				replLogIf(ctx, fmt.Errorf("invalid range header for %s/%s(%s) - %w", bucket, object, opts.VersionID, err))
 				continue
 			}
 			gopts.Set(xhttp.Range, h)
@@ -2263,6 +2294,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 
 		objInfo, err := tgt.StatObject(ctx, t.TargetBucket, object, gopts)
 		if err != nil {
+			perr = err
 			if isErrInvalidRange(ErrorRespToObjectError(err, bucket, object)) {
 				return nil, oi, proxyResult{Err: err}
 			}
@@ -2299,6 +2331,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 		}
 		return tgt, oi, proxyResult{Proxy: true}
 	}
+	proxy.Err = perr
 	return nil, oi, proxy
 }
 
@@ -2346,6 +2379,129 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 	} else {
 		globalReplicationPool.queueReplicaTask(ri)
 	}
+}
+
+// proxyTaggingToRepTarget proxies tagging requests to remote targets for
+// active-active replicated setups
+func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *tags.Tags, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (proxy proxyResult) {
+	// this option is set when active-active replication is in place between site A -> B,
+	// and request hits site B that does not have the object yet.
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+		return proxy
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, len(proxyTargets.Targets))
+	for idx, t := range proxyTargets.Targets {
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			continue
+		}
+		// if proxying explicitly disabled on remote target
+		if tgt.disableProxy {
+			continue
+		}
+		idx := idx
+		wg.Add(1)
+		go func(idx int, tgt *TargetClient) {
+			defer wg.Done()
+			var err error
+			if tags != nil {
+				popts := minio.PutObjectTaggingOptions{
+					VersionID: opts.VersionID,
+					Internal: minio.AdvancedObjectTaggingOptions{
+						ReplicationProxyRequest: "true",
+					},
+				}
+				err = tgt.PutObjectTagging(ctx, tgt.Bucket, object, tags, popts)
+			} else {
+				dopts := minio.RemoveObjectTaggingOptions{
+					VersionID: opts.VersionID,
+					Internal: minio.AdvancedObjectTaggingOptions{
+						ReplicationProxyRequest: "true",
+					},
+				}
+				err = tgt.RemoveObjectTagging(ctx, tgt.Bucket, object, dopts)
+			}
+			if err != nil {
+				errs[idx] = err
+			}
+		}(idx, tgt)
+	}
+	wg.Wait()
+
+	var (
+		terr        error
+		taggedCount int
+	)
+	for _, err := range errs {
+		if err == nil {
+			taggedCount++
+			continue
+		}
+		if err != nil {
+			terr = err
+		}
+	}
+	// don't return error if at least one target was tagged successfully
+	if taggedCount == 0 && terr != nil {
+		proxy.Err = terr
+	}
+	return proxy
+}
+
+// proxyGetTaggingToRepTarget proxies get tagging requests to remote targets for
+// active-active replicated setups
+func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (tgs *tags.Tags, proxy proxyResult) {
+	// this option is set when active-active replication is in place between site A -> B,
+	// and request hits site B that does not have the object yet.
+	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+		return nil, proxy
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, len(proxyTargets.Targets))
+	tagSlc := make([]map[string]string, len(proxyTargets.Targets))
+	for idx, t := range proxyTargets.Targets {
+		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			continue
+		}
+		// if proxying explicitly disabled on remote target
+		if tgt.disableProxy {
+			continue
+		}
+		idx := idx
+		wg.Add(1)
+		go func(idx int, tgt *TargetClient) {
+			defer wg.Done()
+			var err error
+			gopts := minio.GetObjectTaggingOptions{
+				VersionID: opts.VersionID,
+				Internal: minio.AdvancedObjectTaggingOptions{
+					ReplicationProxyRequest: "true",
+				},
+			}
+			tgs, err = tgt.GetObjectTagging(ctx, tgt.Bucket, object, gopts)
+			if err != nil {
+				errs[idx] = err
+			} else {
+				tagSlc[idx] = tgs.ToMap()
+			}
+		}(idx, tgt)
+	}
+	wg.Wait()
+	for idx, err := range errs {
+		errCode := minio.ToErrorResponse(err).Code
+		if err != nil && errCode != "NoSuchKey" && errCode != "NoSuchVersion" {
+			return nil, proxyResult{Err: err}
+		}
+		if err == nil {
+			tgs, _ = tags.MapToObjectTags(tagSlc[idx])
+		}
+	}
+	if len(errs) == 1 {
+		proxy.Err = errs[0]
+	}
+	return tgs, proxy
 }
 
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectReplicationInfo, o ObjectLayer) {
@@ -2498,7 +2654,7 @@ func (s *replicationResyncer) PersistToDisk(ctx context.Context, objectAPI Objec
 				}
 				if updt {
 					if err := saveResyncStatus(ctx, bucket, brs, objectAPI); err != nil {
-						logger.LogIf(ctx, fmt.Errorf("Could not save resync metadata to drive for %s - %w", bucket, err))
+						replLogIf(ctx, fmt.Errorf("could not save resync metadata to drive for %s - %w", bucket, err))
 					} else {
 						lastResyncStatusSave[bucket] = brs.LastUpdate
 					}
@@ -2586,12 +2742,12 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	objInfoCh := make(chan ObjectInfo)
 	cfg, err := getReplicationConfig(ctx, opts.bucket)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("replication resync of %s for arn %s failed with %w", opts.bucket, opts.arn, err))
+		replLogIf(ctx, fmt.Errorf("replication resync of %s for arn %s failed with %w", opts.bucket, opts.arn, err))
 		return
 	}
 	tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, opts.bucket)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("replication resync of %s for arn %s failed  %w", opts.bucket, opts.arn, err))
+		replLogIf(ctx, fmt.Errorf("replication resync of %s for arn %s failed  %w", opts.bucket, opts.arn, err))
 		return
 	}
 	rcfg := replicationConfig{
@@ -2604,12 +2760,12 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			TargetArn: opts.arn,
 		})
 	if len(tgtArns) != 1 {
-		logger.LogIf(ctx, fmt.Errorf("replication resync failed for %s - arn specified %s is missing in the replication config", opts.bucket, opts.arn))
+		replLogIf(ctx, fmt.Errorf("replication resync failed for %s - arn specified %s is missing in the replication config", opts.bucket, opts.arn))
 		return
 	}
 	tgt := globalBucketTargetSys.GetRemoteTargetClient(opts.bucket, opts.arn)
 	if tgt == nil {
-		logger.LogIf(ctx, fmt.Errorf("replication resync failed for %s - target could not be created for arn %s", opts.bucket, opts.arn))
+		replLogIf(ctx, fmt.Errorf("replication resync failed for %s - target could not be created for arn %s", opts.bucket, opts.arn))
 		return
 	}
 	// mark resync status as resync started
@@ -2620,7 +2776,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	// Walk through all object versions - Walk() is always in ascending order needed to ensure
 	// delete marker replicated to target after object version is first created.
 	if err := objectAPI.Walk(ctx, opts.bucket, "", objInfoCh, WalkOptions{}); err != nil {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 		return
 	}
 
@@ -2634,7 +2790,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	}
 	workers := make([]chan ReplicateObjectInfo, resyncParallelRoutines)
 	resultCh := make(chan TargetReplicationResyncStatus, 1)
-	defer close(resultCh)
+	defer xioutil.SafeClose(resultCh)
 	go func() {
 		for r := range resultCh {
 			s.incStats(r, opts)
@@ -2746,7 +2902,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 		}
 	}
 	for i := 0; i < resyncParallelRoutines; i++ {
-		close(workers[i])
+		xioutil.SafeClose(workers[i])
 	}
 	wg.Wait()
 	resyncStatus = ResyncCompleted
@@ -2876,7 +3032,7 @@ func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []Buck
 		}
 		duration := time.Duration(r.Float64() * float64(time.Minute))
 		if duration < time.Second {
-			// Make sure to sleep atleast a second to avoid high CPU ticks.
+			// Make sure to sleep at least a second to avoid high CPU ticks.
 			duration = time.Second
 		}
 		time.Sleep(duration)
@@ -2895,7 +3051,7 @@ func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, 
 		meta, err := loadBucketResyncMetadata(ctx, bucket, objAPI)
 		if err != nil {
 			if !errors.Is(err, errVolumeNotFound) {
-				logger.LogIf(ctx, err)
+				replLogIf(ctx, err)
 			}
 			continue
 		}
@@ -2982,18 +3138,18 @@ func saveResyncStatus(ctx context.Context, bucket string, brs BucketReplicationR
 func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, opts madmin.ReplDiffOpts) (chan madmin.DiffInfo, error) {
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 		return nil, err
 	}
 	tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 		return nil, err
 	}
 
 	objInfoCh := make(chan ObjectInfo, 10)
 	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, WalkOptions{}); err != nil {
-		logger.LogIf(ctx, err)
+		replLogIf(ctx, err)
 		return nil, err
 	}
 	rcfg := replicationConfig{
@@ -3002,7 +3158,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	}
 	diffCh := make(chan madmin.DiffInfo, 4000)
 	go func() {
-		defer close(diffCh)
+		defer xioutil.SafeClose(diffCh)
 		for obj := range objInfoCh {
 			if contextCanceled(ctx) {
 				// Just consume input...
@@ -3091,6 +3247,9 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 		return roi
 	}
 
+	if isVeeamSOSAPIObject(oi.Name) {
+		return roi
+	}
 	if rcfg.Config == nil || rcfg.remotes == nil {
 		return roi
 	}
@@ -3195,7 +3354,7 @@ func (p *ReplicationPool) persistMRF() {
 			mTimer.Reset(mrfSaveInterval)
 		case <-p.ctx.Done():
 			p.mrfStopCh <- struct{}{}
-			close(p.mrfSaveCh)
+			xioutil.SafeClose(p.mrfSaveCh)
 			// We try to save if possible, but we don't care beyond that.
 			saveMRFToDisk()
 			return
@@ -3263,12 +3422,12 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {
 		r := newReader()
-		err := localDrive.CreateFile(ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
+		err := localDrive.CreateFile(ctx, "", minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), -1, r)
 		r.Close()
 		if err == nil {
 			break
@@ -3330,7 +3489,7 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {
@@ -3374,7 +3533,7 @@ func (p *ReplicationPool) processMRF() {
 				continue
 			}
 			if err := p.queueMRFHeal(); err != nil && !osIsNotExist(err) {
-				logger.LogIf(p.ctx, err)
+				replLogIf(p.ctx, err)
 			}
 			pTimer.Reset(mrfQueueInterval)
 		case <-p.ctx.Done():
@@ -3430,7 +3589,7 @@ func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch <-chan 
 
 	mrfCh := make(chan madmin.ReplicationMRF, 100)
 	go func() {
-		defer close(mrfCh)
+		defer xioutil.SafeClose(mrfCh)
 		for vID, e := range mrfRec.Entries {
 			if bucket != "" && e.Bucket != bucket {
 				continue

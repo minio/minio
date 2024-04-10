@@ -27,6 +27,7 @@ import (
 
 	"github.com/minio/dperf/pkg/dperf"
 	"github.com/minio/madmin-go/v3"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 const speedTest = "speedtest"
@@ -46,7 +47,7 @@ type speedTestOpts struct {
 func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedTestResult {
 	ch := make(chan madmin.SpeedTestResult, 1)
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 
 		concurrency := opts.concurrencyStart
 

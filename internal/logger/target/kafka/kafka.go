@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,6 +33,7 @@ import (
 	"github.com/IBM/sarama"
 	saramatls "github.com/IBM/sarama/tools/tls"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
@@ -77,35 +77,6 @@ type Config struct {
 	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
 }
 
-// Check if atleast one broker in cluster is active
-func (k Config) pingBrokers() (err error) {
-	d := net.Dialer{Timeout: 1 * time.Second}
-
-	errs := make([]error, len(k.Brokers))
-	var wg sync.WaitGroup
-	for idx, broker := range k.Brokers {
-		broker := broker
-		idx := idx
-		wg.Add(1)
-		go func(broker xnet.Host, idx int) {
-			defer wg.Done()
-
-			_, errs[idx] = d.Dial("tcp", broker.String())
-		}(broker, idx)
-	}
-	wg.Wait()
-
-	var retErr error
-	for _, err := range errs {
-		if err == nil {
-			// if one broker is online its enough
-			return nil
-		}
-		retErr = err
-	}
-	return retErr
-}
-
 // Target - Kafka target.
 type Target struct {
 	status int32
@@ -129,6 +100,7 @@ type Target struct {
 	initKafkaOnce      once.Init
 	initQueueStoreOnce once.Init
 
+	client   sarama.Client
 	producer sarama.SyncProducer
 	kconfig  Config
 	config   *sarama.Config
@@ -191,7 +163,7 @@ func (h *Target) Init(ctx context.Context) error {
 	if err := h.init(); err != nil {
 		return err
 	}
-	go h.startKakfaLogger()
+	go h.startKafkaLogger()
 	return nil
 }
 
@@ -209,7 +181,7 @@ func (h *Target) initQueueStore(ctx context.Context) (err error) {
 	return
 }
 
-func (h *Target) startKakfaLogger() {
+func (h *Target) startKafkaLogger() {
 	h.logChMu.RLock()
 	logCh := h.logCh
 	if logCh != nil {
@@ -262,10 +234,6 @@ func (h *Target) send(entry interface{}) error {
 
 // Init initialize kafka target
 func (h *Target) init() error {
-	if err := h.kconfig.pingBrokers(); err != nil {
-		return err
-	}
-
 	sconfig := sarama.NewConfig()
 	if h.kconfig.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(h.kconfig.Version)
@@ -314,13 +282,23 @@ func (h *Target) init() error {
 		brokers = append(brokers, broker.String())
 	}
 
-	producer, err := sarama.NewSyncProducer(brokers, sconfig)
+	client, err := sarama.NewClient(brokers, sconfig)
 	if err != nil {
 		return err
 	}
 
+	producer, err := sarama.NewSyncProducerFromClient(client)
+	if err != nil {
+		return err
+	}
+	h.client = client
 	h.producer = producer
-	atomic.StoreInt32(&h.status, statusOnline)
+
+	if len(h.client.Brokers()) > 0 {
+		// Refer https://github.com/IBM/sarama/issues/1341
+		atomic.StoreInt32(&h.status, statusOnline)
+	}
+
 	return nil
 }
 
@@ -392,12 +370,13 @@ func (h *Target) Cancel() {
 	// and finish the existing ones.
 	// All future ones will be discarded.
 	h.logChMu.Lock()
-	close(h.logCh)
+	xioutil.SafeClose(h.logCh)
 	h.logCh = nil
 	h.logChMu.Unlock()
 
 	if h.producer != nil {
 		h.producer.Close()
+		h.client.Close()
 	}
 
 	// Wait for messages to be sent...

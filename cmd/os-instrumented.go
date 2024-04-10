@@ -39,6 +39,8 @@ const (
 	osMetricRename
 	osMetricOpenFileW
 	osMetricOpenFileR
+	osMetricOpenFileWFd
+	osMetricOpenFileRFd
 	osMetricOpen
 	osMetricOpenFileDirectIO
 	osMetricLstat
@@ -49,7 +51,7 @@ const (
 	osMetricReadDirent
 	osMetricFdatasync
 	osMetricSync
-	osMetricRename2 // Linux specific
+
 	// .... add more
 
 	osMetricLast

@@ -172,7 +172,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 			float64(v), string(k),
 		)
 	}
-	for k, v := range bgSeq.gethealFailedItemsMap() {
+	for k, v := range bgSeq.getHealFailedItemsMap() {
 		// healFailedItemsMap stores the endpoint and volume state separated by comma,
 		// split the fields and pass to channel at correct index
 		s := strings.Split(k, ",")
@@ -190,7 +190,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 // collects http metrics for MinIO server in Prometheus specific format
 // and sends to given channel
 func httpMetricsPrometheus(ch chan<- prometheus.Metric) {
-	httpStats := globalHTTPStats.toServerHTTPStats()
+	httpStats := globalHTTPStats.toServerHTTPStats(true)
 
 	for api, value := range httpStats.CurrentS3Requests.APIStats {
 		ch <- prometheus.MustNewConstMetric(
@@ -381,7 +381,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 
 	server := getLocalServerProperty(globalEndpoints, &http.Request{
 		Host: globalLocalNodeName,
-	})
+	}, true)
 
 	onlineDisks, offlineDisks := getOnlineOfflineDisksStats(server.Disks)
 	totalDisks := offlineDisks.Merge(onlineDisks)

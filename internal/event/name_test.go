@@ -31,12 +31,12 @@ func TestNameExpand(t *testing.T) {
 	}{
 		{BucketCreated, []Name{BucketCreated}},
 		{BucketRemoved, []Name{BucketRemoved}},
-		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold}},
+		{ObjectAccessedAll, []Name{ObjectAccessedGet, ObjectAccessedHead, ObjectAccessedGetRetention, ObjectAccessedGetLegalHold, ObjectAccessedAttributes}},
 		{ObjectCreatedAll, []Name{
 			ObjectCreatedCompleteMultipartUpload, ObjectCreatedCopy, ObjectCreatedPost, ObjectCreatedPut,
 			ObjectCreatedPutRetention, ObjectCreatedPutLegalHold, ObjectCreatedPutTagging, ObjectCreatedDeleteTagging,
 		}},
-		{ObjectRemovedAll, []Name{ObjectRemovedDelete, ObjectRemovedDeleteMarkerCreated}},
+		{ObjectRemovedAll, []Name{ObjectRemovedDelete, ObjectRemovedDeleteMarkerCreated, ObjectRemovedNoOP, ObjectRemovedDeleteAllVersions}},
 		{ObjectAccessedHead, []Name{ObjectAccessedHead}},
 	}
 
@@ -68,6 +68,7 @@ func TestNameString(t *testing.T) {
 		{ObjectCreatedPut, "s3:ObjectCreated:Put"},
 		{ObjectRemovedAll, "s3:ObjectRemoved:*"},
 		{ObjectRemovedDelete, "s3:ObjectRemoved:Delete"},
+		{ObjectRemovedNoOP, "s3:ObjectRemoved:NoOP"},
 		{ObjectCreatedPutRetention, "s3:ObjectCreated:PutRetention"},
 		{ObjectCreatedPutLegalHold, "s3:ObjectCreated:PutLegalHold"},
 		{ObjectAccessedGetRetention, "s3:ObjectAccessed:GetRetention"},
@@ -95,6 +96,7 @@ func TestNameMarshalXML(t *testing.T) {
 	}{
 		{ObjectAccessedAll, []byte("<Name>s3:ObjectAccessed:*</Name>"), false},
 		{ObjectRemovedDelete, []byte("<Name>s3:ObjectRemoved:Delete</Name>"), false},
+		{ObjectRemovedNoOP, []byte("<Name>s3:ObjectRemoved:NoOP</Name>"), false},
 		{blankName, []byte("<Name></Name>"), false},
 	}
 
@@ -124,6 +126,7 @@ func TestNameUnmarshalXML(t *testing.T) {
 	}{
 		{[]byte("<Name>s3:ObjectAccessed:*</Name>"), ObjectAccessedAll, false},
 		{[]byte("<Name>s3:ObjectRemoved:Delete</Name>"), ObjectRemovedDelete, false},
+		{[]byte("<Name>s3:ObjectRemoved:NoOP</Name>"), ObjectRemovedNoOP, false},
 		{[]byte("<Name></Name>"), blankName, true},
 	}
 
@@ -154,6 +157,7 @@ func TestNameMarshalJSON(t *testing.T) {
 	}{
 		{ObjectAccessedAll, []byte(`"s3:ObjectAccessed:*"`), false},
 		{ObjectRemovedDelete, []byte(`"s3:ObjectRemoved:Delete"`), false},
+		{ObjectRemovedNoOP, []byte(`"s3:ObjectRemoved:NoOP"`), false},
 		{blankName, []byte(`""`), false},
 	}
 
@@ -183,6 +187,7 @@ func TestNameUnmarshalJSON(t *testing.T) {
 	}{
 		{[]byte(`"s3:ObjectAccessed:*"`), ObjectAccessedAll, false},
 		{[]byte(`"s3:ObjectRemoved:Delete"`), ObjectRemovedDelete, false},
+		{[]byte(`"s3:ObjectRemoved:NoOP"`), ObjectRemovedNoOP, false},
 		{[]byte(`""`), blankName, true},
 	}
 
@@ -213,6 +218,7 @@ func TestParseName(t *testing.T) {
 	}{
 		{"s3:ObjectAccessed:*", ObjectAccessedAll, false},
 		{"s3:ObjectRemoved:Delete", ObjectRemovedDelete, false},
+		{"s3:ObjectRemoved:NoOP", ObjectRemovedNoOP, false},
 		{"", blankName, true},
 	}
 

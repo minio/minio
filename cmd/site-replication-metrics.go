@@ -282,6 +282,8 @@ type SRMetricsSummary struct {
 	ReplicaCount int64 `json:"replicaCount"`
 	// Queued operations
 	Queued InQueueMetric `json:"queued"`
+	// Proxy stats
+	Proxied ProxyMetric `json:"proxied"`
 	// replication metrics summary for each site replication peer
 	Metrics map[string]SRMetric `json:"replMetrics"`
 	// uptime of node being queried for site replication metrics

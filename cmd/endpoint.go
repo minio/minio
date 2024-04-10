@@ -62,8 +62,9 @@ type ProxyEndpoint struct {
 // Node holds information about a node in this cluster
 type Node struct {
 	*url.URL
-	Pools   []int
-	IsLocal bool
+	Pools    []int
+	IsLocal  bool
+	GridHost string
 }
 
 // Endpoint - any type of endpoint.
@@ -72,6 +73,16 @@ type Endpoint struct {
 	IsLocal bool
 
 	PoolIdx, SetIdx, DiskIdx int
+}
+
+// Equal returns true if endpoint == ep
+func (endpoint Endpoint) Equal(ep Endpoint) bool {
+	if endpoint.IsLocal == ep.IsLocal && endpoint.PoolIdx == ep.PoolIdx && endpoint.SetIdx == ep.SetIdx && endpoint.DiskIdx == ep.DiskIdx {
+		if endpoint.Path == ep.Path && endpoint.Host == ep.Host {
+			return true
+		}
+	}
+	return false
 }
 
 func (endpoint Endpoint) String() string {
@@ -103,7 +114,7 @@ func (endpoint Endpoint) GridHost() string {
 
 // UpdateIsLocal - resolves the host and updates if it is local or not.
 func (endpoint *Endpoint) UpdateIsLocal() (err error) {
-	if !endpoint.IsLocal {
+	if endpoint.Host != "" {
 		endpoint.IsLocal, err = isLocalHost(endpoint.Hostname(), endpoint.Port(), globalMinioPort)
 		if err != nil {
 			return err
@@ -254,6 +265,7 @@ func (l EndpointServerPools) GetNodes() (nodes []Node) {
 					Scheme: ep.Scheme,
 					Host:   ep.Host,
 				}
+				node.GridHost = ep.GridHost()
 			}
 			if !slices.Contains(node.Pools, ep.PoolIdx) {
 				node.Pools = append(node.Pools, ep.PoolIdx)
@@ -386,6 +398,95 @@ func (l EndpointServerPools) NEndpoints() (count int) {
 	return count
 }
 
+// GridHosts will return all peers, including local.
+// in websocket grid compatible format, The local peer
+// is returned as a separate string.
+func (l EndpointServerPools) GridHosts() (gridHosts []string, gridLocal string) {
+	seenHosts := set.NewStringSet()
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			u := endpoint.GridHost()
+			if seenHosts.Contains(u) {
+				continue
+			}
+			seenHosts.Add(u)
+
+			// Set local endpoint
+			if endpoint.IsLocal {
+				gridLocal = u
+			}
+
+			gridHosts = append(gridHosts, u)
+		}
+	}
+
+	return gridHosts, gridLocal
+}
+
+// FindGridHostsFromPeerPool will return a matching peerPool from provided peer (as string)
+func (l EndpointServerPools) FindGridHostsFromPeerPool(peer string) []int {
+	if peer == "" {
+		return nil
+	}
+
+	var pools []int
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+
+			if !slices.Contains(pools, endpoint.PoolIdx) {
+				pools = append(pools, endpoint.PoolIdx)
+			}
+		}
+	}
+
+	return pools
+}
+
+// FindGridHostsFromPeerStr will return a matching peer from provided peer (as string)
+func (l EndpointServerPools) FindGridHostsFromPeerStr(peer string) (peerGrid string) {
+	if peer == "" {
+		return ""
+	}
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+
+			if endpoint.Host == peer {
+				return endpoint.GridHost()
+			}
+		}
+	}
+	return ""
+}
+
+// FindGridHostsFromPeer will return a matching peer from provided peer.
+func (l EndpointServerPools) FindGridHostsFromPeer(peer *xnet.Host) (peerGrid string) {
+	if peer == nil {
+		return ""
+	}
+	for _, ep := range l {
+		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				continue
+			}
+			host, err := xnet.ParseHost(endpoint.Host)
+			if err != nil {
+				continue
+			}
+
+			if host.String() == peer.String() {
+				return endpoint.GridHost()
+			}
+		}
+	}
+	return ""
+}
+
 // Hostnames - returns list of unique hostnames
 func (l EndpointServerPools) Hostnames() []string {
 	foundSet := set.NewStringSet()
@@ -413,7 +514,7 @@ func (l EndpointServerPools) hostsSorted() []*xnet.Host {
 		}
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			internalLogIf(GlobalContext, err)
 			continue
 		}
 		hosts[i] = host
@@ -435,7 +536,9 @@ func (l EndpointServerPools) peers() (peers []string, local string) {
 			peer := endpoint.Host
 			if endpoint.IsLocal {
 				if _, port := mustSplitHostPort(peer); port == globalMinioPort {
-					local = peer
+					if local == "" {
+						local = peer
+					}
 				}
 			}
 
@@ -474,13 +577,6 @@ func (endpoints Endpoints) GetAllStrings() (all []string) {
 func hostResolveToLocalhost(endpoint Endpoint) bool {
 	hostIPs, err := getHostIP(endpoint.Hostname())
 	if err != nil {
-		// Log the message to console about the host resolving
-		reqInfo := (&logger.ReqInfo{}).AppendTags(
-			"host",
-			endpoint.Hostname(),
-		)
-		ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-		logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.Application)
 		return false
 	}
 	var loopback int
@@ -494,8 +590,6 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 
 // UpdateIsLocal - resolves the host and discovers the local host.
 func (endpoints Endpoints) UpdateIsLocal() error {
-	orchestrated := IsDocker() || IsKubernetes()
-
 	var epsResolved int
 	var foundLocal bool
 	resolvedList := make([]bool, len(endpoints))
@@ -522,6 +616,16 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 					continue
 				}
 
+				if endpoints[i].Host == "" {
+					resolvedList[i] = true
+					endpoints[i].IsLocal = true
+					epsResolved++
+					if !foundLocal {
+						foundLocal = true
+					}
+					continue
+				}
+
 				// Log the message to console about the host resolving
 				reqInfo := (&logger.ReqInfo{}).AppendTags(
 					"host",
@@ -541,8 +645,8 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
-							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.Application)
+						bootLogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
+							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.ErrorKind)
 					}
 
 					continue
@@ -571,7 +675,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.Application)
+						bootLogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
 					}
 				} else {
 					resolvedList[i] = true
@@ -669,8 +773,6 @@ type PoolEndpointList []Endpoints
 
 // UpdateIsLocal - resolves all hosts and discovers which are local
 func (p PoolEndpointList) UpdateIsLocal() error {
-	orchestrated := IsDocker() || IsKubernetes()
-
 	var epsResolved int
 	var epCount int
 
@@ -705,6 +807,17 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 						continue
 					}
 
+					if endpoint.Host == "" {
+						if !foundLocal {
+							foundLocal = true
+						}
+						endpoint.IsLocal = true
+						endpoints[j] = endpoint
+						epsResolved++
+						resolvedList[endpoint] = true
+						continue
+					}
+
 					// Log the message to console about the host resolving
 					reqInfo := (&logger.ReqInfo{}).AppendTags(
 						"host",
@@ -724,8 +837,8 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
-								endpoint.Hostname()), endpoint.Hostname(), logger.Application)
+							bootLogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
+								endpoint.Hostname()), endpoint.Hostname(), logger.ErrorKind)
 						}
 						continue
 					}
@@ -753,7 +866,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, err, endpoint.Hostname(), logger.Application)
+							bootLogOnceIf(ctx, fmt.Errorf("Unable to resolve DNS for %s: %w", endpoint, err), endpoint.Hostname(), logger.ErrorKind)
 						}
 					} else {
 						resolvedList[endpoint] = true
@@ -859,6 +972,8 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 		return poolEndpoints, setupType, nil
 	}
 
+	uniqueArgs := set.NewStringSet()
+
 	for poolIdx, pool := range poolsLayout {
 		var endpoints Endpoints
 		for setIdx, setLayout := range pool.layout {
@@ -889,25 +1004,9 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 		poolEndpoints[poolIdx] = endpoints
 	}
 
-	for _, endpoints := range poolEndpoints {
-		// Return Erasure setup when all endpoints are path style.
-		if endpoints[0].Type() == PathEndpointType {
-			setupType = ErasureSetupType
-		}
-		if endpoints[0].Type() == URLEndpointType && setupType != DistErasureSetupType {
-			setupType = DistErasureSetupType
-		}
-	}
-
-	if setupType == ErasureSetupType {
-		return poolEndpoints, setupType, nil
-	}
-
 	if err := poolEndpoints.UpdateIsLocal(); err != nil {
 		return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
-
-	uniqueArgs := set.NewStringSet()
 
 	for i, endpoints := range poolEndpoints {
 		// Here all endpoints are URL style.
@@ -918,7 +1017,7 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 
 		for _, endpoint := range endpoints {
 			endpointPathSet.Add(endpoint.Path)
-			if endpoint.IsLocal {
+			if endpoint.IsLocal && endpoint.Host != "" {
 				localServerHostSet.Add(endpoint.Hostname())
 
 				_, port, err := net.SplitHostPort(endpoint.Host)
@@ -931,12 +1030,10 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 			}
 		}
 
-		orchestrated := IsKubernetes() || IsDocker()
 		reverseProxy := (env.Get("_MINIO_REVERSE_PROXY", "") != "") && ((env.Get("MINIO_CI_CD", "") != "") || (env.Get("CI", "") != ""))
 		// If not orchestrated
-		if !orchestrated &&
-			// and not setup in reverse proxy
-			!reverseProxy {
+		// and not setup in reverse proxy
+		if !orchestrated && !reverseProxy {
 			// Check whether same path is not used in endpoints of a host on different port.
 			// Only verify this on baremetal setups, DNS is not available in orchestrated
 			// environments so we can't do much here.
@@ -944,14 +1041,18 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 			hostIPCache := make(map[string]set.StringSet)
 			for _, endpoint := range endpoints {
 				host := endpoint.Hostname()
-				hostIPSet, ok := hostIPCache[host]
-				if !ok {
-					var err error
-					hostIPSet, err = getHostIP(host)
-					if err != nil {
-						return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
+				var hostIPSet set.StringSet
+				if host != "" {
+					var ok bool
+					hostIPSet, ok = hostIPCache[host]
+					if !ok {
+						var err error
+						hostIPSet, err = getHostIP(host)
+						if err != nil {
+							return nil, setupType, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("host '%s' cannot resolve: %s", host, err))
+						}
+						hostIPCache[host] = hostIPSet
 					}
-					hostIPCache[host] = hostIPSet
 				}
 				if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 					if !IPSet.Intersection(hostIPSet).IsEmpty() {
@@ -982,12 +1083,14 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 
 		// Add missing port in all endpoints.
 		for i := range endpoints {
-			_, port, err := net.SplitHostPort(endpoints[i].Host)
-			if err != nil {
-				endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
-			} else if endpoints[i].IsLocal && serverAddrPort != port {
-				// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
-				endpoints[i].IsLocal = false
+			if endpoints[i].Host != "" {
+				_, port, err := net.SplitHostPort(endpoints[i].Host)
+				if err != nil {
+					endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
+				} else if endpoints[i].IsLocal && serverAddrPort != port {
+					// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
+					endpoints[i].IsLocal = false
+				}
 			}
 		}
 
@@ -1006,29 +1109,37 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 			// This means it is DistErasure setup.
 		}
 
-		poolEndpoints[i] = endpoints
-
 		for _, endpoint := range endpoints {
-			uniqueArgs.Add(endpoint.Host)
+			if endpoint.Host != "" {
+				uniqueArgs.Add(endpoint.Host)
+			} else {
+				uniqueArgs.Add(net.JoinHostPort("localhost", serverAddrPort))
+			}
 		}
 
 		poolEndpoints[i] = endpoints
 	}
-
-	// TODO: ensure that each pool has at least two nodes in a distributed setup
 
 	publicIPs := env.Get(config.EnvPublicIPs, "")
 	if len(publicIPs) == 0 {
 		updateDomainIPs(uniqueArgs)
 	}
 
+	erasureType := len(uniqueArgs.ToSlice()) == 1
+
 	for _, endpoints := range poolEndpoints {
 		// Return Erasure setup when all endpoints are path style.
 		if endpoints[0].Type() == PathEndpointType {
 			setupType = ErasureSetupType
+			break
 		}
-		if endpoints[0].Type() == URLEndpointType && setupType != DistErasureSetupType {
-			setupType = DistErasureSetupType
+		if endpoints[0].Type() == URLEndpointType {
+			if erasureType {
+				setupType = ErasureSetupType
+			} else {
+				setupType = DistErasureSetupType
+			}
+			break
 		}
 	}
 

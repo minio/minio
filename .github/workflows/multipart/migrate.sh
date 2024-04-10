@@ -25,8 +25,8 @@ if [ ! -f ./mc ]; then
 fi
 
 (
-	cd /tmp
-	go install github.com/minio/minio/docs/debugging/s3-check-md5@latest
+	cd ./docs/debugging/s3-check-md5
+	go install -v
 )
 
 export RELEASE=RELEASE.2023-08-29T23-07-35Z

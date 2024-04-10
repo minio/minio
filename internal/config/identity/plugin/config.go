@@ -38,6 +38,10 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 )
 
+func authNLogIf(ctx context.Context, err error) {
+	logger.LogIf(ctx, "authN", err)
+}
+
 // Authentication Plugin config and env variables
 const (
 	URL        = "url"
@@ -197,7 +201,7 @@ func (h *metrics) accumRequestRTT(reqStartTime time.Time, rttMs float64, isSucce
 		}
 	}
 
-	// Round the reqest time *down* to whole minute.
+	// Round the request time *down* to whole minute.
 	reqTimeMinute := reqStartTime.Truncate(time.Minute)
 	if reqTimeMinute.After(h.currentMinute.statsTime) {
 		// Drop the last full minute now, since we got a request for a time we
@@ -434,7 +438,7 @@ func (o *AuthNPlugin) checkConnectivity(ctx context.Context) bool {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		authNLogIf(ctx, err)
 		return false
 	}
 

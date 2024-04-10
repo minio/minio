@@ -31,7 +31,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zip"
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/lifecycle"
@@ -39,7 +39,6 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/policy"
 )
@@ -99,7 +98,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	}
 
 	// Call site replication hook.
-	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta))
+	replLogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, bucketMeta))
 
 	// Write success response.
 	writeSuccessResponseHeadersOnly(w)
@@ -431,7 +430,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 			case bucketNotificationConfig:
 				config, err := globalBucketMetadataSys.GetNotificationConfig(bucket)
 				if err != nil {
-					logger.LogIf(ctx, err)
+					adminLogIf(ctx, err)
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
@@ -447,7 +446,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					if errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
 						continue
 					}
-					logger.LogIf(ctx, err)
+					adminLogIf(ctx, err)
 					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
 					return
 				}
@@ -680,22 +679,15 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			if _, ok := bucketMap[bucket]; !ok {
 				opts := MakeBucketOptions{
 					LockEnabled: config.Enabled(),
+					ForceCreate: true, // ignore if it already exists
 				}
 				err = objectAPI.MakeBucket(ctx, bucket, opts)
 				if err != nil {
-					if _, ok := err.(BucketExists); !ok {
-						rpt.SetStatus(bucket, fileName, err)
-						continue
-					}
+					rpt.SetStatus(bucket, fileName, err)
+					continue
 				}
-				v := newBucketMetadata(bucket)
+				v, _ := globalBucketMetadataSys.Get(bucket)
 				bucketMap[bucket] = &v
-			}
-
-			// Deny object locking configuration settings on existing buckets without object lock enabled.
-			if _, _, err = globalBucketMetadataSys.GetObjectLockConfig(bucket); err != nil {
-				rpt.SetStatus(bucket, fileName, err)
-				continue
 			}
 
 			bucketMap[bucket].ObjectLockConfigXML = configData
@@ -724,13 +716,13 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				continue
 			}
 			if _, ok := bucketMap[bucket]; !ok {
-				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{}); err != nil {
-					if _, ok := err.(BucketExists); !ok {
-						rpt.SetStatus(bucket, fileName, err)
-						continue
-					}
+				if err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{
+					ForceCreate: true, // ignore if it already exists
+				}); err != nil {
+					rpt.SetStatus(bucket, fileName, err)
+					continue
 				}
-				v := newBucketMetadata(bucket)
+				v, _ := globalBucketMetadataSys.Get(bucket)
 				bucketMap[bucket] = &v
 			}
 
@@ -776,14 +768,14 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 		// create bucket if it does not exist yet.
 		if _, ok := bucketMap[bucket]; !ok {
-			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{})
+			err = objectAPI.MakeBucket(ctx, bucket, MakeBucketOptions{
+				ForceCreate: true, // ignore if it already exists
+			})
 			if err != nil {
-				if _, ok := err.(BucketExists); !ok {
-					rpt.SetStatus(bucket, "", err)
-					continue
-				}
+				rpt.SetStatus(bucket, "", err)
+				continue
 			}
-			v := newBucketMetadata(bucket)
+			v, _ := globalBucketMetadataSys.Get(bucket)
 			bucketMap[bucket] = &v
 		}
 		if _, ok := bucketMap[bucket]; !ok {

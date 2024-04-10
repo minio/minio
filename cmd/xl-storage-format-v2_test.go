@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -1008,6 +1009,77 @@ func Test_mergeXLV2Versions2(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func Test_mergeEntryChannels(t *testing.T) {
+	dataZ, err := os.ReadFile("testdata/xl-meta-merge.zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vers []metaCacheEntry
+	zr, err := zip.NewReader(bytes.NewReader(dataZ), int64(len(dataZ)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, file := range zr.File {
+		if file.UncompressedSize64 == 0 {
+			continue
+		}
+		in, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer in.Close()
+		buf, err := io.ReadAll(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		buf = xlMetaV2TrimData(buf)
+
+		vers = append(vers, metaCacheEntry{
+			name:     "a",
+			metadata: buf,
+		})
+	}
+
+	// Shuffle...
+	for i := 0; i < 100; i++ {
+		rng := rand.New(rand.NewSource(int64(i)))
+		rng.Shuffle(len(vers), func(i, j int) {
+			vers[i], vers[j] = vers[j], vers[i]
+		})
+		var entries []chan metaCacheEntry
+		for _, v := range vers {
+			v.cached = nil
+			ch := make(chan metaCacheEntry, 1)
+			ch <- v
+			close(ch)
+			entries = append(entries, ch)
+		}
+		out := make(chan metaCacheEntry, 1)
+		err := mergeEntryChannels(context.Background(), entries, out, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, ok := <-out
+		if !ok {
+			t.Fatal("Got no result")
+		}
+
+		xl, err := got.xlmeta()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(xl.versions) != 3 {
+			t.Fatal("Got wrong number of versions, want 3, got", len(xl.versions))
+		}
+		if !sort.SliceIsSorted(xl.versions, func(i, j int) bool {
+			return xl.versions[i].header.sortsBefore(xl.versions[j].header)
+		}) {
+			t.Errorf("Got unsorted result")
+		}
 	}
 }
 

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/cachevalue"
 )
 
 const (
@@ -41,14 +41,14 @@ const (
 	dataUsageCacheName = ".usage-cache.bin"
 )
 
-// storeDataUsageInBackend will store all objects sent on the gui channel until closed.
+// storeDataUsageInBackend will store all objects sent on the dui channel until closed.
 func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan DataUsageInfo) {
 	attempts := 1
 	for dataUsageInfo := range dui {
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		dataUsageJSON, err := json.Marshal(dataUsageInfo)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			scannerLogIf(ctx, err)
 			continue
 		}
 		if attempts > 10 {
@@ -56,13 +56,13 @@ func storeDataUsageInBackend(ctx context.Context, objAPI ObjectLayer, dui <-chan
 			attempts = 1
 		}
 		if err = saveConfig(ctx, objAPI, dataUsageObjNamePath, dataUsageJSON); err != nil {
-			logger.LogOnceIf(ctx, err, dataUsageObjNamePath)
+			scannerLogOnceIf(ctx, err, dataUsageObjNamePath)
 		}
 		attempts++
 	}
 }
 
-var prefixUsageCache timedValue
+var prefixUsageCache = cachevalue.New[map[string]uint64]()
 
 // loadPrefixUsageFromBackend returns prefix usages found in passed buckets
 //
@@ -76,12 +76,10 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 
 	cache := dataUsageCache{}
 
-	prefixUsageCache.Once.Do(func() {
-		prefixUsageCache.TTL = 30 * time.Second
-
+	prefixUsageCache.InitOnce(30*time.Second,
 		// No need to fail upon Update() error, fallback to old value.
-		prefixUsageCache.Relax = true
-		prefixUsageCache.Update = func() (interface{}, error) {
+		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
+		func() (map[string]uint64, error) {
 			m := make(map[string]uint64)
 			for _, pool := range z.serverPools {
 				for _, er := range pool.sets {
@@ -106,15 +104,10 @@ func loadPrefixUsageFromBackend(ctx context.Context, objAPI ObjectLayer, bucket 
 				}
 			}
 			return m, nil
-		}
-	})
+		},
+	)
 
-	v, _ := prefixUsageCache.Get()
-	if v != nil {
-		return v.(map[string]uint64), nil
-	}
-
-	return map[string]uint64{}, nil
+	return prefixUsageCache.Get()
 }
 
 func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsageInfo, error) {
@@ -155,7 +148,9 @@ func loadDataUsageFromBackend(ctx context.Context, objAPI ObjectLayer) (DataUsag
 			bui.ReplicationFailedSizeV1 > 0 || bui.ReplicationPendingCountV1 > 0 {
 			cfg, _ := getReplicationConfig(GlobalContext, bucket)
 			if cfg != nil && cfg.RoleArn != "" {
-				dataUsageInfo.ReplicationInfo = make(map[string]BucketTargetUsageInfo)
+				if dataUsageInfo.ReplicationInfo == nil {
+					dataUsageInfo.ReplicationInfo = make(map[string]BucketTargetUsageInfo)
+				}
 				dataUsageInfo.ReplicationInfo[cfg.RoleArn] = BucketTargetUsageInfo{
 					ReplicationFailedSize:   bui.ReplicationFailedSizeV1,
 					ReplicationFailedCount:  bui.ReplicationFailedCountV1,

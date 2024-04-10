@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net/http"
 	"net/url"
@@ -115,14 +116,29 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
+		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
 			return
 		}
 
-		if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
+		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
+		ssecRepHeaders := []string{
+			"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+			"X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+			"X-Minio-Replication-Server-Side-Encryption-Iv",
+		}
+		ssecRep := false
+		for _, header := range ssecRepHeaders {
+			if val := r.Header.Get(header); val != "" {
+				ssecRep = true
+				break
+			}
+		}
+		if !(ssecRep && sourceReplReq) {
+			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
 		}
 		// Set this for multipart only operations, we need to differentiate during
 		// decryption if the file was actually multipart or not.
@@ -728,13 +744,20 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		sha256hex = ""
 	}
 
+	var forceMD5 []byte
+	// Optimization: If SSE-KMS and SSE-C did not request Content-Md5. Use uuid as etag. Optionally enable this also
+	// for server that is started with `--no-compat`.
+	if !etag.ContentMD5Requested(r.Header) && (crypto.S3KMS.IsEncrypted(mi.UserDefined) || crypto.SSEC.IsRequested(r.Header) || !globalServerCtxt.StrictS3Compat) {
+		forceMD5 = mustGetUUIDBytes()
+	}
+
 	hashReader, err := hash.NewReaderWithOpts(ctx, reader, hash.Options{
 		Size:       size,
 		MD5Hex:     md5hex,
 		SHA256Hex:  sha256hex,
 		ActualSize: actualSize,
 		DisableMD5: false,
-		ForceMD5:   nil,
+		ForceMD5:   forceMD5,
 	})
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -749,9 +772,10 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	pReader := NewPutObjReader(hashReader)
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
+	_, replicationStatus := mi.UserDefined[xhttp.AmzBucketReplicationStatus]
 	var objectEncryptionKey crypto.ObjectKey
 	if isEncrypted {
-		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) {
+		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) && !replicationStatus {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrSSEMultipartEncrypted), r.URL)
 			return
 		}
@@ -771,52 +795,55 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 		}
 
-		// Calculating object encryption key
-		key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		copy(objectEncryptionKey[:], key)
+		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
+		if !(sourceReplReq && crypto.SSEC.IsEncrypted(mi.UserDefined)) {
+			// Calculating object encryption key
+			key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			copy(objectEncryptionKey[:], key)
 
-		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-		in := io.Reader(hashReader)
-		if size > encryptBufferThreshold {
-			// The encryption reads in blocks of 64KB.
-			// We add a buffer on bigger files to reduce the number of syscalls upstream.
-			in = bufio.NewReaderSize(hashReader, encryptBufferSize)
-		}
-		reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		wantSize := int64(-1)
-		if size >= 0 {
-			info := ObjectInfo{Size: size}
-			wantSize = info.EncryptedSize()
-		}
-		// do not try to verify encrypted content
-		hashReader, err = hash.NewReader(ctx, etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
-		if err := hashReader.AddChecksum(r, true); err != nil {
-			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
-			return
-		}
+			partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
+			in := io.Reader(hashReader)
+			if size > encryptBufferThreshold {
+				// The encryption reads in blocks of 64KB.
+				// We add a buffer on bigger files to reduce the number of syscalls upstream.
+				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
+			}
+			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			wantSize := int64(-1)
+			if size >= 0 {
+				info := ObjectInfo{Size: size}
+				wantSize = info.EncryptedSize()
+			}
+			// do not try to verify encrypted content
+			hashReader, err = hash.NewReader(ctx, etag.Wrap(reader, hashReader), wantSize, "", "", actualSize)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+			if err := hashReader.AddChecksum(r, true); err != nil {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+				return
+			}
 
-		pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
-		if err != nil {
-			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			return
-		}
+			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
+			if err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
 
-		if idxCb != nil {
-			idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
+			if idxCb != nil {
+				idxCb = compressionIndexEncrypter(objectEncryptionKey, idxCb)
+			}
+			opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 		}
-		opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 	}
 	opts.IndexCB = idxCb
 
@@ -1035,9 +1062,18 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		Metadata:     cleanReservedKeys(objInfo.UserDefined),
 	})
 
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		evt.EventName = event.ObjectManyVersions
 		sendEvent(evt)
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "CompleteMultipartUpload",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
+		})
 	}
 
 	// Remove the transitioned object whose object version is being overwritten.

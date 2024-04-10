@@ -94,6 +94,20 @@ func TestInvalidExpiration(t *testing.T) {
                                     </Expiration>`,
 			expectedErr: errLifecycleInvalidDeleteMarker,
 		},
+		{ // Expiration with a valid number of days and ExpiredObjectAllVersions
+			inputXML: `<Expiration>
+									<Days>3</Days>
+			            <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
+                                    </Expiration>`,
+			expectedErr: nil,
+		},
+		{ // Expiration with a valid ISO 8601 date and ExpiredObjectAllVersions
+			inputXML: `<Expiration>
+									<Date>2019-04-20T00:00:00Z</Date>
+			            <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
+                                    </Expiration>`,
+			expectedErr: errLifecycleInvalidDeleteAll,
+		},
 	}
 	for i, tc := range validationTestCases {
 		t.Run(fmt.Sprintf("Test %d", i+1), func(t *testing.T) {

@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	ftp "goftp.io/server/v2"
 )
 
@@ -322,7 +322,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 			}
 
 			// Call hook for site replication.
-			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+			replLogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
 				Type: madmin.SRIAMItemSTSAcc,
 				STSCredential: &madmin.SRSTSCredential{
 					AccessKey:    cred.AccessKey,
@@ -386,7 +386,7 @@ func (driver *ftpDriver) DeleteDir(ctx *ftp.Context, path string) (err error) {
 
 	// Send object names that are needed to be removed to objectsCh
 	go func() {
-		defer close(objectsCh)
+		defer xioutil.SafeClose(objectsCh)
 		opts := minio.ListObjectsOptions{
 			Prefix:    prefix,
 			Recursive: true,

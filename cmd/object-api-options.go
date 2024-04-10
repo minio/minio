@@ -133,6 +133,121 @@ func getOpts(ctx context.Context, r *http.Request, bucket, object string) (Objec
 	return opts, nil
 }
 
+func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r *http.Request, bucket, object string) (opts ObjectOptions, valid bool) {
+	var argumentName string
+	var argumentValue string
+	var apiErr APIError
+	var err error
+	valid = true
+
+	defer func() {
+		if valid {
+			return
+		}
+
+		errResp := objectAttributesErrorResponse{
+			ArgumentName:  &argumentName,
+			ArgumentValue: &argumentValue,
+			APIErrorResponse: getAPIErrorResponse(
+				ctx,
+				apiErr,
+				r.URL.Path,
+				w.Header().Get(xhttp.AmzRequestID),
+				w.Header().Get(xhttp.AmzRequestHostID),
+			),
+		}
+
+		writeResponse(w, apiErr.HTTPStatusCode, encodeResponse(errResp), mimeXML)
+	}()
+
+	opts, err = getOpts(ctx, r, bucket, object)
+	if err != nil {
+		switch vErr := err.(type) {
+		case InvalidVersionID:
+			apiErr = toAPIError(ctx, vErr)
+			argumentName = strings.ToLower("versionId")
+			argumentValue = vErr.VersionID
+		default:
+			apiErr = toAPIError(ctx, vErr)
+		}
+		valid = false
+		return
+	}
+
+	opts.MaxParts, err = parseIntHeader(bucket, object, r.Header, xhttp.AmzMaxParts)
+	if err != nil {
+		apiErr = toAPIError(ctx, err)
+		argumentName = strings.ToLower(xhttp.AmzMaxParts)
+		valid = false
+		return
+	}
+
+	if opts.MaxParts == 0 {
+		opts.MaxParts = maxPartsList
+	}
+
+	opts.PartNumberMarker, err = parseIntHeader(bucket, object, r.Header, xhttp.AmzPartNumberMarker)
+	if err != nil {
+		apiErr = toAPIError(ctx, err)
+		argumentName = strings.ToLower(xhttp.AmzPartNumberMarker)
+		valid = false
+		return
+	}
+
+	opts.ObjectAttributes = parseObjectAttributes(r.Header)
+	if len(opts.ObjectAttributes) < 1 {
+		apiErr = errorCodes.ToAPIErr(ErrInvalidAttributeName)
+		argumentName = strings.ToLower(xhttp.AmzObjectAttributes)
+		valid = false
+		return
+	}
+
+	for tag := range opts.ObjectAttributes {
+		switch tag {
+		case xhttp.ETag:
+		case xhttp.Checksum:
+		case xhttp.StorageClass:
+		case xhttp.ObjectSize:
+		case xhttp.ObjectParts:
+		default:
+			apiErr = errorCodes.ToAPIErr(ErrInvalidAttributeName)
+			argumentName = strings.ToLower(xhttp.AmzObjectAttributes)
+			argumentValue = tag
+			valid = false
+			return
+		}
+	}
+
+	return
+}
+
+func parseObjectAttributes(h http.Header) (attributes map[string]struct{}) {
+	attributes = make(map[string]struct{})
+	for _, v := range strings.Split(strings.TrimSpace(h.Get(xhttp.AmzObjectAttributes)), ",") {
+		if v != "" {
+			attributes[v] = struct{}{}
+		}
+	}
+
+	return
+}
+
+func parseIntHeader(bucket, object string, h http.Header, headerName string) (value int, err error) {
+	stringInt := strings.TrimSpace(h.Get(headerName))
+	if stringInt == "" {
+		return
+	}
+	value, err = strconv.Atoi(stringInt)
+	if err != nil {
+		return 0, InvalidArgument{
+			Bucket: bucket,
+			Object: object,
+			Err:    fmt.Errorf("Unable to parse %s, value should be an integer", headerName),
+		}
+	}
+	return
+}
+
 func parseBoolHeader(bucket, object string, h http.Header, headerName string) (bool, error) {
 	value := strings.TrimSpace(h.Get(headerName))
 	if value != "" {
@@ -365,7 +480,7 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	}
 	opts.MTime = mtime
 	opts.UserDefined = make(map[string]string)
-
+	opts.UserDefined[ReservedMetadataPrefix+"Actual-Object-Size"] = r.Header.Get(xhttp.MinIOReplicationActualObjectSize)
 	// Transfer SSEC key in opts.EncryptFn
 	if crypto.SSEC.IsRequested(r.Header) {
 		key, err := ParseSSECustomerRequest(r)
@@ -375,6 +490,9 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 				return key
 			}
 		}
+	}
+	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
+		opts.ReplicationRequest = true
 	}
 	return opts, nil
 }

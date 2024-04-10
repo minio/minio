@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"github.com/dustin/go-humanize"
+	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v3/kernel"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sys"
@@ -43,7 +45,7 @@ func oldLinux() bool {
 	return currentKernel < kernel.Version(4, 0, 0)
 }
 
-func setMaxResources() (err error) {
+func setMaxResources(ctx *cli.Context) (err error) {
 	// Set the Go runtime max threads threshold to 90% of kernel setting.
 	sysMaxThreads, err := sys.GetMaxThreads()
 	if err == nil {
@@ -75,6 +77,27 @@ func setMaxResources() (err error) {
 		return err
 	}
 
+	// set debug memory limit instead of GOMEMLIMIT env
+	_ = setDebugMemoryLimit(ctx)
+
 	err = sys.SetMaxMemoryLimit(maxLimit, maxLimit)
 	return err
+}
+
+func setDebugMemoryLimit(ctx *cli.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	if ctx.IsSet("memlimit") {
+		memlimit := ctx.String("memlimit")
+		if memlimit == "" {
+			memlimit = ctx.GlobalString("memlimit")
+		}
+		mlimit, err := humanize.ParseBytes(memlimit)
+		if err != nil {
+			return err
+		}
+		debug.SetMemoryLimit(int64(mlimit))
+	}
+	return nil
 }

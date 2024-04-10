@@ -16,10 +16,10 @@ export CI=true
 export MINIO_KMS_AUTO_ENCRYPTION=on
 export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
 
-(minio server /tmp/xl/{1...10}/disk{0...1} 2>&1 >/dev/null) &
+(minio server http://localhost:9000/tmp/xl/{1...10}/disk{0...1} 2>&1 >/dev/null) &
 pid=$!
 
-sleep 10
+sleep 30
 
 export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 
@@ -48,10 +48,14 @@ user_count=$(./mc admin user list myminio/ | wc -l)
 policy_count=$(./mc admin policy list myminio/ | wc -l)
 
 kill $pid
-(minio server /tmp/xl/{1...10}/disk{0...1} /tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/expanded.log) &
-pid=$!
 
-sleep 10
+(minio server http://localhost:9000/tmp/xl/{1...10}/disk{0...1} http://localhost:9001/tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/expanded_1.log) &
+pid_1=$!
+
+(minio server --address ":9001" http://localhost:9000/tmp/xl/{1...10}/disk{0...1} http://localhost:9001/tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/expanded_2.log) &
+pid_2=$!
+
+sleep 30
 
 expanded_user_count=$(./mc admin user list myminio/ | wc -l)
 expanded_policy_count=$(./mc admin policy list myminio/ | wc -l)
@@ -78,19 +82,24 @@ fi
 ./mc ls -r myminio/versioned/ >expanded_ns.txt
 ./mc ls -r --versions myminio/versioned/ >expanded_ns_versions.txt
 
-./mc admin decom start myminio/ /tmp/xl/{1...10}/disk{0...1}
+./mc admin decom start myminio/ http://localhost:9000/tmp/xl/{1...10}/disk{0...1}
 
 until $(./mc admin decom status myminio/ | grep -q Complete); do
 	echo "waiting for decom to finish..."
 	sleep 1
 done
 
-kill $pid
+kill $pid_1
+kill $pid_2
 
-(minio server /tmp/xl/{11...30}/disk{0...3} 2>&1 >/dev/null) &
+sleep 5
+
+(minio server --address ":9001" http://localhost:9001/tmp/xl/{11...30}/disk{0...3} 2>&1 >/tmp/removed.log) &
 pid=$!
 
-sleep 10
+sleep 30
+
+export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9001/"
 
 decom_user_count=$(./mc admin user list myminio/ | wc -l)
 decom_policy_count=$(./mc admin policy list myminio/ | wc -l)
@@ -134,5 +143,12 @@ if [ "${expected_checksum}" != "${got_checksum}" ]; then
 	echo "BUG: decommission failed on encrypted objects: expected ${expected_checksum} got ${got_checksum}"
 	exit 1
 fi
+
+(
+	cd ./docs/debugging/s3-check-md5
+	go install -v
+)
+
+s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned
 
 kill $pid

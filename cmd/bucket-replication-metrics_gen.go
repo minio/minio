@@ -584,6 +584,7 @@ func (z *InQueueStats) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z InQueueStats) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 0
+	_ = z
 	err = en.Append(0x80)
 	if err != nil {
 		return
@@ -595,6 +596,7 @@ func (z InQueueStats) EncodeMsg(en *msgp.Writer) (err error) {
 func (z InQueueStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 0
+	_ = z
 	o = append(o, 0x80)
 	return
 }
@@ -632,6 +634,334 @@ func (z *InQueueStats) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z InQueueStats) Msgsize() (s int) {
 	s = 1
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *ProxyMetric) DecodeMsg(dc *msgp.Reader) (err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, err = dc.ReadMapHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, err = dc.ReadMapKeyPtr()
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "ptc":
+			z.PutTagTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "PutTagTotal")
+				return
+			}
+		case "gtc":
+			z.GetTagTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "GetTagTotal")
+				return
+			}
+		case "rtc":
+			z.RmvTagTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "RmvTagTotal")
+				return
+			}
+		case "gc":
+			z.GetTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "GetTotal")
+				return
+			}
+		case "hc":
+			z.HeadTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "HeadTotal")
+				return
+			}
+		case "ptf":
+			z.PutTagFailedTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "PutTagFailedTotal")
+				return
+			}
+		case "gtf":
+			z.GetTagFailedTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "GetTagFailedTotal")
+				return
+			}
+		case "rtf":
+			z.RmvTagFailedTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "RmvTagFailedTotal")
+				return
+			}
+		case "gf":
+			z.GetFailedTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "GetFailedTotal")
+				return
+			}
+		case "hf":
+			z.HeadFailedTotal, err = dc.ReadUint64()
+			if err != nil {
+				err = msgp.WrapError(err, "HeadFailedTotal")
+				return
+			}
+		default:
+			err = dc.Skip()
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	return
+}
+
+// EncodeMsg implements msgp.Encodable
+func (z *ProxyMetric) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 10
+	// write "ptc"
+	err = en.Append(0x8a, 0xa3, 0x70, 0x74, 0x63)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.PutTagTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "PutTagTotal")
+		return
+	}
+	// write "gtc"
+	err = en.Append(0xa3, 0x67, 0x74, 0x63)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.GetTagTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "GetTagTotal")
+		return
+	}
+	// write "rtc"
+	err = en.Append(0xa3, 0x72, 0x74, 0x63)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.RmvTagTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "RmvTagTotal")
+		return
+	}
+	// write "gc"
+	err = en.Append(0xa2, 0x67, 0x63)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.GetTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "GetTotal")
+		return
+	}
+	// write "hc"
+	err = en.Append(0xa2, 0x68, 0x63)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.HeadTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "HeadTotal")
+		return
+	}
+	// write "ptf"
+	err = en.Append(0xa3, 0x70, 0x74, 0x66)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.PutTagFailedTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "PutTagFailedTotal")
+		return
+	}
+	// write "gtf"
+	err = en.Append(0xa3, 0x67, 0x74, 0x66)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.GetTagFailedTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "GetTagFailedTotal")
+		return
+	}
+	// write "rtf"
+	err = en.Append(0xa3, 0x72, 0x74, 0x66)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.RmvTagFailedTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "RmvTagFailedTotal")
+		return
+	}
+	// write "gf"
+	err = en.Append(0xa2, 0x67, 0x66)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.GetFailedTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "GetFailedTotal")
+		return
+	}
+	// write "hf"
+	err = en.Append(0xa2, 0x68, 0x66)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint64(z.HeadFailedTotal)
+	if err != nil {
+		err = msgp.WrapError(err, "HeadFailedTotal")
+		return
+	}
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *ProxyMetric) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// map header, size 10
+	// string "ptc"
+	o = append(o, 0x8a, 0xa3, 0x70, 0x74, 0x63)
+	o = msgp.AppendUint64(o, z.PutTagTotal)
+	// string "gtc"
+	o = append(o, 0xa3, 0x67, 0x74, 0x63)
+	o = msgp.AppendUint64(o, z.GetTagTotal)
+	// string "rtc"
+	o = append(o, 0xa3, 0x72, 0x74, 0x63)
+	o = msgp.AppendUint64(o, z.RmvTagTotal)
+	// string "gc"
+	o = append(o, 0xa2, 0x67, 0x63)
+	o = msgp.AppendUint64(o, z.GetTotal)
+	// string "hc"
+	o = append(o, 0xa2, 0x68, 0x63)
+	o = msgp.AppendUint64(o, z.HeadTotal)
+	// string "ptf"
+	o = append(o, 0xa3, 0x70, 0x74, 0x66)
+	o = msgp.AppendUint64(o, z.PutTagFailedTotal)
+	// string "gtf"
+	o = append(o, 0xa3, 0x67, 0x74, 0x66)
+	o = msgp.AppendUint64(o, z.GetTagFailedTotal)
+	// string "rtf"
+	o = append(o, 0xa3, 0x72, 0x74, 0x66)
+	o = msgp.AppendUint64(o, z.RmvTagFailedTotal)
+	// string "gf"
+	o = append(o, 0xa2, 0x67, 0x66)
+	o = msgp.AppendUint64(o, z.GetFailedTotal)
+	// string "hf"
+	o = append(o, 0xa2, 0x68, 0x66)
+	o = msgp.AppendUint64(o, z.HeadFailedTotal)
+	return
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *ProxyMetric) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	for zb0001 > 0 {
+		zb0001--
+		field, bts, err = msgp.ReadMapKeyZC(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		switch msgp.UnsafeString(field) {
+		case "ptc":
+			z.PutTagTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PutTagTotal")
+				return
+			}
+		case "gtc":
+			z.GetTagTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "GetTagTotal")
+				return
+			}
+		case "rtc":
+			z.RmvTagTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "RmvTagTotal")
+				return
+			}
+		case "gc":
+			z.GetTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "GetTotal")
+				return
+			}
+		case "hc":
+			z.HeadTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "HeadTotal")
+				return
+			}
+		case "ptf":
+			z.PutTagFailedTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "PutTagFailedTotal")
+				return
+			}
+		case "gtf":
+			z.GetTagFailedTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "GetTagFailedTotal")
+				return
+			}
+		case "rtf":
+			z.RmvTagFailedTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "RmvTagFailedTotal")
+				return
+			}
+		case "gf":
+			z.GetFailedTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "GetFailedTotal")
+				return
+			}
+		case "hf":
+			z.HeadFailedTotal, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "HeadFailedTotal")
+				return
+			}
+		default:
+			bts, err = msgp.Skip(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *ProxyMetric) Msgsize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 4 + msgp.Uint64Size + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size
 	return
 }
 

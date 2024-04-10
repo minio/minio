@@ -82,6 +82,7 @@ const (
 	EnvWorm       = "MINIO_WORM"        // legacy
 	EnvRegion     = "MINIO_REGION"      // legacy
 	EnvRegionName = "MINIO_REGION_NAME" // legacy
+
 )
 
 // Expiration Token durations

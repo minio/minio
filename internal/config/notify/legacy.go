@@ -251,6 +251,10 @@ func SetNotifyRedis(s config.Config, redisName string, cfg target.RedisArgs) err
 			Value: cfg.Password,
 		},
 		config.KV{
+			Key:   target.RedisUser,
+			Value: cfg.User,
+		},
+		config.KV{
 			Key:   target.RedisKey,
 			Value: cfg.Key,
 		},
@@ -445,6 +449,10 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 		config.KV{
 			Key:   target.NATSUsername,
 			Value: cfg.Username,
+		},
+		config.KV{
+			Key:   target.NATSUserCredentials,
+			Value: cfg.UserCredentials,
 		},
 		config.KV{
 			Key:   target.NATSPassword,

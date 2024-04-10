@@ -196,7 +196,7 @@ func (sys *HTTPConsoleLoggerSys) Send(ctx context.Context, entry interface{}) er
 	sys.logBuf.Value = lg
 	sys.logBuf = sys.logBuf.Next()
 	sys.Unlock()
-	err := sys.console.Send(entry, string(logger.All))
+	err := sys.console.Send(entry)
 	if err != nil {
 		atomic.AddInt64(&sys.failedMessages, 1)
 	}

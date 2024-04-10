@@ -648,7 +648,7 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(7)
 	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
@@ -718,7 +718,7 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ModTime")
 		return
 	}
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0001Mask & 0x20) == 0 { // if not omitted
 		// write "index"
 		err = en.Append(0xa5, 0x69, 0x6e, 0x64, 0x65, 0x78)
 		if err != nil {
@@ -730,7 +730,7 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
+	if (zb0001Mask & 0x40) == 0 { // if not omitted
 		// write "crc"
 		err = en.Append(0xa3, 0x63, 0x72, 0x63)
 		if err != nil {
@@ -760,7 +760,7 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(7)
 	var zb0001Mask uint8 /* 7 bits */
 	_ = zb0001Mask
@@ -792,12 +792,12 @@ func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "ModTime"
 	o = append(o, 0xa7, 0x4d, 0x6f, 0x64, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendTime(o, z.ModTime)
-	if (zb0001Mask & 0x20) == 0 { // if not empty
+	if (zb0001Mask & 0x20) == 0 { // if not omitted
 		// string "index"
 		o = append(o, 0xa5, 0x69, 0x6e, 0x64, 0x65, 0x78)
 		o = msgp.AppendBytes(o, z.Index)
 	}
-	if (zb0001Mask & 0x40) == 0 { // if not empty
+	if (zb0001Mask & 0x40) == 0 { // if not omitted
 		// string "crc"
 		o = append(o, 0xa3, 0x63, 0x72, 0x63)
 		o = msgp.AppendMapHeader(o, uint32(len(z.Checksums)))

@@ -18,9 +18,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +32,8 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
+	ldap "github.com/minio/pkg/v2/ldap"
+	"golang.org/x/exp/slices"
 )
 
 func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
@@ -661,6 +666,36 @@ func (s *TestSuiteIAM) SetUpLDAP(c *check, serverAddr string) {
 	s.RestartIAMSuite(c)
 }
 
+// SetUpLDAPWithNonNormalizedBaseDN - expects to setup an LDAP test server using
+// the test LDAP container and canned data from
+// https://github.com/minio/minio-ldap-testing
+//
+// Sets up non-normalized base DN configuration for testing.
+func (s *TestSuiteIAM) SetUpLDAPWithNonNormalizedBaseDN(c *check, serverAddr string) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	configCmds := []string{
+		"identity_ldap",
+		fmt.Sprintf("server_addr=%s", serverAddr),
+		"server_insecure=on",
+		"lookup_bind_dn=cn=admin,dc=min,dc=io",
+		"lookup_bind_password=admin",
+		// `DC` is intentionally capitalized here.
+		"user_dn_search_base_dn=DC=min,DC=io",
+		"user_dn_search_filter=(uid=%s)",
+		// `DC` is intentionally capitalized here.
+		"group_search_base_dn=ou=swengg,DC=min,dc=io",
+		"group_search_filter=(&(objectclass=groupofnames)(member=%d))",
+	}
+	_, err := s.adm.SetConfigKV(ctx, strings.Join(configCmds, " "))
+	if err != nil {
+		c.Fatalf("unable to setup LDAP for tests: %v", err)
+	}
+
+	s.RestartIAMSuite(c)
+}
+
 const (
 	EnvTestLDAPServer = "_MINIO_LDAP_TEST_SERVER"
 )
@@ -675,18 +710,214 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 
 				ldapServer := os.Getenv(EnvTestLDAPServer)
 				if ldapServer == "" {
-					c.Skip("Skipping LDAP test as no LDAP server is provided.")
+					c.Skipf("Skipping LDAP test as no LDAP server is provided via %s", EnvTestLDAPServer)
 				}
 
 				suite.SetUpSuite(c)
 				suite.SetUpLDAP(c, ldapServer)
 				suite.TestLDAPSTS(c)
+				suite.TestLDAPUnicodeVariations(c)
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
 				suite.TestLDAPSTSServiceAccountsWithGroups(c)
 				suite.TearDownSuite(c)
 			},
 		)
+	}
+}
+
+// This test is for a fix added to handle non-normalized base DN values in the
+// LDAP configuration. It runs the existing LDAP sub-tests with a non-normalized
+// LDAP configuration.
+func TestIAMWithLDAPNonNormalizedBaseDNConfigServerSuite(t *testing.T) {
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				ldapServer := os.Getenv(EnvTestLDAPServer)
+				if ldapServer == "" {
+					c.Skipf("Skipping LDAP test as no LDAP server is provided via %s", EnvTestLDAPServer)
+				}
+
+				suite.SetUpSuite(c)
+				suite.SetUpLDAPWithNonNormalizedBaseDN(c, ldapServer)
+				suite.TestLDAPSTS(c)
+				suite.TestLDAPUnicodeVariations(c)
+				suite.TestLDAPSTSServiceAccounts(c)
+				suite.TestLDAPSTSServiceAccountsWithUsername(c)
+				suite.TestLDAPSTSServiceAccountsWithGroups(c)
+				suite.TearDownSuite(c)
+			},
+		)
+	}
+}
+
+func TestIAMExportImportWithLDAP(t *testing.T) {
+	for i, testCase := range iamTestSuites {
+		t.Run(
+			fmt.Sprintf("Test: %d, ServerType: %s", i+1, testCase.ServerTypeDescription),
+			func(t *testing.T) {
+				c := &check{t, testCase.serverType}
+				suite := testCase
+
+				ldapServer := os.Getenv(EnvTestLDAPServer)
+				if ldapServer == "" {
+					c.Skipf("Skipping LDAP test as no LDAP server is provided via %s", EnvTestLDAPServer)
+				}
+
+				iamTestContentCases := []iamTestContent{
+					{
+						policies: map[string][]byte{
+							"mypolicy": []byte(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetObject","s3:ListBucket","s3:PutObject"],"Resource":["arn:aws:s3:::mybucket/*"]}]}`),
+						},
+						ldapUserPolicyMappings: map[string][]string{
+							"uid=dillon,ou=people,ou=swengg,dc=min,dc=io": {"mypolicy"},
+							"uid=liza,ou=people,ou=swengg,dc=min,dc=io":   {"consoleAdmin"},
+						},
+						ldapGroupPolicyMappings: map[string][]string{
+							"cn=projectb,ou=groups,ou=swengg,dc=min,dc=io": {"mypolicy"},
+							"cn=projecta,ou=groups,ou=swengg,dc=min,dc=io": {"consoleAdmin"},
+						},
+					},
+				}
+
+				for caseNum, content := range iamTestContentCases {
+					suite.SetUpSuite(c)
+					suite.SetUpLDAP(c, ldapServer)
+					exportedContent := suite.TestIAMExport(c, caseNum, content)
+					suite.TearDownSuite(c)
+					suite.SetUpSuite(c)
+					suite.SetUpLDAP(c, ldapServer)
+					suite.TestIAMImport(c, exportedContent, caseNum, content)
+					suite.TearDownSuite(c)
+				}
+			},
+		)
+	}
+}
+
+type iamTestContent struct {
+	policies                map[string][]byte
+	ldapUserPolicyMappings  map[string][]string
+	ldapGroupPolicyMappings map[string][]string
+}
+
+func (s *TestSuiteIAM) TestIAMExport(c *check, caseNum int, content iamTestContent) []byte {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	for policy, policyBytes := range content.policies {
+		err := s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+		if err != nil {
+			c.Fatalf("export %d: policy add error: %v", caseNum, err)
+		}
+	}
+
+	for userDN, policies := range content.ldapUserPolicyMappings {
+		_, err := s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+			Policies: policies,
+			User:     userDN,
+		})
+		if err != nil {
+			c.Fatalf("export %d: Unable to attach policy: %v", caseNum, err)
+		}
+	}
+
+	for groupDN, policies := range content.ldapGroupPolicyMappings {
+		_, err := s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+			Policies: policies,
+			Group:    groupDN,
+		})
+		if err != nil {
+			c.Fatalf("export %d: Unable to attach group policy: %v", caseNum, err)
+		}
+	}
+
+	contentReader, err := s.adm.ExportIAM(ctx)
+	if err != nil {
+		c.Fatalf("export %d: Unable to export IAM: %v", caseNum, err)
+	}
+	defer contentReader.Close()
+
+	expContent, err := io.ReadAll(contentReader)
+	if err != nil {
+		c.Fatalf("export %d: Unable to read exported content: %v", caseNum, err)
+	}
+
+	return expContent
+}
+
+type dummyCloser struct {
+	io.Reader
+}
+
+func (d dummyCloser) Close() error { return nil }
+
+func (s *TestSuiteIAM) TestIAMImport(c *check, exportedContent []byte, caseNum int, content iamTestContent) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	dummyCloser := dummyCloser{bytes.NewReader(exportedContent)}
+	err := s.adm.ImportIAM(ctx, dummyCloser)
+	if err != nil {
+		c.Fatalf("import %d: Unable to import IAM: %v", caseNum, err)
+	}
+
+	gotContent := iamTestContent{
+		policies:                make(map[string][]byte),
+		ldapUserPolicyMappings:  make(map[string][]string),
+		ldapGroupPolicyMappings: make(map[string][]string),
+	}
+	policyContentMap, err := s.adm.ListCannedPolicies(ctx)
+	if err != nil {
+		c.Fatalf("import %d: Unable to list policies: %v", caseNum, err)
+	}
+	defaultCannedPolicies := set.CreateStringSet("consoleAdmin", "readwrite", "readonly",
+		"diagnostics", "writeonly")
+	for policy, policyBytes := range policyContentMap {
+		if defaultCannedPolicies.Contains(policy) {
+			continue
+		}
+		gotContent.policies[policy] = policyBytes
+	}
+
+	policyQueryRes, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{})
+	if err != nil {
+		c.Fatalf("import %d: Unable to get policy entities: %v", caseNum, err)
+	}
+
+	for _, entity := range policyQueryRes.PolicyMappings {
+		m := gotContent.ldapUserPolicyMappings
+		for _, user := range entity.Users {
+			m[user] = append(m[user], entity.Policy)
+		}
+		m = gotContent.ldapGroupPolicyMappings
+		for _, group := range entity.Groups {
+			m[group] = append(m[group], entity.Policy)
+		}
+	}
+
+	{
+		// We don't compare the values of the canned policies because server is
+		// re-encoding them. (FIXME?)
+		for k := range content.policies {
+			content.policies[k] = nil
+			gotContent.policies[k] = nil
+		}
+		if !reflect.DeepEqual(content.policies, gotContent.policies) {
+			c.Fatalf("import %d: policies mismatch: expected: %v, got: %v", caseNum, content.policies, gotContent.policies)
+		}
+	}
+
+	if !reflect.DeepEqual(content.ldapUserPolicyMappings, gotContent.ldapUserPolicyMappings) {
+		c.Fatalf("import %d: user policy mappings mismatch: expected: %v, got: %v", caseNum, content.ldapUserPolicyMappings, gotContent.ldapUserPolicyMappings)
+	}
+
+	if !reflect.DeepEqual(content.ldapGroupPolicyMappings, gotContent.ldapGroupPolicyMappings) {
+		c.Fatalf("import %d: group policy mappings mismatch: expected: %v, got: %v", caseNum, content.ldapGroupPolicyMappings, gotContent.ldapGroupPolicyMappings)
 	}
 }
 
@@ -823,6 +1054,170 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	c.Assert(err.Error(), "Access Denied.")
 }
 
+func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	ldapID := cr.LDAPIdentity{
+		Client:       s.TestSuiteCommon.client,
+		STSEndpoint:  s.endPoint,
+		LDAPUsername: "svc.algorithm",
+		LDAPPassword: "example",
+	}
+
+	_, err = ldapID.Retrieve()
+	if err == nil {
+		c.Fatalf("Expected to fail to create STS cred with no associated policy!")
+	}
+
+	mustNormalizeDN := func(dn string) string {
+		normalizedDN, err := ldap.NormalizeDN(dn)
+		if err != nil {
+			c.Fatalf("normalize err: %v", err)
+		}
+		return normalizedDN
+	}
+
+	actualUserDN := mustNormalizeDN("uid=svc.algorithm,OU=swengg,DC=min,DC=io")
+
+	// \uFE52 is the unicode dot SMALL FULL STOP used below:
+	userDNWithUnicodeDot := "uid=svc﹒algorithm,OU=swengg,DC=min,DC=io"
+
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDNWithUnicodeDot,
+	})
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	value, err := ldapID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	usersList, err := s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("list users should not fail: %v", err)
+	}
+	if len(usersList) != 1 {
+		c.Fatalf("expected user listing output: %#v", usersList)
+	}
+	uinfo := usersList[actualUserDN]
+	if uinfo.PolicyName != policy || uinfo.Status != madmin.AccountEnabled {
+		c.Fatalf("expected user listing content: %v", uinfo)
+	}
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that the client cannot remove any objects
+	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
+	if err.Error() != "Access Denied." {
+		c.Fatalf("unexpected non-access-denied err: %v", err)
+	}
+
+	// Remove the policy assignment on the user DN:
+	_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDNWithUnicodeDot,
+	})
+	if err != nil {
+		c.Fatalf("Unable to remove policy setting: %v", err)
+	}
+
+	_, err = ldapID.Retrieve()
+	if err == nil {
+		c.Fatalf("Expected to fail to create a user with no associated policy!")
+	}
+
+	// Set policy via group and validate policy assignment.
+	actualGroupDN := mustNormalizeDN("cn=project.c,ou=groups,ou=swengg,dc=min,dc=io")
+	groupDNWithUnicodeDot := "cn=project﹒c,ou=groups,ou=swengg,dc=min,dc=io"
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		Group:    groupDNWithUnicodeDot,
+	})
+	if err != nil {
+		c.Fatalf("Unable to attach group policy: %v", err)
+	}
+
+	value, err = ldapID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	policyResult, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{
+		Policy: []string{policy},
+	})
+	if err != nil {
+		c.Fatalf("GetLDAPPolicyEntities should not fail: %v", err)
+	}
+	{
+		// Check that the mapping we created exists.
+		idx := slices.IndexFunc(policyResult.PolicyMappings, func(e madmin.PolicyEntities) bool {
+			return e.Policy == policy && slices.Contains(e.Groups, actualGroupDN)
+		})
+		if !(idx >= 0) {
+			c.Fatalf("expected groupDN (%s) to be present in mapping list: %#v", actualGroupDN, policyResult)
+		}
+	}
+
+	minioClient, err = minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that the client cannot remove any objects
+	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
+	c.Assert(err.Error(), "Access Denied.")
+}
+
 func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -908,14 +1303,6 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 
 	// 3. Check S3 access
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
-
-	// 4. Check that svc account can restrict the policy, and that the
-	// session policy can be updated.
-	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
-
-	// 4. Check that service account's secret key and account status can be
-	// updated.
-	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
@@ -1101,14 +1488,6 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 	// 3. Check S3 access
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
-	// 4. Check that svc account can restrict the policy, and that the
-	// session policy can be updated.
-	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
-
-	// 4. Check that service account's secret key and account status can be
-	// updated.
-	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
-
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 
@@ -1188,6 +1567,97 @@ func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
 	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
 	if err.Error() != "Access Denied." {
 		c.Fatalf("unexpected non-access-denied err: %v", err)
+	}
+}
+
+func (s *TestSuiteIAM) TestOpenIDSTSDurationSeconds(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Generate web identity STS token by interacting with OpenID IDP.
+	token, err := MockOpenIDTestUserInteraction(ctx, testAppParams, "dillon@example.io", "dillon")
+	if err != nil {
+		c.Fatalf("mock user err: %v", err)
+	}
+	// fmt.Printf("TOKEN: %s\n", token)
+
+	webID := cr.STSWebIdentity{
+		Client:      s.TestSuiteCommon.client,
+		STSEndpoint: s.endPoint,
+		GetWebIDTokenExpiry: func() (*cr.WebIdentityToken, error) {
+			return &cr.WebIdentityToken{
+				Token:  token,
+				Expiry: 900,
+			}, nil
+		},
+	}
+
+	// Create policy - with name as one of the groups in OpenID the user is
+	// a member of.
+	policy := "projecta"
+	policyTmpl := `{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+    "Effect": "Deny",
+    "Action": ["sts:AssumeRoleWithWebIdentity"],
+    "Condition": {"NumericGreaterThan": {"sts:DurationSeconds": "%d"}}
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`
+
+	for i, testCase := range []struct {
+		durSecs     int
+		expectedErr bool
+	}{
+		{60, true},
+		{1800, false},
+	} {
+		policyBytes := []byte(fmt.Sprintf(policyTmpl, testCase.durSecs, bucket))
+		err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+		if err != nil {
+			c.Fatalf("Test %d: policy add error: %v", i+1, err)
+		}
+
+		value, err := webID.Retrieve()
+		if err != nil && !testCase.expectedErr {
+			c.Fatalf("Test %d: Expected to generate STS creds, got err: %#v", i+1, err)
+		}
+		if err == nil && testCase.expectedErr {
+			c.Fatalf("Test %d: An error is unexpected to generate STS creds, got err: %#v", i+1, err)
+		}
+
+		if err != nil && testCase.expectedErr {
+			continue
+		}
+
+		minioClient, err := minio.New(s.endpoint, &minio.Options{
+			Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+			Secure:    s.secure,
+			Transport: s.TestSuiteCommon.client.Transport,
+		})
+		if err != nil {
+			c.Fatalf("Test %d: Error initializing client: %v", i+1, err)
+		}
+
+		c.mustListObjects(ctx, minioClient, bucket)
 	}
 }
 
@@ -1358,14 +1828,6 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	// 3. Check S3 access
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
-	// 4. Check that svc account can restrict the policy, and that the
-	// session policy can be updated.
-	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
-
-	// 4. Check that service account's secret key and account status can be
-	// updated.
-	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
-
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 
@@ -1464,6 +1926,7 @@ func TestIAMWithOpenIDServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpOpenID(c, openIDServer, "")
 				suite.TestOpenIDSTS(c)
+				suite.TestOpenIDSTSDurationSeconds(c)
 				suite.TestOpenIDServiceAcc(c)
 				suite.TestOpenIDSTSAddUser(c)
 				suite.TearDownSuite(c)
@@ -1657,14 +2120,6 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 
 	// 3. Check S3 access
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
-
-	// 4. Check that svc account can restrict the policy, and that the
-	// session policy can be updated.
-	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
-
-	// 4. Check that service account's secret key and account status can be
-	// updated.
-	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)

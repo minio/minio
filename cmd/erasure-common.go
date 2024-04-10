@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/sync/errgroup"
 )
 
@@ -42,7 +41,7 @@ func (er erasureObjects) getOnlineDisks() (newDisks []StorageAPI) {
 			if disks[i] == nil {
 				return
 			}
-			di, err := disks[i].DiskInfo(context.Background(), false)
+			di, err := disks[i].DiskInfo(context.Background(), DiskInfoOptions{})
 			if err != nil || di.Healing {
 				// - Do not consume disks which are not reachable
 				//   unformatted or simply not accessible for some reason.
@@ -163,7 +162,7 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 			continue
 		}
 		if !IsErr(err, ignoredErrs...) {
-			logger.LogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
+			storageLogOnceIf(ctx, fmt.Errorf("Drive %s, path (%s/%s) returned an error (%w)",
 				disks[index], req.Bucket, req.Prefix, err),
 				disks[index].String())
 		}

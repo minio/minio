@@ -28,7 +28,7 @@ import (
 
 // RemoveSensitiveHeaders removes confidential encryption
 // information - e.g. the SSE-C key - from the HTTP headers.
-// It has the same semantics as RemoveSensitiveEntires.
+// It has the same semantics as RemoveSensitiveEntries.
 func RemoveSensitiveHeaders(h http.Header) {
 	h.Del(xhttp.AmzServerSideEncryptionCustomerKey)
 	h.Del(xhttp.AmzServerSideEncryptionCopyCustomerKey)

@@ -70,24 +70,24 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 	invalidMD5Header := md5Header([]byte("meh"))
 
 	testCases := []struct {
-		bucketName     string
-		objName        string
-		inputData      []byte
-		inputMeta      map[string]string
-		inputSHA256    string
-		intputDataSize int64
+		bucketName    string
+		objName       string
+		inputData     []byte
+		inputMeta     map[string]string
+		inputSHA256   string
+		inputDataSize int64
 		// expected error output.
 		expectedMd5   string
 		expectedError error
 	}{
 		// Cases with invalid bucket name.
-		0: {bucketName: ".test", objName: "obj", inputData: []byte(""), expectedError: BucketNotFound{Bucket: ".test"}},
-		1: {bucketName: "------", objName: "obj", inputData: []byte(""), expectedError: BucketNotFound{Bucket: "------"}},
+		0: {bucketName: ".test", objName: "obj", inputData: []byte(""), expectedError: BucketNameInvalid{Bucket: ".test"}},
+		1: {bucketName: "------", objName: "obj", inputData: []byte(""), expectedError: BucketNameInvalid{Bucket: "------"}},
 		2: {
 			bucketName: "$this-is-not-valid-too", objName: "obj", inputData: []byte(""),
-			expectedError: BucketNotFound{Bucket: "$this-is-not-valid-too"},
+			expectedError: BucketNameInvalid{Bucket: "$this-is-not-valid-too"},
 		},
-		3: {bucketName: "a", objName: "obj", inputData: []byte(""), expectedError: BucketNotFound{Bucket: "a"}},
+		3: {bucketName: "a", objName: "obj", inputData: []byte(""), expectedError: BucketNameInvalid{Bucket: "a"}},
 
 		// Case with invalid object names.
 		4: {bucketName: bucket, inputData: []byte(""), expectedError: ObjectNameInvalid{Bucket: bucket, Object: ""}},
@@ -106,7 +106,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		7: {
 			bucketName: bucket, objName: object, inputData: []byte("abcd"),
 			inputMeta:   map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"},
-			inputSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580", intputDataSize: int64(len("abcd")),
+			inputSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580", inputDataSize: int64(len("abcd")),
 			expectedError: hash.SHA256Mismatch{
 				ExpectedSHA256:   "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031580",
 				CalculatedSHA256: "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
@@ -116,76 +116,76 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Input with size more than the size of actual data inside the reader.
 		8: {
 			bucketName: bucket, objName: object, inputData: []byte("abcd"),
-			inputMeta: map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331e"}, intputDataSize: int64(len("abcd") + 1),
+			inputMeta: map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331e"}, inputDataSize: int64(len("abcd") + 1),
 			expectedError: hash.BadDigest{ExpectedMD5: "e2fc714c4727ee9395f324cd2e7f331e", CalculatedMD5: "e2fc714c4727ee9395f324cd2e7f331f"},
 		},
 
 		// Input with size less than the size of actual data inside the reader.
 		9: {
 			bucketName: bucket, objName: object, inputData: []byte("abcd"),
-			inputMeta: map[string]string{"etag": "900150983cd24fb0d6963f7d28e17f73"}, intputDataSize: int64(len("abcd") - 1),
+			inputMeta: map[string]string{"etag": "900150983cd24fb0d6963f7d28e17f73"}, inputDataSize: int64(len("abcd") - 1),
 			expectedError: ioutil.ErrOverread,
 		},
 
 		// Validating for success cases.
-		10: {bucketName: bucket, objName: object, inputData: []byte("abcd"), inputMeta: map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"}, intputDataSize: int64(len("abcd"))},
-		11: {bucketName: bucket, objName: object, inputData: []byte("efgh"), inputMeta: map[string]string{"etag": "1f7690ebdd9b4caf8fab49ca1757bf27"}, intputDataSize: int64(len("efgh"))},
-		12: {bucketName: bucket, objName: object, inputData: []byte("ijkl"), inputMeta: map[string]string{"etag": "09a0877d04abf8759f99adec02baf579"}, intputDataSize: int64(len("ijkl"))},
-		13: {bucketName: bucket, objName: object, inputData: []byte("mnop"), inputMeta: map[string]string{"etag": "e132e96a5ddad6da8b07bba6f6131fef"}, intputDataSize: int64(len("mnop"))},
+		10: {bucketName: bucket, objName: object, inputData: []byte("abcd"), inputMeta: map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"}, inputDataSize: int64(len("abcd"))},
+		11: {bucketName: bucket, objName: object, inputData: []byte("efgh"), inputMeta: map[string]string{"etag": "1f7690ebdd9b4caf8fab49ca1757bf27"}, inputDataSize: int64(len("efgh"))},
+		12: {bucketName: bucket, objName: object, inputData: []byte("ijkl"), inputMeta: map[string]string{"etag": "09a0877d04abf8759f99adec02baf579"}, inputDataSize: int64(len("ijkl"))},
+		13: {bucketName: bucket, objName: object, inputData: []byte("mnop"), inputMeta: map[string]string{"etag": "e132e96a5ddad6da8b07bba6f6131fef"}, inputDataSize: int64(len("mnop"))},
 
 		// With no metadata
-		14: {bucketName: bucket, objName: object, inputData: data, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
-		15: {bucketName: bucket, objName: object, inputData: nilBytes, intputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes)},
-		16: {bucketName: bucket, objName: object, inputData: fiveMBBytes, intputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes)},
+		14: {bucketName: bucket, objName: object, inputData: data, inputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
+		15: {bucketName: bucket, objName: object, inputData: nilBytes, inputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes)},
+		16: {bucketName: bucket, objName: object, inputData: fiveMBBytes, inputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes)},
 
 		// With arbitrary metadata
-		17: {bucketName: bucket, objName: object, inputData: data, inputMeta: map[string]string{"answer": "42"}, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
-		18: {bucketName: bucket, objName: object, inputData: nilBytes, inputMeta: map[string]string{"answer": "42"}, intputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes)},
-		19: {bucketName: bucket, objName: object, inputData: fiveMBBytes, inputMeta: map[string]string{"answer": "42"}, intputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes)},
+		17: {bucketName: bucket, objName: object, inputData: data, inputMeta: map[string]string{"answer": "42"}, inputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
+		18: {bucketName: bucket, objName: object, inputData: nilBytes, inputMeta: map[string]string{"answer": "42"}, inputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes)},
+		19: {bucketName: bucket, objName: object, inputData: fiveMBBytes, inputMeta: map[string]string{"answer": "42"}, inputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes)},
 
 		// With valid md5sum and sha256.
-		20: {bucketName: bucket, objName: object, inputData: data, inputMeta: md5Header(data), inputSHA256: getSHA256Hash(data), intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
-		21: {bucketName: bucket, objName: object, inputData: nilBytes, inputMeta: md5Header(nilBytes), inputSHA256: getSHA256Hash(nilBytes), intputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes)},
-		22: {bucketName: bucket, objName: object, inputData: fiveMBBytes, inputMeta: md5Header(fiveMBBytes), inputSHA256: getSHA256Hash(fiveMBBytes), intputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes)},
+		20: {bucketName: bucket, objName: object, inputData: data, inputMeta: md5Header(data), inputSHA256: getSHA256Hash(data), inputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
+		21: {bucketName: bucket, objName: object, inputData: nilBytes, inputMeta: md5Header(nilBytes), inputSHA256: getSHA256Hash(nilBytes), inputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes)},
+		22: {bucketName: bucket, objName: object, inputData: fiveMBBytes, inputMeta: md5Header(fiveMBBytes), inputSHA256: getSHA256Hash(fiveMBBytes), inputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes)},
 
 		// data with invalid md5sum in header
 		23: {
-			bucketName: bucket, objName: object, inputData: data, inputMeta: invalidMD5Header, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data),
+			bucketName: bucket, objName: object, inputData: data, inputMeta: invalidMD5Header, inputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data),
 			expectedError: hash.BadDigest{ExpectedMD5: invalidMD5, CalculatedMD5: getMD5Hash(data)},
 		},
 		24: {
-			bucketName: bucket, objName: object, inputData: nilBytes, inputMeta: invalidMD5Header, intputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes),
+			bucketName: bucket, objName: object, inputData: nilBytes, inputMeta: invalidMD5Header, inputDataSize: int64(len(nilBytes)), expectedMd5: getMD5Hash(nilBytes),
 			expectedError: hash.BadDigest{ExpectedMD5: invalidMD5, CalculatedMD5: getMD5Hash(nilBytes)},
 		},
 		25: {
-			bucketName: bucket, objName: object, inputData: fiveMBBytes, inputMeta: invalidMD5Header, intputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes),
+			bucketName: bucket, objName: object, inputData: fiveMBBytes, inputMeta: invalidMD5Header, inputDataSize: int64(len(fiveMBBytes)), expectedMd5: getMD5Hash(fiveMBBytes),
 			expectedError: hash.BadDigest{ExpectedMD5: invalidMD5, CalculatedMD5: getMD5Hash(fiveMBBytes)},
 		},
 
 		// data with size different from the actual number of bytes available in the reader
-		26: {bucketName: bucket, objName: object, inputData: data, intputDataSize: int64(len(data) - 1), expectedMd5: getMD5Hash(data[:len(data)-1]), expectedError: ioutil.ErrOverread},
-		27: {bucketName: bucket, objName: object, inputData: nilBytes, intputDataSize: int64(len(nilBytes) + 1), expectedMd5: getMD5Hash(nilBytes), expectedError: IncompleteBody{Bucket: bucket, Object: object}},
+		26: {bucketName: bucket, objName: object, inputData: data, inputDataSize: int64(len(data) - 1), expectedMd5: getMD5Hash(data[:len(data)-1]), expectedError: ioutil.ErrOverread},
+		27: {bucketName: bucket, objName: object, inputData: nilBytes, inputDataSize: int64(len(nilBytes) + 1), expectedMd5: getMD5Hash(nilBytes), expectedError: IncompleteBody{Bucket: bucket, Object: object}},
 		28: {bucketName: bucket, objName: object, inputData: fiveMBBytes, expectedMd5: getMD5Hash(fiveMBBytes), expectedError: ioutil.ErrOverread},
 
 		// valid data with X-Amz-Meta- meta
-		29: {bucketName: bucket, objName: object, inputData: data, inputMeta: map[string]string{"X-Amz-Meta-AppID": "a42"}, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
+		29: {bucketName: bucket, objName: object, inputData: data, inputMeta: map[string]string{"X-Amz-Meta-AppID": "a42"}, inputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
 
 		// Put an empty object with a trailing slash
 		30: {bucketName: bucket, objName: "emptydir/", inputData: []byte{}, expectedMd5: getMD5Hash([]byte{})},
 		// Put an object inside the empty directory
-		31: {bucketName: bucket, objName: "emptydir/" + object, inputData: data, intputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
+		31: {bucketName: bucket, objName: "emptydir/" + object, inputData: data, inputDataSize: int64(len(data)), expectedMd5: getMD5Hash(data)},
 		// Put the empty object with a trailing slash again (refer to Test case 30), this needs to succeed
 		32: {bucketName: bucket, objName: "emptydir/", inputData: []byte{}, expectedMd5: getMD5Hash([]byte{})},
 
 		// With invalid crc32.
 		33: {
 			bucketName: bucket, objName: object, inputData: []byte("abcd"),
-			inputMeta:      map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f", "x-amz-checksum-crc32": "abcd"},
-			intputDataSize: int64(len("abcd")),
+			inputMeta:     map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f", "x-amz-checksum-crc32": "abcd"},
+			inputDataSize: int64(len("abcd")),
 		},
 	}
 	for i, testCase := range testCases {
-		in := mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], testCase.inputSHA256)
+		in := mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.inputDataSize, testCase.inputMeta["etag"], testCase.inputSHA256)
 		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, in, ObjectOptions{UserDefined: testCase.inputMeta})
 		if actualErr != nil && testCase.expectedError == nil {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i, instanceType, actualErr.Error())
@@ -243,11 +243,11 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 	}
 
 	testCases := []struct {
-		bucketName     string
-		objName        string
-		inputData      []byte
-		inputMeta      map[string]string
-		intputDataSize int64
+		bucketName    string
+		objName       string
+		inputData     []byte
+		inputMeta     map[string]string
+		inputDataSize int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
@@ -263,7 +263,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 
 	sha256sum := ""
 	for i, testCase := range testCases {
-		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), ObjectOptions{UserDefined: testCase.inputMeta})
+		objInfo, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.inputDataSize, testCase.inputMeta["etag"], sha256sum), ObjectOptions{UserDefined: testCase.inputMeta})
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -291,11 +291,11 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 
 	// Validate the last test.
 	testCase := struct {
-		bucketName     string
-		objName        string
-		inputData      []byte
-		inputMeta      map[string]string
-		intputDataSize int64
+		bucketName    string
+		objName       string
+		inputData     []byte
+		inputMeta     map[string]string
+		inputDataSize int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
 		// expected error output.
@@ -312,7 +312,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		errErasureWriteQuorum,
 	}
 
-	_, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.intputDataSize, testCase.inputMeta["etag"], sha256sum), ObjectOptions{UserDefined: testCase.inputMeta})
+	_, actualErr := obj.PutObject(context.Background(), testCase.bucketName, testCase.objName, mustGetPutObjReader(t, bytes.NewReader(testCase.inputData), testCase.inputDataSize, testCase.inputMeta["etag"], sha256sum), ObjectOptions{UserDefined: testCase.inputMeta})
 	if actualErr != nil && testCase.shouldPass {
 		t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", len(testCases)+1, instanceType, actualErr.Error())
 	}

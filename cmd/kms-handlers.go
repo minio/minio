@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
@@ -431,10 +431,6 @@ func (a kmsAPIHandlers) KMSDescribePolicyHandler(w http.ResponseWriter, r *http.
 	writeSuccessResponseJSON(w, p)
 }
 
-type assignPolicyRequest struct {
-	Identity string
-}
-
 // KMSAssignPolicyHandler - POST /minio/kms/v1/policy/assign?policy=<policy>
 func (a kmsAPIHandlers) KMSAssignPolicyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSAssignPolicy")
@@ -449,22 +445,8 @@ func (a kmsAPIHandlers) KMSAssignPolicyHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
-	manager, ok := GlobalKMS.(kms.PolicyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	var request assignPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	err := manager.AssignPolicy(ctx, r.Form.Get("policy"), request.Identity)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseHeadersOnly(w)
+	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+	return
 }
 
 // KMSDeletePolicyHandler - DELETE /minio/kms/v1/policy/delete?policy=<policy>
@@ -481,17 +463,8 @@ func (a kmsAPIHandlers) KMSDeletePolicyHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
-
-	manager, ok := GlobalKMS.(kms.PolicyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	if err := manager.DeletePolicy(ctx, r.Form.Get("policy")); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseHeadersOnly(w)
+	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+	return
 }
 
 // KMSListPoliciesHandler - GET /minio/kms/v1/policy/list?pattern=<pattern>
@@ -668,17 +641,8 @@ func (a kmsAPIHandlers) KMSDeleteIdentityHandler(w http.ResponseWriter, r *http.
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
-	manager, ok := GlobalKMS.(kms.IdentityManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	if err := manager.DeleteIdentity(ctx, r.Form.Get("policy")); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseHeadersOnly(w)
+	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
+	return
 }
 
 // KMSListIdentitiesHandler - GET /minio/kms/v1/identity/list?pattern=<pattern>

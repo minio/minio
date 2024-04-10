@@ -471,9 +471,11 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 
 	if len(events) > 0 {
 		sort.Slice(events, func(i, j int) bool {
-			if events[i].Due.Equal(events[j].Due) {
-				// Prefer Expiration over Transition for both current
-				// and noncurrent versions
+			// Prefer Expiration over Transition for both current
+			// and noncurrent versions when,
+			// - now is past the expected time to action
+			// - expected time to action is the same for both actions
+			if now.After(events[i].Due) && now.After(events[j].Due) || events[i].Due.Equal(events[j].Due) {
 				switch events[i].Action {
 				case DeleteAction, DeleteVersionAction:
 					return true
@@ -515,7 +517,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
 	event := lc.eval(obj, time.Time{})
 	switch event.Action {
-	case DeleteAction, DeleteVersionAction:
+	case DeleteAction, DeleteVersionAction, DeleteAllVersionsAction:
 		w.Header()[xhttp.AmzExpiration] = []string{
 			fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, event.Due.Format(http.TimeFormat), event.RuleID),
 		}

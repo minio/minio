@@ -206,7 +206,9 @@ func TestIAMInternalIDPServerSuite(t *testing.T) {
 				suite.TestCannedPolicies(c)
 				suite.TestGroupAddRemove(c)
 				suite.TestServiceAccountOpsByAdmin(c)
+				suite.TestServiceAccountPrivilegeEscalationBug(c)
 				suite.TestServiceAccountOpsByUser(c)
+				suite.TestServiceAccountDurationSecondsCondition(c)
 				suite.TestAddServiceAccountPerms(c)
 				suite.TearDownSuite(c)
 			},
@@ -896,19 +898,98 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 	// 3. Check S3 access
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
-	// 4. Check that svc account can restrict the policy, and that the
-	// session policy can be updated.
-	c.assertSvcAccSessionPolicyUpdate(ctx, s, userAdmClient, accessKey, bucket)
-
-	// 4. Check that service account's secret key and account status can be
-	// updated.
-	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, accessKey, bucket)
-
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
 
 	// 6. Check that service account cannot be created for some other user.
 	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
+}
+
+func (s *TestSuiteIAM) TestServiceAccountDurationSecondsCondition(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Deny",
+   "Action": [
+     "admin:CreateServiceAccount",
+     "admin:UpdateServiceAccount"
+   ],
+   "Condition": {"NumericGreaterThan": {"svc:DurationSeconds": "3600"}}
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	// Create an madmin client with user creds
+	userAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating user admin client: %v", err)
+	}
+	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	distantExpiration := time.Now().Add(30 * time.Minute)
+	cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: accessKey,
+		AccessKey:  "svc-accesskey",
+		SecretKey:  "svc-secretkey",
+		Expiration: &distantExpiration,
+	})
+	if err != nil {
+		c.Fatalf("Unable to create svc acc: %v", err)
+	}
+
+	c.assertSvcAccS3Access(ctx, s, cr, bucket)
+
+	closeExpiration := time.Now().Add(2 * time.Hour)
+	_, err = userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: accessKey,
+		AccessKey:  "svc-accesskey",
+		SecretKey:  "svc-secretkey",
+		Expiration: &closeExpiration,
+	})
+	if err == nil {
+		c.Fatalf("Creating a svc acc with distant expiration should fail")
+	}
 }
 
 func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
@@ -977,6 +1058,95 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 
 	// 5. Check that service account can be deleted.
 	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket)
+}
+
+func (s *TestSuiteIAM) TestServiceAccountPrivilegeEscalationBug(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	err := s.client.MakeBucket(ctx, "public", minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	err = s.client.MakeBucket(ctx, "private", minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket creat error: %v", err)
+	}
+
+	pubPolicyBytes := []byte(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:*"
+   ],
+   "Resource": [
+    "arn:aws:s3:::public",
+    "arn:aws:s3:::public/*"
+   ]
+  }
+ ]
+}`)
+
+	fullS3PolicyBytes := []byte(`{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*"
+      ]
+    }
+  ]
+}
+`)
+
+	// Create a service account for the root user.
+	cr, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		TargetUser: globalActiveCred.AccessKey,
+		Policy:     pubPolicyBytes,
+	})
+	if err != nil {
+		c.Fatalf("admin should be able to create service account for themselves %s", err)
+	}
+
+	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
+
+	// Check that the service account can access the public bucket.
+	buckets, err := svcClient.ListBuckets(ctx)
+	if err != nil {
+		c.Fatalf("err fetching buckets %s", err)
+	}
+	if len(buckets) != 1 || buckets[0].Name != "public" {
+		c.Fatalf("service account should only have access to public bucket")
+	}
+
+	// Create an madmin client with the service account creds.
+	svcAdmClient, err := madmin.NewWithOptions(s.endpoint, &madmin.Options{
+		Creds:  credentials.NewStaticV4(cr.AccessKey, cr.SecretKey, ""),
+		Secure: s.secure,
+	})
+	if err != nil {
+		c.Fatalf("Err creating svcacct admin client: %v", err)
+	}
+	svcAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+
+	// Attempt to update the policy on the service account.
+	err = svcAdmClient.UpdateServiceAccount(ctx, cr.AccessKey,
+		madmin.UpdateServiceAccountReq{
+			NewPolicy: fullS3PolicyBytes,
+		})
+
+	if err == nil {
+		c.Fatalf("service account should not be able to update policy on itself")
+	} else if !strings.Contains(err.Error(), "Access Denied") {
+		c.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func (s *TestSuiteIAM) SetUpAccMgmtPlugin(c *check) {

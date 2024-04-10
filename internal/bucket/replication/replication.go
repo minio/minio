@@ -118,9 +118,6 @@ func (c Config) Validate(bucket string, sameTarget bool) error {
 	return nil
 }
 
-// Type - replication type enum
-type Type int
-
 // Types of replication
 const (
 	UnsetReplicationType Type = 0 + iota
@@ -223,9 +220,6 @@ func (c Config) GetDestination() Destination {
 
 // Replicate returns true if the object should be replicated.
 func (c Config) Replicate(obj ObjectOpts) bool {
-	if obj.SSEC {
-		return false
-	}
 	for _, rule := range c.FilterActionableRules(obj) {
 		if rule.Status == Disabled {
 			continue

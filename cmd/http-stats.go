@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -268,6 +269,28 @@ func (s *bucketConnStats) getS3InOutBytes() map[string]inOutBytes {
 	return bucketStats
 }
 
+// Return S3 total input/output bytes for each
+func (s *bucketConnStats) getBucketS3InOutBytes(buckets []string) map[string]inOutBytes {
+	s.RLock()
+	defer s.RUnlock()
+
+	if len(s.stats) == 0 || len(buckets) == 0 {
+		return nil
+	}
+
+	bucketStats := make(map[string]inOutBytes, len(buckets))
+	for _, bucket := range buckets {
+		if stats, ok := s.stats[bucket]; ok {
+			bucketStats[bucket] = inOutBytes{
+				In:  stats.s3InputBytes,
+				Out: stats.s3OutputBytes,
+			}
+		}
+	}
+
+	return bucketStats
+}
+
 // delete metrics once bucket is deleted.
 func (s *bucketConnStats) delete(bucket string) {
 	s.Lock()
@@ -326,7 +349,7 @@ func (stats *HTTPAPIStats) Get(api string) int {
 }
 
 // Load returns the recorded stats.
-func (stats *HTTPAPIStats) Load() map[string]int {
+func (stats *HTTPAPIStats) Load(toLower bool) map[string]int {
 	if stats == nil {
 		return map[string]int{}
 	}
@@ -336,6 +359,9 @@ func (stats *HTTPAPIStats) Load() map[string]int {
 
 	apiStats := make(map[string]int, len(stats.apiStats))
 	for k, v := range stats.apiStats {
+		if toLower {
+			k = strings.ToLower(k)
+		}
 		apiStats[k] = v
 	}
 	return apiStats
@@ -373,7 +399,7 @@ func (st *HTTPStats) incS3RequestsIncoming() {
 }
 
 // Converts http stats into struct to be sent back to the client.
-func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
+func (st *HTTPStats) toServerHTTPStats(toLowerKeys bool) ServerHTTPStats {
 	serverStats := ServerHTTPStats{}
 	serverStats.S3RequestsIncoming = atomic.SwapUint64(&st.s3RequestsIncoming, 0)
 	serverStats.S3RequestsInQueue = atomic.LoadInt32(&st.s3RequestsInQueue)
@@ -382,22 +408,22 @@ func (st *HTTPStats) toServerHTTPStats() ServerHTTPStats {
 	serverStats.TotalS3RejectedHeader = atomic.LoadUint64(&st.rejectedRequestsHeader)
 	serverStats.TotalS3RejectedInvalid = atomic.LoadUint64(&st.rejectedRequestsInvalid)
 	serverStats.CurrentS3Requests = ServerHTTPAPIStats{
-		APIStats: st.currentS3Requests.Load(),
+		APIStats: st.currentS3Requests.Load(toLowerKeys),
 	}
 	serverStats.TotalS3Requests = ServerHTTPAPIStats{
-		APIStats: st.totalS3Requests.Load(),
+		APIStats: st.totalS3Requests.Load(toLowerKeys),
 	}
 	serverStats.TotalS3Errors = ServerHTTPAPIStats{
-		APIStats: st.totalS3Errors.Load(),
+		APIStats: st.totalS3Errors.Load(toLowerKeys),
 	}
 	serverStats.TotalS34xxErrors = ServerHTTPAPIStats{
-		APIStats: st.totalS34xxErrors.Load(),
+		APIStats: st.totalS34xxErrors.Load(toLowerKeys),
 	}
 	serverStats.TotalS35xxErrors = ServerHTTPAPIStats{
-		APIStats: st.totalS35xxErrors.Load(),
+		APIStats: st.totalS35xxErrors.Load(toLowerKeys),
 	}
 	serverStats.TotalS3Canceled = ServerHTTPAPIStats{
-		APIStats: st.totalS3Canceled.Load(),
+		APIStats: st.totalS3Canceled.Load(toLowerKeys),
 	}
 	return serverStats
 }

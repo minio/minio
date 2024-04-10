@@ -98,7 +98,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	// Get buckets in the DNS
 	dnsBuckets, err := globalDNSConfig.List()
 	if err != nil && !IsErrIgnored(err, dns.ErrNoEntriesFound, dns.ErrNotImplemented, dns.ErrDomainMissing) {
-		logger.LogIf(GlobalContext, err)
+		dnsLogIf(GlobalContext, err)
 		return
 	}
 
@@ -160,13 +160,13 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	ctx := GlobalContext
 	for _, err := range g.Wait() {
 		if err != nil {
-			logger.LogIf(ctx, err)
+			dnsLogIf(ctx, err)
 			return
 		}
 	}
 
 	for _, bucket := range bucketsInConflict.ToSlice() {
-		logger.LogIf(ctx, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket", bucket, globalDomainIPs.ToSlice()))
+		dnsLogIf(ctx, fmt.Errorf("Unable to add bucket DNS entry for bucket %s, an entry exists for the same bucket by a different tenant. This local bucket will be ignored. Bucket names are globally unique in federated deployments. Use path style requests on following addresses '%v' to access this bucket", bucket, globalDomainIPs.ToSlice()))
 	}
 
 	var wg sync.WaitGroup
@@ -187,7 +187,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 			// We go to here, so we know the bucket no longer exists,
 			// but is registered in DNS to this server
 			if err := globalDNSConfig.Delete(bucket); err != nil {
-				logger.LogIf(GlobalContext, fmt.Errorf("Failed to remove DNS entry for %s due to %w",
+				dnsLogIf(GlobalContext, fmt.Errorf("Failed to remove DNS entry for %s due to %w",
 					bucket, err))
 			}
 		}(bucket)
@@ -424,7 +424,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Content-Md5 is requied should be set
+	// Content-Md5 is required should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL)
@@ -466,13 +466,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Call checkRequestAuthType to populate ReqInfo.AccessKey before GetBucketInfo()
 	// Ignore errors here to preserve the S3 error behavior of GetBucketInfo()
 	checkRequestAuthType(ctx, r, policy.DeleteObjectAction, bucket, "")
-
-	// Before proceeding validate if bucket exists.
-	_, err := objectAPI.GetBucketInfo(ctx, bucket, BucketOptions{})
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
 
 	deleteObjectsFn := objectAPI.DeleteObjects
 
@@ -611,6 +604,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		VersionSuspended: vc.Suspended(),
 	})
 
+	// Are all objects saying bucket not found?
+	if isAllBucketsNotFound(errs) {
+		writeErrorResponse(ctx, w, toAPIError(ctx, errs[0]), r.URL)
+		return
+	}
+
 	for i := range errs {
 		// DeleteMarkerVersionID is not used specifically to avoid
 		// lookup errors, since DeleteMarkerVersionID is only
@@ -618,7 +617,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		// specify a versionID.
 		objToDel := ObjectToDelete{
 			ObjectV: ObjectV{
-				ObjectName: dObjects[i].ObjectName,
+				ObjectName: decodeDirObject(dObjects[i].ObjectName),
 				VersionID:  dObjects[i].VersionID,
 			},
 			VersionPurgeStatus:            dObjects[i].VersionPurgeStatus(),
@@ -791,7 +790,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// check if client is attempting to create more buckets, complain about it.
 	if currBuckets := globalBucketMetadataSys.Count(); currBuckets+1 > maxBuckets {
-		logger.LogIf(ctx, fmt.Errorf("Please avoid creating more buckets %d beyond recommended %d", currBuckets+1, maxBuckets))
+		internalLogIf(ctx, fmt.Errorf("Please avoid creating more buckets %d beyond recommended %d", currBuckets+1, maxBuckets), logger.WarningKind)
 	}
 
 	opts := MakeBucketOptions{
@@ -872,7 +871,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	globalNotificationSys.LoadBucketMetadata(GlobalContext, bucket)
 
 	// Call site replication hook
-	logger.LogIf(ctx, globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts))
+	replLogIf(ctx, globalSiteReplicationSys.MakeBucketHook(ctx, bucket, opts))
 
 	// Make sure to add Location information here only for bucket
 	w.Header().Set(xhttp.Location, pathJoin(SlashSeparator, bucket))
@@ -1219,11 +1218,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
-			return
-		}
-
 		var (
 			reader io.Reader
 			keyID  string
@@ -1395,7 +1389,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			// Notify object created events.
 			sendEvent(eventArgsList[i])
 
-			if eventArgsList[i].Object.NumVersions > dataScannerExcessiveVersionsThreshold {
+			if eventArgsList[i].Object.NumVersions > int(scannerExcessObjectVersions.Load()) {
 				// Send events for excessive versions.
 				sendEvent(eventArgs{
 					EventName:    event.ObjectManyVersions,
@@ -1405,6 +1399,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					RespElements: extractRespElements(w),
 					UserAgent:    r.UserAgent() + " " + "MinIO-Fan-Out",
 					Host:         handlers.GetSourceIP(r),
+				})
+
+				auditLogInternal(context.Background(), AuditLogOptions{
+					Event:     "scanner:manyversions",
+					APIName:   "PostPolicyBucket",
+					Bucket:    eventArgsList[i].Object.Bucket,
+					Object:    eventArgsList[i].Object.Name,
+					VersionID: eventArgsList[i].Object.VersionID,
+					Status:    http.StatusText(http.StatusOK),
 				})
 			}
 		}
@@ -1461,7 +1464,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		Host:         handlers.GetSourceIP(r),
 	})
 
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		defer sendEvent(eventArgs{
 			EventName:    event.ObjectManyVersions,
 			BucketName:   objInfo.Bucket,
@@ -1470,6 +1473,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			RespElements: extractRespElements(w),
 			UserAgent:    r.UserAgent(),
 			Host:         handlers.GetSourceIP(r),
+		})
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "PostPolicyBucket",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
 		})
 	}
 
@@ -1681,7 +1693,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	if globalDNSConfig != nil {
 		if err := globalDNSConfig.Delete(bucket); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually, bucket on MinIO no longer exists", err))
+			dnsLogIf(ctx, fmt.Errorf("Unable to delete bucket DNS entry %w, please delete it manually, bucket on MinIO no longer exists", err))
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
 		}
@@ -1691,7 +1703,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	globalReplicationPool.deleteResyncMetadata(ctx, bucket)
 
 	// Call site replication hook.
-	logger.LogIf(ctx, globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete))
+	replLogIf(ctx, globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete))
 
 	// Write success response.
 	writeSuccessNoContent(w)
@@ -1764,7 +1776,7 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	replLogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:             madmin.SRBucketMetaTypeObjectLockConfig,
 		Bucket:           bucket,
 		ObjectLockConfig: &cfgStr,
@@ -1868,7 +1880,7 @@ func (api objectAPIHandlers) PutBucketTaggingHandler(w http.ResponseWriter, r *h
 	// We encode the xml bytes as base64 to ensure there are no encoding
 	// errors.
 	cfgStr := base64.StdEncoding.EncodeToString(configData)
-	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	replLogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeTags,
 		Bucket:    bucket,
 		Tags:      &cfgStr,
@@ -1944,7 +1956,7 @@ func (api objectAPIHandlers) DeleteBucketTaggingHandler(w http.ResponseWriter, r
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
+	replLogIf(ctx, globalSiteReplicationSys.BucketMetaHook(ctx, madmin.SRBucketMeta{
 		Type:      madmin.SRBucketMetaTypeTags,
 		Bucket:    bucket,
 		UpdatedAt: updatedAt,

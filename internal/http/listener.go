@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"net"
 	"syscall"
+	"time"
+
+	"github.com/minio/minio/internal/deadlineconn"
 )
 
 type acceptResult struct {
@@ -32,7 +35,8 @@ type acceptResult struct {
 
 // httpListener - HTTP listener capable of handling multiple server addresses.
 type httpListener struct {
-	tcpListeners []*net.TCPListener // underlaying TCP listeners.
+	opts         TCPOptions
+	tcpListeners []*net.TCPListener // underlying TCP listeners.
 	acceptCh     chan acceptResult  // channel where all TCP listeners write accepted connection.
 	ctx          context.Context
 	ctxCanceler  context.CancelFunc
@@ -74,7 +78,9 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 	select {
 	case result, ok := <-listener.acceptCh:
 		if ok {
-			return result.conn, result.err
+			return deadlineconn.New(result.conn).
+				WithReadDeadline(listener.opts.ClientReadTimeout).
+				WithWriteDeadline(listener.opts.ClientWriteTimeout), result.err
 		}
 	case <-listener.ctx.Done():
 	}
@@ -119,9 +125,11 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 
 // TCPOptions specify customizable TCP optimizations on raw socket
 type TCPOptions struct {
-	UserTimeout int              // this value is expected to be in milliseconds
-	Interface   string           // this is a VRF device passed via `--interface` flag
-	Trace       func(msg string) // Trace when starting.
+	UserTimeout        int              // this value is expected to be in milliseconds
+	ClientReadTimeout  time.Duration    // When the net.Conn is idle for more than ReadTimeout duration, we close the connection on the client proactively.
+	ClientWriteTimeout time.Duration    // When the net.Conn is idle for more than WriteTimeout duration, we close the connection on the client proactively.
+	Interface          string           // this is a VRF device passed via `--interface` flag
+	Trace              func(msg string) // Trace when starting.
 }
 
 // newHTTPListener - creates new httpListener object which is interface compatible to net.Listener.
@@ -173,6 +181,7 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	listener = &httpListener{
 		tcpListeners: tcpListeners,
 		acceptCh:     make(chan acceptResult, len(tcpListeners)),
+		opts:         opts,
 	}
 	listener.ctx, listener.ctxCanceler = context.WithCancel(ctx)
 	if opts.Trace != nil {

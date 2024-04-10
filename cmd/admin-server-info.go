@@ -19,22 +19,23 @@ package cmd
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"os"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 )
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
 // local endpoints from given list of endpoints
-func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request) madmin.ServerProperties {
+func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Request, metrics bool) madmin.ServerProperties {
 	addr := globalLocalNodeName
 	if r != nil {
 		addr = r.Host
@@ -42,9 +43,13 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 	if globalIsDistErasure {
 		addr = globalLocalNodeName
 	}
+	poolNumbers := make(map[int]struct{})
 	network := make(map[string]string)
 	for _, ep := range endpointServerPools {
 		for _, endpoint := range ep.Endpoints {
+			if endpoint.IsLocal {
+				poolNumbers[endpoint.PoolIdx+1] = struct{}{}
+			}
 			nodeName := endpoint.Host
 			if nodeName == "" {
 				nodeName = addr
@@ -61,7 +66,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 				} else {
 					network[nodeName] = string(madmin.ItemOffline)
 					// log once the error
-					logger.LogOnceIf(context.Background(), err, nodeName)
+					peersLogOnceIf(context.Background(), err, nodeName)
 				}
 			}
 		}
@@ -112,6 +117,17 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 		MinioEnvVars: make(map[string]string, 10),
 	}
 
+	for poolNumber := range poolNumbers {
+		props.PoolNumbers = append(props.PoolNumbers, poolNumber)
+	}
+	sort.Ints(props.PoolNumbers)
+	props.PoolNumber = func() int {
+		if len(props.PoolNumbers) == 1 {
+			return props.PoolNumbers[0]
+		}
+		return math.MaxInt // this indicates that its unset.
+	}()
+
 	sensitive := map[string]struct{}{
 		config.EnvAccessKey:         {},
 		config.EnvSecretKey:         {},
@@ -141,7 +157,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 
 	objLayer := newObjectLayerFn()
 	if objLayer != nil {
-		storageInfo := objLayer.LocalStorageInfo(GlobalContext, true)
+		storageInfo := objLayer.LocalStorageInfo(GlobalContext, metrics)
 		props.State = string(madmin.ItemOnline)
 		props.Disks = storageInfo.Disks
 	} else {

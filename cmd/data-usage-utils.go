@@ -71,6 +71,10 @@ type BucketUsageInfo struct {
 
 // DataUsageInfo represents data usage stats of the underlying Object API
 type DataUsageInfo struct {
+	TotalCapacity     uint64 `json:"capacity,omitempty"`
+	TotalUsedCapacity uint64 `json:"usedCapacity,omitempty"`
+	TotalFreeCapacity uint64 `json:"freeCapacity,omitempty"`
+
 	// LastUpdate is the timestamp of when the data usage info was last updated.
 	// This does not indicate a full scan.
 	LastUpdate time.Time `json:"lastUpdate"`
@@ -87,6 +91,7 @@ type DataUsageInfo struct {
 	// Objects total size across all buckets
 	ObjectsTotalSize uint64                           `json:"objectsTotalSize"`
 	ReplicationInfo  map[string]BucketTargetUsageInfo `json:"objectsReplicationInfo"`
+
 	// Total number of buckets in this cluster
 	BucketsCount uint64 `json:"bucketsCount"`
 
@@ -135,7 +140,7 @@ func (dui DataUsageInfo) tierStats() []madmin.TierInfo {
 	return infos
 }
 
-func (dui DataUsageInfo) tierMetrics() (metrics []Metric) {
+func (dui DataUsageInfo) tierMetrics() (metrics []MetricV2) {
 	if dui.TierStats == nil {
 		return nil
 	}
@@ -143,17 +148,17 @@ func (dui DataUsageInfo) tierMetrics() (metrics []Metric) {
 	//     minio_cluster_ilm_transitioned_objects{tier="S3TIER-1"}=1
 	//     minio_cluster_ilm_transitioned_versions{tier="S3TIER-1"}=3
 	for tier, st := range dui.TierStats.Tiers {
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getClusterTransitionedBytesMD(),
 			Value:          float64(st.TotalSize),
 			VariableLabels: map[string]string{"tier": tier},
 		})
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getClusterTransitionedObjectsMD(),
 			Value:          float64(st.NumObjects),
 			VariableLabels: map[string]string{"tier": tier},
 		})
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getClusterTransitionedVersionsMD(),
 			Value:          float64(st.NumVersions),
 			VariableLabels: map[string]string{"tier": tier},

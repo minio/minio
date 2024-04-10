@@ -31,6 +31,15 @@ const (
 	Speed    = "speed"
 	EnvSpeed = "MINIO_SCANNER_SPEED"
 
+	IdleSpeed    = "idle_speed"
+	EnvIdleSpeed = "MINIO_SCANNER_IDLE_SPEED"
+
+	ExcessVersions    = "alert_excess_versions"
+	EnvExcessVersions = "MINIO_SCANNER_ALERT_EXCESS_VERSIONS"
+
+	ExcessFolders    = "alert_excess_folders"
+	EnvExcessFolders = "MINIO_SCANNER_ALERT_EXCESS_FOLDERS"
+
 	// All below are deprecated in October 2022 and
 	// replaced them with a single speed parameter
 	Delay            = "delay"
@@ -47,6 +56,16 @@ const (
 type Config struct {
 	// Delay is the sleep multiplier.
 	Delay float64 `json:"delay"`
+
+	// Sleep always or based on incoming S3 requests.
+	IdleMode int32 // 0 => on, 1 => off
+
+	// Alert upon this many excess object versions
+	ExcessVersions int64 // 100
+
+	// Alert upon this many excess sub-folders per folder in an erasure set.
+	ExcessFolders int64 // 50000
+
 	// MaxWait is maximum wait time between operations
 	MaxWait time.Duration
 	// Cycle is the time.Duration between each scanner cycles
@@ -59,23 +78,37 @@ var DefaultKVS = config.KVS{
 		Key:   Speed,
 		Value: "default",
 	},
+	config.KV{
+		Key:           IdleSpeed,
+		Value:         "",
+		HiddenIfEmpty: true,
+	},
+	config.KV{
+		Key:   ExcessVersions,
+		Value: "100",
+	},
+	config.KV{
+		Key:   ExcessFolders,
+		Value: "50000",
+	},
+
 	// Deprecated Oct 2022
 	config.KV{
-		Key:        Delay,
-		Value:      "",
-		Deprecated: true,
+		Key:           Delay,
+		Value:         "",
+		HiddenIfEmpty: true,
 	},
 	// Deprecated Oct 2022
 	config.KV{
-		Key:        MaxWait,
-		Value:      "",
-		Deprecated: true,
+		Key:           MaxWait,
+		Value:         "",
+		HiddenIfEmpty: true,
 	},
 	// Deprecated Oct 2022
 	config.KV{
-		Key:        Cycle,
-		Value:      "",
-		Deprecated: true,
+		Key:           Cycle,
+		Value:         "",
+		HiddenIfEmpty: true,
 	},
 }
 
@@ -107,7 +140,29 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	default:
 		return cfg, fmt.Errorf("unknown '%s' value", speed)
 	}
-	return
+
+	switch idleSpeed := env.Get(EnvIdleSpeed, kvs.GetWithDefault(IdleSpeed, DefaultKVS)); idleSpeed {
+	case "", config.EnableOn:
+		cfg.IdleMode = 0
+	case config.EnableOff:
+		cfg.IdleMode = 1
+	default:
+		return cfg, fmt.Errorf("unknown value: '%s'", idleSpeed)
+	}
+
+	excessVersions, err := strconv.ParseInt(env.Get(EnvExcessVersions, kvs.GetWithDefault(ExcessVersions, DefaultKVS)), 10, 64)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.ExcessVersions = excessVersions
+
+	excessFolders, err := strconv.ParseInt(env.Get(EnvExcessFolders, kvs.GetWithDefault(ExcessFolders, DefaultKVS)), 10, 64)
+	if err != nil {
+		return cfg, err
+	}
+	cfg.ExcessFolders = excessFolders
+
+	return cfg, nil
 }
 
 func lookupDeprecatedScannerConfig(kvs config.KVS) (cfg Config, err error) {

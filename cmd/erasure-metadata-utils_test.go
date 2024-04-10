@@ -94,7 +94,7 @@ func TestReduceErrs(t *testing.T) {
 			},
 			nil, nil,
 		},
-		// Checks if wrapped context cancelation errors are grouped as one.
+		// Checks if wrapped context cancellation errors are grouped as one.
 		{canceledErrs, nil, context.Canceled},
 	}
 	// Validates list of all the testcases for returning valid errors.

@@ -237,7 +237,7 @@ func TestIsRequestPresignedSignatureV2(t *testing.T) {
 	}
 }
 
-// TestIsRequestPresignedSignatureV4 - Test validates the logic for presign signature verision v4 detection.
+// TestIsRequestPresignedSignatureV4 - Test validates the logic for presign signature version v4 detection.
 func TestIsRequestPresignedSignatureV4(t *testing.T) {
 	testCases := []struct {
 		inputQueryKey   string
@@ -287,7 +287,7 @@ func mustNewSignedRequest(method string, urlStr string, contentLength int64, bod
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	cred := globalActiveCred
 	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
-		t.Fatalf("Unable to inititalized new signed http request %s", err)
+		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
 	return req
 }
@@ -298,7 +298,7 @@ func mustNewSignedV2Request(method string, urlStr string, contentLength int64, b
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	cred := globalActiveCred
 	if err := signRequestV2(req, cred.AccessKey, cred.SecretKey); err != nil {
-		t.Fatalf("Unable to inititalized new signed http request %s", err)
+		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
 	return req
 }
@@ -309,7 +309,7 @@ func mustNewPresignedV2Request(method string, urlStr string, contentLength int64
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	cred := globalActiveCred
 	if err := preSignV2(req, cred.AccessKey, cred.SecretKey, time.Now().Add(10*time.Minute).Unix()); err != nil {
-		t.Fatalf("Unable to inititalized new signed http request %s", err)
+		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
 	return req
 }
@@ -320,7 +320,7 @@ func mustNewPresignedRequest(method string, urlStr string, contentLength int64, 
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	cred := globalActiveCred
 	if err := preSignV4(req, cred.AccessKey, cred.SecretKey, time.Now().Add(10*time.Minute).Unix()); err != nil {
-		t.Fatalf("Unable to inititalized new signed http request %s", err)
+		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
 	return req
 }
@@ -491,7 +491,7 @@ func TestValidateAdminSignature(t *testing.T) {
 	for i, testCase := range testCases {
 		req := mustNewRequest(http.MethodGet, "http://localhost:9000/", 0, nil, t)
 		if err := signRequestV4(req, testCase.AccessKey, testCase.SecretKey); err != nil {
-			t.Fatalf("Unable to inititalized new signed http request %s", err)
+			t.Fatalf("Unable to initialized new signed http request %s", err)
 		}
 		_, _, s3Error := validateAdminSignature(ctx, req, globalMinioDefaultRegion)
 		if s3Error != testCase.ErrCode {

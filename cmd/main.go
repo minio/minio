@@ -25,7 +25,9 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/minio/internal/color"
@@ -169,8 +171,9 @@ func newApp(name string) *cli.App {
 }
 
 func startupBanner(banner io.Writer) {
+	CopyrightYear = strconv.Itoa(time.Now().Year())
 	fmt.Fprintln(banner, color.Blue("Copyright:")+color.Bold(" 2015-%s MinIO, Inc.", CopyrightYear))
-	fmt.Fprintln(banner, color.Blue("License:")+color.Bold(" GNU AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>"))
+	fmt.Fprintln(banner, color.Blue("License:")+color.Bold(" "+MinioLicense))
 	fmt.Fprintln(banner, color.Blue("Version:")+color.Bold(" %s (%s %s/%s)", ReleaseTag, runtime.Version(), runtime.GOOS, runtime.GOARCH))
 }
 

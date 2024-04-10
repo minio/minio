@@ -155,16 +155,21 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 	for i, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
-			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:",
-				testCase.prefix, "marker:", testCase.marker, "delimiter:",
-				testCase.delimiter, "maxkeys:", testCase.maxKeys)
 			var err error
 			var resultL ListObjectsInfo
 			var resultV ListObjectVersionsInfo
 			if testCase.versioned {
+				t.Log("ListObjectVersions, bucket:", testCase.bucketName, "prefix:",
+					testCase.prefix, "marker:", testCase.marker, "delimiter:",
+					testCase.delimiter, "maxkeys:", testCase.maxKeys)
+
 				resultV, err = obj.ListObjectVersions(context.Background(), testCase.bucketName,
 					testCase.prefix, testCase.marker, "", testCase.delimiter, testCase.maxKeys)
 			} else {
+				t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:",
+					testCase.prefix, "marker:", testCase.marker, "delimiter:",
+					testCase.delimiter, "maxkeys:", testCase.maxKeys)
+
 				resultL, err = obj.ListObjects(context.Background(), testCase.bucketName,
 					testCase.prefix, testCase.marker, testCase.delimiter, testCase.maxKeys)
 			}
@@ -819,16 +824,14 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4 ).
-		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Using an existing file for bucket name, but its not a directory (5).
-		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
-		// Valid bucket names, but they donot exist (6-8).
-		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
+		// Valid bucket names, but they do not exist (6-8).
+		{"volatile-bucket-1", "", "", "", 1000, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "", "", "", 1000, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "", "", "", 1000, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// If marker is *after* the last possible object from the prefix it should return an empty list.
 		{"test-bucket-list-object", "Asia", "europe-object", "", 0, ListObjectsInfo{}, nil, true},
 		// If the marker is *before* the first possible object from the prefix it should return the first object.
@@ -1564,16 +1567,14 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		shouldPass bool
 	}{
 		// Test cases with invalid bucket names ( Test number 1-4).
-		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: ".test"}, false},
-		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "Test"}, false},
-		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "---"}, false},
-		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "ad"}, false},
-		// Using an existing file for bucket name, but its not a directory (5).
-		{"simple-file.txt", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "simple-file.txt"}, false},
-		// Valid bucket names, but they donot exist (6-8).
-		{"volatile-bucket-1", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", 0, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		{".test", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: ".test"}, false},
+		{"Test", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
+		{"---", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
+		{"ad", "", "", "", 0, ListObjectsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
+		// Valid bucket names, but they do not exist (6-8).
+		{"volatile-bucket-1", "", "", "", 1000, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
+		{"volatile-bucket-2", "", "", "", 1000, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
+		{"volatile-bucket-3", "", "", "", 1000, ListObjectsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
 		// If marker is *after* the last possible object from the prefix it should return an empty list.
 		{"test-bucket-list-object", "Asia", "europe-object", "", 0, ListObjectsInfo{}, nil, true},
 		// Setting a non-existing directory to be prefix (10-11).

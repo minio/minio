@@ -43,6 +43,7 @@ const (
 	AuthToken  = "auth_token"
 	ClientCert = "client_cert"
 	ClientKey  = "client_key"
+	BatchSize  = "batch_size"
 	QueueSize  = "queue_size"
 	QueueDir   = "queue_dir"
 	Proxy      = "proxy"
@@ -68,6 +69,7 @@ const (
 	EnvLoggerWebhookClientCert = "MINIO_LOGGER_WEBHOOK_CLIENT_CERT"
 	EnvLoggerWebhookClientKey  = "MINIO_LOGGER_WEBHOOK_CLIENT_KEY"
 	EnvLoggerWebhookProxy      = "MINIO_LOGGER_WEBHOOK_PROXY"
+	EnvLoggerWebhookBatchSize  = "MINIO_LOGGER_WEBHOOK_BATCH_SIZE"
 	EnvLoggerWebhookQueueSize  = "MINIO_LOGGER_WEBHOOK_QUEUE_SIZE"
 	EnvLoggerWebhookQueueDir   = "MINIO_LOGGER_WEBHOOK_QUEUE_DIR"
 
@@ -76,6 +78,7 @@ const (
 	EnvAuditWebhookAuthToken  = "MINIO_AUDIT_WEBHOOK_AUTH_TOKEN"
 	EnvAuditWebhookClientCert = "MINIO_AUDIT_WEBHOOK_CLIENT_CERT"
 	EnvAuditWebhookClientKey  = "MINIO_AUDIT_WEBHOOK_CLIENT_KEY"
+	EnvAuditWebhookBatchSize  = "MINIO_AUDIT_WEBHOOK_BATCH_SIZE"
 	EnvAuditWebhookQueueSize  = "MINIO_AUDIT_WEBHOOK_QUEUE_SIZE"
 	EnvAuditWebhookQueueDir   = "MINIO_AUDIT_WEBHOOK_QUEUE_DIR"
 
@@ -99,7 +102,10 @@ const (
 	auditTargetNamePrefix  = "audit-"
 )
 
-var errInvalidQueueSize = errors.New("invalid queue_size value")
+var (
+	errInvalidQueueSize = errors.New("invalid queue_size value")
+	errInvalidBatchSize = errors.New("invalid batch_size value")
+)
 
 // Default KVS for loggerHTTP and loggerAuditHTTP
 var (
@@ -127,6 +133,10 @@ var (
 		config.KV{
 			Key:   Proxy,
 			Value: "",
+		},
+		config.KV{
+			Key:   BatchSize,
+			Value: "1",
 		},
 		config.KV{
 			Key:   QueueSize,
@@ -158,6 +168,10 @@ var (
 		config.KV{
 			Key:   ClientKey,
 			Value: "",
+		},
+		config.KV{
+			Key:   BatchSize,
+			Value: "1",
 		},
 		config.KV{
 			Key:   QueueSize,
@@ -285,7 +299,7 @@ func lookupLegacyConfigForSubSys(ctx context.Context, subSys string) Config {
 			}
 			url, err := xnet.ParseHTTPURL(endpoint)
 			if err != nil {
-				LogOnceIf(ctx, err, "logger-webhook-"+endpoint)
+				LogOnceIf(ctx, "logging", err, "logger-webhook-"+endpoint)
 				continue
 			}
 			cfg.HTTP[target] = http.Config{
@@ -313,7 +327,7 @@ func lookupLegacyConfigForSubSys(ctx context.Context, subSys string) Config {
 			}
 			url, err := xnet.ParseHTTPURL(endpoint)
 			if err != nil {
-				LogOnceIf(ctx, err, "audit-webhook-"+endpoint)
+				LogOnceIf(ctx, "logging", err, "audit-webhook-"+endpoint)
 				continue
 			}
 			cfg.AuditWebhook[target] = http.Config{
@@ -435,6 +449,14 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if queueSize <= 0 {
 			return cfg, errInvalidQueueSize
 		}
+		batchSizeCfgVal := getCfgVal(EnvLoggerWebhookBatchSize, k, kv.Get(BatchSize))
+		batchSize, err := strconv.Atoi(batchSizeCfgVal)
+		if err != nil {
+			return cfg, err
+		}
+		if batchSize <= 0 {
+			return cfg, errInvalidBatchSize
+		}
 		cfg.HTTP[k] = http.Config{
 			Enabled:    true,
 			Endpoint:   url,
@@ -442,6 +464,7 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 			ClientCert: clientCert,
 			ClientKey:  clientKey,
 			Proxy:      getCfgVal(EnvLoggerWebhookProxy, k, kv.Get(Proxy)),
+			BatchSize:  batchSize,
 			QueueSize:  queueSize,
 			QueueDir:   getCfgVal(EnvLoggerWebhookQueueDir, k, kv.Get(QueueDir)),
 			Name:       loggerTargetNamePrefix + k,
@@ -488,12 +511,21 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if queueSize <= 0 {
 			return cfg, errInvalidQueueSize
 		}
+		batchSizeCfgVal := getCfgVal(EnvAuditWebhookBatchSize, k, kv.Get(BatchSize))
+		batchSize, err := strconv.Atoi(batchSizeCfgVal)
+		if err != nil {
+			return cfg, err
+		}
+		if batchSize <= 0 {
+			return cfg, errInvalidBatchSize
+		}
 		cfg.AuditWebhook[k] = http.Config{
 			Enabled:    true,
 			Endpoint:   url,
 			AuthToken:  getCfgVal(EnvAuditWebhookAuthToken, k, kv.Get(AuthToken)),
 			ClientCert: clientCert,
 			ClientKey:  clientKey,
+			BatchSize:  batchSize,
 			QueueSize:  queueSize,
 			QueueDir:   getCfgVal(EnvAuditWebhookQueueDir, k, kv.Get(QueueDir)),
 			Name:       auditTargetNamePrefix + k,

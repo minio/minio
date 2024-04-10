@@ -34,7 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -490,13 +490,15 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		)
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
+			globalReplicationStats.incProxy(bucket, getObjectAPI, false)
 			// proxy to replication target if active-active replication is in place.
 			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
 			if perr != nil {
+				globalReplicationStats.incProxy(bucket, getObjectAPI, true)
 				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
 				if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
 					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
-					logger.LogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+					replLogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
 				}
 			}
 			if reader != nil && proxy.Proxy && perr == nil {
@@ -689,6 +691,145 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	})
 }
 
+// GetObjectAttributes ...
+func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, objectAPI ObjectLayer, bucket, object string, w http.ResponseWriter, r *http.Request) {
+	opts, valid := getAndValidateAttributesOpts(ctx, w, r, bucket, object)
+	if !valid {
+		return
+	}
+
+	var s3Error APIErrorCode
+	if opts.VersionID != "" {
+		s3Error = checkRequestAuthType(ctx, r, policy.GetObjectVersionAttributesAction, bucket, object)
+		if s3Error == ErrNone {
+			s3Error = checkRequestAuthType(ctx, r, policy.GetObjectVersionAction, bucket, object)
+		}
+	} else {
+		s3Error = checkRequestAuthType(ctx, r, policy.GetObjectAttributesAction, bucket, object)
+		if s3Error == ErrNone {
+			s3Error = checkRequestAuthType(ctx, r, policy.GetObjectAction, bucket, object)
+		}
+	}
+
+	if s3Error != ErrNone {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
+		return
+	}
+
+	objInfo, err := objectAPI.GetObjectInfo(ctx, bucket, object, opts)
+	if err != nil {
+		s3Error = checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, object)
+		if s3Error == ErrNone {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
+	if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
+		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
+		return
+	}
+
+	if checkPreconditions(ctx, w, r, objInfo, opts) {
+		return
+	}
+
+	OA := new(getObjectAttributesResponse)
+
+	if opts.Versioned {
+		w.Header().Set(xhttp.AmzVersionID, objInfo.VersionID)
+	}
+
+	lastModified := objInfo.ModTime.UTC().Format(http.TimeFormat)
+	w.Header().Set(xhttp.LastModified, lastModified)
+	w.Header().Del(xhttp.ContentType)
+
+	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
+		chkSums := objInfo.decryptChecksums(0)
+		// AWS does not appear to append part number on this API call.
+		switch {
+		case chkSums["CRC32"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
+		case chkSums["CRC32C"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
+		case chkSums["SHA256"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
+		case chkSums["SHA1"] != "":
+			OA.Checksum = new(objectAttributesChecksum)
+			OA.Checksum.ChecksumSHA256 = strings.Split(chkSums["SHA256"], "-")[0]
+		}
+
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.ETag]; ok {
+		OA.ETag = objInfo.ETag
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.ObjectSize]; ok {
+		OA.ObjectSize, _ = objInfo.GetActualSize()
+	}
+
+	if _, ok := opts.ObjectAttributes[xhttp.StorageClass]; ok {
+		OA.StorageClass = objInfo.StorageClass
+	}
+
+	objInfo.decryptPartsChecksums()
+
+	if _, ok := opts.ObjectAttributes[xhttp.ObjectParts]; ok {
+		OA.ObjectParts = new(objectAttributesParts)
+		OA.ObjectParts.PartNumberMarker = opts.PartNumberMarker
+
+		OA.ObjectParts.MaxParts = opts.MaxParts
+		partsLength := len(objInfo.Parts)
+		OA.ObjectParts.PartsCount = partsLength
+
+		if opts.MaxParts > -1 {
+			for i, v := range objInfo.Parts {
+				if v.Number <= opts.PartNumberMarker {
+					continue
+				}
+
+				if len(OA.ObjectParts.Parts) == opts.MaxParts {
+					break
+				}
+
+				OA.ObjectParts.NextPartNumberMarker = v.Number
+				OA.ObjectParts.Parts = append(OA.ObjectParts.Parts, &objectAttributesPart{
+					ChecksumSHA1:   objInfo.Parts[i].Checksums["SHA1"],
+					ChecksumSHA256: objInfo.Parts[i].Checksums["SHA256"],
+					ChecksumCRC32:  objInfo.Parts[i].Checksums["CRC32"],
+					ChecksumCRC32C: objInfo.Parts[i].Checksums["CRC32C"],
+					PartNumber:     objInfo.Parts[i].Number,
+					Size:           objInfo.Parts[i].Size,
+				})
+			}
+		}
+
+		if OA.ObjectParts.NextPartNumberMarker != partsLength {
+			OA.ObjectParts.IsTruncated = true
+		}
+	}
+
+	writeSuccessResponseXML(w, encodeResponse(OA))
+
+	sendEvent(eventArgs{
+		EventName:    event.ObjectAccessedAttributes,
+		BucketName:   bucket,
+		Object:       objInfo,
+		ReqParams:    extractReqParams(r),
+		RespElements: extractRespElements(w),
+		UserAgent:    r.UserAgent(),
+		Host:         handlers.GetSourceIP(r),
+	})
+
+	return
+}
+
 // GetObjectHandler - GET Object
 // ----------
 // This implementation of the GET operation retrieves object. To use GET,
@@ -879,12 +1020,14 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
+			globalReplicationStats.incProxy(bucket, headObjectAPI, false)
 			var oi ObjectInfo
 			oi, proxy = proxyHeadToReplicationTarget(ctx, bucket, object, rs, opts, proxytgts)
 			if proxy.Proxy {
 				objInfo = oi
 			}
 			if proxy.Err != nil {
+				globalReplicationStats.incProxy(bucket, headObjectAPI, true)
 				writeErrorResponseHeadersOnly(w, toAPIError(ctx, proxy.Err))
 				return
 			}
@@ -1043,6 +1186,30 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	})
 }
 
+// GetObjectAttributesHandles - GET Object
+// -----------
+// This operation retrieves metadata and part metadata from an object without returning the object itself.
+func (api objectAPIHandlers) GetObjectAttributesHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := newContext(r, w, "GetObjectAttributes")
+	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrServerNotInitialized))
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object, err := unescapePath(vars["object"])
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
+	api.getObjectAttributesHandler(ctx, objectAPI, bucket, object, w, r)
+}
+
 // HeadObjectHandler - HEAD Object
 // -----------
 // The HEAD operation retrieves metadata from an object without returning the object itself.
@@ -1124,11 +1291,20 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	return defaultMeta, nil
 }
 
-// getRemoteInstanceTransport contains a singleton roundtripper.
-var (
-	getRemoteInstanceTransport     *http.Transport
-	getRemoteInstanceTransportOnce sync.Once
-)
+// getRemoteInstanceTransport contains a roundtripper for external (not peers) servers
+var remoteInstanceTransport atomic.Value
+
+func setRemoteInstanceTransport(tr http.RoundTripper) {
+	remoteInstanceTransport.Store(tr)
+}
+
+func getRemoteInstanceTransport() http.RoundTripper {
+	rt, ok := remoteInstanceTransport.Load().(http.RoundTripper)
+	if ok {
+		return rt
+	}
+	return nil
+}
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
@@ -1139,7 +1315,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: getRemoteInstanceTransport,
+		Transport: getRemoteInstanceTransport(),
 	})
 	if err != nil {
 		return nil, err
@@ -1554,7 +1730,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceTaggingTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastTaggingTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastTaggingTimestamp)
 				// update tagging metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp] = srcTimestamp.UTC().Format(time.RFC3339Nano)
@@ -1581,7 +1757,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceRetentionTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastretentionTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastretentionTimestamp)
 				// update retention metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
@@ -1601,7 +1777,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceLegalholdTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastLegalHoldTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastLegalHoldTimestamp)
 				// update legalhold metadata only if replica timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = string(legalHold.Status)
@@ -2067,8 +2243,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
+		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
 			return
 		}
 
@@ -2193,9 +2369,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		Host:         handlers.GetSourceIP(r),
 	}
 	sendEvent(evt)
-	if objInfo.NumVersions > dataScannerExcessiveVersionsThreshold {
+	if objInfo.NumVersions > int(scannerExcessObjectVersions.Load()) {
 		evt.EventName = event.ObjectManyVersions
 		sendEvent(evt)
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:     "scanner:manyversions",
+			APIName:   "PutObject",
+			Bucket:    objInfo.Bucket,
+			Object:    objInfo.Name,
+			VersionID: objInfo.VersionID,
+			Status:    http.StatusText(http.StatusOK),
+		})
 	}
 
 	// Do not send checksums in events to avoid leaks.
@@ -2473,10 +2658,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 				return errInvalidEncryptionParameters
 			}
 
-			if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-				return errInvalidEncryptionParametersSSEC
-			}
-
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				return err
@@ -2654,7 +2835,9 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
 	if rcfg.LockEnabled && opts.DeletePrefix {
-		writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL)
+		apiErr := toAPIError(ctx, errInvalidArgument)
+		apiErr.Description = "force-delete is forbidden on Object Locking enabled buckets"
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -2715,6 +2898,18 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			return
 		}
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			// Send an event when the object is not found
+			objInfo.Name = object
+			objInfo.VersionID = opts.VersionID
+			sendEvent(eventArgs{
+				EventName:    event.ObjectRemovedNoOP,
+				BucketName:   bucket,
+				Object:       objInfo,
+				ReqParams:    extractReqParams(r),
+				RespElements: extractRespElements(w),
+				UserAgent:    r.UserAgent(),
+				Host:         handlers.GetSourceIP(r),
+			})
 			writeSuccessNoContent(w)
 			return
 		}
@@ -3141,8 +3336,30 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 
 	ot, err := objAPI.GetObjectTags(ctx, bucket, object, opts)
 	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
+		// if object/version is not found locally, but exists on peer site - proxy
+		// the tagging request to peer site. The response to client will
+		// return tags from peer site.
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, false)
+				// proxy to replication target if site replication is in place.
+				tags, gerr := proxyGetTaggingToRepTarget(ctx, bucket, object, opts, proxytgts)
+				if gerr.Err != nil || tags == nil {
+					globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, true)
+					writeErrorResponse(ctx, w, toAPIError(ctx, gerr.Err), r.URL)
+					return
+				} // overlay tags from peer site.
+				ot = tags
+				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"} // indicate that the request was proxied.
+			} else {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return
+			}
+		} else {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	// Set this such that authorization policies can be applied on the object tags.
@@ -3222,6 +3439,35 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 
 	objInfo, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
+		// if object is not found locally, but exists on peer site - proxy
+		// the tagging request to peer site. The response to client will
+		// be 200 with extra header indicating that the request was proxied.
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				globalReplicationStats.incProxy(bucket, putObjectTaggingAPI, false)
+				// proxy to replication target if site replication is in place.
+				perr := proxyTaggingToRepTarget(ctx, bucket, object, tags, opts, proxytgts)
+				if perr.Err != nil {
+					globalReplicationStats.incProxy(bucket, putObjectTaggingAPI, true)
+					writeErrorResponse(ctx, w, toAPIError(ctx, perr.Err), r.URL)
+					return
+				}
+				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"}
+				writeSuccessResponseHeadersOnly(w)
+				// when tagging is proxied, the object version is not available to return
+				// as header in the response, or ObjectInfo in the notification event.
+				sendEvent(eventArgs{
+					EventName:    event.ObjectCreatedPutTagging,
+					BucketName:   bucket,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent(),
+					Host:         handlers.GetSourceIP(r),
+				})
+				return
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3290,6 +3536,36 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 
 	oi, err := objAPI.GetObjectInfo(ctx, bucket, object, opts)
 	if err != nil {
+		// if object is not found locally, but exists on peer site - proxy
+		// the tagging request to peer site. The response to client will
+		// be 200 OK with extra header indicating that the request was proxied.
+		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				globalReplicationStats.incProxy(bucket, removeObjectTaggingAPI, false)
+				// proxy to replication target if active-active replication is in place.
+				perr := proxyTaggingToRepTarget(ctx, bucket, object, nil, opts, proxytgts)
+				if perr.Err != nil {
+					globalReplicationStats.incProxy(bucket, removeObjectTaggingAPI, true)
+					writeErrorResponse(ctx, w, toAPIError(ctx, perr.Err), r.URL)
+					return
+				}
+				// when delete tagging is proxied, the object version/tags are not available to return
+				// as header in the response, nor ObjectInfo in the notification event.
+				w.Header()[xhttp.MinIOTaggingProxied] = []string{"true"}
+				writeSuccessNoContent(w)
+				sendEvent(eventArgs{
+					EventName:    event.ObjectCreatedDeleteTagging,
+					BucketName:   bucket,
+					Object:       oi,
+					ReqParams:    extractReqParams(r),
+					RespElements: extractRespElements(w),
+					UserAgent:    r.UserAgent(),
+					Host:         handlers.GetSourceIP(r),
+				})
+				return
+			}
+		}
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -3432,6 +3708,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}, ObjectOptions{
 			VersionID: objInfo.VersionID,
+			MTime:     objInfo.ModTime,
 		}); err != nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidObjectState), r.URL)
 			return
@@ -3512,7 +3789,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}
 		if err := objectAPI.RestoreTransitionedObject(rctx, bucket, object, opts); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to restore transitioned bucket/object %s/%s: %w", bucket, object, err))
+			s3LogIf(ctx, fmt.Errorf("Unable to restore transitioned bucket/object %s/%s: %w", bucket, object, err))
 			return
 		}
 

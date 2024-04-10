@@ -112,6 +112,8 @@ the DefaultDeny namespace annotation. Note: this will enforce policy for *all* p
 kubectl annotate namespace default "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
 ```
 
+When using `Cilium` as a CNI in your cluster, please edit the `flavor` field to `cilium`.
+
 With NetworkPolicy enabled, traffic will be limited to just port 9000.
 
 For more precise policy, set `networkPolicy.allowExternal=true`. This will

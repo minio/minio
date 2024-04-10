@@ -37,6 +37,7 @@ import (
 	"github.com/klauspost/filepathx"
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/cli"
+	"github.com/minio/highwayhash"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -67,8 +68,9 @@ FLAGS:
 
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
-			Usage: "print each file as a separate line without formatting",
-			Name:  "ndjson",
+			Usage:  "print each file as a separate line without formatting",
+			Name:   "ndjson",
+			Hidden: true,
 		},
 		cli.BoolFlag{
 			Usage: "display inline data keys and sizes",
@@ -286,13 +288,11 @@ FLAGS:
 		if len(files) == 0 {
 			return fmt.Errorf("no files found")
 		}
-		multiple := len(files) > 1 || strings.HasSuffix(files[0], ".zip")
-		if multiple {
+		if len(files) > 1 || strings.HasSuffix(files[0], ".zip") {
 			ndjson = true
-			fmt.Println("{")
 		}
 
-		hasWritten := false
+		toPrint := make([]string, 0, 16)
 		for _, file := range files {
 			var r io.Reader
 			var sz int64
@@ -323,42 +323,42 @@ FLAGS:
 						}
 						// Quote string...
 						b, _ := json.Marshal(file.Name)
-						if hasWritten {
-							fmt.Print(",\n")
-						}
-						fmt.Printf("\t%s: ", string(b))
-
-						b, err = decode(r, file.Name)
+						b2, err := decode(r, file.Name)
 						if err != nil {
 							return err
 						}
-						fmt.Print(string(b))
-						hasWritten = true
+						var tmp map[string]interface{}
+						if err := json.Unmarshal(b2, &tmp); err == nil {
+							if b3, err := json.Marshal(tmp); err == nil {
+								b2 = b3
+							}
+						}
+						toPrint = append(toPrint, fmt.Sprintf("\t%s: %s", string(b), string(b2)))
 					}
 				}
 			} else {
-				if multiple {
-					// Quote string...
+				b0 := ""
+				if ndjson {
 					b, _ := json.Marshal(file)
-					if hasWritten {
-						fmt.Print(",\n")
-					}
-					fmt.Printf("\t%s: ", string(b))
+					b0 = fmt.Sprintf("%s: ", string(b))
 				}
-
 				b, err := decode(r, file)
 				if err != nil {
 					return err
 				}
+				b = bytes.TrimSpace(b)
+				if !ndjson {
+					b = bytes.TrimFunc(b, func(r rune) bool {
+						return r == '{' || r == '}' || r == '\n' || r == '\r'
+					})
+				}
 
-				hasWritten = true
-				fmt.Print(string(b))
+				toPrint = append(toPrint, fmt.Sprintf("%s%s", b0, string(b)))
 			}
 		}
-		fmt.Println("")
-		if multiple {
-			fmt.Println("}")
-		}
+		sort.Strings(toPrint)
+		fmt.Printf("{\n%s\n}\n", strings.Join(toPrint, ",\n"))
+
 		if len(combineFiles) > 0 {
 			for k, v := range combineFiles {
 				if err := combine(v, k); err != nil {
@@ -452,7 +452,6 @@ func (x xlMetaInlineData) json() ([]byte, error) {
 	if !x.versionOK() {
 		return nil, errors.New("xlMetaInlineData: unknown version")
 	}
-
 	sz, buf, err := msgp.ReadMapHeaderBytes(x.afterVersion())
 	if err != nil {
 		return nil, err
@@ -476,7 +475,23 @@ func (x xlMetaInlineData) json() ([]byte, error) {
 		if i > 0 {
 			res = append(res, ',')
 		}
-		s := fmt.Sprintf(`"%s":%d`, string(key), len(val))
+		s := fmt.Sprintf(`"%s": {"bytes": %d`, string(key), len(val))
+		// Check bitrot... We should only ever have one block...
+		if len(val) >= 32 {
+			want := val[:32]
+			data := val[32:]
+			const magicHighwayHash256Key = "\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0"
+
+			hh, _ := highwayhash.New([]byte(magicHighwayHash256Key))
+			hh.Write(data)
+			got := hh.Sum(nil)
+			if bytes.Equal(want, got) {
+				s += ", \"bitrot_valid\": true"
+			} else {
+				s += ", \"bitrot_valid\": false"
+			}
+			s += "}"
+		}
 		res = append(res, []byte(s)...)
 	}
 	res = append(res, '}')

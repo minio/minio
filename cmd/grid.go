@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"sync/atomic"
 
-	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
@@ -36,30 +35,9 @@ var globalGrid atomic.Pointer[grid.Manager]
 var globalGridStart = make(chan struct{})
 
 func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
-	seenHosts := set.NewStringSet()
-	var hosts []string
-	var local string
-	for _, ep := range eps {
-		for _, endpoint := range ep.Endpoints {
-			u := endpoint.GridHost()
-			if seenHosts.Contains(u) {
-				continue
-			}
-			seenHosts.Add(u)
-
-			// Set local endpoint
-			if endpoint.IsLocal {
-				local = u
-			}
-			hosts = append(hosts, u)
-		}
-	}
-	lookupHost := globalDNSCache.LookupHost
-	if IsKubernetes() || IsDocker() {
-		lookupHost = nil
-	}
+	hosts, local := eps.GridHosts()
 	g, err := grid.NewManager(ctx, grid.ManagerOptions{
-		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
+		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(globalDNSCache.LookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
 		Local:        local,
 		Hosts:        hosts,
 		AddAuth:      newCachedAuthToken(),

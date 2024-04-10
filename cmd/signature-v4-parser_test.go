@@ -79,7 +79,7 @@ func validateCredentialfields(t *testing.T, testNum int, expectedCredentials cre
 }
 
 // TestParseCredentialHeader - validates the format validator and extractor for the Credential header in an aws v4 request.
-// A valid format of creadential should be of the following format.
+// A valid format of credential should be of the following format.
 // Credential = accessKey + SlashSeparator+ scope
 // where scope = string.Join([]string{  currTime.Format(yyyymmdd),
 //
@@ -258,7 +258,7 @@ func TestParseSignature(t *testing.T) {
 		expectedErrCode  APIErrorCode
 	}{
 		// Test case - 1.
-		// SignElemenet doesn't have 2 parts on an attempt to split at '='.
+		// SignElement doesn't have 2 parts on an attempt to split at '='.
 		// ErrMissingFields expected.
 		{
 			inputSignElement: "Signature",
@@ -274,7 +274,7 @@ func TestParseSignature(t *testing.T) {
 			expectedErrCode:  ErrMissingFields,
 		},
 		// Test case - 3.
-		// SignElemenet with missing "SignatureTag",ErrMissingSignTag expected.
+		// SignElement with missing "SignatureTag",ErrMissingSignTag expected.
 		{
 			inputSignElement: "Sign=",
 			expectedSignStr:  "",
@@ -310,7 +310,7 @@ func TestParseSignedHeaders(t *testing.T) {
 		expectedErrCode       APIErrorCode
 	}{
 		// Test case - 1.
-		// SignElemenet doesn't have 2 parts on an attempt to split at '='.
+		// SignElement doesn't have 2 parts on an attempt to split at '='.
 		// ErrMissingFields expected.
 		{
 			inputSignElement:      "SignedHeaders",
@@ -318,7 +318,7 @@ func TestParseSignedHeaders(t *testing.T) {
 			expectedErrCode:       ErrMissingFields,
 		},
 		// Test case - 2.
-		// SignElemenet with missing "SigHeaderTag",ErrMissingSignHeadersTag expected.
+		// SignElement with missing "SigHeaderTag",ErrMissingSignHeadersTag expected.
 		{
 			inputSignElement:      "Sign=",
 			expectedSignedHeaders: nil,
@@ -387,7 +387,7 @@ func TestParseSignV4(t *testing.T) {
 		},
 		// Test case - 5.
 		// Auth field with missing "SigHeaderTag",ErrMissingSignHeadersTag expected.
-		// A vaild credential is generated.
+		// A valid credential is generated.
 		// Test case with invalid credential field.
 		{
 			inputV4AuthStr: signV4Algorithm +
@@ -409,7 +409,7 @@ func TestParseSignV4(t *testing.T) {
 		},
 		// Test case - 6.
 		// Auth string with missing "SignatureTag",ErrMissingSignTag expected.
-		// A vaild credential is generated.
+		// A valid credential is generated.
 		// Test case with invalid credential field.
 		{
 			inputV4AuthStr: signV4Algorithm +

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 // Reads in parallel from readers.
@@ -118,7 +118,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 	}
 
 	readTriggerCh := make(chan bool, len(p.readers))
-	defer close(readTriggerCh) // close the channel upon return
+	defer xioutil.SafeClose(readTriggerCh) // close the channel upon return
 
 	for i := 0; i < p.dataBlocks; i++ {
 		// Setup read triggers for p.dataBlocks number of reads so that it reads in parallel.
@@ -158,7 +158,7 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 			bufIdx := p.readerToBuf[i]
 			if p.buf[bufIdx] == nil {
 				// Reading first time on this disk, hence the buffer needs to be allocated.
-				// Subsequent reads will re-use this buffer.
+				// Subsequent reads will reuse this buffer.
 				p.buf[bufIdx] = make([]byte, p.shardSize)
 			}
 			// For the last shard, the shardsize might be less than previous shard sizes.
@@ -210,11 +210,9 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 // A set of preferred drives can be supplied. In that case they will be used and the data reconstructed.
 func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.ReaderAt, offset, length, totalLength int64, prefer []bool) (written int64, derr error) {
 	if offset < 0 || length < 0 {
-		logger.LogIf(ctx, errInvalidArgument)
 		return -1, errInvalidArgument
 	}
 	if offset+length > totalLength {
-		logger.LogIf(ctx, errInvalidArgument)
 		return -1, errInvalidArgument
 	}
 
@@ -268,7 +266,6 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 		}
 
 		if err = e.DecodeDataBlocks(bufs); err != nil {
-			logger.LogIf(ctx, err)
 			return -1, err
 		}
 
@@ -281,7 +278,6 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 	}
 
 	if bytesWritten != length {
-		logger.LogIf(ctx, errLessData)
 		return bytesWritten, errLessData
 	}
 
@@ -320,7 +316,6 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		if err = e.DecodeDataAndParityBlocks(ctx, bufs); err != nil {
-			logger.LogOnceIf(ctx, err, "erasure-heal-decode")
 			return err
 		}
 
@@ -331,7 +326,6 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 		}
 
 		if err = w.Write(ctx, bufs); err != nil {
-			logger.LogOnceIf(ctx, err, "erasure-heal-write")
 			return err
 		}
 	}

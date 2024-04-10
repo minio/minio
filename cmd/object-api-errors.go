@@ -539,7 +539,7 @@ func (e ObjectNameTooLong) Error() string {
 
 // Error returns string an error formatted as the given text.
 func (e ObjectNamePrefixAsSlash) Error() string {
-	return "Object name contains forward slash as pefix: " + e.Bucket + "/" + e.Object
+	return "Object name contains forward slash as prefix: " + e.Bucket + "/" + e.Object
 }
 
 // AllAccessDisabled All access to this object has been disabled
@@ -680,13 +680,13 @@ func isErrBucketNotFound(err error) bool {
 	return errors.As(err, &bkNotFound)
 }
 
-// isErrReadQuorum check if the error type is InsufficentReadQuorum
+// isErrReadQuorum check if the error type is InsufficientReadQuorum
 func isErrReadQuorum(err error) bool {
 	var rquorum InsufficientReadQuorum
 	return errors.As(err, &rquorum)
 }
 
-// isErrWriteQuorum check if the error type is InsufficentWriteQuorum
+// isErrWriteQuorum check if the error type is InsufficientWriteQuorum
 func isErrWriteQuorum(err error) bool {
 	var rquorum InsufficientWriteQuorum
 	return errors.As(err, &rquorum)

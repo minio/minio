@@ -74,8 +74,8 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser  = "ldapUser"
-	ldapUserN = "ldapUsername"
+	ldapUser  = "ldapUser"     // this is a key name for a DN value
+	ldapUserN = "ldapUsername" // this is a key name for the short/login username
 
 	// Role Claim key
 	roleArnClaim = "roleArn"
@@ -190,6 +190,19 @@ func parseForm(r *http.Request) error {
 	return nil
 }
 
+// getTokenSigningKey returns secret key used to sign JWT session tokens
+func getTokenSigningKey() (string, error) {
+	secret := globalActiveCred.SecretKey
+	if globalSiteReplicationSys.isEnabled() {
+		c, err := globalSiteReplicatorCred.Get(GlobalContext)
+		if err != nil {
+			return "", err
+		}
+		return c.SecretKey, nil
+	}
+	return secret, nil
+}
+
 // AssumeRole - implementation of AWS STS API AssumeRole to get temporary
 // credentials for regular users on Minio.
 // https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
@@ -276,7 +289,12 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalActiveCred.SecretKey
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+
 	cred, err := auth.GetNewCredentialsWithMetadata(claims, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -296,7 +314,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 
 	// Call hook for site replication.
 	if cred.ParentUser != globalActiveCred.AccessKey {
-		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSTSAcc,
 			STSCredential: &madmin.SRSTSCredential{
 				AccessKey:    cred.AccessKey,
@@ -453,7 +471,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalActiveCred.SecretKey
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
 	cred, err := auth.GetNewCredentialsWithMetadata(claims, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -493,6 +515,30 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		cred.ParentUser = base64.RawURLEncoding.EncodeToString(bs)
 	}
 
+	// Deny this assume role request if the policy that the user intends to bind
+	// has a sts:DurationSeconds condition, which is not satisfied as well
+	{
+		p := policyName
+		if p == "" {
+			var err error
+			_, p, err = globalIAMSys.GetRolePolicy(roleArnStr)
+			if err != nil {
+				writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, err)
+				return
+			}
+		}
+
+		if !globalIAMSys.doesPolicyAllow(p, policy.Args{
+			DenyOnly:        true,
+			Action:          policy.AssumeRoleWithWebIdentityAction,
+			ConditionValues: getSTSConditionValues(r, "", cred),
+			Claims:          cred.Claims,
+		}) {
+			writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, errors.New("this user does not have enough permission"))
+			return
+		}
+	}
+
 	// Set the newly generated credentials.
 	updatedAt, err := globalIAMSys.SetTempUser(ctx, cred.AccessKey, cred, policyName)
 	if err != nil {
@@ -501,7 +547,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:           cred.AccessKey,
@@ -630,7 +676,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Check if this user or their groups have a policy applied.
-	ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
+	ldapPolicies, err := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
 	if len(ldapPolicies) == 0 && newGlobalAuthZPluginFn() == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
@@ -652,7 +702,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
-	secret := globalActiveCred.SecretKey
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+
 	cred, err := auth.GetNewCredentialsWithMetadata(claims, secret)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -677,7 +732,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:    cred.AccessKey,
@@ -723,7 +778,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// We have to establish a TLS connection and the
 	// client must provide exactly one client certificate.
 	// Otherwise, we don't have a certificate to verify or
-	// the policy lookup would ambigious.
+	// the policy lookup would ambiguous.
 	if r.TLS == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInsecureConnection, errors.New("No TLS connection attempt"))
 		return
@@ -732,7 +787,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// A client may send a certificate chain such that we end up
 	// with multiple peer certificates. However, we can only accept
 	// a single client certificate. Otherwise, the certificate to
-	// policy mapping would be ambigious.
+	// policy mapping would be ambiguous.
 	// However, we can filter all CA certificates and only check
 	// whether they client has sent exactly one (non-CA) leaf certificate.
 	peerCertificates := make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
@@ -827,8 +882,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	claims[audClaim] = certificate.Subject.Organization
 	claims[issClaim] = certificate.Issuer.CommonName
 	claims[parentClaim] = parentUser
-
-	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+	secretKey, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, secretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -843,7 +902,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:           tmpCredentials.AccessKey,
@@ -954,8 +1013,12 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 			claims[k] = v
 		}
 	}
-
-	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
+	secretKey, err := getTokenSigningKey()
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
+		return
+	}
+	tmpCredentials, err := auth.GetNewCredentialsWithMetadata(claims, secretKey)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
 		return
@@ -969,7 +1032,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	}
 
 	// Call hook for site replication.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemSTSAcc,
 		STSCredential: &madmin.SRSTSCredential{
 			AccessKey:    tmpCredentials.AccessKey,

@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/mux"
 )
 
@@ -48,6 +49,7 @@ const (
 	debugSetConnPingDuration
 	debugSetClientPingDuration
 	debugAddToDeadline
+	debugIsOutgoingClosed
 )
 
 // TestGrid contains a grid of servers for testing purposes.
@@ -98,7 +100,7 @@ func SetupTestGrid(n int) (*TestGrid, error) {
 		res.Listeners = append(res.Listeners, listeners[i])
 		res.Mux = append(res.Mux, m)
 	}
-	close(ready)
+	xioutil.SafeClose(ready)
 	for _, m := range res.Managers {
 		for _, remote := range m.Targets() {
 			if err := m.Connection(remote).WaitForConnect(ctx); err != nil {

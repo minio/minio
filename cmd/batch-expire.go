@@ -32,10 +32,11 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/bucket/versioning"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/wildcard"
 	"github.com/minio/pkg/v2/workers"
+	"gopkg.in/yaml.v3"
 )
 
 // expire: # Expire objects that match a condition
@@ -43,7 +44,7 @@ import (
 //   bucket: mybucket # Bucket where this batch job will expire matching objects from
 //   prefix: myprefix # (Optional) Prefix under which this job will expire objects matching the rules below.
 //   rules:
-//     - type: object  # regular objects with zero ore more older versions
+//     - type: object  # regular objects with zero or more older versions
 //       name: NAME # match object names that satisfy the wildcard expression.
 //       olderThan: 70h # match objects older than this value
 //       createdBefore: "2006-01-02T15:04:05.00Z" # match objects created before "date"
@@ -80,19 +81,41 @@ import (
 
 // BatchJobExpirePurge type accepts non-negative versions to be retained
 type BatchJobExpirePurge struct {
+	line, col      int
 	RetainVersions int `yaml:"retainVersions" json:"retainVersions"`
+}
+
+var _ yaml.Unmarshaler = &BatchJobExpirePurge{}
+
+// UnmarshalYAML - BatchJobExpirePurge extends unmarshal to extract line, col
+func (p *BatchJobExpirePurge) UnmarshalYAML(val *yaml.Node) error {
+	type purge BatchJobExpirePurge
+	var tmp purge
+	err := val.Decode(&tmp)
+	if err != nil {
+		return err
+	}
+
+	*p = BatchJobExpirePurge(tmp)
+	p.line, p.col = val.Line, val.Column
+	return nil
 }
 
 // Validate returns nil if value is valid, ie > 0.
 func (p BatchJobExpirePurge) Validate() error {
 	if p.RetainVersions < 0 {
-		return errors.New("retainVersions must be >= 0")
+		return BatchJobYamlErr{
+			line: p.line,
+			col:  p.col,
+			msg:  "retainVersions must be >= 0",
+		}
 	}
 	return nil
 }
 
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
+	line, col     int
 	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
@@ -101,6 +124,22 @@ type BatchJobExpireFilter struct {
 	Type          string              `yaml:"type" json:"type"`
 	Name          string              `yaml:"name" json:"name"`
 	Purge         BatchJobExpirePurge `yaml:"purge" json:"purge"`
+}
+
+var _ yaml.Unmarshaler = &BatchJobExpireFilter{}
+
+// UnmarshalYAML - BatchJobExpireFilter extends unmarshal to extract line, col
+// information
+func (ef *BatchJobExpireFilter) UnmarshalYAML(value *yaml.Node) error {
+	type expFilter BatchJobExpireFilter
+	var tmp expFilter
+	err := value.Decode(&tmp)
+	if err != nil {
+		return err
+	}
+	*ef = BatchJobExpireFilter(tmp)
+	ef.line, ef.col = value.Line, value.Column
+	return err
 }
 
 // Matches returns true if obj matches the filter conditions specified in ef.
@@ -116,7 +155,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 		}
 	default:
 		// we should never come here, Validate should have caught this.
-		logger.LogOnceIf(context.Background(), fmt.Errorf("invalid filter type: %s", ef.Type), ef.Type)
+		batchLogOnceIf(context.Background(), fmt.Errorf("invalid filter type: %s", ef.Type), ef.Type)
 		return false
 	}
 
@@ -194,10 +233,18 @@ func (ef BatchJobExpireFilter) Validate() error {
 	case BatchJobExpireObject:
 	case BatchJobExpireDeleted:
 		if len(ef.Tags) > 0 || len(ef.Metadata) > 0 {
-			return errors.New("invalid batch-expire rule filter")
+			return BatchJobYamlErr{
+				line: ef.line,
+				col:  ef.col,
+				msg:  "delete type filter can't have tags or metadata",
+			}
 		}
 	default:
-		return errors.New("invalid batch-expire type")
+		return BatchJobYamlErr{
+			line: ef.line,
+			col:  ef.col,
+			msg:  "invalid batch-expire type",
+		}
 	}
 
 	for _, tag := range ef.Tags {
@@ -218,7 +265,11 @@ func (ef BatchJobExpireFilter) Validate() error {
 		return err
 	}
 	if ef.CreatedBefore != nil && !ef.CreatedBefore.Before(time.Now()) {
-		return errors.New("CreatedBefore is in the future")
+		return BatchJobYamlErr{
+			line: ef.line,
+			col:  ef.col,
+			msg:  "CreatedBefore is in the future",
+		}
 	}
 	return nil
 }
@@ -226,12 +277,29 @@ func (ef BatchJobExpireFilter) Validate() error {
 // BatchJobExpire represents configuration parameters for a batch expiration
 // job typically supplied in yaml form
 type BatchJobExpire struct {
+	line, col       int
 	APIVersion      string                 `yaml:"apiVersion" json:"apiVersion"`
 	Bucket          string                 `yaml:"bucket" json:"bucket"`
 	Prefix          string                 `yaml:"prefix" json:"prefix"`
 	NotificationCfg BatchJobNotification   `yaml:"notify" json:"notify"`
 	Retry           BatchJobRetry          `yaml:"retry" json:"retry"`
 	Rules           []BatchJobExpireFilter `yaml:"rules" json:"rules"`
+}
+
+var _ yaml.Unmarshaler = &BatchJobExpire{}
+
+// UnmarshalYAML - BatchJobExpire extends default unmarshal to extract line, col information.
+func (r *BatchJobExpire) UnmarshalYAML(val *yaml.Node) error {
+	type expireJob BatchJobExpire
+	var tmp expireJob
+	err := val.Decode(&tmp)
+	if err != nil {
+		return err
+	}
+
+	*r = BatchJobExpire(tmp)
+	r.line, r.col = val.Line, val.Column
+	return nil
 }
 
 // Notify notifies notification endpoint if configured regarding job failure or success.
@@ -252,7 +320,7 @@ func (r BatchJobExpire) Notify(ctx context.Context, body io.Reader) error {
 		req.Header.Set("Authorization", r.NotificationCfg.Token)
 	}
 
-	clnt := http.Client{Transport: getRemoteInstanceTransport}
+	clnt := http.Client{Transport: getRemoteInstanceTransport()}
 	resp, err := clnt.Do(req)
 	if err != nil {
 		return err
@@ -358,12 +426,13 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 					default:
 					}
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
-					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
-						DeletePrefix: true,
+					_, err := api.DeleteObject(ctx, exp.Bucket, encodeDirObject(exp.Name), ObjectOptions{
+						DeletePrefix:       true,
+						DeletePrefixObject: true, // use prefix delete on exact object (this is an optimization to avoid fan-out calls)
 					})
 					if err != nil {
 						stopFn(exp, err)
-						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
+						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
 					} else {
 						stopFn(exp, err)
 						success = true
@@ -401,7 +470,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 				for i, err := range errs {
 					if err != nil {
 						stopFn(toDelCopy[i], err)
-						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
+						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
 						failed++
 						if attempts == retryAttempts { // all retry attempts failed, record failure
 							if oi, ok := oiCache.Get(toDelCopy[i]); ok {
@@ -487,23 +556,27 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 			select {
 			case <-saveTicker.C:
 				// persist in-memory state to disk after every 10secs.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
 			case <-ctx.Done():
-				// persist in-memory state immediately before exiting due to context cancelation.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+				// persist in-memory state immediately before exiting due to context cancellation.
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
 
 			case <-saverQuitCh:
 				// persist in-memory state immediately to disk.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
 			}
 		}
 	}()
 
 	expireCh := make(chan []expireObjInfo, workerSize)
-	go batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
+	expireDoneCh := make(chan struct{})
+	go func() {
+		defer close(expireDoneCh)
+		batchObjsForDelete(ctx, r, ri, job, api, wk, expireCh)
+	}()
 
 	var (
 		prevObj       ObjectInfo
@@ -580,9 +653,10 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		case expireCh <- toDel:
 		}
 	}
-	close(expireCh)
+	xioutil.SafeClose(expireCh)
 
-	wk.Wait() // waits for all expire goroutines to complete
+	<-expireDoneCh // waits for the expire goroutine to complete
+	wk.Wait()      // waits for all expire workers to retire
 
 	ri.Complete = ri.ObjectsFailed == 0
 	ri.Failed = ri.ObjectsFailed > 0
@@ -590,12 +664,12 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 
 	// Close the saverQuitCh - this also triggers saving in-memory state
 	// immediately one last time before we exit this method.
-	close(saverQuitCh)
+	xioutil.SafeClose(saverQuitCh)
 
 	// Notify expire jobs final status to the configured endpoint
 	buf, _ := json.Marshal(ri)
 	if err := r.Notify(context.Background(), bytes.NewReader(buf)); err != nil {
-		logger.LogIf(context.Background(), fmt.Errorf("unable to notify %v", err))
+		batchLogIf(context.Background(), fmt.Errorf("unable to notify %v", err))
 	}
 
 	return nil

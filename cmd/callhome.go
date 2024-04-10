@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
 )
 
 var callhomeLeaderLockTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
@@ -60,7 +59,7 @@ func initCallhome(ctx context.Context, objAPI ObjectLayer) {
 			// sleep for some time and try again.
 			duration := time.Duration(r.Float64() * float64(globalCallhomeConfig.FrequencyDur()))
 			if duration < time.Second {
-				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				// Make sure to sleep at least a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
@@ -112,7 +111,7 @@ func performCallhome(ctx context.Context) {
 	deadline := 10 * time.Second // Default deadline is 10secs for callhome
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
-		logger.LogIf(ctx, errors.New("Callhome: object layer not ready"))
+		internalLogIf(ctx, errors.New("Callhome: object layer not ready"))
 		return
 	}
 
@@ -145,7 +144,7 @@ func performCallhome(ctx context.Context) {
 				// Received all data. Send to SUBNET and return
 				err := sendHealthInfo(ctx, healthInfo)
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
+					internalLogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
 				}
 				return
 			}
@@ -180,12 +179,12 @@ func createHealthJSONGzip(ctx context.Context, healthInfo madmin.HealthInfo) []b
 
 	enc := json.NewEncoder(gzWriter)
 	if e := enc.Encode(header); e != nil {
-		logger.LogIf(ctx, fmt.Errorf("Could not encode health info header: %w", e))
+		internalLogIf(ctx, fmt.Errorf("Could not encode health info header: %w", e))
 		return nil
 	}
 
 	if e := enc.Encode(healthInfo); e != nil {
-		logger.LogIf(ctx, fmt.Errorf("Could not encode health info: %w", e))
+		internalLogIf(ctx, fmt.Errorf("Could not encode health info: %w", e))
 		return nil
 	}
 

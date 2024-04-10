@@ -27,7 +27,6 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/shirou/gopsutil/v3/host"
 )
 
 const (
@@ -82,7 +81,12 @@ var (
 	resourceMetricsMapMu sync.RWMutex
 	// resourceMetricsHelpMap maps metric name to its help string
 	resourceMetricsHelpMap map[MetricName]string
-	resourceMetricsGroups  []*MetricsGroup
+	resourceMetricsGroups  []*MetricsGroupV2
+	// initial values for drives (at the time  of server startup)
+	// used for calculating avg values for drive metrics
+	latestDriveStats      map[string]madmin.DiskIOStats
+	latestDriveStatsMu    sync.RWMutex
+	lastDriveStatsRefresh time.Time
 )
 
 // PeerResourceMetrics represents the resource metrics
@@ -142,7 +146,7 @@ func init() {
 		writesKBPerSec:    "Kilobytes written per second on a drive",
 		readsAwait:        "Average time for read requests to be served on a drive",
 		writesAwait:       "Average time for write requests to be served on a drive",
-		percUtil:          "Percentage of time the disk was busy since uptime",
+		percUtil:          "Percentage of time the disk was busy",
 		usedBytes:         "Used bytes on a drive",
 		totalBytes:        "Total bytes on a drive",
 		usedInodes:        "Total inodes used on a drive",
@@ -160,7 +164,7 @@ func init() {
 		cpuLoad5Perc:      "CPU load average 5min (percentage)",
 		cpuLoad15Perc:     "CPU load average 15min (percentage)",
 	}
-	resourceMetricsGroups = []*MetricsGroup{
+	resourceMetricsGroups = []*MetricsGroupV2{
 		getResourceMetrics(),
 	}
 
@@ -214,50 +218,69 @@ func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64,
 	resourceMetricsMap[subSys] = subsysMetrics
 }
 
-func collectDriveMetrics(m madmin.RealtimeMetrics) {
-	upt, _ := host.Uptime()
-	kib := 1 << 10
+// updateDriveIOStats - Updates the drive IO stats by calculating the difference between the current and latest updated values.
+func updateDriveIOStats(currentStats madmin.DiskIOStats, latestStats madmin.DiskIOStats, labels map[string]string) {
 	sectorSize := uint64(512)
-
-	for d, dm := range m.ByDisk {
-		stats := dm.IOStats
-		labels := map[string]string{"drive": d}
-		updateResourceMetrics(driveSubsystem, readsPerSec, float64(stats.ReadIOs)/float64(upt), labels, false)
-
-		readBytes := stats.ReadSectors * sectorSize
-		readKib := float64(readBytes) / float64(kib)
-		readKibPerSec := readKib / float64(upt)
-		updateResourceMetrics(driveSubsystem, readsKBPerSec, readKibPerSec, labels, false)
-
-		updateResourceMetrics(driveSubsystem, writesPerSec, float64(stats.WriteIOs)/float64(upt), labels, false)
-
-		writeBytes := stats.WriteSectors * sectorSize
-		writeKib := float64(writeBytes) / float64(kib)
-		writeKibPerSec := writeKib / float64(upt)
-		updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKibPerSec, labels, false)
-
-		rdAwait := 0.0
-		if stats.ReadIOs > 0 {
-			rdAwait = float64(stats.ReadTicks) / float64(stats.ReadIOs)
-		}
-		updateResourceMetrics(driveSubsystem, readsAwait, rdAwait, labels, false)
-
-		wrAwait := 0.0
-		if stats.WriteIOs > 0 {
-			wrAwait = float64(stats.WriteTicks) / float64(stats.WriteIOs)
-		}
-		updateResourceMetrics(driveSubsystem, writesAwait, wrAwait, labels, false)
-
-		updateResourceMetrics(driveSubsystem, percUtil, float64(stats.TotalTicks)/float64(upt*10), labels, false)
+	kib := float64(1 << 10)
+	diffInSeconds := time.Now().UTC().Sub(lastDriveStatsRefresh).Seconds()
+	if diffInSeconds == 0 {
+		// too soon to update the stats
+		return
+	}
+	diffStats := madmin.DiskIOStats{
+		ReadIOs:      currentStats.ReadIOs - latestStats.ReadIOs,
+		WriteIOs:     currentStats.WriteIOs - latestStats.WriteIOs,
+		ReadTicks:    currentStats.ReadTicks - latestStats.ReadTicks,
+		WriteTicks:   currentStats.WriteTicks - latestStats.WriteTicks,
+		TotalTicks:   currentStats.TotalTicks - latestStats.TotalTicks,
+		ReadSectors:  currentStats.ReadSectors - latestStats.ReadSectors,
+		WriteSectors: currentStats.WriteSectors - latestStats.WriteSectors,
 	}
 
+	updateResourceMetrics(driveSubsystem, readsPerSec, float64(diffStats.ReadIOs)/diffInSeconds, labels, false)
+	readKib := float64(diffStats.ReadSectors*sectorSize) / kib
+	updateResourceMetrics(driveSubsystem, readsKBPerSec, readKib/diffInSeconds, labels, false)
+
+	updateResourceMetrics(driveSubsystem, writesPerSec, float64(diffStats.WriteIOs)/diffInSeconds, labels, false)
+	writeKib := float64(diffStats.WriteSectors*sectorSize) / kib
+	updateResourceMetrics(driveSubsystem, writesKBPerSec, writeKib/diffInSeconds, labels, false)
+
+	rdAwait := 0.0
+	if diffStats.ReadIOs > 0 {
+		rdAwait = float64(diffStats.ReadTicks) / float64(diffStats.ReadIOs)
+	}
+	updateResourceMetrics(driveSubsystem, readsAwait, rdAwait, labels, false)
+
+	wrAwait := 0.0
+	if diffStats.WriteIOs > 0 {
+		wrAwait = float64(diffStats.WriteTicks) / float64(diffStats.WriteIOs)
+	}
+	updateResourceMetrics(driveSubsystem, writesAwait, wrAwait, labels, false)
+	updateResourceMetrics(driveSubsystem, percUtil, float64(diffStats.TotalTicks)/(diffInSeconds*10), labels, false)
+}
+
+func collectDriveMetrics(m madmin.RealtimeMetrics) {
+	latestDriveStatsMu.Lock()
+	for d, dm := range m.ByDisk {
+		labels := map[string]string{"drive": d}
+		latestStats, ok := latestDriveStats[d]
+		if !ok {
+			latestDriveStats[d] = dm.IOStats
+			continue
+		}
+		updateDriveIOStats(dm.IOStats, latestStats, labels)
+		latestDriveStats[d] = dm.IOStats
+	}
+	lastDriveStatsRefresh = time.Now().UTC()
+	latestDriveStatsMu.Unlock()
+
 	globalLocalDrivesMu.RLock()
-	localDrives := globalLocalDrives
+	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, d := range localDrives {
-		labels := map[string]string{"drive": d.Endpoint().RawPath}
-		di, err := d.DiskInfo(GlobalContext, false)
+		di, err := d.DiskInfo(GlobalContext, DiskInfoOptions{})
+		labels := map[string]string{"drive": di.Endpoint}
 		if err == nil {
 			updateResourceMetrics(driveSubsystem, usedBytes, float64(di.Used), labels, false)
 			updateResourceMetrics(driveSubsystem, totalBytes, float64(di.Total), labels, false)
@@ -339,8 +362,26 @@ func collectLocalResourceMetrics() {
 	collectDriveMetrics(m)
 }
 
+func initLatestValues() {
+	m := collectLocalMetrics(madmin.MetricsDisk, collectMetricsOpts{
+		hosts: map[string]struct{}{
+			globalLocalNodeName: {},
+		},
+	})
+
+	latestDriveStatsMu.Lock()
+	latestDriveStats = map[string]madmin.DiskIOStats{}
+	for d, dm := range m.ByDisk {
+		latestDriveStats[d] = dm.IOStats
+	}
+	lastDriveStatsRefresh = time.Now().UTC()
+	latestDriveStatsMu.Unlock()
+}
+
 // startResourceMetricsCollection - starts the job for collecting resource metrics
 func startResourceMetricsCollection() {
+	initLatestValues()
+
 	resourceMetricsMapMu.Lock()
 	resourceMetricsMap = map[MetricSubsystem]ResourceMetrics{}
 	resourceMetricsMapMu.Unlock()
@@ -364,7 +405,7 @@ func startResourceMetricsCollection() {
 
 // minioResourceCollector is the Collector for resource metrics
 type minioResourceCollector struct {
-	metricsGroups []*MetricsGroup
+	metricsGroups []*MetricsGroupV2
 	desc          *prometheus.Desc
 }
 
@@ -376,7 +417,7 @@ func (c *minioResourceCollector) Describe(ch chan<- *prometheus.Desc) {
 // Collect is called by the Prometheus registry when collecting metrics.
 func (c *minioResourceCollector) Collect(out chan<- prometheus.Metric) {
 	var wg sync.WaitGroup
-	publish := func(in <-chan Metric) {
+	publish := func(in <-chan MetricV2) {
 		defer wg.Done()
 		for metric := range in {
 			labels, values := getOrderedLabelValueArrays(metric.VariableLabels)
@@ -395,18 +436,18 @@ func (c *minioResourceCollector) Collect(out chan<- prometheus.Metric) {
 // and returns reference of minio resource Collector
 // It creates the Prometheus Description which is used
 // to define Metric and  help string
-func newMinioResourceCollector(metricsGroups []*MetricsGroup) *minioResourceCollector {
+func newMinioResourceCollector(metricsGroups []*MetricsGroupV2) *minioResourceCollector {
 	return &minioResourceCollector{
 		metricsGroups: metricsGroups,
 		desc:          prometheus.NewDesc("minio_resource_stats", "Resource statistics exposed by MinIO server", nil, nil),
 	}
 }
 
-func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []Metric {
+func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAvgMax bool) []MetricV2 {
 	help := resourceMetricsHelpMap[rm.Name]
 	name := rm.Name
-	metrics := make([]Metric, 0, 3)
-	metrics = append(metrics, Metric{
+	metrics := make([]MetricV2, 0, 3)
+	metrics = append(metrics, MetricV2{
 		Description:    getResourceMetricDescription(subSys, name, help),
 		Value:          rm.Current,
 		VariableLabels: cloneMSS(rm.Labels),
@@ -415,7 +456,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 	if requireAvgMax {
 		avgName := MetricName(fmt.Sprintf("%s_avg", name))
 		avgHelp := fmt.Sprintf("%s (avg)", help)
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getResourceMetricDescription(subSys, avgName, avgHelp),
 			Value:          math.Round(rm.Avg*100) / 100,
 			VariableLabels: cloneMSS(rm.Labels),
@@ -423,7 +464,7 @@ func prepareResourceMetrics(rm ResourceMetric, subSys MetricSubsystem, requireAv
 
 		maxName := MetricName(fmt.Sprintf("%s_max", name))
 		maxHelp := fmt.Sprintf("%s (max)", help)
-		metrics = append(metrics, Metric{
+		metrics = append(metrics, MetricV2{
 			Description:    getResourceMetricDescription(subSys, maxName, maxHelp),
 			Value:          rm.Max,
 			VariableLabels: cloneMSS(rm.Labels),
@@ -443,12 +484,12 @@ func getResourceMetricDescription(subSys MetricSubsystem, name MetricName, help 
 	}
 }
 
-func getResourceMetrics() *MetricsGroup {
-	mg := &MetricsGroup{
+func getResourceMetrics() *MetricsGroupV2 {
+	mg := &MetricsGroupV2{
 		cacheInterval: resourceMetricsCacheInterval,
 	}
-	mg.RegisterRead(func(ctx context.Context) []Metric {
-		metrics := []Metric{}
+	mg.RegisterRead(func(ctx context.Context) []MetricV2 {
+		metrics := []MetricV2{}
 
 		subSystems := []MetricSubsystem{interfaceSubsystem, memSubsystem, driveSubsystem, cpuSubsystem}
 		resourceMetricsMapMu.RLock()

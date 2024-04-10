@@ -30,6 +30,9 @@ const freeVersion = "free-version"
 // InitFreeVersion creates a free-version to track the tiered-content of j. If j has
 // no tiered content, it returns false.
 func (j xlMetaV2Object) InitFreeVersion(fi FileInfo) (xlMetaV2Version, bool) {
+	if fi.SkipTierFreeVersion() {
+		return xlMetaV2Version{}, false
+	}
 	if status, ok := j.MetaSys[ReservedMetadataPrefixLower+TransitionStatus]; ok && bytes.Equal(status, []byte(lifecycle.TransitionComplete)) {
 		vID, err := uuid.Parse(fi.TierFreeVersionID())
 		if err != nil {

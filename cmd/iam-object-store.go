@@ -25,14 +25,16 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // IAMObjectStore implements IAMStorageAPI
@@ -41,6 +43,8 @@ type IAMObjectStore struct {
 	sync.RWMutex
 
 	*iamCache
+
+	cachedIAMListing atomic.Value
 
 	usersSysType UsersSysType
 
@@ -143,6 +147,41 @@ func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}
 
 func (iamOS *IAMObjectStore) deleteIAMConfig(ctx context.Context, path string) error {
 	return deleteConfig(ctx, iamOS.objAPI, path)
+}
+
+func (iamOS *IAMObjectStore) loadPolicyDocWithRetry(ctx context.Context, policy string, m map[string]PolicyDoc, retries int) error {
+	for {
+	retry:
+		data, objInfo, err := iamOS.loadIAMConfigBytesWithMetadata(ctx, getPolicyDocPath(policy))
+		if err != nil {
+			if err == errConfigNotFound {
+				return errNoSuchPolicy
+			}
+			retries--
+			if retries <= 0 {
+				return err
+			}
+			time.Sleep(500 * time.Millisecond)
+			goto retry
+		}
+
+		var p PolicyDoc
+		err = p.parseJSON(data)
+		if err != nil {
+			return err
+		}
+
+		if p.Version == 0 {
+			// This means that policy was in the old version (without any
+			// timestamp info). We fetch the mod time of the file and save
+			// that as create and update date.
+			p.CreateDate = objInfo.ModTime
+			p.UpdateDate = objInfo.ModTime
+		}
+
+		m[policy] = p
+		return nil
+	}
 }
 
 func (iamOS *IAMObjectStore) loadPolicyDoc(ctx context.Context, policy string, m map[string]PolicyDoc) error {
@@ -288,9 +327,29 @@ func (iamOS *IAMObjectStore) loadGroups(ctx context.Context, m map[string]GroupI
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool,
-	m map[string]MappedPolicy,
-) error {
+func (iamOS *IAMObjectStore) loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy], retries int) error {
+	for {
+	retry:
+		var p MappedPolicy
+		err := iamOS.loadIAMConfig(ctx, &p, getMappedPolicyPath(name, userType, isGroup))
+		if err != nil {
+			if err == errConfigNotFound {
+				return errNoSuchPolicy
+			}
+			retries--
+			if retries <= 0 {
+				return err
+			}
+			time.Sleep(500 * time.Millisecond)
+			goto retry
+		}
+
+		m.Store(name, p)
+		return nil
+	}
+}
+
+func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error {
 	var p MappedPolicy
 	err := iamOS.loadIAMConfig(ctx, &p, getMappedPolicyPath(name, userType, isGroup))
 	if err != nil {
@@ -299,11 +358,12 @@ func (iamOS *IAMObjectStore) loadMappedPolicy(ctx context.Context, name string, 
 		}
 		return err
 	}
-	m[name] = p
+
+	m.Store(name, p)
 	return nil
 }
 
-func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
+func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error {
 	var basePath string
 	if isGroup {
 		basePath = iamConfigPolicyDBGroupsPrefix
@@ -334,53 +394,52 @@ func (iamOS *IAMObjectStore) loadMappedPolicies(ctx context.Context, userType IA
 }
 
 var (
-	usersListKey                   = "users/"
-	svcAccListKey                  = "service-accounts/"
-	groupsListKey                  = "groups/"
-	policiesListKey                = "policies/"
-	stsListKey                     = "sts/"
-	policyDBUsersListKey           = "policydb/users/"
-	policyDBSTSUsersListKey        = "policydb/sts-users/"
-	policyDBServiceAccountsListKey = "policydb/service-accounts/"
-	policyDBGroupsListKey          = "policydb/groups/"
-
-	// List of directories from which to read iam data into memory.
-	allListKeys = []string{
-		usersListKey,
-		svcAccListKey,
-		groupsListKey,
-		policiesListKey,
-		stsListKey,
-		policyDBUsersListKey,
-		policyDBSTSUsersListKey,
-		policyDBServiceAccountsListKey,
-		policyDBGroupsListKey,
-	}
-
-	// List of directories to skip: we do not read STS directories for better
-	// performance. STS credentials would be stored in memory when they are
-	// first used.
-	iamLoadSkipListKeySet = set.CreateStringSet(
-		stsListKey,
-		policyDBSTSUsersListKey,
-	)
+	usersListKey            = "users/"
+	svcAccListKey           = "service-accounts/"
+	groupsListKey           = "groups/"
+	policiesListKey         = "policies/"
+	stsListKey              = "sts/"
+	policyDBPrefix          = "policydb/"
+	policyDBUsersListKey    = "policydb/users/"
+	policyDBSTSUsersListKey = "policydb/sts-users/"
+	policyDBGroupsListKey   = "policydb/groups/"
 )
+
+// splitPath splits a path into a top-level directory and a child item. The
+// parent directory retains the trailing slash.
+func splitPath(s string, lastIndex bool) (string, string) {
+	var i int
+	if lastIndex {
+		i = strings.LastIndex(s, "/")
+	} else {
+		i = strings.Index(s, "/")
+	}
+	if i == -1 {
+		return s, ""
+	}
+	// Include the trailing slash in the parent directory.
+	return s[:i+1], s[i+1:]
+}
 
 func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
 	res := make(map[string][]string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	for _, listKey := range allListKeys {
-		if iamLoadSkipListKeySet.Contains(listKey) {
+	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
+		if item.Err != nil {
+			return nil, item.Err
+		}
+
+		lastIndex := strings.HasPrefix(item.Item, policyDBPrefix)
+		listKey, trimmedItem := splitPath(item.Item, lastIndex)
+		if listKey == iamFormatFile {
 			continue
 		}
-		for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+listKey) {
-			if item.Err != nil {
-				return nil, item.Err
-			}
-			res[listKey] = append(res[listKey], item.Item)
-		}
+
+		res[listKey] = append(res[listKey], trimmedItem)
 	}
+	// Store the listing for later re-use.
+	iamOS.cachedIAMListing.Store(res)
 	return res, nil
 }
 
@@ -391,22 +450,47 @@ func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
 	}
 
 	bootstrapTraceMsg("purging expired STS credentials")
+
+	iamListing, ok := iamOS.cachedIAMListing.Load().(map[string][]string)
+	if !ok {
+		// There has been no store yet. This should never happen!
+		iamLogIf(GlobalContext, errors.New("WARNING: no cached IAM listing found"))
+		return nil
+	}
+
 	// Scan STS users on disk and purge expired ones. We do not need to hold a
 	// lock with store.lock() here.
-	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator+stsListKey) {
-		if item.Err != nil {
-			return item.Err
-		}
-		userName := path.Dir(item.Item)
-		// loadUser() will delete expired user during the load - we do not need
-		// to keep the loaded user around in memory, so we reinitialize the map
-		// each time.
-		m := map[string]UserIdentity{}
-		if err := iamOS.loadUser(ctx, userName, stsUser, m); err != nil && err != errNoSuchUser {
-			logger.LogIf(GlobalContext, fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item.Item))
+	stsAccountsFromStore := map[string]UserIdentity{}
+	stsAccPoliciesFromStore := xsync.NewMapOf[string, MappedPolicy]()
+	for _, item := range iamListing[stsListKey] {
+		userName := path.Dir(item)
+		// loadUser() will delete expired user during the load.
+		err := iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore)
+		if err != nil && !errors.Is(err, errNoSuchUser) {
+			iamLogIf(GlobalContext,
+				fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item))
 		}
 
 	}
+	// Loading the STS policy mappings from disk ensures that stale entries
+	// (removed during loadUser() in the loop above) are removed from memory.
+	for _, item := range iamListing[policyDBSTSUsersListKey] {
+		stsName := strings.TrimSuffix(item, ".json")
+		err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore)
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
+			iamLogIf(GlobalContext,
+				fmt.Errorf("unable to load policies during STS purge: %w (%s)", err, item))
+		}
+
+	}
+
+	// Store the newly populated map in the iam cache. This takes care of
+	// removing stale entries from the existing map.
+	iamOS.Lock()
+	defer iamOS.Unlock()
+	iamOS.iamCache.iamSTSAccountsMap = stsAccountsFromStore
+	iamOS.iamCache.iamSTSPolicyMap = stsAccPoliciesFromStore
+
 	return nil
 }
 
@@ -567,15 +651,13 @@ type itemOrErr struct {
 	Err  error
 }
 
-// Lists files or dirs in the minioMetaBucket at the given path
-// prefix. If dirs is true, only directories are listed, otherwise
-// only objects are listed. All returned items have the pathPrefix
-// removed from their names.
+// Lists objects in the minioMetaBucket at the given path prefix. All returned
+// items have the pathPrefix removed from their names.
 func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix string) <-chan itemOrErr {
 	ch := make(chan itemOrErr)
 
 	go func() {
-		defer close(ch)
+		defer xioutil.SafeClose(ch)
 
 		// Allocate new results channel to receive ObjectInfo.
 		objInfoCh := make(chan ObjectInfo)

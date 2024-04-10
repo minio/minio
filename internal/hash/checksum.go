@@ -34,6 +34,10 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+func hashLogIf(ctx context.Context, err error) {
+	logger.LogIf(ctx, "hash", err)
+}
+
 // MinIOMultipartChecksum is as metadata on multipart uploads to indicate checksum type.
 const MinIOMultipartChecksum = "x-minio-multipart-checksum"
 
@@ -166,7 +170,7 @@ func (c ChecksumType) Hasher() hash.Hash {
 	return nil
 }
 
-// Trailing return whether the checksum is traling.
+// Trailing return whether the checksum is trailing.
 func (c ChecksumType) Trailing() bool {
 	return c.Is(ChecksumTrailing)
 }
@@ -240,6 +244,49 @@ func ReadCheckSums(b []byte, part int) map[string]string {
 	return res
 }
 
+// ReadPartCheckSums will read all part checksums from b and return them.
+func ReadPartCheckSums(b []byte) (res []map[string]string) {
+	for len(b) > 0 {
+		t, n := binary.Uvarint(b)
+		if n <= 0 {
+			break
+		}
+		b = b[n:]
+
+		typ := ChecksumType(t)
+		length := typ.RawByteLen()
+		if length == 0 || len(b) < length {
+			break
+		}
+		// Skip main checksum
+		b = b[length:]
+		if !typ.Is(ChecksumIncludesMultipart) {
+			continue
+		}
+		parts, n := binary.Uvarint(b)
+		if n <= 0 {
+			break
+		}
+		if len(res) == 0 {
+			res = make([]map[string]string, parts)
+		}
+		b = b[n:]
+		for part := 0; part < int(parts); part++ {
+			if len(b) < length {
+				break
+			}
+			// Read part checksum
+			cs := base64.StdEncoding.EncodeToString(b[:length])
+			b = b[length:]
+			if res[part] == nil {
+				res[part] = make(map[string]string, 1)
+			}
+			res[part][typ.String()] = cs
+		}
+	}
+	return res
+}
+
 // NewChecksumWithType is similar to NewChecksumString but expects input algo of ChecksumType.
 func NewChecksumWithType(alg ChecksumType, value string) *Checksum {
 	if !alg.IsSet() {
@@ -280,7 +327,7 @@ func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 		var checksums int
 		// Ensure we don't divide by 0:
 		if c.Type.RawByteLen() == 0 || len(parts)%c.Type.RawByteLen() != 0 {
-			logger.LogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
+			hashLogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
 			checksums = 0
 			parts = nil
 		} else {

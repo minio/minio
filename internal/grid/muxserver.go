@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 const lastPingThreshold = 4 * clientPingInterval
@@ -101,116 +101,154 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 		BaseFlags: c.baseFlags,
 	}
 	// Acknowledge Mux created.
-	var ack message
-	ack.Op = OpAckMux
-	ack.Flags = m.BaseFlags
-	ack.MuxID = m.ID
-	m.send(ack)
-	if debugPrint {
-		fmt.Println("connected stream mux:", ack.MuxID)
-	}
+	// Send async.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var ack message
+		ack.Op = OpAckMux
+		ack.Flags = m.BaseFlags
+		ack.MuxID = m.ID
+		m.send(ack)
+		if debugPrint {
+			fmt.Println("connected stream mux:", ack.MuxID)
+		}
+	}()
 
 	// Data inbound to the handler
 	var handlerIn chan []byte
 	if inboundCap > 0 {
 		m.inbound = make(chan []byte, inboundCap)
 		handlerIn = make(chan []byte, 1)
-		go func(inbound <-chan []byte) {
-			defer close(handlerIn)
-			// Send unblocks when we have delivered the message to the handler.
-			for in := range inbound {
-				handlerIn <- in
-				m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
-			}
+		go func(inbound chan []byte) {
+			wg.Wait()
+			defer xioutil.SafeClose(handlerIn)
+			m.handleInbound(c, inbound, handlerIn)
 		}(m.inbound)
 	}
+	// Fill outbound block.
+	// Each token represents a message that can be sent to the client without blocking.
+	// The client will refill the tokens as they confirm delivery of the messages.
 	for i := 0; i < outboundCap; i++ {
 		m.outBlock <- struct{}{}
 	}
 
 	// Handler goroutine.
-	var handlerErr *RemoteErr
+	var handlerErr atomic.Pointer[RemoteErr]
 	go func() {
-		start := time.Now()
-		defer func() {
-			if debugPrint {
-				fmt.Println("Mux", m.ID, "Handler took", time.Since(start).Round(time.Millisecond))
-			}
-			if r := recover(); r != nil {
-				logger.LogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
-				err := RemoteErr(fmt.Sprintf("panic: %v", r))
-				handlerErr = &err
-			}
-			if debugPrint {
-				fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
-			}
-			close(send)
-		}()
-		// handlerErr is guarded by 'send' channel.
-		handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
-	}()
-	// Response sender gorutine...
-	go func(outBlock <-chan struct{}) {
-		defer m.parent.deleteMux(true, m.ID)
-		for {
-			// Process outgoing message.
-			var payload []byte
-			var ok bool
-			select {
-			case payload, ok = <-send:
-			case <-ctx.Done():
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-outBlock:
-			}
-			msg := message{
-				MuxID: m.ID,
-				Op:    OpMuxServerMsg,
-				Flags: c.baseFlags,
-			}
-			if !ok {
-				if debugPrint {
-					fmt.Println("muxServer: Mux", m.ID, "send EOF", handlerErr)
-				}
-				msg.Flags |= FlagEOF
-				if handlerErr != nil {
-					msg.Flags |= FlagPayloadIsErr
-					msg.Payload = []byte(*handlerErr)
-				}
-				msg.setZeroPayloadFlag()
-				m.send(msg)
-				return
-			}
-			msg.Payload = payload
-			msg.setZeroPayloadFlag()
-			m.send(msg)
+		wg.Wait()
+		defer xioutil.SafeClose(send)
+		err := m.handleRequests(ctx, msg, send, handler, handlerIn)
+		if err != nil {
+			handlerErr.Store(err)
 		}
+	}()
+
+	// Response sender goroutine...
+	go func(outBlock <-chan struct{}) {
+		wg.Wait()
+		defer m.parent.deleteMux(true, m.ID)
+		m.sendResponses(ctx, send, c, &handlerErr, outBlock)
 	}(m.outBlock)
 
-	// Remote aliveness check.
+	// Remote aliveness check if needed.
 	if msg.DeadlineMS == 0 || msg.DeadlineMS > uint32(lastPingThreshold/time.Millisecond) {
 		go func() {
-			t := time.NewTicker(lastPingThreshold / 4)
-			defer t.Stop()
-			for {
-				select {
-				case <-m.ctx.Done():
-					return
-				case <-t.C:
-					last := time.Since(time.Unix(atomic.LoadInt64(&m.LastPing), 0))
-					if last > lastPingThreshold {
-						logger.LogIf(m.ctx, fmt.Errorf("canceling remote connection %s not seen for %v", m.parent, last))
-						m.close()
-						return
-					}
-				}
-			}
+			wg.Wait()
+			m.checkRemoteAlive()
 		}()
 	}
 	return &m
+}
+
+// handleInbound sends unblocks when we have delivered the message to the handler.
+func (m *muxServer) handleInbound(c *Connection, inbound <-chan []byte, handlerIn chan<- []byte) {
+	for in := range inbound {
+		handlerIn <- in
+		m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
+	}
+}
+
+// sendResponses will send responses to the client.
+func (m *muxServer) sendResponses(ctx context.Context, toSend <-chan []byte, c *Connection, handlerErr *atomic.Pointer[RemoteErr], outBlock <-chan struct{}) {
+	for {
+		// Process outgoing message.
+		var payload []byte
+		var ok bool
+		select {
+		case payload, ok = <-toSend:
+		case <-ctx.Done():
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-outBlock:
+		}
+		msg := message{
+			MuxID: m.ID,
+			Op:    OpMuxServerMsg,
+			Flags: c.baseFlags,
+		}
+		if !ok {
+			hErr := handlerErr.Load()
+			if debugPrint {
+				fmt.Println("muxServer: Mux", m.ID, "send EOF", hErr)
+			}
+			msg.Flags |= FlagEOF
+			if hErr != nil {
+				msg.Flags |= FlagPayloadIsErr
+				msg.Payload = []byte(*hErr)
+			}
+			msg.setZeroPayloadFlag()
+			m.send(msg)
+			return
+		}
+		msg.Payload = payload
+		msg.setZeroPayloadFlag()
+		m.send(msg)
+	}
+}
+
+// handleRequests will handle the requests from the client and call the handler function.
+func (m *muxServer) handleRequests(ctx context.Context, msg message, send chan<- []byte, handler StreamHandler, handlerIn <-chan []byte) (handlerErr *RemoteErr) {
+	start := time.Now()
+	defer func() {
+		if debugPrint {
+			fmt.Println("Mux", m.ID, "Handler took", time.Since(start).Round(time.Millisecond))
+		}
+		if r := recover(); r != nil {
+			gridLogIf(ctx, fmt.Errorf("grid handler (%v) panic: %v", msg.Handler, r))
+			err := RemoteErr(fmt.Sprintf("handler panic: %v", r))
+			handlerErr = &err
+		}
+		if debugPrint {
+			fmt.Println("muxServer: Mux", m.ID, "Returned with", handlerErr)
+		}
+	}()
+	// handlerErr is guarded by 'send' channel.
+	handlerErr = handler.Handle(ctx, msg.Payload, handlerIn, send)
+	return handlerErr
+}
+
+// checkRemoteAlive will check if the remote is alive.
+func (m *muxServer) checkRemoteAlive() {
+	t := time.NewTicker(lastPingThreshold / 4)
+	defer t.Stop()
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-t.C:
+			last := time.Since(time.Unix(atomic.LoadInt64(&m.LastPing), 0))
+			if last > lastPingThreshold {
+				gridLogIf(m.ctx, fmt.Errorf("canceling remote connection %s not seen for %v", m.parent, last))
+				m.close()
+				return
+			}
+		}
+	}
 }
 
 // checkSeq will check if sequence number is correct and increment it by 1.
@@ -228,7 +266,7 @@ func (m *muxServer) checkSeq(seq uint32) (ok bool) {
 
 func (m *muxServer) message(msg message) {
 	if debugPrint {
-		fmt.Printf("muxServer: recevied message %d, length %d\n", msg.Seq, len(msg.Payload))
+		fmt.Printf("muxServer: received message %d, length %d\n", msg.Seq, len(msg.Payload))
 	}
 	m.recvMu.Lock()
 	defer m.recvMu.Unlock()
@@ -242,10 +280,12 @@ func (m *muxServer) message(msg message) {
 	// Note, on EOF no value can be sent.
 	if msg.Flags&FlagEOF != 0 {
 		if len(msg.Payload) > 0 {
-			logger.LogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
+			gridLogIf(m.ctx, fmt.Errorf("muxServer: EOF message with payload"))
 		}
-		close(m.inbound)
-		m.inbound = nil
+		if m.inbound != nil {
+			xioutil.SafeClose(m.inbound)
+			m.inbound = nil
+		}
 		return
 	}
 
@@ -273,7 +313,7 @@ func (m *muxServer) unblockSend(seq uint32) {
 	select {
 	case m.outBlock <- struct{}{}:
 	default:
-		logger.LogIf(m.ctx, errors.New("output unblocked overflow"))
+		gridLogIf(m.ctx, errors.New("output unblocked overflow"))
 	}
 }
 
@@ -313,19 +353,22 @@ func (m *muxServer) send(msg message) {
 	if debugPrint {
 		fmt.Printf("Mux %d, Sending %+v\n", m.ID, msg)
 	}
-	logger.LogIf(m.ctx, m.parent.queueMsg(msg, nil))
+	gridLogIf(m.ctx, m.parent.queueMsg(msg, nil))
 }
 
 func (m *muxServer) close() {
 	m.cancel()
 	m.recvMu.Lock()
 	defer m.recvMu.Unlock()
+
 	if m.inbound != nil {
-		close(m.inbound)
+		xioutil.SafeClose(m.inbound)
 		m.inbound = nil
 	}
+
 	if m.outBlock != nil {
-		close(m.outBlock)
+		xioutil.SafeClose(m.outBlock)
 		m.outBlock = nil
+
 	}
 }

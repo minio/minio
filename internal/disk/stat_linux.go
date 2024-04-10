@@ -22,7 +22,9 @@ package disk
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -109,125 +111,63 @@ func GetInfo(path string, firstTime bool) (info Info, err error) {
 	return info, nil
 }
 
-const (
-	statsPath = "/proc/diskstats"
-)
+// GetDriveStats returns IO stats of the drive by its major:minor
+func GetDriveStats(major, minor uint32) (iostats IOStats, err error) {
+	return readDriveStats(fmt.Sprintf("/sys/dev/block/%v:%v/stat", major, minor))
+}
 
-// GetAllDrivesIOStats returns IO stats of all drives found in the machine
-func GetAllDrivesIOStats() (info AllDrivesIOStats, err error) {
-	proc, err := os.Open(statsPath)
+func readDriveStats(statsFile string) (iostats IOStats, err error) {
+	stats, err := readStat(statsFile)
+	if err != nil {
+		return IOStats{}, err
+	}
+	if len(stats) < 11 {
+		return IOStats{}, fmt.Errorf("found invalid format while reading %v", statsFile)
+	}
+	// refer https://www.kernel.org/doc/Documentation/block/stat.txt
+	iostats = IOStats{
+		ReadIOs:      stats[0],
+		ReadMerges:   stats[1],
+		ReadSectors:  stats[2],
+		ReadTicks:    stats[3],
+		WriteIOs:     stats[4],
+		WriteMerges:  stats[5],
+		WriteSectors: stats[6],
+		WriteTicks:   stats[7],
+		CurrentIOs:   stats[8],
+		TotalTicks:   stats[9],
+		ReqTicks:     stats[10],
+	}
+	// as per the doc, only 11 fields are guaranteed
+	// only set if available
+	if len(stats) > 14 {
+		iostats.DiscardIOs = stats[11]
+		iostats.DiscardMerges = stats[12]
+		iostats.DiscardSectors = stats[13]
+		iostats.DiscardTicks = stats[14]
+	}
+	return
+}
+
+func readStat(fileName string) (stats []uint64, err error) {
+	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, err
 	}
-	defer proc.Close()
+	defer file.Close()
 
-	ret := make(AllDrivesIOStats)
-
-	sc := bufio.NewScanner(proc)
-	for sc.Scan() {
-		line := sc.Text()
-		fields := strings.Fields(line)
-		if len(fields) < 11 {
-			continue
-		}
-
-		var err error
-		var ds IOStats
-
-		ds.ReadIOs, err = strconv.ParseUint((fields[3]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.ReadMerges, err = strconv.ParseUint((fields[4]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.ReadSectors, err = strconv.ParseUint((fields[5]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.ReadTicks, err = strconv.ParseUint((fields[6]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.WriteIOs, err = strconv.ParseUint((fields[7]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.WriteMerges, err = strconv.ParseUint((fields[8]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.WriteSectors, err = strconv.ParseUint((fields[9]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-		ds.WriteTicks, err = strconv.ParseUint((fields[10]), 10, 64)
-		if err != nil {
-			return ret, err
-		}
-
-		if len(fields) > 11 {
-			ds.CurrentIOs, err = strconv.ParseUint((fields[11]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-
-			ds.TotalTicks, err = strconv.ParseUint((fields[12]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-			ds.ReqTicks, err = strconv.ParseUint((fields[13]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-		}
-
-		if len(fields) > 14 {
-			ds.DiscardIOs, err = strconv.ParseUint((fields[14]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-			ds.DiscardMerges, err = strconv.ParseUint((fields[15]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-			ds.DiscardSectors, err = strconv.ParseUint((fields[16]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-			ds.DiscardTicks, err = strconv.ParseUint((fields[17]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-		}
-
-		if len(fields) > 18 {
-			ds.FlushIOs, err = strconv.ParseUint((fields[18]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-			ds.FlushTicks, err = strconv.ParseUint((fields[19]), 10, 64)
-			if err != nil {
-				return ret, err
-			}
-		}
-
-		major, err := strconv.ParseUint((fields[0]), 10, 32)
-		if err != nil {
-			return ret, err
-		}
-
-		minor, err := strconv.ParseUint((fields[1]), 10, 32)
-		if err != nil {
-			return ret, err
-		}
-		ret[DevID{uint32(major), uint32(minor)}] = ds
-	}
-
-	if err := sc.Err(); err != nil {
+	s, err := bufio.NewReader(file).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
+	statLine := strings.TrimSpace(s)
+	for _, token := range strings.Fields(statLine) {
+		ui64, err := strconv.ParseUint(token, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		stats = append(stats, ui64)
+	}
 
-	return ret, nil
+	return stats, nil
 }

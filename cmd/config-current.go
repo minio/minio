@@ -18,11 +18,17 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/minio/kms-go/kes"
+	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/browser"
+	"github.com/minio/minio/internal/kms"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
@@ -39,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/config/identity/openid"
 	idplugin "github.com/minio/minio/internal/config/identity/plugin"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/config/ilm"
 	"github.com/minio/minio/internal/config/lambda"
 	"github.com/minio/minio/internal/config/notify"
 	"github.com/minio/minio/internal/config/policy/opa"
@@ -72,8 +79,10 @@ func initHelp() {
 		config.SubnetSubSys:         subnet.DefaultKVS,
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 		config.DriveSubSys:          drive.DefaultKVS,
+		config.ILMSubSys:            ilm.DefaultKVS,
 		config.CacheSubSys:          cache.DefaultKVS,
 		config.BatchSubSys:          batch.DefaultKVS,
+		config.BrowserSubSys:        browser.DefaultKVS,
 	}
 	for k, v := range notify.DefaultNotificationKVS {
 		kvs[k] = v
@@ -226,6 +235,11 @@ func initHelp() {
 			Description: "enable cache plugin on MinIO for GET/HEAD requests",
 			Optional:    true,
 		},
+		config.HelpKV{
+			Key:         config.BrowserSubSys,
+			Description: "manage Browser HTTP specific features, such as Security headers, etc.",
+			Optional:    true,
+		},
 	}
 
 	if globalIsErasure {
@@ -273,6 +287,7 @@ func initHelp() {
 		config.CallhomeSubSys:       callhome.HelpCallhome,
 		config.DriveSubSys:          drive.HelpDrive,
 		config.CacheSubSys:          cache.Help,
+		config.BrowserSubSys:        browser.Help,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
@@ -407,6 +422,10 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 				return err
 			}
 		}
+	case config.BrowserSubSys:
+		if _, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default]); err != nil {
+			return err
+		}
 	default:
 		if config.LoggerSubSystems.Contains(subSys) {
 			if err := logger.ValidateSubSysConfig(ctx, s, subSys); err != nil {
@@ -460,7 +479,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	dnsURL, dnsUser, dnsPass, err := env.LookupEnv(config.EnvDNSWebhook)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 	}
 	if err == nil && dnsURL != "" {
 		bootstrapTraceMsg("initialize remote bucket DNS store")
@@ -468,27 +487,27 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 			dns.Authentication(dnsUser, dnsPass),
 			dns.RootCAs(globalRootCAs))
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to initialize remote webhook DNS config %w", err))
 		}
 	}
 
 	etcdCfg, err := etcd.LookupConfig(s[config.EtcdSubSys][config.Default], globalRootCAs)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 	}
 
 	if etcdCfg.Enabled {
 		bootstrapTraceMsg("initialize etcd store")
 		globalEtcdClient, err = etcd.New(etcdCfg)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to initialize etcd config: %w", err))
 		}
 
 		if len(globalDomainNames) != 0 && !globalDomainIPs.IsEmpty() && globalEtcdClient != nil {
 			if globalDNSConfig != nil {
-				// if global DNS is already configured, indicate with a warning, incase
+				// if global DNS is already configured, indicate with a warning, in case
 				// users are confused.
-				logger.LogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
+				configLogIf(ctx, fmt.Errorf("DNS store is already configured with %s, etcd is not used for DNS store", globalDNSConfig))
 			} else {
 				globalDNSConfig, err = dns.NewCoreDNS(etcdCfg.Config,
 					dns.DomainNames(globalDomainNames),
@@ -497,7 +516,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 					dns.CoreDNSPath(etcdCfg.CoreDNSPath),
 				)
 				if err != nil {
-					logger.LogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
+					configLogIf(ctx, fmt.Errorf("Unable to initialize DNS config for %s: %w",
 						globalDomainNames, err))
 				}
 			}
@@ -513,7 +532,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 
 	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
+		configLogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
 	}
 
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
@@ -526,19 +545,19 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	bootstrapTraceMsg("initialize the event notification targets")
 	globalNotifyTargetList, err = notify.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize notification target(s): %w", err))
 	}
 
 	bootstrapTraceMsg("initialize the lambda targets")
 	globalLambdaTargetList, err = lambda.FetchEnabledTargets(GlobalContext, s, transport)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize lambda target(s): %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize lambda target(s): %w", err))
 	}
 
 	bootstrapTraceMsg("applying the dynamic configuration")
 	// Apply dynamic config values
 	if err := applyDynamicConfig(ctx, objAPI, s); err != nil {
-		logger.LogIf(ctx, err)
+		configLogIf(ctx, err)
 	}
 }
 
@@ -552,15 +571,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 	case config.APISubSys:
 		apiConfig, err := api.LookupConfig(s[config.APISubSys][config.Default])
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
+			configLogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 		}
 
 		globalAPIConfig.init(apiConfig, setDriveCounts)
-
-		// Initialize remote instance transport once.
-		getRemoteInstanceTransportOnce.Do(func() {
-			getRemoteInstanceTransport = NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline)
-		})
+		autoGenerateRootCredentials() // Generate the KMS root credentials here since we don't know whether API root access is disabled until now.
+		setRemoteInstanceTransport(NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline))
 	case config.CompressionSubSys:
 		cmpCfg, err := compress.LookupConfig(s[config.CompressionSubSys][config.Default])
 		if err != nil {
@@ -587,65 +603,68 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			return fmt.Errorf("Unable to apply scanner config: %w", err)
 		}
 		// update dynamic scanner values.
+		scannerIdleMode.Store(scannerCfg.IdleMode)
 		scannerCycle.Store(scannerCfg.Cycle)
-		logger.LogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
+		scannerExcessObjectVersions.Store(scannerCfg.ExcessVersions)
+		scannerExcessFolders.Store(scannerCfg.ExcessFolders)
+		configLogIf(ctx, scannerSleeper.Update(scannerCfg.Delay, scannerCfg.MaxWait))
 	case config.LoggerWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.LoggerWebhookSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load logger webhook config: %w", err))
 		}
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.HTTP {
 			if l.Enabled {
-				l.LogOnce = logger.LogOnceConsoleIf
+				l.LogOnceIf = configLogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			}
 			loggerCfg.HTTP[n] = l
 		}
-		if errs := logger.UpdateSystemTargets(ctx, loggerCfg); len(errs) > 0 {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
+		if errs := logger.UpdateHTTPWebhooks(ctx, loggerCfg.HTTP); len(errs) > 0 {
+			configLogIf(ctx, fmt.Errorf("Unable to update logger webhook config: %v", errs))
 		}
 	case config.AuditWebhookSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditWebhookSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load audit webhook config: %w", err))
 		}
 		userAgent := getUserAgent(getMinioMode())
 		for n, l := range loggerCfg.AuditWebhook {
 			if l.Enabled {
-				l.LogOnce = logger.LogOnceConsoleIf
+				l.LogOnceIf = configLogOnceConsoleIf
 				l.UserAgent = userAgent
 				l.Transport = NewHTTPTransportWithClientCerts(l.ClientCert, l.ClientKey)
 			}
 			loggerCfg.AuditWebhook[n] = l
 		}
 
-		if errs := logger.UpdateAuditWebhookTargets(ctx, loggerCfg); len(errs) > 0 {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
+		if errs := logger.UpdateAuditWebhooks(ctx, loggerCfg.AuditWebhook); len(errs) > 0 {
+			configLogIf(ctx, fmt.Errorf("Unable to update audit webhook targets: %v", errs))
 		}
 	case config.AuditKafkaSubSys:
 		loggerCfg, err := logger.LookupConfigForSubSys(ctx, s, config.AuditKafkaSubSys)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load audit kafka config: %w", err))
 		}
 		for n, l := range loggerCfg.AuditKafka {
 			if l.Enabled {
 				if l.TLS.Enable {
 					l.TLS.RootCAs = globalRootCAs
 				}
-				l.LogOnce = logger.LogOnceIf
+				l.LogOnce = configLogOnceIf
 				loggerCfg.AuditKafka[n] = l
 			}
 		}
 		if errs := logger.UpdateAuditKafkaTargets(ctx, loggerCfg); len(errs) > 0 {
-			logger.LogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
+			configLogIf(ctx, fmt.Errorf("Unable to update audit kafka targets: %v", errs))
 		}
 	case config.StorageClassSubSys:
 		for i, setDriveCount := range setDriveCounts {
 			sc, err := storageclass.LookupConfig(s[config.StorageClassSubSys][config.Default], setDriveCount)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
+				configLogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 				break
 			}
 			// if we validated all setDriveCounts and it was successful
@@ -657,7 +676,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 	case config.SubnetSubSys:
 		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 		} else {
 			globalSubnetConfig.Update(subnetConfig, globalIsCICD)
 			globalSubnetConfig.ApplyEnv() // update environment settings for Console UI
@@ -665,7 +684,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 	case config.CallhomeSubSys:
 		callhomeCfg, err := callhome.LookupConfig(s[config.CallhomeSubSys][config.Default])
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load callhome config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load callhome config: %w", err))
 		} else {
 			enable := callhomeCfg.Enable && !globalCallhomeConfig.Enabled()
 			globalCallhomeConfig.Update(callhomeCfg)
@@ -675,20 +694,38 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		}
 	case config.DriveSubSys:
 		if driveConfig, err := drive.LookupConfig(s[config.DriveSubSys][config.Default]); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load drive config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load drive config: %w", err))
 		} else {
 			err := globalDriveConfig.Update(driveConfig)
 			if err != nil {
-				logger.LogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
+				configLogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
 			}
 		}
 	case config.CacheSubSys:
 		cacheCfg, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport)
 		if err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
+			configLogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
 		} else {
 			globalCacheConfig.Update(cacheCfg)
 		}
+	case config.BrowserSubSys:
+		browserCfg, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply browser config: %w", err)
+		}
+		globalBrowserConfig.Update(browserCfg)
+	case config.ILMSubSys:
+		ilmCfg, err := ilm.LookupConfig(s[config.ILMSubSys][config.Default])
+		if err != nil {
+			return fmt.Errorf("Unable to apply ilm config: %w", err)
+		}
+		if globalTransitionState != nil {
+			globalTransitionState.UpdateWorkers(ilmCfg.TransitionWorkers)
+		}
+		if globalExpiryState != nil {
+			globalExpiryState.ResizeWorkers(ilmCfg.ExpirationWorkers)
+		}
+		globalILMConfig.update(ilmCfg)
 	}
 	globalServerConfigMu.Lock()
 	defer globalServerConfigMu.Unlock()
@@ -696,6 +733,55 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 		globalServerConfig[subSys] = s[subSys]
 	}
 	return nil
+}
+
+// autoGenerateRootCredentials generates root credentials deterministically if
+// a KMS is configured, no manual credentials have been specified and if root
+// access is disabled.
+func autoGenerateRootCredentials() {
+	if GlobalKMS == nil {
+		return
+	}
+	if globalAPIConfig.permitRootAccess() || !globalActiveCred.Equal(auth.DefaultCredentials) {
+		return
+	}
+
+	if manager, ok := GlobalKMS.(kms.KeyManager); ok {
+		stat, err := GlobalKMS.Stat(GlobalContext)
+		if err != nil {
+			kmsLogIf(GlobalContext, err, "Unable to generate root credentials using KMS")
+			return
+		}
+
+		aKey, err := manager.HMAC(GlobalContext, stat.DefaultKey, []byte("root access key"))
+		if errors.Is(err, kes.ErrNotAllowed) {
+			return // If we don't have permission to compute the HMAC, don't change the cred.
+		}
+		if err != nil {
+			logger.Fatal(err, "Unable to generate root access key using KMS")
+		}
+
+		sKey, err := manager.HMAC(GlobalContext, stat.DefaultKey, []byte("root secret key"))
+		if err != nil {
+			// Here, we must have permission. Otherwise, we would have failed earlier.
+			logger.Fatal(err, "Unable to generate root secret key using KMS")
+		}
+
+		accessKey, err := auth.GenerateAccessKey(20, bytes.NewReader(aKey))
+		if err != nil {
+			logger.Fatal(err, "Unable to generate root access key")
+		}
+		secretKey, err := auth.GenerateSecretKey(32, bytes.NewReader(sKey))
+		if err != nil {
+			logger.Fatal(err, "Unable to generate root secret key")
+		}
+
+		logger.Info("Automatically generated root access key and secret key with the KMS")
+		globalActiveCred = auth.Credentials{
+			AccessKey: accessKey,
+			SecretKey: secretKey,
+		}
+	}
 }
 
 // applyDynamicConfig will apply dynamic config values.

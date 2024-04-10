@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/minio/minio/internal/logger"
 	"github.com/tidwall/gjson"
 )
 
@@ -47,7 +46,7 @@ func initLicenseUpdateJob(ctx context.Context, objAPI ObjectLayer) {
 			// sleep for some time and try again.
 			duration := time.Duration(r.Float64() * float64(time.Hour))
 			if duration < time.Second {
-				// Make sure to sleep atleast a second to avoid high CPU ticks.
+				// Make sure to sleep at least a second to avoid high CPU ticks.
 				duration = time.Second
 			}
 			time.Sleep(duration)
@@ -85,13 +84,13 @@ func performLicenseUpdate(ctx context.Context, objectAPI ObjectLayer) {
 
 	resp, err := globalSubnetConfig.Post(url, nil)
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("error from %s: %w", url, err))
+		subnetLogIf(ctx, fmt.Errorf("error from %s: %w", url, err))
 		return
 	}
 
 	r := gjson.Parse(resp).Get("license_v2")
 	if r.Index == 0 {
-		logger.LogIf(ctx, fmt.Errorf("license not found in response from %s", url))
+		internalLogIf(ctx, fmt.Errorf("license not found in response from %s", url))
 		return
 	}
 
@@ -104,13 +103,13 @@ func performLicenseUpdate(ctx context.Context, objectAPI ObjectLayer) {
 	kv := "subnet license=" + lic
 	result, err := setConfigKV(ctx, objectAPI, []byte(kv))
 	if err != nil {
-		logger.LogIf(ctx, fmt.Errorf("error setting subnet license config: %w", err))
+		internalLogIf(ctx, fmt.Errorf("error setting subnet license config: %w", err))
 		return
 	}
 
 	if result.Dynamic {
 		if err := applyDynamicConfigForSubSys(GlobalContext, objectAPI, result.Cfg, result.SubSys); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("error applying subnet dynamic config: %w", err))
+			subnetLogIf(ctx, fmt.Errorf("error applying subnet dynamic config: %w", err))
 			return
 		}
 		globalNotificationSys.SignalConfigReload(result.SubSys)

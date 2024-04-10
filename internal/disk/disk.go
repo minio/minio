@@ -40,15 +40,6 @@ type Info struct {
 	NRRequests uint64
 }
 
-// DevID is the drive major and minor ids
-type DevID struct {
-	Major uint32
-	Minor uint32
-}
-
-// AllDrivesIOStats is map between drive devices and IO stats
-type AllDrivesIOStats map[DevID]IOStats
-
 // IOStats contains stats of a single drive
 type IOStats struct {
 	ReadIOs        uint64

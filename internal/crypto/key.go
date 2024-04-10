@@ -51,10 +51,12 @@ func GenerateKey(extKey []byte, random io.Reader) (key ObjectKey) {
 	if _, err := io.ReadFull(random, nonce[:]); err != nil {
 		logger.CriticalIf(context.Background(), errOutOfEntropy)
 	}
-	sha := sha256.New()
-	sha.Write(extKey)
-	sha.Write(nonce[:])
-	sha.Sum(key[:0])
+
+	const Context = "object-encryption-key generation"
+	mac := hmac.New(sha256.New, extKey)
+	mac.Write([]byte(Context))
+	mac.Write(nonce[:])
+	mac.Sum(key[:0])
 	return key
 }
 
@@ -74,7 +76,7 @@ func GenerateIV(random io.Reader) (iv [32]byte) {
 // SealedKey represents a sealed object key. It can be stored
 // at an untrusted location.
 type SealedKey struct {
-	Key       [64]byte // The encrypted and authenticted object-key.
+	Key       [64]byte // The encrypted and authenticated object-key.
 	IV        [32]byte // The random IV used to encrypt the object-key.
 	Algorithm string   // The sealing algorithm used to encrypt the object key.
 }

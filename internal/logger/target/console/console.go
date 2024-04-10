@@ -48,7 +48,7 @@ func (c *Target) String() string {
 }
 
 // Send log message 'e' to console
-func (c *Target) Send(e interface{}, logKind string) error {
+func (c *Target) Send(e interface{}) error {
 	entry, ok := e.(log.Entry)
 	if !ok {
 		return fmt.Errorf("Uexpected log entry structure %#v", e)
@@ -59,6 +59,11 @@ func (c *Target) Send(e interface{}, logKind string) error {
 			return err
 		}
 		fmt.Println(string(logJSON))
+		return nil
+	}
+
+	if entry.Level == logger.EventKind {
+		fmt.Println(entry.Message)
 		return nil
 	}
 
@@ -83,22 +88,25 @@ func (c *Target) Send(e interface{}, logKind string) error {
 
 	var apiString string
 	if entry.API != nil {
-		apiString = "API: " + entry.API.Name + "("
+		apiString = "API: " + entry.API.Name
 		if entry.API.Args != nil {
+			args := ""
 			if entry.API.Args.Bucket != "" {
-				apiString = apiString + "bucket=" + entry.API.Args.Bucket
+				args = args + "bucket=" + entry.API.Args.Bucket
 			}
 			if entry.API.Args.Object != "" {
-				apiString = apiString + ", object=" + entry.API.Args.Object
+				args = args + ", object=" + entry.API.Args.Object
 			}
 			if entry.API.Args.VersionID != "" {
-				apiString = apiString + ", versionId=" + entry.API.Args.VersionID
+				args = args + ", versionId=" + entry.API.Args.VersionID
 			}
 			if len(entry.API.Args.Objects) > 0 {
-				apiString = apiString + ", multiObject=true, numberOfObjects=" + strconv.Itoa(len(entry.API.Args.Objects))
+				args = args + ", multiObject=true, numberOfObjects=" + strconv.Itoa(len(entry.API.Args.Objects))
+			}
+			if len(args) > 0 {
+				apiString += "(" + args + ")"
 			}
 		}
-		apiString += ")"
 	} else {
 		apiString = "INTERNAL"
 	}

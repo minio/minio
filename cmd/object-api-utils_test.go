@@ -99,7 +99,7 @@ func testPathTraversalExploit(obj ObjectLayer, instanceType, bucketName string, 
 		t.Fatalf("failed to create HTTP request for Put Object: <ERROR> %v", err)
 	}
 
-	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 	// Call the ServeHTTP to execute the handler.
 	apiRouter.ServeHTTP(rec, req)
 
@@ -111,7 +111,7 @@ func testPathTraversalExploit(obj ObjectLayer, instanceType, bucketName string, 
 	z := obj.(*erasureServerPools)
 	xl := z.serverPools[0].sets[0]
 	erasureDisks := xl.getDisks()
-	parts, errs := readAllFileInfo(ctx, erasureDisks, bucketName, objectName, "", false, false)
+	parts, errs := readAllFileInfo(ctx, erasureDisks, "", bucketName, objectName, "", false, false)
 	for i := range parts {
 		if errs[i] == nil {
 			if parts[i].Name == objectName {
@@ -149,7 +149,7 @@ func TestIsValidBucketName(t *testing.T) {
 		{"192.168.1.1", false},
 		{"$this-is-not-valid-too", false},
 		{"contains-$-dollar", false},
-		{"contains-^-carret", false},
+		{"contains-^-caret", false},
 		{"contains-$-dollar", false},
 		{"contains-$-dollar", false},
 		{"......", false},
@@ -195,7 +195,7 @@ func TestIsValidObjectName(t *testing.T) {
 		{"117Gn8rfHL2ACARPAhaFd0AGzic9pUbIA/5OCn5A", true},
 		{"SHØRT", true},
 		{"f*le", true},
-		{"contains-^-carret", true},
+		{"contains-^-caret", true},
 		{"contains-|-pipe", true},
 		{"contains-`-tick", true},
 		{"..test", true},

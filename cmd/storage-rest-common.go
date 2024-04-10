@@ -20,17 +20,13 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v52" // Added DiskInfo drive signature
+	storageRESTVersion       = "v57" // Remove TotalTokens from DiskMetrics
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
 
 const (
-	storageRESTMethodHealth      = "/health"
-	storageRESTMethodMakeVol     = "/makevol"
-	storageRESTMethodMakeVolBulk = "/makevolbulk"
-	storageRESTMethodDeleteVol   = "/deletevol"
-	storageRESTMethodListVols    = "/listvols"
+	storageRESTMethodHealth = "/health"
 
 	storageRESTMethodAppendFile     = "/appendfile"
 	storageRESTMethodCreateFile     = "/createfile"
@@ -47,7 +43,6 @@ const (
 	storageRESTMethodStatInfoFile   = "/statfile"
 	storageRESTMethodReadMultiple   = "/readmultiple"
 	storageRESTMethodCleanAbandoned = "/cleanabandoned"
-	storageRESTMethodLinkXL         = "/linkxl"
 )
 
 const (
@@ -72,6 +67,8 @@ const (
 	storageRESTForceDelete   = "force-delete"
 	storageRESTGlob          = "glob"
 	storageRESTMetrics       = "metrics"
+	storageRESTDriveQuorum   = "drive-quorum"
+	storageRESTOrigVolume    = "orig-volume"
 )
 
 type nsScannerOptions struct {

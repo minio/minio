@@ -231,6 +231,7 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 		t.Errorf("want %q, got %q", testPayload, resp.OrgString)
 	}
 	t.Log("Roundtrip:", time.Since(start))
+	h1.PutResponse(resp)
 
 	start = time.Now()
 	resp, err = h2.Call(context.Background(), remoteConn, &testRequest{Num: 1, String: testPayload})
@@ -241,7 +242,72 @@ func TestSingleRoundtripGenerics(t *testing.T) {
 	if resp != nil {
 		t.Errorf("want nil, got %q", resp)
 	}
+	h2.PutResponse(resp)
 	t.Log("Roundtrip:", time.Since(start))
+}
+
+func TestSingleRoundtripGenericsRecycle(t *testing.T) {
+	defer testlogger.T.SetLogTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	grid, err := SetupTestGrid(2)
+	errFatal(err)
+	remoteHost := grid.Hosts[1]
+	local := grid.Managers[0]
+	remote := grid.Managers[1]
+
+	// 1: Echo
+	h1 := NewSingleHandler[*MSS, *MSS](handlerTest, NewMSS, NewMSS)
+	// Handles incoming requests, returns a response
+	handler1 := func(req *MSS) (resp *MSS, err *RemoteErr) {
+		resp = h1.NewResponse()
+		for k, v := range *req {
+			(*resp)[k] = v
+		}
+		return resp, nil
+	}
+	// Return error
+	h2 := NewSingleHandler[*MSS, *MSS](handlerTest2, NewMSS, NewMSS)
+	handler2 := func(req *MSS) (resp *MSS, err *RemoteErr) {
+		defer req.Recycle()
+		r := RemoteErr(req.Get("err"))
+		return nil, &r
+	}
+	errFatal(h1.Register(local, handler1))
+	errFatal(h2.Register(local, handler2))
+
+	errFatal(h1.Register(remote, handler1))
+	errFatal(h2.Register(remote, handler2))
+
+	// local to remote connection
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	start := time.Now()
+	req := NewMSSWith(map[string]string{"test": testPayload})
+	resp, err := h1.Call(context.Background(), remoteConn, req)
+	errFatal(err)
+	if resp.Get("test") != testPayload {
+		t.Errorf("want %q, got %q", testPayload, resp.Get("test"))
+	}
+	t.Log("Roundtrip:", time.Since(start))
+	h1.PutResponse(resp)
+
+	start = time.Now()
+	resp, err = h2.Call(context.Background(), remoteConn, NewMSSWith(map[string]string{"err": testPayload}))
+	t.Log("Roundtrip:", time.Since(start))
+	if err != RemoteErr(testPayload) {
+		t.Errorf("want error %v(%T), got %v(%T)", RemoteErr(testPayload), RemoteErr(testPayload), err, err)
+	}
+	if resp != nil {
+		t.Errorf("want nil, got %q", resp)
+	}
+	t.Log("Roundtrip:", time.Since(start))
+	h2.PutResponse(resp)
 }
 
 func TestStreamSuite(t *testing.T) {
@@ -303,6 +369,12 @@ func TestStreamSuite(t *testing.T) {
 	t.Run("testGenericsStreamRoundtripSubroute", func(t *testing.T) {
 		defer timeout(1 * time.Minute)()
 		testGenericsStreamRoundtripSubroute(t, local, remote)
+		assertNoActive(t, connRemoteLocal)
+		assertNoActive(t, connLocalToRemote)
+	})
+	t.Run("testServerStreamResponseBlocked", func(t *testing.T) {
+		defer timeout(1 * time.Minute)()
+		testServerStreamResponseBlocked(t, local, remote)
 		assertNoActive(t, connRemoteLocal)
 		assertNoActive(t, connLocalToRemote)
 	})
@@ -535,7 +607,6 @@ func testStreamDeadline(t *testing.T, local, remote *Manager) {
 				err = resp.Err
 			}
 			clientCanceled <- time.Since(started)
-			t.Log("Client Context canceled")
 		}()
 		serverEnd := <-serverCanceled
 		clientEnd := <-clientCanceled
@@ -862,6 +933,96 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 
 	errFatal(err)
 	t.Log("EOF.", payloads, " Roundtrips:", time.Since(start))
+}
+
+// testServerStreamResponseBlocked will test if server can handle a blocked response stream
+func testServerStreamResponseBlocked(t *testing.T, local, remote *Manager) {
+	defer testlogger.T.SetErrorTB(t)()
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// We fake a local and remote server.
+	remoteHost := remote.HostName()
+
+	// 1: Echo
+	serverSent := make(chan struct{})
+	serverCanceled := make(chan struct{})
+	register := func(manager *Manager) {
+		errFatal(manager.RegisterStreamingHandler(handlerTest, StreamHandler{
+			Handle: func(ctx context.Context, payload []byte, _ <-chan []byte, resp chan<- []byte) *RemoteErr {
+				// Send many responses.
+				// Test that this doesn't block.
+				for i := byte(0); i < 100; i++ {
+					select {
+					case resp <- []byte{i}:
+					// ok
+					case <-ctx.Done():
+						close(serverCanceled)
+						return NewRemoteErr(ctx.Err())
+					}
+					if i == 1 {
+						close(serverSent)
+					}
+				}
+				return nil
+			},
+			OutCapacity: 1,
+			InCapacity:  0,
+		}))
+	}
+	register(local)
+	register(remote)
+
+	remoteConn := local.Connection(remoteHost)
+	const testPayload = "Hello Grid World!"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+	errFatal(err)
+
+	// Wait for the server to send the first response.
+	<-serverSent
+
+	// Read back from the stream and block.
+	nowBlocking := make(chan struct{})
+	stopBlocking := make(chan struct{})
+	defer close(stopBlocking)
+	go func() {
+		st.Results(func(b []byte) error {
+			close(nowBlocking)
+			// Block until test is done.
+			<-stopBlocking
+			return nil
+		})
+	}()
+
+	<-nowBlocking
+	// Wait for the receiver channel to fill.
+	for len(st.responses) != cap(st.responses) {
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	<-serverCanceled
+	local.debugMsg(debugIsOutgoingClosed, st.muxID, func(closed bool) {
+		if !closed {
+			t.Error("expected outgoing closed")
+		} else {
+			t.Log("outgoing was closed")
+		}
+	})
+
+	// Drain responses and check if error propagated.
+	err = st.Results(func(b []byte) error {
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Error("expected context.Canceled, got", err)
+	}
 }
 
 func timeout(after time.Duration) (cancel func()) {

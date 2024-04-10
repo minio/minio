@@ -6,7 +6,7 @@ Metrics may include one or more labels, such as the server that calculated that 
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/cluster
+https://HOSTNAME:PORT/minio/v2/metrics/cluster
 ```
 
 Replace ``HOSTNAME:PORT`` with the hostname of your MinIO deployment.
@@ -35,7 +35,7 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 | `minio_cluster_usage_version_total`          | Total number of versions (includes delete marker) in a cluster |
 | `minio_cluster_usage_deletemarker_total`     | Total number of delete markers in a cluster                    |
 | `minio_cluster_usage_total_bytes`            | Total cluster usage in bytes                                   |
-| `minio_cluster_buckets_total`                | Total number of buckets in the cluster                         |
+| `minio_cluster_bucket_total`                 | Total number of buckets in the cluster                         |
 
 ## Cluster Drive Metrics
 
@@ -65,12 +65,17 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 
 ## Cluster Health Metrics
 
-| Name                                | Description                                    |
-|:------------------------------------|:-----------------------------------------------|
-| `minio_cluster_nodes_offline_total` | Total number of MinIO nodes offline.           |
-| `minio_cluster_nodes_online_total`  | Total number of MinIO nodes online.            |
-| `minio_cluster_write_quorum`        | Maximum write quorum across all pools and sets |
-| `minio_cluster_health_status`       | Get current cluster health status              |
+| Name                                              | Description                                    |
+|:--------------------------------------------------|:-----------------------------------------------|
+| `minio_cluster_nodes_offline_total`               | Total number of MinIO nodes offline.           |
+| `minio_cluster_nodes_online_total`                | Total number of MinIO nodes online.            |
+| `minio_cluster_write_quorum`                      | Maximum write quorum across all pools and sets |
+| `minio_cluster_health_status`                     | Get current cluster health status              |
+| `minio_cluster_health_erasure_set_healing_drives` | Count of healing drives in the erasure set     |
+| `minio_cluster_health_erasure_set_online_drives`  | Count of online drives in the erasure set      |
+| `minio_cluster_health_erasure_set_read_quorum`    | Get read quorum of the erasure set             |
+| `minio_cluster_health_erasure_set_write_quorum`   | Get write quorum of the erasure set            |
+| `minio_cluster_health_erasure_set_status`         | Get current health status of the erasure set   |
 
 ## Cluster Replication Metrics
 
@@ -78,6 +83,36 @@ Metrics marked as ``Site Replication Only`` only populate on deployments with [S
 For deployments with [bucket](https://min.io/docs/minio/linux/administration/bucket-replication.html) or [batch](https://min.io/docs/minio/linux/administration/batch-framework.html#replicate) configurations, these metrics populate instead under the [Bucket Metrics](#bucket-metrics) endpoint.
 
 | Name                                                       | Description                                                                                             
+|:-----------------------------------------------------------|:---------------------------------------------------------------------------------------------------------|
+| `minio_cluster_replication_last_hour_failed_bytes`         | (_Site Replication Only_) Total number of bytes failed at least once to replicate in the last full hour. |
+| `minio_cluster_replication_last_hour_failed_count`         | (_Site Replication Only_) Total number of objects which failed replication in the last full hour.        |
+| `minio_cluster_replication_last_minute_failed_bytes`       | Total number of bytes failed at least once to replicate in the last full minute.                         |
+| `minio_cluster_replication_last_minute_failed_count`       | Total number of objects which failed replication in the last full minute.                                |
+| `minio_cluster_replication_total_failed_bytes`             | (_Site Replication Only_) Total number of bytes failed at least once to replicate since server start.    |
+| `minio_cluster_replication_total_failed_count`             | (_Site Replication Only_) Total number of objects which failed replication since server start.           |
+| `minio_cluster_replication_received_bytes`                 | (_Site Replication Only_) Total number of bytes replicated to this cluster from another source cluster.  |
+| `minio_cluster_replication_received_count`                 | (_Site Replication Only_) Total number of objects received by this cluster from another source cluster.  |
+| `minio_cluster_replication_sent_bytes`                     | (_Site Replication Only_) Total number of bytes replicated to the target cluster.                        |
+| `minio_cluster_replication_sent_count`                     | (_Site Replication Only_) Total number of objects replicated to the target cluster.                      |
+| `minio_cluster_replication_credential_errors`              | (_Site Replication Only_) Total number of replication credential errors since server start               |
+| `minio_cluster_replication_proxied_get_requests_total` | (_Site Replication Only_)Number of GET requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_head_requests_total` | (_Site Replication Only_)Number of HEAD requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_delete_tagging_requests_total` | (_Site Replication Only_)Number of DELETE tagging requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_get_tagging_requests_total` | (_Site Replication Only_)Number of GET tagging requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_put_tagging_requests_total` | (_Site Replication Only_)Number of PUT tagging requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_get_requests_failures` | (_Site Replication Only_)Number of failures in GET requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_head_requests_failures` | (_Site Replication Only_)Number of failures in HEAD requests proxied to replication target                          |
+| `minio_cluster_replication_proxied_delete_tagging_requests_failures` | (_Site Replication Only_)Number of failures proxying DELETE tagging requests to replication target                          |
+| `minio_cluster_replication_proxied_get_tagging_requests_failures` | (_Site Replication Only_)Number of failures proxying GET tagging requests to replication target                          |
+| `minio_cluster_replication_proxied_put_tagging_requests_failures` | (_Site Replication Only_)Number of failures proxying PUT tagging requests to replication target                          |
+
+
+## Node Replication Metrics
+
+Metrics marked as ``Site Replication Only`` only populate on deployments with [Site Replication](https://min.io/docs/minio/linux/operations/install-deploy-manage/multi-site-replication.html) configurations.
+For deployments with [bucket](https://min.io/docs/minio/linux/administration/bucket-replication.html) or [batch](https://min.io/docs/minio/linux/administration/batch-framework.html#replicate) configurations, these metrics populate instead under the [Bucket Metrics](#bucket-metrics) endpoint.
+
+| Name                                                       | Description
 |:-----------------------------------------------------------|:---------------------------------------------------------------------------------------------------------|
 | `minio_cluster_replication_current_active_workers`         | Total number of active replication workers                                                               |
 | `minio_cluster_replication_average_active_workers`         | Average number of active replication workers                                                             |
@@ -98,17 +133,6 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_cluster_replication_max_queued_bytes`               | Maximum number of bytes queued for replication seen since server start                                   |
 | `minio_cluster_replication_max_queued_count`               | Maximum number of objects queued for replication seen since server start                                 |
 | `minio_cluster_replication_recent_backlog_count`           | Total number of objects seen in replication backlog in the last 5 minutes                                |
-| `minio_cluster_replication_last_minute_failed_bytes`       | Total number of bytes failed at least once to replicate in the last full minute.                         |
-| `minio_cluster_replication_last_minute_failed_count`       | Total number of objects which failed replication in the last full minute.                                |
-| `minio_cluster_replication_last_hour_failed_bytes`         | (_Site Replication Only_) Total number of bytes failed at least once to replicate in the last full hour. |
-| `minio_cluster_replication_last_hour_failed_count`         | (_Site Replication Only_) Total number of objects which failed replication in the last full hour.        |
-| `minio_cluster_replication_total_failed_bytes`             | (_Site Replication Only_) Total number of bytes failed at least once to replicate since server start.    |
-| `minio_cluster_replication_total_failed_count`             | (_Site Replication Only_) Total number of objects which failed replication since server start.           |
-| `minio_cluster_replication_received_bytes`                 | (_Site Replication Only_) Total number of bytes replicated to this cluster from another source cluster.  |
-| `minio_cluster_replication_received_count`                 | (_Site Replication Only_) Total number of objects received by this cluster from another source cluster.  |
-| `minio_cluster_replication_sent_bytes`                     | (_Site Replication Only_) Total number of bytes replicated to the target cluster.                        |
-| `minio_cluster_replication_sent_count`                     | (_Site Replication Only_) Total number of objects replicated to the target cluster.                      |
-| `minio_cluster_replication_credential_errors`              | (_Site Replication Only_) Total number of replication credential errors since server start               |
 
 ## Healing Metrics
 
@@ -170,16 +194,19 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 ## Drive Metrics
 
-| Name                             | Description                                                         |
-|:---------------------------------|:--------------------------------------------------------------------|
-| `minio_node_drive_free_bytes`    | Total storage available on a drive.                                 |
-| `minio_node_drive_free_inodes`   | Total free inodes.                                                  |
-| `minio_node_drive_latency_us`    | Average last minute latency in µs for drive API storage operations. |
-| `minio_node_drive_offline_total` | Total drives offline in this node.                                  |
-| `minio_node_drive_online_total`  | Total drives online in this node.                                   |
-| `minio_node_drive_total`         | Total drives in this node.                                          |
-| `minio_node_drive_total_bytes`   | Total storage on a drive.                                           |
-| `minio_node_drive_used_bytes`    | Total storage used on a drive.                                      |
+| Name                                   | Description                                                                         |
+|:---------------------------------------|:------------------------------------------------------------------------------------|
+| `minio_node_drive_free_bytes`          | Total storage available on a drive.                                                 |
+| `minio_node_drive_free_inodes`         | Total free inodes.                                                                  |
+| `minio_node_drive_latency_us`          | Average last minute latency in µs for drive API storage operations.                 |
+| `minio_node_drive_offline_total`       | Total drives offline in this node.                                                  |
+| `minio_node_drive_online_total`        | Total drives online in this node.                                                   |
+| `minio_node_drive_total`               | Total drives in this node.                                                          |
+| `minio_node_drive_total_bytes`         | Total storage on a drive.                                                           |
+| `minio_node_drive_used_bytes`          | Total storage used on a drive.                                                      |
+| `minio_node_drive_errors_timeout`      | Total number of drive timeout errors since server start                             |
+| `minio_node_drive_errors_availability` | Total number of drive I/O errors, permission denied and timeouts since server start |
+| `minio_node_drive_io_waiting`          | Total number I/O operations waiting on drive                                        |
 
 ## Identity and Access Management (IAM) Metrics
 
@@ -192,13 +219,20 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 ## Information Lifecycle Management (ILM) Metrics
 
-| Name                                               | Description                                                                 |
-|:---------------------------------------------------|:----------------------------------------------------------------------------|
-| `minio_node_ilm_expiry_pending_tasks`              | Number of pending ILM expiry tasks in the queue.                            |
-| `minio_node_ilm_transition_active_tasks`           | Number of active ILM transition tasks.                                      |
-| `minio_node_ilm_transition_pending_tasks`          | Number of pending ILM transition tasks in the queue.                        |
-| `minio_node_ilm_transition_missed_immediate_tasks` | Number of missed immediate ILM transition tasks.                            |
-| `minio_node_ilm_versions_scanned`                  | Total number of object versions checked for ilm actions since server start. |
+| Name                                                         | Description                                                                                                |
+|:-------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------|
+| `minio_node_ilm_expiry_pending_tasks`                        | Number of pending ILM expiry tasks in the queue.                                                           |
+| `minio_node_ilm_transition_active_tasks`                     | Number of active ILM transition tasks.                                                                     |
+| `minio_node_ilm_transition_pending_tasks`                    | Number of pending ILM transition tasks in the queue.                                                       |
+| `minio_node_ilm_transition_missed_immediate_tasks`           | Number of missed immediate ILM transition tasks.                                                           |
+| `minio_node_ilm_versions_scanned`                            | Total number of object versions checked for ilm actions since server start.                                |
+| `minio_node_ilm_action_count_delete_action`                  | Total action outcome of lifecycle checks since server start for deleting object                            |
+| `minio_node_ilm_action_count_delete_version_action`          | Total action outcome of lifecycle checks since server start for deleting a version                         |
+| `minio_node_ilm_action_count_transition_action`              | Total action outcome of lifecycle checks since server start for transition of an object                    |
+| `minio_node_ilm_action_count_transition_version_action`      | Total action outcome of lifecycle checks since server start for transition of a particular object version  |
+| `minio_node_ilm_action_count_delete_restored_action`         | Total action outcome of lifecycle checks since server start for deletion of temporarily restored object    |
+| `minio_node_ilm_action_count_delete_restored_version_action` | Total action outcome of lifecycle checks since server start for deletion of a temporarily restored version |
+| `minio_node_ilm_action_count_delete_all_versions_action`     | Total action outcome of lifecycle checks since server start for deletion of all versions                   |
 
 ## Tier Metrics
 
@@ -221,6 +255,7 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_node_io_write_bytes`                | Total bytes written by the process to the underlying storage system, /proc/[pid]/io write_bytes.                |
 | `minio_node_process_cpu_total_seconds`     | Total user and system CPU time spent in seconds.                                                                |
 | `minio_node_process_resident_memory_bytes` | Resident memory size in bytes.                                                                                  |
+| `minio_node_process_virtual_memory_bytes`  | Virtual memory size in bytes.                                                                                   |
 | `minio_node_process_starttime_seconds`     | Start time for MinIO process per node, time in seconds since Unix epoc.                                         |
 | `minio_node_process_uptime_seconds`        | Uptime for MinIO process per node in seconds.                                                                   |
 
@@ -278,6 +313,16 @@ For deployments with [Site Replication](https://min.io/docs/minio/linux/operatio
 | `minio_bucket_replication_sent_bytes`               | Total number of bytes replicated to the target bucket.                           |
 | `minio_bucket_replication_sent_count`               | Total number of objects replicated to the target bucket.                         |
 | `minio_bucket_replication_credential_errors`        | Total number of replication credential errors since server start                 |
+| `minio_bucket_replication_proxied_get_requests_total` | Number of GET requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_head_requests_total` | Number of HEAD requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_delete_tagging_requests_total` | Number of DELETE tagging requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_get_tagging_requests_total` | Number of GET tagging requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_put_tagging_requests_total` | Number of PUT tagging requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_get_requests_failures` | Number of failures in GET requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_head_requests_failures` | Number of failures in HEAD requests proxied to replication target                          |
+| `minio_bucket_replication_proxied_delete_tagging_requests_failures` | Number of failures in DELETE tagging proxy requests to replication target                          |
+| `minio_bucket_replication_proxied_get_tagging_requests_failures` |Number of failures in GET tagging proxy requests to replication target                          |
+| `minio_bucket_replication_proxied_put_tagging_requests_failures` | Number of failures in PUT tagging proxy requests to replication target                          |
 
 ## Traffic Metrics
 
@@ -316,7 +361,7 @@ Metrics may include one or more additional labels, such as the drive path, inter
 These metrics can be obtained from any MinIO server once per collection by using the following URL:
 
 ```shell
-https://HOSTNAME:PORT/minio/metrics/v2/resource
+https://HOSTNAME:PORT/minio/v2/metrics/resource
 ```
 
 Replace `HOSTNAME:PORT` with the hostname of your MinIO deployment.
@@ -340,20 +385,20 @@ For deployments behind a load balancer, use the load balancer hostname instead o
 
 ## Network Interface Metrics
 
-| Name                          | Description                                   |
-|:------------------------------|:----------------------------------------------|
-| `minio_node_if_rx_bytes`      | Bytes received on the interface in 60s.       |
-| `minio_node_if_rx_bytes_avg`  | Bytes received on the interface in 60s (avg). |
-| `minio_node_if_rx_bytes_max`  | Bytes received on the interface in 60s (max). |
-| `minio_node_if_rx_errors`     | Receive errors in 60s.                        |
-| `minio_node_if_rx_errors_avg` | Receive errors in 60s (avg).                  |
-| `minio_node_if_rx_errors_max` | Receive errors in 60s (max).                  |
-| `minio_node_if_tx_bytes`      | Bytes transmitted in 60s.                     |
-| `minio_node_if_tx_bytes_avg`  | Bytes transmitted in 60s (avg).               |
-| `minio_node_if_tx_bytes_max`  | Bytes transmitted in 60s (max).               |
-| `minio_node_if_tx_errors`     | Transmit errors in 60s.                       |
-| `minio_node_if_tx_errors_avg` | Transmit errors in 60s (avg).                 |
-| `minio_node_if_tx_errors_max` | Transmit errors in 60s (max).                 |
+| Name                          | Description                                                |
+|:------------------------------|:-----------------------------------------------------------|
+| `minio_node_if_rx_bytes`      | Bytes received on the interface in 60s.                    |
+| `minio_node_if_rx_bytes_avg`  | Bytes received on the interface in 60s (avg) since uptime. |
+| `minio_node_if_rx_bytes_max`  | Bytes received on the interface in 60s (max) since uptime. |
+| `minio_node_if_rx_errors`     | Receive errors in 60s.                                     |
+| `minio_node_if_rx_errors_avg` | Receive errors in 60s (avg).                               |
+| `minio_node_if_rx_errors_max` | Receive errors in 60s (max).                               |
+| `minio_node_if_tx_bytes`      | Bytes transmitted in 60s.                                  |
+| `minio_node_if_tx_bytes_avg`  | Bytes transmitted in 60s (avg).                            |
+| `minio_node_if_tx_bytes_max`  | Bytes transmitted in 60s (max).                            |
+| `minio_node_if_tx_errors`     | Transmit errors in 60s.                                    |
+| `minio_node_if_tx_errors_avg` | Transmit errors in 60s (avg).                              |
+| `minio_node_if_tx_errors_max` | Transmit errors in 60s (max).                              |
 
 ## CPU Metrics
 

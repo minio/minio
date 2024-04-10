@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-// writeSTSErrorRespone writes error headers
+// writeSTSErrorResponse writes error headers
 func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode STSErrorCode, err error) {
 	stsErr := stsErrCodes.ToSTSErr(errCode)
 
@@ -40,7 +40,7 @@ func writeSTSErrorResponse(ctx context.Context, w http.ResponseWriter, errCode S
 	}
 	switch errCode {
 	case ErrSTSInternalError, ErrSTSUpstreamError:
-		logger.LogIf(ctx, err, logger.Minio)
+		stsLogIf(ctx, err, logger.ErrorKind)
 	}
 	encodedErrorResponse := encodeResponse(stsErrorResponse)
 	writeResponse(w, stsErr.HTTPStatusCode, encodedErrorResponse, mimeXML)

@@ -30,7 +30,7 @@ import (
 )
 
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
-var ErrDisconnected = errors.New("remote disconnected")
+var ErrDisconnected = RemoteErr("remote disconnected")
 
 const (
 	// minBufferSize is the minimum buffer size.
@@ -42,10 +42,16 @@ const (
 
 	// maxBufferSize is the maximum buffer size.
 	// Buffers larger than this is not reused.
-	maxBufferSize = 64 << 10
+	maxBufferSize = 96 << 10
+
+	// This is the assumed size of bigger buffers and allocation size.
+	biggerBufMin = 32 << 10
+
+	// This is the maximum size of bigger buffers.
+	biggerBufMax = maxBufferSize
 
 	// If there is a queue, merge up to this many messages.
-	maxMergeMessages = 20
+	maxMergeMessages = 30
 
 	// clientPingInterval will ping the remote handler every 15 seconds.
 	// Clients disconnect when we exceed 2 intervals.
@@ -63,6 +69,13 @@ var internalByteBuffer = sync.Pool{
 	},
 }
 
+var internal32KByteBuffer = sync.Pool{
+	New: func() any {
+		m := make([]byte, 0, biggerBufMin)
+		return &m
+	},
+}
+
 // GetByteBuffer can be replaced with a function that returns a small
 // byte buffer.
 // When replacing PutByteBuffer should also be replaced
@@ -72,10 +85,34 @@ var GetByteBuffer = func() []byte {
 	return b[:0]
 }
 
+// GetByteBufferCap returns a length 0 byte buffer with at least the given capacity.
+func GetByteBufferCap(wantSz int) []byte {
+	if wantSz < defaultBufferSize {
+		b := GetByteBuffer()[:0]
+		if cap(b) >= wantSz {
+			return b
+		}
+		PutByteBuffer(b)
+	}
+	if wantSz <= maxBufferSize {
+		b := *internal32KByteBuffer.Get().(*[]byte)
+		if cap(b) >= wantSz {
+			return b[:0]
+		}
+		internal32KByteBuffer.Put(&b)
+	}
+	return make([]byte, 0, wantSz)
+}
+
 // PutByteBuffer is for returning byte buffers.
 var PutByteBuffer = func(b []byte) {
-	if cap(b) >= minBufferSize && cap(b) < maxBufferSize {
+	if cap(b) >= biggerBufMin && cap(b) < biggerBufMax {
+		internal32KByteBuffer.Put(&b)
+		return
+	}
+	if cap(b) >= minBufferSize && cap(b) < biggerBufMin {
 		internalByteBuffer.Put(&b)
+		return
 	}
 }
 
@@ -117,11 +154,7 @@ type writerWrapper struct {
 }
 
 func (w *writerWrapper) Write(p []byte) (n int, err error) {
-	buf := GetByteBuffer()
-	if cap(buf) < len(p) {
-		PutByteBuffer(buf)
-		buf = make([]byte, len(p))
-	}
+	buf := GetByteBufferCap(len(p))
 	buf = buf[:len(p)]
 	copy(buf, p)
 	select {
@@ -145,143 +178,4 @@ func bytesOrLength(b []byte) string {
 		return fmt.Sprintf("%d bytes", len(b))
 	}
 	return fmt.Sprint(b)
-}
-
-type lockedClientMap struct {
-	m  map[uint64]*muxClient
-	mu sync.Mutex
-}
-
-func (m *lockedClientMap) Load(id uint64) (*muxClient, bool) {
-	m.mu.Lock()
-	v, ok := m.m[id]
-	m.mu.Unlock()
-	return v, ok
-}
-
-func (m *lockedClientMap) LoadAndDelete(id uint64) (*muxClient, bool) {
-	m.mu.Lock()
-	v, ok := m.m[id]
-	if ok {
-		delete(m.m, id)
-	}
-	m.mu.Unlock()
-	return v, ok
-}
-
-func (m *lockedClientMap) Size() int {
-	m.mu.Lock()
-	v := len(m.m)
-	m.mu.Unlock()
-	return v
-}
-
-func (m *lockedClientMap) Delete(id uint64) {
-	m.mu.Lock()
-	delete(m.m, id)
-	m.mu.Unlock()
-}
-
-func (m *lockedClientMap) Range(fn func(key uint64, value *muxClient) bool) {
-	m.mu.Lock()
-	for k, v := range m.m {
-		if !fn(k, v) {
-			break
-		}
-	}
-	m.mu.Unlock()
-}
-
-func (m *lockedClientMap) Clear() {
-	m.mu.Lock()
-	m.m = map[uint64]*muxClient{}
-	m.mu.Unlock()
-}
-
-func (m *lockedClientMap) LoadOrStore(id uint64, v *muxClient) (*muxClient, bool) {
-	m.mu.Lock()
-	v2, ok := m.m[id]
-	if ok {
-		m.mu.Unlock()
-		return v2, true
-	}
-	m.m[id] = v
-	m.mu.Unlock()
-	return v, false
-}
-
-type lockedServerMap struct {
-	m  map[uint64]*muxServer
-	mu sync.Mutex
-}
-
-func (m *lockedServerMap) Load(id uint64) (*muxServer, bool) {
-	m.mu.Lock()
-	v, ok := m.m[id]
-	m.mu.Unlock()
-	return v, ok
-}
-
-func (m *lockedServerMap) LoadAndDelete(id uint64) (*muxServer, bool) {
-	m.mu.Lock()
-	v, ok := m.m[id]
-	if ok {
-		delete(m.m, id)
-	}
-	m.mu.Unlock()
-	return v, ok
-}
-
-func (m *lockedServerMap) Size() int {
-	m.mu.Lock()
-	v := len(m.m)
-	m.mu.Unlock()
-	return v
-}
-
-func (m *lockedServerMap) Delete(id uint64) {
-	m.mu.Lock()
-	delete(m.m, id)
-	m.mu.Unlock()
-}
-
-func (m *lockedServerMap) Range(fn func(key uint64, value *muxServer) bool) {
-	m.mu.Lock()
-	for k, v := range m.m {
-		if !fn(k, v) {
-			break
-		}
-	}
-	m.mu.Unlock()
-}
-
-func (m *lockedServerMap) Clear() {
-	m.mu.Lock()
-	m.m = map[uint64]*muxServer{}
-	m.mu.Unlock()
-}
-
-func (m *lockedServerMap) LoadOrStore(id uint64, v *muxServer) (*muxServer, bool) {
-	m.mu.Lock()
-	v2, ok := m.m[id]
-	if ok {
-		m.mu.Unlock()
-		return v2, true
-	}
-	m.m[id] = v
-	m.mu.Unlock()
-	return v, false
-}
-
-func (m *lockedServerMap) LoadOrCompute(id uint64, fn func() *muxServer) (*muxServer, bool) {
-	m.mu.Lock()
-	v2, ok := m.m[id]
-	if ok {
-		m.mu.Unlock()
-		return v2, true
-	}
-	v := fn()
-	m.m[id] = v
-	m.mu.Unlock()
-	return v, false
 }

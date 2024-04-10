@@ -27,7 +27,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -50,7 +49,7 @@ import (
 	"github.com/minio/console/api/operations"
 	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
 	consoleCerts "github.com/minio/console/pkg/certs"
-	"github.com/minio/kes-go"
+	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -67,9 +66,11 @@ import (
 )
 
 // serverDebugLog will enable debug printing
-var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
-
-var shardDiskTimeDelta time.Duration
+var (
+	serverDebugLog     = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
+	currentReleaseTime time.Time
+	orchestrated       = IsKubernetes() || IsDocker()
+)
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -83,12 +84,8 @@ func init() {
 		}
 	}
 
-	rand.Seed(time.Now().UTC().UnixNano())
-
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
-
-	initGlobalContext()
 
 	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
 	go globalBatchJobsMetrics.purgeJobMetrics()
@@ -105,18 +102,15 @@ func init() {
 	gob.Register(StorageErr(""))
 	gob.Register(madmin.TimeInfo{})
 	gob.Register(madmin.XFSErrorConfigs{})
+	gob.Register(map[string]string{})
 	gob.Register(map[string]interface{}{})
-
-	var err error
-	shardDiskTimeDelta, err = time.ParseDuration(env.Get("_MINIO_SHARD_DISKTIME_DELTA", "1m"))
-	if err != nil {
-		shardDiskTimeDelta = 1 * time.Minute
-	}
 
 	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
 	minio.MaxRetry = 1
 	madmin.MaxRetry = 1
+
+	currentReleaseTime, _ = GetCurrentReleaseTime()
 }
 
 const consolePrefix = "CONSOLE_"
@@ -177,6 +171,23 @@ func minioConfigToConsoleFeatures() {
 
 	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
+
+	// This section sets Browser (console) stored config
+	if valueSCP := globalBrowserConfig.GetCSPolicy(); valueSCP != "" {
+		os.Setenv("CONSOLE_SECURE_CONTENT_SECURITY_POLICY", valueSCP)
+	}
+
+	if hstsSeconds := globalBrowserConfig.GetHSTSSeconds(); hstsSeconds > 0 {
+		isubdom := globalBrowserConfig.IsHSTSIncludeSubdomains()
+		isprel := globalBrowserConfig.IsHSTSPreload()
+		os.Setenv("CONSOLE_SECURE_STS_SECONDS", strconv.Itoa(hstsSeconds))
+		os.Setenv("CONSOLE_SECURE_STS_INCLUDE_SUB_DOMAINS", isubdom)
+		os.Setenv("CONSOLE_SECURE_STS_PRELOAD", isprel)
+	}
+
+	if valueRefer := globalBrowserConfig.GetReferPolicy(); valueRefer != "" {
+		os.Setenv("CONSOLE_SECURE_REFERRER_POLICY", valueRefer)
+	}
 
 	globalSubnetConfig.ApplyEnv()
 }
@@ -284,9 +295,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	// Its OK to ignore any errors during doUpdate() here.
-	crTime, err := GetCurrentReleaseTime()
-	if err != nil {
+	if currentReleaseTime.IsZero() {
 		return
 	}
 
@@ -297,8 +306,8 @@ func checkUpdate(mode string) {
 
 	var older time.Duration
 	var downloadURL string
-	if lrTime.After(crTime) {
-		older = lrTime.Sub(crTime)
+	if lrTime.After(currentReleaseTime) {
+		older = lrTime.Sub(currentReleaseTime)
 		downloadURL = getDownloadURL(releaseTimeToReleaseTag(lrTime))
 	}
 
@@ -307,7 +316,7 @@ func checkUpdate(mode string) {
 		return
 	}
 
-	logger.Info(prepareUpdateMessage("Run `mc admin update`", lrTime.Sub(crTime)))
+	logger.Info(prepareUpdateMessage("Run `mc admin update ALIAS`", lrTime.Sub(currentReleaseTime)))
 }
 
 func newConfigDir(dir string, dirSet bool, getDefaultDir func() string) (*ConfigDir, error) {
@@ -354,9 +363,16 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 		ctxt.ConsoleAddr = ctx.String("console-address")
 	}
 
+	if cxml := ctx.String("crossdomain-xml"); cxml != "" {
+		buf, err := os.ReadFile(cxml)
+		if err != nil {
+			return err
+		}
+		ctxt.CrossDomainXML = string(buf)
+	}
+
 	// Check "no-compat" flag from command line argument.
 	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
-	ctxt.PreAllocate = ctx.IsSet("pre-allocate") || ctx.GlobalIsSet("pre-allocate")
 
 	switch {
 	case ctx.IsSet("config-dir"):
@@ -383,10 +399,13 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
 	ctxt.ConnReadDeadline = ctx.Duration("conn-read-deadline")
 	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
+	ctxt.ConnClientReadDeadline = ctx.Duration("conn-client-read-deadline")
+	ctxt.ConnClientWriteDeadline = ctx.Duration("conn-client-write-deadline")
 
 	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
 	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
+	ctxt.MaxIdleConnsPerHost = ctx.Int("max-idle-conns-per-host")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)
@@ -477,7 +496,11 @@ func runDNSCache(ctx *cli.Context) {
 	dnsTTL := ctx.Duration("dns-cache-ttl")
 	// Check if we have configured a custom DNS cache TTL.
 	if dnsTTL <= 0 {
-		dnsTTL = 10 * time.Minute
+		if orchestrated {
+			dnsTTL = 30 * time.Second
+		} else {
+			dnsTTL = 10 * time.Minute
+		}
 	}
 
 	// Call to refresh will refresh names in cache.
@@ -830,7 +853,7 @@ func loadRootCredentials() {
 // It depends on KMS env variables and global cli flags.
 func handleKMSConfig() {
 	if env.IsSet(kms.EnvKMSSecretKey) && env.IsSet(kms.EnvKESEndpoint) {
-		logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
+		logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
 	}
 
 	if env.IsSet(kms.EnvKMSSecretKey) {
@@ -843,10 +866,10 @@ func handleKMSConfig() {
 	if env.IsSet(kms.EnvKESEndpoint) {
 		if env.IsSet(kms.EnvKESAPIKey) {
 			if env.IsSet(kms.EnvKESClientKey) {
-				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientKey))
+				logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientKey))
 			}
 			if env.IsSet(kms.EnvKESClientCert) {
-				logger.Fatal(errors.New("ambigious KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
+				logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
 			}
 		}
 		if !env.IsSet(kms.EnvKESKeyName) {
@@ -883,7 +906,6 @@ func handleKMSConfig() {
 			}
 			kmsConf = kms.Config{
 				Endpoints:    endpoints,
-				Enclave:      env.Get(kms.EnvKESEnclave, ""),
 				DefaultKeyID: env.Get(kms.EnvKESKeyName, ""),
 				APIKey:       key,
 				RootCAs:      rootCAs,
@@ -929,7 +951,6 @@ func handleKMSConfig() {
 
 			kmsConf = kms.Config{
 				Endpoints:        endpoints,
-				Enclave:          env.Get(kms.EnvKESEnclave, ""),
 				DefaultKeyID:     env.Get(kms.EnvKESKeyName, ""),
 				Certificate:      certificate,
 				ReloadCertEvents: reloadCertEvents,
@@ -1023,7 +1044,7 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		}
 		if err = manager.AddCertificate(certFile, keyFile); err != nil {
 			err = fmt.Errorf("Unable to load TLS certificate '%s,%s': %w", certFile, keyFile, err)
-			logger.LogIf(GlobalContext, err, logger.Minio)
+			bootLogIf(GlobalContext, err, logger.ErrorKind)
 		}
 	}
 	secureConn = true

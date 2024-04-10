@@ -26,7 +26,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/hash/sha256"
-	"github.com/minio/minio/internal/logger"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/tinylib/msgp/msgp"
 )
 
@@ -35,6 +35,7 @@ import (
 // HandlerID is a handler identifier.
 // It is used to determine request routing on the server.
 // Handlers can be registered with a static subroute.
+// Do NOT remove or change the order of existing handlers.
 const (
 	// handlerInvalid is reserved to check for uninitialized values.
 	handlerInvalid HandlerID = iota
@@ -56,6 +57,60 @@ const (
 	HandlerWriteMetadata
 	HandlerCheckParts
 	HandlerRenameData
+	HandlerRenameFile
+	HandlerReadAll
+	HandlerServerVerify
+	HandlerTrace
+	HandlerListen
+	HandlerDeleteBucketMetadata
+	HandlerLoadBucketMetadata
+	HandlerReloadSiteReplicationConfig
+	HandlerReloadPoolMeta
+	HandlerStopRebalance
+	HandlerLoadRebalanceMeta
+	HandlerLoadTransitionTierConfig
+	HandlerDeletePolicy
+	HandlerLoadPolicy
+	HandlerLoadPolicyMapping
+	HandlerDeleteServiceAccount
+	HandlerLoadServiceAccount
+	HandlerDeleteUser
+	HandlerLoadUser
+	HandlerLoadGroup
+	HandlerHealBucket
+	HandlerMakeBucket
+	HandlerHeadBucket
+	HandlerDeleteBucket
+	HandlerGetMetrics
+	HandlerGetResourceMetrics
+	HandlerGetMemInfo
+	HandlerGetProcInfo
+	HandlerGetOSInfo
+	HandlerGetPartitions
+	HandlerGetNetInfo
+	HandlerGetCPUs
+	HandlerServerInfo
+	HandlerGetSysConfig
+	HandlerGetSysServices
+	HandlerGetSysErrors
+	HandlerGetAllBucketStats
+	HandlerGetBucketStats
+	HandlerGetSRMetrics
+	HandlerGetPeerMetrics
+	HandlerGetMetacacheListing
+	HandlerUpdateMetacacheListing
+	HandlerGetPeerBucketMetrics
+	HandlerStorageInfo
+	HandlerConsoleLog
+	HandlerListDir
+	HandlerGetLocks
+	HandlerBackgroundHealStatus
+	HandlerGetLastDayTierStats
+	HandlerSignalService
+	HandlerGetBandwidth
+	HandlerWriteAll
+	HandlerListBuckets
+	HandlerRenameDataInline
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -68,29 +123,81 @@ const (
 // handlerPrefixes are prefixes for handler IDs used for tracing.
 // If a handler is not listed here, it will be traced with "grid" prefix.
 var handlerPrefixes = [handlerLast]string{
-	HandlerLockLock:        lockPrefix,
-	HandlerLockRLock:       lockPrefix,
-	HandlerLockUnlock:      lockPrefix,
-	HandlerLockRUnlock:     lockPrefix,
-	HandlerLockRefresh:     lockPrefix,
-	HandlerLockForceUnlock: lockPrefix,
-	HandlerWalkDir:         storagePrefix,
-	HandlerStatVol:         storagePrefix,
-	HandlerDiskInfo:        storagePrefix,
-	HandlerNSScanner:       storagePrefix,
-	HandlerReadXL:          storagePrefix,
-	HandlerReadVersion:     storagePrefix,
-	HandlerDeleteFile:      storagePrefix,
-	HandlerDeleteVersion:   storagePrefix,
-	HandlerUpdateMetadata:  storagePrefix,
-	HandlerWriteMetadata:   storagePrefix,
-	HandlerCheckParts:      storagePrefix,
-	HandlerRenameData:      storagePrefix,
+	HandlerLockLock:                    lockPrefix,
+	HandlerLockRLock:                   lockPrefix,
+	HandlerLockUnlock:                  lockPrefix,
+	HandlerLockRUnlock:                 lockPrefix,
+	HandlerLockRefresh:                 lockPrefix,
+	HandlerLockForceUnlock:             lockPrefix,
+	HandlerWalkDir:                     storagePrefix,
+	HandlerStatVol:                     storagePrefix,
+	HandlerDiskInfo:                    storagePrefix,
+	HandlerNSScanner:                   storagePrefix,
+	HandlerReadXL:                      storagePrefix,
+	HandlerReadVersion:                 storagePrefix,
+	HandlerDeleteFile:                  storagePrefix,
+	HandlerDeleteVersion:               storagePrefix,
+	HandlerUpdateMetadata:              storagePrefix,
+	HandlerWriteMetadata:               storagePrefix,
+	HandlerCheckParts:                  storagePrefix,
+	HandlerRenameData:                  storagePrefix,
+	HandlerRenameFile:                  storagePrefix,
+	HandlerReadAll:                     storagePrefix,
+	HandlerWriteAll:                    storagePrefix,
+	HandlerServerVerify:                bootstrapPrefix,
+	HandlerTrace:                       peerPrefix,
+	HandlerListen:                      peerPrefix,
+	HandlerDeleteBucketMetadata:        peerPrefix,
+	HandlerLoadBucketMetadata:          peerPrefix,
+	HandlerReloadSiteReplicationConfig: peerPrefix,
+	HandlerReloadPoolMeta:              peerPrefix,
+	HandlerStopRebalance:               peerPrefix,
+	HandlerLoadRebalanceMeta:           peerPrefix,
+	HandlerLoadTransitionTierConfig:    peerPrefix,
+	HandlerDeletePolicy:                peerPrefix,
+	HandlerLoadPolicy:                  peerPrefix,
+	HandlerLoadPolicyMapping:           peerPrefix,
+	HandlerDeleteServiceAccount:        peerPrefix,
+	HandlerLoadServiceAccount:          peerPrefix,
+	HandlerDeleteUser:                  peerPrefix,
+	HandlerLoadUser:                    peerPrefix,
+	HandlerLoadGroup:                   peerPrefix,
+	HandlerMakeBucket:                  peerPrefixS3,
+	HandlerHeadBucket:                  peerPrefixS3,
+	HandlerDeleteBucket:                peerPrefixS3,
+	HandlerHealBucket:                  healPrefix,
+	HandlerGetMetrics:                  peerPrefix,
+	HandlerGetResourceMetrics:          peerPrefix,
+	HandlerGetMemInfo:                  peerPrefix,
+	HandlerGetProcInfo:                 peerPrefix,
+	HandlerGetOSInfo:                   peerPrefix,
+	HandlerGetPartitions:               peerPrefix,
+	HandlerGetNetInfo:                  peerPrefix,
+	HandlerGetCPUs:                     peerPrefix,
+	HandlerServerInfo:                  peerPrefix,
+	HandlerGetSysConfig:                peerPrefix,
+	HandlerGetSysServices:              peerPrefix,
+	HandlerGetSysErrors:                peerPrefix,
+	HandlerGetAllBucketStats:           peerPrefix,
+	HandlerGetBucketStats:              peerPrefix,
+	HandlerGetSRMetrics:                peerPrefix,
+	HandlerGetPeerMetrics:              peerPrefix,
+	HandlerGetMetacacheListing:         peerPrefix,
+	HandlerUpdateMetacacheListing:      peerPrefix,
+	HandlerGetPeerBucketMetrics:        peerPrefix,
+	HandlerStorageInfo:                 peerPrefix,
+	HandlerConsoleLog:                  peerPrefix,
+	HandlerListDir:                     storagePrefix,
+	HandlerListBuckets:                 peerPrefixS3,
 }
 
 const (
-	lockPrefix    = "lockR"
-	storagePrefix = "storageR"
+	lockPrefix      = "lockR"
+	storagePrefix   = "storageR"
+	bootstrapPrefix = "bootstrap"
+	peerPrefix      = "peer"
+	peerPrefixS3    = "peerS3"
+	healPrefix      = "heal"
 )
 
 func init() {
@@ -289,14 +396,41 @@ type RoundTripper interface {
 
 // SingleHandler is a type safe handler for single roundtrip requests.
 type SingleHandler[Req, Resp RoundTripper] struct {
-	id             HandlerID
-	sharedResponse bool
+	id            HandlerID
+	sharedResp    bool
+	callReuseReq  bool
+	ignoreNilConn bool
 
-	reqPool  sync.Pool
-	respPool sync.Pool
+	newReq  func() Req
+	newResp func() Resp
 
-	nilReq  Req
-	nilResp Resp
+	recycleReq  func(Req)
+	recycleResp func(Resp)
+}
+
+func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle func(r RT)) {
+	rAny := any(newRT())
+	var rZero RT
+	if _, ok := rAny.(Recycler); ok {
+		return newRT, func(r RT) {
+			if r != rZero {
+				if rc, ok := any(r).(Recycler); ok {
+					rc.Recycle()
+				}
+			}
+		}
+	}
+	pool := sync.Pool{
+		New: func() interface{} {
+			return newRT()
+		},
+	}
+	return func() RT { return pool.Get().(RT) },
+		func(r RT) {
+			if r != rZero {
+				pool.Put(r)
+			}
+		}
 }
 
 // NewSingleHandler creates a typed handler that can provide Marshal/Unmarshal.
@@ -304,27 +438,45 @@ type SingleHandler[Req, Resp RoundTripper] struct {
 // Use Call to initiate a clientside call.
 func NewSingleHandler[Req, Resp RoundTripper](h HandlerID, newReq func() Req, newResp func() Resp) *SingleHandler[Req, Resp] {
 	s := SingleHandler[Req, Resp]{id: h}
-	s.reqPool.New = func() interface{} {
-		return newReq()
-	}
-	s.respPool.New = func() interface{} {
-		return newResp()
+	s.newReq, s.recycleReq = recycleFunc[Req](newReq)
+	s.newResp, s.recycleResp = recycleFunc[Resp](newResp)
+	if _, ok := any(newReq()).(Recycler); ok {
+		s.callReuseReq = true
 	}
 	return &s
 }
 
 // PutResponse will accept a response for reuse.
-// These should be returned by the caller.
+// This can be used by a caller to recycle a response after receiving it from a Call.
 func (h *SingleHandler[Req, Resp]) PutResponse(r Resp) {
-	if r != h.nilResp {
-		h.respPool.Put(r)
-	}
+	h.recycleResp(r)
 }
 
-// WithSharedResponse indicates it is unsafe to reuse the response.
+// AllowCallRequestPool indicates it is safe to reuse the request
+// on the client side, meaning the request is recycled/pooled when a request is sent.
+// CAREFUL: This should only be used when there are no pointers, slices that aren't freshly constructed.
+func (h *SingleHandler[Req, Resp]) AllowCallRequestPool(b bool) *SingleHandler[Req, Resp] {
+	h.callReuseReq = b
+	return h
+}
+
+// IgnoreNilConn will ignore nil connections when calling.
+// This will make Call return nil instead of ErrDisconnected when the connection is nil.
+// This may only be set ONCE before use.
+func (h *SingleHandler[Req, Resp]) IgnoreNilConn() *SingleHandler[Req, Resp] {
+	if h.ignoreNilConn {
+		gridLogOnceIf(context.Background(), fmt.Errorf("%s: IgnoreNilConn called twice", h.id.String()), h.id.String()+"IgnoreNilConn")
+	}
+	h.ignoreNilConn = true
+	return h
+}
+
+// WithSharedResponse indicates it is unsafe to reuse the response
+// when it has been returned on a handler.
+// This will disable automatic response recycling/pooling.
 // Typically this is used when the response sharing part of its data structure.
 func (h *SingleHandler[Req, Resp]) WithSharedResponse() *SingleHandler[Req, Resp] {
-	h.sharedResponse = true
+	h.sharedResp = true
 	return h
 }
 
@@ -332,26 +484,25 @@ func (h *SingleHandler[Req, Resp]) WithSharedResponse() *SingleHandler[Req, Resp
 // Handlers can use this to create a reusable response.
 // The response may be reused, so caller should clear any fields.
 func (h *SingleHandler[Req, Resp]) NewResponse() Resp {
-	return h.respPool.Get().(Resp)
-}
-
-// putRequest will accept a request for reuse.
-// This is not exported, since it shouldn't be needed.
-func (h *SingleHandler[Req, Resp]) putRequest(r Req) {
-	if r != h.nilReq {
-		h.reqPool.Put(r)
-	}
+	return h.newResp()
 }
 
 // NewRequest creates a new request.
 // Handlers can use this to create a reusable request.
 // The request may be reused, so caller should clear any fields.
 func (h *SingleHandler[Req, Resp]) NewRequest() Req {
-	return h.reqPool.Get().(Req)
+	return h.newReq()
 }
 
 // Register a handler for a Req -> Resp roundtrip.
+// Requests are automatically recycled.
 func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (resp Resp, err *RemoteErr), subroute ...string) error {
+	if h.newReq == nil {
+		return errors.New("newReq nil in NewSingleHandler")
+	}
+	if h.newResp == nil {
+		return errors.New("newResp nil in NewSingleHandler")
+	}
 	return m.RegisterSingleHandler(h.id, func(payload []byte) ([]byte, *RemoteErr) {
 		req := h.NewRequest()
 		_, err := req.UnmarshalMsg(payload)
@@ -361,13 +512,14 @@ func (h *SingleHandler[Req, Resp]) Register(m *Manager, handle func(req Req) (re
 			return nil, &r
 		}
 		resp, rerr := handle(req)
-		h.putRequest(req)
+		h.recycleReq(req)
+
 		if rerr != nil {
 			PutByteBuffer(payload)
 			return nil, rerr
 		}
 		payload, err = resp.MarshalMsg(payload[:0])
-		if !h.sharedResponse {
+		if !h.sharedResp {
 			h.PutResponse(resp)
 		}
 		if err != nil {
@@ -388,23 +540,39 @@ type Requester interface {
 // The response should be returned with PutResponse when no error.
 // If no deadline is set, a 1-minute deadline is added.
 func (h *SingleHandler[Req, Resp]) Call(ctx context.Context, c Requester, req Req) (resp Resp, err error) {
-	payload, err := req.MarshalMsg(GetByteBuffer()[:0])
+	if c == nil {
+		if h.ignoreNilConn {
+			return resp, nil
+		}
+		return resp, ErrDisconnected
+	}
+	payload, err := req.MarshalMsg(GetByteBufferCap(req.Msgsize()))
 	if err != nil {
 		return resp, err
 	}
-	ctx = context.WithValue(ctx, TraceParamsKey{}, req)
+	switch any(req).(type) {
+	case *MSS, *URLValues:
+		ctx = context.WithValue(ctx, TraceParamsKey{}, req)
+	case *NoPayload, *Bytes:
+		// do not need to trace nopayload and bytes payload
+	default:
+		ctx = context.WithValue(ctx, TraceParamsKey{}, fmt.Sprintf("type=%T", req))
+	}
+	if h.callReuseReq {
+		defer h.recycleReq(req)
+	}
 	res, err := c.Request(ctx, h.id, payload)
 	PutByteBuffer(payload)
 	if err != nil {
 		return resp, err
 	}
+	defer PutByteBuffer(res)
 	r := h.NewResponse()
 	_, err = r.UnmarshalMsg(res)
 	if err != nil {
 		h.PutResponse(r)
 		return resp, err
 	}
-	PutByteBuffer(res)
 	return r, err
 }
 
@@ -534,6 +702,20 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Register(m *Manager, handle func
 	return h.register(m, handle, subroute...)
 }
 
+// WithOutCapacity adjusts the output capacity from the handler perspective.
+// This must be done prior to registering the handler.
+func (h *StreamTypeHandler[Payload, Req, Resp]) WithOutCapacity(out int) *StreamTypeHandler[Payload, Req, Resp] {
+	h.OutCapacity = out
+	return h
+}
+
+// WithInCapacity adjusts the input capacity from the handler perspective.
+// This must be done prior to registering the handler.
+func (h *StreamTypeHandler[Payload, Req, Resp]) WithInCapacity(in int) *StreamTypeHandler[Payload, Req, Resp] {
+	h.InCapacity = in
+	return h
+}
+
 // RegisterNoInput a handler for one-way streaming with payload and output stream.
 // An optional subroute can be given. Multiple entries are joined with '/'.
 func (h *StreamTypeHandler[Payload, Req, Resp]) RegisterNoInput(m *Manager, handle func(ctx context.Context, p Payload, out chan<- Resp) *RemoteErr, subroute ...string) error {
@@ -572,7 +754,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 				// Don't add extra buffering
 				inT = make(chan Req)
 				go func() {
-					defer close(inT)
+					defer xioutil.SafeClose(inT)
 					for {
 						select {
 						case <-ctx.Done():
@@ -584,7 +766,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 							input := h.NewRequest()
 							_, err := input.UnmarshalMsg(v)
 							if err != nil {
-								logger.LogOnceIf(ctx, err, err.Error())
+								gridLogOnceIf(ctx, err, err.Error())
 							}
 							PutByteBuffer(v)
 							// Send input
@@ -600,16 +782,15 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 			outT := make(chan Resp)
 			outDone := make(chan struct{})
 			go func() {
-				defer close(outDone)
+				defer xioutil.SafeClose(outDone)
 				dropOutput := false
 				for v := range outT {
 					if dropOutput {
 						continue
 					}
-					dst := GetByteBuffer()
-					dst, err := v.MarshalMsg(dst[:0])
+					dst, err := v.MarshalMsg(GetByteBufferCap(v.Msgsize()))
 					if err != nil {
-						logger.LogOnceIf(ctx, err, err.Error())
+						gridLogOnceIf(ctx, err, err.Error())
 					}
 					if !h.sharedResponse {
 						h.PutResponse(v)
@@ -622,7 +803,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) register(m *Manager, handle func
 				}
 			}()
 			rErr := handle(ctx, plT, inT, outT)
-			close(outT)
+			xioutil.SafeClose(outT)
 			<-outDone
 			return rErr
 		}, OutCapacity: h.OutCapacity, InCapacity: h.InCapacity, Subroute: strings.Join(subroute, "/"),
@@ -665,10 +846,13 @@ type Streamer interface {
 
 // Call the remove with the request and
 func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Streamer, payload Payload) (st *TypedStream[Req, Resp], err error) {
+	if c == nil {
+		return nil, ErrDisconnected
+	}
 	var payloadB []byte
 	if h.WithPayload {
 		var err error
-		payloadB, err = payload.MarshalMsg(GetByteBuffer()[:0])
+		payloadB, err = payload.MarshalMsg(GetByteBufferCap(payload.Msgsize()))
 		if err != nil {
 			return nil, err
 		}
@@ -684,43 +868,23 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) Call(ctx context.Context, c Stre
 	if h.InCapacity > 0 {
 		reqT = make(chan Req)
 		// Request handler
+		if stream.Requests == nil {
+			return nil, fmt.Errorf("internal error: stream request channel nil")
+		}
 		go func() {
-			defer close(stream.Requests)
+			defer xioutil.SafeClose(stream.Requests)
 			for req := range reqT {
-				b, err := req.MarshalMsg(GetByteBuffer()[:0])
+				b, err := req.MarshalMsg(GetByteBufferCap(req.Msgsize()))
 				if err != nil {
-					logger.LogOnceIf(ctx, err, err.Error())
+					gridLogOnceIf(ctx, err, err.Error())
 				}
 				h.PutRequest(req)
 				stream.Requests <- b
 			}
 		}()
 	} else if stream.Requests != nil {
-		close(stream.Requests)
+		xioutil.SafeClose(stream.Requests)
 	}
 
 	return &TypedStream[Req, Resp]{responses: stream, newResp: h.NewResponse, Requests: reqT}, nil
-}
-
-// NoPayload is a type that can be used for handlers that do not use a payload.
-type NoPayload struct{}
-
-// Msgsize returns 0.
-func (p NoPayload) Msgsize() int {
-	return 0
-}
-
-// UnmarshalMsg satisfies the interface, but is a no-op.
-func (NoPayload) UnmarshalMsg(bytes []byte) ([]byte, error) {
-	return bytes, nil
-}
-
-// MarshalMsg satisfies the interface, but is a no-op.
-func (NoPayload) MarshalMsg(bytes []byte) ([]byte, error) {
-	return bytes, nil
-}
-
-// NewNoPayload returns an empty NoPayload struct.
-func NewNoPayload() NoPayload {
-	return NoPayload{}
 }

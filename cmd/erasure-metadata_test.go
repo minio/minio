@@ -314,3 +314,11 @@ func TestTransitionInfoEquals(t *testing.T) {
 		t.Fatalf("Expected to be inequal: fi %v ofi %v", fi, ofi)
 	}
 }
+
+func TestSkipTierFreeVersion(t *testing.T) {
+	fi := newFileInfo("object", 8, 8)
+	fi.SetSkipTierFreeVersion()
+	if ok := fi.SkipTierFreeVersion(); !ok {
+		t.Fatal("Expected SkipTierFreeVersion to be set on FileInfo but wasn't")
+	}
+}

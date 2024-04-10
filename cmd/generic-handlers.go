@@ -33,6 +33,8 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/grid"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/config/dns"
@@ -73,6 +75,9 @@ const (
 // and must not set by clients
 func containsReservedMetadata(header http.Header) bool {
 	for key := range header {
+		if slices.Contains(maps.Keys(validSSEReplicationHeaders), key) {
+			return false
+		}
 		if stringsHasPrefixFold(key, ReservedMetadataPrefix) {
 			return true
 		}
@@ -233,7 +238,8 @@ func guessIsMetricsReq(req *http.Request) bool {
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ClusterPath ||
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2NodePath ||
 		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2BucketPath ||
-		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ResourcePath
+		req.URL.Path == minioReservedBucketPath+prometheusMetricsV2ResourcePath ||
+		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+metricsV3Path)
 }
 
 // guessIsRPCReq - returns true if the request is for an RPC endpoint.
@@ -263,7 +269,7 @@ func isKMSReq(r *http.Request) bool {
 
 // Supported Amz date headers.
 var amzDateHeaders = []string{
-	// Do not chane this order, x-amz-date value should be
+	// Do not change this order, x-amz-date value should be
 	// validated first.
 	"x-amz-date",
 	"date",

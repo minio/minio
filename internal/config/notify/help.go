@@ -143,7 +143,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         target.AmqpPublisherConfirms,
-			Description: "enable consumer acknowlegement and publisher confirms, use this along with queue_dir for guaranteed delivery of all events",
+			Description: "enable consumer acknowledgement and publisher confirms, use this along with queue_dir for guaranteed delivery of all events",
 			Optional:    true,
 			Type:        "on|off",
 		},
@@ -673,6 +673,12 @@ var (
 			Type:        "string",
 			Sensitive:   true,
 			Secret:      true,
+		},
+		config.HelpKV{
+			Key:         target.RedisUser,
+			Description: "Redis server user for the auth",
+			Optional:    true,
+			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.RedisQueueDir,
