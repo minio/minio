@@ -36,6 +36,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
@@ -3172,11 +3173,11 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
-	file = strings.ReplaceAll(file, string(os.PathSeparator), "/")
 
+	file = filepath.ToSlash(file)
 	// Reject attempts to traverse parent or absolute paths.
-	if strings.Contains(file, "..") || strings.Contains(volume, "..") {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+	if hasBadPathComponent(volume) || hasBadPathComponent(file) {
+		writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
 		return
 	}
 
