@@ -20,6 +20,8 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -39,6 +41,22 @@ type collectMetricsOpts struct {
 func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if types == madmin.MetricsNone {
 		return
+	}
+
+	byHostName := globalMinioAddr
+	if len(opts.hosts) > 0 {
+		server := getLocalServerProperty(globalEndpoints, &http.Request{
+			Host: globalLocalNodeName,
+		}, false)
+		if _, ok := opts.hosts[server.Endpoint]; ok {
+			byHostName = server.Endpoint
+		} else {
+			return
+		}
+	}
+
+	if strings.HasPrefix(byHostName, ":") && !strings.HasPrefix(globalLocalNodeName, ":") {
+		byHostName = globalLocalNodeName
 	}
 
 	if types.Contains(madmin.MetricsDisk) {
@@ -74,7 +92,7 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		}
 		netStats, err := net.GetInterfaceNetStats(globalInternodeInterface)
 		if err != nil {
-			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v  (nicstats)", globalMinioAddr, err.Error()))
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v  (nicstats)", byHostName, err.Error()))
 		} else {
 			m.Aggregated.Net.NetStats = netStats
 		}
@@ -83,7 +101,7 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		m.Aggregated.Mem = &madmin.MemMetrics{
 			CollectedAt: UTCNow(),
 		}
-		m.Aggregated.Mem.Info = madmin.GetMemInfo(GlobalContext, globalMinioAddr)
+		m.Aggregated.Mem.Info = madmin.GetMemInfo(GlobalContext, byHostName)
 	}
 	if types.Contains(madmin.MetricsCPU) {
 		m.Aggregated.CPU = &madmin.CPUMetrics{
@@ -91,25 +109,25 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		}
 		cm, err := c.Times(false)
 		if err != nil {
-			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (cpuTimes)", globalMinioAddr, err.Error()))
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (cpuTimes)", byHostName, err.Error()))
 		} else {
 			// not collecting per-cpu stats, so there will be only one element
 			if len(cm) == 1 {
 				m.Aggregated.CPU.TimesStat = &cm[0]
 			} else {
-				m.Errors = append(m.Errors, fmt.Sprintf("%s: Expected one CPU stat, got %d", globalMinioAddr, len(cm)))
+				m.Errors = append(m.Errors, fmt.Sprintf("%s: Expected one CPU stat, got %d", byHostName, len(cm)))
 			}
 		}
 		cpuCount, err := c.Counts(true)
 		if err != nil {
-			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (cpuCount)", globalMinioAddr, err.Error()))
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (cpuCount)", byHostName, err.Error()))
 		} else {
 			m.Aggregated.CPU.CPUCount = cpuCount
 		}
 
 		loadStat, err := load.Avg()
 		if err != nil {
-			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (loadStat)", globalMinioAddr, err.Error()))
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: %v (loadStat)", byHostName, err.Error()))
 		} else {
 			m.Aggregated.CPU.LoadStat = loadStat
 		}
@@ -117,8 +135,8 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.
-	m.ByHost = map[string]madmin.Metrics{globalMinioAddr: m.Aggregated}
-	m.Hosts = append(m.Hosts, globalMinioAddr)
+	m.ByHost = map[string]madmin.Metrics{byHostName: m.Aggregated}
+	m.Hosts = append(m.Hosts, byHostName)
 
 	return m
 }
