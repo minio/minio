@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/dchest/siphash"
-	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -261,7 +260,6 @@ func (s *erasureSets) connectDisks() {
 			}
 
 			disk.SetDiskID(format.Erasure.This)
-			disk.SetDiskLoc(s.poolIndex, setIndex, diskIndex)
 			disk.SetFormatData(formatData)
 			s.erasureDisks[setIndex][diskIndex] = disk
 
@@ -455,20 +453,10 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 					if diskID == "" {
 						return
 					}
-					m, n, err := findDiskIndexByDiskID(format, diskID)
-					if err != nil {
-						bootLogIf(ctx, err)
-						return
-					}
-					if m != i || n != j {
-						bootLogIf(ctx, fmt.Errorf("Detected unexpected drive ordering refusing to use the drive - poolID: %s, found drive mounted at (set=%s, drive=%s) expected mount at (set=%s, drive=%s): %s(%s)", humanize.Ordinal(poolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(i+1), humanize.Ordinal(j+1), disk, diskID))
-						s.erasureDisks[i][j] = &unrecognizedDisk{storage: disk}
-						return
-					}
-					disk.SetDiskLoc(s.poolIndex, m, n)
-					s.erasureDisks[m][n] = disk
+					s.erasureDisks[i][j] = disk
 				}(disk, i, j)
 			}
+
 			innerWg.Wait()
 
 			// Initialize erasure objects for a given set.
@@ -1137,8 +1125,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 
 			if disk := storageDisks[index]; disk != nil {
 				if disk.IsLocal() {
-					disk.SetDiskLoc(s.poolIndex, m, n)
-
 					xldisk, ok := disk.(*xlStorageDiskIDCheck)
 					if ok {
 						_, commonDeletes := calcCommonWritesDeletes(currentDisksInfo[m], (s.setDriveCount+1)/2)
@@ -1155,7 +1141,6 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 					if err != nil {
 						continue
 					}
-					disk.SetDiskLoc(s.poolIndex, m, n)
 				}
 
 				s.erasureDisks[m][n] = disk
