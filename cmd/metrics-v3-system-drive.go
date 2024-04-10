@@ -126,7 +126,7 @@ var (
 		allDriveLabels...)
 )
 
-func getCurrentDiskMetrics() map[string]madmin.DiskIOStats {
+func getCurrentDriveIOStats() map[string]madmin.DiskIOStats {
 	var types madmin.MetricType = madmin.MetricsDisk
 	driveRealtimeMetrics := collectLocalMetrics(types, collectMetricsOpts{
 		hosts: map[string]struct{}{
@@ -141,7 +141,7 @@ func getCurrentDiskMetrics() map[string]madmin.DiskIOStats {
 	return stats
 }
 
-func setDriveBasicMetrics(m MetricValues, drive madmin.Disk, labels []string) {
+func (m *MetricValues) setDriveBasicMetrics(drive madmin.Disk, labels []string) {
 	m.Set(driveUsedBytes, float64(drive.UsedSpace), labels...)
 	m.Set(driveFreeBytes, float64(drive.AvailableSpace), labels...)
 	m.Set(driveTotalBytes, float64(drive.TotalSpace), labels...)
@@ -161,7 +161,7 @@ func setDriveBasicMetrics(m MetricValues, drive madmin.Disk, labels []string) {
 	m.Set(driveOnline, online, labels...)
 }
 
-func setDriveAPIMetrics(m MetricValues, disk madmin.Disk, labels []string) {
+func (m *MetricValues) setDriveAPIMetrics(disk madmin.Disk, labels []string) {
 	if disk.Metrics == nil {
 		return
 	}
@@ -180,14 +180,14 @@ func setDriveAPIMetrics(m MetricValues, disk madmin.Disk, labels []string) {
 	}
 }
 
-func setDriveIOStatMetrics(m MetricValues, ioStats *diskIOStats, disk madmin.Disk, labels []string) {
+func (m *MetricValues) setDriveIOStatMetrics(ioStats *diskIOStats, disk madmin.Disk, labels []string) {
 	if ioStats == nil {
 		return
 	}
 
-	durationSecs := ioStats.collectedAt.Sub(initialDriveIOStats.collectedAt).Seconds()
+	durationSecs := ioStats.duration.Seconds()
 
-	if durationSecs <= 0 {
+	if durationSecs < 1 {
 		return
 	}
 
@@ -197,14 +197,10 @@ func setDriveIOStatMetrics(m MetricValues, ioStats *diskIOStats, disk madmin.Dis
 	}
 
 	readsPerSec := float64(cachedStats.ReadIOs) / durationSecs
-	if readsPerSec > 0 {
-		m.Set(driveReadsPerSec, readsPerSec, labels...)
-	}
+	m.Set(driveReadsPerSec, readsPerSec, labels...)
 
-	if cachedStats.ReadSectors > 0 {
-		readsKBPerSec := float64(cachedStats.ReadSectors) * float64(sectorSize) / kib / durationSecs
-		m.Set(driveReadsKBPerSec, readsKBPerSec, labels...)
-	}
+	readsKBPerSec := float64(cachedStats.ReadSectors) * float64(sectorSize) / kib / durationSecs
+	m.Set(driveReadsKBPerSec, readsKBPerSec, labels...)
 
 	if cachedStats.ReadIOs > 0 {
 		readsAwait := float64(cachedStats.ReadTicks) / float64(cachedStats.ReadIOs)
@@ -212,14 +208,10 @@ func setDriveIOStatMetrics(m MetricValues, ioStats *diskIOStats, disk madmin.Dis
 	}
 
 	writesPerSec := float64(cachedStats.WriteIOs) / durationSecs
-	if writesPerSec > 0 {
-		m.Set(driveWritesPerSec, writesPerSec, labels...)
-	}
+	m.Set(driveWritesPerSec, writesPerSec, labels...)
 
-	if cachedStats.WriteSectors > 0 {
-		writesKBPerSec := float64(cachedStats.WriteSectors) * float64(sectorSize) / kib / durationSecs
-		m.Set(driveWritesKBPerSec, writesKBPerSec, labels...)
-	}
+	writesKBPerSec := float64(cachedStats.WriteSectors) * float64(sectorSize) / kib / durationSecs
+	m.Set(driveWritesKBPerSec, writesKBPerSec, labels...)
 
 	if cachedStats.WriteIOs > 0 {
 		writesAwait := float64(cachedStats.WriteTicks) / float64(cachedStats.WriteIOs)
@@ -247,9 +239,9 @@ func loadDriveMetrics(ctx context.Context, m MetricValues, c *metricsCache) erro
 			driveIndexL, strconv.Itoa(disk.DiskIndex),
 		}
 
-		setDriveBasicMetrics(m, disk, labels)
-		setDriveIOStatMetrics(m, driveMetrics.ioStats, disk, labels)
-		setDriveAPIMetrics(m, disk, labels)
+		m.setDriveBasicMetrics(disk, labels)
+		m.setDriveIOStatMetrics(driveMetrics.ioStats, disk, labels)
+		m.setDriveAPIMetrics(disk, labels)
 	}
 
 	m.Set(driveOfflineCount, float64(driveMetrics.offlineDrives))

@@ -18,15 +18,20 @@
 package cmd
 
 import (
+	"sync"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/cachevalue"
 )
 
-// initialDriveIOStats is used to calculate "per second"
-// values for IOStat related disk metrics e.g. reads/sec.
-var initialDriveIOStats *diskIOStats
+var (
+	// prevDriveIOStats is used to calculate "per second"
+	// values for IOStat related disk metrics e.g. reads/sec.
+	prevDriveIOStats            map[string]madmin.DiskIOStats
+	prevDriveIOStatsMu          sync.RWMutex
+	prevDriveIOStatsRefreshedAt time.Time
+)
 
 // metricsCache - cache for metrics.
 //
@@ -66,8 +71,8 @@ func newNodesUpDownCache() *cachevalue.Cache[nodesOnline] {
 }
 
 type diskIOStats struct {
-	stats       map[string]madmin.DiskIOStats
-	collectedAt time.Time
+	stats    map[string]madmin.DiskIOStats
+	duration time.Duration
 }
 
 // storageMetrics - cached storage metrics.
@@ -132,30 +137,35 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
 
-		var ioStats *diskIOStats
-		currentStats := getCurrentDiskMetrics()
-		if initialDriveIOStats == nil {
-			initialDriveIOStats = &diskIOStats{
-				stats:       currentStats,
-				collectedAt: time.Now().UTC(),
-			}
-		} else {
-			diffStats := map[string]madmin.DiskIOStats{}
-			for d, cs := range currentStats {
-				if is, found := initialDriveIOStats.stats[d]; found {
-					diffStats[d] = getDiffStats(is, cs)
+		currentStats := getCurrentDriveIOStats()
+		now := time.Now().UTC()
+
+		prevDriveIOStatsMu.Lock()
+		if prevDriveIOStats != nil {
+			duration := now.Sub(prevDriveIOStatsRefreshedAt)
+			if duration.Seconds() > 1 {
+				diffStats := map[string]madmin.DiskIOStats{}
+				for d, cs := range currentStats {
+					if ps, found := prevDriveIOStats[d]; found {
+						diffStats[d] = getDiffStats(ps, cs)
+					}
+				}
+
+				ioStats := &diskIOStats{stats: diffStats, duration: duration}
+
+				v = storageMetrics{
+					storageInfo:   storageInfo,
+					onlineDrives:  onlineDrives.Sum(),
+					offlineDrives: offlineDrives.Sum(),
+					totalDrives:   totalDrives.Sum(),
+					ioStats:       ioStats,
 				}
 			}
-			ioStats = &diskIOStats{stats: diffStats, collectedAt: time.Now().UTC()}
 		}
 
-		v = storageMetrics{
-			storageInfo:   storageInfo,
-			onlineDrives:  onlineDrives.Sum(),
-			offlineDrives: offlineDrives.Sum(),
-			totalDrives:   totalDrives.Sum(),
-			ioStats:       ioStats,
-		}
+		prevDriveIOStats = currentStats
+		prevDriveIOStatsRefreshedAt = now
+		prevDriveIOStatsMu.Unlock()
 
 		return
 	}
