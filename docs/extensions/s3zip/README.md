@@ -39,3 +39,7 @@ All properties except the file size are tied to the zip file. This means that mo
   - `ListObjectsV2`
 - If the ZIP file directory isn't located within the last 100MB the file will not be parsed.
 - A maximum of 100M inside a single zip is allowed. However, a reasonable limit of 100,000 files inside a single ZIP archive is recommended for best performance and memory usage trade-off.
+
+## Content-Type
+
+The Content-Type of the response will be determined by the extension and the following: https://pkg.go.dev/mime#TypeByExtension
