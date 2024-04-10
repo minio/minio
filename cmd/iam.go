@@ -1602,6 +1602,30 @@ func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userTyp
 		return updatedAt, errServerNotInitialized
 	}
 
+	if sys.LDAPConfig.Enabled() {
+		if isGroup {
+			var foundGroupDN string
+			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(name); err != nil {
+				iamLogIf(ctx, err)
+				return
+			} else if foundGroupDN == "" {
+				err = errNoSuchGroup
+				return
+			}
+			name = foundGroupDN
+		} else {
+			var foundUserDN string
+			if foundUserDN, err = sys.LDAPConfig.GetValidatedDNForUsername(name); err != nil {
+				iamLogIf(ctx, err)
+				return
+			} else if foundUserDN == "" {
+				err = errNoSuchUser
+				return
+			}
+			name = foundUserDN
+		}
+	}
+
 	updatedAt, err = sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
 	if err != nil {
 		return
