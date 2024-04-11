@@ -157,11 +157,14 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.HealSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
-	cfg.Bitrot = env.Get(EnvBitrot, kvs.GetWithDefault(Bitrot, DefaultKVS))
-	_, err = parseBitrotConfig(cfg.Bitrot)
-	if err != nil {
+
+	bitrot := env.Get(EnvBitrot, kvs.GetWithDefault(Bitrot, DefaultKVS))
+	if _, err = parseBitrotConfig(bitrot); err != nil {
 		return cfg, fmt.Errorf("'heal:bitrotscan' value invalid: %w", err)
 	}
+
+	cfg.Bitrot = bitrot
+
 	cfg.Sleep, err = time.ParseDuration(env.Get(EnvSleep, kvs.GetWithDefault(Sleep, DefaultKVS)))
 	if err != nil {
 		return cfg, fmt.Errorf("'heal:max_sleep' value invalid: %w", err)
