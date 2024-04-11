@@ -83,7 +83,7 @@ var (
 	driveTimeoutErrorsMD = NewCounterMD(driveTimeoutErrorsTotal,
 		"Total timeout errors on a drive", allDriveLabels...)
 	driveAvailabilityErrorsMD = NewCounterMD(driveAvailabilityErrorsTotal,
-		"Total availability errors (I/O errors, permission denied and timeouts) on a drive",
+		"Total availability errors (I/O errors, timeouts) on a drive",
 		allDriveLabels...)
 	driveWaitingIOMD = NewGaugeMD(driveWaitingIO,
 		"Total waiting I/O operations on a drive", allDriveLabels...)
