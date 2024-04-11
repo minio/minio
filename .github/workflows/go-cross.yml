@@ -3,12 +3,12 @@ name: Crosscompile
 on:
   pull_request:
     branches:
-    - master
-    - next
+      - master
+      - next
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
@@ -24,8 +24,8 @@ jobs:
         go-version: [1.21.x]
         os: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3
-      - uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
