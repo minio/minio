@@ -24,6 +24,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -117,18 +118,23 @@ func main() {
 	fatalErr(err)
 
 	// Decrypt the inspect data
+	msg := fmt.Sprintf("output written to %s", outputFileName)
+
 	switch {
 	case *keyHex != "":
-		err = extractInspectV1(*keyHex, input, output)
+		err = extractInspectV1(*keyHex, input, output, msg)
 	case len(privateKey) != 0:
-		err = extractInspectV2(privateKey, input, output)
+		err = extractInspectV2(privateKey, input, output, msg)
 	}
 	output.Close()
 	if err != nil {
-		os.Remove(outputFileName)
+
+		var keep keepFileErr
+		if !errors.As(err, &keep) {
+			os.Remove(outputFileName)
+		}
 		fatalErr(err)
 	}
-	fmt.Println("output written to", outputFileName)
 
 	// Export xl.meta to stdout
 	if *export {
