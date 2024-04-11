@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -279,7 +279,7 @@ func (lc Lifecycle) FilterRules(obj ObjectOpts) []Rule {
 		if !strings.HasPrefix(obj.Name, rule.GetPrefix()) {
 			continue
 		}
-		if !obj.DeleteMarker && !rule.Filter.TestTags(obj.UserTags) {
+		if !rule.Filter.TestTags(obj.UserTags) {
 			continue
 		}
 		if !obj.DeleteMarker && !rule.Filter.BySize(obj.Size) {
@@ -353,23 +353,6 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 	}
 
 	for _, rule := range lc.FilterRules(obj) {
-		if obj.IsLatest && rule.Expiration.DeleteAll.val {
-			if !rule.Expiration.IsDaysNull() {
-				// Specifying the Days tag will automatically perform all versions cleanup
-				// once the latest object is old enough to satisfy the age criteria.
-				// This is a MinIO only extension.
-				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
-					events = append(events, Event{
-						Action: DeleteAllVersionsAction,
-						RuleID: rule.ID,
-						Due:    expectedExpiry,
-					})
-					// No other conflicting actions apply to an all version expired object.
-					break
-				}
-			}
-		}
-
 		if obj.ExpiredObjectDeleteMarker() {
 			if rule.Expiration.DeleteMarker.val {
 				// Indicates whether MinIO will remove a delete marker with no noncurrent versions.
@@ -448,11 +431,19 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 				}
 			case !rule.Expiration.IsDaysNull():
 				if expectedExpiry := ExpectedExpiryTime(obj.ModTime, int(rule.Expiration.Days)); now.IsZero() || now.After(expectedExpiry) {
-					events = append(events, Event{
+					event := Event{
 						Action: DeleteAction,
 						RuleID: rule.ID,
 						Due:    expectedExpiry,
-					})
+					}
+					if rule.Expiration.DeleteAll.val {
+						// Expires all versions of this object once the latest object is old enough.
+						// This is a MinIO only extension.
+						event.Action = DeleteAllVersionsAction
+						// DeleteAllVersionsAction supersedes all other event.Action(s) that this object may qualify for, e.g TransitionAction, DeleteAction, etc.
+						return event
+					}
+					events = append(events, event)
 				}
 			}
 
