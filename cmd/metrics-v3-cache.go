@@ -34,6 +34,7 @@ type metricsCache struct {
 	dataUsageInfo       *cachevalue.Cache[DataUsageInfo]
 	esetHealthResult    *cachevalue.Cache[HealthResult]
 	driveMetrics        *cachevalue.Cache[storageMetrics]
+	memoryMetrics       *cachevalue.Cache[madmin.MemInfo]
 	clusterDriveMetrics *cachevalue.Cache[storageMetrics]
 	nodesUpDown         *cachevalue.Cache[nodesOnline]
 }
@@ -43,6 +44,7 @@ func newMetricsCache() *metricsCache {
 		dataUsageInfo:       newDataUsageInfoCache(),
 		esetHealthResult:    newESetHealthResultCache(),
 		driveMetrics:        newDriveMetricsCache(),
+		memoryMetrics:       newMemoryMetricsCache(),
 		clusterDriveMetrics: newClusterStorageInfoCache(),
 		nodesUpDown:         newNodesUpDownCache(),
 	}
@@ -196,6 +198,31 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 	return cachevalue.NewFromFunc(1*time.Minute,
 		cachevalue.Opts{ReturnLastGood: true},
 		loadDriveMetrics)
+}
+
+func newMemoryMetricsCache() *cachevalue.Cache[madmin.MemInfo] {
+	loadMemoryMetrics := func() (v madmin.MemInfo, err error) {
+		var types madmin.MetricType = madmin.MetricsMem
+
+		m := collectLocalMetrics(types, collectMetricsOpts{
+			hosts: map[string]struct{}{
+				globalLocalNodeName: {},
+			},
+		})
+
+		for _, hm := range m.ByHost {
+			if hm.Mem != nil && len(hm.Mem.Info.Addr) > 0 {
+				v = hm.Mem.Info
+				break
+			}
+		}
+
+		return
+	}
+
+	return cachevalue.NewFromFunc(1*time.Minute,
+		cachevalue.Opts{ReturnLastGood: true},
+		loadMemoryMetrics)
 }
 
 func newClusterStorageInfoCache() *cachevalue.Cache[storageMetrics] {
