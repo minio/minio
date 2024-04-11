@@ -3196,6 +3196,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+	addErr := func(msg string) {}
 
 	// Write a version for making *incompatible* changes.
 	// The AdminClient will reject any version it does not know.
@@ -3234,6 +3235,11 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		if err != nil {
 			bugLogIf(ctx, stream.AddError(err.Error()))
 			return
+		}
+		addErr = func(msg string) {
+			inspectZipW.Close()
+			encStream.Close()
+			stream.AddError(msg)
 		}
 		defer encStream.Close()
 
@@ -3315,18 +3321,6 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 		}
 		return nil
 	}
-	err := o.GetRawData(ctx, volume, file, rawDataFn)
-	if !errors.Is(err, errFileNotFound) {
-		adminLogIf(ctx, err)
-	}
-
-	// save the format.json as part of inspect by default
-	if !(volume == minioMetaBucket && file == formatConfigFile) {
-		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
-	}
-	if !errors.Is(err, errFileNotFound) {
-		adminLogIf(ctx, err)
-	}
 
 	// save args passed to inspect command
 	var sb bytes.Buffer
@@ -3338,6 +3332,24 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 	sb.WriteString("\n")
 	adminLogIf(ctx, embedFileInZip(inspectZipW, "inspect-input.txt", sb.Bytes(), 0o600))
+
+	err := o.GetRawData(ctx, volume, file, rawDataFn)
+	if err != nil {
+		if errors.Is(err, errFileNotFound) {
+			addErr("GetRawData: No files matched the given pattern")
+			return
+		}
+		embedFileInZip(inspectZipW, "GetRawData-err.txt", []byte(err.Error()), 0o600)
+		adminLogIf(ctx, err)
+	}
+
+	// save the format.json as part of inspect by default
+	if !(volume == minioMetaBucket && file == formatConfigFile) {
+		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
+	}
+	if !errors.Is(err, errFileNotFound) {
+		adminLogIf(ctx, err)
+	}
 
 	scheme := "https"
 	if !globalIsTLS {
