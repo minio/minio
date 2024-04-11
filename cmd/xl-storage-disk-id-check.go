@@ -79,7 +79,7 @@ const (
 type xlStorageDiskIDCheck struct {
 	totalWrites           atomic.Uint64
 	totalDeletes          atomic.Uint64
-	totalErrsAvailability atomic.Uint64 // Captures all data availability errors such as permission denied, faulty disk and timeout errors.
+	totalErrsAvailability atomic.Uint64 // Captures all data availability errors such as faulty disk, timeout errors.
 	totalErrsTimeout      atomic.Uint64 // Captures all timeout only errors
 
 	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
@@ -740,9 +740,6 @@ func (p *xlStorageDiskIDCheck) updateStorageMetrics(s storageMetric, paths ...st
 
 		atomic.AddUint64(&p.apiCalls[s], 1)
 		if IsErr(err, []error{
-			errVolumeAccessDenied,
-			errFileAccessDenied,
-			errDiskAccessDenied,
 			errFaultyDisk,
 			errFaultyRemoteDisk,
 			context.DeadlineExceeded,

@@ -546,7 +546,7 @@ func getNodeDriveAvailabilityErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_availability",
-		Help:      "Total number of drive I/O errors, permission denied and timeouts since server start",
+		Help:      "Total number of drive I/O errors, timeouts since server start",
 		Type:      counterMetric,
 	}
 }
