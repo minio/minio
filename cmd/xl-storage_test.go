@@ -23,6 +23,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	slashpath "path"
 	"runtime"
@@ -114,13 +115,29 @@ func TestIsValidVolname(t *testing.T) {
 	}
 }
 
+func newLocalXLStorage(path string) (*xlStorage, error) {
+	return newLocalXLStorageWithDiskIdx(path, 0)
+}
+
+// Initialize a new storage disk.
+func newLocalXLStorageWithDiskIdx(path string, diskIdx int) (*xlStorage, error) {
+	u := url.URL{Path: path}
+	return newXLStorage(Endpoint{
+		URL:     &u,
+		IsLocal: true,
+		PoolIdx: 0,
+		SetIdx:  0,
+		DiskIdx: diskIdx,
+	}, true)
+}
+
 // creates a temp dir and sets up xlStorage layer.
 // returns xlStorage layer, temp dir path to be used for the purpose of tests.
 func newXLStorageTestSetup(tb testing.TB) (*xlStorageDiskIDCheck, string, error) {
 	diskPath := tb.TempDir()
 
 	// Initialize a new xlStorage layer.
-	storage, err := newLocalXLStorage(diskPath)
+	storage, err := newLocalXLStorageWithDiskIdx(diskPath, 3)
 	if err != nil {
 		return nil, "", err
 	}

@@ -163,21 +163,11 @@ type storageRESTClient struct {
 	formatMutex sync.RWMutex
 
 	diskInfoCache *cachevalue.Cache[DiskInfo]
-
-	// Indexes, will be -1 until assigned a set.
-	poolIndex, setIndex, diskIndex int
 }
 
 // Retrieve location indexes.
 func (client *storageRESTClient) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	return client.poolIndex, client.setIndex, client.diskIndex
-}
-
-// Set location indexes.
-func (client *storageRESTClient) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
-	client.poolIndex = poolIdx
-	client.setIndex = setIdx
-	client.diskIndex = diskIdx
+	return client.endpoint.PoolIdx, client.endpoint.SetIdx, client.endpoint.DiskIdx
 }
 
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is makred disconnected
