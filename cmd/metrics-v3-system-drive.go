@@ -180,47 +180,20 @@ func (m *MetricValues) setDriveAPIMetrics(disk madmin.Disk, labels []string) {
 	}
 }
 
-func (m *MetricValues) setDriveIOStatMetrics(ioStats *diskIOStats, disk madmin.Disk, labels []string) {
-	if ioStats == nil {
-		return
+func (m *MetricValues) setDriveIOStatMetrics(ioStats driveIOStatMetrics, labels []string) {
+	m.Set(driveReadsPerSec, ioStats.readsPerSec, labels...)
+	m.Set(driveReadsKBPerSec, ioStats.readsKBPerSec, labels...)
+	if ioStats.readsPerSec > 0 {
+		m.Set(driveReadsAwait, ioStats.readsAwait, labels...)
 	}
 
-	durationSecs := ioStats.duration.Seconds()
-
-	if durationSecs < 1 {
-		return
+	m.Set(driveWritesPerSec, ioStats.writesPerSec, labels...)
+	m.Set(driveWritesKBPerSec, ioStats.writesKBPerSec, labels...)
+	if ioStats.writesPerSec > 0 {
+		m.Set(driveWritesAwait, ioStats.writesAwait, labels...)
 	}
 
-	cachedStats, found := ioStats.stats[disk.DrivePath]
-	if !found {
-		return
-	}
-
-	readsPerSec := float64(cachedStats.ReadIOs) / durationSecs
-	m.Set(driveReadsPerSec, readsPerSec, labels...)
-
-	readsKBPerSec := float64(cachedStats.ReadSectors) * float64(sectorSize) / kib / durationSecs
-	m.Set(driveReadsKBPerSec, readsKBPerSec, labels...)
-
-	if cachedStats.ReadIOs > 0 {
-		readsAwait := float64(cachedStats.ReadTicks) / float64(cachedStats.ReadIOs)
-		m.Set(driveReadsAwait, readsAwait, labels...)
-	}
-
-	writesPerSec := float64(cachedStats.WriteIOs) / durationSecs
-	m.Set(driveWritesPerSec, writesPerSec, labels...)
-
-	writesKBPerSec := float64(cachedStats.WriteSectors) * float64(sectorSize) / kib / durationSecs
-	m.Set(driveWritesKBPerSec, writesKBPerSec, labels...)
-
-	if cachedStats.WriteIOs > 0 {
-		writesAwait := float64(cachedStats.WriteTicks) / float64(cachedStats.WriteIOs)
-		m.Set(driveWritesAwait, writesAwait, labels...)
-	}
-
-	// TotalTicks is in milliseconds
-	percUtil := float64(cachedStats.TotalTicks) * 100 / (durationSecs * 1000)
-	m.Set(drivePercUtil, percUtil, labels...)
+	m.Set(drivePercUtil, ioStats.percUtil, labels...)
 }
 
 // loadDriveMetrics - `MetricsLoaderFn` for node drive metrics.
@@ -240,7 +213,9 @@ func loadDriveMetrics(ctx context.Context, m MetricValues, c *metricsCache) erro
 		}
 
 		m.setDriveBasicMetrics(disk, labels)
-		m.setDriveIOStatMetrics(driveMetrics.ioStats, disk, labels)
+		if dm, found := driveMetrics.ioStats[disk.DrivePath]; found {
+			m.setDriveIOStatMetrics(dm, labels)
+		}
 		m.setDriveAPIMetrics(disk, labels)
 	}
 
