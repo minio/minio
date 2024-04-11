@@ -227,15 +227,7 @@ func updateDriveIOStats(currentStats madmin.DiskIOStats, latestStats madmin.Disk
 		// too soon to update the stats
 		return
 	}
-	diffStats := madmin.DiskIOStats{
-		ReadIOs:      currentStats.ReadIOs - latestStats.ReadIOs,
-		WriteIOs:     currentStats.WriteIOs - latestStats.WriteIOs,
-		ReadTicks:    currentStats.ReadTicks - latestStats.ReadTicks,
-		WriteTicks:   currentStats.WriteTicks - latestStats.WriteTicks,
-		TotalTicks:   currentStats.TotalTicks - latestStats.TotalTicks,
-		ReadSectors:  currentStats.ReadSectors - latestStats.ReadSectors,
-		WriteSectors: currentStats.WriteSectors - latestStats.WriteSectors,
-	}
+	diffStats := getDiffStats(latestStats, currentStats)
 
 	updateResourceMetrics(driveSubsystem, readsPerSec, float64(diffStats.ReadIOs)/diffInSeconds, labels, false)
 	readKib := float64(diffStats.ReadSectors*sectorSize) / kib
