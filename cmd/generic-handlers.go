@@ -310,6 +310,13 @@ func hasBadHost(host string) error {
 // Check if the incoming path has bad path components,
 // such as ".." and "."
 func hasBadPathComponent(path string) bool {
+	if len(path) > 4096 {
+		// path cannot be greater than Linux PATH_MAX
+		// this is to avoid a busy loop, that can happen
+		// if the caller sends path of following style
+		// a/a/a/a/a/a/a/a...
+		return true
+	}
 	path = filepath.ToSlash(strings.TrimSpace(path)) // For windows '\' must be converted to '/'
 	for _, p := range strings.Split(path, SlashSeparator) {
 		switch strings.TrimSpace(p) {
