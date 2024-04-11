@@ -25,14 +25,6 @@ import (
 	"github.com/minio/minio/internal/cachevalue"
 )
 
-var (
-	// prevDriveIOStats is used to calculate "per second"
-	// values for IOStat related disk metrics e.g. reads/sec.
-	prevDriveIOStats            map[string]madmin.DiskIOStats
-	prevDriveIOStatsMu          sync.RWMutex
-	prevDriveIOStatsRefreshedAt time.Time
-)
-
 // metricsCache - cache for metrics.
 //
 // When serving metrics, this cache is passed to the MetricsLoaderFn.
@@ -127,6 +119,14 @@ func getDiffStats(initialStats, currentStats madmin.DiskIOStats) madmin.DiskIOSt
 }
 
 func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
+	var (
+		// prevDriveIOStats is used to calculate "per second"
+		// values for IOStat related disk metrics e.g. reads/sec.
+		prevDriveIOStats            map[string]madmin.DiskIOStats
+		prevDriveIOStatsMu          sync.RWMutex
+		prevDriveIOStatsRefreshedAt time.Time
+	)
+
 	loadDriveMetrics := func() (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
