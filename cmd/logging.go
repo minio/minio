@@ -193,3 +193,12 @@ func tierLogIf(ctx context.Context, err error, errKind ...interface{}) {
 func kmsLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "kms", err, errKind...)
 }
+
+type Logger interface {
+	LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{})
+}
+type KMSLoggerType struct{}
+
+func (t KMSLoggerType) LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, "kms", err, id, errKind...)
+}

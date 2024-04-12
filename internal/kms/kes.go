@@ -25,13 +25,13 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/minio/pkg/v2/env"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/env"
 )
 
 const (
@@ -71,7 +71,7 @@ type Config struct {
 
 // NewWithConfig returns a new KMS using the given
 // configuration.
-func NewWithConfig(config Config) (KMS, error) {
+func NewWithConfig(config Config, kmsLogger KMSLogger) (KMS, error) {
 	if len(config.Endpoints) == 0 {
 		return nil, errors.New("kms: no server endpoints")
 	}
@@ -140,13 +140,13 @@ func NewWithConfig(config Config) (KMS, error) {
 		}
 	}()
 
-	go c.refreshKMSMasterKeyCache()
+	go c.refreshKMSMasterKeyCache(kmsLogger)
 	return c, nil
 }
 
 // Request KES keep an up-to-date copy of the KMS master key to allow minio to start up even if KMS is down. The
 // cached key may still be evicted if the period of this function is longer than that of KES .cache.expiry.unused
-func (c *kesClient) refreshKMSMasterKeyCache() {
+func (c *kesClient) refreshKMSMasterKeyCache(kmsLogger KMSLogger) {
 	ctx := context.Background()
 
 	defaultCacheInterval := 10
@@ -167,7 +167,7 @@ func (c *kesClient) refreshKMSMasterKeyCache() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				c.ValidateKey(ctx)
+				c.RefreshKey(ctx, kmsLogger)
 			}()
 			wg.Wait()
 
@@ -487,8 +487,12 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 	return results
 }
 
-// ValidateKey checks the validity of the KMS Master Key
-func (c *kesClient) ValidateKey(ctx context.Context) bool {
+type KMSLogger interface {
+	LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{})
+}
+
+// RefreshKey checks the validity of the KMS Master Key
+func (c *kesClient) RefreshKey(ctx context.Context, kmsLogger KMSLogger) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -503,11 +507,13 @@ func (c *kesClient) ValidateKey(ctx context.Context) bool {
 		// 1. Generate a new key using the KMS.
 		kmsCtx, err := kmsContext.MarshalText()
 		if err != nil {
+			kmsLogger.LogOnceIf(ctx, "kms", err, "refresh-kms-master-key")
 			validKey = false
 			break
 		}
 		_, err = client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
 		if err != nil {
+			kmsLogger.LogOnceIf(ctx, "kms", err, "refresh-kms-master-key")
 			validKey = false
 			break
 		}
