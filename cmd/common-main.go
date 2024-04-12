@@ -958,7 +958,7 @@ func handleKMSConfig() {
 			}
 		}
 
-		kmsLogger := KMSLoggerType{}
+		kmsLogger := Logger{}
 		KMS, err := kms.NewWithConfig(kmsConf, kmsLogger)
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
