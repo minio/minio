@@ -159,7 +159,7 @@ var NotifySubSystems = set.CreateStringSet(
 	NotifyWebhookSubSys,
 )
 
-// LambdaSubSystems - all lambda sub-systesm
+// LambdaSubSystems - all lambda sub-systems
 var LambdaSubSystems = set.CreateStringSet(
 	LambdaWebhookSubSys,
 )

@@ -1974,8 +1974,8 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *check) {
 	c.Assert(putMD5, getMD5)
 }
 
-// TestGetPartialObjectMisAligned - tests get object partially mis-aligned.
-// create a large buffer of mis-aligned data and upload it.
+// TestGetPartialObjectMisAligned - tests get object partially misaligned.
+// create a large buffer of misaligned data and upload it.
 // then make partial range requests to while fetching it back and assert the response content.
 func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *check) {
 	// generate a random bucket name.

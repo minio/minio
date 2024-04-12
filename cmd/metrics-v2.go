@@ -536,7 +536,7 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 	}
 }
 
-func getNodeDriveAvailablityErrorsMD() MetricDescription {
+func getNodeDriveAvailabilityErrorsMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
@@ -3474,7 +3474,7 @@ func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroup {
 				})
 
 				metrics = append(metrics, Metric{
-					Description:    getNodeDriveAvailablityErrorsMD(),
+					Description:    getNodeDriveAvailabilityErrorsMD(),
 					Value:          float64(disk.Metrics.TotalErrorsAvailability),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
 				})

@@ -1664,7 +1664,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 	}
 }
 
-// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint,
+// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls the registered object layer API endpoint,
 // and assert the error response. The purpose is to validate the API handlers response when the object layer is uninitialized.
 // Usage hint: Should be used at the end of the API end points tests (ex: check the last few lines of `testAPIListObjectPartsHandler`),
 // need a sample HTTP request to be sent as argument so that the relevant handler is called, the handler registration is expected

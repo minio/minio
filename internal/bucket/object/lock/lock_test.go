@@ -84,7 +84,7 @@ func TestParseLegalHoldStatus(t *testing.T) {
 }
 
 // TestUnmarshalDefaultRetention checks if default retention
-// marshaling and unmarshaling work as expected
+// marshaling and unmarshalling work as expected
 func TestUnmarshalDefaultRetention(t *testing.T) {
 	days := uint64(4)
 	years := uint64(1)
