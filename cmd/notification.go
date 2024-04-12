@@ -1121,7 +1121,7 @@ func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient
 	if len(sys.peerClients) == 0 {
 		return nil
 	}
-	peerClients := sys.getOnlinePeers()
+	peerClients := sys.allPeerClients
 	if len(peerClients) == 0 {
 		return nil
 	}
