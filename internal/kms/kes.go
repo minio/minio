@@ -146,13 +146,10 @@ func NewWithConfig(config Config) (KMS, error) {
 	return c, nil
 }
 
-// CtxValidKey allows for checking the existence of a valid key for encryption and decryption
-type CtxValidKey struct{}
-
 // Request KES keep an up-to-date copy of the KMS master key to allow minio to start up even if KMS is down. The
 // cached key may still be evicted if the period of this function is longer than that of KES .cache.expiry.unused
 func (c *kesClient) keepKeyInCache() {
-	ctx := context.WithValue(context.Background(), CtxValidKey{}, "true")
+	ctx := context.Background()
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -441,16 +438,11 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 			HTTPClient: c.client.HTTPClient,
 		}
 
-		state := kes.State{}
-		// Permission on /status is not required to validate kes key encryption and decryption
-		if ctx.Value(CtxValidKey{}) != "true" {
-			// 1. Get stats for the KES instance
-			clientState, err := client.Status(ctx)
-			if err != nil {
-				results = append(results, VerifyResult{Status: "offline", Endpoint: endpoint})
-				continue
-			}
-			state = clientState
+		// 1. Get stats for the KES instance
+		state, err := client.Status(ctx)
+		if err != nil {
+			results = append(results, VerifyResult{Status: "offline", Endpoint: endpoint})
+			continue
 		}
 
 		// 2. Generate a new key using the KMS.

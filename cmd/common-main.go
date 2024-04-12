@@ -962,20 +962,11 @@ func handleKMSConfig() {
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
-		// Try to generate/decrypt a data encryption key. Only try to create key if this fails.
+		// Try to generate a data encryption key. Only try to create key if this fails.
 		// This implicitly checks that we can communicate to KES.
 		// We don't treat a policy error as failure condition since MinIO may not have the permission
 		// to create keys - just to generate/decrypt data encryption keys.
-		ctx := context.WithValue(context.Background(), kms.CtxValidKey{}, "true")
-		results := KMS.Verify(ctx)
-		validKey := false
-		for _, result := range results {
-			if validKey == false && result.Status == "online" && result.Decrypt == "success" && result.Encrypt == "success" {
-				validKey = true
-				break
-			}
-		}
-		if !validKey {
+		if _, err = KMS.GenerateKey(GlobalContext, env.Get(kms.EnvKESKeyName, ""), kms.Context{}); err != nil && errors.Is(err, kes.ErrKeyNotFound) {
 			if err = KMS.CreateKey(context.Background(), env.Get(kms.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
 				logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 			}
