@@ -159,7 +159,7 @@ func (c *kesClient) keepKeyInCache() {
 		case <-ctx.Done():
 			return
 		}
-		_ = c.Verify(ctx)
+		_ = c.ValidateKey(ctx)
 	}
 }
 
@@ -471,4 +471,35 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 		results = append(results, result)
 	}
 	return results
+}
+
+// ValidateKey checks the validity of the KMS Master Key
+func (c *kesClient) ValidateKey(ctx context.Context) bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	validKey := false
+	kmsContext := Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+	for _, endpoint := range c.client.Endpoints {
+		client := kes.Client{
+			Endpoints:  []string{endpoint},
+			HTTPClient: c.client.HTTPClient,
+		}
+
+		// 1. Generate a new key using the KMS.
+		kmsCtx, err := kmsContext.MarshalText()
+		if err != nil {
+			validKey = false
+			break
+		}
+		_, err = client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
+		if err != nil {
+			validKey = false
+			break
+		}
+		if !validKey {
+			validKey = true
+		}
+	}
+	return validKey
 }
