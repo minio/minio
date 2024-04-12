@@ -1104,24 +1104,13 @@ func (sys *NotificationSys) ServerInfo(metrics bool) []madmin.ServerProperties {
 	return reply
 }
 
-// returns all the peers that are currently online.
-func (sys *NotificationSys) getOnlinePeers() []*peerRESTClient {
-	var peerClients []*peerRESTClient
-	for _, peerClient := range sys.allPeerClients {
-		if peerClient != nil && peerClient.IsOnline() {
-			peerClients = append(peerClients, peerClient)
-		}
-	}
-	return peerClients
-}
-
 // restClientFromHash will return a deterministic peerRESTClient based on s.
 // Will return nil if client is local.
 func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient) {
 	if len(sys.peerClients) == 0 {
 		return nil
 	}
-	peerClients := sys.getOnlinePeers()
+	peerClients := sys.allPeerClients
 	if len(peerClients) == 0 {
 		return nil
 	}
