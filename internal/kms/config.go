@@ -19,13 +19,14 @@ package kms
 
 // Top level config constants for KMS
 const (
-	EnvKMSSecretKey      = "MINIO_KMS_SECRET_KEY"
-	EnvKMSSecretKeyFile  = "MINIO_KMS_SECRET_KEY_FILE"
-	EnvKESEndpoint       = "MINIO_KMS_KES_ENDPOINT"     // One or multiple KES endpoints, separated by ','
-	EnvKESKeyName        = "MINIO_KMS_KES_KEY_NAME"     // The default key name used for IAM data and when no key ID is specified on a bucket
-	EnvKESAPIKey         = "MINIO_KMS_KES_API_KEY"      // Access credential for KES - API keys and private key / certificate are mutually exclusive
-	EnvKESClientKey      = "MINIO_KMS_KES_KEY_FILE"     // Path to TLS private key for authenticating to KES with mTLS - usually prefer API keys
-	EnvKESClientPassword = "MINIO_KMS_KES_KEY_PASSWORD" // Optional password to decrypt an encrypt TLS private key
-	EnvKESClientCert     = "MINIO_KMS_KES_CERT_FILE"    // Path to TLS certificate for authenticating to KES with mTLS - usually prefer API keys
-	EnvKESServerCA       = "MINIO_KMS_KES_CAPATH"       // Path to file/directory containing CA certificates to verify the KES server certificate
+	EnvKMSSecretKey        = "MINIO_KMS_SECRET_KEY"
+	EnvKMSSecretKeyFile    = "MINIO_KMS_SECRET_KEY_FILE"
+	EnvKESEndpoint         = "MINIO_KMS_KES_ENDPOINT"       // One or multiple KES endpoints, separated by ','
+	EnvKESKeyName          = "MINIO_KMS_KES_KEY_NAME"       // The default key name used for IAM data and when no key ID is specified on a bucket
+	EnvKESAPIKey           = "MINIO_KMS_KES_API_KEY"        // Access credential for KES - API keys and private key / certificate are mutually exclusive
+	EnvKESClientKey        = "MINIO_KMS_KES_KEY_FILE"       // Path to TLS private key for authenticating to KES with mTLS - usually prefer API keys
+	EnvKESClientPassword   = "MINIO_KMS_KES_KEY_PASSWORD"   // Optional password to decrypt an encrypt TLS private key
+	EnvKESClientCert       = "MINIO_KMS_KES_CERT_FILE"      // Path to TLS certificate for authenticating to KES with mTLS - usually prefer API keys
+	EnvKESServerCA         = "MINIO_KMS_KES_CAPATH"         // Path to file/directory containing CA certificates to verify the KES server certificate
+	EnvKESKeyCacheInterval = "MINIO_KMS_KEY_CACHE_INTERVAL" // Period between polls of the KES KMS Master Key cache, to prevent it from being unused and purged
 )

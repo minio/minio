@@ -140,26 +140,40 @@ func NewWithConfig(config Config) (KMS, error) {
 		}
 	}()
 
-	go func() {
-		c.keepKeyInCache()
-	}()
+	go c.refreshKMSMasterKeyCache()
 	return c, nil
 }
 
 // Request KES keep an up-to-date copy of the KMS master key to allow minio to start up even if KMS is down. The
 // cached key may still be evicted if the period of this function is longer than that of KES .cache.expiry.unused
-func (c *kesClient) keepKeyInCache() {
+func (c *kesClient) refreshKMSMasterKeyCache() {
 	ctx := context.Background()
 
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+	defaultCacheInterval := 10
+	cacheInterval, err := env.GetInt("EnvKESKeyCacheInterval", defaultCacheInterval)
+	if err != nil {
+		cacheInterval = defaultCacheInterval
+	}
+
+	timer := time.NewTimer(time.Duration(cacheInterval) * time.Second)
+	defer timer.Stop()
+
 	for {
 		select {
-		case <-ticker.C:
 		case <-ctx.Done():
 			return
+		case <-timer.C:
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				c.ValidateKey(ctx)
+			}()
+			wg.Wait()
+
+			// Reset for the next interval
+			timer.Reset(time.Duration(cacheInterval) * time.Second)
 		}
-		_ = c.ValidateKey(ctx)
 	}
 }
 
