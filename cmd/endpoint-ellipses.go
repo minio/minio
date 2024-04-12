@@ -477,7 +477,7 @@ func mergeDisksLayoutFromArgs(args []string, ctxt *serverCtxt) (err error) {
 		}
 		ctxt.Layout = disksLayout{
 			legacy: true,
-			pools:  []poolDisksLayout{{layout: setArgs}},
+			pools:  []poolDisksLayout{{layout: setArgs, cmdline: strings.Join(args, " ")}},
 		}
 		return
 	}

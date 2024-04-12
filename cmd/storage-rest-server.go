@@ -1198,6 +1198,10 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 		} else {
 			logger.Fatal(err, "Unable to initialize backend")
 		}
+	case errors.Is(err, errInconsistentDisk):
+		if exit {
+			logger.Fatal(err, "Unable to initialize backend")
+		}
 	default:
 		if !exit {
 			storageLogOnceIf(GlobalContext, fmt.Errorf("Drive %s returned an unexpected error: %w, please investigate - drive will be offline", endpoint, err), "log-fatal-errs")

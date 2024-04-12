@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"sync"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -61,8 +62,20 @@ func newNodesUpDownCache() *cachevalue.Cache[nodesOnline] {
 		loadNodesUpDown)
 }
 
+type driveIOStatMetrics struct {
+	readsPerSec    float64
+	readsKBPerSec  float64
+	readsAwait     float64
+	writesPerSec   float64
+	writesKBPerSec float64
+	writesAwait    float64
+	percUtil       float64
+}
+
+// storageMetrics - cached storage metrics.
 type storageMetrics struct {
 	storageInfo                              madmin.StorageInfo
+	ioStats                                  map[string]driveIOStatMetrics
 	onlineDrives, offlineDrives, totalDrives int
 }
 
@@ -98,7 +111,48 @@ func newESetHealthResultCache() *cachevalue.Cache[HealthResult] {
 	)
 }
 
+func getDiffStats(initialStats, currentStats madmin.DiskIOStats) madmin.DiskIOStats {
+	return madmin.DiskIOStats{
+		ReadIOs:      currentStats.ReadIOs - initialStats.ReadIOs,
+		WriteIOs:     currentStats.WriteIOs - initialStats.WriteIOs,
+		ReadSectors:  currentStats.ReadSectors - initialStats.ReadSectors,
+		WriteSectors: currentStats.WriteSectors - initialStats.WriteSectors,
+		ReadTicks:    currentStats.ReadTicks - initialStats.ReadTicks,
+		WriteTicks:   currentStats.WriteTicks - initialStats.WriteTicks,
+		TotalTicks:   currentStats.TotalTicks - initialStats.TotalTicks,
+	}
+}
+
+func getDriveIOStatMetrics(ioStats madmin.DiskIOStats, duration time.Duration) (m driveIOStatMetrics) {
+	durationSecs := duration.Seconds()
+
+	m.readsPerSec = float64(ioStats.ReadIOs) / durationSecs
+	m.readsKBPerSec = float64(ioStats.ReadSectors) * float64(sectorSize) / kib / durationSecs
+	if ioStats.ReadIOs > 0 {
+		m.readsAwait = float64(ioStats.ReadTicks) / float64(ioStats.ReadIOs)
+	}
+
+	m.writesPerSec = float64(ioStats.WriteIOs) / durationSecs
+	m.writesKBPerSec = float64(ioStats.WriteSectors) * float64(sectorSize) / kib / durationSecs
+	if ioStats.WriteIOs > 0 {
+		m.writesAwait = float64(ioStats.WriteTicks) / float64(ioStats.WriteIOs)
+	}
+
+	// TotalTicks is in milliseconds
+	m.percUtil = float64(ioStats.TotalTicks) * 100 / (durationSecs * 1000)
+
+	return
+}
+
 func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
+	var (
+		// prevDriveIOStats is used to calculate "per second"
+		// values for IOStat related disk metrics e.g. reads/sec.
+		prevDriveIOStats            map[string]madmin.DiskIOStats
+		prevDriveIOStatsMu          sync.RWMutex
+		prevDriveIOStatsRefreshedAt time.Time
+	)
+
 	loadDriveMetrics := func() (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
@@ -108,14 +162,37 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 		storageInfo := objLayer.LocalStorageInfo(GlobalContext, true)
 		onlineDrives, offlineDrives := getOnlineOfflineDisksStats(storageInfo.Disks)
 		totalDrives := onlineDrives.Merge(offlineDrives)
+
 		v = storageMetrics{
 			storageInfo:   storageInfo,
 			onlineDrives:  onlineDrives.Sum(),
 			offlineDrives: offlineDrives.Sum(),
 			totalDrives:   totalDrives.Sum(),
+			ioStats:       map[string]driveIOStatMetrics{},
 		}
+
+		currentStats := getCurrentDriveIOStats()
+		now := time.Now().UTC()
+
+		prevDriveIOStatsMu.Lock()
+		if prevDriveIOStats != nil {
+			duration := now.Sub(prevDriveIOStatsRefreshedAt)
+			if duration.Seconds() > 1 {
+				for d, cs := range currentStats {
+					if ps, found := prevDriveIOStats[d]; found {
+						v.ioStats[d] = getDriveIOStatMetrics(getDiffStats(ps, cs), duration)
+					}
+				}
+			}
+		}
+
+		prevDriveIOStats = currentStats
+		prevDriveIOStatsRefreshedAt = now
+		prevDriveIOStatsMu.Unlock()
+
 		return
 	}
+
 	return cachevalue.NewFromFunc(1*time.Minute,
 		cachevalue.Opts{ReturnLastGood: true},
 		loadDriveMetrics)

@@ -147,11 +147,12 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 		modTime = dstOpts.MTime
 		fi.ModTime = dstOpts.MTime
 	}
+	// check inline before overwriting metadata.
+	inlineData := fi.InlineData()
 
 	fi.Metadata = srcInfo.UserDefined
 	srcInfo.UserDefined["etag"] = srcInfo.ETag
 
-	inlineData := fi.InlineData()
 	freeVersionID := fi.TierFreeVersionID()
 	freeVersionMarker := fi.TierFreeVersion()
 

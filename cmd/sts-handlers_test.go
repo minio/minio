@@ -1054,6 +1054,158 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	c.Assert(err.Error(), "Access Denied.")
 }
 
+func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	ldapID := cr.LDAPIdentity{
+		Client:       s.TestSuiteCommon.client,
+		STSEndpoint:  s.endPoint,
+		LDAPUsername: "svc.algorithm",
+		LDAPPassword: "example",
+	}
+
+	_, err = ldapID.Retrieve()
+	if err == nil {
+		c.Fatalf("Expected to fail to create STS cred with no associated policy!")
+	}
+
+	mustNormalizeDN := func(dn string) string {
+		normalizedDN, err := ldap.NormalizeDN(dn)
+		if err != nil {
+			c.Fatalf("normalize err: %v", err)
+		}
+		return normalizedDN
+	}
+
+	actualUserDN := mustNormalizeDN("uid=svc.algorithm,OU=swengg,DC=min,DC=io")
+
+	// \uFE52 is the unicode dot SMALL FULL STOP used below:
+	userDNWithUnicodeDot := "uid=svc﹒algorithm,OU=swengg,DC=min,DC=io"
+
+	if err = s.adm.SetPolicy(ctx, policy, userDNWithUnicodeDot, false); err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+
+	value, err := ldapID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	usersList, err := s.adm.ListUsers(ctx)
+	if err != nil {
+		c.Fatalf("list users should not fail: %v", err)
+	}
+	if len(usersList) != 1 {
+		c.Fatalf("expected user listing output: %#v", usersList)
+	}
+	uinfo := usersList[actualUserDN]
+	if uinfo.PolicyName != policy || uinfo.Status != madmin.AccountEnabled {
+		c.Fatalf("expected user listing content: %v", uinfo)
+	}
+
+	minioClient, err := minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that the client cannot remove any objects
+	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
+	if err.Error() != "Access Denied." {
+		c.Fatalf("unexpected non-access-denied err: %v", err)
+	}
+
+	// Remove the policy assignment on the user DN:
+	if err = s.adm.SetPolicy(ctx, "", userDNWithUnicodeDot, false); err != nil {
+		c.Fatalf("Unable to remove policy setting: %v", err)
+	}
+
+	_, err = ldapID.Retrieve()
+	if err == nil {
+		c.Fatalf("Expected to fail to create a user with no associated policy!")
+	}
+
+	// Set policy via group and validate policy assignment.
+	actualGroupDN := mustNormalizeDN("cn=project.c,ou=groups,ou=swengg,dc=min,dc=io")
+	groupDNWithUnicodeDot := "cn=project﹒c,ou=groups,ou=swengg,dc=min,dc=io"
+	if err = s.adm.SetPolicy(ctx, policy, groupDNWithUnicodeDot, true); err != nil {
+		c.Fatalf("Unable to attach group policy: %v", err)
+	}
+
+	value, err = ldapID.Retrieve()
+	if err != nil {
+		c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+	}
+
+	policyResult, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{
+		Policy: []string{policy},
+	})
+	if err != nil {
+		c.Fatalf("GetLDAPPolicyEntities should not fail: %v", err)
+	}
+	{
+		// Check that the mapping we created exists.
+		idx := slices.IndexFunc(policyResult.PolicyMappings, func(e madmin.PolicyEntities) bool {
+			return e.Policy == policy && slices.Contains(e.Groups, actualGroupDN)
+		})
+		if !(idx >= 0) {
+			c.Fatalf("expected groupDN (%s) to be present in mapping list: %#v", actualGroupDN, policyResult)
+		}
+	}
+
+	minioClient, err = minio.New(s.endpoint, &minio.Options{
+		Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+		Secure:    s.secure,
+		Transport: s.TestSuiteCommon.client.Transport,
+	})
+	if err != nil {
+		c.Fatalf("Error initializing client: %v", err)
+	}
+
+	// Validate that the client from sts creds can access the bucket.
+	c.mustListObjects(ctx, minioClient, bucket)
+
+	// Validate that the client cannot remove any objects
+	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
+	c.Assert(err.Error(), "Access Denied.")
+}
+
 func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()

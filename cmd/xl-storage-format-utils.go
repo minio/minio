@@ -141,22 +141,6 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allPart
 	return fi, nil
 }
 
-// getXLDiskLoc will return the pool/set/disk id if it can be located in the object layer.
-// Will return -1 for unknown values.
-func getXLDiskLoc(diskID string) (poolIdx, setIdx, diskIdx int) {
-	if api := newObjectLayerFn(); api != nil {
-		if globalIsErasureSD {
-			return 0, 0, 0
-		}
-		if ep, ok := api.(*erasureServerPools); ok {
-			if pool, set, disk, err := ep.getPoolAndSet(diskID); err == nil {
-				return pool, set, disk
-			}
-		}
-	}
-	return -1, -1, -1
-}
-
 // hashDeterministicString will return a deterministic hash for the map values.
 // Trivial collisions are avoided, but this is by no means a strong hash.
 func hashDeterministicString(m map[string]string) uint64 {
