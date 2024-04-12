@@ -128,6 +128,8 @@ scrape_configs:
 ##### Node (optional)
 
 Optionally you can also collect per node metrics. This needs to be done on a per server instance.
+The scrape configurations should use all the servers under `targets` so that graphing systems like
+grafana can visualize them for all the nodes
 
 ```yaml
 scrape_configs:
@@ -135,7 +137,7 @@ scrape_configs:
   metrics_path: /minio/v2/metrics/node
   scheme: http
   static_configs:
-  - targets: ['localhost:9000']
+  - targets: ['server1:9000','server2:9000','server3:9000','server4:9000']
 ```
 
 ##### Resource (optional)
