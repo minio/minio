@@ -164,13 +164,7 @@ func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			var wg sync.WaitGroup
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				c.RefreshKey(ctx, logger)
-			}()
-			wg.Wait()
+			c.RefreshKey(ctx, logger)
 
 			// Reset for the next interval
 			timer.Reset(time.Duration(cacheInterval) * time.Second)
