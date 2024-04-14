@@ -85,7 +85,7 @@ type xlStorageDiskIDCheck struct {
 	// apiCalls should be placed first so alignment is guaranteed for atomic operations.
 	apiCalls     [storageMetricLast]uint64
 	apiLatencies [storageMetricLast]*lockedLastMinuteLatency
-	diskID       string
+	diskID       atomic.Pointer[string]
 	storage      *xlStorage
 	health       *diskHealthTracker
 	healthCheck  bool
@@ -182,6 +182,7 @@ func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDis
 		healthCheck:  healthCheck && globalDriveMonitoring,
 		metricsCache: cachevalue.New[DiskMetrics](),
 	}
+	xl.SetDiskID(emptyDiskID)
 
 	xl.totalWrites.Store(xl.storage.getWriteAttribute())
 	xl.totalDeletes.Store(xl.storage.getDeleteAttribute())
@@ -204,7 +205,7 @@ func (p *xlStorageDiskIDCheck) IsOnline() bool {
 	if err != nil {
 		return false
 	}
-	return storedDiskID == p.diskID
+	return storedDiskID == *p.diskID.Load()
 }
 
 func (p *xlStorageDiskIDCheck) LastConn() time.Time {
@@ -245,10 +246,6 @@ func (p *xlStorageDiskIDCheck) NSScanner(ctx context.Context, cache dataUsageCac
 	return p.storage.NSScanner(ctx, cache, updates, scanMode, weSleep)
 }
 
-func (p *xlStorageDiskIDCheck) SetFormatData(b []byte) {
-	p.storage.SetFormatData(b)
-}
-
 func (p *xlStorageDiskIDCheck) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return p.storage.GetDiskLoc()
 }
@@ -263,11 +260,11 @@ func (p *xlStorageDiskIDCheck) GetDiskID() (string, error) {
 }
 
 func (p *xlStorageDiskIDCheck) SetDiskID(id string) {
-	p.diskID = id
+	p.diskID.Store(&id)
 }
 
 func (p *xlStorageDiskIDCheck) checkDiskStale() error {
-	if p.diskID == "" {
+	if *p.diskID.Load() == emptyDiskID {
 		// For empty disk-id we allow the call as the server might be
 		// coming up and trying to read format.json or create format.json
 		return nil
@@ -277,7 +274,7 @@ func (p *xlStorageDiskIDCheck) checkDiskStale() error {
 		// return any error generated while reading `format.json`
 		return err
 	}
-	if err == nil && p.diskID == storedDiskID {
+	if err == nil && *p.diskID.Load() == storedDiskID {
 		return nil
 	}
 	// not the same disk we remember, take it offline.
@@ -331,7 +328,8 @@ func (p *xlStorageDiskIDCheck) DiskInfo(ctx context.Context, opts DiskInfoOption
 
 	// check cached diskID against backend
 	// only if its non-empty.
-	if p.diskID != "" && p.diskID != info.ID {
+	cachedID := *p.diskID.Load()
+	if cachedID != "" && cachedID != info.ID {
 		return info, errDiskNotFound
 	}
 	return info, nil

@@ -414,7 +414,7 @@ func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions,
 // On success a meta cache stream will be returned, that should be closed when done.
 func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
 	// Ensure remote has the same disk ID.
-	opts.DiskID = client.diskID
+	opts.DiskID = *client.diskID.Load()
 	b, err := opts.MarshalMsg(grid.GetByteBuffer()[:0])
 	if err != nil {
 		return toStorageErr(err)
