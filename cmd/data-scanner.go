@@ -1422,48 +1422,7 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 	t := time.Now()
 	return func() {
 		doneAt := time.Now()
-		for {
-			// Grab current values
-			d.mu.RLock()
-			minWait, maxWait := d.minSleep, d.maxSleep
-			factor := d.factor
-			cycle := d.cycle
-			d.mu.RUnlock()
-			elapsed := doneAt.Sub(t)
-			// Don't sleep for really small amount of time
-			wantSleep := time.Duration(float64(elapsed) * factor)
-			if wantSleep <= minWait {
-				return
-			}
-			if maxWait > 0 && wantSleep > maxWait {
-				wantSleep = maxWait
-			}
-			timer := time.NewTimer(wantSleep)
-			select {
-			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
-				if d.isScanner {
-					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-				}
-				return
-			case <-timer.C:
-				if d.isScanner {
-					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-				}
-				return
-			case <-cycle:
-				if !timer.Stop() {
-					// We expired.
-					<-timer.C
-					if d.isScanner {
-						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-					}
-					return
-				}
-			}
-		}
+		d.Sleep(ctx, doneAt.Sub(t))
 	}
 }
 
