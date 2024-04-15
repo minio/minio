@@ -198,11 +198,11 @@ func kmsLogIf(ctx context.Context, err error, errKind ...interface{}) {
 type KMSLogger struct{}
 
 // LogOnceIf is the implementation of LogOnceIf, accessible using the Logger interface
-func (kmsLogger KMSLogger) LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func (l KMSLogger) LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
 	logger.LogOnceIf(ctx, "kms", err, id, errKind...)
 }
 
 // LogIf is the implementation of LogIf, accessible using the Logger interface
-func (kmsLogger KMSLogger) LogIf(ctx context.Context, err error, errKind ...interface{}) {
+func (l KMSLogger) LogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "kms", err, errKind...)
 }
