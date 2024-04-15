@@ -350,25 +350,25 @@ func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks [
 
 // Clean-up previously deleted objects. from .minio.sys/tmp/.trash/
 func (er erasureObjects) cleanupDeletedObjects(ctx context.Context) {
-	// run multiple cleanup's local to this server.
 	var wg sync.WaitGroup
 	for _, disk := range er.getLocalDisks() {
-		if disk != nil {
-			wg.Add(1)
-			go func(disk StorageAPI) {
-				defer wg.Done()
-				diskPath := disk.Endpoint().Path
-				readDirFn(pathJoin(diskPath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
-					w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
-					return w.Run(func() error {
-						wait := deletedCleanupSleeper.Timer(ctx)
-						removeAll(pathJoin(diskPath, minioMetaTmpDeletedBucket, ddir))
-						wait()
-						return nil
-					})
-				})
-			}(disk)
+		if disk == nil {
+			continue
 		}
+		wg.Add(1)
+		go func(disk StorageAPI) {
+			defer wg.Done()
+			drivePath := disk.Endpoint().Path
+			readDirFn(pathJoin(drivePath, minioMetaTmpDeletedBucket), func(ddir string, typ os.FileMode) error {
+				w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
+				return w.Run(func() error {
+					wait := deleteCleanupSleeper.Timer(ctx)
+					removeAll(pathJoin(drivePath, minioMetaTmpDeletedBucket, ddir))
+					wait()
+					return nil
+				})
+			})
+		}(disk)
 	}
 	wg.Wait()
 }

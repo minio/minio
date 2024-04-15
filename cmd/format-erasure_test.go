@@ -21,7 +21,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"os"
 	"reflect"
 	"testing"
@@ -428,62 +427,6 @@ func BenchmarkGetFormatErasureInQuorum(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, _ = getFormatErasureInQuorum(formats)
-	}
-}
-
-// Tests formatErasureGetDeploymentID()
-func TestGetErasureID(t *testing.T) {
-	setCount := 2
-	setDriveCount := 8
-
-	format := newFormatErasureV3(setCount, setDriveCount)
-	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
-	formats := make([]*formatErasureV3, 16)
-
-	for i := 0; i < setCount; i++ {
-		for j := 0; j < setDriveCount; j++ {
-			newFormat := format.Clone()
-			newFormat.Erasure.This = format.Erasure.Sets[i][j]
-			formats[i*setDriveCount+j] = newFormat
-		}
-	}
-
-	// Return a format from list of formats in quorum.
-	quorumFormat, err := getFormatErasureInQuorum(formats)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Check if the reference format and input formats are same.
-	var id string
-	if id, err = formatErasureGetDeploymentID(quorumFormat, formats); err != nil {
-		t.Fatal(err)
-	}
-
-	if id == "" {
-		t.Fatal("ID cannot be empty.")
-	}
-
-	formats[0] = nil
-	if id, err = formatErasureGetDeploymentID(quorumFormat, formats); err != nil {
-		t.Fatal(err)
-	}
-	if id == "" {
-		t.Fatal("ID cannot be empty.")
-	}
-
-	formats[1].Erasure.Sets[0][0] = "bad-uuid"
-	if id, err = formatErasureGetDeploymentID(quorumFormat, formats); err != nil {
-		t.Fatal(err)
-	}
-
-	if id == "" {
-		t.Fatal("ID cannot be empty.")
-	}
-
-	formats[2].ID = "bad-id"
-	if _, err = formatErasureGetDeploymentID(quorumFormat, formats); !errors.Is(err, errCorruptedFormat) {
-		t.Fatalf("Unexpected error %s", err)
 	}
 }
 
