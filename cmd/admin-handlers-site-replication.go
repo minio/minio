@@ -347,6 +347,18 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+	// Report the ILMExpiryStats only if at least one site has replication of ILM expiry enabled
+	var replicateILMExpiry bool
+	for _, site := range info.Sites {
+		if site.ReplicateILMExpiry {
+			replicateILMExpiry = true
+			break
+		}
+	}
+	if !replicateILMExpiry {
+		// explicitly send nil for ILMExpiryStats
+		info.ILMExpiryStats = nil
+	}
 
 	if err = json.NewEncoder(w).Encode(info); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
