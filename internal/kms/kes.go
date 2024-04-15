@@ -72,7 +72,7 @@ type Config struct {
 
 // NewWithConfig returns a new KMS using the given
 // configuration.
-func NewWithConfig(config Config, kmsLogger Logger) (KMS, error) {
+func NewWithConfig(config Config, kmsLogger KMSLogger) (KMS, error) {
 	if len(config.Endpoints) == 0 {
 		return nil, errors.New("kms: no server endpoints")
 	}
@@ -147,16 +147,17 @@ func NewWithConfig(config Config, kmsLogger Logger) (KMS, error) {
 
 // Request KES keep an up-to-date copy of the KMS master key to allow minio to start up even if KMS is down. The
 // cached key may still be evicted if the period of this function is longer than that of KES .cache.expiry.unused
-func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
+func (c *kesClient) refreshKMSMasterKeyCache(kmsLogger KMSLogger) {
 	ctx := context.Background()
 
-	defaultCacheInterval := 10
-	cacheInterval, err := env.GetInt("EnvKESKeyCacheInterval", defaultCacheInterval)
+	defaultCacheDuration := time.Duration(10)
+	cacheDuration, err := env.GetDuration(EnvKESKeyCacheInterval, defaultCacheDuration)
 	if err != nil {
-		cacheInterval = defaultCacheInterval
+		kmsLogger.LogOnceIf(ctx, err, "refresh-kms-master-key")
+		cacheDuration = defaultCacheDuration
 	}
 
-	timer := time.NewTimer(time.Duration(cacheInterval) * time.Second)
+	timer := time.NewTimer(cacheDuration * time.Second)
 	defer timer.Stop()
 
 	for {
@@ -164,10 +165,10 @@ func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			c.RefreshKey(ctx, logger)
+			c.RefreshKey(ctx, kmsLogger)
 
 			// Reset for the next interval
-			timer.Reset(time.Duration(cacheInterval) * time.Second)
+			timer.Reset(cacheDuration * time.Second)
 		}
 	}
 }
@@ -482,13 +483,14 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 	return results
 }
 
-// Logger interface permits access to module specific logging, in this case, for KMS
-type Logger interface {
-	LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{})
+// KMSLogger interface permits access to module specific logging, in this case, for KMS
+type KMSLogger interface {
+	LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{})
+	LogIf(ctx context.Context, err error, errKind ...interface{})
 }
 
 // RefreshKey checks the validity of the KMS Master Key
-func (c *kesClient) RefreshKey(ctx context.Context, logger Logger) bool {
+func (c *kesClient) RefreshKey(ctx context.Context, kmsLogger KMSLogger) bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -503,13 +505,13 @@ func (c *kesClient) RefreshKey(ctx context.Context, logger Logger) bool {
 		// 1. Generate a new key using the KMS.
 		kmsCtx, err := kmsContext.MarshalText()
 		if err != nil {
-			logger.LogOnceIf(ctx, "kms", err, "refresh-kms-master-key")
+			kmsLogger.LogOnceIf(ctx, err, "refresh-kms-master-key")
 			validKey = false
 			break
 		}
 		_, err = client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
 		if err != nil {
-			logger.LogOnceIf(ctx, "kms", err, "refresh-kms-master-key")
+			kmsLogger.LogOnceIf(ctx, err, "refresh-kms-master-key")
 			validKey = false
 			break
 		}
