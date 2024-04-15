@@ -106,10 +106,6 @@ func (d *naughtyDisk) GetDiskID() (string, error) {
 	return d.disk.GetDiskID()
 }
 
-func (d *naughtyDisk) SetFormatData(b []byte) {
-	d.disk.SetFormatData(b)
-}
-
 func (d *naughtyDisk) SetDiskID(id string) {
 	d.disk.SetDiskID(id)
 }

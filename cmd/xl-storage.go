@@ -407,12 +407,6 @@ func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return s.endpoint.PoolIdx, s.endpoint.SetIdx, s.endpoint.DiskIdx
 }
 
-func (s *xlStorage) SetFormatData(b []byte) {
-	s.Lock()
-	defer s.Unlock()
-	s.formatData = b
-}
-
 func (s *xlStorage) Healing() *healingTracker {
 	healingFile := pathJoin(s.drivePath, minioMetaBucket,
 		bucketMetaPrefix, healingTrackerFilename)
@@ -2201,7 +2195,7 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 
 	var w *os.File
 	if sync {
-		// Perform directIO along with fdatasync for larger xl.meta, mostly when
+		// Perform DirectIO along with fdatasync for larger xl.meta, mostly when
 		// xl.meta has "inlined data" we prefer writing O_DIRECT and then doing
 		// fdatasync() at the end instead of opening the file with O_DSYNC.
 		//
@@ -2241,6 +2235,14 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
+	// Specific optimization to avoid re-read from the drives for `format.json`
+	// in-case the caller is a network operation.
+	if volume == minioMetaBucket && path == formatConfigFile {
+		s.Lock()
+		s.formatData = b
+		s.Unlock()
+	}
+
 	return s.writeAll(ctx, volume, path, b, true)
 }
 

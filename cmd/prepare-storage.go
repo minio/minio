@@ -245,23 +245,11 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 	}
 
 	if format.ID == "" {
-		// Not a first disk, wait until first disk fixes deploymentID
-		if !firstDisk {
-			return nil, nil, errNotFirstDisk
-		}
-		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format, formatConfigs); err != nil {
-			storageLogIf(GlobalContext, err)
-			return nil, nil, err
-		}
+		internalLogIf(GlobalContext, errors.New("unexpected error deployment ID is missing, refusing to continue"))
+		return nil, nil, errInvalidArgument
 	}
 
 	globalDeploymentIDPtr.Store(&format.ID)
-
-	if err = formatErasureFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
-		storageLogIf(GlobalContext, err)
-		return nil, nil, err
-	}
-
 	return storageDisks, format, nil
 }
 

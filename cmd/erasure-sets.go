@@ -114,26 +114,26 @@ func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 
 // Initializes a new StorageAPI from the endpoint argument, returns
 // StorageAPI and also `format` which exists on the disk.
-func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, []byte, error) {
+func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 	disk, err := newStorageAPI(endpoint, storageOpts{
 		cleanUp:     false,
 		healthCheck: false,
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	format, formatData, err := loadFormatErasureWithData(disk, false)
+	format, err := loadFormatErasure(disk, false)
 	if err != nil {
 		if errors.Is(err, errUnformattedDisk) {
 			info, derr := disk.DiskInfo(context.TODO(), DiskInfoOptions{})
 			if derr != nil && info.RootDisk {
 				disk.Close()
-				return nil, nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
+				return nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
 			}
 		}
 		disk.Close()
-		return nil, nil, nil, fmt.Errorf("Drive: %s returned %w", disk, err) // make sure to '%w' to wrap the error
+		return nil, nil, fmt.Errorf("Drive: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
 
 	disk.Close()
@@ -142,10 +142,10 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, []byte, e
 		healthCheck: true,
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
-	return disk, format, formatData, nil
+	return disk, format, nil
 }
 
 // findDiskIndex - returns the i,j'th position of the input `diskID` against the reference
@@ -226,7 +226,7 @@ func (s *erasureSets) connectDisks() {
 		wg.Add(1)
 		go func(endpoint Endpoint) {
 			defer wg.Done()
-			disk, format, formatData, err := connectEndpoint(endpoint)
+			disk, format, err := connectEndpoint(endpoint)
 			if err != nil {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
@@ -260,7 +260,6 @@ func (s *erasureSets) connectDisks() {
 			}
 
 			disk.SetDiskID(format.Erasure.This)
-			disk.SetFormatData(formatData)
 			s.erasureDisks[setIndex][diskIndex] = disk
 
 			if disk.IsLocal() {
