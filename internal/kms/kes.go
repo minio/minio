@@ -150,13 +150,13 @@ func NewWithConfig(config Config, kmsLogger Logger) (KMS, error) {
 func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 	ctx := context.Background()
 
-	defaultCacheInterval := 10
-	cacheInterval, err := env.GetInt("EnvKESKeyCacheInterval", defaultCacheInterval)
+	defaultCacheDuration := time.Duration(10)
+	cacheDuration, err := env.GetDuration(EnvKESKeyCacheInterval, defaultCacheDuration)
 	if err != nil {
-		cacheInterval = defaultCacheInterval
+		cacheDuration = defaultCacheDuration
 	}
 
-	timer := time.NewTimer(time.Duration(cacheInterval) * time.Second)
+	timer := time.NewTimer(cacheDuration * time.Second)
 	defer timer.Stop()
 
 	for {
@@ -167,7 +167,7 @@ func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 			c.RefreshKey(ctx, logger)
 
 			// Reset for the next interval
-			timer.Reset(time.Duration(cacheInterval) * time.Second)
+			timer.Reset(cacheDuration * time.Second)
 		}
 	}
 }
