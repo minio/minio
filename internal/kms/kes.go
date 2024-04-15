@@ -153,6 +153,7 @@ func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 	defaultCacheDuration := time.Duration(10)
 	cacheDuration, err := env.GetDuration(EnvKESKeyCacheInterval, defaultCacheDuration)
 	if err != nil {
+		logger.LogIf(ctx, "kms", err, "refresh-kms-master-key")
 		cacheDuration = defaultCacheDuration
 	}
 
@@ -485,6 +486,7 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 // Logger interface permits access to module specific logging, in this case, for KMS
 type Logger interface {
 	LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{})
+	LogIf(ctx context.Context, subsystem string, err error, errKind ...interface{})
 }
 
 // RefreshKey checks the validity of the KMS Master Key

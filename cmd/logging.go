@@ -201,3 +201,8 @@ type Logger struct{}
 func (l Logger) LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
 	logger.LogOnceIf(ctx, subsystem, err, id, errKind...)
 }
+
+// LogIf is the implementation of LogIf, accessible using the Logger interface
+func (l Logger) LogIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
+	logger.LogIf(ctx, subsystem, err, errKind...)
+}
