@@ -82,10 +82,7 @@ func (m *minioFileInfo) Mode() os.FileMode {
 }
 
 func (m *minioFileInfo) ModTime() time.Time {
-	if !m.info.LastModified.IsZero() {
-		return m.info.LastModified
-	}
-	return time.Now().UTC()
+        return minFileDate;
 }
 
 func (m *minioFileInfo) IsDir() bool {
