@@ -34,8 +34,9 @@ import (
 // appended to the path. e.g. if the collector path is /bucket/api, the endpoint
 // for the bucket "mybucket" would be /minio/metrics/v3/bucket/api/mybucket
 const (
-	apiRequestsCollectorPath collectorPath = "/api/requests"
-	apiBucketCollectorPath   collectorPath = "/bucket/api"
+	apiRequestsCollectorPath          collectorPath = "/api/requests"
+	apiBucketCollectorPath            collectorPath = "/bucket/api"
+	apiBucketReplicationCollectorPath collectorPath = "/api/bucket/replication"
 
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
@@ -51,6 +52,7 @@ const (
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
+	clusterReplicationCollectorPath  collectorPath = "/cluster/replication"
 
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
@@ -111,6 +113,31 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			apiBucketRequestsTTFBSecondsDistributionMD,
 		},
 		JoinBucketLoaders(loadAPIBucketHTTPMetrics, loadAPIBucketTTFBMetrics),
+	)
+
+	apiBucketReplicationMG := NewBucketMetricsGroup(apiBucketReplicationCollectorPath,
+		[]MetricDescriptor{
+			bucketReplLastHrFailedBytesMD,
+			bucketReplLastHrFailedCountMD,
+			bucketReplLastMinFailedBytesMD,
+			bucketReplLastMinFailedCountMD,
+			bucketReplLatencyMsMD,
+			bucketReplProxiedDeleteTaggingRequestsTotalMD,
+			bucketReplProxiedGetRequestsFailuresMD,
+			bucketReplProxiedGetRequestsTotalMD,
+			bucketReplProxiedGetTaggingRequestsFailuresMD,
+			bucketReplProxiedGetTaggingRequestsTotalMD,
+			bucketReplProxiedHeadRequestsFailuresMD,
+			bucketReplProxiedHeadRequestsTotalMD,
+			bucketReplProxiedPutTaggingRequestsFailuresMD,
+			bucketReplProxiedPutTaggingRequestsTotalMD,
+			bucketReplSentBytesMD,
+			bucketReplSentCountMD,
+			bucketReplTotalFailedBytesMD,
+			bucketReplTotalFailedCountMD,
+			bucketReplProxiedDeleteTaggingRequestsFailuresMD,
+		},
+		loadAPIBucketReplicationMetrics,
 	)
 
 	systemNetworkInternodeMG := NewMetricsGroup(systemNetworkInternodeCollectorPath,
@@ -296,6 +323,25 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterIAMMetrics,
 	)
 
+	clusterReplicationMG := NewMetricsGroup(clusterReplicationCollectorPath,
+		[]MetricDescriptor{
+			replicationAverageActiveWorkersMD,
+			replicationAverageQueuedBytesMD,
+			replicationAverageQueuedCountMD,
+			replicationAverageTransferRateMD,
+			replicationCurrentActiveWorkersMD,
+			replicationCurrentTransferRateMD,
+			replicationLastMinuteQueuedBytesMD,
+			replicationLastMinuteQueuedCountMD,
+			replicationMaxActiveWorkersMD,
+			replicationMaxQueuedBytesMD,
+			replicationMaxQueuedCountMD,
+			replicationMaxTransferRateMD,
+			replicationRecentBacklogCountMD,
+		},
+		loadClusterReplicationMetrics,
+	)
+
 	loggerWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
 			webhookFailedMessagesMD,
@@ -317,6 +363,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
+		apiBucketReplicationMG,
 
 		systemNetworkInternodeMG,
 		systemDriveMG,
@@ -330,6 +377,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterErasureSetMG,
 		clusterNotificationMG,
 		clusterIAMMG,
+		clusterReplicationMG,
 
 		auditMG,
 		loggerWebhookMG,

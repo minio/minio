@@ -225,7 +225,7 @@ func (m *MetricValues) Set(name MetricName, value float64, labels ...string) {
 	}
 
 	if len(labels)/2 != len(validLabels) {
-		panic(fmt.Sprintf("not all labels were given values"))
+		panic("not all labels were given values")
 	}
 
 	v, ok := m.values[name]
