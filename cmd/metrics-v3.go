@@ -53,6 +53,7 @@ const (
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
 	clusterConfigCollectorPath       collectorPath = "/cluster/config"
+	clusterScannerCollectorPath      collectorPath = "/cluster/scanner"
 
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
@@ -351,6 +352,18 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterConfigMetrics,
 	)
 
+	clusterScannerMG := NewMetricsGroup(clusterScannerCollectorPath,
+		[]MetricDescriptor{
+			scannerBucketScansFinishedMD,
+			scannerBucketScansStartedMD,
+			scannerDirectoriesScannedMD,
+			scannerObjectsScannedMD,
+			scannerVersionsScannedMD,
+			scannerLastActivityNanoSecondsMD,
+		},
+		loadClusterScannerMetrics,
+	)
+
 	loggerWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
 			webhookFailedMessagesMD,
@@ -388,6 +401,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterIAMMG,
 		clusterReplicationMG,
 		clusterConfigMG,
+		clusterScannerMG,
 
 		auditMG,
 		loggerWebhookMG,
