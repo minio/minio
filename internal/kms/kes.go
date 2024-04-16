@@ -72,7 +72,7 @@ type Config struct {
 
 // NewWithConfig returns a new KMS using the given
 // configuration.
-func NewWithConfig(config Config, kmsLogger Logger) (KMS, error) {
+func NewWithConfig(config Config, logger Logger) (KMS, error) {
 	if len(config.Endpoints) == 0 {
 		return nil, errors.New("kms: no server endpoints")
 	}
@@ -141,7 +141,7 @@ func NewWithConfig(config Config, kmsLogger Logger) (KMS, error) {
 		}
 	}()
 
-	go c.refreshKMSMasterKeyCache(kmsLogger)
+	go c.refreshKMSMasterKeyCache(logger)
 	return c, nil
 }
 
@@ -150,13 +150,17 @@ func NewWithConfig(config Config, kmsLogger Logger) (KMS, error) {
 func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 	ctx := context.Background()
 
-	defaultCacheInterval := 10
-	cacheInterval, err := env.GetInt("EnvKESKeyCacheInterval", defaultCacheInterval)
+	defaultCacheDuration := 10 * time.Second
+	cacheDuration, err := env.GetDuration(EnvKESKeyCacheInterval, defaultCacheDuration)
 	if err != nil {
-		cacheInterval = defaultCacheInterval
+		logger.LogOnceIf(ctx, fmt.Errorf("%s, using default of 10s", err.Error()), "refresh-kms-master-key")
+		cacheDuration = defaultCacheDuration
 	}
-
-	timer := time.NewTimer(time.Duration(cacheInterval) * time.Second)
+	if cacheDuration < time.Second {
+		logger.LogOnceIf(ctx, errors.New("cache duration is less than 1s, using default of 10s"), "refresh-kms-master-key")
+		cacheDuration = defaultCacheDuration
+	}
+	timer := time.NewTimer(cacheDuration)
 	defer timer.Stop()
 
 	for {
@@ -167,7 +171,7 @@ func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
 			c.RefreshKey(ctx, logger)
 
 			// Reset for the next interval
-			timer.Reset(time.Duration(cacheInterval) * time.Second)
+			timer.Reset(cacheDuration)
 		}
 	}
 }
@@ -484,7 +488,8 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 
 // Logger interface permits access to module specific logging, in this case, for KMS
 type Logger interface {
-	LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{})
+	LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{})
+	LogIf(ctx context.Context, err error, errKind ...interface{})
 }
 
 // RefreshKey checks the validity of the KMS Master Key
@@ -503,13 +508,13 @@ func (c *kesClient) RefreshKey(ctx context.Context, logger Logger) bool {
 		// 1. Generate a new key using the KMS.
 		kmsCtx, err := kmsContext.MarshalText()
 		if err != nil {
-			logger.LogOnceIf(ctx, "kms", err, "refresh-kms-master-key")
+			logger.LogOnceIf(ctx, err, "refresh-kms-master-key")
 			validKey = false
 			break
 		}
 		_, err = client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
 		if err != nil {
-			logger.LogOnceIf(ctx, "kms", err, "refresh-kms-master-key")
+			logger.LogOnceIf(ctx, err, "refresh-kms-master-key")
 			validKey = false
 			break
 		}
