@@ -64,7 +64,7 @@ func setObjectLayer(o ObjectLayer) {
 	globalObjLayerMutex.Unlock()
 }
 
-// objectAPIHandler implements and provides http handlers for S3 API.
+// objectAPIHandlers implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 }
