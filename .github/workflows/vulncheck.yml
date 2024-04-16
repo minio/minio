@@ -27,5 +27,5 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
         shell: bash
       - name: Run govulncheck
-        run: govulncheck ./...
+        run: govulncheck -show verbose ./...
         shell: bash
