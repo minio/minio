@@ -115,8 +115,20 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 		// Lifecycle with max noncurrent versions
 		{
-			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
+		// Lifecycle with delmarker expiration
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DelMarkerExpiration><Days>5</Days></DelMarkerExpiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
+		// Lifecycle with empty delmarker expiration
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DelMarkerExpiration><Days></Days></DelMarkerExpiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    errInvalidDaysDelMarkerExpiration,
 			expectedValidationErr: nil,
 		},
 	}
@@ -587,6 +599,59 @@ func TestEval(t *testing.T) {
 			objectModTime:          time.Now().UTC().Add(-90 * 24 * time.Hour),
 			objectSuccessorModTime: time.Now().UTC().Add(-90 * 24 * time.Hour),
 			expectedAction:         DeleteVersionAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with Transition</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+	                      <Transition>
+                                <StorageClass>WARM-1</StorageClass>
+                                <Days>30</Days>
+                              </Transition>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectModTime:  time.Now().UTC().Add(-90 * 24 * time.Hour),
+			isDelMarker:    true,
+			expectedAction: DelMarkerDeleteAllVersionsAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with non DEL-marker object</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectModTime:  time.Now().UTC().Add(-90 * 24 * time.Hour),
+			expectedAction: NoneAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with noncurrent DEL-marker</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:             "obj-1",
+			objectModTime:          time.Now().UTC().Add(-90 * 24 * time.Hour),
+			objectSuccessorModTime: time.Now().UTC().Add(-60 * 24 * time.Hour),
+			isDelMarker:            true,
+			isNoncurrent:           true,
+			expectedAction:         NoneAction,
 		},
 	}
 

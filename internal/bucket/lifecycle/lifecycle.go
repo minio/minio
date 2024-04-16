@@ -67,7 +67,8 @@ const (
 	DeleteRestoredVersionAction
 	// DeleteAllVersionsAction deletes all versions when an object expires
 	DeleteAllVersionsAction
-
+	// DelMarkerDeleteAllVersionsAction deletes all versions when an object with delete marker as latest version expires
+	DelMarkerDeleteAllVersionsAction
 	// ActionCount must be the last action and shouldn't be used as a regular action.
 	ActionCount
 )
@@ -84,7 +85,7 @@ func (a Action) DeleteVersioned() bool {
 
 // DeleteAll - Returns true if the action demands deleting all versions of an object
 func (a Action) DeleteAll() bool {
-	return a == DeleteAllVersionsAction
+	return a == DeleteAllVersionsAction || a == DelMarkerDeleteAllVersionsAction
 }
 
 // Delete - Returns true if action demands delete on all objects (including restored)
@@ -92,7 +93,7 @@ func (a Action) Delete() bool {
 	if a.DeleteRestored() {
 		return true
 	}
-	return a == DeleteVersionAction || a == DeleteAction || a == DeleteAllVersionsAction
+	return a == DeleteVersionAction || a == DeleteAction || a == DeleteAllVersionsAction || a == DelMarkerDeleteAllVersionsAction
 }
 
 // Lifecycle - Configuration for bucket lifecycle.
@@ -384,6 +385,17 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 			}
 		}
 
+		// DelMarkerExpiration
+		if obj.IsLatest && obj.DeleteMarker && !rule.DelMarkerExpiration.Empty() {
+			if due, ok := rule.DelMarkerExpiration.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
+				return Event{
+					Action: DelMarkerDeleteAllVersionsAction,
+					RuleID: rule.ID,
+					Due:    due,
+				}
+			}
+		}
+
 		// Skip rules with newer noncurrent versions specified. These rules are
 		// not handled at an individual version level. eval applies only to a
 		// specific version.
@@ -508,7 +520,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
 	event := lc.eval(obj, time.Time{})
 	switch event.Action {
-	case DeleteAction, DeleteVersionAction, DeleteAllVersionsAction:
+	case DeleteAction, DeleteVersionAction, DeleteAllVersionsAction, DelMarkerDeleteAllVersionsAction:
 		w.Header()[xhttp.AmzExpiration] = []string{
 			fmt.Sprintf(`expiry-date="%s", rule-id="%s"`, event.Due.Format(http.TimeFormat), event.RuleID),
 		}
