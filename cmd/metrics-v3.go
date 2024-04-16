@@ -50,6 +50,7 @@ const (
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
+	clusterWebhookCollectorPath      collectorPath = "/cluster/webhook"
 
 	auditCollectorPath collectorPath = "/audit"
 )
@@ -291,6 +292,16 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterIAMMetrics,
 	)
 
+	clusterWebhookMG := NewMetricsGroup(clusterWebhookCollectorPath,
+		[]MetricDescriptor{
+			webhookFailedMessagesMD,
+			webhookOnlineMD,
+			webhookQueueLengthMD,
+			webhookTotalMessagesMD,
+		},
+		loadClusterWebhookMetrics,
+	)
+
 	auditMG := NewMetricsGroup(auditCollectorPath,
 		[]MetricDescriptor{
 			auditFailedMessagesMD,
@@ -318,6 +329,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterIAMMG,
 
 		auditMG,
+		clusterWebhookMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These
