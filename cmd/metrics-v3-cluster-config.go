@@ -42,8 +42,10 @@ func loadClusterConfigMetrics(ctx context.Context, m MetricValues, c *metricsCac
 	m.Set(configRRSParity, float64(clusterDriveMetrics.storageInfo.Backend.RRSCParity))
 
 	objLayer := newObjectLayerFn()
-	result := objLayer.Health(ctx, HealthOptions{})
-	m.Set(configWriteQuorum, float64(result.WriteQuorum))
+	if objLayer != nil {
+		result := objLayer.Health(ctx, HealthOptions{})
+		m.Set(configWriteQuorum, float64(result.WriteQuorum))
+	}
 
 	return nil
 }
