@@ -42,7 +42,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/lock"
@@ -449,49 +448,6 @@ func (fs *FSObjects) MakeBucketWithLocation(ctx context.Context, bucket string, 
 
 	if err = fsMkdir(ctx, bucketDir); err != nil {
 		return toObjectErr(err, bucket)
-	}
-
-	//TODO:only when file is passed from the frontend
-	if false {
-
-		b := []byte(`{"storage1": {"url": "localhost:9999","accessKey": "minioadmin","secretKey": "minioadmin","api": "s3v4","path": "auto"}}`)
-
-		filename := fmt.Sprintf(".sds-config.%s.json", bucket)
-		path := path.Join(bucketDir, filename)
-		f, err := os.CreateTemp("", "sds-")
-		defer func() {
-			f.Close()
-			err := os.Remove(f.Name())
-			if err != nil {
-				fmt.Println("Cannot delete temp config file.")
-			}
-		}()
-
-		if err != nil {
-			return toObjectErr(err, bucket)
-		}
-
-		_, err = f.Write(b)
-		if err != nil {
-			return toObjectErr(err, bucket)
-		}
-		f.Seek(0, 0)
-
-		hr, err := hash.NewReader(f, int64(len(b)), "", "", int64(len(b)))
-		if err != nil {
-			return toObjectErr(err, bucket)
-		}
-
-		id, err := gateway.Put(hr, filename, "")
-		if err != nil {
-			return toObjectErr(err, bucket)
-		}
-
-		reader := bytes.NewReader([]byte(id))
-		_, err = fsCreateFile(ctx, path, reader, int64(len(id)))
-		if err != nil {
-			return toObjectErr(err, bucket)
-		}
 	}
 
 	meta := newBucketMetadata(bucket)
