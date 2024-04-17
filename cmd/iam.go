@@ -1770,6 +1770,19 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		isGroup = true
 	}
 
+	// Backward compatibility in detaching non-normalized DNs.
+	if !isAttach {
+		var oldDN string
+		if isGroup {
+			oldDN = r.Group
+		} else {
+			oldDN = r.User
+		}
+		if oldDN != dn {
+			sys.store.PolicyDBUpdate(ctx, oldDN, isGroup, stsUser, r.Policies, isAttach)
+		}
+	}
+
 	userType := stsUser
 	updatedAt, addedOrRemoved, effectivePolicies, err = sys.store.PolicyDBUpdate(
 		ctx, dn, isGroup, userType, r.Policies, isAttach)
