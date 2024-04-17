@@ -131,7 +131,7 @@ type remoteVersionID string
 
 // newWarmBackend instantiates the tier type specific WarmBackend, runs
 // checkWarmBackend on it.
-func newWarmBackend(ctx context.Context, tier madmin.TierConfig) (d WarmBackend, err error) {
+func newWarmBackend(ctx context.Context, tier madmin.TierConfig, probe bool) (d WarmBackend, err error) {
 	switch tier.Type {
 	case madmin.S3:
 		d, err = newWarmBackendS3(*tier.S3, tier.Name)
@@ -148,9 +148,11 @@ func newWarmBackend(ctx context.Context, tier madmin.TierConfig) (d WarmBackend,
 		return nil, errTierTypeUnsupported
 	}
 
-	err = checkWarmBackend(ctx, d)
-	if err != nil {
-		return nil, err
+	if probe {
+		if err = checkWarmBackend(ctx, d); err != nil {
+			return nil, err
+		}
 	}
+
 	return d, nil
 }
