@@ -23,12 +23,12 @@ import (
 )
 
 const (
-	scannerBucketScansFinished     = "bucket_scans_finished"
-	scannerBucketScansStarted      = "bucket_scans_started"
-	scannerDirectoriesScanned      = "directories_scanned"
-	scannerObjectsScanned          = "objects_scanned"
-	scannerVersionsScanned         = "versions_scanned"
-	scannerLastActivityNanoSeconds = "last_activity_nano_seconds"
+	scannerBucketScansFinished = "bucket_scans_finished"
+	scannerBucketScansStarted  = "bucket_scans_started"
+	scannerDirectoriesScanned  = "directories_scanned"
+	scannerObjectsScanned      = "objects_scanned"
+	scannerVersionsScanned     = "versions_scanned"
+	scannerLastActivitySeconds = "last_activity_seconds"
 )
 
 var (
@@ -42,8 +42,8 @@ var (
 		"Total number of unique objects scanned since server start")
 	scannerVersionsScannedMD = NewCounterMD(scannerVersionsScanned,
 		"Total number of object versions scanned since server start")
-	scannerLastActivityNanoSecondsMD = NewGaugeMD(scannerLastActivityNanoSeconds,
-		"Time elapsed (in nano seconds) since last scan activity.")
+	scannerLastActivitySecondsMD = NewGaugeMD(scannerLastActivitySeconds,
+		"Time elapsed (in seconds) since last scan activity.")
 )
 
 // loadClusterScannerMetrics - `MetricsLoaderFn` for cluster webhook
@@ -59,7 +59,7 @@ func loadClusterScannerMetrics(ctx context.Context, m MetricValues, c *metricsCa
 	if err != nil {
 		metricsLogIf(ctx, err)
 	} else {
-		m.Set(scannerLastActivityNanoSeconds, float64(time.Since(dui.LastUpdate)))
+		m.Set(scannerLastActivitySeconds, time.Since(dui.LastUpdate).Seconds())
 	}
 
 	return nil

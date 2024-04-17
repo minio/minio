@@ -359,7 +359,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			scannerDirectoriesScannedMD,
 			scannerObjectsScannedMD,
 			scannerVersionsScannedMD,
-			scannerLastActivityNanoSecondsMD,
+			scannerLastActivitySecondsMD,
 		},
 		loadClusterScannerMetrics,
 	)
