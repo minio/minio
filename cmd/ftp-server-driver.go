@@ -81,8 +81,13 @@ func (m *minioFileInfo) Mode() os.FileMode {
 	return os.ModePerm
 }
 
+var minFileDate = time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC) // Workaround for Filezilla
+
 func (m *minioFileInfo) ModTime() time.Time {
-	return m.info.LastModified
+	if !m.info.LastModified.IsZero() {
+		return m.info.LastModified
+	}
+	return minFileDate
 }
 
 func (m *minioFileInfo) IsDir() bool {
