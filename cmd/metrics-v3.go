@@ -44,6 +44,7 @@ const (
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterAuditCollectorPath        collectorPath = "/cluster/audit"
+	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 )
 
 const (
@@ -228,6 +229,16 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterAuditMetrics,
 	)
 
+	clusterNotificationMG := NewMetricsGroup(clusterNotificationCollectorPath,
+		[]MetricDescriptor{
+			notificationCurrentSendInProgressMD,
+			notificationEventsErrorsTotalMD,
+			notificationEventsSentTotalMD,
+			notificationEventsSkippedTotalMD,
+		},
+		loadClusterNotificationMetrics,
+	)
+
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
@@ -241,6 +252,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterUsageBucketsMG,
 		clusterErasureSetMG,
 		clusterAuditMG,
+		clusterNotificationMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These
