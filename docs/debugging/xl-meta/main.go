@@ -138,7 +138,7 @@ FLAGS:
 					b = nbuf
 				}
 
-				nVers, v, err := decodeXLHeaders(v)
+				hdr, v, err := decodeXLHeaders(v)
 				if err != nil {
 					return nil, err
 				}
@@ -147,10 +147,11 @@ FLAGS:
 					Header   json.RawMessage
 					Metadata json.RawMessage
 				}
-				versions := make([]version, nVers)
-				err = decodeVersions(v, nVers, func(idx int, hdr, meta []byte) error {
+				versions := make([]version, hdr.versions)
+				headerVer := hdr.headerVer
+				err = decodeVersions(v, hdr.versions, func(idx int, hdr, meta []byte) error {
 					var header xlMetaV2VersionHeaderV2
-					if _, err := header.UnmarshalMsg(hdr); err != nil {
+					if _, err := header.UnmarshalMsg(hdr, headerVer); err != nil {
 						return err
 					}
 					b, err := header.MarshalJSON()
@@ -533,33 +534,38 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 }
 
 const (
-	xlHeaderVersion = 2
+	xlHeaderVersion = 3
 	xlMetaVersion   = 2
 )
 
-func decodeXLHeaders(buf []byte) (versions int, b []byte, err error) {
-	hdrVer, buf, err := msgp.ReadUintBytes(buf)
+type xlHeaders struct {
+	versions           int
+	headerVer, metaVer uint
+}
+
+func decodeXLHeaders(buf []byte) (x xlHeaders, b []byte, err error) {
+	x.headerVer, buf, err = msgp.ReadUintBytes(buf)
 	if err != nil {
-		return 0, buf, err
+		return x, buf, err
 	}
-	metaVer, buf, err := msgp.ReadUintBytes(buf)
+	x.metaVer, buf, err = msgp.ReadUintBytes(buf)
 	if err != nil {
-		return 0, buf, err
+		return x, buf, err
 	}
-	if hdrVer > xlHeaderVersion {
-		return 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl header version %d", metaVer)
+	if x.headerVer > xlHeaderVersion {
+		return x, buf, fmt.Errorf("decodeXLHeaders: Unknown xl header version %d", x.headerVer)
 	}
-	if metaVer > xlMetaVersion {
-		return 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl meta version %d", metaVer)
+	if x.metaVer > xlMetaVersion {
+		return x, buf, fmt.Errorf("decodeXLHeaders: Unknown xl meta version %d", x.metaVer)
 	}
-	versions, buf, err = msgp.ReadIntBytes(buf)
+	x.versions, buf, err = msgp.ReadIntBytes(buf)
 	if err != nil {
-		return 0, buf, err
+		return x, buf, err
 	}
-	if versions < 0 {
-		return 0, buf, fmt.Errorf("decodeXLHeaders: Negative version count %d", versions)
+	if x.versions < 0 {
+		return x, buf, fmt.Errorf("decodeXLHeaders: Negative version count %d", x.versions)
 	}
-	return versions, buf, nil
+	return x, buf, nil
 }
 
 // decodeVersions will decode a number of versions from a buffer
@@ -589,18 +595,23 @@ type xlMetaV2VersionHeaderV2 struct {
 	Signature [4]byte
 	Type      uint8
 	Flags     uint8
+	EcM, EcN  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byte, err error) {
 	var zb0001 uint32
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 5 {
-		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+	want := uint32(5)
+	if hdrVer > 2 {
+		want += 2
+	}
+	if zb0001 != want {
+		err = msgp.ArrayError{Wanted: want, Got: zb0001}
 		return
 	}
 	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
@@ -636,6 +647,27 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, err error)
 		}
 		z.Flags = zb0003
 	}
+	if hdrVer > 2 {
+		// Version 3 has EcM and EcN
+		{
+			var zb0004 uint8
+			zb0004, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "EcM")
+				return
+			}
+			z.EcM = zb0004
+		}
+		{
+			var zb0005 uint8
+			zb0005, bts, err = msgp.ReadUint8Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "EcN")
+				return
+			}
+			z.EcN = zb0005
+		}
+	}
 	o = bts
 	return
 }
@@ -647,12 +679,15 @@ func (z xlMetaV2VersionHeaderV2) MarshalJSON() (o []byte, err error) {
 		Signature string
 		Type      uint8
 		Flags     uint8
+		EcM, EcN  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
 	}{
 		VersionID: hex.EncodeToString(z.VersionID[:]),
 		ModTime:   time.Unix(0, z.ModTime),
 		Signature: hex.EncodeToString(z.Signature[:]),
 		Type:      z.Type,
 		Flags:     z.Flags,
+		EcM:       z.EcM,
+		EcN:       z.EcN,
 	}
 	return json.Marshal(tmp)
 }
