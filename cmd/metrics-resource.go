@@ -50,15 +50,6 @@ const (
 	interfaceTxBytes  MetricName = "tx_bytes"
 	interfaceTxErrors MetricName = "tx_errors"
 
-	// memory stats
-	memUsed      MetricName = "used"
-	memUsedPerc  MetricName = "used_perc"
-	memFree      MetricName = "free"
-	memShared    MetricName = "shared"
-	memBuffers   MetricName = "buffers"
-	memCache     MetricName = "cache"
-	memAvailable MetricName = "available"
-
 	// cpu stats
 	cpuUser       MetricName = "user"
 	cpuSystem     MetricName = "system"
