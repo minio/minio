@@ -45,6 +45,9 @@ ignoreChartChecksums: false
 
 ## Additional arguments to pass to minio binary
 extraArgs: []
+# example for enabling FTP:
+#   - --ftp=\"address=:8021\"
+#   - --ftp=\"passive-port-range=10000-10010\"
 
 ## Additional volumes to minio container
 extraVolumes: []
