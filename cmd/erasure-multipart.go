@@ -1311,24 +1311,28 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}()
 
 	// Rename the multipart object to final location.
-	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
+	onlineDisks, versions, oldDataDir, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
 		partsMetadata, bucket, object, writeQuorum)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	if !opts.Speedtest && versionsDisparity {
+	if err = er.commitRenameDataDir(ctx, bucket, object, oldDataDir, onlineDisks); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	if !opts.Speedtest && len(versions) > 0 {
 		globalMRFState.addPartialOp(partialOperation{
-			bucket:      bucket,
-			object:      object,
-			queued:      time.Now(),
-			allVersions: true,
-			setIndex:    er.setIndex,
-			poolIndex:   er.poolIndex,
+			bucket:    bucket,
+			object:    object,
+			queued:    time.Now(),
+			versions:  versions,
+			setIndex:  er.setIndex,
+			poolIndex: er.poolIndex,
 		})
 	}
 
-	if !opts.Speedtest && !versionsDisparity {
+	if !opts.Speedtest && len(versions) == 0 {
 		// Check if there is any offline disk and add it to the MRF list
 		for _, disk := range onlineDisks {
 			if disk != nil && disk.IsOnline() {

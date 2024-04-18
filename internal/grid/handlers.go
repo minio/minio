@@ -111,6 +111,7 @@ const (
 	HandlerWriteAll
 	HandlerListBuckets
 	HandlerRenameDataInline
+	HandlerRenameData2
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -189,6 +190,8 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerConsoleLog:                  peerPrefix,
 	HandlerListDir:                     storagePrefix,
 	HandlerListBuckets:                 peerPrefixS3,
+	HandlerRenameDataInline:            storagePrefix,
+	HandlerRenameData2:                 storagePrefix,
 }
 
 const (

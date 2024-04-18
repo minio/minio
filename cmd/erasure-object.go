@@ -48,7 +48,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/mimedb"
 	"github.com/minio/pkg/v2/sync/errgroup"
-	"github.com/minio/pkg/v2/wildcard"
 )
 
 // list all errors which can be ignored in object operations.
@@ -1006,7 +1005,7 @@ func (er erasureObjects) getObjectInfoAndQuorum(ctx context.Context, bucket, obj
 }
 
 // Similar to rename but renames data from srcEntry to dstEntry at dataDir
-func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, bool, error) {
+func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry string, metadata []FileInfo, dstBucket, dstEntry string, writeQuorum int) ([]StorageAPI, []byte, string, error) {
 	g := errgroup.WithNErrs(len(disks))
 
 	fvID := mustGetUUID()
@@ -1014,7 +1013,8 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 		metadata[index].SetTierFreeVersionID(fvID)
 	}
 
-	diskVersions := make([]uint64, len(disks))
+	diskVersions := make([][]byte, len(disks))
+	dataDirs := make([]string, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
 		index := index
@@ -1033,19 +1033,18 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if !fi.IsValid() {
 				return errFileCorrupt
 			}
-			sign, err := disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry, RenameOptions{})
+			resp, err := disks[index].RenameData(ctx, srcBucket, srcEntry, fi, dstBucket, dstEntry, RenameOptions{})
 			if err != nil {
 				return err
 			}
-			diskVersions[index] = sign
+			diskVersions[index] = resp.Sign
+			dataDirs[index] = resp.OldDataDir
 			return nil
 		}, index)
 	}
 
 	// Wait for all renames to finish.
 	errs := g.Wait()
-
-	var versionsDisparity bool
 
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if err != nil {
@@ -1060,27 +1059,35 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			// caller this dangling object will be now scheduled to be removed
 			// via active healing.
 			dg.Go(func() error {
-				return disks[index].DeleteVersion(context.Background(), dstBucket, dstEntry, metadata[index], false, DeleteOptions{UndoWrite: true})
+				return disks[index].DeleteVersion(context.Background(), dstBucket, dstEntry, metadata[index], false, DeleteOptions{
+					UndoWrite:  true,
+					OldDataDir: dataDirs[index],
+				})
 			}, index)
 		}
 		dg.Wait()
 	}
+	var dataDir string
+	var versions []byte
 	if err == nil {
-		versions := reduceCommonVersions(diskVersions, writeQuorum)
+		versions = reduceCommonVersions(diskVersions, writeQuorum)
 		for index, dversions := range diskVersions {
 			if errs[index] != nil {
 				continue
 			}
-			if versions != dversions {
-				versionsDisparity = true
+			if !bytes.Equal(dversions, versions) {
+				if len(dversions) > len(versions) {
+					versions = dversions
+				}
 				break
 			}
 		}
+		dataDir = reduceCommonDataDir(dataDirs, writeQuorum)
 	}
 
 	// We can safely allow RenameData errors up to len(er.getDisks()) - writeQuorum
 	// otherwise return failure.
-	return evalDisks(disks, errs), versionsDisparity, err
+	return evalDisks(disks, errs), versions, dataDir, err
 }
 
 func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
@@ -1227,44 +1234,6 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 // object operations.
 func (er erasureObjects) PutObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	return er.putObject(ctx, bucket, object, data, opts)
-}
-
-// Heal up to two versions of one object when there is disparity between disks
-func healObjectVersionsDisparity(bucket string, entry metaCacheEntry, scanMode madmin.HealScanMode) error {
-	if entry.isDir() {
-		return nil
-	}
-	// We might land at .metacache, .trash, .multipart
-	// no need to heal them skip, only when bucket
-	// is '.minio.sys'
-	if bucket == minioMetaBucket {
-		if wildcard.Match("buckets/*/.metacache/*", entry.name) {
-			return nil
-		}
-		if wildcard.Match("tmp/*", entry.name) {
-			return nil
-		}
-		if wildcard.Match("multipart/*", entry.name) {
-			return nil
-		}
-		if wildcard.Match("tmp-old/*", entry.name) {
-			return nil
-		}
-	}
-
-	fivs, err := entry.fileInfoVersions(bucket)
-	if err != nil {
-		healObject(bucket, entry.name, "", madmin.HealDeepScan)
-		return err
-	}
-
-	if len(fivs.Versions) <= 2 {
-		for _, version := range fivs.Versions {
-			healObject(bucket, entry.name, version.VersionID, scanMode)
-		}
-	}
-
-	return nil
 }
 
 // putObject wrapper for erasureObjects PutObject
@@ -1547,11 +1516,15 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	// Rename the successfully written temporary object to final location.
-	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
+	onlineDisks, versions, oldDataDir, err := renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
 	if err != nil {
 		if errors.Is(err, errFileNotFound) {
 			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
 		}
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	if err = er.commitRenameDataDir(ctx, bucket, object, oldDataDir, onlineDisks); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1569,7 +1542,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		// When there is versions disparity we are healing
 		// the content implicitly for all versions, we can
 		// avoid triggering another MRF heal for offline drives.
-		if !versionsDisparity {
+		if len(versions) == 0 {
 			// Whether a disk was initially or becomes offline
 			// during this upload, send it to the MRF list.
 			for i := 0; i < len(onlineDisks); i++ {
@@ -1582,12 +1555,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			}
 		} else {
 			globalMRFState.addPartialOp(partialOperation{
-				bucket:      bucket,
-				object:      object,
-				queued:      time.Now(),
-				allVersions: true,
-				setIndex:    er.setIndex,
-				poolIndex:   er.poolIndex,
+				bucket:    bucket,
+				object:    object,
+				queued:    time.Now(),
+				versions:  versions,
+				setIndex:  er.setIndex,
+				poolIndex: er.poolIndex,
 			})
 		}
 	}
@@ -1795,6 +1768,30 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	}
 
 	return dobjects, errs
+}
+
+func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object, dataDir string, onlineDisks []StorageAPI) error {
+	if dataDir == "" {
+		return nil
+	}
+	g := errgroup.WithNErrs(len(onlineDisks))
+	for index := range onlineDisks {
+		index := index
+		g.Go(func() error {
+			if onlineDisks[index] == nil {
+				return nil
+			}
+			return onlineDisks[index].Delete(ctx, bucket, pathJoin(object, dataDir), DeleteOptions{
+				Recursive: true,
+			})
+		}, index)
+	}
+	for _, err := range g.Wait() {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
