@@ -829,11 +829,17 @@ func TestIAMImportAssetWithLDAP(t *testing.T) {
 }
 `,
 		userPolicyMappingsFile: `{}`,
+		// Contains duplicate mapping with same policy, we should not error out.
 		groupPolicyMappingsFile: `{
     "cn=project.c,ou=groups,ou=swengg,DC=min,dc=io": {
         "version": 0,
         "policy": "consoleAdmin",
         "updatedAt": "2024-04-17T23:54:28.442998301Z"
+    },
+    "cn=project.c,ou=groups,OU=swengg,DC=min,DC=io": {
+        "version": 0,
+        "policy": "consoleAdmin",
+        "updatedAt": "2024-04-17T20:54:28.442998301Z"
     }
 }
 `,

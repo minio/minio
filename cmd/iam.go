@@ -1621,8 +1621,29 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	for normKey, origKeys := range normalizedDNKeysMap {
 		if len(origKeys) > 1 {
-			return fmt.Errorf("multiple DNs map to the same LDAP DN[%s]: %v; please remove DNs that are not needed",
-				normKey, origKeys)
+			// If there are multiple DN keys that normalize to the same value,
+			// check if the policy mappings are equal, if they are we don't need
+			// to return an error.
+			policiesDiffer := false
+			firstMappedPolicies := policyMap[origKeys[0]].policySet()
+			for i := 1; i < len(origKeys); i++ {
+				otherMappedPolicies := policyMap[origKeys[i]].policySet()
+				if !firstMappedPolicies.Equals(otherMappedPolicies) {
+					policiesDiffer = true
+					break
+				}
+			}
+
+			if policiesDiffer {
+				return fmt.Errorf("multiple DNs map to the same LDAP DN[%s]: %v; please remove DNs that are not needed",
+					normKey, origKeys)
+			}
+
+			// Policies mapped to the DN's are the same, so we remove the extra
+			// ones from the map.
+			for i := 1; i < len(origKeys); i++ {
+				delete(policyMap, origKeys[i])
+			}
 		}
 
 		// Replacing origKeys[0] with normKey in the policyMap
