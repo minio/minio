@@ -340,7 +340,7 @@ func (z *xlMetaDataDirDecoder) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaDataDirDecoder) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 1 bits */
 	_ = zb0001Mask
@@ -356,7 +356,7 @@ func (z *xlMetaDataDirDecoder) EncodeMsg(en *msgp.Writer) (err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x1) == 0 { // if not empty
+	if (zb0001Mask & 0x1) == 0 { // if not omitted
 		// write "V2Obj"
 		err = en.Append(0xa5, 0x56, 0x32, 0x4f, 0x62, 0x6a)
 		if err != nil {
@@ -387,7 +387,7 @@ func (z *xlMetaDataDirDecoder) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaDataDirDecoder) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(1)
 	var zb0001Mask uint8 /* 1 bits */
 	_ = zb0001Mask
@@ -400,7 +400,7 @@ func (z *xlMetaDataDirDecoder) MarshalMsg(b []byte) (o []byte, err error) {
 	if zb0001Len == 0 {
 		return
 	}
-	if (zb0001Mask & 0x1) == 0 { // if not empty
+	if (zb0001Mask & 0x1) == 0 { // if not omitted
 		// string "V2Obj"
 		o = append(o, 0xa5, 0x56, 0x32, 0x4f, 0x62, 0x6a)
 		if z.ObjectV2 == nil {
@@ -571,7 +571,7 @@ func (z *xlMetaV2DeleteMarker) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2DeleteMarker) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 3 bits */
 	_ = zb0001Mask
@@ -607,7 +607,7 @@ func (z *xlMetaV2DeleteMarker) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "ModTime")
 		return
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not omitted
 		// write "MetaSys"
 		err = en.Append(0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
 		if err != nil {
@@ -637,7 +637,7 @@ func (z *xlMetaV2DeleteMarker) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaV2DeleteMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(3)
 	var zb0001Mask uint8 /* 3 bits */
 	_ = zb0001Mask
@@ -656,7 +656,7 @@ func (z *xlMetaV2DeleteMarker) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "MTime"
 	o = append(o, 0xa5, 0x4d, 0x54, 0x69, 0x6d, 0x65)
 	o = msgp.AppendInt64(o, z.ModTime)
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not omitted
 		// string "MetaSys"
 		o = append(o, 0xa7, 0x4d, 0x65, 0x74, 0x61, 0x53, 0x79, 0x73)
 		o = msgp.AppendMapHeader(o, uint32(len(z.MetaSys)))
@@ -879,7 +879,7 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 					err = msgp.WrapError(err, "PartETags")
 					return
 				}
-				if cap(z.PartETags) >= int(zb0006) {
+				if z.PartETags != nil && cap(z.PartETags) >= int(zb0006) {
 					z.PartETags = (z.PartETags)[:zb0006]
 				} else {
 					z.PartETags = make([]string, zb0006)
@@ -926,7 +926,7 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 					err = msgp.WrapError(err, "PartActualSizes")
 					return
 				}
-				if cap(z.PartActualSizes) >= int(zb0008) {
+				if z.PartActualSizes != nil && cap(z.PartActualSizes) >= int(zb0008) {
 					z.PartActualSizes = (z.PartActualSizes)[:zb0008]
 				} else {
 					z.PartActualSizes = make([]int64, zb0008)
@@ -1061,7 +1061,7 @@ func (z *xlMetaV2Object) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(18)
 	var zb0001Mask uint32 /* 18 bits */
 	_ = zb0001Mask
@@ -1256,7 +1256,7 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x2000) == 0 { // if not empty
+	if (zb0001Mask & 0x2000) == 0 { // if not omitted
 		// write "PartIdx"
 		err = en.Append(0xa7, 0x50, 0x61, 0x72, 0x74, 0x49, 0x64, 0x78)
 		if err != nil {
@@ -1359,7 +1359,7 @@ func (z *xlMetaV2Object) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(18)
 	var zb0001Mask uint32 /* 18 bits */
 	_ = zb0001Mask
@@ -1434,7 +1434,7 @@ func (z *xlMetaV2Object) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendInt64(o, z.PartActualSizes[za0007])
 		}
 	}
-	if (zb0001Mask & 0x2000) == 0 { // if not empty
+	if (zb0001Mask & 0x2000) == 0 { // if not omitted
 		// string "PartIdx"
 		o = append(o, 0xa7, 0x50, 0x61, 0x72, 0x74, 0x49, 0x64, 0x78)
 		o = msgp.AppendArrayHeader(o, uint32(len(z.PartIndices)))
@@ -1596,7 +1596,7 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartETags")
 					return
 				}
-				if cap(z.PartETags) >= int(zb0006) {
+				if z.PartETags != nil && cap(z.PartETags) >= int(zb0006) {
 					z.PartETags = (z.PartETags)[:zb0006]
 				} else {
 					z.PartETags = make([]string, zb0006)
@@ -1639,7 +1639,7 @@ func (z *xlMetaV2Object) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PartActualSizes")
 					return
 				}
-				if cap(z.PartActualSizes) >= int(zb0008) {
+				if z.PartActualSizes != nil && cap(z.PartActualSizes) >= int(zb0008) {
 					z.PartActualSizes = (z.PartActualSizes)[:zb0008]
 				} else {
 					z.PartActualSizes = make([]int64, zb0008)
@@ -1893,7 +1893,7 @@ func (z *xlMetaV2Version) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
@@ -1927,7 +1927,7 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Type")
 		return
 	}
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not omitted
 		// write "V1Obj"
 		err = en.Append(0xa5, 0x56, 0x31, 0x4f, 0x62, 0x6a)
 		if err != nil {
@@ -1946,7 +1946,7 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not omitted
 		// write "V2Obj"
 		err = en.Append(0xa5, 0x56, 0x32, 0x4f, 0x62, 0x6a)
 		if err != nil {
@@ -1965,7 +1965,7 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not omitted
 		// write "DelObj"
 		err = en.Append(0xa6, 0x44, 0x65, 0x6c, 0x4f, 0x62, 0x6a)
 		if err != nil {
@@ -2000,7 +2000,7 @@ func (z *xlMetaV2Version) EncodeMsg(en *msgp.Writer) (err error) {
 // MarshalMsg implements msgp.Marshaler
 func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
+	// check for omitted fields
 	zb0001Len := uint32(5)
 	var zb0001Mask uint8 /* 5 bits */
 	_ = zb0001Mask
@@ -2024,7 +2024,7 @@ func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Type"
 	o = append(o, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendUint8(o, uint8(z.Type))
-	if (zb0001Mask & 0x2) == 0 { // if not empty
+	if (zb0001Mask & 0x2) == 0 { // if not omitted
 		// string "V1Obj"
 		o = append(o, 0xa5, 0x56, 0x31, 0x4f, 0x62, 0x6a)
 		if z.ObjectV1 == nil {
@@ -2037,7 +2037,7 @@ func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x4) == 0 { // if not empty
+	if (zb0001Mask & 0x4) == 0 { // if not omitted
 		// string "V2Obj"
 		o = append(o, 0xa5, 0x56, 0x32, 0x4f, 0x62, 0x6a)
 		if z.ObjectV2 == nil {
@@ -2050,7 +2050,7 @@ func (z *xlMetaV2Version) MarshalMsg(b []byte) (o []byte, err error) {
 			}
 		}
 	}
-	if (zb0001Mask & 0x8) == 0 { // if not empty
+	if (zb0001Mask & 0x8) == 0 { // if not omitted
 		// string "DelObj"
 		o = append(o, 0xa6, 0x44, 0x65, 0x6c, 0x4f, 0x62, 0x6a)
 		if z.DeleteMarker == nil {

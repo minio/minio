@@ -38,7 +38,6 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 )
 
@@ -98,6 +97,8 @@ type listPathOptions struct {
 
 	// Versioned is this a ListObjectVersions call.
 	Versioned bool
+	// V1 listing type
+	V1 bool
 
 	// Versioning config is used for if the path
 	// has versioning enabled.
@@ -172,7 +173,8 @@ func (o *listPathOptions) debugln(data ...interface{}) {
 	}
 }
 
-// gatherResults will collect all results on the input channel and filter results according to the options.
+// gatherResults will collect all results on the input channel and filter results according
+// to the options or to the current bucket ILM expiry rules.
 // Caller should close the channel when done.
 // The returned function will return the results once there is enough or input is closed,
 // or the context is canceled.
@@ -213,6 +215,12 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 			}
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				continue
+			}
+			if o.Lifecycle != nil || o.Replication.Config != nil {
+				if skipped := triggerExpiryAndRepl(ctx, *o, entry); skipped == true {
+					results.lastSkippedEntry = entry.name
+					continue
+				}
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
 				// We have enough and we have more.
@@ -276,7 +284,7 @@ func (o *listPathOptions) findFirstPart(fi FileInfo) (int, error) {
 		}
 		err := json.Unmarshal([]byte(v), &tmp)
 		if !ok {
-			logger.LogIf(context.Background(), err)
+			bugLogIf(context.Background(), err)
 			return -1, err
 		}
 		if tmp.First == "" && tmp.Last == "" && tmp.EOS {
@@ -529,7 +537,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 				}
 				loadedPart = partN
 				bi, err := getMetacacheBlockInfo(fi, partN)
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err)
 				if err == nil {
 					if bi.pastPrefix(o.Prefix) {
 						return entries, io.EOF
@@ -568,7 +576,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 					time.Sleep(retryDelay250)
 					continue
 				default:
-					logger.LogIf(ctx, err)
+					internalLogIf(ctx, err)
 					return entries, err
 				}
 			}
@@ -576,7 +584,7 @@ func (er *erasureObjects) streamMetadataParts(ctx context.Context, o listPathOpt
 			// We finished at the end of the block.
 			// And should not expect any more results.
 			bi, err := getMetacacheBlockInfo(fi, partN)
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err)
 			if err != nil || bi.EOS {
 				// We are done and there are no more parts.
 				return entries, io.EOF
@@ -859,7 +867,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 		}
 		o.debugln(color.Green("saveMetaCacheStream:")+" saving block", b.n, "to", o.objectPath(b.n))
 		r, err := hash.NewReader(ctx, bytes.NewReader(b.data), int64(len(b.data)), "", "", int64(len(b.data)))
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		custom := b.headerKV()
 		_, err = er.putMetacacheObject(ctx, o.objectPath(b.n), NewPutObjReader(r), ObjectOptions{
 			UserDefined: custom,
@@ -893,7 +901,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 				return err
 			case InsufficientReadQuorum:
 			default:
-				logger.LogIf(ctx, err)
+				internalLogIf(ctx, err)
 			}
 			if retries >= maxTries {
 				return err

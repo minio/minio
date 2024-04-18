@@ -36,7 +36,6 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
-	"github.com/minio/minio/internal/logger"
 	"github.com/pierrec/lz4"
 )
 
@@ -249,7 +248,7 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 				}()
 				if err := putObject(&rc, fi, name); err != nil {
 					if o.ignoreErrs {
-						logger.LogIf(ctx, err)
+						s3LogIf(ctx, err)
 						return
 					}
 					asyncErrMu.Lock()
@@ -273,7 +272,7 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 		if err := putObject(&rc, header.FileInfo(), name); err != nil {
 			rc.Close()
 			if o.ignoreErrs {
-				logger.LogIf(ctx, err)
+				s3LogIf(ctx, err)
 				continue
 			}
 			return err

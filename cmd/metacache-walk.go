@@ -25,7 +25,6 @@ import (
 
 	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -60,10 +59,22 @@ type WalkDirOptions struct {
 	DiskID string
 }
 
+// supported FS for Nlink optimization in readdir.
+const (
+	xfs  = "XFS"
+	ext4 = "EXT4"
+)
+
 // WalkDir will traverse a directory and return all entries found.
 // On success a sorted meta cache stream will be returned.
 // Metadata has data stripped, if any.
 func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
+	legacyFS := !(s.fsType == xfs || s.fsType == ext4)
+
+	s.RLock()
+	legacy := s.formatLegacy
+	s.RUnlock()
+
 	// Verify if volume is valid and it exists.
 	volumeDir, err := s.getVolDir(opts.Bucket)
 	if err != nil {
@@ -76,10 +87,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			return convertAccessError(err, errVolumeAccessDenied)
 		}
 	}
-
-	s.RLock()
-	legacy := s.formatLegacy
-	s.RUnlock()
 
 	// Use a small block size to start sending quickly
 	w := newMetacacheWriter(wr, 16<<10)
@@ -171,7 +178,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		if err != nil {
 			// Folder could have gone away in-between
 			if err != errVolumeNotFound && err != errFileNotFound {
-				logger.LogOnceIf(ctx, err, "metacache-walk-scan-dir")
+				internalLogOnceIf(ctx, err, "metacache-walk-scan-dir")
 			}
 			if opts.ReportNotFound && err == errFileNotFound && current == opts.BaseDir {
 				err = errFileNotFound
@@ -239,7 +246,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					// while being concurrently listed at the same time in
 					// such scenarios the 'xl.meta' might get truncated
 					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
-						logger.LogOnceIf(ctx, err, "metacache-walk-read-metadata")
+						internalLogOnceIf(ctx, err, "metacache-walk-read-metadata")
 					}
 					continue
 				}
@@ -257,7 +264,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				diskHealthCheckOK(ctx, err)
 				if err != nil {
 					if !IsErrIgnored(err, io.EOF, io.ErrUnexpectedEOF) {
-						logger.LogIf(ctx, err)
+						internalLogIf(ctx, err)
 					}
 					continue
 				}
@@ -308,7 +315,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 					// Scan folder we found. Should be in correct sort order where we are.
 					err := scanDir(pop)
 					if err != nil && !IsErrIgnored(err, context.Canceled) {
-						logger.LogIf(ctx, err)
+						internalLogIf(ctx, err)
 					}
 				}
 				dirStack = dirStack[:len(dirStack)-1]
@@ -354,7 +361,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				// NOT an object, append to stack (with slash)
 				// If dirObject, but no metadata (which is unexpected) we skip it.
 				if !isDirObj {
-					if !isDirEmpty(pathJoinBuf(sb, volumeDir, meta.name)) {
+					if !isDirEmpty(pathJoinBuf(sb, volumeDir, meta.name), legacyFS) {
 						dirStack = append(dirStack, meta.name+slashSeparator)
 					}
 				}
@@ -379,7 +386,7 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			}
 			if opts.Recursive {
 				// Scan folder we found. Should be in correct sort order where we are.
-				logger.LogIf(ctx, scanDir(pop))
+				internalLogIf(ctx, scanDir(pop))
 			}
 			dirStack = dirStack[:len(dirStack)-1]
 		}
@@ -407,7 +414,7 @@ func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions,
 // On success a meta cache stream will be returned, that should be closed when done.
 func (client *storageRESTClient) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) error {
 	// Ensure remote has the same disk ID.
-	opts.DiskID = client.diskID
+	opts.DiskID = *client.diskID.Load()
 	b, err := opts.MarshalMsg(grid.GetByteBuffer()[:0])
 	if err != nil {
 		return toStorageErr(err)

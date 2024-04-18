@@ -33,6 +33,8 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -49,7 +51,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	locationConstraint := createBucketLocationConfiguration{}
 	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
 	if err != nil && r.ContentLength != 0 {
-		logger.LogOnceIf(GlobalContext, err, "location-constraint-xml-parsing")
+		internalLogOnceIf(GlobalContext, err, "location-constraint-xml-parsing")
 		// Treat all other failures as XML parsing errors.
 		return "", ErrMalformedXML
 	} // else for both err as nil or io.EOF
@@ -82,6 +84,31 @@ var supportedHeaders = []string{
 	xhttp.AmzObjectTagging,
 	"expires",
 	xhttp.AmzBucketReplicationStatus,
+	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Replication-Server-Side-Encryption-Iv",
+	"X-Minio-Replication-Encrypted-Multipart",
+	"X-Minio-Replication-Actual-Object-Size",
+	// Add more supported headers here.
+}
+
+// mapping of internal headers to allowed replication headers
+var validSSEReplicationHeaders = map[string]string{
+	"X-Minio-Internal-Server-Side-Encryption-Sealed-Key":     "X-Minio-Replication-Server-Side-Encryption-Sealed-Key",
+	"X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Internal-Server-Side-Encryption-Iv":             "X-Minio-Replication-Server-Side-Encryption-Iv",
+	"X-Minio-Internal-Encrypted-Multipart":                   "X-Minio-Replication-Encrypted-Multipart",
+	"X-Minio-Internal-Actual-Object-Size":                    "X-Minio-Replication-Actual-Object-Size",
+	// Add more supported headers here.
+}
+
+// mapping of replication headers to internal headers
+var replicationToInternalHeaders = map[string]string{
+	"X-Minio-Replication-Server-Side-Encryption-Sealed-Key":     "X-Minio-Internal-Server-Side-Encryption-Sealed-Key",
+	"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm": "X-Minio-Internal-Server-Side-Encryption-Seal-Algorithm",
+	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
+	"X-Minio-Replication-Encrypted-Multipart":                   "X-Minio-Internal-Encrypted-Multipart",
+	"X-Minio-Replication-Actual-Object-Size":                    "X-Minio-Internal-Actual-Object-Size",
 	// Add more supported headers here.
 }
 
@@ -164,7 +191,7 @@ func extractMetadata(ctx context.Context, mimesHeader ...textproto.MIMEHeader) (
 // extractMetadata extracts metadata from map values.
 func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[string]string) error {
 	if v == nil {
-		logger.LogIf(ctx, errInvalidArgument)
+		bugLogIf(ctx, errInvalidArgument)
 		return errInvalidArgument
 	}
 
@@ -178,7 +205,11 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 	for _, supportedHeader := range supportedHeaders {
 		value, ok := nv[http.CanonicalHeaderKey(supportedHeader)]
 		if ok {
-			m[supportedHeader] = strings.Join(value, ",")
+			if slices.Contains(maps.Keys(replicationToInternalHeaders), supportedHeader) {
+				m[replicationToInternalHeaders[supportedHeader]] = strings.Join(value, ",")
+			} else {
+				m[supportedHeader] = strings.Join(value, ",")
+			}
 		}
 	}
 
@@ -430,7 +461,7 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			success = false
 			if err != nil && !errors.Is(err, context.Canceled) {
-				logger.LogIf(GlobalContext, err)
+				replLogIf(GlobalContext, err)
 			}
 		},
 	})

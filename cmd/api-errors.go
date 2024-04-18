@@ -278,6 +278,7 @@ const (
 	ErrMalformedJSON
 	ErrAdminNoSuchUser
 	ErrAdminNoSuchUserLDAPWarn
+	ErrAdminLDAPExpectedLoginName
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
 	ErrAdminGroupDisabled
@@ -300,6 +301,7 @@ const (
 	ErrAdminConfigIDPCfgNameDoesNotExist
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	ErrAdminLDAPNotEnabled
 
 	// Site-Replication errors
 	ErrSiteReplicationInvalidRequest
@@ -2079,7 +2081,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid attribute name specified.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	// Add your error structure here.
+	ErrAdminLDAPNotEnabled: {
+		Code:           "XMinioLDAPNotEnabled",
+		Description:    "LDAP is not enabled. LDAP must be enabled to make LDAP requests.",
+		HTTPStatusCode: http.StatusNotImplemented,
+	},
+	ErrAdminLDAPExpectedLoginName: {
+		Code:           "XMinioLDAPExpectedLoginName",
+		Description:    "Expected LDAP short username but was given full DN.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience
@@ -2519,7 +2530,7 @@ func toAPIError(ctx context.Context, err error) APIError {
 		// Make sure to log the errors which we cannot translate
 		// to a meaningful S3 API errors. This is added to aid in
 		// debugging unexpected/unhandled errors.
-		logger.LogIf(ctx, err)
+		internalLogIf(ctx, err)
 	}
 
 	return apiErr

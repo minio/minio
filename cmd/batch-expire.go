@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 	"github.com/minio/pkg/v2/wildcard"
 	"github.com/minio/pkg/v2/workers"
@@ -156,7 +155,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 		}
 	default:
 		// we should never come here, Validate should have caught this.
-		logger.LogOnceIf(context.Background(), fmt.Errorf("invalid filter type: %s", ef.Type), ef.Type)
+		batchLogOnceIf(context.Background(), fmt.Errorf("invalid filter type: %s", ef.Type), ef.Type)
 		return false
 	}
 
@@ -321,7 +320,7 @@ func (r BatchJobExpire) Notify(ctx context.Context, body io.Reader) error {
 		req.Header.Set("Authorization", r.NotificationCfg.Token)
 	}
 
-	clnt := http.Client{Transport: getRemoteInstanceTransport}
+	clnt := http.Client{Transport: getRemoteInstanceTransport()}
 	resp, err := clnt.Do(req)
 	if err != nil {
 		return err
@@ -427,12 +426,13 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 					default:
 					}
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
-					_, err := api.DeleteObject(ctx, exp.Bucket, exp.Name, ObjectOptions{
-						DeletePrefix: true,
+					_, err := api.DeleteObject(ctx, exp.Bucket, encodeDirObject(exp.Name), ObjectOptions{
+						DeletePrefix:       true,
+						DeletePrefixObject: true, // use prefix delete on exact object (this is an optimization to avoid fan-out calls)
 					})
 					if err != nil {
 						stopFn(exp, err)
-						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
+						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
 					} else {
 						stopFn(exp, err)
 						success = true
@@ -470,7 +470,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 				for i, err := range errs {
 					if err != nil {
 						stopFn(toDelCopy[i], err)
-						logger.LogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
+						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
 						failed++
 						if attempts == retryAttempts { // all retry attempts failed, record failure
 							if oi, ok := oiCache.Get(toDelCopy[i]); ok {
@@ -556,16 +556,16 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 			select {
 			case <-saveTicker.C:
 				// persist in-memory state to disk after every 10secs.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
 
 			case <-ctx.Done():
 				// persist in-memory state immediately before exiting due to context cancellation.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
 
 			case <-saverQuitCh:
 				// persist in-memory state immediately to disk.
-				logger.LogIf(ctx, ri.updateAfter(ctx, api, 0, job))
+				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
 				return
 			}
 		}
@@ -669,7 +669,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	// Notify expire jobs final status to the configured endpoint
 	buf, _ := json.Marshal(ri)
 	if err := r.Notify(context.Background(), bytes.NewReader(buf)); err != nil {
-		logger.LogIf(context.Background(), fmt.Errorf("unable to notify %v", err))
+		batchLogIf(context.Background(), fmt.Errorf("unable to notify %v", err))
 	}
 
 	return nil

@@ -39,6 +39,8 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 )
 
+const logSubsys = "internodes"
+
 // DefaultTimeout - default REST timeout is 10 seconds.
 const DefaultTimeout = 10 * time.Second
 
@@ -316,7 +318,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 				atomic.AddUint64(&globalStats.errs, 1)
 			}
 			if c.MarkOffline(err) {
-				logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
+				logger.LogOnceIf(ctx, logSubsys, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
 			}
 		}
 		return nil, &NetworkError{err}
@@ -340,7 +342,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		// instead, see cmd/storage-rest-server.go for ideas.
 		if c.HealthCheckFn != nil && resp.StatusCode == http.StatusPreconditionFailed {
 			err = fmt.Errorf("Marking %s offline temporarily; caused by PreconditionFailed with drive ID mismatch", c.url.Host)
-			logger.LogOnceIf(ctx, err, c.url.Host)
+			logger.LogOnceIf(ctx, logSubsys, err, c.url.Host)
 			c.MarkOffline(err)
 		}
 		defer xhttp.DrainBody(resp.Body)
@@ -352,7 +354,7 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 					atomic.AddUint64(&globalStats.errs, 1)
 				}
 				if c.MarkOffline(err) {
-					logger.LogOnceIf(ctx, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
+					logger.LogOnceIf(ctx, logSubsys, fmt.Errorf("Marking %s offline temporarily; caused by %w", c.url.Host, err), c.url.Host)
 				}
 			}
 			return nil, err

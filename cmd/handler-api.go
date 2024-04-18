@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"math"
 	"net/http"
 	"os"
 	"runtime"
@@ -55,6 +56,7 @@ type apiConfig struct {
 	gzipObjects                 bool
 	rootAccess                  bool
 	syncEvents                  bool
+	objectMaxVersions           int64
 }
 
 const (
@@ -140,7 +142,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 		// total_ram / ram_per_request
 		// ram_per_request is (2MiB+128KiB) * driveCount \
 		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
-		blockSize := xioutil.BlockSizeLarge + xioutil.BlockSizeSmall
+		blockSize := xioutil.LargeBlock + xioutil.SmallBlock
 		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
 		if globalIsDistErasure {
 			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
@@ -186,6 +188,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
+	t.objectMaxVersions = cfg.ObjectMaxVersions
 }
 
 func (t *apiConfig) odirectEnabled() bool {
@@ -289,7 +292,11 @@ func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
 	defer t.mu.RUnlock()
 
 	if t.requestsPool == nil {
-		return nil, time.Duration(0)
+		return nil, 10 * time.Second
+	}
+
+	if t.requestsDeadline <= 0 {
+		return t.requestsPool, 10 * time.Second
 	}
 
 	return t.requestsPool, t.requestsDeadline
@@ -385,4 +392,16 @@ func (t *apiConfig) isSyncEventsEnabled() bool {
 	defer t.mu.RUnlock()
 
 	return t.syncEvents
+}
+
+func (t *apiConfig) getObjectMaxVersions() int64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.objectMaxVersions <= 0 {
+		// defaults to 'IntMax' when unset.
+		return math.MaxInt64
+	}
+
+	return t.objectMaxVersions
 }

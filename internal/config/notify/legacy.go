@@ -251,6 +251,10 @@ func SetNotifyRedis(s config.Config, redisName string, cfg target.RedisArgs) err
 			Value: cfg.Password,
 		},
 		config.KV{
+			Key:   target.RedisUser,
+			Value: cfg.User,
+		},
+		config.KV{
 			Key:   target.RedisKey,
 			Value: cfg.Key,
 		},

@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,31 +36,8 @@ import (
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/storageclass"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/env"
 	"github.com/tinylib/msgp/msgp"
 )
-
-// Reject creating new versions when a single object is cross maxObjectVersions
-var maxObjectVersions = 10000
-
-func init() {
-	v := env.Get("_MINIO_OBJECT_MAX_VERSIONS", "")
-	if v != "" {
-		maxv, err := strconv.Atoi(v)
-		if err != nil {
-			logger.Info("invalid _MINIO_OBJECT_MAX_VERSIONS value: %s, defaulting to '10000'", v)
-			maxObjectVersions = 10000
-		} else {
-			if maxv < 10 {
-				logger.Info("invalid _MINIO_OBJECT_MAX_VERSIONS value: %s, minimum allowed is '10' defaulting to '10000'", v)
-				maxObjectVersions = 10000
-			} else {
-				maxObjectVersions = maxv
-			}
-		}
-	}
-}
 
 var (
 	// XL header specifies the format
@@ -962,7 +938,7 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 	x.metaV = metaV
 	if err = x.data.validate(); err != nil {
 		x.data.repair()
-		logger.LogIf(GlobalContext, fmt.Errorf("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries()))
+		storageLogIf(GlobalContext, fmt.Errorf("xlMetaV2.loadIndexed: data validation failed: %v. %d entries after repair", err, x.data.entries()))
 	}
 	return decodeVersions(buf, versions, func(i int, hdr, meta []byte) error {
 		ver := &x.versions[i]
@@ -1029,7 +1005,7 @@ func (x *xlMetaV2) loadLegacy(buf []byte) error {
 			x.data = buf
 			if err = x.data.validate(); err != nil {
 				x.data.repair()
-				logger.LogIf(GlobalContext, fmt.Errorf("xlMetaV2.Load: data validation failed: %v. %d entries after repair", err, x.data.entries()))
+				storageLogIf(GlobalContext, fmt.Errorf("xlMetaV2.Load: data validation failed: %v. %d entries after repair", err, x.data.entries()))
 			}
 		default:
 			return errors.New("unknown minor metadata version")
@@ -1111,8 +1087,8 @@ func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 		return err
 	}
 
-	// returns error if we have exceeded maxObjectVersions
-	if len(x.versions)+1 > maxObjectVersions {
+	// returns error if we have exceeded configured object max versions
+	if int64(len(x.versions)+1) > globalAPIConfig.getObjectMaxVersions() {
 		return errMaxVersionsExceeded
 	}
 
@@ -1768,7 +1744,7 @@ func (x xlMetaV2) ToFileInfo(volume, path, versionID string, inclFreeVers, allPa
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
+			storageLogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return fi, errFileVersionNotFound
 		}
 	}
@@ -2074,7 +2050,7 @@ func (x xlMetaBuf) ToFileInfo(volume, path, versionID string, allParts bool) (fi
 	if versionID != "" && versionID != nullVersionID {
 		uv, err = uuid.Parse(versionID)
 		if err != nil {
-			logger.LogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
+			storageLogIf(GlobalContext, fmt.Errorf("invalid versionID specified %s", versionID))
 			return fi, errFileVersionNotFound
 		}
 	}

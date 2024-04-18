@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/grid"
+	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
 //go:generate msgp -file=$GOFILE
@@ -150,6 +152,15 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 	if f == nil || v == "" {
 		return -1
 	}
+	if v == nullVersionID {
+		for i, ver := range f.Versions {
+			if ver.VersionID == "" {
+				return i
+			}
+		}
+		return -1
+	}
+
 	for i, ver := range f.Versions {
 		if ver.VersionID == v {
 			return i
@@ -431,6 +442,27 @@ type RenameDataHandlerParams struct {
 	DstPath   string        `msg:"dp"`
 	FI        FileInfo      `msg:"fi"`
 	Opts      RenameOptions `msg:"ro"`
+}
+
+// RenameDataInlineHandlerParams are parameters for RenameDataHandler with a buffer for inline data.
+type RenameDataInlineHandlerParams struct {
+	RenameDataHandlerParams `msg:"p"`
+}
+
+func newRenameDataInlineHandlerParams() *RenameDataInlineHandlerParams {
+	buf := grid.GetByteBufferCap(32 + 16<<10)
+	return &RenameDataInlineHandlerParams{RenameDataHandlerParams{FI: FileInfo{Data: buf[:0]}}}
+}
+
+// Recycle will reuse the memory allocated for the FileInfo data.
+func (r *RenameDataInlineHandlerParams) Recycle() {
+	if r == nil {
+		return
+	}
+	if cap(r.FI.Data) >= xioutil.SmallBlock {
+		grid.PutByteBuffer(r.FI.Data)
+		r.FI.Data = nil
+	}
 }
 
 // RenameFileHandlerParams are parameters for RenameFileHandler.

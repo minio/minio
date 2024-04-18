@@ -242,27 +242,26 @@ func HashString(input string) string {
 
 // LogAlwaysIf prints a detailed error message during
 // the execution of the server.
-func LogAlwaysIf(ctx context.Context, err error, errKind ...interface{}) {
+func LogAlwaysIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
 	if err == nil {
 		return
 	}
-
-	logIf(ctx, err, errKind...)
+	logIf(ctx, subsystem, err, errKind...)
 }
 
 // LogIf prints a detailed error message during
 // the execution of the server, if it is not an
 // ignored error.
-func LogIf(ctx context.Context, err error, errKind ...interface{}) {
+func LogIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
 	if logIgnoreError(err) {
 		return
 	}
-	logIf(ctx, err, errKind...)
+	logIf(ctx, subsystem, err, errKind...)
 }
 
 // LogIfNot prints a detailed error message during
 // the execution of the server, if it is not an ignored error (either internal or given).
-func LogIfNot(ctx context.Context, err error, ignored ...error) {
+func LogIfNot(ctx context.Context, subsystem string, err error, ignored ...error) {
 	if logIgnoreError(err) {
 		return
 	}
@@ -271,24 +270,24 @@ func LogIfNot(ctx context.Context, err error, ignored ...error) {
 			return
 		}
 	}
-	logIf(ctx, err)
+	logIf(ctx, subsystem, err)
 }
 
-func errToEntry(ctx context.Context, err error, errKind ...interface{}) log.Entry {
+func errToEntry(ctx context.Context, subsystem string, err error, errKind ...interface{}) log.Entry {
 	var l string
 	if anonFlag {
 		l = reflect.TypeOf(err).String()
 	} else {
 		l = fmt.Sprintf("%v (%T)", err, err)
 	}
-	return buildLogEntry(ctx, l, getTrace(3), errKind...)
+	return buildLogEntry(ctx, subsystem, l, getTrace(3), errKind...)
 }
 
-func logToEntry(ctx context.Context, message string, errKind ...interface{}) log.Entry {
-	return buildLogEntry(ctx, message, nil, errKind...)
+func logToEntry(ctx context.Context, subsystem, message string, errKind ...interface{}) log.Entry {
+	return buildLogEntry(ctx, subsystem, message, nil, errKind...)
 }
 
-func buildLogEntry(ctx context.Context, message string, trace []string, errKind ...interface{}) log.Entry {
+func buildLogEntry(ctx context.Context, subsystem, message string, trace []string, errKind ...interface{}) log.Entry {
 	logKind := madmin.LogKindError
 	if len(errKind) > 0 {
 		if ek, ok := errKind[0].(madmin.LogKind); ok {
@@ -307,8 +306,11 @@ func buildLogEntry(ctx context.Context, message string, trace []string, errKind 
 	defer req.RUnlock()
 
 	API := "SYSTEM"
-	if req.API != "" {
+	switch {
+	case req.API != "":
 		API = req.API
+	case subsystem != "":
+		API += "." + subsystem
 	}
 
 	// Copy tags. We hold read lock already.
@@ -364,7 +366,9 @@ func buildLogEntry(ctx context.Context, message string, trace []string, errKind 
 		entry.API.Args.Bucket = HashString(entry.API.Args.Bucket)
 		entry.API.Args.Object = HashString(entry.API.Args.Object)
 		entry.RemoteHost = HashString(entry.RemoteHost)
-		entry.Trace.Variables = make(map[string]interface{})
+		if entry.Trace != nil {
+			entry.Trace.Variables = make(map[string]interface{})
+		}
 	}
 
 	return entry
@@ -372,7 +376,7 @@ func buildLogEntry(ctx context.Context, message string, trace []string, errKind 
 
 // consoleLogIf prints a detailed error message during
 // the execution of the server.
-func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
+func consoleLogIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
@@ -380,20 +384,21 @@ func consoleLogIf(ctx context.Context, err error, errKind ...interface{}) {
 		return
 	}
 	if consoleTgt != nil {
-		consoleTgt.Send(ctx, errToEntry(ctx, err, errKind...))
+		entry := errToEntry(ctx, subsystem, err, errKind...)
+		consoleTgt.Send(ctx, entry)
 	}
 }
 
 // logIf prints a detailed error message during
 // the execution of the server.
-func logIf(ctx context.Context, err error, errKind ...interface{}) {
+func logIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
 	if err == nil {
 		return
 	}
-	entry := errToEntry(ctx, err, errKind...)
+	entry := errToEntry(ctx, subsystem, err, errKind...)
 	sendLog(ctx, entry)
 }
 
@@ -415,11 +420,11 @@ func sendLog(ctx context.Context, entry log.Entry) {
 }
 
 // Event sends a event log to  log targets
-func Event(ctx context.Context, msg string, args ...interface{}) {
+func Event(ctx context.Context, subsystem, msg string, args ...interface{}) {
 	if DisableErrorLog {
 		return
 	}
-	entry := logToEntry(ctx, fmt.Sprintf(msg, args...), EventKind)
+	entry := logToEntry(ctx, subsystem, fmt.Sprintf(msg, args...), EventKind)
 	sendLog(ctx, entry)
 }
 
@@ -430,7 +435,7 @@ var ErrCritical struct{}
 // current go-routine by causing a `panic(ErrCritical)`.
 func CriticalIf(ctx context.Context, err error, errKind ...interface{}) {
 	if err != nil {
-		LogIf(ctx, err, errKind...)
+		LogIf(ctx, "", err, errKind...)
 		panic(ErrCritical)
 	}
 }

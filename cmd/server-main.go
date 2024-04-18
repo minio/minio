@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -141,9 +141,14 @@ var ServerFlags = []cli.Flag{
 	},
 	cli.DurationFlag{
 		Name:   "dns-cache-ttl",
-		Usage:  "custom DNS cache TTL for baremetal setups",
+		Usage:  "custom DNS cache TTL",
 		Hidden: true,
-		Value:  10 * time.Minute,
+		Value: func() time.Duration {
+			if orchestrated {
+				return 30 * time.Second
+			}
+			return 10 * time.Minute
+		}(),
 		EnvVar: "MINIO_DNS_CACHE_TTL",
 	},
 	cli.IntFlag{
@@ -160,6 +165,18 @@ var ServerFlags = []cli.Flag{
 	cli.StringSliceFlag{
 		Name:  "sftp",
 		Usage: "enable and configure an SFTP server",
+	},
+	cli.StringFlag{
+		Name:   "crossdomain-xml",
+		Usage:  "provide a custom crossdomain-xml configuration to report at http://endpoint/crossdomain.xml",
+		Hidden: true,
+		EnvVar: "MINIO_CROSSDOMAIN_XML",
+	},
+	cli.StringFlag{
+		Name:   "memlimit",
+		Usage:  "set global memory limit per server via GOMEMLIMIT",
+		Hidden: true,
+		EnvVar: "MINIO_MEMLIMIT",
 	},
 }
 
@@ -356,7 +373,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
 		Logger: func(err error) {
 			if err != nil && !errors.Is(err, context.Canceled) {
-				logger.LogIf(GlobalContext, err)
+				replLogIf(GlobalContext, err)
 			}
 		},
 	})
@@ -566,7 +583,7 @@ func initConfigSubsystem(ctx context.Context, newObject ObjectLayer) error {
 		}
 
 		// Any other config errors we simply print a message and proceed forward.
-		logger.LogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing: %w", err))
+		configLogIf(ctx, fmt.Errorf("Unable to initialize config, some features may be missing: %w", err))
 	}
 
 	return nil
@@ -587,12 +604,7 @@ func setGlobalInternodeInterface(interfaceName string) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
 
-				lookupHost := globalDNSCache.LookupHost
-				if IsKubernetes() || IsDocker() {
-					lookupHost = net.DefaultResolver.LookupHost
-				}
-
-				haddrs, err := lookupHost(ctx, host)
+				haddrs, err := globalDNSCache.LookupHost(ctx, host)
 				if err == nil {
 					ip = haddrs[0]
 				}
@@ -630,12 +642,7 @@ func getServerListenAddrs() []string {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
-		lookupHost := globalDNSCache.LookupHost
-		if IsKubernetes() || IsDocker() {
-			lookupHost = net.DefaultResolver.LookupHost
-		}
-
-		haddrs, err := lookupHost(ctx, host)
+		haddrs, err := globalDNSCache.LookupHost(ctx, host)
 		if err == nil {
 			for _, addr := range haddrs {
 				addrs.Add(net.JoinHostPort(addr, globalMinioPort))
@@ -730,7 +737,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Set system resources to maximum.
 	bootstrapTrace("setMaxResources", func() {
-		_ = setMaxResources()
+		_ = setMaxResources(ctx)
 	})
 
 	// Verify kernel release and version.
@@ -776,7 +783,7 @@ func serverMain(ctx *cli.Context) {
 		httpServer.TCPOptions.Trace = bootstrapTraceMsg
 		go func() {
 			serveFn, err := httpServer.Init(GlobalContext, func(listenAddr string, err error) {
-				logger.LogIf(GlobalContext, fmt.Errorf("Unable to listen on `%s`: %v", listenAddr, err))
+				bootLogIf(GlobalContext, fmt.Errorf("Unable to listen on `%s`: %v", listenAddr, err))
 			})
 			if err != nil {
 				globalHTTPServerErrorCh <- err
@@ -838,7 +845,7 @@ func serverMain(ctx *cli.Context) {
 				logger.FatalIf(err, "Server startup canceled upon user request")
 			}
 
-			logger.LogIf(GlobalContext, err)
+			bootLogIf(GlobalContext, err)
 		}
 
 		if !globalServerCtxt.StrictS3Compat {
@@ -934,14 +941,14 @@ func serverMain(ctx *cli.Context) {
 			// Initialize transition tier configuration manager
 			bootstrapTrace("globalTierConfigMgr.Init", func() {
 				if err := globalTierConfigMgr.Init(GlobalContext, newObject); err != nil {
-					logger.LogIf(GlobalContext, err)
+					bootLogIf(GlobalContext, err)
 				}
 			})
 		}()
 
 		// Initialize bucket notification system.
 		bootstrapTrace("initBucketTargets", func() {
-			logger.LogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
+			bootLogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
 		})
 
 		var buckets []BucketInfo
@@ -955,7 +962,7 @@ func serverMain(ctx *cli.Context) {
 						time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
 						continue
 					}
-					logger.LogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
+					bootLogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
 				}
 
 				break

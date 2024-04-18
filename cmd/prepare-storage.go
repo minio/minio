@@ -48,7 +48,7 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 			printOnce[endpoint] = m
 			if once {
 				m[err.Error()]++
-				logger.LogAlwaysIf(ctx, err)
+				peersLogAlwaysIf(ctx, err)
 				return
 			}
 		}
@@ -60,7 +60,7 @@ var printEndpointError = func() func(Endpoint, error, bool) {
 		// once not set, check if same error occurred 3 times in
 		// a row, then make sure we print it to call attention.
 		if m[err.Error()] > 2 {
-			logger.LogAlwaysIf(ctx, fmt.Errorf("Following error has been printed %d times.. %w", m[err.Error()], err))
+			peersLogAlwaysIf(ctx, fmt.Errorf("Following error has been printed %d times.. %w", m[err.Error()], err))
 			// Reduce the count to introduce further delay in printing
 			// but let it again print after the 2th attempt
 			m[err.Error()]--
@@ -86,14 +86,14 @@ func bgFormatErasureCleanupTmp(diskPath string) {
 	tmpOld := pathJoin(diskPath, minioMetaTmpBucket+"-old", tmpID)
 	if err := renameAll(pathJoin(diskPath, minioMetaTmpBucket),
 		tmpOld, diskPath); err != nil && !errors.Is(err, errFileNotFound) {
-		logger.LogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty please investigate",
+		storageLogIf(GlobalContext, fmt.Errorf("unable to rename (%s -> %s) %w, drive may be faulty, please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			tmpOld,
 			osErrToFileErr(err)))
 	}
 
 	if err := mkdirAll(pathJoin(diskPath, minioMetaTmpDeletedBucket), 0o777, diskPath); err != nil {
-		logger.LogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty please investigate",
+		storageLogIf(GlobalContext, fmt.Errorf("unable to create (%s) %w, drive may be faulty, please investigate",
 			pathJoin(diskPath, minioMetaTmpBucket),
 			err))
 	}
@@ -240,28 +240,16 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, endpoints Endpo
 
 	format, err = getFormatErasureInQuorum(formatConfigs)
 	if err != nil {
-		logger.LogIf(GlobalContext, err)
+		internalLogIf(GlobalContext, err)
 		return nil, nil, err
 	}
 
 	if format.ID == "" {
-		// Not a first disk, wait until first disk fixes deploymentID
-		if !firstDisk {
-			return nil, nil, errNotFirstDisk
-		}
-		if err = formatErasureFixDeploymentID(endpoints, storageDisks, format, formatConfigs); err != nil {
-			logger.LogIf(GlobalContext, err)
-			return nil, nil, err
-		}
+		internalLogIf(GlobalContext, errors.New("unexpected error deployment ID is missing, refusing to continue"))
+		return nil, nil, errInvalidArgument
 	}
 
 	globalDeploymentIDPtr.Store(&format.ID)
-
-	if err = formatErasureFixLocalDeploymentID(endpoints, storageDisks, format); err != nil {
-		logger.LogIf(GlobalContext, err)
-		return nil, nil, err
-	}
-
 	return storageDisks, format, nil
 }
 

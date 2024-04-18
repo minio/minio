@@ -38,6 +38,10 @@ import (
 	xnet "github.com/minio/pkg/v2/net"
 )
 
+func authNLogIf(ctx context.Context, err error) {
+	logger.LogIf(ctx, "authN", err)
+}
+
 // Authentication Plugin config and env variables
 const (
 	URL        = "url"
@@ -434,7 +438,7 @@ func (o *AuthNPlugin) checkConnectivity(ctx context.Context) bool {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		authNLogIf(ctx, err)
 		return false
 	}
 

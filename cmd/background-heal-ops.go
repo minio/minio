@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/env"
 )
 
@@ -101,16 +100,17 @@ func waitForLowHTTPReq() {
 }
 
 func initBackgroundHealing(ctx context.Context, objAPI ObjectLayer) {
+	bgSeq := newBgHealSequence()
 	// Run the background healer
 	for i := 0; i < globalBackgroundHealRoutine.workers; i++ {
-		go globalBackgroundHealRoutine.AddWorker(ctx, objAPI)
+		go globalBackgroundHealRoutine.AddWorker(ctx, objAPI, bgSeq)
 	}
 
-	globalBackgroundHealState.LaunchNewHealSequence(newBgHealSequence(), objAPI)
+	globalBackgroundHealState.LaunchNewHealSequence(bgSeq, objAPI)
 }
 
 // Wait for heal requests and process them
-func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
+func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer, bgSeq *healSequence) {
 	for {
 		select {
 		case task, ok := <-h.tasks:
@@ -133,6 +133,15 @@ func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer) {
 				}
 			}
 
+			if bgSeq != nil {
+				// We increment relevant counter based on the heal result for prometheus reporting.
+				if err != nil {
+					bgSeq.countFailed(res)
+				} else {
+					bgSeq.countHeals(res.Type, false)
+				}
+			}
+
 			if task.respCh != nil {
 				task.respCh <- healResult{result: res, err: err}
 			}
@@ -148,7 +157,7 @@ func newHealRoutine() *healRoutine {
 
 	if envHealWorkers := env.Get("_MINIO_HEAL_WORKERS", ""); envHealWorkers != "" {
 		if numHealers, err := strconv.Atoi(envHealWorkers); err != nil {
-			logger.LogIf(context.Background(), fmt.Errorf("invalid _MINIO_HEAL_WORKERS value: %w", err))
+			bugLogIf(context.Background(), fmt.Errorf("invalid _MINIO_HEAL_WORKERS value: %w", err))
 		} else {
 			workers = numHealers
 		}

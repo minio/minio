@@ -27,7 +27,6 @@ import (
 	"time"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/zeebo/xxh3"
 )
 
@@ -145,7 +144,7 @@ func (m *muxClient) send(msg message) error {
 // sendLocked the message. msg.Seq and msg.MuxID will be set.
 // m.respMu must be held.
 func (m *muxClient) sendLocked(msg message) error {
-	dst := GetByteBuffer()[:0]
+	dst := GetByteBufferCap(msg.Msgsize())
 	msg.Seq = m.SendSeq
 	msg.MuxID = m.MuxID
 	msg.Flags |= m.BaseFlags
@@ -289,7 +288,7 @@ func (m *muxClient) addErrorNonBlockingClose(respHandler chan<- Response, err er
 				xioutil.SafeClose(respHandler)
 			}()
 		}
-		logger.LogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
+		gridLogIf(m.ctx, m.sendLocked(message{Op: OpDisconnectServerMux, MuxID: m.MuxID}))
 		m.closed = true
 	}
 }
@@ -336,7 +335,7 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 			case respHandler <- resp:
 				m.respMu.Lock()
 				if !m.closed {
-					logger.LogIf(m.ctx, m.sendLocked(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
+					gridLogIf(m.ctx, m.sendLocked(message{Op: OpUnblockSrvMux, MuxID: m.MuxID}))
 				}
 				m.respMu.Unlock()
 			case <-m.ctx.Done():
@@ -349,7 +348,7 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 				return
 			}
 			// Send new ping.
-			logger.LogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
+			gridLogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
 		}
 	}
 }
@@ -509,7 +508,7 @@ func (m *muxClient) unblockSend(seq uint32) {
 	select {
 	case m.outBlock <- struct{}{}:
 	default:
-		logger.LogIf(m.ctx, errors.New("output unblocked overflow"))
+		gridLogIf(m.ctx, errors.New("output unblocked overflow"))
 	}
 }
 
@@ -548,7 +547,7 @@ func (m *muxClient) addResponse(r Response) (ok bool) {
 			return
 		}
 		err := errors.New("INTERNAL ERROR: Response was blocked")
-		logger.LogIf(m.ctx, err)
+		gridLogIf(m.ctx, err)
 		m.closeLocked()
 		return false
 	}

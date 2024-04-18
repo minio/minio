@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -49,6 +50,7 @@ const (
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
+	apiObjectMaxVersions           = "object_max_versions"
 
 	EnvAPIRequestsMax                 = "MINIO_API_REQUESTS_MAX"
 	EnvAPIRequestsDeadline            = "MINIO_API_REQUESTS_DEADLINE"
@@ -69,6 +71,8 @@ const (
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
 	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
 	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
+	EnvAPIObjectMaxVersions           = "MINIO_API_OBJECT_MAX_VERSIONS"
+	EnvAPIObjectMaxVersionsLegacy     = "_MINIO_OBJECT_MAX_VERSIONS"
 )
 
 // Deprecated key and ENVs
@@ -150,6 +154,10 @@ var (
 			Key:   apiSyncEvents,
 			Value: config.EnableOff,
 		},
+		config.KV{
+			Key:   apiObjectMaxVersions,
+			Value: "9223372036854775807",
+		},
 	}
 )
 
@@ -164,7 +172,6 @@ type Config struct {
 	ReplicationPriority         string        `json:"replication_priority"`
 	ReplicationMaxWorkers       int           `json:"replication_max_workers"`
 	TransitionWorkers           int           `json:"transition_workers"`
-	ExpiryWorkers               int           `json:"expiry_workers"`
 	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
 	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
 	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
@@ -172,6 +179,7 @@ type Config struct {
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
 	SyncEvents                  bool          `json:"sync_events"`
+	ObjectMaxVersions           int64         `json:"object_max_versions"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -192,6 +200,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		"extend_list_cache_life",
 		apiReplicationWorkers,
 		apiReplicationFailedWorkers,
+		"expiry_workers",
 	}
 
 	disableODirect := env.Get(EnvAPIDisableODirect, kvs.Get(apiDisableODirect)) == config.EnableOn
@@ -306,6 +315,23 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	cfg.StaleUploadsExpiry = staleUploadsExpiry
 
 	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
+
+	maxVerStr := env.Get(EnvAPIObjectMaxVersions, "")
+	if maxVerStr == "" {
+		maxVerStr = env.Get(EnvAPIObjectMaxVersionsLegacy, kvs.Get(apiObjectMaxVersions))
+	}
+	if maxVerStr != "" {
+		maxVersions, err := strconv.ParseInt(maxVerStr, 10, 64)
+		if err != nil {
+			return cfg, err
+		}
+		if maxVersions <= 0 {
+			return cfg, fmt.Errorf("invalid object max versions value: %v", maxVersions)
+		}
+		cfg.ObjectMaxVersions = maxVersions
+	} else {
+		cfg.ObjectMaxVersions = math.MaxInt64
+	}
 
 	return cfg, nil
 }

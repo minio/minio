@@ -20,8 +20,6 @@ package cmd
 import (
 	"context"
 	"errors"
-
-	"github.com/minio/minio/internal/logger"
 )
 
 // errMaxVersionsExceeded return error beyond 10000 (default) versions per object
@@ -176,7 +174,7 @@ func osErrToFileErr(err error) error {
 		return errFaultyDisk
 	}
 	if isSysErrInvalidArg(err) {
-		logger.LogIf(context.Background(), err)
+		storageLogIf(context.Background(), err)
 		// For some odd calls with O_DIRECT reads
 		// filesystems can return EINVAL, handle
 		// these as FileNotFound instead.

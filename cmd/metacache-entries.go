@@ -27,7 +27,6 @@ import (
 	"strings"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 )
 
@@ -377,7 +376,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		xl, err := entry.xlmeta()
 		if err != nil {
 			if !errors.Is(err, errFileNotFound) {
-				logger.LogIf(GlobalContext, err)
+				internalLogIf(GlobalContext, err)
 			}
 			continue
 		}
@@ -437,7 +436,7 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 	var err error
 	selected.metadata, err = selected.cached.AppendTo(metaDataPoolGet())
 	if err != nil {
-		logger.LogIf(context.Background(), err)
+		bugLogIf(context.Background(), err)
 		return nil, false
 	}
 	return selected, true
@@ -473,6 +472,8 @@ type metaCacheEntriesSorted struct {
 	listID string
 	// Reuse buffers
 	reuse bool
+	// Contain the last skipped object after an ILM expiry evaluation
+	lastSkippedEntry string
 }
 
 // shallowClone will create a shallow clone of the array objects,

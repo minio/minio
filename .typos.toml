@@ -12,20 +12,26 @@ extend-ignore-re = [
     "[0-9A-Za-z/+=]{64}",
     "ZXJuZXQxDjAMBgNVBA-some-junk-Q4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF",
     "eyJmb28iOiJiYXIifQ",
+    "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.*",
+    "MIIDBTCCAe2gAwIBAgIQWHw7h.*",
     'http\.Header\{"X-Amz-Server-Side-Encryptio":',
-    'sessionToken',
 ]
 
 [default.extend-words]
 "encrypter" = "encrypter"
+"kms" = "kms"
 "requestor" = "requestor"
 
 [default.extend-identifiers]
-"bui" = "bui"
-"toi" = "toi"
-"ot" = "ot"
-"dm2nd" = "dm2nd"
 "HashiCorp" = "HashiCorp"
+
+[type.go.extend-identifiers]
+"bui" = "bui"
+"dm2nd" = "dm2nd"
+"ot" = "ot"
 "ParseND" = "ParseND"
 "ParseNDStream" = "ParseNDStream"
+"pn" = "pn"
 "TestGetPartialObjectMisAligned" = "TestGetPartialObjectMisAligned"
+"thr" = "thr"
+"toi" = "toi"

@@ -33,7 +33,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	ftp "goftp.io/server/v2"
 )
 
@@ -82,8 +81,13 @@ func (m *minioFileInfo) Mode() os.FileMode {
 	return os.ModePerm
 }
 
+var minFileDate = time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC) // Workaround for Filezilla
+
 func (m *minioFileInfo) ModTime() time.Time {
-	return m.info.LastModified
+	if !m.info.LastModified.IsZero() {
+		return m.info.LastModified
+	}
+	return minFileDate
 }
 
 func (m *minioFileInfo) IsDir() bool {
@@ -323,7 +327,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 			}
 
 			// Call hook for site replication.
-			logger.LogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
+			replLogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
 				Type: madmin.SRIAMItemSTSAcc,
 				STSCredential: &madmin.SRSTSCredential{
 					AccessKey:    cred.AccessKey,

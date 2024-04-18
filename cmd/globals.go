@@ -171,6 +171,7 @@ type serverCtxt struct {
 	ReadHeaderTimeout   time.Duration
 	MaxIdleConnsPerHost int
 
+	CrossDomainXML string
 	// The layout of disks as interpreted
 	Layout disksLayout
 }
@@ -452,8 +453,11 @@ var (
 	globalConnReadDeadline  time.Duration
 	globalConnWriteDeadline time.Duration
 
-	// Controller for deleted file sweeper.
-	deletedCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
+	// dynamic sleeper to avoid thundering herd for trash folder expunge routine
+	deleteCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
+
+	// dynamic sleeper for multipart expiration routine
+	deleteMultipartCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
 
 	// Is _MINIO_DISABLE_API_FREEZE_ON_BOOT set?
 	globalDisableFreezeOnBoot bool

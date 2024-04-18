@@ -172,7 +172,7 @@ func healingMetricsPrometheus(ch chan<- prometheus.Metric) {
 			float64(v), string(k),
 		)
 	}
-	for k, v := range bgSeq.gethealFailedItemsMap() {
+	for k, v := range bgSeq.getHealFailedItemsMap() {
 		// healFailedItemsMap stores the endpoint and volume state separated by comma,
 		// split the fields and pass to channel at correct index
 		s := strings.Split(k, ",")

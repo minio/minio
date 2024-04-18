@@ -181,6 +181,8 @@ spec:
               value: {{ .Values.oidc.scopes }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
+            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+              value: {{ .Values.oidc.redirectUri }}
             - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
               value: {{ .Values.oidc.displayName }}
             {{- end }}
@@ -189,6 +191,10 @@ spec:
               value: {{ tpl $val $ | quote }}
             {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
+          securityContext:
+            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem | default false }}
+          {{- end }}
         {{- with .Values.extraContainers }}
           {{- if eq (typeOf .) "string" }}
             {{- tpl . $ | nindent 8 }}

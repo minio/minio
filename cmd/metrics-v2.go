@@ -546,7 +546,7 @@ func getNodeDriveAvailabilityErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_availability",
-		Help:      "Total number of drive I/O errors, permission denied and timeouts since server start",
+		Help:      "Total number of drive I/O errors, timeouts since server start",
 		Type:      counterMetric,
 	}
 }
@@ -1690,7 +1690,7 @@ func getMinioProcMetrics() *MetricsGroupV2 {
 
 		p, err := procfs.Self()
 		if err != nil {
-			logger.LogOnceIf(ctx, err, string(nodeMetricNamespace))
+			internalLogOnceIf(ctx, err, string(nodeMetricNamespace))
 			return
 		}
 
@@ -1846,7 +1846,7 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 		if err != nil {
 			// Log error and continue to receive other metric
 			// values
-			logger.LogIf(GlobalContext, err)
+			bugLogIf(GlobalContext, err)
 			continue
 		}
 
@@ -2476,7 +2476,7 @@ func getReplicationSiteMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		if globalSiteReplicationSys.isEnabled() {
 			m, err := globalSiteReplicationSys.getSiteMetrics(GlobalContext)
 			if err != nil {
-				logger.LogIf(GlobalContext, err)
+				metricsLogIf(GlobalContext, err)
 				return ml
 			}
 			ml = append(ml, MetricV2{
@@ -2654,7 +2654,7 @@ func getMinioHealingMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 }
 
 func getFailedItems(seq *healSequence) (m []MetricV2) {
-	items := seq.gethealFailedItemsMap()
+	items := seq.getHealFailedItemsMap()
 	m = make([]MetricV2, 0, len(items))
 	for k, v := range items {
 		s := strings.Split(k, ",")
@@ -3126,7 +3126,7 @@ func getClusterUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		metrics = make([]MetricV2, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			return
 		}
 
@@ -3229,7 +3229,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		metrics = make([]MetricV2, 0, 50)
 		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			return
 		}
 
@@ -3463,7 +3463,7 @@ func getClusterTierMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 
 		dui, err := loadDataUsageFromBackend(ctx, objLayer)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			metricsLogIf(ctx, err)
 			return
 		}
 		// data usage has not captured any tier stats yet.
@@ -4013,7 +4013,7 @@ func collectMetric(metric MetricV2, labels []string, values []string, metricName
 			if err != nil {
 				// Enable for debugging
 				if serverDebugLog {
-					logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram), metricName+"-metrics-histogram")
+					bugLogIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v+%v", err, values, metric.Histogram))
 				}
 			} else {
 				out <- pmetric
@@ -4040,7 +4040,7 @@ func collectMetric(metric MetricV2, labels []string, values []string, metricName
 	if err != nil {
 		// Enable for debugging
 		if serverDebugLog {
-			logger.LogOnceIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values), metricName+"-metrics")
+			bugLogIf(GlobalContext, fmt.Errorf("unable to validate prometheus metric (%w) %v", err, values))
 		}
 	} else {
 		out <- pmetric
@@ -4366,7 +4366,7 @@ func metricsNodeHandler() http.Handler {
 		enc := expfmt.NewEncoder(w, contentType)
 		for _, mf := range mfs {
 			if err := enc.Encode(mf); err != nil {
-				logger.LogIf(r.Context(), err)
+				metricsLogIf(r.Context(), err)
 				return
 			}
 		}

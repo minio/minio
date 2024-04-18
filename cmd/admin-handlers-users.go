@@ -35,9 +35,9 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/dns"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/policy"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // RemoveUser - DELETE /minio/admin/v3/remove-user?accessKey=<access_key>
@@ -74,7 +74,7 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemIAMUser,
 		IAMUser: &madmin.SRIAMUser{
 			AccessKey:   accessKey,
@@ -278,7 +278,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemGroupInfo,
 		GroupInfo: &madmin.SRGroupInfo{
 			UpdateReq: updReq,
@@ -368,7 +368,7 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemGroupInfo,
 		GroupInfo: &madmin.SRGroupInfo{
 			UpdateReq: madmin.GroupAddRemove{
@@ -406,7 +406,7 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemIAMUser,
 		IAMUser: &madmin.SRIAMUser{
 			AccessKey:   accessKey,
@@ -495,14 +495,14 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	password := cred.SecretKey
 	configBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
 
 	var ureq madmin.AddOrUpdateUserReq
 	if err = json.Unmarshal(configBytes, &ureq); err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
 		return
 	}
@@ -513,7 +513,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemIAMUser,
 		IAMUser: &madmin.SRIAMUser{
 			AccessKey:   accessKey,
@@ -731,7 +731,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	// Call hook for cluster-replication if the service account is not for a
 	// root user.
 	if newCred.ParentUser != globalActiveCred.AccessKey {
-		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Create: &madmin.SRSvcAccCreate{
@@ -853,7 +853,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// Call site replication hook - non-root user accounts are replicated.
 	if svcAccount.ParentUser != globalActiveCred.AccessKey {
-		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Update: &madmin.SRSvcAccUpdate{
@@ -1115,7 +1115,7 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 
 	// Call site replication hook - non-root user accounts are replicated.
 	if svcAccount.ParentUser != "" && svcAccount.ParentUser != globalActiveCred.AccessKey {
-		logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+		replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 			Type: madmin.SRIAMItemSvcAcc,
 			SvcAccChange: &madmin.SRSvcAccChange{
 				Delete: &madmin.SRSvcAccDelete{
@@ -1273,7 +1273,7 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	default:
 		policies, err := globalIAMSys.PolicyDBGet(accountName, cred.Groups...)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			adminLogIf(ctx, err)
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
@@ -1425,7 +1425,7 @@ func (a adminAPIHandlers) ListBucketPolicies(w http.ResponseWriter, r *http.Requ
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			adminLogIf(ctx, err)
 			continue
 		}
 		newPolicies[name] = p
@@ -1455,7 +1455,7 @@ func (a adminAPIHandlers) ListCannedPolicies(w http.ResponseWriter, r *http.Requ
 	for name, p := range policies {
 		_, err = json.Marshal(p)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			adminLogIf(ctx, err)
 			continue
 		}
 		newPolicies[name] = p
@@ -1485,7 +1485,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 
 	// Call cluster-replication policy creation hook to replicate policy deletion to
 	// other minio clusters.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type:      madmin.SRIAMItemPolicy,
 		Name:      policyName,
 		UpdatedAt: UTCNow(),
@@ -1548,7 +1548,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 
 	// Call cluster-replication policy creation hook to replicate policy to
 	// other minio clusters.
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type:      madmin.SRIAMItemPolicy,
 		Name:      policyName,
 		Policy:    iamPolicyBytes,
@@ -1616,7 +1616,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		return
 	}
 
-	logger.LogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
+	replLogIf(ctx, globalSiteReplicationSys.IAMChangeHook(ctx, madmin.SRIAMItem{
 		Type: madmin.SRIAMItemPolicyMapping,
 		PolicyMapping: &madmin.SRPolicyMapping{
 			UserOrGroup: entityName,
@@ -1756,15 +1756,14 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 }
 
 const (
-	allPoliciesFile            = "policies.json"
-	allUsersFile               = "users.json"
-	allGroupsFile              = "groups.json"
-	allSvcAcctsFile            = "svcaccts.json"
-	userPolicyMappingsFile     = "user_mappings.json"
-	groupPolicyMappingsFile    = "group_mappings.json"
-	stsUserPolicyMappingsFile  = "stsuser_mappings.json"
-	stsGroupPolicyMappingsFile = "stsgroup_mappings.json"
-	iamAssetsDir               = "iam-assets"
+	allPoliciesFile           = "policies.json"
+	allUsersFile              = "users.json"
+	allGroupsFile             = "groups.json"
+	allSvcAcctsFile           = "svcaccts.json"
+	userPolicyMappingsFile    = "user_mappings.json"
+	groupPolicyMappingsFile   = "group_mappings.json"
+	stsUserPolicyMappingsFile = "stsuser_mappings.json"
+	iamAssetsDir              = "iam-assets"
 )
 
 // ExportIAMHandler - exports all iam info as a zipped file
@@ -1790,17 +1789,17 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 			sys:     nil,
 		})
 		if zerr != nil {
-			logger.LogIf(ctx, zerr)
+			adminLogIf(ctx, zerr)
 			return nil
 		}
 		header.Method = zip.Deflate
 		zwriter, zerr := zipWriter.CreateHeader(header)
 		if zerr != nil {
-			logger.LogIf(ctx, zerr)
+			adminLogIf(ctx, zerr)
 			return nil
 		}
 		if _, err := io.Copy(zwriter, r); err != nil {
-			logger.LogIf(ctx, err)
+			adminLogIf(ctx, err)
 		}
 		return nil
 	}
@@ -1813,7 +1812,6 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 		userPolicyMappingsFile,
 		groupPolicyMappingsFile,
 		stsUserPolicyMappingsFile,
-		stsGroupPolicyMappingsFile,
 	}
 	for _, f := range iamFiles {
 		iamFile := pathJoin(iamAssetsDir, f)
@@ -1821,7 +1819,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 		case allPoliciesFile:
 			allPolicies, err := globalIAMSys.ListPolicies(ctx, "")
 			if err != nil {
-				logger.LogIf(ctx, err)
+				adminLogIf(ctx, err)
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
@@ -1936,13 +1934,13 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case userPolicyMappingsFile:
-			userPolicyMap := make(map[string]MappedPolicy)
+			userPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, false, userPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			userPolData, err := json.Marshal(userPolicyMap)
+			userPolData, err := json.Marshal(mappedPoliciesToMap(userPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -1953,13 +1951,13 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case groupPolicyMappingsFile:
-			groupPolicyMap := make(map[string]MappedPolicy)
+			groupPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, regUser, true, groupPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			grpPolData, err := json.Marshal(groupPolicyMap)
+			grpPolData, err := json.Marshal(mappedPoliciesToMap(groupPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
@@ -1970,34 +1968,18 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case stsUserPolicyMappingsFile:
-			userPolicyMap := make(map[string]MappedPolicy)
+			userPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
 			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, false, userPolicyMap)
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
-			userPolData, err := json.Marshal(userPolicyMap)
+			userPolData, err := json.Marshal(mappedPoliciesToMap(userPolicyMap))
 			if err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
 			if err = rawDataFn(bytes.NewReader(userPolData), iamFile, len(userPolData)); err != nil {
-				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
-				return
-			}
-		case stsGroupPolicyMappingsFile:
-			groupPolicyMap := make(map[string]MappedPolicy)
-			err := globalIAMSys.store.loadMappedPolicies(ctx, stsUser, true, groupPolicyMap)
-			if err != nil {
-				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
-				return
-			}
-			grpPolData, err := json.Marshal(groupPolicyMap)
-			if err != nil {
-				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
-				return
-			}
-			if err = rawDataFn(bytes.NewReader(grpPolData), iamFile, len(grpPolData)); err != nil {
 				writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 				return
 			}
@@ -2386,35 +2368,6 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
-					return
-				}
-			}
-		}
-	}
-
-	// import sts group policy mappings
-	{
-		f, err := zr.Open(pathJoin(iamAssetsDir, stsGroupPolicyMappingsFile))
-		switch {
-		case errors.Is(err, os.ErrNotExist):
-		case err != nil:
-			writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsGroupPolicyMappingsFile, ""), r.URL)
-			return
-		default:
-			defer f.Close()
-			var grpPolicyMap map[string]MappedPolicy
-			data, err := io.ReadAll(f)
-			if err != nil {
-				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrInvalidRequest, err, stsGroupPolicyMappingsFile, ""), r.URL)
-				return
-			}
-			if err = json.Unmarshal(data, &grpPolicyMap); err != nil {
-				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, stsGroupPolicyMappingsFile, ""), r.URL)
-				return
-			}
-			for g, pm := range grpPolicyMap {
-				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsGroupPolicyMappingsFile, g), r.URL)
 					return
 				}
 			}

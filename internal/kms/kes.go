@@ -27,10 +27,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/minio/pkg/v2/env"
 
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/env"
 )
 
 const (
@@ -70,7 +72,7 @@ type Config struct {
 
 // NewWithConfig returns a new KMS using the given
 // configuration.
-func NewWithConfig(config Config) (KMS, error) {
+func NewWithConfig(config Config, logger Logger) (KMS, error) {
 	if len(config.Endpoints) == 0 {
 		return nil, errors.New("kms: no server endpoints")
 	}
@@ -138,7 +140,40 @@ func NewWithConfig(config Config) (KMS, error) {
 			}
 		}
 	}()
+
+	go c.refreshKMSMasterKeyCache(logger)
 	return c, nil
+}
+
+// Request KES keep an up-to-date copy of the KMS master key to allow minio to start up even if KMS is down. The
+// cached key may still be evicted if the period of this function is longer than that of KES .cache.expiry.unused
+func (c *kesClient) refreshKMSMasterKeyCache(logger Logger) {
+	ctx := context.Background()
+
+	defaultCacheDuration := 10 * time.Second
+	cacheDuration, err := env.GetDuration(EnvKESKeyCacheInterval, defaultCacheDuration)
+	if err != nil {
+		logger.LogOnceIf(ctx, fmt.Errorf("%s, using default of 10s", err.Error()), "refresh-kms-master-key")
+		cacheDuration = defaultCacheDuration
+	}
+	if cacheDuration < time.Second {
+		logger.LogOnceIf(ctx, errors.New("cache duration is less than 1s, using default of 10s"), "refresh-kms-master-key")
+		cacheDuration = defaultCacheDuration
+	}
+	timer := time.NewTimer(cacheDuration)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			c.RefreshKey(ctx, logger)
+
+			// Reset for the next interval
+			timer.Reset(cacheDuration)
+		}
+	}
 }
 
 type kesClient struct {
@@ -393,7 +428,7 @@ func (c *kesClient) DescribeSelfIdentity(ctx context.Context) (*kes.IdentityInfo
 	return c.client.DescribeSelf(ctx)
 }
 
-// ListPolicies returns an iterator over all identities.
+// ListIdentities returns an iterator over all identities.
 func (c *kesClient) ListIdentities(ctx context.Context) (*kes.ListIter[kes.Identity], error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
@@ -449,4 +484,43 @@ func (c *kesClient) Verify(ctx context.Context) []VerifyResult {
 		results = append(results, result)
 	}
 	return results
+}
+
+// Logger interface permits access to module specific logging, in this case, for KMS
+type Logger interface {
+	LogOnceIf(ctx context.Context, err error, id string, errKind ...interface{})
+	LogIf(ctx context.Context, err error, errKind ...interface{})
+}
+
+// RefreshKey checks the validity of the KMS Master Key
+func (c *kesClient) RefreshKey(ctx context.Context, logger Logger) bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	validKey := false
+	kmsContext := Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
+	for _, endpoint := range c.client.Endpoints {
+		client := kes.Client{
+			Endpoints:  []string{endpoint},
+			HTTPClient: c.client.HTTPClient,
+		}
+
+		// 1. Generate a new key using the KMS.
+		kmsCtx, err := kmsContext.MarshalText()
+		if err != nil {
+			logger.LogOnceIf(ctx, err, "refresh-kms-master-key")
+			validKey = false
+			break
+		}
+		_, err = client.GenerateKey(ctx, env.Get(EnvKESKeyName, ""), kmsCtx)
+		if err != nil {
+			logger.LogOnceIf(ctx, err, "refresh-kms-master-key")
+			validKey = false
+			break
+		}
+		if !validKey {
+			validKey = true
+		}
+	}
+	return validKey
 }

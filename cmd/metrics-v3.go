@@ -35,6 +35,7 @@ const (
 
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
+	systemMemoryCollectorPath           collectorPath = "/system/memory"
 	systemProcessCollectorPath          collectorPath = "/system/process"
 	systemGoCollectorPath               collectorPath = "/system/go"
 
@@ -42,6 +43,7 @@ const (
 	clusterUsageObjectsCollectorPath collectorPath = "/cluster/usage/objects"
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
+	clusterAuditCollectorPath        collectorPath = "/cluster/audit"
 )
 
 const (
@@ -112,20 +114,47 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadNetworkInternodeMetrics,
 	)
 
+	systemMemoryMG := NewMetricsGroup(systemMemoryCollectorPath,
+		[]MetricDescriptor{
+			memTotalMD,
+			memUsedMD,
+			memFreeMD,
+			memAvailableMD,
+			memBuffersMD,
+			memCacheMD,
+			memSharedMD,
+			memUsedPercMD,
+		},
+		loadMemoryMetrics,
+	)
+
 	systemDriveMG := NewMetricsGroup(systemDriveCollectorPath,
 		[]MetricDescriptor{
 			driveUsedBytesMD,
 			driveFreeBytesMD,
 			driveTotalBytesMD,
+			driveUsedInodesMD,
 			driveFreeInodesMD,
+			driveTotalInodesMD,
 			driveTimeoutErrorsMD,
 			driveAvailabilityErrorsMD,
 			driveWaitingIOMD,
 			driveAPILatencyMD,
+			driveHealingMD,
+			driveOnlineMD,
 
 			driveOfflineCountMD,
 			driveOnlineCountMD,
 			driveCountMD,
+
+			// iostat related
+			driveReadsPerSecMD,
+			driveReadsKBPerSecMD,
+			driveReadsAwaitMD,
+			driveWritesPerSecMD,
+			driveWritesKBPerSecMD,
+			driveWritesAwaitMD,
+			drivePercUtilMD,
 		},
 		loadDriveMetrics,
 	)
@@ -190,17 +219,28 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterErasureSetMetrics,
 	)
 
+	clusterAuditMG := NewMetricsGroup(clusterAuditCollectorPath,
+		[]MetricDescriptor{
+			auditFailedMessagesMD,
+			auditTargetQueueLengthMD,
+			auditTotalMessagesMD,
+		},
+		loadClusterAuditMetrics,
+	)
+
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
 
 		systemNetworkInternodeMG,
 		systemDriveMG,
+		systemMemoryMG,
 
 		clusterHealthMG,
 		clusterUsageObjectsMG,
 		clusterUsageBucketsMG,
 		clusterErasureSetMG,
+		clusterAuditMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These

@@ -34,7 +34,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -498,7 +498,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
 				if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
 					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
-					logger.LogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+					replLogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
 				}
 			}
 			if reader != nil && proxy.Proxy && perr == nil {
@@ -1291,11 +1291,20 @@ func getCpObjMetadataFromHeader(ctx context.Context, r *http.Request, userMeta m
 	return defaultMeta, nil
 }
 
-// getRemoteInstanceTransport contains a singleton roundtripper.
-var (
-	getRemoteInstanceTransport     *http.Transport
-	getRemoteInstanceTransportOnce sync.Once
-)
+// getRemoteInstanceTransport contains a roundtripper for external (not peers) servers
+var remoteInstanceTransport atomic.Value
+
+func setRemoteInstanceTransport(tr http.RoundTripper) {
+	remoteInstanceTransport.Store(tr)
+}
+
+func getRemoteInstanceTransport() http.RoundTripper {
+	rt, ok := remoteInstanceTransport.Load().(http.RoundTripper)
+	if ok {
+		return rt
+	}
+	return nil
+}
 
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
@@ -1306,7 +1315,7 @@ var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core,
 	core, err := miniogo.NewCore(host, &miniogo.Options{
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: getRemoteInstanceTransport,
+		Transport: getRemoteInstanceTransport(),
 	})
 	if err != nil {
 		return nil, err
@@ -1721,7 +1730,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceTaggingTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastTaggingTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastTaggingTimestamp)
 				// update tagging metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp] = srcTimestamp.UTC().Format(time.RFC3339Nano)
@@ -1748,7 +1757,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceRetentionTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastretentionTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastretentionTimestamp)
 				// update retention metadata only if replica  timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockMode)] = string(retentionMode)
@@ -1768,7 +1777,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		if dstOpts.ReplicationRequest {
 			srcTimestamp := dstOpts.ReplicationSourceLegalholdTimestamp
 			if !srcTimestamp.IsZero() {
-				ondiskTimestamp, err := time.Parse(lastLegalHoldTimestamp, time.RFC3339Nano)
+				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastLegalHoldTimestamp)
 				// update legalhold metadata only if replica timestamp is newer than what's on disk
 				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
 					srcInfo.UserDefined[strings.ToLower(xhttp.AmzObjectLockLegalHold)] = string(legalHold.Status)
@@ -2234,8 +2243,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, errInvalidEncryptionParametersSSEC), r.URL)
+		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
+			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
 			return
 		}
 
@@ -2649,10 +2658,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 				return errInvalidEncryptionParameters
 			}
 
-			if crypto.SSEC.IsRequested(r.Header) && isReplicationEnabled(ctx, bucket) {
-				return errInvalidEncryptionParametersSSEC
-			}
-
 			reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 			if err != nil {
 				return err
@@ -2830,7 +2835,9 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	rcfg, _ := globalBucketObjectLockSys.Get(bucket)
 	if rcfg.LockEnabled && opts.DeletePrefix {
-		writeErrorResponse(ctx, w, toAPIError(ctx, errors.New("force-delete is forbidden in a locked-enabled bucket")), r.URL)
+		apiErr := toAPIError(ctx, errInvalidArgument)
+		apiErr.Description = "force-delete is forbidden on Object Locking enabled buckets"
+		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -3701,6 +3708,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}, ObjectOptions{
 			VersionID: objInfo.VersionID,
+			MTime:     objInfo.ModTime,
 		}); err != nil {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidObjectState), r.URL)
 			return
@@ -3781,7 +3789,7 @@ func (api objectAPIHandlers) PostRestoreObjectHandler(w http.ResponseWriter, r *
 			VersionID: objInfo.VersionID,
 		}
 		if err := objectAPI.RestoreTransitionedObject(rctx, bucket, object, opts); err != nil {
-			logger.LogIf(ctx, fmt.Errorf("Unable to restore transitioned bucket/object %s/%s: %w", bucket, object, err))
+			s3LogIf(ctx, fmt.Errorf("Unable to restore transitioned bucket/object %s/%s: %w", bucket, object, err))
 			return
 		}
 

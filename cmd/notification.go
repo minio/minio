@@ -126,7 +126,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 				if i == g.retryCount-1 {
 					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", addr.String())
 					ctx := logger.SetReqInfo(ctx, reqInfo)
-					logger.LogOnceIf(ctx, err, addr.String())
+					peersLogOnceIf(ctx, err, addr.String())
 				}
 				// Wait for a minimum of 100ms and dynamically increase this based on number of attempts.
 				if i < g.retryCount-1 {
@@ -312,7 +312,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		if err != nil {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 			ctx := logger.SetReqInfo(ctx, reqInfo)
-			logger.LogIf(ctx, err)
+			peersLogIf(ctx, err)
 			continue
 		}
 
@@ -323,7 +323,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 				ctx := logger.SetReqInfo(ctx, reqInfo)
-				logger.LogIf(ctx, err)
+				peersLogIf(ctx, err)
 			}
 		}
 	}
@@ -331,7 +331,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	// Local host
 	thisAddr, err := xnet.ParseHost(globalLocalNodeName)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		return profilingDataFound
 	}
 
@@ -339,7 +339,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	if err != nil {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", thisAddr.String())
 		ctx := logger.SetReqInfo(ctx, reqInfo)
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		return profilingDataFound
 	}
 
@@ -348,10 +348,10 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	// Send profiling data to zip as file
 	for typ, data := range data {
 		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data, 0o600)
-		logger.LogIf(ctx, err)
+		internalLogIf(ctx, err)
 	}
 	if b := getClusterMetaInfo(ctx); len(b) > 0 {
-		logger.LogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b, 0o600))
+		internalLogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b, 0o600))
 	}
 
 	return
@@ -480,7 +480,7 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
 			sys.peerClients[index].host.String())
 		ctx := logger.SetReqInfo(ctx, reqInfo)
-		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
+		peersLogOnceIf(ctx, err, sys.peerClients[index].host.String())
 	}
 	locksResp = append(locksResp, &PeerLocks{
 		Addr:  getHostName(r),
@@ -504,7 +504,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -534,7 +534,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -561,7 +561,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 
@@ -603,7 +603,7 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 	bucketStats = append(bucketStats, BucketStats{
@@ -636,7 +636,7 @@ func (sys *NotificationSys) GetClusterSiteMetrics(ctx context.Context) []SRMetri
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 	siteStats = append(siteStats, globalReplicationStats.getSRMetricsForNode())
@@ -658,7 +658,7 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -679,13 +679,13 @@ func (sys *NotificationSys) StopRebalance(ctx context.Context) {
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
-		logger.LogIf(ctx, errServerNotInitialized)
+		internalLogIf(ctx, errServerNotInitialized)
 		return
 	}
 
@@ -711,7 +711,7 @@ func (sys *NotificationSys) LoadRebalanceMeta(ctx context.Context, startRebalanc
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -732,7 +732,7 @@ func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
 	for _, nErr := range ng.Wait() {
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
 		if nErr.Err != nil {
-			logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
 }
@@ -946,7 +946,7 @@ func (sys *NotificationSys) addNodeErr(nodeInfo madmin.NodeInfo, peerClient *pee
 	addr := peerClient.host.String()
 	reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", addr)
 	ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-	logger.LogOnceIf(ctx, err, "add-node-err-"+addr)
+	peersLogOnceIf(ctx, err, "add-node-err-"+addr)
 	nodeInfo.SetAddr(addr)
 	nodeInfo.SetError(err.Error())
 }
@@ -1104,24 +1104,13 @@ func (sys *NotificationSys) ServerInfo(metrics bool) []madmin.ServerProperties {
 	return reply
 }
 
-// returns all the peers that are currently online.
-func (sys *NotificationSys) getOnlinePeers() []*peerRESTClient {
-	var peerClients []*peerRESTClient
-	for _, peerClient := range sys.allPeerClients {
-		if peerClient != nil && peerClient.IsOnline() {
-			peerClients = append(peerClients, peerClient)
-		}
-	}
-	return peerClients
-}
-
 // restClientFromHash will return a deterministic peerRESTClient based on s.
 // Will return nil if client is local.
 func (sys *NotificationSys) restClientFromHash(s string) (client *peerRESTClient) {
 	if len(sys.peerClients) == 0 {
 		return nil
 	}
-	peerClients := sys.getOnlinePeers()
+	peerClients := sys.allPeerClients
 	if len(peerClients) == 0 {
 		return nil
 	}
@@ -1187,7 +1176,7 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
 			sys.peerClients[index].host.String())
 		ctx := logger.SetReqInfo(ctx, reqInfo)
-		logger.LogOnceIf(ctx, err, sys.peerClients[index].host.String())
+		peersLogOnceIf(ctx, err, sys.peerClients[index].host.String())
 	}
 	reports = append(reports, globalBucketMonitor.GetReport(bandwidth.SelectBuckets(buckets...)))
 	consolidatedReport := bandwidth.BucketBandwidthReport{
@@ -1222,9 +1211,9 @@ func (sys *NotificationSys) collectPeerMetrics(ctx context.Context, peerChannels
 			if sys.peerClients[index] != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
 					sys.peerClients[index].host.String())
-				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
+				peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
 			} else {
-				logger.LogOnceIf(ctx, err, "peer-offline")
+				peersLogOnceIf(ctx, err, "peer-offline")
 			}
 			continue
 		}
@@ -1460,7 +1449,7 @@ func (sys *NotificationSys) DriveSpeedTest(ctx context.Context, opts madmin.Driv
 
 			reqInfo := (&logger.ReqInfo{}).AppendTags("remotePeer", client.host.String())
 			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogOnceIf(ctx, err, client.host.String())
+			peersLogOnceIf(ctx, err, client.host.String())
 		}(client)
 	}
 
@@ -1521,7 +1510,7 @@ func (sys *NotificationSys) GetLastDayTierStats(ctx context.Context) DailyAllTie
 	merged := globalTransitionState.getDailyAllTierStats()
 	for i, stat := range lastDayStats {
 		if errs[i] != nil {
-			logger.LogOnceIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]), sys.peerClients[i].host.String())
+			peersLogOnceIf(ctx, fmt.Errorf("failed to fetch last day tier stats: %w", errs[i]), sys.peerClients[i].host.String())
 			continue
 		}
 		merged.merge(stat)
@@ -1556,9 +1545,9 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 			if sys.peerClients[index] != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress",
 					sys.peerClients[index].host.String())
-				logger.LogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
+				peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), err, sys.peerClients[index].host.String())
 			} else {
-				logger.LogOnceIf(ctx, err, "peer-offline")
+				peersLogOnceIf(ctx, err, "peer-offline")
 			}
 			continue
 		}

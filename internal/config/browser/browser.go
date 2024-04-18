@@ -97,14 +97,29 @@ func (browseCfg *Config) Update(newCfg Config) {
 
 // LookupConfig - lookup api config and override with valid environment settings if any.
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
-	cspPolicy := env.Get(EnvBrowserCSPPolicy, kvs.GetWithDefault(browserCSPPolicy, DefaultKVS))
-	hstsSeconds, err := strconv.Atoi(env.Get(EnvBrowserHSTSSeconds, kvs.GetWithDefault(browserHSTSSeconds, DefaultKVS)))
-	if err != nil {
+	cfg = Config{
+		CSPPolicy:             env.Get(EnvBrowserCSPPolicy, kvs.GetWithDefault(browserCSPPolicy, DefaultKVS)),
+		HSTSSeconds:           0,
+		HSTSIncludeSubdomains: true,
+		HSTSPreload:           true,
+		ReferrerPolicy:        "strict-origin-when-cross-origin",
+	}
+
+	if err = config.CheckValidKeys(config.BrowserSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
 
 	hstsIncludeSubdomains := env.Get(EnvBrowserHSTSIncludeSubdomains, kvs.GetWithDefault(browserHSTSIncludeSubdomains, DefaultKVS)) == config.EnableOn
 	hstsPreload := env.Get(EnvBrowserHSTSPreload, kvs.Get(browserHSTSPreload)) == config.EnableOn
+
+	hstsSeconds, err := strconv.Atoi(env.Get(EnvBrowserHSTSSeconds, kvs.GetWithDefault(browserHSTSSeconds, DefaultKVS)))
+	if err != nil {
+		return cfg, err
+	}
+
+	cfg.HSTSSeconds = hstsSeconds
+	cfg.HSTSIncludeSubdomains = hstsIncludeSubdomains
+	cfg.HSTSPreload = hstsPreload
 
 	referrerPolicy := env.Get(EnvBrowserReferrerPolicy, kvs.GetWithDefault(browserReferrerPolicy, DefaultKVS))
 	switch referrerPolicy {
@@ -113,11 +128,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	default:
 		return cfg, fmt.Errorf("invalid value %v for %s", referrerPolicy, browserReferrerPolicy)
 	}
-
-	cfg.CSPPolicy = cspPolicy
-	cfg.HSTSSeconds = hstsSeconds
-	cfg.HSTSIncludeSubdomains = hstsIncludeSubdomains
-	cfg.HSTSPreload = hstsPreload
 
 	return cfg, nil
 }

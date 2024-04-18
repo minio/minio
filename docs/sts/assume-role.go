@@ -85,6 +85,7 @@ func main() {
 		if f, err := os.Open(sessionPolicyFile); err != nil {
 			log.Fatalf("Unable to open session policy file: %v", err)
 		} else {
+			defer f.Close()
 			bs, err := io.ReadAll(f)
 			if err != nil {
 				log.Fatalf("Error reading session policy file: %v", err)

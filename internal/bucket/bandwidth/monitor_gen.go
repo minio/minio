@@ -38,6 +38,7 @@ func (z *BucketBandwidthReport) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z BucketBandwidthReport) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 0
+	_ = z
 	err = en.Append(0x80)
 	if err != nil {
 		return
@@ -49,6 +50,7 @@ func (z BucketBandwidthReport) EncodeMsg(en *msgp.Writer) (err error) {
 func (z BucketBandwidthReport) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 0
+	_ = z
 	o = append(o, 0x80)
 	return
 }

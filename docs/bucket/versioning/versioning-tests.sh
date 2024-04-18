@@ -10,10 +10,10 @@ trap 'catch $LINENO' ERR
 catch() {
 	if [ $# -ne 0 ]; then
 		echo "error on line $1"
-		echo "$site server logs ========="
-		cat "/tmp/${site}_1.log"
+		echo "server logs ========="
+		cat "/tmp/sitea_1.log"
 		echo "==========================="
-		cat "/tmp/${site}_2.log"
+		cat "/tmp/sitea_2.log"
 	fi
 
 	echo "Cleaning up instances of MinIO"
@@ -27,8 +27,6 @@ catch
 set -e
 export MINIO_CI_CD=1
 export MINIO_BROWSER=off
-export MINIO_ROOT_USER="minio"
-export MINIO_ROOT_PASSWORD="minio123"
 export MINIO_KMS_AUTO_ENCRYPTION=off
 export MINIO_PROMETHEUS_AUTH_TYPE=public
 export MINIO_KMS_SECRET_KEY=my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw=
@@ -42,32 +40,37 @@ if [ ! -f ./mc ]; then
 		chmod +x mc
 fi
 
-minio server --address 127.0.0.1:9001 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
-	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
-minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
-	"http://127.0.0.1:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+minio server -S /tmp/no-certs --address ":9001" "http://localhost:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+	"http://localhost:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
 
-export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
+minio server -S /tmp/no-certs --address ":9002" "http://localhost:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
+	"http://localhost:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
 
-./mc mb sitea/delissue
+sleep 5
 
-./mc version enable sitea/delissue
+export MC_HOST_sitea=http://minioadmin:minioadmin@localhost:9002
 
-echo hello | ./mc pipe sitea/delissue/hello
+./mc ready sitea
 
-./mc version suspend sitea/delissue
+./mc mb sitea/delissue --insecure
 
-./mc rm sitea/delissue/hello
+./mc version enable sitea/delissue --insecure
 
-./mc version enable sitea/delissue
+echo hello | ./mc pipe sitea/delissue/hello --insecure
 
-echo hello | ./mc pipe sitea/delissue/hello
+./mc version suspend sitea/delissue --insecure
 
-./mc version suspend sitea/delissue
+./mc rm sitea/delissue/hello --insecure
 
-./mc rm sitea/delissue/hello
+./mc version enable sitea/delissue --insecure
 
-count=$(./mc ls --versions sitea/delissue | wc -l)
+echo hello | ./mc pipe sitea/delissue/hello --insecure
+
+./mc version suspend sitea/delissue --insecure
+
+./mc rm sitea/delissue/hello --insecure
+
+count=$(./mc ls --versions sitea/delissue --insecure | wc -l)
 
 if [ ${count} -ne 3 ]; then
 	echo "BUG: expected number of versions to be '3' found ${count}"
@@ -75,7 +78,21 @@ if [ ${count} -ne 3 ]; then
 	./mc ls --versions sitea/delissue
 fi
 
+./mc mb sitea/testbucket
+
+./mc version enable sitea/testbucket
+
+./mc put --quiet README.md sitea/testbucket/file
+etag1=$(./mc cat sitea/testbucket/file | md5sum --tag | awk {'print $4'})
+
+./mc cp --quiet --storage-class "STANDARD" sitea/testbucket/file sitea/testbucket/file
+etag2=$(./mc cat sitea/testbucket/file | md5sum --tag | awk {'print $4'})
+if [ $etag1 != $etag2 ]; then
+	echo "expected $etag1, got $etag2"
+	exit 1
+fi
+
 echo "SUCCESS:"
-./mc ls --versions sitea/delissue
+./mc ls --versions sitea/delissue --insecure
 
 catch

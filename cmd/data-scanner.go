@@ -41,7 +41,6 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	uatomic "go.uber.org/atomic"
 )
@@ -63,11 +62,12 @@ var (
 	globalHealConfig heal.Config
 
 	// Sleeper values are updated when config is loaded.
-	scannerSleeper              = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
-	scannerCycle                = uatomic.NewDuration(dataScannerStartDelay)
-	scannerIdleMode             = uatomic.NewInt32(0) // default is throttled when idle
-	scannerExcessObjectVersions = uatomic.NewInt64(100)
-	scannerExcessFolders        = uatomic.NewInt64(50000)
+	scannerSleeper                       = newDynamicSleeper(2, time.Second, true) // Keep defaults same as config defaults
+	scannerCycle                         = uatomic.NewDuration(dataScannerStartDelay)
+	scannerIdleMode                      = uatomic.NewInt32(0) // default is throttled when idle
+	scannerExcessObjectVersions          = uatomic.NewInt64(100)
+	scannerExcessObjectVersionsTotalSize = uatomic.NewInt64(1024 * 1024 * 1024 * 1024) // 1 TB
+	scannerExcessFolders                 = uatomic.NewInt64(50000)
 )
 
 // initDataScanner will start the scanner in the background.
@@ -122,13 +122,13 @@ func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundH
 	buf, err := readConfig(ctx, objAPI, backgroundHealInfoPath)
 	if err != nil {
 		if !errors.Is(err, errConfigNotFound) {
-			logger.LogOnceIf(ctx, err, backgroundHealInfoPath)
+			internalLogOnceIf(ctx, err, backgroundHealInfoPath)
 		}
 		return backgroundHealInfo{}
 	}
 	var info backgroundHealInfo
 	if err = json.Unmarshal(buf, &info); err != nil {
-		logger.LogOnceIf(ctx, err, backgroundHealInfoPath)
+		bugLogIf(ctx, err, backgroundHealInfoPath)
 	}
 	return info
 }
@@ -140,13 +140,13 @@ func saveBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer, info backgr
 
 	b, err := json.Marshal(info)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 		return
 	}
 	// Get last healing information
 	err = saveConfig(ctx, objAPI, backgroundHealInfoPath, b)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		internalLogIf(ctx, err)
 	}
 }
 
@@ -167,7 +167,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 		cycleInfo.next = binary.LittleEndian.Uint64(buf[:8])
 		buf = buf[8:]
 		_, err := cycleInfo.UnmarshalMsg(buf)
-		logger.LogIf(ctx, err)
+		bugLogIf(ctx, err)
 	}
 
 	scannerTimer := time.NewTimer(scannerCycle.Load())
@@ -204,7 +204,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
 			err := objAPI.NSScanner(ctx, results, uint32(cycleInfo.current), scanMode)
-			logger.LogOnceIf(ctx, err, "ns-scanner")
+			scannerLogIf(ctx, err)
 			res := map[string]string{"cycle": strconv.FormatUint(cycleInfo.current, 10)}
 			if err != nil {
 				res["error"] = err.Error()
@@ -224,7 +224,7 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
 				tmp, _ = cycleInfo.MarshalMsg(tmp)
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
-				logger.LogOnceIf(ctx, err, dataUsageBloomNamePath)
+				scannerLogIf(ctx, err, dataUsageBloomNamePath)
 			}
 		}
 	}
@@ -752,7 +752,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 							versionID: "",
 						}, madmin.HealItemObject)
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogOnceIf(ctx, err, entry.name)
+							scannerLogIf(ctx, err)
 						}
 						foundObjs = foundObjs || err == nil
 						return
@@ -769,7 +769,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						}, madmin.HealItemObject)
 						stopFn(int(ver.Size))
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							logger.LogOnceIf(ctx, err, fiv.Name)
+							scannerLogIf(ctx, err, fiv.Name)
 						}
 						if err == nil {
 							successVersions++
@@ -945,7 +945,7 @@ func (i *scannerItem) applyHealing(ctx context.Context, o ObjectLayer, oi Object
 func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi ObjectInfo) (action lifecycle.Action, size int64) {
 	size, err := oi.GetActualSize()
 	if i.debug {
-		logger.LogIf(ctx, err)
+		scannerLogIf(ctx, err)
 	}
 	if i.lifeCycle == nil {
 		return action, size
@@ -1051,7 +1051,9 @@ func (i *scannerItem) applyNewerNoncurrentVersionLimit(ctx context.Context, _ Ob
 		})
 	}
 
-	expState.enqueueByNewerNoncurrent(i.bucket, toDel, event)
+	if len(toDel) > 0 {
+		expState.enqueueByNewerNoncurrent(i.bucket, toDel, event)
+	}
 	return objectInfos, nil
 }
 
@@ -1064,7 +1066,7 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 	}
 
 	// Check if we have many versions after applyNewerNoncurrentVersionLimit.
-	if len(objInfos) > int(scannerExcessObjectVersions.Load()) {
+	if len(objInfos) >= int(scannerExcessObjectVersions.Load()) {
 		// Notify object accessed via a GET request.
 		sendEvent(eventArgs{
 			EventName:  event.ObjectManyVersions,
@@ -1084,6 +1086,39 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			Object:  i.objectPath(),
 			Tags: map[string]interface{}{
 				"x-minio-versions": strconv.Itoa(len(objInfos)),
+			},
+		})
+	}
+
+	cumulativeSize := int64(0)
+	for _, objInfo := range objInfos {
+		cumulativeSize += objInfo.Size
+	}
+	// Check if the cumulative size of all versions of this object is high.
+	if cumulativeSize >= scannerExcessObjectVersionsTotalSize.Load() {
+		// Notify object accessed via a GET request.
+		sendEvent(eventArgs{
+			EventName:  event.ObjectLargeVersions,
+			BucketName: i.bucket,
+			Object: ObjectInfo{
+				Name: i.objectPath(),
+			},
+			UserAgent: "Scanner",
+			Host:      globalLocalNodeName,
+			RespElements: map[string]string{
+				"x-minio-versions-count": strconv.Itoa(len(objInfos)),
+				"x-minio-versions-size":  strconv.FormatInt(cumulativeSize, 10),
+			},
+		})
+
+		auditLogInternal(context.Background(), AuditLogOptions{
+			Event:   "scanner:largeversions",
+			APIName: "Scanner",
+			Bucket:  i.bucket,
+			Object:  i.objectPath(),
+			Tags: map[string]interface{}{
+				"x-minio-versions-count": strconv.Itoa(len(objInfos)),
+				"x-minio-versions-size":  strconv.FormatInt(cumulativeSize, 10),
 			},
 		})
 	}
@@ -1121,7 +1156,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 				err := o.CheckAbandonedParts(ctx, i.bucket, i.objectPath(), madmin.HealOpts{Remove: healDeleteDangling})
 				done()
 				if err != nil {
-					logger.LogOnceIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err), i.objectPath())
+					healingLogIf(ctx, fmt.Errorf("unable to check object %s/%s for abandoned data: %w", i.bucket, i.objectPath(), err), i.objectPath())
 				}
 			}
 		}
@@ -1197,7 +1232,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
-		logger.LogOnceIf(ctx, err, obj.Name)
+		ilmLogIf(ctx, err)
 		return false
 	}
 	// Notification already sent in *expireTransitionedObject*, just return 'true' here.
@@ -1219,6 +1254,8 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 
 	if lcEvent.Action.DeleteAll() {
 		opts.DeletePrefix = true
+		// use prefix delete on exact object (this is an optimization to avoid fan-out calls)
+		opts.DeletePrefixObject = true
 	}
 	var (
 		dobj ObjectInfo
@@ -1238,13 +1275,13 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		}
 	}()
 
-	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, obj.Name, opts)
+	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, encodeDirObject(obj.Name), opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
 		// Assume it is still there.
-		logger.LogOnceIf(ctx, err, "non-transition-expiry")
+		ilmLogOnceIf(ctx, err, "non-transition-expiry")
 		return false
 	}
 	if dobj.Name == "" {
@@ -1259,7 +1296,9 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	if obj.DeleteMarker {
 		eventName = event.ObjectRemovedDeleteMarkerCreated
 	}
-
+	if lcEvent.Action.DeleteAll() {
+		eventName = event.ObjectRemovedDeleteAllVersions
+	}
 	// Notify object deleted event.
 	sendEvent(eventArgs{
 		EventName:  eventName,
@@ -1383,48 +1422,7 @@ func (d *dynamicSleeper) Timer(ctx context.Context) func() {
 	t := time.Now()
 	return func() {
 		doneAt := time.Now()
-		for {
-			// Grab current values
-			d.mu.RLock()
-			minWait, maxWait := d.minSleep, d.maxSleep
-			factor := d.factor
-			cycle := d.cycle
-			d.mu.RUnlock()
-			elapsed := doneAt.Sub(t)
-			// Don't sleep for really small amount of time
-			wantSleep := time.Duration(float64(elapsed) * factor)
-			if wantSleep <= minWait {
-				return
-			}
-			if maxWait > 0 && wantSleep > maxWait {
-				wantSleep = maxWait
-			}
-			timer := time.NewTimer(wantSleep)
-			select {
-			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
-				if d.isScanner {
-					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-				}
-				return
-			case <-timer.C:
-				if d.isScanner {
-					globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-				}
-				return
-			case <-cycle:
-				if !timer.Stop() {
-					// We expired.
-					<-timer.C
-					if d.isScanner {
-						globalScannerMetrics.incTime(scannerMetricYield, wantSleep)
-					}
-					return
-				}
-			}
-		}
+		d.Sleep(ctx, doneAt.Sub(t))
 	}
 }
 

@@ -31,7 +31,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 )
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
@@ -67,7 +66,7 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 				} else {
 					network[nodeName] = string(madmin.ItemOffline)
 					// log once the error
-					logger.LogOnceIf(context.Background(), err, nodeName)
+					peersLogOnceIf(context.Background(), err, nodeName)
 				}
 			}
 		}

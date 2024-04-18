@@ -584,6 +584,7 @@ func (z *InQueueStats) DecodeMsg(dc *msgp.Reader) (err error) {
 // EncodeMsg implements msgp.Encodable
 func (z InQueueStats) EncodeMsg(en *msgp.Writer) (err error) {
 	// map header, size 0
+	_ = z
 	err = en.Append(0x80)
 	if err != nil {
 		return
@@ -595,6 +596,7 @@ func (z InQueueStats) EncodeMsg(en *msgp.Writer) (err error) {
 func (z InQueueStats) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// map header, size 0
+	_ = z
 	o = append(o, 0x80)
 	return
 }

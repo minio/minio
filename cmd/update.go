@@ -142,7 +142,7 @@ func IsDocker() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	logger.LogIf(GlobalContext, err)
+	internalLogIf(GlobalContext, err)
 
 	return err == nil
 }
@@ -172,7 +172,7 @@ func IsBOSH() bool {
 	}
 
 	// Log error, as we will not propagate it to caller
-	logger.LogIf(GlobalContext, err)
+	internalLogIf(GlobalContext, err)
 
 	return err == nil
 }
@@ -189,7 +189,7 @@ func getHelmVersion(helmInfoFilePath string) string {
 		if !osIsNotExist(err) {
 			reqInfo := (&logger.ReqInfo{}).AppendTags("helmInfoFilePath", helmInfoFilePath)
 			ctx := logger.SetReqInfo(GlobalContext, reqInfo)
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err)
 		}
 		return ""
 	}

@@ -675,6 +675,12 @@ var (
 			Secret:      true,
 		},
 		config.HelpKV{
+			Key:         target.RedisUser,
+			Description: "Redis server user for the auth",
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
 			Key:         target.RedisQueueDir,
 			Description: queueDirComment,
 			Optional:    true,

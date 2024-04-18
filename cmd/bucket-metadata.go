@@ -145,7 +145,7 @@ func (b *BucketMetadata) SetCreatedAt(createdAt time.Time) {
 // If an error is returned the returned metadata will be default initialized.
 func readBucketMetadata(ctx context.Context, api ObjectLayer, name string) (BucketMetadata, error) {
 	if name == "" {
-		logger.LogIf(ctx, errors.New("bucket name cannot be empty"))
+		internalLogIf(ctx, errors.New("bucket name cannot be empty"), logger.WarningKind)
 		return BucketMetadata{}, errInvalidArgument
 	}
 	b := newBucketMetadata(name)
@@ -400,7 +400,7 @@ func (b *BucketMetadata) convertLegacyConfigs(ctx context.Context, objectAPI Obj
 	for legacyFile := range configs {
 		configFile := path.Join(bucketMetaPrefix, b.Name, legacyFile)
 		if err := deleteConfig(ctx, objectAPI, configFile); err != nil && !errors.Is(err, errConfigNotFound) {
-			logger.LogIf(ctx, err)
+			internalLogIf(ctx, err, logger.WarningKind)
 		}
 	}
 

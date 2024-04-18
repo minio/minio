@@ -37,7 +37,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/minio/internal/logger"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
 )
@@ -189,6 +188,22 @@ type replicationAllStatsV1 struct {
 	Targets      map[string]replicationStats
 	ReplicaSize  uint64 `msg:"ReplicaSize,omitempty"`
 	ReplicaCount uint64 `msg:"ReplicaCount,omitempty"`
+}
+
+// empty returns true if the replicationAllStats is empty (contains no entries).
+func (r *replicationAllStats) empty() bool {
+	if r == nil {
+		return true
+	}
+	if r.ReplicaSize != 0 || r.ReplicaCount != 0 {
+		return false
+	}
+	for _, v := range r.Targets {
+		if !v.Empty() {
+			return false
+		}
+	}
+	return true
 }
 
 // clone creates a deep-copy clone.
@@ -523,20 +538,18 @@ func (d *dataUsageCache) searchParent(h dataUsageHash) *dataUsageHash {
 	want := h.Key()
 	if idx := strings.LastIndexByte(want, '/'); idx >= 0 {
 		if v := d.find(want[:idx]); v != nil {
-			for child := range v.Children {
-				if child == want {
-					found := hashPath(want[:idx])
-					return &found
-				}
+			_, ok := v.Children[want]
+			if ok {
+				found := hashPath(want[:idx])
+				return &found
 			}
 		}
 	}
 	for k, v := range d.Cache {
-		for child := range v.Children {
-			if child == want {
-				found := dataUsageHash(k)
-				return &found
-			}
+		_, ok := v.Children[want]
+		if ok {
+			found := dataUsageHash(k)
+			return &found
 		}
 	}
 	return nil
@@ -621,7 +634,7 @@ func (d *dataUsageCache) copyWithChildren(src *dataUsageCache, hash dataUsageHas
 	d.Cache[hash.Key()] = e
 	for ch := range e.Children {
 		if ch == hash.Key() {
-			logger.LogIf(GlobalContext, errors.New("dataUsageCache.copyWithChildren: Circular reference"))
+			scannerLogIf(GlobalContext, errors.New("dataUsageCache.copyWithChildren: Circular reference"))
 			return
 		}
 		d.copyWithChildren(src, dataUsageHash(ch), &hash)
@@ -901,6 +914,9 @@ func (d *dataUsageCache) sizeRecursive(path string) *dataUsageEntry {
 		return root
 	}
 	flat := d.flatten(*root)
+	if flat.ReplicationStats.empty() {
+		flat.ReplicationStats = nil
+	}
 	return &flat
 }
 
@@ -1024,7 +1040,7 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 	}
 
 	if retries == 5 {
-		logger.LogOnceIf(ctx, fmt.Errorf("maximum retry reached to load the data usage cache `%s`", name), "retry-loading-data-usage-cache")
+		scannerLogOnceIf(ctx, fmt.Errorf("maximum retry reached to load the data usage cache `%s`", name), "retry-loading-data-usage-cache")
 	}
 
 	return nil

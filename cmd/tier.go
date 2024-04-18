@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -34,7 +35,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -219,7 +219,7 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig, ig
 		return errTierAlreadyExists
 	}
 
-	d, err := newWarmBackend(ctx, tier)
+	d, err := newWarmBackend(ctx, tier, true)
 	if err != nil {
 		return err
 	}
@@ -243,8 +243,11 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig, ig
 
 // Remove removes tier if it is empty.
 func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
-	d, err := config.getDriver(tier)
+	d, err := config.getDriver(ctx, tier)
 	if err != nil {
+		if errors.Is(err, errTierNotFound) {
+			return nil
+		}
 		return err
 	}
 	if inuse, err := d.InUse(ctx); err != nil {
@@ -262,7 +265,7 @@ func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
 // Verify verifies if tier's config is valid by performing all supported
 // operations on the corresponding warmbackend.
 func (config *TierConfigMgr) Verify(ctx context.Context, tier string) error {
-	d, err := config.getDriver(tier)
+	d, err := config.getDriver(ctx, tier)
 	if err != nil {
 		return err
 	}
@@ -359,7 +362,7 @@ func (config *TierConfigMgr) Edit(ctx context.Context, tierName string, creds ma
 		cfg.MinIO.SecretKey = creds.SecretKey
 	}
 
-	d, err := newWarmBackend(ctx, cfg)
+	d, err := newWarmBackend(ctx, cfg, true)
 	if err != nil {
 		return err
 	}
@@ -383,7 +386,7 @@ func (config *TierConfigMgr) Bytes() ([]byte, error) {
 }
 
 // getDriver returns a warmBackend interface object initialized with remote tier config matching tierName
-func (config *TierConfigMgr) getDriver(tierName string) (d WarmBackend, err error) {
+func (config *TierConfigMgr) getDriver(ctx context.Context, tierName string) (d WarmBackend, err error) {
 	config.Lock()
 	defer config.Unlock()
 
@@ -399,7 +402,7 @@ func (config *TierConfigMgr) getDriver(tierName string) (d WarmBackend, err erro
 	if !ok {
 		return nil, errTierNotFound
 	}
-	d, err = newWarmBackend(context.TODO(), t)
+	d, err = newWarmBackend(ctx, t, false)
 	if err != nil {
 		return nil, err
 	}
@@ -463,6 +466,10 @@ func (config *TierConfigMgr) configReader(ctx context.Context) (*PutObjReader, *
 // Reload updates config by reloading remote tier config from config store.
 func (config *TierConfigMgr) Reload(ctx context.Context, objAPI ObjectLayer) error {
 	newConfig, err := loadTierConfig(ctx, objAPI)
+
+	config.Lock()
+	defer config.Unlock()
+
 	switch err {
 	case nil:
 		break
@@ -475,8 +482,6 @@ func (config *TierConfigMgr) Reload(ctx context.Context, objAPI ObjectLayer) err
 		return err
 	}
 
-	config.Lock()
-	defer config.Unlock()
 	// Reset drivercache built using current config
 	for k := range config.drivercache {
 		delete(config.drivercache, k)
@@ -534,7 +539,7 @@ func (config *TierConfigMgr) refreshTierConfig(ctx context.Context, objAPI Objec
 		case <-t.C:
 			err := config.Reload(ctx, objAPI)
 			if err != nil {
-				logger.LogIf(ctx, err)
+				tierLogIf(ctx, err)
 			}
 		}
 		t.Reset(tierCfgRefresh + randInterval())

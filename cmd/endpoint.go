@@ -514,7 +514,7 @@ func (l EndpointServerPools) hostsSorted() []*xnet.Host {
 		}
 		host, err := xnet.ParseHost(hostStr)
 		if err != nil {
-			logger.LogIf(GlobalContext, err)
+			internalLogIf(GlobalContext, err)
 			continue
 		}
 		hosts[i] = host
@@ -590,8 +590,6 @@ func hostResolveToLocalhost(endpoint Endpoint) bool {
 
 // UpdateIsLocal - resolves the host and discovers the local host.
 func (endpoints Endpoints) UpdateIsLocal() error {
-	orchestrated := IsDocker() || IsKubernetes()
-
 	var epsResolved int
 	var foundLocal bool
 	resolvedList := make([]bool, len(endpoints))
@@ -647,7 +645,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
+						bootLogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
 							endpoints[i].Hostname()), endpoints[i].Hostname(), logger.ErrorKind)
 					}
 
@@ -677,7 +675,7 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 							))
 						ctx := logger.SetReqInfo(GlobalContext,
 							reqInfo)
-						logger.LogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
+						bootLogOnceIf(ctx, err, endpoints[i].Hostname(), logger.ErrorKind)
 					}
 				} else {
 					resolvedList[i] = true
@@ -775,8 +773,6 @@ type PoolEndpointList []Endpoints
 
 // UpdateIsLocal - resolves all hosts and discovers which are local
 func (p PoolEndpointList) UpdateIsLocal() error {
-	orchestrated := IsDocker() || IsKubernetes()
-
 	var epsResolved int
 	var epCount int
 
@@ -811,7 +807,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 						continue
 					}
 
-					if endpoint.Host == "" {
+					if endpoint.Host == "" || (orchestrated && env.Get("_MINIO_SERVER_LOCAL", "") == endpoint.Host) {
 						if !foundLocal {
 							foundLocal = true
 						}
@@ -841,7 +837,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
+							bootLogOnceIf(ctx, fmt.Errorf("%s resolves to localhost in a containerized deployment, waiting for it to resolve to a valid IP",
 								endpoint.Hostname()), endpoint.Hostname(), logger.ErrorKind)
 						}
 						continue
@@ -870,7 +866,7 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 								))
 							ctx := logger.SetReqInfo(GlobalContext,
 								reqInfo)
-							logger.LogOnceIf(ctx, fmt.Errorf("Unable to resolve DNS for %s: %w", endpoint, err), endpoint.Hostname(), logger.ErrorKind)
+							bootLogOnceIf(ctx, fmt.Errorf("Unable to resolve DNS for %s: %w", endpoint, err), endpoint.Hostname(), logger.ErrorKind)
 						}
 					} else {
 						resolvedList[endpoint] = true
@@ -1034,7 +1030,6 @@ func CreatePoolEndpoints(serverAddr string, poolsLayout ...poolDisksLayout) ([]E
 			}
 		}
 
-		orchestrated := IsKubernetes() || IsDocker()
 		reverseProxy := (env.Get("_MINIO_REVERSE_PROXY", "") != "") && ((env.Get("MINIO_CI_CD", "") != "") || (env.Get("CI", "") != ""))
 		// If not orchestrated
 		// and not setup in reverse proxy

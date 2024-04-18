@@ -66,9 +66,11 @@ import (
 )
 
 // serverDebugLog will enable debug printing
-var serverDebugLog = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
-
-var currentReleaseTime time.Time
+var (
+	serverDebugLog     = env.Get("_MINIO_SERVER_DEBUG", config.EnableOff) == config.EnableOn
+	currentReleaseTime time.Time
+	orchestrated       = IsKubernetes() || IsDocker()
+)
 
 func init() {
 	if runtime.GOOS == "windows" {
@@ -361,6 +363,14 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 		ctxt.ConsoleAddr = ctx.String("console-address")
 	}
 
+	if cxml := ctx.String("crossdomain-xml"); cxml != "" {
+		buf, err := os.ReadFile(cxml)
+		if err != nil {
+			return err
+		}
+		ctxt.CrossDomainXML = string(buf)
+	}
+
 	// Check "no-compat" flag from command line argument.
 	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
 
@@ -486,7 +496,11 @@ func runDNSCache(ctx *cli.Context) {
 	dnsTTL := ctx.Duration("dns-cache-ttl")
 	// Check if we have configured a custom DNS cache TTL.
 	if dnsTTL <= 0 {
-		dnsTTL = 10 * time.Minute
+		if orchestrated {
+			dnsTTL = 30 * time.Second
+		} else {
+			dnsTTL = 10 * time.Minute
+		}
 	}
 
 	// Call to refresh will refresh names in cache.
@@ -749,12 +763,7 @@ func serverHandleEnvVars() {
 		for _, endpoint := range minioEndpoints {
 			if net.ParseIP(endpoint) == nil {
 				// Checking if the IP is a DNS entry.
-				lookupHost := globalDNSCache.LookupHost
-				if IsKubernetes() || IsDocker() {
-					lookupHost = net.DefaultResolver.LookupHost
-				}
-
-				addrs, err := lookupHost(GlobalContext, endpoint)
+				addrs, err := globalDNSCache.LookupHost(GlobalContext, endpoint)
 				if err != nil {
 					logger.FatalIf(err, "Unable to initialize MinIO server with [%s] invalid entry found in MINIO_PUBLIC_IPS", endpoint)
 				}
@@ -949,16 +958,18 @@ func handleKMSConfig() {
 			}
 		}
 
-		KMS, err := kms.NewWithConfig(kmsConf)
+		KMS, err := kms.NewWithConfig(kmsConf, KMSLogger{})
 		if err != nil {
 			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
 		}
-		// We check that the default key ID exists or try to create it otherwise.
-		// This implicitly checks that we can communicate to KES. We don't treat
-		// a policy error as failure condition since MinIO may not have the permission
+		// Try to generate a data encryption key. Only try to create key if this fails.
+		// This implicitly checks that we can communicate to KES.
+		// We don't treat a policy error as failure condition since MinIO may not have the permission
 		// to create keys - just to generate/decrypt data encryption keys.
-		if err = KMS.CreateKey(context.Background(), env.Get(kms.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
-			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
+		if _, err = KMS.GenerateKey(GlobalContext, env.Get(kms.EnvKESKeyName, ""), kms.Context{}); err != nil && errors.Is(err, kes.ErrKeyNotFound) {
+			if err = KMS.CreateKey(GlobalContext, env.Get(kms.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
+				logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
+			}
 		}
 		GlobalKMS = KMS
 	}
@@ -1035,7 +1046,7 @@ func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secu
 		}
 		if err = manager.AddCertificate(certFile, keyFile); err != nil {
 			err = fmt.Errorf("Unable to load TLS certificate '%s,%s': %w", certFile, keyFile, err)
-			logger.LogIf(GlobalContext, err, logger.ErrorKind)
+			bootLogIf(GlobalContext, err, logger.ErrorKind)
 		}
 	}
 	secureConn = true

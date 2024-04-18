@@ -32,7 +32,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v2/policy"
 )
@@ -55,7 +54,7 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 	opts := getSRAddOptions(r)
 	status, err := globalSiteReplicationSys.AddPeerClusters(ctx, sites, opts)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -93,7 +92,7 @@ func (a adminAPIHandlers) SRPeerJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := globalSiteReplicationSys.PeerJoinReq(ctx, joinArg); err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -140,7 +139,7 @@ func (a adminAPIHandlers) SRPeerBucketOps(w http.ResponseWriter, r *http.Request
 		globalSiteReplicationSys.purgeDeletedBucket(ctx, objectAPI, bucket)
 	}
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -192,7 +191,7 @@ func (a adminAPIHandlers) SRPeerReplicateIAMItem(w http.ResponseWriter, r *http.
 		err = globalSiteReplicationSys.PeerGroupInfoChangeHandler(ctx, item.GroupInfo, item.UpdatedAt)
 	}
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -263,7 +262,7 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		err = globalSiteReplicationSys.PeerBucketLCConfigHandler(ctx, item.Bucket, item.ExpiryLCConfig, item.UpdatedAt)
 	}
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -316,7 +315,6 @@ func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptio
 	if encryptionKey != "" {
 		data, err = madmin.DecryptData(encryptionKey, bytes.NewReader(data))
 		if err != nil {
-			logger.LogIf(ctx, err)
 			return SRError{
 				Cause: err,
 				Code:  ErrSiteReplicationInvalidRequest,
@@ -348,6 +346,18 @@ func (a adminAPIHandlers) SiteReplicationStatus(w http.ResponseWriter, r *http.R
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
+	}
+	// Report the ILMExpiryStats only if at least one site has replication of ILM expiry enabled
+	var replicateILMExpiry bool
+	for _, site := range info.Sites {
+		if site.ReplicateILMExpiry {
+			replicateILMExpiry = true
+			break
+		}
+	}
+	if !replicateILMExpiry {
+		// explicitly send nil for ILMExpiryStats
+		info.ILMExpiryStats = nil
 	}
 
 	if err = json.NewEncoder(w).Encode(info); err != nil {
@@ -396,7 +406,7 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 	opts := getSREditOptions(r)
 	status, err := globalSiteReplicationSys.EditPeerCluster(ctx, site, opts)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -433,7 +443,7 @@ func (a adminAPIHandlers) SRPeerEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := globalSiteReplicationSys.PeerEditReq(ctx, pi); err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -456,7 +466,7 @@ func (a adminAPIHandlers) SRStateEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := globalSiteReplicationSys.PeerStateEditReq(ctx, state); err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -493,7 +503,7 @@ func (a adminAPIHandlers) SiteReplicationRemove(w http.ResponseWriter, r *http.R
 	}
 	status, err := globalSiteReplicationSys.RemovePeerCluster(ctx, objectAPI, rreq)
 	if err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -524,7 +534,7 @@ func (a adminAPIHandlers) SRPeerRemove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := globalSiteReplicationSys.InternalRemoveReq(ctx, objectAPI, req); err != nil {
-		logger.LogIf(ctx, err)
+		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -586,7 +596,7 @@ func (a adminAPIHandlers) SiteReplicationDevNull(w http.ResponseWriter, r *http.
 			// If there is a disconnection before globalNetPerfMinDuration (we give a margin of error of 1 sec)
 			// would mean the network is not stable. Logging here will help in debugging network issues.
 			if time.Since(connectTime) < (globalNetPerfMinDuration - time.Second) {
-				logger.LogIf(ctx, err)
+				adminLogIf(ctx, err)
 			}
 		}
 		if err != nil {
@@ -609,5 +619,5 @@ func (a adminAPIHandlers) SiteReplicationNetPerf(w http.ResponseWriter, r *http.
 		duration = globalNetPerfMinDuration
 	}
 	result := siteNetperf(r.Context(), duration)
-	logger.LogIf(r.Context(), gob.NewEncoder(w).Encode(result))
+	adminLogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }

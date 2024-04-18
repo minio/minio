@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -35,6 +35,12 @@ var (
 		config.HelpKV{
 			Key:         ClassRRS,
 			Description: `set the parity count for reduced redundancy storage class` + defaultHelpPostfix(ClassRRS),
+			Optional:    true,
+			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         Optimize,
+			Description: `optimize parity calculation for standard storage class, set 'capacity' for capacity optimized (no additional parity)` + defaultHelpPostfix(Optimize),
 			Optional:    true,
 			Type:        "string",
 		},

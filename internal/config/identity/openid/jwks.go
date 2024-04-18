@@ -20,6 +20,7 @@ package openid
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	"encoding/base64"
@@ -117,6 +118,13 @@ func (key *JWKS) DecodePublicKey() (crypto.PublicKey, error) {
 			Y:     &y,
 		}, nil
 	default:
+		if key.Alg == "EdDSA" && key.Crv == "Ed25519" && key.X != "" {
+			pb, err := base64.RawURLEncoding.DecodeString(key.X)
+			if err != nil {
+				return nil, errMalformedJWKECKey
+			}
+			return ed25519.PublicKey(pb), nil
+		}
 		return nil, fmt.Errorf("Unknown JWK key type %s", key.Kty)
 	}
 }

@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	pathutil "path"
 	"path/filepath"
@@ -54,8 +53,6 @@ import (
 
 const (
 	nullVersionID = "null"
-	// Largest streams threshold per shard.
-	largestFileThreshold = 64 * humanize.MiByte // Optimized for HDDs
 
 	// Small file threshold below which data accompanies metadata from storage layer.
 	smallFileThreshold = 128 * humanize.KiByte // Optimized for NVMe/SSDs
@@ -105,9 +102,6 @@ type xlStorage struct {
 
 	diskID string
 
-	// Indexes, will be -1 until assigned a set.
-	poolIndex, setIndex, diskIndex int
-
 	formatFileInfo  os.FileInfo
 	formatFile      string
 	formatLegacy    bool
@@ -119,6 +113,7 @@ type xlStorage struct {
 
 	nrRequests   uint64
 	major, minor uint32
+	fsType       string
 
 	immediatePurge chan string
 
@@ -197,15 +192,6 @@ func getValidPath(path string) (string, error) {
 	return path, nil
 }
 
-// Initialize a new storage disk.
-func newLocalXLStorage(path string) (*xlStorage, error) {
-	u := url.URL{Path: path}
-	return newXLStorage(Endpoint{
-		URL:     &u,
-		IsLocal: true,
-	}, true)
-}
-
 // Make Erasure backend meta volumes.
 func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 	if disk == nil {
@@ -232,9 +218,6 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		endpoint:       ep,
 		globalSync:     globalFSOSync,
 		diskInfoCache:  cachevalue.New[DiskInfo](),
-		poolIndex:      -1,
-		setIndex:       -1,
-		diskIndex:      -1,
 		immediatePurge: make(chan string, immediatePurgeQueue),
 	}
 
@@ -256,6 +239,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	}
 	s.major = info.Major
 	s.minor = info.Minor
+	s.fsType = info.FSType
 
 	if !globalIsCICD && !globalIsErasureSD {
 		var rootDrive bool
@@ -315,7 +299,19 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		if err = json.Unmarshal(s.formatData, &format); err != nil {
 			return s, errCorruptedFormat
 		}
-		s.diskID = format.Erasure.This
+		m, n, err := findDiskIndexByDiskID(format, format.Erasure.This)
+		if err != nil {
+			return s, err
+		}
+		diskID := format.Erasure.This
+		if m != ep.SetIdx || n != ep.DiskIdx {
+			storageLogOnceIf(context.Background(),
+				fmt.Errorf("unexpected drive ordering on pool: %s: found drive at (set=%s, drive=%s), expected at (set=%s, drive=%s): %s(%s): %w",
+					humanize.Ordinal(ep.PoolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(ep.SetIdx+1), humanize.Ordinal(ep.DiskIdx+1),
+					s, s.diskID, errInconsistentDisk), "drive-order-format-json")
+			return s, errInconsistentDisk
+		}
+		s.diskID = diskID
 		s.formatLastCheck = time.Now()
 		s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	}
@@ -329,6 +325,32 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	} else {
 		return s, err
 	}
+
+	// Initialize DiskInfo cache
+	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
+		func() (DiskInfo, error) {
+			dcinfo := DiskInfo{}
+			di, err := getDiskInfo(s.drivePath)
+			if err != nil {
+				return dcinfo, err
+			}
+			dcinfo.Major = di.Major
+			dcinfo.Minor = di.Minor
+			dcinfo.Total = di.Total
+			dcinfo.Free = di.Free
+			dcinfo.Used = di.Used
+			dcinfo.UsedInodes = di.Files - di.Ffree
+			dcinfo.FreeInodes = di.Ffree
+			dcinfo.FSType = di.FSType
+			diskID, err := s.GetDiskID()
+			// Healing is 'true' when
+			// - if we found an unformatted disk (no 'format.json')
+			// - if we found healing tracker 'healing.bin'
+			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
+			dcinfo.ID = diskID
+			return dcinfo, err
+		},
+	)
 
 	// Success.
 	return s, nil
@@ -382,24 +404,7 @@ func (s *xlStorage) IsLocal() bool {
 
 // Retrieve location indexes.
 func (s *xlStorage) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
-	// If unset, see if we can locate it.
-	if s.poolIndex < 0 || s.setIndex < 0 || s.diskIndex < 0 {
-		return getXLDiskLoc(s.diskID)
-	}
-	return s.poolIndex, s.setIndex, s.diskIndex
-}
-
-func (s *xlStorage) SetFormatData(b []byte) {
-	s.Lock()
-	defer s.Unlock()
-	s.formatData = b
-}
-
-// Set location indexes.
-func (s *xlStorage) SetDiskLoc(poolIdx, setIdx, diskIdx int) {
-	s.poolIndex = poolIdx
-	s.setIndex = setIdx
-	s.diskIndex = diskIdx
+	return s.endpoint.PoolIdx, s.endpoint.SetIdx, s.endpoint.DiskIdx
 }
 
 func (s *xlStorage) Healing() *healingTracker {
@@ -411,7 +416,7 @@ func (s *xlStorage) Healing() *healingTracker {
 	}
 	h := newHealingTracker()
 	_, err = h.UnmarshalMsg(b)
-	logger.LogIf(GlobalContext, err)
+	bugLogIf(GlobalContext, err)
 	return h
 }
 
@@ -745,31 +750,6 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
-	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
-		func() (DiskInfo, error) {
-			dcinfo := DiskInfo{}
-			di, err := getDiskInfo(s.drivePath)
-			if err != nil {
-				return dcinfo, err
-			}
-			dcinfo.Major = di.Major
-			dcinfo.Minor = di.Minor
-			dcinfo.Total = di.Total
-			dcinfo.Free = di.Free
-			dcinfo.Used = di.Used
-			dcinfo.UsedInodes = di.Files - di.Ffree
-			dcinfo.FreeInodes = di.Ffree
-			dcinfo.FSType = di.FSType
-			diskID, err := s.GetDiskID()
-			// Healing is 'true' when
-			// - if we found an unformatted disk (no 'format.json')
-			// - if we found healing tracker 'healing.bin'
-			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
-			dcinfo.ID = diskID
-			return dcinfo, err
-		},
-	)
-
 	info, err = s.diskInfoCache.Get()
 	info.NRRequests = s.nrRequests
 	info.Rotational = s.rotational
@@ -805,12 +785,12 @@ func (s *xlStorage) checkFormatJSON() (os.FileInfo, error) {
 			} else if osIsPermission(err) {
 				return nil, errDiskAccessDenied
 			}
-			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+			storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 			return nil, errCorruptedBackend
 		} else if osIsPermission(err) {
 			return nil, errDiskAccessDenied
 		}
-		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+		storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 		return nil, errCorruptedBackend
 	}
 	return fi, nil
@@ -856,30 +836,44 @@ func (s *xlStorage) GetDiskID() (string, error) {
 			} else if osIsPermission(err) {
 				return "", errDiskAccessDenied
 			}
-			logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+			storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 			return "", errCorruptedBackend
 		} else if osIsPermission(err) {
 			return "", errDiskAccessDenied
 		}
-		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+		storageLogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
 		return "", errCorruptedBackend
 	}
 
 	format := &formatErasureV3{}
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	if err = json.Unmarshal(b, &format); err != nil {
-		logger.LogOnceIf(GlobalContext, err, "check-format-json") // log unexpected errors
+		bugLogIf(GlobalContext, err) // log unexpected errors
 		return "", errCorruptedFormat
 	}
 
+	m, n, err := findDiskIndexByDiskID(format, format.Erasure.This)
+	if err != nil {
+		return "", err
+	}
+
+	diskID = format.Erasure.This
+	ep := s.endpoint
+	if m != ep.SetIdx || n != ep.DiskIdx {
+		storageLogOnceIf(GlobalContext,
+			fmt.Errorf("unexpected drive ordering on pool: %s: found drive at (set=%s, drive=%s), expected at (set=%s, drive=%s): %s(%s): %w",
+				humanize.Ordinal(ep.PoolIdx+1), humanize.Ordinal(m+1), humanize.Ordinal(n+1), humanize.Ordinal(ep.SetIdx+1), humanize.Ordinal(ep.DiskIdx+1),
+				s, s.diskID, errInconsistentDisk), "drive-order-format-json")
+		return "", errInconsistentDisk
+	}
 	s.Lock()
-	defer s.Unlock()
-	s.formatData = b
-	s.diskID = format.Erasure.This
+	s.diskID = diskID
 	s.formatLegacy = format.Erasure.DistributionAlgo == formatErasureVersionV2DistributionAlgoV1
 	s.formatFileInfo = fi
+	s.formatData = b
 	s.formatLastCheck = time.Now()
-	return s.diskID, nil
+	s.Unlock()
+	return diskID, nil
 }
 
 // Make a volume entry.
@@ -1196,6 +1190,19 @@ func (s *xlStorage) cleanupTrashImmediateCallers(ctx context.Context) {
 	}
 }
 
+const almostFilledPercent = 0.05
+
+func (s *xlStorage) diskAlmostFilled() bool {
+	info, err := s.diskInfoCache.Get()
+	if err != nil {
+		return false
+	}
+	if info.Used == 0 || info.UsedInodes == 0 {
+		return false
+	}
+	return (float64(info.Free)/float64(info.Used)) < almostFilledPercent || (float64(info.FreeInodes)/float64(info.UsedInodes)) < almostFilledPercent
+}
+
 func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool) (err error) {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
@@ -1225,6 +1232,10 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 
 	if err != nil {
 		return err
+	}
+
+	if !immediatePurge && s.diskAlmostFilled() {
+		immediatePurge = true
 	}
 
 	// immediately purge the target
@@ -2113,11 +2124,15 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 
 	var bufp *[]byte
 	switch {
-	case fileSize > 0 && fileSize >= largestFileThreshold:
+	case fileSize > 0 && fileSize >= xioutil.XXLargeBlock*2:
+		// use a larger 8MiB buffer for a really really large streamsx.
+		bufp = xioutil.ODirectPoolXXLarge.Get().(*[]byte)
+		defer xioutil.ODirectPoolXXLarge.Put(bufp)
+	case fileSize > 0 && fileSize >= xioutil.XLargeBlock:
 		// use a larger 4MiB buffer for a really large streams.
 		bufp = xioutil.ODirectPoolXLarge.Get().(*[]byte)
 		defer xioutil.ODirectPoolXLarge.Put(bufp)
-	case fileSize <= smallFileThreshold:
+	case fileSize <= xioutil.SmallBlock:
 		bufp = xioutil.ODirectPoolSmall.Get().(*[]byte)
 		defer xioutil.ODirectPoolSmall.Put(bufp)
 	default:
@@ -2180,7 +2195,7 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 
 	var w *os.File
 	if sync {
-		// Perform directIO along with fdatasync for larger xl.meta, mostly when
+		// Perform DirectIO along with fdatasync for larger xl.meta, mostly when
 		// xl.meta has "inlined data" we prefer writing O_DIRECT and then doing
 		// fdatasync() at the end instead of opening the file with O_DSYNC.
 		//
@@ -2220,6 +2235,14 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {
+	// Specific optimization to avoid re-read from the drives for `format.json`
+	// in-case the caller is a network operation.
+	if volume == minioMetaBucket && path == formatConfigFile {
+		s.Lock()
+		s.formatData = b
+		s.Unlock()
+	}
+
 	return s.writeAll(ctx, volume, path, b, true)
 }
 
@@ -2423,7 +2446,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 		if err != nil && !IsErr(err, ignoredErrs...) && !contextCanceled(ctx) {
 			// Only log these errors if context is not yet canceled.
-			logger.LogOnceIf(ctx, fmt.Errorf("drive:%s, srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
+			storageLogOnceIf(ctx, fmt.Errorf("drive:%s, srcVolume: %s, srcPath: %s, dstVolume: %s:, dstPath: %s - error %v",
 				s.drivePath,
 				srcVolume, srcPath,
 				dstVolume, dstPath,
@@ -2522,12 +2545,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			xlMetaLegacy := &xlMetaV1Object{}
 			json := jsoniter.ConfigCompatibleWithStandardLibrary
 			if err := json.Unmarshal(dstBuf, xlMetaLegacy); err != nil {
-				logger.LogOnceIf(ctx, err, "read-data-unmarshal-"+dstFilePath)
+				storageLogOnceIf(ctx, err, "read-data-unmarshal-"+dstFilePath)
 				// Data appears corrupt. Drop data.
 			} else {
 				xlMetaLegacy.DataDir = legacyDataDir
 				if err = xlMeta.AddLegacy(xlMetaLegacy); err != nil {
-					logger.LogOnceIf(ctx, err, "read-data-add-legacy-"+dstFilePath)
+					storageLogOnceIf(ctx, err, "read-data-add-legacy-"+dstFilePath)
 				}
 				legacyPreserved = true
 			}
@@ -2850,7 +2873,7 @@ func (s *xlStorage) VerifyFile(ctx context.Context, volume, path string, fi File
 				errFileVersionNotFound,
 			}...) {
 				logger.GetReqInfo(ctx).AppendTags("disk", s.String())
-				logger.LogOnceIf(ctx, err, partPath)
+				storageLogOnceIf(ctx, err, partPath)
 			}
 			return err
 		}

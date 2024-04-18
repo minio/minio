@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/minio/internal/logger"
+	"github.com/puzpuzpuz/xsync/v3"
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	etcd "go.etcd.io/etcd/client/v3"
 )
@@ -325,11 +325,11 @@ func (ies *IAMEtcdStore) loadGroups(ctx context.Context, m map[string]GroupInfo)
 	return nil
 }
 
-func (ies *IAMEtcdStore) loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, _ int) error {
+func (ies *IAMEtcdStore) loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy], retries int) error {
 	return ies.loadMappedPolicy(ctx, name, userType, isGroup, m)
 }
 
-func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
+func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error {
 	var p MappedPolicy
 	err := ies.loadIAMConfig(ctx, &p, getMappedPolicyPath(name, userType, isGroup))
 	if err != nil {
@@ -338,11 +338,11 @@ func (ies *IAMEtcdStore) loadMappedPolicy(ctx context.Context, name string, user
 		}
 		return err
 	}
-	m[name] = p
+	m.Store(name, p)
 	return nil
 }
 
-func getMappedPolicy(ctx context.Context, kv *mvccpb.KeyValue, userType IAMUserType, isGroup bool, m map[string]MappedPolicy, basePrefix string) error {
+func getMappedPolicy(kv *mvccpb.KeyValue, m *xsync.MapOf[string, MappedPolicy], basePrefix string) error {
 	var p MappedPolicy
 	err := getIAMConfig(&p, kv.Value, string(kv.Key))
 	if err != nil {
@@ -352,11 +352,11 @@ func getMappedPolicy(ctx context.Context, kv *mvccpb.KeyValue, userType IAMUserT
 		return err
 	}
 	name := extractPathPrefixAndSuffix(string(kv.Key), basePrefix, ".json")
-	m[name] = p
+	m.Store(name, p)
 	return nil
 }
 
-func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m map[string]MappedPolicy) error {
+func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error {
 	cctx, cancel := context.WithTimeout(ctx, defaultContextTimeout)
 	defer cancel()
 	var basePrefix string
@@ -381,7 +381,7 @@ func (ies *IAMEtcdStore) loadMappedPolicies(ctx context.Context, userType IAMUse
 
 	// Parse all policies mapping to create the proper data model
 	for _, kv := range r.Kvs {
-		if err = getMappedPolicy(ctx, kv, userType, isGroup, m, basePrefix); err != nil && !errors.Is(err, errNoSuchPolicy) {
+		if err = getMappedPolicy(kv, m, basePrefix); err != nil && !errors.Is(err, errNoSuchPolicy) {
 			return err
 		}
 	}
@@ -459,7 +459,7 @@ func (ies *IAMEtcdStore) watch(ctx context.Context, keyPath string) <-chan iamWa
 						goto outerLoop
 					}
 					if err := watchResp.Err(); err != nil {
-						logger.LogIf(ctx, err)
+						iamLogIf(ctx, err)
 						// log and retry.
 						time.Sleep(1 * time.Second)
 						// Upon an error on watch channel

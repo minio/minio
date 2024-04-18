@@ -233,6 +233,10 @@ func (es *expiryState) enqueueByDays(oi ObjectInfo, event lifecycle.Event, src l
 // enqueueByNewerNoncurrent enqueues object versions expired by
 // NewerNoncurrentVersions limit for expiry.
 func (es *expiryState) enqueueByNewerNoncurrent(bucket string, versions []ObjectToDelete, lcEvent lifecycle.Event) {
+	if len(versions) == 0 {
+		return
+	}
+
 	task := newerNoncurrentTask{bucket: bucket, versions: versions, event: lcEvent}
 	wrkr := es.getWorkerCh(task.OpHash())
 	if wrkr == nil {
@@ -332,7 +336,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 			case newerNoncurrentTask:
 				deleteObjectVersions(es.ctx, es.objAPI, v.bucket, v.versions, v.event)
 			case jentry:
-				logger.LogIf(es.ctx, deleteObjectFromRemoteTier(es.ctx, v.ObjName, v.VersionID, v.TierName))
+				transitionLogIf(es.ctx, deleteObjectFromRemoteTier(es.ctx, v.ObjName, v.VersionID, v.TierName))
 			case freeVersionTask:
 				oi := v.ObjectInfo
 				traceFn := globalLifecycleSys.trace(oi)
@@ -351,7 +355,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				// Remove the remote object
 				err := deleteObjectFromRemoteTier(es.ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
 				if ignoreNotFoundErr(err) != nil {
-					logger.LogIf(es.ctx, err)
+					transitionLogIf(es.ctx, err)
 					return
 				}
 
@@ -364,10 +368,10 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 					auditLogLifecycle(es.ctx, oi, ILMFreeVersionDelete, nil, traceFn)
 				}
 				if ignoreNotFoundErr(err) != nil {
-					logger.LogIf(es.ctx, err)
+					transitionLogIf(es.ctx, err)
 				}
 			default:
-				logger.LogIf(es.ctx, fmt.Errorf("Invalid work type - %v", v))
+				bugLogIf(es.ctx, fmt.Errorf("Invalid work type - %v", v))
 			}
 		}
 	}
@@ -482,7 +486,7 @@ func (t *transitionState) worker(objectAPI ObjectLayer) {
 			if err := transitionObject(t.ctx, objectAPI, task.objInfo, newLifecycleAuditEvent(task.src, task.event)); err != nil {
 				if !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !xnet.IsNetworkOrHostDown(err, false) {
 					if !strings.Contains(err.Error(), "use of closed network connection") {
-						logger.LogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
+						transitionLogIf(t.ctx, fmt.Errorf("Transition to %s failed for %s/%s version:%s with %w",
 							task.event.StorageClass, task.objInfo.Bucket, task.objInfo.Name, task.objInfo.VersionID, err))
 					}
 				}
@@ -610,7 +614,7 @@ func expireTransitionedObject(ctx context.Context, objectAPI ObjectLayer, oi *Ob
 		// remote object
 		opts.SkipFreeVersion = true
 	} else {
-		logger.LogIf(ctx, err)
+		transitionLogIf(ctx, err)
 	}
 
 	// Now, delete object from hot-tier namespace
@@ -717,9 +721,9 @@ func auditTierActions(ctx context.Context, tier string, bytes int64) func(err er
 
 // getTransitionedObjectReader returns a reader from the transitioned tier.
 func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, oi ObjectInfo, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	tgtClient, err := globalTierConfigMgr.getDriver(oi.TransitionedObject.Tier)
+	tgtClient, err := globalTierConfigMgr.getDriver(ctx, oi.TransitionedObject.Tier)
 	if err != nil {
-		return nil, fmt.Errorf("transition storage class not configured")
+		return nil, fmt.Errorf("transition storage class not configured: %w", err)
 	}
 
 	fn, off, length, err := NewGetObjectReader(rs, oi, opts)
@@ -875,7 +879,7 @@ func postRestoreOpts(ctx context.Context, r *http.Request, bucket, object string
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
-			logger.LogIf(ctx, err)
+			s3LogIf(ctx, err)
 			return opts, InvalidVersionID{
 				Bucket:    bucket,
 				Object:    object,

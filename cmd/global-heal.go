@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"runtime"
 	"sort"
 	"time"
@@ -153,7 +154,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		_, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
 		if err != nil {
 			// Log bucket healing error if any, we shall retry again.
-			logger.LogIf(ctx, err)
+			healingLogIf(ctx, err)
 		}
 	}
 
@@ -177,7 +178,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		numHealers = uint64(v)
 	}
 
-	logger.Event(ctx, fmt.Sprintf("Healing drive '%s' - use %d parallel workers.", tracker.disk.String(), numHealers))
+	healingLogEvent(ctx, fmt.Sprintf("Healing drive '%s' - use %d parallel workers.", tracker.disk.String(), numHealers))
 
 	jt, _ := workers.New(int(numHealers))
 
@@ -204,7 +205,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		if _, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
 			ScanMode: scanMode,
 		}); err != nil {
-			logger.LogIf(ctx, err)
+			// Set this such that when we return this function
+			// we let the caller retry this disk again for the
+			// buckets that failed healing.
+			retErr = err
+			healingLogIf(ctx, err)
 			continue
 		}
 
@@ -226,14 +231,17 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		if len(disks) == 0 {
 			// No object healing necessary
 			tracker.bucketDone(bucket)
-			logger.LogIf(ctx, tracker.update(ctx))
+			healingLogIf(ctx, tracker.update(ctx))
 			continue
 		}
 
-		// Limit listing to 3 drives.
-		if len(disks) > 3 {
-			disks = disks[:3]
-		}
+		rand.Shuffle(len(disks), func(i, j int) {
+			disks[i], disks[j] = disks[j], disks[i]
+		})
+
+		expectedDisks := len(disks)/2 + 1
+		fallbackDisks := disks[expectedDisks:]
+		disks = disks[:expectedDisks]
 
 		type healEntryResult struct {
 			bytes     uint64
@@ -293,7 +301,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				if res.entryDone {
 					tracker.setObject(res.name)
 					if time.Since(tracker.getLastUpdate()) > time.Minute {
-						logger.LogIf(ctx, tracker.update(ctx))
+						healingLogIf(ctx, tracker.update(ctx))
 					}
 					continue
 				}
@@ -306,7 +314,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			select {
 			case <-ctx.Done():
 				if !contextCanceled(ctx) {
-					logger.LogIf(ctx, ctx.Err())
+					healingLogIf(ctx, ctx.Err())
 				}
 				return false
 			case results <- result:
@@ -360,7 +368,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 						return
 					}
 					result = healEntryFailure(0)
-					logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
+					healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
 				} else {
 					result = healEntrySuccess(0)
 				}
@@ -399,9 +407,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					// If not deleted, assume they failed.
 					result = healEntryFailure(uint64(version.Size))
 					if version.VersionID != "" {
-						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
+						healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
 					} else {
-						logger.LogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
+						healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
 					}
 				} else {
 					result = healEntrySuccess(uint64(version.Size))
@@ -436,6 +444,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 		err := listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
+			fallbackDisks:  fallbackDisks,
 			bucket:         actualBucket,
 			path:           prefix,
 			recursive:      true,
@@ -465,7 +474,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			// we let the caller retry this disk again for the
 			// buckets it failed to list.
 			retErr = err
-			logger.LogIf(ctx, err)
+			healingLogIf(ctx, err)
 			continue
 		}
 
@@ -475,7 +484,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			return ctx.Err()
 		default:
 			tracker.bucketDone(bucket)
-			logger.LogIf(ctx, tracker.update(ctx))
+			healingLogIf(ctx, tracker.update(ctx))
 		}
 	}
 
