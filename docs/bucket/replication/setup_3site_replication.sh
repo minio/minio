@@ -194,7 +194,7 @@ fi
 sleep 5
 
 head -c 221227088 </dev/urandom >200M
-./mc.RELEASE.2021-03-12T03-36-59Z cp --config-dir ~/.mc --enc-s3 "sitea" --quiet 200M "sitea/bucket/200M-enc-v1"
+./mc.RELEASE.2021-03-12T03-36-59Z cp --config-dir ~/.mc --encrypt "sitea" --quiet 200M "sitea/bucket/200M-enc-v1"
 ./mc.RELEASE.2021-03-12T03-36-59Z cp --config-dir ~/.mc --quiet 200M "sitea/bucket/200M-v1"
 
 ./mc cp --enc-s3 "sitea" --quiet 200M "sitea/bucket/200M-enc-v2"
