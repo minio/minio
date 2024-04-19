@@ -67,9 +67,7 @@ func getDefaultOpts(header http.Header, copySource bool, metadata map[string]str
 		opts.ServerSideEncryption = encrypt.NewSSE()
 	}
 	_, opts.ProxyRequest = header[xhttp.MinIOSourceProxyRequest]
-	if _, ok := header[xhttp.MinIOSourceReplicationRequest]; ok {
-		opts.ReplicationRequest = true
-	}
+	_, opts.ReplicationRequest = header[xhttp.MinIOSourceReplicationRequest]
 	opts.Speedtest = header.Get(globalObjectPerfUserMetadata) != ""
 	return
 }
