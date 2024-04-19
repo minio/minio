@@ -32,15 +32,15 @@ TEST_MINIO_ENC_KEY="MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDA"
 echo -n "Setup certs for MinIO instances ..."
 wget -O certgen https://github.com/minio/certgen/releases/latest/download/certgen-linux-amd64 && chmod +x certgen
 ./certgen --host localhost
-mkdir -p ~/.minio/certs
-mv public.crt ~/.minio/certs || sudo mv public.crt ~/.minio/certs
-mv private.key ~/.minio/certs || sudo mv private.key ~/.minio/certs
+mkdir -p /tmp/certs
+mv public.crt /tmp/certs || sudo mv public.crt /tmp/certs
+mv private.key /tmp/certs || sudo mv private.key /tmp/certs
 echo "done"
 
 # Start MinIO instances
 echo -n "Starting MinIO instances ..."
-minio server --address ":9001" --console-address ":10000" /tmp/minio1/{1...4}/disk{1...4} /tmp/minio1/{5...8}/disk{1...4} >/tmp/minio1_1.log 2>&1 &
-minio server --address ":9002" --console-address ":11000" /tmp/minio2/{1...4}/disk{1...4} /tmp/minio2/{5...8}/disk{1...4} >/tmp/minio2_1.log 2>&1 &
+minio server --certs-dir /tmp/certs --address ":9001" --console-address ":10000" /tmp/minio1/{1...4}/disk{1...4} /tmp/minio1/{5...8}/disk{1...4} >/tmp/minio1_1.log 2>&1 &
+minio server --certs-dir /tmp/certs --address ":9002" --console-address ":11000" /tmp/minio2/{1...4}/disk{1...4} /tmp/minio2/{5...8}/disk{1...4} >/tmp/minio2_1.log 2>&1 &
 echo "done"
 
 if [ ! -f ./mc ]; then
