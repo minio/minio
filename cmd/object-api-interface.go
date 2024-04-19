@@ -90,7 +90,6 @@ type ObjectOptions struct {
 	PreserveETag                        string    // preserves this etag during a PUT call.
 	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
 	ProxyRequest                        bool      // only set for GET/HEAD in active-active replication scenario
-	ProxyHeaderSet                      bool      // only set for GET/HEAD in active-active replication scenario
 	ReplicationRequest                  bool      // true only if replication request
 	ReplicationSourceTaggingTimestamp   time.Time // set if MinIOSourceTaggingTimestamp received
 	ReplicationSourceLegalholdTimestamp time.Time // set if MinIOSourceObjectLegalholdTimestamp received

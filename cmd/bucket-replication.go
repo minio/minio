@@ -2226,7 +2226,7 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	if opts.VersionSuspended {
 		return &madmin.BucketTargets{}
 	}
-	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) {
+	if opts.ProxyRequest {
 		return &madmin.BucketTargets{}
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
@@ -2247,7 +2247,7 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (tgt *TargetClient, oi ObjectInfo, proxy proxyResult) {
 	// this option is set when active-active replication is in place between site A -> B,
 	// and site B does not have the object yet.
-	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+	if opts.ProxyRequest { // true only when site B sets MinIOSourceProxyRequest header
 		return nil, oi, proxy
 	}
 	var perr error
@@ -2372,7 +2372,7 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *tags.Tags, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (proxy proxyResult) {
 	// this option is set when active-active replication is in place between site A -> B,
 	// and request hits site B that does not have the object yet.
-	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+	if opts.ProxyRequest { // true only when site B sets MinIOSourceProxyRequest header
 		return proxy
 	}
 	var wg sync.WaitGroup
@@ -2440,7 +2440,7 @@ func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *t
 func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (tgs *tags.Tags, proxy proxyResult) {
 	// this option is set when active-active replication is in place between site A -> B,
 	// and request hits site B that does not have the object yet.
-	if opts.ProxyRequest || (opts.ProxyHeaderSet && !opts.ProxyRequest) { // true only when site B sets MinIOSourceProxyRequest header
+	if opts.ProxyRequest { // true only when site B sets MinIOSourceProxyRequest header
 		return nil, proxy
 	}
 	var wg sync.WaitGroup
