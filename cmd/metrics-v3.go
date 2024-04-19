@@ -36,6 +36,7 @@ const (
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
 	systemMemoryCollectorPath           collectorPath = "/system/memory"
+	systemCPUCollectorPath              collectorPath = "/system/cpu"
 	systemProcessCollectorPath          collectorPath = "/system/process"
 	systemGoCollectorPath               collectorPath = "/system/go"
 
@@ -126,6 +127,20 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			memUsedPercMD,
 		},
 		loadMemoryMetrics,
+	)
+
+	systemCPUMG := NewMetricsGroup(systemCPUCollectorPath,
+		[]MetricDescriptor{
+			sysCPUAvgIdleMD,
+			sysCPUAvgIOWaitMD,
+			sysCPULoadMD,
+			sysCPULoadPercMD,
+			sysCPUNiceMD,
+			sysCPUStealMD,
+			sysCPUSystemMD,
+			sysCPUUserMD,
+		},
+		loadCPUMetrics,
 	)
 
 	systemDriveMG := NewMetricsGroup(systemDriveCollectorPath,
@@ -235,6 +250,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		systemNetworkInternodeMG,
 		systemDriveMG,
 		systemMemoryMG,
+		systemCPUMG,
 
 		clusterHealthMG,
 		clusterUsageObjectsMG,
