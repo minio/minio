@@ -52,6 +52,9 @@ func (bp *BytePoolCap) Populate() {
 // Get gets a []byte from the BytePool, or creates a new one if none are
 // available in the pool.
 func (bp *BytePoolCap) Get() (b []byte) {
+	if bp == nil {
+		return nil
+	}
 	select {
 	case b = <-bp.c:
 		// reuse existing buffer
@@ -68,6 +71,9 @@ func (bp *BytePoolCap) Get() (b []byte) {
 
 // Put returns the given Buffer to the BytePool.
 func (bp *BytePoolCap) Put(b []byte) {
+	if bp == nil {
+		return
+	}
 	select {
 	case bp.c <- b:
 		// buffer went back into pool
@@ -78,10 +84,16 @@ func (bp *BytePoolCap) Put(b []byte) {
 
 // Width returns the width of the byte arrays in this pool.
 func (bp *BytePoolCap) Width() (n int) {
+	if bp == nil {
+		return 0
+	}
 	return bp.w
 }
 
 // WidthCap returns the cap width of the byte arrays in this pool.
 func (bp *BytePoolCap) WidthCap() (n int) {
+	if bp == nil {
+		return 0
+	}
 	return bp.wcap
 }

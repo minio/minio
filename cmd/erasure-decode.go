@@ -49,11 +49,11 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 	}
 	bufs := make([][]byte, len(readers))
 	// Fill buffers
-	b := globalBytePoolCap.Get()
+	b := globalBytePoolCap.Load().Get()
 	shardSize := int(e.ShardSize())
 	if cap(b) < len(readers)*shardSize {
 		// We should always have enough capacity, but older objects may be bigger.
-		globalBytePoolCap.Put(b)
+		globalBytePoolCap.Load().Put(b)
 		b = nil
 	} else {
 		// Seed the buffers.
@@ -78,7 +78,7 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 // Done will release any resources used by the parallelReader.
 func (p *parallelReader) Done() {
 	if p.stashBuffer != nil {
-		globalBytePoolCap.Put(p.stashBuffer)
+		globalBytePoolCap.Load().Put(p.stashBuffer)
 		p.stashBuffer = nil
 	}
 }
