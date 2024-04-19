@@ -120,6 +120,16 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) (prefer *me
 	for i, eVer := range eVers.versions {
 		oVer := oVers.versions[i]
 		if eVer.header != oVer.header {
+			if eVer.header.hasEC() != oVer.header.hasEC() {
+				// One version has EC and the other doesn't - may have been written later.
+				// Compare without considering EC.
+				a, b := eVer.header, oVer.header
+				a.EcN, a.EcM = 0, 0
+				b.EcN, b.EcM = 0, 0
+				if a == b {
+					continue
+				}
+			}
 			if !strict && eVer.header.matchesNotStrict(oVer.header) {
 				if prefer == nil {
 					if eVer.header.sortsBefore(oVer.header) {

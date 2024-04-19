@@ -250,15 +250,17 @@ type xlMetaV2VersionHeader struct {
 	Signature [4]byte
 	Type      VersionType
 	Flags     xlFlags
+	EcM, EcN  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
 }
 
 func (x xlMetaV2VersionHeader) String() string {
-	return fmt.Sprintf("Type: %s, VersionID: %s, Signature: %s, ModTime: %s, Flags: %s",
+	return fmt.Sprintf("Type: %s, VersionID: %s, Signature: %s, ModTime: %s, Flags: %s, N: %d, M: %d",
 		x.Type.String(),
 		hex.EncodeToString(x.VersionID[:]),
 		hex.EncodeToString(x.Signature[:]),
 		time.Unix(0, x.ModTime),
 		x.Flags.String(),
+		x.EcN, x.EcM,
 	)
 }
 
@@ -272,6 +274,11 @@ func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) bool {
 	}
 	return x.VersionID == o.VersionID &&
 		x.Type == o.Type
+}
+
+// hasEC will return true if the version has erasure coding information.
+func (x xlMetaV2VersionHeader) hasEC() bool {
+	return x.EcM > 0 && x.EcN > 0
 }
 
 // sortsBefore can be used as a tiebreaker for stable sorting/selecting.
@@ -351,12 +358,18 @@ func (j *xlMetaV2Version) header() xlMetaV2VersionHeader {
 	if j.Type == ObjectType && j.ObjectV2.InlineData() {
 		flags |= xlFlagInlineData
 	}
+	var ecM, ecN uint8
+	if j.Type == ObjectType && j.ObjectV2 != nil {
+		ecM, ecN = uint8(j.ObjectV2.ErasureM), uint8(j.ObjectV2.ErasureN)
+	}
 	return xlMetaV2VersionHeader{
 		VersionID: j.getVersionID(),
 		ModTime:   j.getModTime().UnixNano(),
 		Signature: j.getSignature(),
 		Type:      j.Type,
 		Flags:     flags,
+		EcN:       ecM,
+		EcM:       ecN,
 	}
 }
 
@@ -440,7 +453,7 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string, allParts bool) (fi Fil
 }
 
 const (
-	xlHeaderVersion = 2
+	xlHeaderVersion = 3
 	xlMetaVersion   = 2
 )
 
