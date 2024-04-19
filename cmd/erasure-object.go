@@ -1138,8 +1138,8 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
 	case size >= fi.Erasure.BlockSize:
-		buffer = globalBytePoolCap.Get()
-		defer globalBytePoolCap.Put(buffer)
+		buffer = globalBytePoolCap.Load().Get()
+		defer globalBytePoolCap.Load().Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
@@ -1388,8 +1388,8 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
 	case size >= fi.Erasure.BlockSize || size == -1:
-		buffer = globalBytePoolCap.Get()
-		defer globalBytePoolCap.Put(buffer)
+		buffer = globalBytePoolCap.Load().Get()
+		defer globalBytePoolCap.Load().Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully blockSizeV1 buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
@@ -1451,10 +1451,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	toEncode := io.Reader(data)
 	if data.Size() >= bigFileThreshold {
 		// We use 2 buffers, so we always have a full buffer of input.
-		bufA := globalBytePoolCap.Get()
-		bufB := globalBytePoolCap.Get()
-		defer globalBytePoolCap.Put(bufA)
-		defer globalBytePoolCap.Put(bufB)
+		pool := globalBytePoolCap.Load()
+		bufA := pool.Get()
+		bufB := pool.Get()
+		defer pool.Put(bufA)
+		defer pool.Put(bufB)
 		ra, err := readahead.NewReaderBuffer(data, [][]byte{bufA[:fi.Erasure.BlockSize], bufB[:fi.Erasure.BlockSize]})
 		if err == nil {
 			toEncode = ra

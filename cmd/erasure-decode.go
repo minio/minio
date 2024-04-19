@@ -38,6 +38,7 @@ type parallelReader struct {
 	shardFileSize int64
 	buf           [][]byte
 	readerToBuf   []int
+	stashBuffer   []byte
 }
 
 // newParallelReader returns parallelReader.
@@ -46,6 +47,21 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 	for i := range r2b {
 		r2b[i] = i
 	}
+	bufs := make([][]byte, len(readers))
+	// Fill buffers
+	b := globalBytePoolCap.Load().Get()
+	shardSize := int(e.ShardSize())
+	if cap(b) < len(readers)*shardSize {
+		// We should always have enough capacity, but older objects may be bigger.
+		globalBytePoolCap.Load().Put(b)
+		b = nil
+	} else {
+		// Seed the buffers.
+		for i := range bufs {
+			bufs[i] = b[i*shardSize : (i+1)*shardSize]
+		}
+	}
+
 	return &parallelReader{
 		readers:       readers,
 		orgReaders:    readers,
@@ -55,6 +71,15 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 		shardFileSize: e.ShardFileSize(totalLength),
 		buf:           make([][]byte, len(readers)),
 		readerToBuf:   r2b,
+		stashBuffer:   b,
+	}
+}
+
+// Done will release any resources used by the parallelReader.
+func (p *parallelReader) Done() {
+	if p.stashBuffer != nil {
+		globalBytePoolCap.Load().Put(p.stashBuffer)
+		p.stashBuffer = nil
 	}
 }
 
@@ -224,6 +249,7 @@ func (e Erasure) Decode(ctx context.Context, writer io.Writer, readers []io.Read
 	if len(prefer) == len(readers) {
 		reader.preferReaders(prefer)
 	}
+	defer reader.Done()
 
 	startBlock := offset / e.blockSize
 	endBlock := (offset + length) / e.blockSize
@@ -294,6 +320,7 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 	if len(readers) == len(prefer) {
 		reader.preferReaders(prefer)
 	}
+	defer reader.Done()
 
 	startBlock := int64(0)
 	endBlock := totalLength / e.blockSize

@@ -241,7 +241,7 @@ var (
 	globalBucketMonitor     *bandwidth.Monitor
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
-	globalBytePoolCap       *bpool.BytePoolCap
+	globalBytePoolCap       atomic.Pointer[bpool.BytePoolCap]
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
