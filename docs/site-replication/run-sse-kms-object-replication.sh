@@ -27,20 +27,21 @@ export MINIO_CI_CD=1
 export MINIO_BROWSER=off
 export MINIO_ROOT_USER="minio"
 export MINIO_ROOT_PASSWORD="minio123"
+TEST_MINIO_ENC_KEY="MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDA"
 
 # Create certificates for TLS enabled MinIO
 echo -n "Setup certs for MinIO instances ..."
 wget -O certgen https://github.com/minio/certgen/releases/latest/download/certgen-linux-amd64 && chmod +x certgen
 ./certgen --host localhost
-mkdir -p ~/.minio/certs
-mv public.crt ~/.minio/certs || sudo mv public.crt ~/.minio/certs
-mv private.key ~/.minio/certs || sudo mv private.key ~/.minio/certs
+mkdir -p /tmp/certs
+mv public.crt /tmp/certs || sudo mv public.crt /tmp/certs
+mv private.key /tmp/certs || sudo mv private.key /tmp/certs
 echo "done"
 
 # Start MinIO instances
 echo -n "Starting MinIO instances ..."
-CI=on MINIO_KMS_SECRET_KEY=minio-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --address ":9001" --console-address ":10000" /tmp/minio1/{1...4}/disk{1...4} /tmp/minio1/{5...8}/disk{1...4} >/tmp/minio1_1.log 2>&1 &
-CI=on MINIO_KMS_SECRET_KEY=minio-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --address ":9002" --console-address ":11000" /tmp/minio2/{1...4}/disk{1...4} /tmp/minio2/{5...8}/disk{1...4} >/tmp/minio2_1.log 2>&1 &
+CI=on MINIO_KMS_SECRET_KEY=minio-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --certs-dir /tmp/certs --address ":9001" --console-address ":10000" /tmp/minio1/{1...4}/disk{1...4} /tmp/minio1/{5...8}/disk{1...4} >/tmp/minio1_1.log 2>&1 &
+CI=on MINIO_KMS_SECRET_KEY=minio-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --certs-dir /tmp/certs --address ":9002" --console-address ":11000" /tmp/minio2/{1...4}/disk{1...4} /tmp/minio2/{5...8}/disk{1...4} >/tmp/minio2_1.log 2>&1 &
 echo "done"
 
 if [ ! -f ./mc ]; then
@@ -82,7 +83,7 @@ echo "Create bucket in source MinIO instance"
 # Load objects to source site
 echo "Loading objects to source MinIO instance"
 ./mc cp /tmp/data/encrypted minio1/test-bucket --insecure
-./mc cp /tmp/data/mpartobj minio1/test-bucket --encrypt-key "minio1/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure
+./mc cp /tmp/data/mpartobj minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure
 ./mc cp /tmp/data/defpartsize minio1/test-bucket --insecure
 ./mc put /tmp/data/custpartsize minio1/test-bucket --insecure --part-size 50MiB
 sleep 120
@@ -152,8 +153,8 @@ stat_out3=$(./mc stat minio1/test-bucket/custpartsize --insecure --json)
 src_obj3_algo=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 src_obj3_keyid=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio1/test-bucket/mpartobj"
-./mc stat minio1/test-bucket/mpartobj --encrypt-key "minio1/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json
-stat_out4=$(./mc stat minio1/test-bucket/mpartobj --encrypt-key "minio1/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json)
+./mc stat minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json
+stat_out4=$(./mc stat minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json)
 src_obj4_etag=$(echo "${stat_out4}" | jq '.etag')
 src_obj4_size=$(echo "${stat_out4}" | jq '.size')
 src_obj4_md5=$(echo "${stat_out4}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
@@ -175,8 +176,8 @@ stat_out3_rep=$(./mc stat minio2/test-bucket/custpartsize --insecure --json)
 rep_obj3_algo=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 rep_obj3_keyid=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio2/test-bucket/mpartobj"
-./mc stat minio2/test-bucket/mpartobj --encrypt-key "minio2/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json
-stat_out4_rep=$(./mc stat minio2/test-bucket/mpartobj --encrypt-key "minio2/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure --json)
+./mc stat minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json
+stat_out4_rep=$(./mc stat minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json)
 rep_obj4_etag=$(echo "${stat_out4}" | jq '.etag')
 rep_obj4_size=$(echo "${stat_out4}" | jq '.size')
 rep_obj4_md5=$(echo "${stat_out4}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
@@ -223,7 +224,7 @@ fi
 
 # Check content of replicated objects
 ./mc cat minio2/test-bucket/encrypted --insecure
-./mc cat minio2/test-bucket/mpartobj --encrypt-key "minio2/test-bucket/mpartobj=iliketobecrazybutnotsomuchreally" --insecure >/dev/null || exit_1
+./mc cat minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/defpartsize --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/custpartsize --insecure >/dev/null || exit_1
 
