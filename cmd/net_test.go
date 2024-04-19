@@ -147,8 +147,16 @@ func TestGetHostIP(t *testing.T) {
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 
-		if testCase.expectedIPList != nil && testCase.expectedIPList.Intersection(ipList).IsEmpty() {
-			t.Fatalf("host: expected = %v, got = %v", testCase.expectedIPList, ipList)
+		if testCase.expectedIPList != nil {
+			var found bool
+			for _, ip := range ipList.ToSlice() {
+				if testCase.expectedIPList.Contains(ip) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("host: expected = %v, got = %v", testCase.expectedIPList, ipList)
+			}
 		}
 	}
 }
