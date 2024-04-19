@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/pkg/v2/mimedb"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -319,7 +321,10 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	}
 	wa.wg.Add(1)
 	go func() {
-		_, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{SendContentMd5: true})
+		_, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
+			ContentType:          mimedb.TypeByExtension(path.Ext(object)),
+			DisableContentSha256: true,
+		})
 		pr.CloseWithError(err)
 		wa.wg.Done()
 	}()
@@ -399,10 +404,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 		dirPath := buildMinioDir(prefix)
 
 		_, err = clnt.PutObject(context.Background(), bucket, dirPath, bytes.NewReader([]byte("")), 0,
-			// Always send Content-MD5 to succeed with bucket with
-			// locking enabled. There is no performance hit since
-			// this is always an empty object
-			minio.PutObjectOptions{SendContentMd5: true},
+			minio.PutObjectOptions{DisableContentSha256: true},
 		)
 		return err
 	}
