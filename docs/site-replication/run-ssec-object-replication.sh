@@ -77,10 +77,12 @@ echo "Create bucket in source MinIO instance"
 
 # Load objects to source site
 echo "Loading objects to source MinIO instance"
+set -x
 ./mc cp /tmp/data/plainfile minio1/test-bucket --insecure
-./mc cp /tmp/data/encrypted minio1/test-bucket --enc-c "minio1/test-bucket/encrypted=${TEST_MINIO_ENC_KEY}" --insecure
-./mc cp /tmp/data/defpartsize minio1/test-bucket --enc-c "minio1/test-bucket/defpartsize=${TEST_MINIO_ENC_KEY}" --insecure
-./mc put /tmp/data/custpartsize minio1/test-bucket --enc-c "minio1/test-bucket/custpartsize=${TEST_MINIO_ENC_KEY}" --insecure --part-size 50MiB
+./mc cp /tmp/data/encrypted minio1/test-bucket/encrypted --enc-c "minio1/test-bucket/encrypted=${TEST_MINIO_ENC_KEY}" --insecure
+./mc cp /tmp/data/defpartsize minio1/test-bucket/defpartsize --enc-c "minio1/test-bucket/defpartsize=${TEST_MINIO_ENC_KEY}" --insecure
+./mc put /tmp/data/custpartsize minio1/test-bucket/custpartsize --enc-c "minio1/test-bucket/custpartsize=${TEST_MINIO_ENC_KEY}" --insecure --part-size 50MiB
+set +x
 sleep 120
 
 # List the objects from source site

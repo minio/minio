@@ -83,7 +83,7 @@ echo "Create bucket in source MinIO instance"
 # Load objects to source site
 echo "Loading objects to source MinIO instance"
 ./mc cp /tmp/data/encrypted minio1/test-bucket --insecure
-./mc cp /tmp/data/mpartobj minio1/test-bucket --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure
+./mc cp /tmp/data/mpartobj minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure
 ./mc cp /tmp/data/defpartsize minio1/test-bucket --insecure
 ./mc put /tmp/data/custpartsize minio1/test-bucket --insecure --part-size 50MiB
 sleep 120
