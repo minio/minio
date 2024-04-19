@@ -1833,9 +1833,18 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	var replcfg *replication.Config
 	if opts.Expiration.Expire {
 		// Check if the current bucket has a configured lifecycle policy
-		lc, _ = globalLifecycleSys.Get(bucket)
-		rcfg, _ = globalBucketObjectLockSys.Get(bucket)
-		replcfg, _ = getReplicationConfig(ctx, bucket)
+		lc, err = globalLifecycleSys.Get(bucket)
+		if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
+			return objInfo, err
+		}
+		rcfg, err = globalBucketObjectLockSys.Get(bucket)
+		if err != nil {
+			return objInfo, err
+		}
+		replcfg, err = getReplicationConfig(ctx, bucket)
+		if err != nil {
+			return objInfo, err
+		}
 	}
 
 	// expiration attempted on a bucket with no lifecycle

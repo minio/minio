@@ -81,13 +81,10 @@ const (
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	rCfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
-	if err != nil {
-		if errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucketName}) || errors.Is(err, errInvalidArgument) {
-			return rCfg, err
-		}
-		logger.CriticalIf(ctx, err)
+	if err != nil && !errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucketName}) {
+		return rCfg, err
 	}
-	return rCfg, err
+	return rCfg, nil
 }
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
@@ -261,10 +258,16 @@ func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplica
 	if mopts.replicationRequest { // incoming replication request on target cluster
 		return
 	}
+
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
+		replLogOnceIf(ctx, err, bucket)
 		return
 	}
+	if cfg == nil {
+		return
+	}
+
 	opts := replication.ObjectOpts{
 		Name:           object,
 		SSEC:           crypto.SSEC.IsEncrypted(mopts.meta),
@@ -312,6 +315,7 @@ var standardHeaders = []string{
 func hasReplicationRules(ctx context.Context, bucket string, objects []ObjectToDelete) bool {
 	c, err := getReplicationConfig(ctx, bucket)
 	if err != nil || c == nil {
+		replLogOnceIf(ctx, err, bucket)
 		return false
 	}
 	for _, obj := range objects {
@@ -331,6 +335,7 @@ func isStandardHeader(matchHeaderKey string) bool {
 func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, delOpts ObjectOptions, gerr error) (dsc ReplicateDecision) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
+		replLogOnceIf(ctx, err, bucket)
 		return
 	}
 	// If incoming request is a replication request, it does not need to be re-replicated.
@@ -2231,6 +2236,8 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
+		replLogOnceIf(ctx, err, bucket)
+
 		return &madmin.BucketTargets{}
 	}
 	topts := replication.ObjectOpts{Name: object}
@@ -3124,7 +3131,7 @@ func saveResyncStatus(ctx context.Context, bucket string, brs BucketReplicationR
 func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, opts madmin.ReplDiffOpts) (chan madmin.DiffInfo, error) {
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
-		replLogIf(ctx, err)
+		replLogOnceIf(ctx, err, bucket)
 		return nil, err
 	}
 	tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
@@ -3217,7 +3224,11 @@ func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, ret
 	if oi.ModTime.IsZero() {
 		return
 	}
-	rcfg, _ := getReplicationConfig(ctx, bucket)
+	rcfg, err := getReplicationConfig(ctx, bucket)
+	if err != nil {
+		replLogOnceIf(ctx, err, bucket)
+		return
+	}
 	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	queueReplicationHeal(ctx, bucket, oi, replicationConfig{
 		Config:  rcfg,

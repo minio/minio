@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"runtime"
@@ -213,14 +214,35 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			continue
 		}
 
-		vc, _ := globalBucketVersioningSys.Get(bucket)
+		vc, err := globalBucketVersioningSys.Get(bucket)
+		if err != nil {
+			retErr = err
+			healingLogIf(ctx, err)
+			continue
+		}
 
 		// Check if the current bucket has a configured lifecycle policy
-		lc, _ := globalLifecycleSys.Get(bucket)
+		lc, err := globalLifecycleSys.Get(bucket)
+		if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
+			retErr = err
+			healingLogIf(ctx, err)
+			continue
+		}
 
 		// Check if bucket is object locked.
-		lr, _ := globalBucketObjectLockSys.Get(bucket)
-		rcfg, _ := getReplicationConfig(ctx, bucket)
+		lr, err := globalBucketObjectLockSys.Get(bucket)
+		if err != nil {
+			retErr = err
+			healingLogIf(ctx, err)
+			continue
+		}
+
+		rcfg, err := getReplicationConfig(ctx, bucket)
+		if err != nil {
+			retErr = err
+			healingLogIf(ctx, err)
+			continue
+		}
 
 		if serverDebugLog {
 			console.Debugf(color.Green("healDrive:")+" healing bucket %s content on %s erasure set\n",
@@ -442,7 +464,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			bucket:    actualBucket,
 		}
 
-		err := listPathRaw(ctx, listPathRawOptions{
+		err = listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
 			fallbackDisks:  fallbackDisks,
 			bucket:         actualBucket,

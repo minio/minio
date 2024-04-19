@@ -36,7 +36,9 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
@@ -952,10 +954,32 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	}
 
 	versionID := oi.VersionID
-	vcfg, _ := globalBucketVersioningSys.Get(i.bucket)
-	rCfg, _ := globalBucketObjectLockSys.Get(i.bucket)
-	replcfg, _ := getReplicationConfig(ctx, i.bucket)
-	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, rCfg, replcfg, oi)
+
+	var vc *versioning.Versioning
+	var lr objectlock.Retention
+	var rcfg *replication.Config
+	if i.bucket != minioMetaBucket {
+		vc, err = globalBucketVersioningSys.Get(i.bucket)
+		if err != nil {
+			scannerLogOnceIf(ctx, err, i.bucket)
+			return
+		}
+
+		// Check if bucket is object locked.
+		lr, err = globalBucketObjectLockSys.Get(i.bucket)
+		if err != nil {
+			scannerLogOnceIf(ctx, err, i.bucket)
+			return
+		}
+
+		rcfg, err = getReplicationConfig(ctx, i.bucket)
+		if err != nil {
+			scannerLogOnceIf(ctx, err, i.bucket)
+			return
+		}
+	}
+
+	lcEvt := evalActionFromLifecycle(ctx, *i.lifeCycle, lr, rcfg, oi)
 	if i.debug {
 		if versionID != "" {
 			console.Debugf(applyActionsLogPrefix+" lifecycle: %q (version-id=%s), Initial scan: %v\n", i.objectPath(), versionID, lcEvt.Action)
@@ -973,7 +997,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 		size = 0
 	case lifecycle.DeleteAction:
 		// On a non-versioned bucket, DeleteObject removes the only version permanently.
-		if !vcfg.PrefixEnabled(oi.Name) {
+		if !vc.PrefixEnabled(oi.Name) {
 			size = 0
 		}
 	}
