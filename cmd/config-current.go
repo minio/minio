@@ -678,7 +678,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			}
 		}
 	case config.SubnetSubSys:
-		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
+		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalRemoteTargetTransport)
 		if err != nil {
 			configLogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 		} else {

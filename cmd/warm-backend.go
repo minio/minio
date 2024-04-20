@@ -18,11 +18,11 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/minio/madmin-go/v3"
 	xhttp "github.com/minio/minio/internal/http"
@@ -48,8 +48,7 @@ const probeObject = "probeobject"
 // checkWarmBackend checks if tier config credentials have sufficient privileges
 // to perform all operations defined in the WarmBackend interface.
 func checkWarmBackend(ctx context.Context, w WarmBackend) error {
-	var empty bytes.Reader
-	remoteVersionID, err := w.Put(ctx, probeObject, &empty, 0)
+	remoteVersionID, err := w.Put(ctx, probeObject, strings.NewReader("MinIO"), 5)
 	if err != nil {
 		if _, ok := err.(BackendDown); ok {
 			return err
