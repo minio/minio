@@ -113,10 +113,9 @@ func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO,
 		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)
 	})
 	opts := &minio.Options{
-		Creds:           creds,
-		Secure:          u.Scheme == "https",
-		Transport:       getRemoteTierTargetInstanceTransport,
-		TrailingHeaders: true,
+		Creds:     creds,
+		Secure:    u.Scheme == "https",
+		Transport: getRemoteTierTargetInstanceTransport,
 	}
 	client, err := minio.New(u.Host, opts)
 	if err != nil {
