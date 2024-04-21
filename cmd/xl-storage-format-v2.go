@@ -1245,7 +1245,7 @@ func (x *xlMetaV2) setIdx(idx int, ver xlMetaV2Version) (err error) {
 // getDataDirs will return all data directories in the metadata
 // as well as all version ids used for inline data.
 func (x *xlMetaV2) getDataDirs() ([]string, error) {
-	dds := make([]string, len(x.versions)*2)
+	dds := make([]string, 0, len(x.versions)*2)
 	for i, ver := range x.versions {
 		if ver.header.Type == DeleteType {
 			continue
