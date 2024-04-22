@@ -32,6 +32,10 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/hash"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -448,9 +452,11 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		}
 
 		stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBucket, poolIdx, bucket)
-		err = z.rebalanceBucket(ctx, bucket, poolIdx)
-		if err != nil {
+		if err = z.rebalanceBucket(ctx, bucket, poolIdx); err != nil {
 			stopFn(err)
+			if errors.Is(err, errServerNotInitialized) || errors.Is(err, errBucketMetadataNotInitialized) {
+				continue
+			}
 			rebalanceLogIf(ctx, err)
 			return
 		}
@@ -521,14 +527,36 @@ func (set *erasureObjects) listObjectsToRebalance(ctx context.Context, bucketNam
 }
 
 // rebalanceBucket rebalances objects under bucket in poolIdx pool
-func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string, poolIdx int) error {
+func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string, poolIdx int) (err error) {
 	ctx = logger.SetReqInfo(ctx, &logger.ReqInfo{})
-	vc, _ := globalBucketVersioningSys.Get(bucket)
-	// Check if the current bucket has a configured lifecycle policy
-	lc, _ := globalLifecycleSys.Get(bucket)
-	// Check if bucket is object locked.
-	lr, _ := globalBucketObjectLockSys.Get(bucket)
-	rcfg, _ := getReplicationConfig(ctx, bucket)
+
+	var vc *versioning.Versioning
+	var lc *lifecycle.Lifecycle
+	var lr objectlock.Retention
+	var rcfg *replication.Config
+	if bucket != minioMetaBucket {
+		vc, err = globalBucketVersioningSys.Get(bucket)
+		if err != nil {
+			return err
+		}
+
+		// Check if the current bucket has a configured lifecycle policy
+		lc, err = globalLifecycleSys.Get(bucket)
+		if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
+			return err
+		}
+
+		// Check if bucket is object locked.
+		lr, err = globalBucketObjectLockSys.Get(bucket)
+		if err != nil {
+			return err
+		}
+
+		rcfg, err = getReplicationConfig(ctx, bucket)
+		if err != nil {
+			return err
+		}
+	}
 
 	pool := z.serverPools[poolIdx]
 

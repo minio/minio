@@ -108,6 +108,16 @@ func reliableMkdirAll(dirPath string, mode os.FileMode, baseDir string) (err err
 			// Retry only for the first retryable error.
 			if osIsNotExist(err) && i == 0 {
 				i++
+				// Determine if os.NotExist error is because of
+				// baseDir's parent being present, retry it once such
+				// that the MkdirAll is retried once for the parent
+				// of dirPath.
+				// Because it is worth a retry to skip a different
+				// baseDir which is slightly higher up the depth.
+				nbaseDir := path.Dir(baseDir)
+				if baseDir != "" && nbaseDir != "" && nbaseDir != SlashSeparator {
+					baseDir = nbaseDir
+				}
 				continue
 			}
 		}
