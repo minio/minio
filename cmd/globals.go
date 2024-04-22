@@ -398,11 +398,7 @@ var (
 
 	globalInternodeTransport http.RoundTripper
 
-	globalProxyTransport http.RoundTripper
-
 	globalRemoteTargetTransport http.RoundTripper
-
-	globalHealthChkTransport http.RoundTripper
 
 	globalDNSCache = &dnscache.Resolver{
 		Timeout: 5 * time.Second,
