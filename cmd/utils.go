@@ -594,29 +594,17 @@ func NewInternodeHTTPTransport(maxIdleConnsPerHost int) func() http.RoundTripper
 	}.NewInternodeHTTPTransport(maxIdleConnsPerHost)
 }
 
-// NewCustomHTTPProxyTransport is used only for proxied requests, specifically
-// only supports HTTP/1.1
-func NewCustomHTTPProxyTransport() func() *http.Transport {
-	return xhttp.ConnSettings{
-		LookupHost:       globalDNSCache.LookupHost,
-		DialTimeout:      rest.DefaultTimeout,
-		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.TLSCiphers(),
-		CurvePreferences: fips.TLSCurveIDs(),
-		EnableHTTP2:      false,
-		TCPOptions:       globalTCPOptions,
-	}.NewCustomHTTPProxyTransport()
-}
-
 // NewHTTPTransportWithClientCerts returns a new http configuration
 // used while communicating with the cloud backends.
-func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
+func NewHTTPTransportWithClientCerts(clientCert, clientKey string) http.RoundTripper {
 	s := xhttp.ConnSettings{
-		LookupHost:  globalDNSCache.LookupHost,
-		DialTimeout: defaultDialTimeout,
-		RootCAs:     globalRootCAs,
-		TCPOptions:  globalTCPOptions,
-		EnableHTTP2: false,
+		LookupHost:       globalDNSCache.LookupHost,
+		DialTimeout:      defaultDialTimeout,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		TCPOptions:       globalTCPOptions,
+		EnableHTTP2:      false,
 	}
 
 	if clientCert != "" && clientKey != "" {
@@ -633,7 +621,7 @@ func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transpo
 		return transport
 	}
 
-	return s.NewHTTPTransportWithTimeout(1 * time.Minute)
+	return globalRemoteTargetTransport
 }
 
 // NewHTTPTransport returns a new http configuration
@@ -648,12 +636,14 @@ const defaultDialTimeout = 5 * time.Second
 // NewHTTPTransportWithTimeout allows setting a timeout.
 func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 	return xhttp.ConnSettings{
-		DialContext: newCustomDialContext(),
-		LookupHost:  globalDNSCache.LookupHost,
-		DialTimeout: defaultDialTimeout,
-		RootCAs:     globalRootCAs,
-		TCPOptions:  globalTCPOptions,
-		EnableHTTP2: false,
+		DialContext:      newCustomDialContext(),
+		LookupHost:       globalDNSCache.LookupHost,
+		DialTimeout:      defaultDialTimeout,
+		RootCAs:          globalRootCAs,
+		TCPOptions:       globalTCPOptions,
+		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		EnableHTTP2:      false,
 	}.NewHTTPTransportWithTimeout(timeout)
 }
 
@@ -682,11 +672,13 @@ func newCustomDialContext() xhttp.DialContext {
 // used while communicating with the remote replication targets.
 func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	return xhttp.ConnSettings{
-		DialContext: newCustomDialContext(),
-		LookupHost:  globalDNSCache.LookupHost,
-		RootCAs:     globalRootCAs,
-		TCPOptions:  globalTCPOptions,
-		EnableHTTP2: false,
+		DialContext:      newCustomDialContext(),
+		LookupHost:       globalDNSCache.LookupHost,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		TCPOptions:       globalTCPOptions,
+		EnableHTTP2:      false,
 	}.NewRemoteTargetHTTPTransport(insecure)
 }
 

@@ -25,7 +25,6 @@ import (
 	"math"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/minio/madmin-go/v3"
 	minio "github.com/minio/minio-go/v7"
@@ -108,14 +107,11 @@ func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO,
 	}
 
 	creds := credentials.NewStaticV4(conf.AccessKey, conf.SecretKey, "")
-
-	getRemoteTierTargetInstanceTransportOnce.Do(func() {
-		getRemoteTierTargetInstanceTransport = NewHTTPTransportWithTimeout(10 * time.Minute)
-	})
 	opts := &minio.Options{
-		Creds:     creds,
-		Secure:    u.Scheme == "https",
-		Transport: getRemoteTierTargetInstanceTransport,
+		Creds:           creds,
+		Secure:          u.Scheme == "https",
+		Transport:       globalRemoteTargetTransport,
+		TrailingHeaders: true,
 	}
 	client, err := minio.New(u.Host, opts)
 	if err != nil {

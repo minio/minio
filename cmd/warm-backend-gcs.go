@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 
 	"cloud.google.com/go/storage"
 	"github.com/minio/madmin-go/v3"
@@ -102,7 +103,7 @@ func (gcs *warmBackendGCS) InUse(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func newWarmBackendGCS(conf madmin.TierGCS, _ string) (*warmBackendGCS, error) {
+func newWarmBackendGCS(conf madmin.TierGCS, tier string) (*warmBackendGCS, error) {
 	// Validation code
 	if conf.Creds == "" {
 		return nil, errors.New("empty credentials unsupported")
@@ -117,7 +118,16 @@ func newWarmBackendGCS(conf madmin.TierGCS, _ string) (*warmBackendGCS, error) {
 		return nil, err
 	}
 
-	client, err := storage.NewClient(context.Background(), option.WithCredentialsJSON(credsJSON), option.WithScopes(storage.ScopeReadWrite))
+	clnt := &http.Client{
+		Transport: globalRemoteTargetTransport,
+	}
+
+	client, err := storage.NewClient(context.Background(),
+		option.WithCredentialsJSON(credsJSON),
+		option.WithScopes(storage.ScopeReadWrite),
+		option.WithHTTPClient(clnt),
+		option.WithUserAgent(fmt.Sprintf("gcs-tier-%s", tier)+SlashSeparator+ReleaseTag),
+	)
 	if err != nil {
 		return nil, err
 	}
