@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/minio/minio/cmd/mantle/gateway"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -34,6 +33,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/minio/minio/cmd/mantle/gateway"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go"
@@ -782,7 +783,8 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 
 	var bb []byte
 	if !isSysCall(bucket) {
-		bb, err = gateway.Get(readCloser)
+		configId := getConfigId(ctx, fs.fsPath, bucket)
+		bb, err = gateway.Get(readCloser, configId)
 
 		if err != nil {
 			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
@@ -1104,7 +1106,8 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	if !isSysCall(bucket) {
 		p := pathJoin(fs.fsPath, bucket, object)
 
-		bId, err := gateway.Put(data, object)
+		configId := getConfigId(ctx, fs.fsPath, bucket)
+		bId, err := gateway.Put(data, object, configId)
 
 		fsMeta.Meta["etag"] = r.MD5CurrentHexString()
 
@@ -1198,6 +1201,22 @@ func (fs *FSObjects) putObject(ctx context.Context, bucket string, object string
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
+}
+
+func getConfigId(ctx context.Context, fsPath string, bucket string) string {
+	configName := fmt.Sprintf(".sds-config.%s.json", bucket)
+	confPath := path.Join(fsPath, bucket, configName)
+	configId := ""
+	r, n, err := fsOpenFile(ctx, confPath, 0)
+	if err == nil {
+		defer r.Close()
+		//config file exist
+		id := make([]byte, n)
+		r.Read(id)
+		configId = string(id)
+	}
+
+	return configId
 }
 
 func isSysCall(path string) bool {

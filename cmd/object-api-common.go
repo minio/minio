@@ -357,6 +357,11 @@ func listObjects(ctx context.Context, obj ObjectLayer, bucket, prefix, marker, d
 					}
 					return toObjectErr(err, bucket, prefix)
 				}
+
+				if strings.Contains(objInfo.Name, ".sds-config") {
+					return nil
+				}
+
 				objInfoFound[i] = &objInfo
 				return nil
 			}, i)
