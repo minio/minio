@@ -261,10 +261,8 @@ const (
 	usageInfo   MetricName = "usage_info"
 	versionInfo MetricName = "version_info"
 
-	sizeDistribution    = "size_distribution"
-	versionDistribution = "version_distribution"
-	ttfbDistribution    = "seconds_distribution"
-	ttlbDistribution    = "ttlb_seconds_distribution"
+	ttfbDistribution = "seconds_distribution"
+	ttlbDistribution = "ttlb_seconds_distribution"
 
 	lastActivityTime = "last_activity_nano_seconds"
 	startTime        = "starttime_seconds"
