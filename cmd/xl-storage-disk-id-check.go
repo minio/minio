@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/cachevalue"
+	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
@@ -471,8 +472,14 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 		}
 		done(&err)
 	}()
-
+	// Copy inline data to a new buffer to function with deadlines.
+	if len(fi.Data) > 0 {
+		fi.Data = append(grid.GetByteBufferCap(len(fi.Data))[:0], fi.Data...)
+	}
 	return xioutil.WithDeadline[uint64](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (result uint64, err error) {
+		if len(fi.Data) > 0 {
+			defer grid.PutByteBuffer(fi.Data)
+		}
 		return p.storage.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath, opts)
 	})
 }
