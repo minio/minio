@@ -579,6 +579,15 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, opts Delet
 	}
 
 	if !opts.Force {
+		//TODO: if we delete this file but bucket is not empty after we wont be able to delete bucket and bucket wont have conf file.
+		//maybe we want to move in /tmp/ ?
+		configName := fmt.Sprintf(".sds-config.%s.json", bucket)
+		confPath := path.Join(bucketDir, configName)
+		err := os.Remove(confPath)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
 		// Attempt to delete regular bucket.
 		if err = fsRemoveDir(ctx, bucketDir); err != nil {
 			return toObjectErr(err, bucket)
