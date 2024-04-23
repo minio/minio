@@ -671,14 +671,12 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				configLogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 				break
 			}
-			// if we validated all setDriveCounts and it was successful
-			// proceed to store the correct storage class globally.
-			if i == len(setDriveCounts)-1 {
+			if i == 0 {
 				globalStorageClass.Update(sc)
 			}
 		}
 	case config.SubnetSubSys:
-		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalProxyTransport)
+		subnetConfig, err := subnet.LookupConfig(s[config.SubnetSubSys][config.Default], globalRemoteTargetTransport)
 		if err != nil {
 			configLogIf(ctx, fmt.Errorf("Unable to parse subnet configuration: %w", err))
 		} else {

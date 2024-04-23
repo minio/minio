@@ -362,28 +362,26 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	// Initialize, see which NIC the service is running on, and save it as global value
 	setGlobalInternodeInterface(ctxt.Interface)
 
-	// allow transport to be HTTP/1.1 for proxying.
-	globalProxyTransport = NewCustomHTTPProxyTransport()()
-	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
-	globalInternodeTransport = NewInternodeHTTPTransport(ctxt.MaxIdleConnsPerHost)()
-	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
-	globalHealthChkTransport = NewHTTPTransport()
-	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
-		PassHost:     true,
-		RoundTripper: NewHTTPTransportWithTimeout(1 * time.Hour),
-		Logger: func(err error) {
-			if err != nil && !errors.Is(err, context.Canceled) {
-				replLogIf(GlobalContext, err)
-			}
-		},
-	})
-
 	globalTCPOptions = xhttp.TCPOptions{
 		UserTimeout:        int(ctxt.UserTimeout.Milliseconds()),
 		ClientReadTimeout:  ctxt.ConnClientReadDeadline,
 		ClientWriteTimeout: ctxt.ConnClientWriteDeadline,
 		Interface:          ctxt.Interface,
 	}
+
+	// allow transport to be HTTP/1.1 for proxying.
+	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints)
+	globalInternodeTransport = NewInternodeHTTPTransport(ctxt.MaxIdleConnsPerHost)()
+	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
+	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
+		PassHost:     true,
+		RoundTripper: globalRemoteTargetTransport,
+		Logger: func(err error) {
+			if err != nil && !errors.Is(err, context.Canceled) {
+				replLogIf(GlobalContext, err)
+			}
+		},
+	})
 
 	// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
 	// to IPv6 address ie minio will start listening on IPv6 address whereas another
@@ -1024,7 +1022,7 @@ func serverMain(ctx *cli.Context) {
 		globalMinioClient, err = minio.New(globalLocalNodeName, &minio.Options{
 			Creds:     credentials.NewStaticV4(globalActiveCred.AccessKey, globalActiveCred.SecretKey, ""),
 			Secure:    globalIsTLS,
-			Transport: globalProxyTransport,
+			Transport: globalRemoteTargetTransport,
 			Region:    region,
 		})
 		logger.FatalIf(err, "Unable to initialize MinIO client")

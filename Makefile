@@ -53,6 +53,10 @@ test-root-disable: install-race
 	@echo "Running minio root lockdown tests"
 	@env bash $(PWD)/buildscripts/disable-root.sh
 
+test-ilm: install-race
+	@echo "Running ILM tests"
+	@env bash $(PWD)/docs/bucket/replication/setup_ilm_expiry_replication.sh
+
 test-decom: install-race
 	@echo "Running minio decom tests"
 	@env bash $(PWD)/docs/distributed/decom.sh

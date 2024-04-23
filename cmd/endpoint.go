@@ -1205,7 +1205,7 @@ func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint 
 
 			proxyEps = append(proxyEps, ProxyEndpoint{
 				Endpoint:  endpoint,
-				Transport: globalProxyTransport,
+				Transport: globalRemoteTargetTransport,
 			})
 		}
 	}

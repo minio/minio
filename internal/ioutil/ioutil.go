@@ -34,26 +34,12 @@ import (
 
 // Block sizes constant.
 const (
-	SmallBlock   = 32 * humanize.KiByte // Default r/w block size for smaller objects.
-	LargeBlock   = 1 * humanize.MiByte  // Default r/w block size for normal objects.
-	XLargeBlock  = 4 * humanize.MiByte  // Default r/w block size for very large objects.
-	XXLargeBlock = 8 * humanize.MiByte  // Default r/w block size for very very large objects.
+	SmallBlock = 32 * humanize.KiByte // Default r/w block size for smaller objects.
+	LargeBlock = 1 * humanize.MiByte  // Default r/w block size for normal objects.
 )
 
 // aligned sync.Pool's
 var (
-	ODirectPoolXXLarge = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(XXLargeBlock)
-			return &b
-		},
-	}
-	ODirectPoolXLarge = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(XLargeBlock)
-			return &b
-		},
-	}
 	ODirectPoolLarge = sync.Pool{
 		New: func() interface{} {
 			b := disk.AlignedBlock(LargeBlock)

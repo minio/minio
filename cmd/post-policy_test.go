@@ -610,7 +610,6 @@ func newPostRequestV2(endPoint, bucketName, objectName string, accessKey, secret
 		"key":                         objectName + "/${filename}",
 		"policy":                      encodedPolicy,
 		"signature":                   signature,
-		"X-Amz-Ignore-signature":      "",
 		"X-Amz-Ignore-AWSAccessKeyId": "",
 	}
 
