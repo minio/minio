@@ -24,10 +24,7 @@ if [ ! -f ./mc ]; then
 		chmod +x mc
 fi
 
-(
-	cd ./docs/debugging/s3-check-md5
-	go install -v
-)
+go install -v github.com/minio/minio/docs/debugging/s3-check-md5@latest
 
 export RELEASE=RELEASE.2023-08-29T23-07-35Z
 

@@ -530,16 +530,7 @@ func healObject(bucket, object, versionID string, scan madmin.HealScanMode) erro
 	// Get background heal sequence to send elements to heal
 	bgSeq, ok := globalBackgroundHealState.getHealSequenceByToken(bgHealingUUID)
 	if ok {
-		return bgSeq.queueHealTask(healSource{
-			bucket:    bucket,
-			object:    object,
-			versionID: versionID,
-			noWait:    true, // do not block callers.
-			opts: &madmin.HealOpts{
-				Remove:   healDeleteDangling, // if found dangling purge it.
-				ScanMode: scan,
-			},
-		}, madmin.HealItemObject)
+		return bgSeq.healObject(bucket, object, versionID, scan)
 	}
 	return nil
 }
