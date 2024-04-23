@@ -72,8 +72,8 @@ func (s ConnSettings) getDefaultTransport(maxIdleConnsPerHost int) *http.Transpo
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialContext,
 		MaxIdleConnsPerHost:   maxIdleConnsPerHost,
-		WriteBufferSize:       32 << 10, // 32KiB moving up from 4KiB default
-		ReadBufferSize:        32 << 10, // 32KiB moving up from 4KiB default
+		WriteBufferSize:       64 << 10, // 64KiB moving up from 4KiB default
+		ReadBufferSize:        64 << 10, // 64KiB moving up from 4KiB default
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Minute, // Conservative timeout is the default (for MinIO internode)
 		TLSHandshakeTimeout:   10 * time.Second,

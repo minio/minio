@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
@@ -177,6 +178,18 @@ var ServerFlags = []cli.Flag{
 		Usage:  "set global memory limit per server via GOMEMLIMIT",
 		Hidden: true,
 		EnvVar: "MINIO_MEMLIMIT",
+	},
+	cli.IntFlag{
+		Name:   "send-buf-size",
+		Value:  4 * humanize.MiByte,
+		EnvVar: "MINIO_SEND_BUF_SIZE",
+		Hidden: true,
+	},
+	cli.IntFlag{
+		Name:   "recv-buf-size",
+		Value:  4 * humanize.MiByte,
+		EnvVar: "MINIO_RECV_BUF_SIZE",
+		Hidden: true,
 	},
 }
 
@@ -367,6 +380,8 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 		ClientReadTimeout:  ctxt.ConnClientReadDeadline,
 		ClientWriteTimeout: ctxt.ConnClientWriteDeadline,
 		Interface:          ctxt.Interface,
+		SendBufSize:        ctxt.SendBufSize,
+		RecvBufSize:        ctxt.RecvBufSize,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -388,9 +403,6 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(xhttp.CheckPortAvailability(globalMinioHost, globalMinioPort, globalTCPOptions), "Unable to start the server")
-
-	globalConnReadDeadline = ctxt.ConnReadDeadline
-	globalConnWriteDeadline = ctxt.ConnWriteDeadline
 }
 
 func initAllSubsystems(ctx context.Context) {
