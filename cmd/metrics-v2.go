@@ -907,7 +907,7 @@ func getRepFailedBytesTotalMD(namespace MetricNamespace) MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      totalFailedBytes,
 		Help:      "Total number of bytes failed at least once to replicate since server start",
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -917,7 +917,7 @@ func getRepFailedOperationsTotalMD(namespace MetricNamespace) MetricDescription 
 		Subsystem: replicationSubsystem,
 		Name:      totalFailedCount,
 		Help:      "Total number of objects which failed replication since server start",
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -927,7 +927,7 @@ func getRepSentBytesMD(namespace MetricNamespace) MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      sentBytes,
 		Help:      "Total number of bytes replicated to the target",
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -951,7 +951,7 @@ func getRepReceivedBytesMD(namespace MetricNamespace) MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      receivedBytes,
 		Help:      helpText,
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -3900,7 +3900,7 @@ func getWebhookMetrics() *MetricsGroupV2 {
 					Subsystem: webhookSubsystem,
 					Name:      webhookQueueLength,
 					Help:      "Webhook queue length",
-					Type:      counterMetric,
+					Type:      gaugeMetric,
 				},
 				VariableLabels: labels,
 				Value:          float64(t.Stats().QueueLength),
