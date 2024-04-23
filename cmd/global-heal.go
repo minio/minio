@@ -249,12 +249,17 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				bucket, humanize.Ordinal(er.setIndex+1))
 		}
 
-		disks, _ := er.getOnlineDisksWithHealing(false)
-		if len(disks) == 0 {
-			// No object healing necessary
-			tracker.bucketDone(bucket)
-			healingLogIf(ctx, tracker.update(ctx))
-			continue
+		disks, _, healing := er.getOnlineDisksWithHealingAndInfo(true)
+		if len(disks) == healing {
+			// All drives in this erasure set were reformatted for some reasons, abort healing and mark it as successful
+			healingLogIf(ctx, errors.New("all drives are in healing state, aborting.."))
+			return nil
+		}
+
+		disks = disks[:len(disks)-healing] // healing drives are always at the end of the list
+
+		if len(disks) < er.setDriveCount/2 {
+			return fmt.Errorf("no enough drives (found=%d, healing=%d, total=%d) are available to heal `%s`", len(disks), healing, er.setDriveCount, tracker.disk.String())
 		}
 
 		rand.Shuffle(len(disks), func(i, j int) {
@@ -455,27 +460,24 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			waitForLowHTTPReq()
 		}
 
-		actualBucket, prefix := path2BucketObject(bucket)
-
 		// How to resolve partial results.
 		resolver := metadataResolutionParams{
 			dirQuorum: 1,
 			objQuorum: 1,
-			bucket:    actualBucket,
+			bucket:    bucket,
 		}
 
 		err = listPathRaw(ctx, listPathRawOptions{
 			disks:          disks,
 			fallbackDisks:  fallbackDisks,
-			bucket:         actualBucket,
-			path:           prefix,
+			bucket:         bucket,
 			recursive:      true,
 			forwardTo:      forwardTo,
 			minDisks:       1,
 			reportNotFound: false,
 			agreed: func(entry metaCacheEntry) {
 				jt.Take()
-				go healEntry(actualBucket, entry)
+				go healEntry(bucket, entry)
 			},
 			partial: func(entries metaCacheEntries, _ []error) {
 				entry, ok := entries.resolve(&resolver)
@@ -485,7 +487,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					entry, _ = entries.firstFound()
 				}
 				jt.Take()
-				go healEntry(actualBucket, *entry)
+				go healEntry(bucket, *entry)
 			},
 			finished: nil,
 		})

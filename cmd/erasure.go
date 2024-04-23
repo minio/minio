@@ -272,11 +272,11 @@ func (er erasureObjects) LocalStorageInfo(ctx context.Context, metrics bool) Sto
 }
 
 // getOnlineDisksWithHealingAndInfo - returns online disks and overall healing status.
-// Disks are randomly ordered, but in the following groups:
+// Disks are ordered in the following groups:
 // - Non-scanning disks
 // - Non-healing disks
 // - Healing disks (if inclHealing is true)
-func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (newDisks []StorageAPI, newInfos []DiskInfo, healing bool) {
+func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (newDisks []StorageAPI, newInfos []DiskInfo, healing int) {
 	var wg sync.WaitGroup
 	disks := er.getDisks()
 	infos := make([]DiskInfo, len(disks))
@@ -315,7 +315,7 @@ func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (new
 			continue
 		}
 		if info.Healing {
-			healing = true
+			healing++
 			if inclHealing {
 				healingDisks = append(healingDisks, disks[i])
 				healingInfos = append(healingInfos, infos[i])
@@ -343,9 +343,9 @@ func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (new
 	return newDisks, newInfos, healing
 }
 
-func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) (newDisks []StorageAPI, healing bool) {
-	newDisks, _, healing = er.getOnlineDisksWithHealingAndInfo(inclHealing)
-	return
+func (er erasureObjects) getOnlineDisksWithHealing(inclHealing bool) ([]StorageAPI, bool) {
+	newDisks, _, healing := er.getOnlineDisksWithHealingAndInfo(inclHealing)
+	return newDisks, healing > 0
 }
 
 // Clean-up previously deleted objects. from .minio.sys/tmp/.trash/

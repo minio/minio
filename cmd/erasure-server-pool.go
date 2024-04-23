@@ -2210,7 +2210,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
 
-				errs[idx] = set.listAndHeal(bucket, prefix, opts.ScanMode, healEntry)
+				errs[idx] = set.listAndHeal(ctx, bucket, prefix, opts.ScanMode, healEntry)
 			}(idx, set)
 		}
 		wg.Wait()
