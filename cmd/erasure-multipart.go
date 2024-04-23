@@ -679,12 +679,12 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 			// Account for padding and forced compression overhead and encryption.
 			buffer = make([]byte, data.ActualSize()+256+32+32, data.ActualSize()*2+512)
 		} else {
-			buffer = globalBytePoolCap.Get()
-			defer globalBytePoolCap.Put(buffer)
+			buffer = globalBytePoolCap.Load().Get()
+			defer globalBytePoolCap.Load().Put(buffer)
 		}
 	case size >= fi.Erasure.BlockSize:
-		buffer = globalBytePoolCap.Get()
-		defer globalBytePoolCap.Put(buffer)
+		buffer = globalBytePoolCap.Load().Get()
+		defer globalBytePoolCap.Load().Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully fi.Erasure.BlockSize buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
@@ -705,10 +705,11 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	if data.Size() > bigFileThreshold {
 		// Add input readahead.
 		// We use 2 buffers, so we always have a full buffer of input.
-		bufA := globalBytePoolCap.Get()
-		bufB := globalBytePoolCap.Get()
-		defer globalBytePoolCap.Put(bufA)
-		defer globalBytePoolCap.Put(bufB)
+		pool := globalBytePoolCap.Load()
+		bufA := pool.Get()
+		bufB := pool.Get()
+		defer pool.Put(bufA)
+		defer pool.Put(bufB)
 		ra, err := readahead.NewReaderBuffer(data, [][]byte{bufA[:fi.Erasure.BlockSize], bufB[:fi.Erasure.BlockSize]})
 		if err == nil {
 			toEncode = ra
@@ -1310,24 +1311,28 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}()
 
 	// Rename the multipart object to final location.
-	onlineDisks, versionsDisparity, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
+	onlineDisks, versions, oldDataDir, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
 		partsMetadata, bucket, object, writeQuorum)
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
 
-	if !opts.Speedtest && versionsDisparity {
+	if err = er.commitRenameDataDir(ctx, bucket, object, oldDataDir, onlineDisks); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	if !opts.Speedtest && len(versions) > 0 {
 		globalMRFState.addPartialOp(partialOperation{
-			bucket:      bucket,
-			object:      object,
-			queued:      time.Now(),
-			allVersions: true,
-			setIndex:    er.setIndex,
-			poolIndex:   er.poolIndex,
+			bucket:    bucket,
+			object:    object,
+			queued:    time.Now(),
+			versions:  versions,
+			setIndex:  er.setIndex,
+			poolIndex: er.poolIndex,
 		})
 	}
 
-	if !opts.Speedtest && !versionsDisparity {
+	if !opts.Speedtest && len(versions) == 0 {
 		// Check if there is any offline disk and add it to the MRF list
 		for _, disk := range onlineDisks {
 			if disk != nil && disk.IsOnline() {

@@ -82,7 +82,7 @@ func (api objectAPIHandlers) PutBucketVersioningHandler(w http.ResponseWriter, r
 		}, r.URL)
 		return
 	}
-	if _, err := getReplicationConfig(ctx, bucket); err == nil && v.Suspended() {
+	if rc, _ := getReplicationConfig(ctx, bucket); rc != nil && v.Suspended() {
 		writeErrorResponse(ctx, w, APIError{
 			Code:           "InvalidBucketState",
 			Description:    "A replication configuration is present on this bucket, bucket wide versioning cannot be suspended.",

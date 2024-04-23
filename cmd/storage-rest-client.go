@@ -440,7 +440,9 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
-func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (sign uint64, err error) {
+func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo,
+	dstVolume, dstPath string, opts RenameOptions,
+) (res RenameDataResp, err error) {
 	params := RenameDataHandlerParams{
 		DiskID:    *client.diskID.Load(),
 		SrcVolume: srcVolume,
@@ -457,11 +459,11 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 		resp, err = storageRenameDataInlineRPC.Call(ctx, client.gridConn, &RenameDataInlineHandlerParams{params})
 	}
 	if err != nil {
-		return 0, toStorageErr(err)
+		return res, toStorageErr(err)
 	}
 
 	defer storageRenameDataRPC.PutResponse(resp)
-	return resp.Signature, nil
+	return *resp, nil
 }
 
 // where we keep old *Readers

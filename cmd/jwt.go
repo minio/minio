@@ -50,28 +50,11 @@ var (
 	errMalformedAuth      = errors.New("Malformed authentication input")
 )
 
-// cachedAuthenticateNode will cache authenticateNode results for given values up to ttl.
-func cachedAuthenticateNode(ttl time.Duration) func(accessKey, secretKey, audience string) (string, error) {
-	type key struct {
-		accessKey, secretKey, audience string
-	}
-
-	cache := expirable.NewLRU[key, string](100, nil, ttl)
-	return func(accessKey, secretKey, audience string) (s string, err error) {
-		k := key{accessKey: accessKey, secretKey: secretKey, audience: audience}
-
-		var ok bool
-		s, ok = cache.Get(k)
-		if !ok {
-			s, err = authenticateNode(accessKey, secretKey, audience)
-			if err != nil {
-				return "", err
-			}
-			cache.Add(k, s)
-		}
-		return s, nil
-	}
+type cacheKey struct {
+	accessKey, secretKey, audience string
 }
+
+var cacheLRU = expirable.NewLRU[cacheKey, string](1000, nil, 15*time.Second)
 
 func authenticateNode(accessKey, secretKey, audience string) (string, error) {
 	claims := xjwt.NewStandardClaims()
@@ -161,7 +144,20 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 // newCachedAuthToken returns a token that is cached up to 15 seconds.
 // If globalActiveCred is updated it is reflected at once.
 func newCachedAuthToken() func(audience string) string {
-	fn := cachedAuthenticateNode(15 * time.Second)
+	fn := func(accessKey, secretKey, audience string) (s string, err error) {
+		k := cacheKey{accessKey: accessKey, secretKey: secretKey, audience: audience}
+
+		var ok bool
+		s, ok = cacheLRU.Get(k)
+		if !ok {
+			s, err = authenticateNode(accessKey, secretKey, audience)
+			if err != nil {
+				return "", err
+			}
+			cacheLRU.Add(k, s)
+		}
+		return s, nil
+	}
 	return func(audience string) string {
 		cred := globalActiveCred
 		token, err := fn(cred.AccessKey, cred.SecretKey, audience)

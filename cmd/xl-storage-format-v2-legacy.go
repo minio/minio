@@ -29,6 +29,9 @@ func (x *xlMetaV2VersionHeader) unmarshalV(v uint8, bts []byte) (o []byte, err e
 	switch v {
 	case 1:
 		return x.unmarshalV1(bts)
+	case 2:
+		x2 := xlMetaV2VersionHeaderV2{xlMetaV2VersionHeader: x}
+		return x2.UnmarshalMsg(bts)
 	case xlHeaderVersion:
 		return x.UnmarshalMsg(bts)
 	}
@@ -122,4 +125,108 @@ func (j *xlMetaV2Version) unmarshalV(v uint8, bts []byte) (o []byte, err error) 
 		}
 	}
 	return o, err
+}
+
+// xlMetaV2VersionHeaderV2 is a version 2 of xlMetaV2VersionHeader before EcN and EcM were added.
+type xlMetaV2VersionHeaderV2 struct {
+	*xlMetaV2VersionHeader
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	z.EcN, z.EcN = 0, 0
+	var zb0001 uint32
+	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "VersionID")
+		return
+	}
+	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	bts, err = msgp.ReadExactBytes(bts, (z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	{
+		var zb0002 uint8
+		zb0002, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Type")
+			return
+		}
+		z.Type = VersionType(zb0002)
+	}
+	{
+		var zb0003 uint8
+		zb0003, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = xlFlags(zb0003)
+	}
+	o = bts
+	return
+}
+
+// DecodeMsg implements msgp.Decodable
+func (z *xlMetaV2VersionHeaderV2) DecodeMsg(dc *msgp.Reader) (err error) {
+	z.EcN, z.EcN = 0, 0
+	var zb0001 uint32
+	zb0001, err = dc.ReadArrayHeader()
+	if err != nil {
+		err = msgp.WrapError(err)
+		return
+	}
+	if zb0001 != 5 {
+		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
+		return
+	}
+	err = dc.ReadExactBytes((z.VersionID)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "VersionID")
+		return
+	}
+	z.ModTime, err = dc.ReadInt64()
+	if err != nil {
+		err = msgp.WrapError(err, "ModTime")
+		return
+	}
+	err = dc.ReadExactBytes((z.Signature)[:])
+	if err != nil {
+		err = msgp.WrapError(err, "Signature")
+		return
+	}
+	{
+		var zb0002 uint8
+		zb0002, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err, "Type")
+			return
+		}
+		z.Type = VersionType(zb0002)
+	}
+	{
+		var zb0003 uint8
+		zb0003, err = dc.ReadUint8()
+		if err != nil {
+			err = msgp.WrapError(err, "Flags")
+			return
+		}
+		z.Flags = xlFlags(zb0003)
+	}
+	return
 }

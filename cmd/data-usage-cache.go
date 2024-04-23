@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -36,7 +35,6 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
-	"github.com/minio/minio/internal/hash"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
 )
@@ -1005,11 +1003,23 @@ func (d *dataUsageCache) load(ctx context.Context, store objectIO, name string) 
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		r, err := store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, ObjectOptions{NoLock: true})
+		r, err := store.GetObjectNInfo(ctx, minioMetaBucket, pathJoin(bucketMetaPrefix, name), nil, http.Header{}, ObjectOptions{NoLock: true})
 		if err != nil {
 			switch err.(type) {
 			case ObjectNotFound, BucketNotFound:
-				return false, nil
+				r, err = store.GetObjectNInfo(ctx, dataUsageBucket, name, nil, http.Header{}, ObjectOptions{NoLock: true})
+				if err != nil {
+					switch err.(type) {
+					case ObjectNotFound, BucketNotFound:
+						return false, nil
+					case InsufficientReadQuorum, StorageErr:
+						return true, nil
+					}
+					return false, err
+				}
+				err = d.deserialize(r)
+				r.Close()
+				return err != nil, nil
 			case InsufficientReadQuorum, StorageErr:
 				return true, nil
 			}
@@ -1070,24 +1080,11 @@ func (d *dataUsageCache) save(ctx context.Context, store objectIO, name string) 
 	}
 
 	save := func(name string, timeout time.Duration) error {
-		hr, err := hash.NewReader(ctx, bytes.NewReader(buf.Bytes()), int64(buf.Len()), "", "", int64(buf.Len()))
-		if err != nil {
-			return err
-		}
-
 		// Abandon if more than a minute, so we don't hold up scanner.
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		_, err = store.PutObject(ctx,
-			dataUsageBucket,
-			name,
-			NewPutObjReader(hr),
-			ObjectOptions{NoLock: true})
-		if isErrBucketNotFound(err) {
-			return nil
-		}
-		return err
+		return saveConfig(ctx, store, pathJoin(bucketMetaPrefix, name), buf.Bytes())
 	}
 	defer save(name+".bkp", 5*time.Second) // Keep a backup as well
 
