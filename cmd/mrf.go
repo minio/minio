@@ -21,6 +21,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/pkg/v2/wildcard"
 )
@@ -35,7 +36,7 @@ type partialOperation struct {
 	bucket              string
 	object              string
 	versionID           string
-	allVersions         bool
+	versions            []byte
 	setIndex, poolIndex int
 	queued              time.Time
 	scanMode            madmin.HealScanMode
@@ -111,8 +112,13 @@ func (m *mrfState) healRoutine(z *erasureServerPools) {
 			if u.object == "" {
 				healBucket(u.bucket, scan)
 			} else {
-				if u.allVersions {
-					z.serverPools[u.poolIndex].sets[u.setIndex].listAndHeal(u.bucket, u.object, u.scanMode, healObjectVersionsDisparity)
+				if len(u.versions) > 0 {
+					vers := len(u.versions) / 16
+					if vers > 0 {
+						for i := 0; i < vers; i++ {
+							healObject(u.bucket, u.object, uuid.UUID(u.versions[16*i:]).String(), scan)
+						}
+					}
 				} else {
 					healObject(u.bucket, u.object, u.versionID, scan)
 				}

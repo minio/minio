@@ -461,10 +461,10 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 	return w.Run(func() error { return p.storage.RenameFile(ctx, srcVolume, srcPath, dstVolume, dstPath) })
 }
 
-func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (sign uint64, err error) {
+func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (res RenameDataResp, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricRenameData, srcPath, fi.DataDir, dstVolume, dstPath)
 	if err != nil {
-		return 0, err
+		return res, err
 	}
 	defer func() {
 		if err == nil && !skipAccessChecks(dstVolume) {
@@ -472,11 +472,12 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 		}
 		done(&err)
 	}()
+
 	// Copy inline data to a new buffer to function with deadlines.
 	if len(fi.Data) > 0 {
 		fi.Data = append(grid.GetByteBufferCap(len(fi.Data))[:0], fi.Data...)
 	}
-	return xioutil.WithDeadline[uint64](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (result uint64, err error) {
+	return xioutil.WithDeadline[RenameDataResp](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (res RenameDataResp, err error) {
 		if len(fi.Data) > 0 {
 			defer grid.PutByteBuffer(fi.Data)
 		}

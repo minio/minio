@@ -36,6 +36,7 @@ const (
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
 	systemMemoryCollectorPath           collectorPath = "/system/memory"
+	systemCPUCollectorPath              collectorPath = "/system/cpu"
 	systemProcessCollectorPath          collectorPath = "/system/process"
 	systemGoCollectorPath               collectorPath = "/system/go"
 
@@ -44,6 +45,7 @@ const (
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterAuditCollectorPath        collectorPath = "/cluster/audit"
+	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 )
 
 const (
@@ -126,6 +128,20 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			memUsedPercMD,
 		},
 		loadMemoryMetrics,
+	)
+
+	systemCPUMG := NewMetricsGroup(systemCPUCollectorPath,
+		[]MetricDescriptor{
+			sysCPUAvgIdleMD,
+			sysCPUAvgIOWaitMD,
+			sysCPULoadMD,
+			sysCPULoadPercMD,
+			sysCPUNiceMD,
+			sysCPUStealMD,
+			sysCPUSystemMD,
+			sysCPUUserMD,
+		},
+		loadCPUMetrics,
 	)
 
 	systemDriveMG := NewMetricsGroup(systemDriveCollectorPath,
@@ -228,6 +244,16 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterAuditMetrics,
 	)
 
+	clusterNotificationMG := NewMetricsGroup(clusterNotificationCollectorPath,
+		[]MetricDescriptor{
+			notificationCurrentSendInProgressMD,
+			notificationEventsErrorsTotalMD,
+			notificationEventsSentTotalMD,
+			notificationEventsSkippedTotalMD,
+		},
+		loadClusterNotificationMetrics,
+	)
+
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
@@ -235,12 +261,14 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		systemNetworkInternodeMG,
 		systemDriveMG,
 		systemMemoryMG,
+		systemCPUMG,
 
 		clusterHealthMG,
 		clusterUsageObjectsMG,
 		clusterUsageBucketsMG,
 		clusterErasureSetMG,
 		clusterAuditMG,
+		clusterNotificationMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These
