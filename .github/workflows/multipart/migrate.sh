@@ -112,7 +112,7 @@ fi
 ./mc admin group enable site1 site-replication-issue-group
 
 max_wait_attempts=30
-wait_interval=5 
+wait_interval=5
 
 attempt=1
 while true; do
