@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -48,7 +47,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
-	"github.com/minio/minio/internal/deadlineconn"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
@@ -636,7 +634,6 @@ const defaultDialTimeout = 5 * time.Second
 // NewHTTPTransportWithTimeout allows setting a timeout.
 func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 	return xhttp.ConnSettings{
-		DialContext:      newCustomDialContext(),
 		LookupHost:       globalDNSCache.LookupHost,
 		DialTimeout:      defaultDialTimeout,
 		RootCAs:          globalRootCAs,
@@ -647,32 +644,10 @@ func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 	}.NewHTTPTransportWithTimeout(timeout)
 }
 
-// newCustomDialContext setups a custom dialer for any external communication and proxies.
-func newCustomDialContext() xhttp.DialContext {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout:   15 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}
-
-		conn, err := dialer.DialContext(ctx, network, addr)
-		if err != nil {
-			return nil, err
-		}
-
-		dconn := deadlineconn.New(conn).
-			WithReadDeadline(globalConnReadDeadline).
-			WithWriteDeadline(globalConnWriteDeadline)
-
-		return dconn, nil
-	}
-}
-
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
 func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	return xhttp.ConnSettings{
-		DialContext:      newCustomDialContext(),
 		LookupHost:       globalDNSCache.LookupHost,
 		RootCAs:          globalRootCAs,
 		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
