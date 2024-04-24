@@ -109,7 +109,6 @@ fi
 # Add user group test
 ./mc admin user add site1 site-replication-issue-user site-replication-issue-password
 ./mc admin group add site1 site-replication-issue-group site-replication-issue-user
-./mc admin group enable site1 site-replication-issue-group
 
 max_wait_attempts=30
 wait_interval=5
