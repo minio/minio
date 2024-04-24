@@ -13,12 +13,23 @@ import (
 )
 
 var (
+	// ErrTooMuchDataToWrite is returned when the data to write is more than the buffer size.
 	ErrTooMuchDataToWrite = errors.New("too much data to write")
-	ErrIsFull             = errors.New("ringbuffer is full")
-	ErrIsEmpty            = errors.New("ringbuffer is empty")
-	ErrIsNotEmpty         = errors.New("ringbuffer is not empty")
-	ErrAcquireLock        = errors.New("unable to acquire lock")
-	ErrWriteOnClosed      = errors.New("write on closed ringbuffer")
+
+	// ErrIsFull is returned when the buffer is full and not blocking.
+	ErrIsFull = errors.New("ringbuffer is full")
+
+	// ErrIsEmpty is returned when the buffer is empty and not blocking.
+	ErrIsEmpty = errors.New("ringbuffer is empty")
+
+	// ErrIsNotEmpty is returned when the buffer is not empty and not blocking.
+	ErrIsNotEmpty = errors.New("ringbuffer is not empty")
+
+	// ErrAcquireLock is returned when the lock is not acquired on Try operations.
+	ErrAcquireLock = errors.New("unable to acquire lock")
+
+	// ErrWriteOnClosed is returned when write on a closed ringbuffer.
+	ErrWriteOnClosed = errors.New("write on closed ringbuffer")
 )
 
 // RingBuffer is a circular buffer that implement io.ReaderWriter interface.
@@ -35,8 +46,8 @@ type RingBuffer struct {
 	block     bool
 	mu        sync.Mutex
 	wg        sync.WaitGroup
-	readCond  *sync.Cond // Signalled when data has been read.
-	writeCond *sync.Cond // Signalled when data has been written.
+	readCond  *sync.Cond // Signaled when data has been read.
+	writeCond *sync.Cond // Signaled when data has been written.
 }
 
 // New returns a new RingBuffer whose buffer has the given size.

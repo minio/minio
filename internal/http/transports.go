@@ -32,8 +32,8 @@ import (
 var tlsClientSessionCacheSize = 100
 
 const (
-	WriteBufferSize = 64 << 10 // 64KiB moving up from 4KiB default
-	ReadBufferSize  = 64 << 10 // 64KiB moving up from 4KiB default
+	WriteBufferSize = 64 << 10 // WriteBufferSize 64KiB moving up from 4KiB default
+	ReadBufferSize  = 64 << 10 // ReadBufferSize 64KiB moving up from 4KiB default
 )
 
 // ConnSettings - contains connection settings.

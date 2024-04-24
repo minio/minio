@@ -173,7 +173,7 @@ func TestRingBuffer_Write(t *testing.T) {
 	if rb.Length() != 3 {
 		t.Fatalf("expect len 3 bytes but got %d. r.w=%d, r.r=%d", rb.Length(), rb.w, rb.r)
 	}
-	_, err = rb.Write([]byte(strings.Repeat("abcd", 15)))
+	rb.Write([]byte(strings.Repeat("abcd", 15)))
 
 	if !bytes.Equal(rb.Bytes(nil), []byte("bcd"+strings.Repeat("abcd", 15))) {
 		t.Fatalf("expect 63 ... but got %s. r.w=%d, r.r=%d", rb.Bytes(nil), rb.w, rb.r)
@@ -299,7 +299,7 @@ func TestRingBuffer_WriteBlocking(t *testing.T) {
 	if rb.Length() != 3 {
 		t.Fatalf("expect len 3 bytes but got %d. r.w=%d, r.r=%d", rb.Length(), rb.w, rb.r)
 	}
-	_, err = rb.Write([]byte(strings.Repeat("abcd", 15)))
+	rb.Write([]byte(strings.Repeat("abcd", 15)))
 
 	if !bytes.Equal(rb.Bytes(nil), []byte("bcd"+strings.Repeat("abcd", 15))) {
 		t.Fatalf("expect 63 ... but got %s. r.w=%d, r.r=%d", rb.Bytes(nil), rb.w, rb.r)
@@ -410,7 +410,6 @@ func TestRingBuffer_Read(t *testing.T) {
 	if rb.r != 16 {
 		t.Fatalf("expect r.r=16 but got %d. r.w=%d", rb.r, rb.w)
 	}
-
 }
 
 func TestRingBuffer_Blocking(t *testing.T) {
@@ -420,12 +419,12 @@ func TestRingBuffer_Blocking(t *testing.T) {
 
 	var readBytes int
 	var wroteBytes int
-	var readHash = crc32.NewIEEE()
-	var wroteHash = crc32.NewIEEE()
 	var readBuf bytes.Buffer
 	var wroteBuf bytes.Buffer
-	var read = io.Writer(readHash)
-	var wrote = io.Writer(wroteHash)
+	readHash := crc32.NewIEEE()
+	wroteHash := crc32.NewIEEE()
+	read := io.Writer(readHash)
+	wrote := io.Writer(wroteHash)
 	if debug {
 		read = io.MultiWriter(read, &readBuf)
 		wrote = io.MultiWriter(wrote, &wroteBuf)
@@ -437,7 +436,7 @@ func TestRingBuffer_Blocking(t *testing.T) {
 	}
 	// Inject random reader/writer sleeps.
 	const maxSleep = int(1 * time.Millisecond)
-	var doSleep = !testing.Short()
+	doSleep := !testing.Short()
 	rb := New(4 << 10).SetBlocking(true)
 
 	// Reader
@@ -583,12 +582,12 @@ func TestRingBuffer_BlockingBig(t *testing.T) {
 
 	var readBytes int
 	var wroteBytes int
-	var readHash = crc32.NewIEEE()
-	var wroteHash = crc32.NewIEEE()
+	readHash := crc32.NewIEEE()
+	wroteHash := crc32.NewIEEE()
 	var readBuf bytes.Buffer
 	var wroteBuf bytes.Buffer
-	var read = io.Writer(readHash)
-	var wrote = io.Writer(wroteHash)
+	read := io.Writer(readHash)
+	wrote := io.Writer(wroteHash)
 	if debug {
 		read = io.MultiWriter(read, &readBuf)
 		wrote = io.MultiWriter(wrote, &wroteBuf)
@@ -600,7 +599,7 @@ func TestRingBuffer_BlockingBig(t *testing.T) {
 	}
 	// Inject random reader/writer sleeps.
 	const maxSleep = int(1 * time.Millisecond)
-	var doSleep = !testing.Short()
+	doSleep := !testing.Short()
 	rb := New(4 << 10).SetBlocking(true)
 
 	// Reader
@@ -858,7 +857,7 @@ func TestRingBuffer_ByteInterface(t *testing.T) {
 	}
 
 	// read three, error
-	b, err = rb.ReadByte()
+	_, err = rb.ReadByte()
 	if err == nil {
 		t.Fatalf("expect ErrIsEmpty but got nil")
 	}
