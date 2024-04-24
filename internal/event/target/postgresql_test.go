@@ -38,8 +38,8 @@ func TestPostgreSQLRegistration(t *testing.T) {
 }
 
 func TestPsqlTableNameValidation(t *testing.T) {
-	validTables := []string{"table", "\"Table name\"", "\"✅✅\"", "table$one", "\"táblë\""}
-	invalidTables := []string{"table name", "table \"name\"", "✅✅", "$table$", "táblë"}
+	validTables := []string{"táblë", "table", "TableName", "\"Table name\"", "\"✅✅\"", "table$one", "\"táblë\""}
+	invalidTables := []string{"table name", "table \"name\"", "✅✅", "$table$"}
 
 	for _, name := range validTables {
 		if err := validatePsqlTableName(name); err != nil {
