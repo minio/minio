@@ -85,6 +85,10 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
 	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
 
+test-iam-ldap-upgrade-import: build ## verify IAM (external LDAP IDP)
+	@echo "Running upgrade tests for IAM (LDAP backend)"
+	@env bash $(PWD)/buildscripts/minio-iam-ldap-upgrade-import-test.sh
+
 test-sio-error:
 	@(env bash $(PWD)/docs/bucket/replication/sio-error.sh)
 
