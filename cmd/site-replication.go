@@ -1325,7 +1325,7 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 			} else {
 				_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 			}
-			if err == nil && updReq.Status != madmin.GroupEnabled {
+			if err == nil && updReq.Status != "" {
 				_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 			}
 		}
