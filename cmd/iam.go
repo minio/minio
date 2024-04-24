@@ -1503,12 +1503,14 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 
 		hasDiff := false
 
-		validatedParent, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
+		// For the parent value, we require that the parent exists in the LDAP
+		// server and is under a configured base DN.
+		validatedParent, isUnderBaseDN, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
 		if err != nil {
 			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", parent, err))
 			continue
 		}
-		if validatedParent == "" {
+		if validatedParent == "" || !isUnderBaseDN {
 			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", parent)
 			collectedErrors = append(collectedErrors, err)
 			continue
@@ -1518,9 +1520,11 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			hasDiff = true
 		}
 
-		var validatedGroups []string
+		var normalizedGroups []string
 		for _, group := range groups {
-			validatedGroup, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
+			// For a group, we store the normalized DN even if it not under a
+			// configured base DN.
+			validatedGroup, _, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
 			if err != nil {
 				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", group, err))
 				continue
@@ -1534,13 +1538,13 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			if validatedGroup != group {
 				hasDiff = true
 			}
-			validatedGroups = append(validatedGroups, validatedGroup)
+			normalizedGroups = append(normalizedGroups, validatedGroup)
 		}
 
 		if hasDiff {
 			updatedCreateReq := createReq
 			updatedCreateReq.Parent = validatedParent
-			updatedCreateReq.Groups = validatedGroups
+			updatedCreateReq.Groups = normalizedGroups
 
 			updatedKeysMap[ak] = updatedCreateReq
 		}
@@ -1580,7 +1584,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	// We map keys that correspond to LDAP DNs and validate that they exist in
 	// the LDAP server.
-	var dnValidator func(*libldap.Conn, string) (string, error) = sys.LDAPConfig.GetValidatedUserDN
+	var dnValidator func(*libldap.Conn, string) (string, bool, error) = sys.LDAPConfig.GetValidatedUserDN
 	if isGroup {
 		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
 	}
@@ -1594,12 +1598,12 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			// not a valid DN, ignore.
 			continue
 		}
-		validatedDN, err := dnValidator(conn, k)
+		validatedDN, underBaseDN, err := dnValidator(conn, k)
 		if err != nil {
 			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", k, err))
 			continue
 		}
-		if validatedDN == "" {
+		if validatedDN == "" || !underBaseDN {
 			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", k)
 			collectedErrors = append(collectedErrors, err)
 			continue
@@ -1905,10 +1909,11 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	} else {
 		if isAttach {
 			var foundGroupDN string
-			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
 				iamLogIf(ctx, err)
 				return
-			} else if foundGroupDN == "" {
+			} else if foundGroupDN == "" || !underBaseDN {
 				err = errNoSuchGroup
 				return
 			}
