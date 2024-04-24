@@ -1269,10 +1269,6 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin
 		return updatedAt, errServerNotInitialized
 	}
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
-	}
-
 	if !auth.IsAccessKeyValid(accessKey) {
 		return updatedAt, auth.ErrInvalidAccessKeyLength
 	}
@@ -1702,10 +1698,6 @@ func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []
 		return updatedAt, errServerNotInitialized
 	}
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
-	}
-
 	updatedAt, err = sys.store.AddUsersToGroup(ctx, group, members)
 	if err != nil {
 		return updatedAt, err
@@ -1777,34 +1769,12 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 	}
 }
 
-// PolicyDBSet - sets a policy for a user or group in the PolicyDB - the user doesn't have to exist since sometimes they are virtuals
+// PolicyDBSet - sets a policy for a user or group in the PolicyDB. This does
+// not validate if the user/group exists - that is the responsibility of the
+// caller.
 func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userType IAMUserType, isGroup bool) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
-	}
-
-	if sys.LDAPConfig.Enabled() {
-		if isGroup {
-			var foundGroupDN string
-			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, name); err != nil {
-				iamLogIf(ctx, err)
-				return
-			} else if foundGroupDN == "" {
-				err = errNoSuchGroup
-				return
-			}
-			name = foundGroupDN
-		} else {
-			var foundUserDN string
-			if foundUserDN, err = sys.LDAPConfig.GetValidatedDNForUsername(name); err != nil {
-				iamLogIf(ctx, err)
-				return
-			} else if foundUserDN == "" {
-				err = errNoSuchUser
-				return
-			}
-			name = foundUserDN
-		}
 	}
 
 	updatedAt, err = sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
