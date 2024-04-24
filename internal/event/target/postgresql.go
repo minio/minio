@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -101,6 +102,10 @@ func (p PostgreSQLArgs) Validate() error {
 	if p.Table == "" {
 		return fmt.Errorf("empty table name")
 	}
+	if err := validatePsqlTableName(p.Table); err != nil {
+		return err
+	}
+
 	if p.Format != "" {
 		f := strings.ToLower(p.Format)
 		if f != event.NamespaceFormat && f != event.AccessFormat {
@@ -443,4 +448,18 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, loggerOnce logger.LogOn
 	}
 
 	return target, nil
+}
+
+var errInvalidPsqlTablename = errors.New("invalid PostgreSQL table")
+
+func validatePsqlTableName(name string) error {
+	// check for simple name or quoted name
+	// - letter/underscore followed by one or more letter/digit/underscore
+	// - any text between quotes (text cannot contain a quote itself)
+	if match, err := regexp.MatchString("^(([a-zA-Z_][a-zA-Z0-9_$]*)|(\"[^\"]+\"))$", name); err != nil {
+		return err
+	} else if !match {
+		return errInvalidPsqlTablename
+	}
+	return nil
 }
