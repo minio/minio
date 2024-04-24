@@ -124,7 +124,7 @@ while true; do
 	fi
 
 	remaining_attempts=$((max_wait_attempts - attempt))
-	if (( attempt >= max_wait_attempts )); then
+	if ((attempt >= max_wait_attempts)); then
 		echo "Outputs remain inconsistent after $max_wait_attempts attempts. Exiting with error."
 		exit 1
 	else
@@ -137,7 +137,7 @@ done
 
 status=$(./mc admin group info site1 site-replication-issue-group --json | jq .groupStatus | tr -d '"')
 
-if [[ "$status" == "enabled" ]]; then
+if [[ $status == "enabled" ]]; then
 	echo "Success"
 else
 	echo "Expected status: enabled, actual status: $status"
