@@ -1559,6 +1559,37 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 	return nil
 }
 
+func (sys *IAMSys) getStoredLDAPPolicyMappingKeys(ctx context.Context, isGroup bool) set.StringSet {
+	entityKeysInStorage := set.NewStringSet()
+	if iamOS, ok := sys.store.IAMStorageAPI.(*IAMObjectStore); ok {
+		// Load existing mapping keys from the cached listing for
+		// `IAMObjectStore`.
+		iamFilesListing := iamOS.cachedIAMListing.Load().(map[string][]string)
+		listKey := policyDBSTSUsersListKey
+		if isGroup {
+			listKey = policyDBGroupsListKey
+		}
+		for _, item := range iamFilesListing[listKey] {
+			stsUserName := strings.TrimSuffix(item, ".json")
+			entityKeysInStorage.Add(stsUserName)
+		}
+	} else {
+		// For non-iam object store, we copy the mapping keys from the cache.
+		cache := sys.store.rlock()
+		defer sys.store.runlock()
+		cachedPolicyMap := cache.iamSTSPolicyMap
+		if isGroup {
+			cachedPolicyMap = cache.iamGroupPolicyMap
+		}
+		cachedPolicyMap.Range(func(k string, v MappedPolicy) bool {
+			entityKeysInStorage.Add(k)
+			return true
+		})
+	}
+
+	return entityKeysInStorage
+}
+
 // NormalizeLDAPMappingImport - validates the LDAP policy mappings. Keys in the
 // given map may not correspond to LDAP DNs - these keys are ignored.
 //
@@ -1615,6 +1646,8 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 		return fmt.Errorf("errors validating LDAP DN: %w", errors.Join(collectedErrors...))
 	}
 
+	entityKeysInStorage := sys.getStoredLDAPPolicyMappingKeys(ctx, isGroup)
+
 	for normKey, origKeys := range normalizedDNKeysMap {
 		if len(origKeys) > 1 {
 			// If there are multiple DN keys that normalize to the same value,
@@ -1639,6 +1672,12 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			// ones from the map.
 			for i := 1; i < len(origKeys); i++ {
 				delete(policyMap, origKeys[i])
+
+				// Remove the mapping from storage by setting the policy to "".
+				if entityKeysInStorage.Contains(origKeys[i]) {
+					// Ignore any deletion error.
+					_, _ = sys.PolicyDBSet(ctx, origKeys[i], "", stsUser, isGroup)
+				}
 			}
 		}
 
@@ -1648,6 +1687,11 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 		mappingValue := policyMap[origKeys[0]]
 		delete(policyMap, origKeys[0])
 		policyMap[normKey] = mappingValue
+		// Remove the mapping from storage by setting the policy to "".
+		if entityKeysInStorage.Contains(origKeys[0]) {
+			// Ignore any deletion error.
+			_, _ = sys.PolicyDBSet(ctx, origKeys[0], "", stsUser, isGroup)
+		}
 	}
 	return nil
 }
