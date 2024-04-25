@@ -238,7 +238,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Initialize if LDAP is enabled
 	ldapConfig, err := xldap.Lookup(s, globalRootCAs)
 	if err != nil {
-		iamLogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err), logger.WarningKind)
+		iamLogIf(ctx, fmt.Errorf("Unable to load LDAP configuration (LDAP configuration will be disabled!): %w", err), logger.WarningKind)
 	}
 
 	stsTLSConfig, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
