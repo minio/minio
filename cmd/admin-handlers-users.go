@@ -1632,9 +1632,10 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		var err error
 		if isGroup {
 			var foundGroupDN string
-			if foundGroupDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
 				iamLogIf(ctx, err)
-			} else if foundGroupDN == "" {
+			} else if foundGroupDN == "" || !underBaseDN {
 				err = errNoSuchGroup
 			}
 			entityName = foundGroupDN
