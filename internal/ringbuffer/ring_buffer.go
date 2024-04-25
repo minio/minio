@@ -556,23 +556,23 @@ func (r *RingBuffer) CloseWriter() {
 // Flush waits for the buffer to be empty and fully read.
 // If not blocking ErrIsNotEmpty will be returned if the buffer still contains data.
 func (r *RingBuffer) Flush() error {
-	for !r.IsEmpty() {
-		if !r.block {
-			return r.setErr(ErrIsNotEmpty, false)
-		}
-		r.mu.Lock()
-		r.readCond.Wait()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for r.w != r.r || r.isFull {
 		err := r.readErr(true)
-		r.mu.Unlock()
 		if err != nil {
 			if err == io.EOF {
 				err = nil
 			}
 			return err
 		}
+		if !r.block {
+			return ErrIsNotEmpty
+		}
+		r.readCond.Wait()
 	}
 
-	err := r.readErr(false)
+	err := r.readErr(true)
 	if err == io.EOF {
 		return nil
 	}
