@@ -126,6 +126,7 @@ verify: ## verify minio various setups
 verify-healing: ## verify healing and replacing disks with minio binary
 	@echo "Verify healing build with race"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/verify-healing-empty-erasure-set.sh)
 	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
