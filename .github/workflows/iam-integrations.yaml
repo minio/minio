@@ -3,8 +3,8 @@ name: IAM integration
 on:
   pull_request:
     branches:
-    - master
-    - next
+      - master
+      - next
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -112,6 +112,12 @@ jobs:
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           go run docs/iam/access-manager-plugin.go &
           make test-iam
+      - name: Test MinIO Old Version data to IAM import current version
+        if: matrix.ldap == 'ldaphost:389'
+        env:
+          _MINIO_LDAP_TEST_SERVER: ${{ matrix.ldap }}
+        run: |
+          make test-iam-ldap-upgrade-import
       - name: Test LDAP for automatic site replication
         if: matrix.ldap == 'localhost:389'
         run: |

@@ -1325,7 +1325,7 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 			} else {
 				_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 			}
-			if err == nil && updReq.Status != madmin.GroupEnabled {
+			if err == nil && updReq.Status != "" {
 				_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 			}
 		}
@@ -1441,9 +1441,10 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 		var err error
 		if isGroup {
 			var foundGroupDN string
-			if foundGroupDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
 				iamLogIf(ctx, err)
-			} else if foundGroupDN == "" {
+			} else if foundGroupDN == "" || !underBaseDN {
 				err = errNoSuchGroup
 			}
 			entityName = foundGroupDN

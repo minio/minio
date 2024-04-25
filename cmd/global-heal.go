@@ -28,6 +28,10 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/storageclass"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -214,34 +218,40 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			continue
 		}
 
-		vc, err := globalBucketVersioningSys.Get(bucket)
-		if err != nil {
-			retErr = err
-			healingLogIf(ctx, err)
-			continue
-		}
+		var (
+			vc   *versioning.Versioning
+			lc   *lifecycle.Lifecycle
+			lr   objectlock.Retention
+			rcfg *replication.Config
+		)
 
-		// Check if the current bucket has a configured lifecycle policy
-		lc, err := globalLifecycleSys.Get(bucket)
-		if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
-			retErr = err
-			healingLogIf(ctx, err)
-			continue
-		}
-
-		// Check if bucket is object locked.
-		lr, err := globalBucketObjectLockSys.Get(bucket)
-		if err != nil {
-			retErr = err
-			healingLogIf(ctx, err)
-			continue
-		}
-
-		rcfg, err := getReplicationConfig(ctx, bucket)
-		if err != nil {
-			retErr = err
-			healingLogIf(ctx, err)
-			continue
+		if !isMinioMetaBucketName(bucket) {
+			vc, err = globalBucketVersioningSys.Get(bucket)
+			if err != nil {
+				retErr = err
+				healingLogIf(ctx, err)
+				continue
+			}
+			// Check if the current bucket has a configured lifecycle policy
+			lc, err = globalLifecycleSys.Get(bucket)
+			if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bucket}) {
+				retErr = err
+				healingLogIf(ctx, err)
+				continue
+			}
+			// Check if bucket is object locked.
+			lr, err = globalBucketObjectLockSys.Get(bucket)
+			if err != nil {
+				retErr = err
+				healingLogIf(ctx, err)
+				continue
+			}
+			rcfg, err = getReplicationConfig(ctx, bucket)
+			if err != nil {
+				retErr = err
+				healingLogIf(ctx, err)
+				continue
+			}
 		}
 
 		if serverDebugLog {

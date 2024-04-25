@@ -2760,11 +2760,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
-	// When we are not inlined and there is no oldDataDir present
-	// we backup existing xl.meta -> xl.meta.bkp - this is done to
-	// ensure for some reason we didn't get enough quorum we can
-	// revert this back to original xl.meta and preserve the older dataDir.
-	if notInline && res.OldDataDir != "" {
+	// If we have oldDataDir then we must preserve current xl.meta
+	// as backup, in-case needing renames().
+	if res.OldDataDir != "" {
 		// preserve current xl.meta inside the oldDataDir.
 		if err = s.writeAll(ctx, dstVolume, pathJoin(dstPath, res.OldDataDir, xlStorageFormatFileBackup), dstBuf, true, skipParent); err != nil {
 			if legacyPreserved {
