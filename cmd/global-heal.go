@@ -269,7 +269,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		disks = disks[:len(disks)-healing] // healing drives are always at the end of the list
 
 		if len(disks) < er.setDriveCount/2 {
-			return fmt.Errorf("no enough drives (found=%d, healing=%d, total=%d) are available to heal `%s`", len(disks), healing, er.setDriveCount, tracker.disk.String())
+			return fmt.Errorf("not enough drives (found=%d, healing=%d, total=%d) are available to heal `%s`", len(disks), healing, er.setDriveCount, tracker.disk.String())
 		}
 
 		rand.Shuffle(len(disks), func(i, j int) {
