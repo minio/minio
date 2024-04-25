@@ -120,17 +120,20 @@ function __init__() {
 	## version is purposefully set to '3' for minio to migrate configuration file
 	echo '{"version": "3", "credential": {"accessKey": "minio", "secretKey": "minio123"}, "region": "us-east-1"}' >"$MINIO_CONFIG_DIR/config.json"
 
-	GOPATH=/tmp/gopath go install github.com/minio/mc@latest
+	if [ ! -f /tmp/mc ]; then
+		wget --quiet -O /tmp/mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
+			chmod +x /tmp/mc
+	fi
 }
 
 function upload_objects() {
 	start_port=$1
 
-	$GOPATH/bin/mc alias set myminio http://127.0.0.1:$((start_port + 1)) minio minio123 --api=s3v4
-	$GOPATH/bin/mc ready myminio
-	$GOPATH/bin/mc mb myminio/testbucket/
+	/tmp/mc alias set myminio http://127.0.0.1:$((start_port + 1)) minio minio123 --api=s3v4
+	/tmp/mc ready myminio
+	/tmp/mc mb myminio/testbucket/
 	for ((i = 0; i < 20; i++)); do
-		echo "my content" | $GOPATH/bin/mc pipe myminio/testbucket/file-$i
+		echo "my content" | /tmp/mc pipe myminio/testbucket/file-$i
 	done
 }
 
