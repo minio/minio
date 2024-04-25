@@ -12,7 +12,6 @@ fi
 WORK_DIR="$PWD/.verify-$RANDOM"
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
 MINIO=("$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server)
-GOPATH=/tmp/gopath
 
 function start_minio_3_node() {
 	export MINIO_ROOT_USER=minio
@@ -20,14 +19,10 @@ function start_minio_3_node() {
 	export MINIO_ERASURE_SET_DRIVE_COUNT=6
 	export MINIO_CI_CD=1
 
-	first_time=$(find ${WORK_DIR}/ | grep format.json | wc -l)
-
 	start_port=$2
 	args=""
-	for d in $(seq 1 3 5); do
-		args="$args http://127.0.0.1:$((start_port + 1))${WORK_DIR}/1/${d}/ http://127.0.0.1:$((start_port + 2))${WORK_DIR}/2/${d}/ http://127.0.0.1:$((start_port + 3))${WORK_DIR}/3/${d}/ "
-		d=$((d + 1))
-		args="$args http://127.0.0.1:$((start_port + 1))${WORK_DIR}/1/${d}/ http://127.0.0.1:$((start_port + 2))${WORK_DIR}/2/${d}/ http://127.0.0.1:$((start_port + 3))${WORK_DIR}/3/${d}/ "
+	for i in $(seq 1 3); do
+		args="$args http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/1/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/2/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/3/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/4/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/5/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/6/"
 	done
 
 	"${MINIO[@]}" --address ":$((start_port + 1))" $args >"${WORK_DIR}/dist-minio-server1.log" 2>&1 &
@@ -43,8 +38,6 @@ function start_minio_3_node() {
 	disown $pid3
 
 	sleep "$1"
-
-	[ ${first_time} -eq 0 ] && upload_objects $start_port
 
 	if ! ps -p $pid1 1>&2 >/dev/null; then
 		echo "server1 log:"
@@ -89,23 +82,10 @@ function start_minio_3_node() {
 	fi
 }
 
-function check_heal() {
+function check_online() {
 	if ! grep -q 'Status:' ${WORK_DIR}/dist-minio-*.log; then
-		return 1
+		echo "1"
 	fi
-
-	for ((i = 0; i < 20; i++)); do
-		test -f ${WORK_DIR}/$1/1/.minio.sys/format.json
-		v1=$?
-		nextInES=$(($1 + 1)) && [ $nextInES -gt 3 ] && nextInES=1
-		foundFiles1=$(find ${WORK_DIR}/$1/1/ | grep -v .minio.sys | grep xl.meta | wc -l)
-		foundFiles2=$(find ${WORK_DIR}/$nextInES/1/ | grep -v .minio.sys | grep xl.meta | wc -l)
-		test $foundFiles1 -eq $foundFiles2
-		v2=$?
-		[ $v1 == 0 -a $v2 == 0 ] && return 0
-		sleep 10
-	done
-	return 1
 }
 
 function purge() {
@@ -119,39 +99,20 @@ function __init__() {
 
 	## version is purposefully set to '3' for minio to migrate configuration file
 	echo '{"version": "3", "credential": {"accessKey": "minio", "secretKey": "minio123"}, "region": "us-east-1"}' >"$MINIO_CONFIG_DIR/config.json"
-
-	if [ ! -f /tmp/mc ]; then
-		wget --quiet -O /tmp/mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
-			chmod +x /tmp/mc
-	fi
-}
-
-function upload_objects() {
-	start_port=$1
-
-	/tmp/mc alias set myminio http://127.0.0.1:$((start_port + 1)) minio minio123 --api=s3v4
-	/tmp/mc ready myminio
-	/tmp/mc mb myminio/testbucket/
-	for ((i = 0; i < 20; i++)); do
-		echo "my content" | /tmp/mc pipe myminio/testbucket/file-$i
-	done
 }
 
 function perform_test() {
-	start_port=$2
-
-	start_minio_3_node 120 $start_port
+	start_minio_3_node 120 $2
 
 	echo "Testing Distributed Erasure setup healing of drives"
-	echo "Remove the contents of the disks belonging to '${1}' node"
+	echo "Remove the contents of the disks belonging to '${1}' erasure set"
 
 	rm -rf ${WORK_DIR}/${1}/*/
 
 	set -x
-	start_minio_3_node 120 $start_port
+	start_minio_3_node 120 $2
 
-	check_heal ${1}
-	rv=$?
+	rv=$(check_online)
 	if [ "$rv" == "1" ]; then
 		for i in $(seq 1 3); do
 			echo "server$i log:"
