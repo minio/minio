@@ -1661,7 +1661,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 					writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 					return
 				}
-			case rcfg.HasActiveRules("", true):
+			case rcfg != nil && rcfg.HasActiveRules("", true):
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
 				return
 			}
