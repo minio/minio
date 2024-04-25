@@ -541,6 +541,16 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 	}
 }
 
+func getNodeDriveIOErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "errors_ioerror",
+		Help:      "Total number of drive I/O errors since server start",
+		Type:      counterMetric,
+	}
+}
+
 func getNodeDriveAvailabilityErrorsMD() MetricDescription {
 	return MetricDescription{
 		Namespace: nodeMetricNamespace,
@@ -3518,6 +3528,12 @@ func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				metrics = append(metrics, MetricV2{
 					Description:    getNodeDriveTimeoutErrorsMD(),
 					Value:          float64(disk.Metrics.TotalErrorsTimeout),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, MetricV2{
+					Description:    getNodeDriveIOErrorsMD(),
+					Value:          float64(disk.Metrics.TotalErrorsAvailability - disk.Metrics.TotalErrorsTimeout),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
 				})
 
