@@ -143,8 +143,10 @@ spec:
               value: {{ .Values.oidc.scopes }}
             - name: MINIO_IDENTITY_OPENID_COMMENT
               value: {{ .Values.oidc.comment }}
-            - name: MINIO_IDENTITY_OPENID_REDIRECT_URI
+            {{- if .Values.oidc.redirectUri }}
+            - name: MINIO_BROWSER_REDIRECT_URL
               value: {{ .Values.oidc.redirectUri }}
+            {{- end }}
             - name: MINIO_IDENTITY_OPENID_DISPLAY_NAME
               value: {{ .Values.oidc.displayName }}
             {{- end }}

@@ -496,7 +496,7 @@ oidc:
   existingClientSecretKey: ""
   claimName: "policy"
   scopes: "openid,profile,email"
-  redirectUri: "https://console-endpoint-url/oauth_callback"
+  redirectUri: ""
   # Can leave empty
   claimPrefix: ""
   comment: ""
