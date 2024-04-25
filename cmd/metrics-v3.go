@@ -153,6 +153,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			driveFreeInodesMD,
 			driveTotalInodesMD,
 			driveTimeoutErrorsMD,
+			driveIOErrorsMD,
 			driveAvailabilityErrorsMD,
 			driveWaitingIOMD,
 			driveAPILatencyMD,
