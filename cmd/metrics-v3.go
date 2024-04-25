@@ -144,6 +144,29 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadCPUMetrics,
 	)
 
+	systemProcessMG := NewMetricsGroup(systemProcessCollectorPath,
+		[]MetricDescriptor{
+			processLocksReadTotalMD,
+			processLocksWriteTotalMD,
+			processCPUTotalSecondsMD,
+			processGoRoutineTotalMD,
+			processIORCharBytesMD,
+			processIOReadBytesMD,
+			processIOWCharBytesMD,
+			processIOWriteBytesMD,
+			processStarttimeSecondsMD,
+			processUptimeSecondsMD,
+			processFileDescriptorLimitTotalMD,
+			processFileDescriptorOpenTotalMD,
+			processSyscallReadTotalMD,
+			processSyscallWriteTotalMD,
+			processResidentMemoryBytesMD,
+			processVirtualMemoryBytesMD,
+			processVirtualMemoryMaxBytesMD,
+		},
+		loadProcessMetrics,
+	)
+
 	systemDriveMG := NewMetricsGroup(systemDriveCollectorPath,
 		[]MetricDescriptor{
 			driveUsedBytesMD,
@@ -262,6 +285,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		systemDriveMG,
 		systemMemoryMG,
 		systemCPUMG,
+		systemProcessMG,
 
 		clusterHealthMG,
 		clusterUsageObjectsMG,
@@ -298,13 +322,10 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 	}
 
 	// Prepare to register the collectors. Other than `MetricGroup` collectors,
-	// we also have standard collectors like `ProcessCollector` and `GoCollector`.
+	// we also have standard collectors like `GoCollector`.
 
 	// Create all Non-`MetricGroup` collectors here.
 	collectors := map[collectorPath]prometheus.Collector{
-		systemProcessCollectorPath: collectors.NewProcessCollector(collectors.ProcessCollectorOpts{
-			ReportErrors: true,
-		}),
 		systemGoCollectorPath: collectors.NewGoCollector(),
 	}
 
