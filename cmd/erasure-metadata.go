@@ -275,7 +275,7 @@ func (fi FileInfo) ObjectToPartOffset(ctx context.Context, offset int64) (partIn
 func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.Time, etag string, quorum int) (FileInfo, error) {
 	// with less quorum return error.
 	if quorum < 1 {
-		return FileInfo{}, errErasureReadQuorum
+		return FileInfo{}, InsufficientReadQuorum{Err: errErasureReadQuorum, Type: RQInsufficientOnlineDrives}
 	}
 	metaHashes := make([]string, len(metaArr))
 	h := sha256.New()
@@ -341,7 +341,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 	}
 
 	if maxCount < quorum {
-		return FileInfo{}, errErasureReadQuorum
+		return FileInfo{}, InsufficientReadQuorum{Err: errErasureReadQuorum, Type: RQInconsistentMeta}
 	}
 
 	// Find the successor mod time in quorum, otherwise leave the
@@ -377,7 +377,7 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		}
 		return candidate, nil
 	}
-	return FileInfo{}, errErasureReadQuorum
+	return FileInfo{}, InsufficientReadQuorum{Err: errErasureReadQuorum, Type: RQInconsistentMeta}
 }
 
 // pickValidFileInfo - picks one valid FileInfo content and returns from a
@@ -498,7 +498,7 @@ func objectQuorumFromMeta(ctx context.Context, partsMetaData []FileInfo, errs []
 	parities := listObjectParities(partsMetaData, errs)
 	parityBlocks := commonParity(parities, defaultParityCount)
 	if parityBlocks < 0 {
-		return -1, -1, errErasureReadQuorum
+		return -1, -1, InsufficientReadQuorum{Err: errErasureReadQuorum, Type: RQInsufficientOnlineDrives}
 	}
 
 	dataBlocks := len(partsMetaData) - parityBlocks

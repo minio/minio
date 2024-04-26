@@ -80,6 +80,8 @@ export MC_HOST_sited=http://minio:minio123@127.0.0.1:9008
 ## Setup site replication
 ./mc admin replicate add sitea siteb --replicate-ilm-expiry
 
+sleep 10s
+
 ## Add warm tier
 ./mc ilm tier add minio sitea WARM-TIER --endpoint http://localhost:9006 --access-key minio --secret-key minio123 --bucket bucket
 
