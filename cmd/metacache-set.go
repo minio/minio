@@ -1095,8 +1095,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 				switch err.Error() {
 				case errFileNotFound.Error(),
 					errVolumeNotFound.Error(),
-					errUnformattedDisk.Error(),
-					errDiskNotFound.Error():
+					errUnformattedDisk.Error():
 					atEOF++
 					fnf++
 					// This is a special case, to handle bucket does
