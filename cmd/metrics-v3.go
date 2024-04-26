@@ -350,7 +350,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			configStandardParityMD,
 		},
 		loadClusterConfigMetrics,
-	)
+	).requiresObjectLayer()
 
 	loggerWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
