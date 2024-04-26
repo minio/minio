@@ -1634,6 +1634,8 @@ func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, 
 	switch {
 	case isGroup:
 		m = cache.iamGroupPolicyMap
+	case userType == stsUser:
+		m = cache.iamSTSPolicyMap
 	default:
 		m = cache.iamUserPolicyMap
 	}
