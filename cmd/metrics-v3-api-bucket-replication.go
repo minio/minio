@@ -43,7 +43,6 @@ const (
 	bucketReplProxiedDeleteTaggingRequestsFailures = "proxied_delete_tagging_requests_failures"
 	bucketL                                        = "bucket"
 	operationL                                     = "operation"
-	rangeL                                         = "range"
 	targetArnL                                     = "targetArn"
 )
 
@@ -141,10 +140,7 @@ func loadAPIBucketReplicationMetrics(ctx context.Context, m MetricValues, c *met
 					m.Set(bucketReplProxiedDeleteTaggingRequestsFailures, float64(s.ProxyStats.RmvTagFailedTotal), labels...)
 					m.Set(bucketReplSentBytes, float64(stat.ReplicatedSize), labels...)
 
-					latencyData := stat.Latency.getUploadLatency()
-					for latencyRange, latency := range latencyData {
-						m.Set(bucketReplLatencyMs, float64(latency), bucketL, bucket, operationL, "upload", rangeL, latencyRange, targetArnL, arn)
-					}
+					SetHistogramValues(m, bucketReplLatencyMs, stat.Latency.getUploadLatency(), bucketL, bucket, operationL, "upload", targetArnL, arn)
 				}
 			}
 		}

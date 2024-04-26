@@ -72,6 +72,8 @@ const (
 	GaugeMT
 	// HistogramMT - represents a histogram metric.
 	HistogramMT
+	// rangeL - represents a range label.
+	rangeL = "range"
 )
 
 func (mt MetricType) String() string {
@@ -281,6 +283,14 @@ func (m *MetricValues) SetHistogram(name MetricName, hist *prometheus.HistogramV
 		if metric.Value > 0 {
 			m.Set(name, metric.Value, labels...)
 		}
+	}
+}
+
+// SetHistogramValues - sets values for the given MetricName using the provided map of
+// range to value.
+func SetHistogramValues[V uint64 | int64 | float64](m MetricValues, name MetricName, values map[string]V, labels ...string) {
+	for rng, val := range values {
+		m.Set(name, float64(val), append(labels, rangeL, rng)...)
 	}
 }
 
