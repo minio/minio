@@ -403,6 +403,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 				quit = true
 				now := time.Now()
 				var status rebalStatus
+
 				switch {
 				case errors.Is(rebalErr, context.Canceled):
 					status = rebalStopped
@@ -411,30 +412,29 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 					status = rebalCompleted
 					traceMsg = fmt.Sprintf("completed at %s", now)
 				default:
-					// rebalance stopped due to an error, don't mark as completed
+					status = rebalFailed
 					traceMsg = fmt.Sprintf("stopped at %s with err: %v", now, rebalErr)
-					break
 				}
 
 				z.rebalMu.Lock()
 				z.rebalMeta.PoolStats[poolIdx].Info.Status = status
 				z.rebalMeta.PoolStats[poolIdx].Info.EndTime = now
 				z.rebalMu.Unlock()
-				traceMsg = fmt.Sprintf("completed at %s", now)
 
 			case <-timer.C:
 				traceMsg = fmt.Sprintf("saved at %s", time.Now())
 			}
 
 			stopFn := globalRebalanceMetrics.log(rebalanceMetricSaveMetadata, poolIdx, traceMsg)
-			err := z.saveRebalanceStats(ctx, poolIdx, rebalSaveStats)
+			err := z.saveRebalanceStats(GlobalContext, poolIdx, rebalSaveStats)
 			stopFn(err)
-			rebalanceLogIf(ctx, err)
-			timer.Reset(randSleepFor())
+			rebalanceLogIf(GlobalContext, err)
 
 			if quit {
 				return
 			}
+
+			timer.Reset(randSleepFor())
 		}
 	}()
 
@@ -443,6 +443,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 	for {
 		select {
 		case <-ctx.Done():
+			doneCh <- ctx.Err()
 			return
 		default:
 		}
@@ -459,7 +460,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			if errors.Is(err, errServerNotInitialized) || errors.Is(err, errBucketMetadataNotInitialized) {
 				continue
 			}
-			rebalanceLogIf(ctx, err)
+			rebalanceLogIf(GlobalContext, err)
 			doneCh <- err
 			return
 		}
@@ -467,7 +468,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		z.bucketRebalanceDone(bucket, poolIdx)
 	}
 
-	rebalanceLogEvent(ctx, "Pool %d rebalancing is done", poolIdx+1)
+	rebalanceLogEvent(GlobalContext, "Pool %d rebalancing is done", poolIdx+1)
 
 	return err
 }
