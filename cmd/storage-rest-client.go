@@ -54,6 +54,9 @@ func isNetworkError(err error) bool {
 		if down := xnet.IsNetworkOrHostDown(nerr.Err, false); down {
 			return true
 		}
+		if errors.Is(nerr.Err, rest.ErrClientClosed) {
+			return true
+		}
 	}
 	if errors.Is(err, grid.ErrDisconnected) {
 		return true
@@ -61,7 +64,7 @@ func isNetworkError(err error) bool {
 	// More corner cases suitable for storage REST API
 	switch {
 	// A peer node can be in shut down phase and proactively
-	// return 503 server closed error,consider it as an offline node
+	// return 503 server closed error, consider it as an offline node
 	case strings.Contains(err.Error(), http.ErrServerClosed.Error()):
 		return true
 	// Corner case, the server closed the connection with a keep-alive timeout

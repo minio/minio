@@ -403,7 +403,7 @@ func writeUniqueFileInfo(ctx context.Context, disks []StorageAPI, origbucket, bu
 			if fi.IsValid() {
 				return disks[index].WriteMetadata(ctx, origbucket, bucket, prefix, fi)
 			}
-			return errCorruptedFormat
+			return errFileCorrupt
 		}, index)
 	}
 
