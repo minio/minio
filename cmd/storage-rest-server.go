@@ -791,9 +791,26 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 		defer xioutil.SafeClose(doneCh)
 		// Initiate ticker after body has been read.
 		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ticker.C:
+				// The done() might have been called
+				// concurrently, check for it before we
+				// write the filler byte.
+				select {
+				case err := <-doneCh:
+					if err != nil {
+						write([]byte{1})
+						write([]byte(err.Error()))
+					} else {
+						write([]byte{0})
+					}
+					return
+				default:
+				}
+
 				// Response not ready, write a filler byte.
 				write([]byte{32})
 				if canWrite {
@@ -806,7 +823,6 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 				} else {
 					write([]byte{0})
 				}
-				ticker.Stop()
 				return
 			}
 		}
@@ -854,6 +870,21 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 		for {
 			select {
 			case <-ticker.C:
+				// The done() might have been called
+				// concurrently, check for it before we
+				// write the filler byte.
+				select {
+				case err := <-doneCh:
+					if err != nil {
+						write([]byte{1})
+						write([]byte(err.Error()))
+					} else {
+						write([]byte{0})
+					}
+					return
+				default:
+				}
+
 				// Response not ready, write a filler byte.
 				write([]byte{32})
 				if canWrite {

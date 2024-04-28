@@ -739,6 +739,15 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	partPath := pathJoin(uploadIDPath, fi.DataDir, partSuffix)
 	onlineDisks, err = renamePart(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, writeQuorum)
 	if err != nil {
+		if errors.Is(err, errFileNotFound) {
+			// An in-quorum errFileNotFound means that client stream
+			// prematurely closed and we do not find any xl.meta or
+			// part.1's - in such a scenario we must return as if client
+			// disconnected. This means that erasure.Encode() CreateFile()
+			// did not do anything.
+			return pi, IncompleteBody{Bucket: bucket, Object: object}
+		}
+
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
@@ -1314,11 +1323,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	onlineDisks, versions, oldDataDir, err := renameData(ctx, onlineDisks, minioMetaMultipartBucket, uploadIDPath,
 		partsMetadata, bucket, object, writeQuorum)
 	if err != nil {
-		return oi, toObjectErr(err, bucket, object)
+		return oi, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	if err = er.commitRenameDataDir(ctx, bucket, object, oldDataDir, onlineDisks); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object, uploadID)
 	}
 
 	if !opts.Speedtest && len(versions) > 0 {

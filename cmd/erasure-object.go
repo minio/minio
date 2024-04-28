@@ -562,7 +562,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVers, allParts bool) (FileInfo, error) {
 	var xl xlMetaV2
 	if err := xl.LoadOrConvert(ri.Buf); err != nil {
-		return FileInfo{}, err
+		return FileInfo{}, errFileCorrupt
 	}
 
 	fi, err := xl.ToFileInfo(bucket, object, "", inclFreeVers, allParts)
@@ -571,7 +571,7 @@ func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVe
 	}
 
 	if !fi.IsValid() {
-		return FileInfo{}, errCorruptedFormat
+		return FileInfo{}, errFileCorrupt
 	}
 
 	versionID := fi.VersionID
@@ -661,7 +661,7 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 	if !lfi.IsValid() {
 		for i := range errs {
 			if errs[i] == nil {
-				errs[i] = errCorruptedFormat
+				errs[i] = errFileCorrupt
 			}
 		}
 		return metaFileInfos, errs
@@ -1519,7 +1519,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	onlineDisks, versions, oldDataDir, err := renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
 	if err != nil {
 		if errors.Is(err, errFileNotFound) {
-			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
+			// An in-quorum errFileNotFound means that client stream
+			// prematurely closed and we do not find any xl.meta or
+			// part.1's - in such a scenario we must return as if client
+			// disconnected. This means that erasure.Encode() CreateFile()
+			// did not do anything.
+			return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 		}
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
