@@ -430,7 +430,7 @@ func (mg *MetricsGroup) AddExtraLabels(labels ...string) {
 // requiresObjectLayer - use to add dependency on the global object layer API
 // when creating the metrics group
 // e.g. myMG := NewMetricsGroup(...).requiresObjectLayer()
-func (mg *MetricsGroup) requiresObjectLayer(labels ...string) *MetricsGroup {
+func (mg *MetricsGroup) requiresObjectLayer() *MetricsGroup {
 	mg.metricsGroupOpts.dependGlobalObjectAPI = true
 	return mg
 }
