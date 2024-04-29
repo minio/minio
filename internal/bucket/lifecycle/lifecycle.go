@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -388,12 +388,16 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 		// DelMarkerExpiration
 		if obj.IsLatest && obj.DeleteMarker && !rule.DelMarkerExpiration.Empty() {
 			if due, ok := rule.DelMarkerExpiration.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
-				return Event{
+				events = append(events, Event{
 					Action: DelMarkerDeleteAllVersionsAction,
 					RuleID: rule.ID,
 					Due:    due,
-				}
+				})
 			}
+			// No other conflicting actions in this rule can apply to an object with current version as DEL marker
+			// Note: There could be other rules with earlier expiration which need to be considered.
+			// See TestDelMarkerExpiration
+			continue
 		}
 
 		// Skip rules with newer noncurrent versions specified. These rules are
@@ -452,8 +456,6 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 						// Expires all versions of this object once the latest object is old enough.
 						// This is a MinIO only extension.
 						event.Action = DeleteAllVersionsAction
-						// DeleteAllVersionsAction supersedes all other event.Action(s) that this object may qualify for, e.g TransitionAction, DeleteAction, etc.
-						return event
 					}
 					events = append(events, event)
 				}
@@ -473,25 +475,30 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 	}
 
 	if len(events) > 0 {
-		sort.Slice(events, func(i, j int) bool {
+		slices.SortFunc(events, func(a, b Event) int {
 			// Prefer Expiration over Transition for both current
 			// and noncurrent versions when,
 			// - now is past the expected time to action
 			// - expected time to action is the same for both actions
-			if now.After(events[i].Due) && now.After(events[j].Due) || events[i].Due.Equal(events[j].Due) {
-				switch events[i].Action {
-				case DeleteAction, DeleteVersionAction:
-					return true
+			if now.After(a.Due) && now.After(b.Due) || a.Due.Equal(b.Due) {
+				switch a.Action {
+				case DeleteAllVersionsAction, DelMarkerDeleteAllVersionsAction,
+					DeleteAction, DeleteVersionAction:
+					return -1
 				}
-				switch events[j].Action {
-				case DeleteAction, DeleteVersionAction:
-					return false
+				switch b.Action {
+				case DeleteAllVersionsAction, DelMarkerDeleteAllVersionsAction,
+					DeleteAction, DeleteVersionAction:
+					return 1
 				}
-				return true
+				return -1
 			}
 
 			// Prefer earlier occurring event
-			return events[i].Due.Before(events[j].Due)
+			if a.Due.Before(b.Due) {
+				return -1
+			}
+			return 1
 		})
 		return events[0]
 	}
