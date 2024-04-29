@@ -374,9 +374,6 @@ type MetricsGroup struct {
 	// Collect() call. This is protected by the `bucketsLock`.
 	bucketsLock sync.Mutex
 	buckets     []string
-
-	// metricsGroupOpts - options for the metrics group.
-	metricsGroupOpts MetricsGroupOpts
 }
 
 // NewMetricsGroup creates a new MetricsGroup. To create a metrics group for
@@ -427,14 +424,6 @@ func (mg *MetricsGroup) AddExtraLabels(labels ...string) {
 	}
 }
 
-// requiresObjectLayer - use to add dependency on the global object layer API
-// when creating the metrics group
-// e.g. myMG := NewMetricsGroup(...).requiresObjectLayer()
-func (mg *MetricsGroup) requiresObjectLayer(labels ...string) *MetricsGroup {
-	mg.metricsGroupOpts.dependGlobalObjectAPI = true
-	return mg
-}
-
 // IsBucketMetricsGroup - returns true if the given MetricsGroup is a bucket
 // metrics group.
 func (mg *MetricsGroup) IsBucketMetricsGroup() bool {
@@ -448,10 +437,6 @@ func (mg *MetricsGroup) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
-func isObjectLayerInitialized() bool {
-	return newObjectLayerFn() != nil
-}
-
 // Collect - implements prometheus.Collector interface.
 func (mg *MetricsGroup) Collect(ch chan<- prometheus.Metric) {
 	metricValues := newMetricValues(mg.descriptorMap)
@@ -460,13 +445,7 @@ func (mg *MetricsGroup) Collect(ch chan<- prometheus.Metric) {
 	if mg.IsBucketMetricsGroup() {
 		err = mg.bucketLoader(GlobalContext, metricValues, mg.cache, mg.buckets)
 	} else {
-		canLoad := true
-		if mg.metricsGroupOpts.dependGlobalObjectAPI && !isObjectLayerInitialized() {
-			canLoad = false
-		}
-		if canLoad {
-			err = mg.loader(GlobalContext, metricValues, mg.cache)
-		}
+		err = mg.loader(GlobalContext, metricValues, mg.cache)
 	}
 
 	// There is no way to handle errors here, so we panic the current goroutine
