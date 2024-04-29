@@ -37,14 +37,12 @@ var (
 // loadClusterConfigMetrics - `MetricsLoaderFn` for cluster config
 // such as standard and RRS parity.
 func loadClusterConfigMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
-	clusterDriveMetrics, _ := c.clusterDriveMetrics.Get()
-	m.Set(configStandardParity, float64(clusterDriveMetrics.storageInfo.Backend.StandardSCParity))
-	m.Set(configRRSParity, float64(clusterDriveMetrics.storageInfo.Backend.RRSCParity))
-
-	objLayer := newObjectLayerFn()
-	if objLayer != nil {
-		result := objLayer.Health(ctx, HealthOptions{})
-		m.Set(configWriteQuorum, float64(result.WriteQuorum))
+	clusterDriveMetrics, err := c.clusterDriveMetrics.Get()
+	if err != nil {
+		metricsLogIf(ctx, err)
+	} else {
+		m.Set(configStandardParity, float64(clusterDriveMetrics.storageInfo.Backend.StandardSCParity))
+		m.Set(configRRSParity, float64(clusterDriveMetrics.storageInfo.Backend.RRSCParity))
 	}
 
 	return nil
