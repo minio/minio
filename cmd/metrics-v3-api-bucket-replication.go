@@ -113,7 +113,12 @@ func loadAPIBucketReplicationMetrics(ctx context.Context, m MetricValues, c *met
 		return nil
 	}
 
-	dataUsageInfo, _ := c.dataUsageInfo.Get()
+	dataUsageInfo, err := c.dataUsageInfo.Get()
+	if err != nil {
+		metricsLogIf(ctx, err)
+		return nil
+	}
+
 	bucketReplStats := globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
 	for _, bucket := range buckets {
 		labels := []string{bucketL, bucket}
