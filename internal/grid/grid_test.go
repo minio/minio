@@ -470,7 +470,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				<-ctx.Done()
 				serverCanceled <- struct{}{}
-				t.Log(GetCaller(ctx).Name, "Server Context canceled")
+				fmt.Println(GetCaller(ctx).Name, "Server Context canceled")
 				return nil
 			},
 			OutCapacity: 1,
@@ -480,7 +480,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				<-ctx.Done()
 				serverCanceled <- struct{}{}
-				t.Log(GetCaller(ctx).Name, "Server Context canceled")
+				fmt.Println(GetCaller(ctx).Name, "Server Context canceled")
 				return nil
 			},
 			OutCapacity: 1,
@@ -1099,4 +1099,20 @@ func (i State) String() string {
 		return "State(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 	return stateName[stateIndex[i]:stateIndex[i+1]]
+}
+
+func TestDataRace(t *testing.T) {
+	t.Run("TestDataRace", func(t *testing.T) {
+		go func() {
+			defer func() {
+				if e := recover(); e != nil {
+					// if we replace it with `t.Log`. It will have a data race
+					// go test -race --count 10000 -run=TestDataRace
+					fmt.Println(e)
+				}
+			}()
+			panic(errors.New("Do a panic!"))
+		}()
+	})
+	return
 }
