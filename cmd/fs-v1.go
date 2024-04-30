@@ -579,9 +579,28 @@ func (fs *FSObjects) DeleteBucket(ctx context.Context, bucket string, opts Delet
 	}
 
 	if !opts.Force {
+		configName := fmt.Sprintf(".sds-config.%s.json", bucket)
+		confPath := path.Join(bucketDir, configName)
+		tmpPath := fmt.Sprintf("/tmp/%s", configName)
+
+		err := os.Rename(confPath, tmpPath)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
 		// Attempt to delete regular bucket.
 		if err = fsRemoveDir(ctx, bucketDir); err != nil {
+
+			err := os.Rename(tmpPath, confPath)
+			if err != nil {
+				fmt.Println(err.Error())
+			}
 			return toObjectErr(err, bucket)
+		}
+
+		err = os.Remove(tmpPath)
+		if err != nil {
+			fmt.Println(err.Error())
 		}
 	} else {
 		tmpBucketPath := pathJoin(fs.fsPath, minioMetaTmpBucket, bucket+"."+mustGetUUID())
