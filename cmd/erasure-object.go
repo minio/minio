@@ -1886,12 +1886,13 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 			// based on the latest objectInfo and see if the object still
 			// qualifies for deletion.
 			if gerr == nil {
-				evt := evalActionFromLifecycle(ctx, *lc, rcfg, replcfg, goi)
 				var isErr bool
+				evt := evalActionFromLifecycle(ctx, *lc, rcfg, replcfg, goi)
 				switch evt.Action {
-				case lifecycle.NoneAction:
-					isErr = true
-				case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+				case lifecycle.DeleteAllVersionsAction, lifecycle.DelMarkerDeleteAllVersionsAction:
+					// opts.DeletePrefix is used only in the above lifecycle Expiration actions.
+				default:
+					// object has been modified since lifecycle action was previously evaluated
 					isErr = true
 				}
 				if isErr {
