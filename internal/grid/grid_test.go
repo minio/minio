@@ -1100,19 +1100,3 @@ func (i State) String() string {
 	}
 	return stateName[stateIndex[i]:stateIndex[i+1]]
 }
-
-func TestDataRace(t *testing.T) {
-	t.Run("TestDataRace", func(t *testing.T) {
-		go func() {
-			defer func() {
-				if e := recover(); e != nil {
-					// if we replace it with `t.Log`. It will have a data race
-					// go test -race --count 10000 -run=TestDataRace
-					fmt.Println(e)
-				}
-			}()
-			panic(errors.New("Do a panic!"))
-		}()
-	})
-	return
-}
