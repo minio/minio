@@ -470,7 +470,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				<-ctx.Done()
 				serverCanceled <- struct{}{}
-				t.Log(GetCaller(ctx).Name, "Server Context canceled")
+				fmt.Println(GetCaller(ctx).Name, "Server Context canceled")
 				return nil
 			},
 			OutCapacity: 1,
@@ -480,7 +480,7 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				<-ctx.Done()
 				serverCanceled <- struct{}{}
-				t.Log(GetCaller(ctx).Name, "Server Context canceled")
+				fmt.Println(GetCaller(ctx).Name, "Server Context canceled")
 				return nil
 			},
 			OutCapacity: 1,
