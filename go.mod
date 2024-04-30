@@ -2,6 +2,8 @@ module github.com/minio/minio
 
 replace github.com/minio/minio/ => ./
 
+replace github.com/minio/minio-go/v7 v7.0.24 => github.com/mantle-labs/minio-go/v7 v7.0.24
+
 go 1.17
 
 require (
@@ -46,7 +48,7 @@ require (
 	github.com/klauspost/readahead v1.4.0
 	github.com/klauspost/reedsolomon v1.9.15
 	github.com/lib/pq v1.10.4
-	github.com/mantle-labs/console v0.0.4
+	github.com/mantle-labs/console v0.0.6
 	github.com/miekg/dns v1.1.46
 	github.com/minio/cli v1.22.0
 	github.com/minio/csvparser v1.0.0
