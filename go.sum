@@ -1030,8 +1030,10 @@ github.com/mailru/easyjson v0.7.0/go.mod h1:KAzv3t3aY1NaHWoQz1+4F1ccyAH66Jk7yos7
 github.com/mailru/easyjson v0.7.6/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/mantle-labs/console v0.0.4 h1:HQWrCQ83W5ESM6moDs1i9uicayYEGQH381OpTMB42fE=
-github.com/mantle-labs/console v0.0.4/go.mod h1:4Kyw8UD2MCpjdN4NLavfrUE60QX+k0tg1Jn4Ag+RMiA=
+github.com/mantle-labs/console v0.0.5 h1:ylsLeE62ZKBvCeR49nlQakRyWiEi+cD07g+expuGPns=
+github.com/mantle-labs/console v0.0.5/go.mod h1:533wuVwgNtJCQNtOTKFo4wtuYveMkHAfz9u7ZqKFHkM=
+github.com/mantle-labs/console v0.0.6 h1:3kr9lOO+1af80KsLwauJeLUJPtzEBtsJw1bs3fVP2Vw=
+github.com/mantle-labs/console v0.0.6/go.mod h1:533wuVwgNtJCQNtOTKFo4wtuYveMkHAfz9u7ZqKFHkM=
 github.com/mantle-labs/minio-go/v7 v7.0.24 h1:/Z3txLqt6uPkFt6IsXWvnsDrti9hsr0tAT4EZrRtk7I=
 github.com/mantle-labs/minio-go/v7 v7.0.24/go.mod h1:x81+AX5gHSfCSqw7jxRKHvxUXMlE5uKX0Vb75Xk5yYg=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
