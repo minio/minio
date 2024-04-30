@@ -31,6 +31,10 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/bucket/lifecycle"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
+	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
@@ -754,14 +758,33 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 		return err
 	}
 
-	vc, _ := globalBucketVersioningSys.Get(bi.Name)
+	var vc *versioning.Versioning
+	var lc *lifecycle.Lifecycle
+	var lr objectlock.Retention
+	var rcfg *replication.Config
+	if bi.Name != minioMetaBucket {
+		vc, err = globalBucketVersioningSys.Get(bi.Name)
+		if err != nil {
+			return err
+		}
 
-	// Check if the current bucket has a configured lifecycle policy
-	lc, _ := globalLifecycleSys.Get(bi.Name)
+		// Check if the current bucket has a configured lifecycle policy
+		lc, err = globalLifecycleSys.Get(bi.Name)
+		if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bi.Name}) {
+			return err
+		}
 
-	// Check if bucket is object locked.
-	lr, _ := globalBucketObjectLockSys.Get(bi.Name)
-	rcfg, _ := getReplicationConfig(ctx, bi.Name)
+		// Check if bucket is object locked.
+		lr, err = globalBucketObjectLockSys.Get(bi.Name)
+		if err != nil {
+			return err
+		}
+
+		rcfg, err = getReplicationConfig(ctx, bi.Name)
+		if err != nil {
+			return err
+		}
+	}
 
 	for setIdx, set := range pool.sets {
 		set := set
@@ -1088,14 +1111,33 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 	pool := z.serverPools[idx]
 	for _, set := range pool.sets {
 		for _, bi := range buckets {
-			vc, _ := globalBucketVersioningSys.Get(bi.Name)
+			var vc *versioning.Versioning
+			var lc *lifecycle.Lifecycle
+			var lr objectlock.Retention
+			var rcfg *replication.Config
+			if bi.Name != minioMetaBucket {
+				vc, err = globalBucketVersioningSys.Get(bi.Name)
+				if err != nil {
+					return err
+				}
 
-			// Check if the current bucket has a configured lifecycle policy
-			lc, _ := globalLifecycleSys.Get(bi.Name)
+				// Check if the current bucket has a configured lifecycle policy
+				lc, err = globalLifecycleSys.Get(bi.Name)
+				if err != nil && !errors.Is(err, BucketLifecycleNotFound{Bucket: bi.Name}) {
+					return err
+				}
 
-			// Check if bucket is object locked.
-			lr, _ := globalBucketObjectLockSys.Get(bi.Name)
-			rcfg, _ := getReplicationConfig(ctx, bi.Name)
+				// Check if bucket is object locked.
+				lr, err = globalBucketObjectLockSys.Get(bi.Name)
+				if err != nil {
+					return err
+				}
+
+				rcfg, err = getReplicationConfig(ctx, bi.Name)
+				if err != nil {
+					return err
+				}
+			}
 
 			filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 				if lc == nil {
@@ -1118,7 +1160,7 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 			}
 
 			var versionsFound int
-			err := set.listObjectsToDecommission(ctx, bi, func(entry metaCacheEntry) {
+			if err = set.listObjectsToDecommission(ctx, bi, func(entry metaCacheEntry) {
 				if !entry.isObject() {
 					return
 				}
@@ -1146,8 +1188,7 @@ func (z *erasureServerPools) checkAfterDecom(ctx context.Context, idx int) error
 
 					versionsFound++
 				}
-			})
-			if err != nil {
+			}); err != nil {
 				return err
 			}
 

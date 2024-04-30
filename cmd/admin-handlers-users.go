@@ -271,7 +271,14 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
-		updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+
+		if globalIAMSys.LDAPConfig.Enabled() {
+			// We don't allow internal group manipulation in this API when LDAP
+			// is enabled for now.
+			err = errIAMActionNotAllowed
+		} else {
+			updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+		}
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -504,6 +511,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	if err = json.Unmarshal(configBytes, &ureq); err != nil {
 		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		return
+	}
+
+	// We don't allow internal user creation with LDAP enabled for now.
+	if globalIAMSys.LDAPConfig.Enabled() {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
 		return
 	}
 
@@ -1556,7 +1569,12 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	}))
 }
 
-// SetPolicyForUserOrGroup - PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
+// SetPolicyForUserOrGroup - sets a policy on a user or a group.
+//
+// PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
+//
+// Deprecated: This API is replaced by attach/detach policy APIs for specific
+// type of users (builtin or LDAP).
 func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1608,6 +1626,32 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	userType := regUser
 	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
 		userType = stsUser
+
+		// Validate that the user or group exists in LDAP and use the normalized
+		// form of the entityName (which will be an LDAP DN).
+		var err error
+		if isGroup {
+			var foundGroupDN string
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
+				iamLogIf(ctx, err)
+			} else if foundGroupDN == "" || !underBaseDN {
+				err = errNoSuchGroup
+			}
+			entityName = foundGroupDN
+		} else {
+			var foundUserDN string
+			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
+				iamLogIf(ctx, err)
+			} else if foundUserDN == "" {
+				err = errNoSuchUser
+			}
+			entityName = foundUserDN
+		}
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, userType, isGroup)
@@ -2157,12 +2201,12 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					// If group does not exist, then check if the group has beginning and end space characters
 					// we will reject such group names.
 					if errors.Is(gerr, errNoSuchGroup) && hasSpaceBE(group) {
-						writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, err, allGroupsFile, group), r.URL)
+						writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, gerr, allGroupsFile, group), r.URL)
 						return
 					}
 				}
 				if _, gerr := globalIAMSys.AddUsersToGroup(ctx, group, grpInfo.Members); gerr != nil {
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, allGroupsFile, group), r.URL)
+					writeErrorResponseJSON(ctx, w, importError(ctx, gerr, allGroupsFile, group), r.URL)
 					return
 				}
 			}
@@ -2209,7 +2253,8 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 				}
-				// service account access key cannot have space characters beginning and end of the string.
+				// service account access key cannot have space characters
+				// beginning and end of the string.
 				if hasSpaceBE(svcAcctReq.AccessKey) {
 					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
 					return
@@ -2384,6 +2429,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponseJSON(ctx, w, importError(ctx, errIAMActionNotAllowed, stsUserPolicyMappingsFile, u), r.URL)
 					return
 				}
+
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
 					return

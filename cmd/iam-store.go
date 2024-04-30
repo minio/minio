@@ -1634,6 +1634,8 @@ func (store *IAMStoreSys) PolicyMappingNotificationHandler(ctx context.Context, 
 	switch {
 	case isGroup:
 		m = cache.iamGroupPolicyMap
+	case userType == stsUser:
+		m = cache.iamSTSPolicyMap
 	default:
 		m = cache.iamUserPolicyMap
 	}
@@ -2106,6 +2108,32 @@ func (store *IAMStoreSys) listPolicyMappings(cache *iamCache, policies []string,
 					policyToUsersMap[policy] = s
 				}
 			}
+		}
+	}
+	if iamOS, ok := store.IAMStorageAPI.(*IAMEtcdStore); ok {
+		m := xsync.NewMapOf[string, MappedPolicy]()
+		err := iamOS.loadMappedPolicies(context.Background(), stsUser, false, m)
+		if err == nil {
+			m.Range(func(user string, mappedPolicy MappedPolicy) bool {
+				if userPredicate != nil && !userPredicate(user) {
+					return true
+				}
+
+				commonPolicySet := mappedPolicy.policySet()
+				if !queryPolSet.IsEmpty() {
+					commonPolicySet = commonPolicySet.Intersection(queryPolSet)
+				}
+				for _, policy := range commonPolicySet.ToSlice() {
+					s, ok := policyToUsersMap[policy]
+					if !ok {
+						policyToUsersMap[policy] = set.CreateStringSet(user)
+					} else {
+						s.Add(user)
+						policyToUsersMap[policy] = s
+					}
+				}
+				return true
+			})
 		}
 	}
 

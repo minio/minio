@@ -44,7 +44,6 @@ func (sys *BucketObjectLockSys) Get(bucketName string) (r objectlock.Retention, 
 		if errors.Is(err, errInvalidArgument) {
 			return r, err
 		}
-		logger.CriticalIf(context.Background(), err)
 		return r, err
 	}
 	return config.ToRetention(), nil

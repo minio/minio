@@ -47,6 +47,7 @@ const (
 	driveFreeInodes              = "free_inodes"
 	driveTotalInodes             = "total_inodes"
 	driveTimeoutErrorsTotal      = "timeout_errors_total"
+	driveIOErrorsTotal           = "io_errors_total"
 	driveAvailabilityErrorsTotal = "availability_errors_total"
 	driveWaitingIO               = "waiting_io"
 	driveAPILatencyMicros        = "api_latency_micros"
@@ -82,6 +83,8 @@ var (
 		"Total inodes available on a drive", allDriveLabels...)
 	driveTimeoutErrorsMD = NewCounterMD(driveTimeoutErrorsTotal,
 		"Total timeout errors on a drive", allDriveLabels...)
+	driveIOErrorsMD = NewCounterMD(driveIOErrorsTotal,
+		"Total I/O errors on a drive", allDriveLabels...)
 	driveAvailabilityErrorsMD = NewCounterMD(driveAvailabilityErrorsTotal,
 		"Total availability errors (I/O errors, timeouts) on a drive",
 		allDriveLabels...)
@@ -167,6 +170,7 @@ func (m *MetricValues) setDriveAPIMetrics(disk madmin.Disk, labels []string) {
 	}
 
 	m.Set(driveTimeoutErrorsTotal, float64(disk.Metrics.TotalErrorsTimeout), labels...)
+	m.Set(driveIOErrorsTotal, float64(disk.Metrics.TotalErrorsAvailability-disk.Metrics.TotalErrorsTimeout), labels...)
 	m.Set(driveAvailabilityErrorsTotal, float64(disk.Metrics.TotalErrorsAvailability), labels...)
 	m.Set(driveWaitingIO, float64(disk.Metrics.TotalWaiting), labels...)
 

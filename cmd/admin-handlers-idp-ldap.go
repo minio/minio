@@ -222,9 +222,8 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		err          error
 	)
 
-	// If we are creating svc account for request sender, ensure
-	// that targetUser is a real user (i.e. not derived
-	// credentials).
+	// If we are creating svc account for request sender, ensure that targetUser
+	// is a real user (i.e. not derived credentials).
 	if isSvcAccForRequestor {
 		if requestorIsDerivedCredential {
 			if requestorParentUser == "" {
