@@ -2558,8 +2558,12 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		}
 	}
 
+	// Preserve all the legacy data, could be slow, but at max there can be 10,000 parts.
+	currentDataPath := pathJoin(dstVolumeDir, dstPath)
+
 	var xlMeta xlMetaV2
 	var legacyPreserved bool
+	var legacyEntries []string
 	if len(dstBuf) > 0 {
 		if isXL2V1Format(dstBuf) {
 			if err = xlMeta.Load(dstBuf); err != nil {
@@ -2590,8 +2594,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			// from `xl.json` to `xl.meta`, we can avoid
 			// one extra readdir operation here for all
 			// new deployments.
-			currentDataPath := pathJoin(dstVolumeDir, dstPath)
-			entries, err := readDirN(currentDataPath, 1)
+			entries, err := readDir(currentDataPath)
 			if err != nil && err != errFileNotFound {
 				return res, osErrToFileErr(err)
 			}
@@ -2601,6 +2604,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 				}
 				if strings.HasPrefix(entry, "part.") {
 					legacyPreserved = true
+					legacyEntries = entries
 					break
 				}
 			}
@@ -2611,31 +2615,29 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	if formatLegacy {
 		legacyDataPath = pathJoin(dstVolumeDir, dstPath, legacyDataDir)
 		if legacyPreserved {
-			// Preserve all the legacy data, could be slow, but at max there can be 1res,000 parts.
-			currentDataPath := pathJoin(dstVolumeDir, dstPath)
-			entries, err := readDir(currentDataPath)
-			if err != nil {
-				return res, osErrToFileErr(err)
+			if contextCanceled(ctx) {
+				return res, ctx.Err()
 			}
 
-			// legacy data dir means its old content, honor system umask.
-			if err = mkdirAll(legacyDataPath, 0o777, dstVolumeDir); err != nil {
-				// any failed mkdir-calls delete them.
-				s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-				return res, osErrToFileErr(err)
-			}
-
-			for _, entry := range entries {
-				// Skip xl.meta renames further, also ignore any directories such as `legacyDataDir`
-				if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
-					continue
-				}
-
-				if err = Rename(pathJoin(currentDataPath, entry), pathJoin(legacyDataPath, entry)); err != nil {
-					// Any failed rename calls un-roll previous transaction.
+			if len(legacyEntries) > 0 {
+				// legacy data dir means its old content, honor system umask.
+				if err = mkdirAll(legacyDataPath, 0o777, dstVolumeDir); err != nil {
+					// any failed mkdir-calls delete them.
 					s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
-
 					return res, osErrToFileErr(err)
+				}
+				for _, entry := range legacyEntries {
+					// Skip xl.meta renames further, also ignore any directories such as `legacyDataDir`
+					if entry == xlStorageFormatFile || strings.HasSuffix(entry, slashSeparator) {
+						continue
+					}
+
+					if err = Rename(pathJoin(currentDataPath, entry), pathJoin(legacyDataPath, entry)); err != nil {
+						// Any failed rename calls un-roll previous transaction.
+						s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
+
+						return res, osErrToFileErr(err)
+					}
 				}
 			}
 		}
@@ -2726,6 +2728,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 		return res, errFileCorrupt
 	}
 
+	if contextCanceled(ctx) {
+		return res, ctx.Err()
+	}
+
 	if err = s.WriteAll(ctx, srcVolume, pathJoin(srcPath, xlStorageFormatFile), newDstBuf); err != nil {
 		if legacyPreserved {
 			s.deleteFile(dstVolumeDir, legacyDataPath, true, false)
@@ -2749,6 +2755,9 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			// on a versioned bucket.
 			s.moveToTrash(legacyDataPath, true, false)
 		}
+		if contextCanceled(ctx) {
+			return res, ctx.Err()
+		}
 		if err = renameAll(srcDataPath, dstDataPath, skipParent); err != nil {
 			if legacyPreserved {
 				// Any failed rename calls un-roll previous transaction.
@@ -2758,11 +2767,16 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			s.deleteFile(dstVolumeDir, dstDataPath, false, false)
 			return res, osErrToFileErr(err)
 		}
+		diskHealthCheckOK(ctx, err)
 	}
 
 	// If we have oldDataDir then we must preserve current xl.meta
 	// as backup, in-case needing renames().
 	if res.OldDataDir != "" {
+		if contextCanceled(ctx) {
+			return res, ctx.Err()
+		}
+
 		// preserve current xl.meta inside the oldDataDir.
 		if err = s.writeAll(ctx, dstVolume, pathJoin(dstPath, res.OldDataDir, xlStorageFormatFileBackup), dstBuf, true, skipParent); err != nil {
 			if legacyPreserved {
@@ -2771,6 +2785,10 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 			return res, osErrToFileErr(err)
 		}
 		diskHealthCheckOK(ctx, err)
+	}
+
+	if contextCanceled(ctx) {
+		return res, ctx.Err()
 	}
 
 	// Commit meta-file

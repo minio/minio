@@ -562,7 +562,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVers, allParts bool) (FileInfo, error) {
 	var xl xlMetaV2
 	if err := xl.LoadOrConvert(ri.Buf); err != nil {
-		return FileInfo{}, err
+		return FileInfo{}, errFileCorrupt
 	}
 
 	fi, err := xl.ToFileInfo(bucket, object, "", inclFreeVers, allParts)
@@ -571,7 +571,7 @@ func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVe
 	}
 
 	if !fi.IsValid() {
-		return FileInfo{}, errCorruptedFormat
+		return FileInfo{}, errFileCorrupt
 	}
 
 	versionID := fi.VersionID
@@ -661,7 +661,7 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 	if !lfi.IsValid() {
 		for i := range errs {
 			if errs[i] == nil {
-				errs[i] = errCorruptedFormat
+				errs[i] = errFileCorrupt
 			}
 		}
 		return metaFileInfos, errs
@@ -1519,7 +1519,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	onlineDisks, versions, oldDataDir, err := renameData(ctx, onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, bucket, object, writeQuorum)
 	if err != nil {
 		if errors.Is(err, errFileNotFound) {
-			return ObjectInfo{}, toObjectErr(errErasureWriteQuorum, bucket, object)
+			// An in-quorum errFileNotFound means that client stream
+			// prematurely closed and we do not find any xl.meta or
+			// part.1's - in such a scenario we must return as if client
+			// disconnected. This means that erasure.Encode() CreateFile()
+			// did not do anything.
+			return ObjectInfo{}, IncompleteBody{Bucket: bucket, Object: object}
 		}
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -1912,23 +1917,26 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 	versionFound := true
 	objInfo = ObjectInfo{VersionID: opts.VersionID} // version id needed in Delete API response.
 	goi, _, gerr := er.getObjectInfoAndQuorum(ctx, bucket, object, opts)
+	tryDel := false
 	if gerr != nil && goi.Name == "" {
 		if _, ok := gerr.(InsufficientReadQuorum); ok {
-			// Add an MRF heal for next time.
-			er.addPartial(bucket, object, opts.VersionID)
-
-			return objInfo, InsufficientWriteQuorum{}
+			if opts.Versioned || opts.VersionSuspended || countOnlineDisks(storageDisks) < len(storageDisks)/2+1 {
+				// Add an MRF heal for next time.
+				er.addPartial(bucket, object, opts.VersionID)
+				return objInfo, InsufficientWriteQuorum{}
+			}
+			tryDel = true // only for unversioned objects if there is write quorum
 		}
 		// For delete marker replication, versionID being replicated will not exist on disk
 		if opts.DeleteMarker {
 			versionFound = false
-		} else {
+		} else if !tryDel {
 			return objInfo, gerr
 		}
 	}
 
 	if opts.EvalMetadataFn != nil {
-		dsc, err := opts.EvalMetadataFn(&goi, err)
+		dsc, err := opts.EvalMetadataFn(&goi, gerr)
 		if err != nil {
 			return ObjectInfo{}, err
 		}

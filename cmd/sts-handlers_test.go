@@ -829,12 +829,14 @@ func TestIAMImportAssetWithLDAP(t *testing.T) {
   }
 }
 `,
+		// The `cn=projecty,..` group below is not under a configured DN, but we
+		// should still import without an error.
 		allSvcAcctsFile: `{
     "u4ccRswj62HV3Ifwima7": {
         "parent": "uid=svc.algorithm,OU=swengg,DC=min,DC=io",
         "accessKey": "u4ccRswj62HV3Ifwima7",
         "secretKey": "ZoEoZdLlzVbOlT9rbhD7ZN7TLyiYXSAlB79uGEge",
-        "groups": ["cn=project.c,ou=groups,OU=swengg,DC=min,DC=io"],
+        "groups": ["cn=project.c,ou=groups,OU=swengg,DC=min,DC=io", "cn=projecty,ou=groups,ou=hwengg,dc=min,dc=io"],
         "claims": {
             "accessKey": "u4ccRswj62HV3Ifwima7",
             "ldapUser": "uid=svc.algorithm,ou=swengg,dc=min,dc=io",

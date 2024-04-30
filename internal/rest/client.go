@@ -286,11 +286,22 @@ func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
 	return
 }
 
+// ErrClientClosed returned when *Client is closed.
+var ErrClientClosed = errors.New("rest client is closed")
+
 // Call - make a REST call with context.
 func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
-	if !c.IsOnline() {
+	switch atomic.LoadInt32(&c.connected) {
+	case closed:
+		// client closed, this is usually a manual process
+		// so return a local error as client is closed
+		return nil, &NetworkError{Err: ErrClientClosed}
+	case offline:
+		// client offline, return last error captured.
 		return nil, &NetworkError{Err: c.LastError()}
 	}
+
+	// client is still connected, attempt the request.
 
 	// Shallow copy. We don't modify the *UserInfo, if set.
 	// All other fields are copied.
@@ -393,8 +404,6 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 	clnt := &Client{
 		httpClient:               &http.Client{Transport: tr},
 		url:                      u,
-		lastErr:                  err,
-		lastErrTime:              time.Now(),
 		newAuthToken:             newAuthToken,
 		connected:                connected,
 		lastConn:                 time.Now().UnixNano(),
@@ -402,6 +411,11 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 		HealthCheckReconnectUnit: 200 * time.Millisecond,
 		HealthCheckTimeout:       time.Second,
 	}
+	if err != nil {
+		clnt.lastErr = err
+		clnt.lastErrTime = time.Now()
+	}
+
 	if clnt.HealthCheckFn != nil {
 		// make connection pre-emptively.
 		go clnt.HealthCheckFn()
@@ -468,7 +482,7 @@ func (c *Client) runHealthCheck() bool {
 					if atomic.CompareAndSwapInt32(&c.connected, offline, online) {
 						now := time.Now()
 						disconnected := now.Sub(c.LastConn())
-						logger.Event(context.Background(), "Client '%s' re-connected in %s", c.url.String(), disconnected)
+						logger.Event(context.Background(), "healthcheck", "Client '%s' re-connected in %s", c.url.String(), disconnected)
 						atomic.StoreInt64(&c.lastConn, now.UnixNano())
 					}
 					return

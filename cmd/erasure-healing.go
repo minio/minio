@@ -44,8 +44,8 @@ const (
 	healingMetricCheckAbandonedParts
 )
 
-func (er erasureObjects) listAndHeal(bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
-	ctx, cancel := context.WithCancel(context.Background())
+func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	disks, _ := er.getOnlineDisksWithHealing(false)
