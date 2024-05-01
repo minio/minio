@@ -105,6 +105,31 @@ func TestInvalidRules(t *testing.T) {
 	                    </Rule>`,
 			expectedErr: errXMLNotWellFormed,
 		},
+		{
+			inputXML: `<Rule>
+				<ID>Rule with a tag and DelMarkerExpiration</ID>
+				<Filter><Tag><Key>k1</Key><Value>v1</Value></Tag></Filter>
+				<DelMarkerExpiration>
+					<Days>365</Days>
+				</DelMarkerExpiration>
+                            <Status>Enabled</Status>
+	                    </Rule>`,
+			expectedErr: errInvalidRuleDelMarkerExpiration,
+		},
+		{
+			inputXML: `<Rule>
+				<ID>Rule with multiple tags and DelMarkerExpiration</ID>
+				<Filter><And>
+				<Tag><Key>k1</Key><Value>v1</Value></Tag>
+				<Tag><Key>k2</Key><Value>v2</Value></Tag>
+				</And></Filter>
+				<DelMarkerExpiration>
+					<Days>365</Days>
+				</DelMarkerExpiration>
+                            <Status>Enabled</Status>
+	                    </Rule>`,
+			expectedErr: errInvalidRuleDelMarkerExpiration,
+		},
 	}
 
 	for i, tc := range invalidTestCases {
