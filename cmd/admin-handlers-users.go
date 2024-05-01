@@ -1039,8 +1039,13 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 	for _, svc := range serviceAccounts {
 		expiryTime := svc.Expiration
 		serviceAccountList = append(serviceAccountList, madmin.ServiceAccountInfo{
-			AccessKey:  svc.AccessKey,
-			Expiration: &expiryTime,
+			Description:   svc.Description,
+			ParentUser:    svc.ParentUser,
+			Name:          svc.Name,
+			AccountStatus: svc.Status,
+			AccessKey:     svc.AccessKey,
+			ImpliedPolicy: svc.IsImpliedPolicy(),
+			Expiration:    &expiryTime,
 		})
 	}
 
