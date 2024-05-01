@@ -428,7 +428,7 @@ func (sys *BucketTargetSys) RemoveTarget(ctx context.Context, bucket, arnStr str
 	if arn.Type == madmin.ReplicationService {
 		// reject removal of remote target if replication configuration is present
 		rcfg, err := getReplicationConfig(ctx, bucket)
-		if err == nil {
+		if err == nil && rcfg != nil {
 			for _, tgtArn := range rcfg.FilterTargetArns(replication.ObjectOpts{OpType: replication.AllReplicationType}) {
 				if err == nil && (tgtArn == arnStr || rcfg.RoleArn == arnStr) {
 					sys.RLock()

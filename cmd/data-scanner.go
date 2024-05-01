@@ -958,7 +958,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	var vc *versioning.Versioning
 	var lr objectlock.Retention
 	var rcfg *replication.Config
-	if i.bucket != minioMetaBucket {
+	if !isMinioMetaBucketName(i.bucket) {
 		vc, err = globalBucketVersioningSys.Get(i.bucket)
 		if err != nil {
 			scannerLogOnceIf(ctx, err, i.bucket)

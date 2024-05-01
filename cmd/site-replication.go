@@ -5781,7 +5781,7 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 
 	for _, bi := range buckets {
 		bucket := bi.Name
-		if _, err := getReplicationConfig(ctx, bucket); err != nil {
+		if _, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
 			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
 				ErrDetail: err.Error(),
 				Bucket:    bucket,

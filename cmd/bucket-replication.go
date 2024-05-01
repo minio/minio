@@ -998,7 +998,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	object := ri.Name
 
 	cfg, err := getReplicationConfig(ctx, bucket)
-	if err != nil {
+	if err != nil || cfg == nil {
 		replLogOnceIf(ctx, err, "get-replication-config-"+bucket)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
