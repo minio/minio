@@ -535,6 +535,10 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 
 	if len(poolIndices) > 0 && globalEndpoints[poolIndices[0]].Endpoints[0].IsLocal {
 		go func() {
+			// Resume decommissioning of pools, but wait 3 minutes for cluster to stabilize.
+			if err := sleepContext(ctx, 3*time.Minute); err != nil {
+				return
+			}
 			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 			for {
 				if err := z.Decommission(ctx, poolIndices...); err != nil {
