@@ -196,7 +196,7 @@ func startSFTPServer(args []string) {
 		case "cipher-algos":
 			allowCiphers = filterAlgos(arg, strings.Split(tokens[1], ","), supportedCiphers)
 		case "mac-algos":
-			allowCiphers = filterAlgos(arg, strings.Split(tokens[1], ","), supportedMACs)
+			allowMACs = filterAlgos(arg, strings.Split(tokens[1], ","), supportedMACs)
 		}
 	}
 
