@@ -109,7 +109,7 @@ func TestMain(m *testing.M) {
 	setMaxResources(nil)
 
 	// Initialize globalConsoleSys system
-	globalConsoleSys = NewConsoleLogger(context.Background())
+	globalConsoleSys = NewConsoleLogger(context.Background(), io.Discard)
 
 	globalInternodeTransport = NewInternodeHTTPTransport(0)()
 
