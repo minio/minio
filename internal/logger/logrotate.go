@@ -18,6 +18,8 @@
 package logger
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -25,6 +27,7 @@ import (
 	"time"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/pkg/v2/logger/message/log"
 )
 
 func defaultFilenameFunc() string {
@@ -48,6 +51,9 @@ type Options struct {
 	// 	2020-03-28_15-00-945-<random-hash>.log
 	// When FileNameFunc is not specified, DefaultFilenameFunc will be used.
 	FileNameFunc func() string
+
+	// Compress specify if you want the logs to be compressed after rotation.
+	Compress bool
 }
 
 // Writer is a concurrency-safe writer with file rotation.
@@ -86,6 +92,8 @@ func (w *Writer) Close() error {
 	return nil
 }
 
+var stdErrEnc = json.NewEncoder(os.Stderr)
+
 func (w *Writer) listen() {
 	for {
 		var r io.Reader = w.pr
@@ -93,20 +101,78 @@ func (w *Writer) listen() {
 			r = io.LimitReader(w.pr, w.opts.MaximumFileSize)
 		}
 		if _, err := io.Copy(w.f, r); err != nil {
-			fmt.Println("Failed to write to log file", err)
+			msg := fmt.Sprintf("unable to write to log file %v: %v", w.f.Name(), err)
+			stdErrEnc.Encode(&log.Entry{
+				Level:   ErrorKind,
+				Message: msg,
+				Time:    time.Now().UTC(),
+				Trace:   &log.Trace{Message: msg},
+			})
 		}
 		if err := w.rotate(); err != nil {
-			fmt.Println("Failed to rotate log file", err)
+			msg := fmt.Sprintf("unable to rotate log file %v: %v", w.f.Name(), err)
+			stdErrEnc.Encode(&log.Entry{
+				Level:   ErrorKind,
+				Message: msg,
+				Time:    time.Now().UTC(),
+				Trace:   &log.Trace{Message: msg},
+			})
 		}
 	}
 }
 
 func (w *Writer) closeCurrentFile() error {
 	if err := w.f.Close(); err != nil {
-		return fmt.Errorf("failed to close current log file: %w", err)
+		return fmt.Errorf("unable to close current log file: %w", err)
 	}
 
 	return nil
+}
+
+func (w *Writer) compress() error {
+	if !w.opts.Compress {
+		return nil
+	}
+
+	oldLgFile := w.f.Name()
+	r, err := os.Open(oldLgFile)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	gw, err := os.Create(oldLgFile + ".gz")
+	if err != nil {
+		return err
+	}
+	defer gw.Close()
+
+	var wc io.WriteCloser
+	wc = gzip.NewWriter(gw)
+	if _, err = io.Copy(wc, r); err != nil {
+		return err
+	}
+
+	if err = wc.Close(); err != nil {
+		return err
+	}
+
+	// Persist to disk any caches.
+	if err = gw.Sync(); err != nil {
+		return err
+	}
+
+	// close everything before we delete.
+	if err = gw.Close(); err != nil {
+		return err
+	}
+
+	if err = r.Close(); err != nil {
+		return err
+	}
+
+	// Attempt to remove after all fd's are closed.
+	return os.Remove(oldLgFile)
 }
 
 func (w *Writer) rotate() error {
@@ -114,12 +180,25 @@ func (w *Writer) rotate() error {
 		if err := w.closeCurrentFile(); err != nil {
 			return err
 		}
+
+		// This function is a no-op if opts.Compress is false
+		// writes an error in JSON form to stderr, if we cannot
+		// compress.
+		if err := w.compress(); err != nil {
+			msg := fmt.Sprintf("unable to compress log file %v: %v, ignoring and moving on", w.f.Name(), err)
+			stdErrEnc.Encode(&log.Entry{
+				Level:   ErrorKind,
+				Message: msg,
+				Time:    time.Now().UTC(),
+				Trace:   &log.Trace{Message: msg},
+			})
+		}
 	}
 
 	path := filepath.Join(w.opts.Directory, w.opts.FileNameFunc())
 	f, err := newFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to create new file at %v: %w", path, err)
+		return fmt.Errorf("unable to create new file at %v: %w", path, err)
 	}
 
 	w.f = f
