@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2022 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -15,23 +15,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !fips
-// +build !fips
-
 package sha256
 
 import (
+	"crypto/sha256"
 	"hash"
-
-	nofipssha256 "github.com/minio/sha256-simd"
 )
 
-// New returns a new hash.Hash computing the SHA256 checksum.
-// The SHA256 implementation is not FIPS 140-2 compliant.
-func New() hash.Hash { return nofipssha256.New() }
+// New initializes a new sha256.New()
+func New() hash.Hash { return sha256.New() }
 
 // Sum256 returns the SHA256 checksum of the data.
-func Sum256(data []byte) [nofipssha256.Size]byte { return nofipssha256.Sum256(data) }
+func Sum256(data []byte) [sha256.Size]byte { return sha256.Sum256(data) }
 
 // Size is the size of a SHA256 checksum in bytes.
-const Size = nofipssha256.Size
+const Size = sha256.Size

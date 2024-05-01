@@ -958,7 +958,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	var vc *versioning.Versioning
 	var lr objectlock.Retention
 	var rcfg *replication.Config
-	if i.bucket != minioMetaBucket {
+	if !isMinioMetaBucketName(i.bucket) {
 		vc, err = globalBucketVersioningSys.Get(i.bucket)
 		if err != nil {
 			scannerLogOnceIf(ctx, err, i.bucket)
@@ -993,7 +993,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	// This can happen when,
 	// - ExpireObjectAllVersions flag is enabled
 	// - NoncurrentVersionExpiration is applicable
-	case lifecycle.DeleteVersionAction, lifecycle.DeleteAllVersionsAction:
+	case lifecycle.DeleteVersionAction, lifecycle.DeleteAllVersionsAction, lifecycle.DelMarkerDeleteAllVersionsAction:
 		size = 0
 	case lifecycle.DeleteAction:
 		// On a non-versioned bucket, DeleteObject removes the only version permanently.
@@ -1162,7 +1162,7 @@ func (i *scannerItem) applyActions(ctx context.Context, o ObjectLayer, oi Object
 
 	// Note: objDeleted is true if and only if action ==
 	// lifecycle.DeleteAllVersionsAction
-	if action == lifecycle.DeleteAllVersionsAction {
+	if action.DeleteAll() {
 		return true, 0
 	}
 
@@ -1292,7 +1292,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 
 		if lcEvent.Action != lifecycle.NoneAction {
 			numVersions := uint64(1)
-			if lcEvent.Action == lifecycle.DeleteAllVersionsAction {
+			if lcEvent.Action.DeleteAll() {
 				numVersions = uint64(obj.NumVersions)
 			}
 			globalScannerMetrics.timeILM(lcEvent.Action)(numVersions)
@@ -1320,8 +1320,11 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	if obj.DeleteMarker {
 		eventName = event.ObjectRemovedDeleteMarkerCreated
 	}
-	if lcEvent.Action.DeleteAll() {
+	switch lcEvent.Action {
+	case lifecycle.DeleteAllVersionsAction:
 		eventName = event.ObjectRemovedDeleteAllVersions
+	case lifecycle.DelMarkerDeleteAllVersionsAction:
+		eventName = event.ILMDelMarkerExpirationDelete
 	}
 	// Notify object deleted event.
 	sendEvent(eventArgs{
@@ -1346,7 +1349,7 @@ func applyLifecycleAction(event lifecycle.Event, src lcEventSrc, obj ObjectInfo)
 	switch action := event.Action; action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteAction,
 		lifecycle.DeleteRestoredAction, lifecycle.DeleteRestoredVersionAction,
-		lifecycle.DeleteAllVersionsAction:
+		lifecycle.DeleteAllVersionsAction, lifecycle.DelMarkerDeleteAllVersionsAction:
 		success = applyExpiryRule(event, src, obj)
 	case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
 		success = applyTransitionRule(event, src, obj)

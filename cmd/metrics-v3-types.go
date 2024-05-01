@@ -232,10 +232,13 @@ func (m *MetricValues) Set(name MetricName, value float64, labels ...string) {
 	if !ok {
 		v = make([]metricValue, 0, 1)
 	}
-	m.values[name] = append(v, metricValue{
-		Labels: labelMap,
-		Value:  value,
-	})
+	// If valid non zero value set the metrics
+	if value > 0 {
+		m.values[name] = append(v, metricValue{
+			Labels: labelMap,
+			Value:  value,
+		})
+	}
 }
 
 // SetHistogram - sets values for the given MetricName using the provided
@@ -274,7 +277,10 @@ func (m *MetricValues) SetHistogram(name MetricName, hist *prometheus.HistogramV
 			}
 		}
 		labels = append(labels, extraLabels...)
-		m.Set(name, metric.Value, labels...)
+		// If valid non zero value set the metrics
+		if metric.Value > 0 {
+			m.Set(name, metric.Value, labels...)
+		}
 	}
 }
 

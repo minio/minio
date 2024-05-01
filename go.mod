@@ -51,12 +51,11 @@ require (
 	github.com/minio/dperf v0.5.3
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kms-go/kes v0.3.0
-	github.com/minio/madmin-go/v3 v3.0.50
-	github.com/minio/minio-go/v7 v7.0.69
+	github.com/minio/madmin-go/v3 v3.0.51
+	github.com/minio/minio-go/v7 v7.0.70
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v2 v2.0.17
 	github.com/minio/selfupdate v0.6.0
-	github.com/minio/sha256-simd v1.0.1
 	github.com/minio/simdjson-go v0.4.5
 	github.com/minio/sio v0.3.1
 	github.com/minio/xxml v0.0.3
@@ -195,7 +194,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.6 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20240415151025-fe58afcd39a7 // indirect
+	github.com/minio/mc v0.0.0-20240425223512-5dfaa31d67be // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
