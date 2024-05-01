@@ -205,6 +205,12 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_LOG_SIZE",
 		Hidden: true,
 	},
+	cli.BoolFlag{
+		Name:   "log-compress",
+		Usage:  "specify if we want the rotated logs to be gzip compressed or not",
+		EnvVar: "MINIO_LOG_COMPRESS",
+		Hidden: true,
+	},
 }
 
 var serverCmd = cli.Command{
@@ -682,6 +688,7 @@ func initializeLogRotate(ctx *cli.Context) (io.WriteCloser, error) {
 	output, err := logger.NewDir(logger.Options{
 		Directory:       lgDirAbs,
 		MaximumFileSize: int64(lgSize),
+		Compress:        ctx.Bool("log-compress"),
 	})
 	if err != nil {
 		return nil, err
