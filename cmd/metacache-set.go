@@ -1010,8 +1010,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 		// not a storage error.
 		return nil
 	}
-	askDisks := len(disks)
-	readers := make([]*metacacheReader, askDisks)
+	readers := make([]*metacacheReader, len(disks))
 	defer func() {
 		for _, r := range readers {
 			r.Close()
@@ -1093,17 +1092,14 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			case nil:
 			default:
 				switch err.Error() {
-				case errFileNotFound.Error(),
-					errVolumeNotFound.Error(),
-					errUnformattedDisk.Error(),
-					errDiskNotFound.Error():
+				case errFileNotFound.Error():
 					atEOF++
 					fnf++
-					// This is a special case, to handle bucket does
-					// not exist situations.
-					if errors.Is(err, errVolumeNotFound) {
-						vnf++
-					}
+					continue
+				case errVolumeNotFound.Error():
+					atEOF++
+					fnf++
+					vnf++
 					continue
 				}
 				hasErr++
@@ -1142,8 +1138,17 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			topEntries[i] = entry
 		}
 
-		// Stop if we exceed number of bad disks
-		if hasErr > len(disks)-opts.minDisks && hasErr > 0 {
+		// Since minDisks is set to quorum, we return if we have enough.
+		if vnf > 0 && vnf >= len(readers)-opts.minDisks {
+			return errVolumeNotFound
+		}
+		// Since minDisks is set to quorum, we return if we have enough.
+		if fnf > 0 && fnf >= len(readers)-opts.minDisks {
+			return errFileNotFound
+		}
+
+		// Stop if we exceed number of bad disks.
+		if hasErr > 0 && hasErr+fnf > len(disks)-opts.minDisks {
 			if opts.finished != nil {
 				opts.finished(errs)
 			}
@@ -1161,20 +1166,12 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			return errors.New(strings.Join(combinedErr, ", "))
 		}
 
-		if vnf == len(readers) {
-			return errVolumeNotFound
-		}
-
 		// Break if all at EOF or error.
 		if atEOF+hasErr == len(readers) {
 			if hasErr > 0 && opts.finished != nil {
 				opts.finished(errs)
 			}
 			break
-		}
-
-		if fnf == len(readers) {
-			return errFileNotFound
 		}
 
 		if agree == len(readers) {

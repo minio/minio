@@ -153,6 +153,8 @@ func readMultipleFiles(ctx context.Context, disks []StorageAPI, req ReadMultiple
 		errFileVersionNotFound,
 		io.ErrUnexpectedEOF, // some times we would read without locks, ignore these errors
 		io.EOF,              // some times we would read without locks, ignore these errors
+		context.DeadlineExceeded,
+		context.Canceled,
 	}
 	ignoredErrs = append(ignoredErrs, objectOpIgnoredErrs...)
 

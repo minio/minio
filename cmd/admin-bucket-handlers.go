@@ -735,7 +735,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				rpt.SetStatus(bucket, fileName, fmt.Errorf("An Object Lock configuration is present on this bucket, so the versioning state cannot be suspended."))
 				continue
 			}
-			if _, err := getReplicationConfig(ctx, bucket); err == nil && v.Suspended() {
+			if rcfg, _ := getReplicationConfig(ctx, bucket); rcfg != nil && v.Suspended() {
 				rpt.SetStatus(bucket, fileName, fmt.Errorf("A replication configuration is present on this bucket, so the versioning state cannot be suspended."))
 				continue
 			}

@@ -210,13 +210,13 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 		{
 			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
 			modTime:        time.Unix(1603863445, 0),
-			expectedErr:    errErasureReadQuorum,
+			expectedErr:    InsufficientReadQuorum{},
 			expectedQuorum: 8,
 		},
 		{
 			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
 			modTime:        time.Unix(1603863445, 0),
-			expectedErr:    errErasureReadQuorum,
+			expectedErr:    InsufficientReadQuorum{},
 			expectedQuorum: 0,
 		},
 		{
@@ -241,7 +241,9 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 		test := test
 		t.Run("", func(t *testing.T) {
 			fi, err := findFileInfoInQuorum(context.Background(), test.fis, test.modTime, "", test.expectedQuorum)
-			if err != test.expectedErr {
+			_, ok1 := err.(InsufficientReadQuorum)
+			_, ok2 := test.expectedErr.(InsufficientReadQuorum)
+			if ok1 != ok2 {
 				t.Errorf("Expected %s, got %s", test.expectedErr, err)
 			}
 			if test.succmodTimes != nil {

@@ -20,18 +20,20 @@ package console
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/logger/message/log"
 )
 
 // Target implements loggerTarget to send log
 // in plain or json format to the standard output.
-type Target struct{}
+type Target struct {
+	output io.Writer
+}
 
 // Validate - validate if the tty can be written to
 func (c *Target) Validate() error {
@@ -58,12 +60,12 @@ func (c *Target) Send(e interface{}) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(logJSON))
+		fmt.Fprintln(c.output, string(logJSON))
 		return nil
 	}
 
 	if entry.Level == logger.EventKind {
-		fmt.Println(entry.Message)
+		fmt.Fprintln(c.output, entry.Message)
 		return nil
 	}
 
@@ -146,13 +148,13 @@ func (c *Target) Send(e interface{}) error {
 		apiString, timeString, deploymentID, requestID, remoteHost, host, userAgent,
 		msg, tagString, strings.Join(trace, "\n"))
 
-	console.Println(output)
+	fmt.Fprintln(c.output, output)
 	return nil
 }
 
 // New initializes a new logger target
 // which prints log directly in the standard
 // output.
-func New() *Target {
-	return &Target{}
+func New(w io.Writer) *Target {
+	return &Target{output: w}
 }

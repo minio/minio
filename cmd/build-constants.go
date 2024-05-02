@@ -65,5 +65,5 @@ var (
 	MinioBannerName = "MinIO Object Storage Server"
 
 	// MinioLicense - MinIO server license.
-	MinioLicense = "GNU AGPLv3 <https://www.gnu.org/licenses/agpl-3.0.html>"
+	MinioLicense = "GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html"
 )

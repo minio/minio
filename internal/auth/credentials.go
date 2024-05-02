@@ -156,6 +156,14 @@ func (cred Credentials) IsServiceAccount() bool {
 	return cred.ParentUser != "" && ok
 }
 
+// IsImpliedPolicy - returns if the policy is implied via ParentUser or not.
+func (cred Credentials) IsImpliedPolicy() bool {
+	if cred.IsServiceAccount() {
+		return cred.Claims[iamPolicyClaimNameSA] == "inherited-policy"
+	}
+	return false
+}
+
 // IsValid - returns whether credential is valid or not.
 func (cred Credentials) IsValid() bool {
 	// Verify credentials if its enabled or not set.

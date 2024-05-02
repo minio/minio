@@ -671,9 +671,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 				configLogIf(ctx, fmt.Errorf("Unable to initialize storage class config: %w", err))
 				break
 			}
-			// if we validated all setDriveCounts and it was successful
-			// proceed to store the correct storage class globally.
-			if i == len(setDriveCounts)-1 {
+			if i == 0 {
 				globalStorageClass.Update(sc)
 			}
 		}

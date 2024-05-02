@@ -115,8 +115,20 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 		// Lifecycle with max noncurrent versions
 		{
-			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID>><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><NoncurrentVersionExpiration><NewerNoncurrentVersions>5</NewerNoncurrentVersions></NoncurrentVersionExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
+		// Lifecycle with delmarker expiration
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DelMarkerExpiration><Days>5</Days></DelMarkerExpiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: nil,
+		},
+		// Lifecycle with empty delmarker expiration
+		{
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DelMarkerExpiration><Days></Days></DelMarkerExpiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    errInvalidDaysDelMarkerExpiration,
 			expectedValidationErr: nil,
 		},
 	}
@@ -228,7 +240,8 @@ func TestEval(t *testing.T) {
 		objectName             string
 		objectTags             string
 		objectModTime          time.Time
-		isExpiredDelMarker     bool
+		isDelMarker            bool
+		hasManyVersions        bool
 		expectedAction         Action
 		isNoncurrent           bool
 		objectSuccessorModTime time.Time
@@ -383,36 +396,52 @@ func TestEval(t *testing.T) {
 		},
 		// Should delete expired delete marker right away
 		{
-			inputConfig:        `<BucketLifecycleConfiguration><Rule><Expiration><ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
-			objectName:         "foodir/fooobject",
-			objectModTime:      time.Now().UTC().Add(-1 * time.Hour), // Created one hour ago
-			isExpiredDelMarker: true,
-			expectedAction:     DeleteVersionAction,
+			inputConfig:    `<BucketLifecycleConfiguration><Rule><Expiration><ExpiredObjectDeleteMarker>true</ExpiredObjectDeleteMarker></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-1 * time.Hour), // Created one hour ago
+			isDelMarker:    true,
+			expectedAction: DeleteVersionAction,
 		},
-		// Should delete expired object right away with 1 day expiration
+		// Should not expire a delete marker; ExpiredObjectDeleteAllVersions applies only when current version is not a DEL marker.
 		{
-			inputConfig:        `<BucketLifecycleConfiguration><Rule><Expiration><Days>1</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
-			objectName:         "foodir/fooobject",
-			objectModTime:      time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
-			isExpiredDelMarker: true,
-			expectedAction:     DeleteAllVersionsAction,
+			inputConfig:     `<BucketLifecycleConfiguration><Rule><Expiration><Days>1</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
+			objectName:      "foodir/fooobject",
+			objectModTime:   time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			isDelMarker:     true,
+			hasManyVersions: true,
+			expectedAction:  NoneAction,
 		},
-
+		// Should delete all versions of this object since the latest version has past the expiry days criteria
+		{
+			inputConfig:     `<BucketLifecycleConfiguration><Rule><Expiration><Days>1</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
+			objectName:      "foodir/fooobject",
+			objectModTime:   time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			hasManyVersions: true,
+			expectedAction:  DeleteAllVersionsAction,
+		},
+		// TransitionAction applies since object doesn't meet the age criteria for DeleteAllVersions
+		{
+			inputConfig:     `<BucketLifecycleConfiguration><Rule><Expiration><Days>30</Days><ExpiredObjectAllVersions>true</ExpiredObjectAllVersions></Expiration><Transition><Days>10</Days><StorageClass>WARM-1</StorageClass></Transition><Filter></Filter><Status>Enabled</Status></Rule></BucketLifecycleConfiguration>`,
+			objectName:      "foodir/fooobject",
+			objectModTime:   time.Now().UTC().Add(-11 * 24 * time.Hour), // Created 11 days ago
+			hasManyVersions: true,
+			expectedAction:  TransitionAction,
+		},
 		// Should not delete expired marker if its time has not come yet
 		{
-			inputConfig:        `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,
-			objectName:         "foodir/fooobject",
-			objectModTime:      time.Now().UTC().Add(-12 * time.Hour), // Created 12 hours ago
-			isExpiredDelMarker: true,
-			expectedAction:     NoneAction,
+			inputConfig:    `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-12 * time.Hour), // Created 12 hours ago
+			isDelMarker:    true,
+			expectedAction: NoneAction,
 		},
 		// Should delete expired marker since its time has come
 		{
-			inputConfig:        `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,
-			objectName:         "foodir/fooobject",
-			objectModTime:      time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
-			isExpiredDelMarker: true,
-			expectedAction:     DeleteVersionAction,
+			inputConfig:    `<BucketLifecycleConfiguration><Rule><Filter></Filter><Status>Enabled</Status><Expiration><Days>1</Days></Expiration></Rule></BucketLifecycleConfiguration>`,
+			objectName:     "foodir/fooobject",
+			objectModTime:  time.Now().UTC().Add(-10 * 24 * time.Hour), // Created 10 days ago
+			isDelMarker:    true,
+			expectedAction: DeleteVersionAction,
 		},
 		// Should transition immediately when Transition days is zero
 		{
@@ -579,6 +608,82 @@ func TestEval(t *testing.T) {
 			objectSuccessorModTime: time.Now().UTC().Add(-90 * 24 * time.Hour),
 			expectedAction:         DeleteVersionAction,
 		},
+		{
+			// DelMarkerExpiration is preferred since object age is past both transition and expiration days.
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with Transition</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+	                      <Transition>
+                                <StorageClass>WARM-1</StorageClass>
+                                <Days>30</Days>
+                              </Transition>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectModTime:  time.Now().UTC().Add(-90 * 24 * time.Hour),
+			isDelMarker:    true,
+			expectedAction: DelMarkerDeleteAllVersionsAction,
+		},
+		{
+			// NoneAction since object doesn't qualify for DelMarkerExpiration yet.
+			// Note: TransitionAction doesn't apply to DEL marker
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with Transition</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+	                      <Transition>
+                                <StorageClass>WARM-1</StorageClass>
+                                <Days>30</Days>
+                              </Transition>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectModTime:  time.Now().UTC().Add(-50 * 24 * time.Hour),
+			isDelMarker:    true,
+			expectedAction: NoneAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with non DEL-marker object</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:     "obj-1",
+			objectModTime:  time.Now().UTC().Add(-90 * 24 * time.Hour),
+			expectedAction: NoneAction,
+		},
+		{
+			inputConfig: `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration with noncurrent DEL-marker</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+                             </Rule>
+                       </LifecycleConfiguration>`,
+			objectName:             "obj-1",
+			objectModTime:          time.Now().UTC().Add(-90 * 24 * time.Hour),
+			objectSuccessorModTime: time.Now().UTC().Add(-60 * 24 * time.Hour),
+			isDelMarker:            true,
+			isNoncurrent:           true,
+			expectedAction:         NoneAction,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -588,16 +693,20 @@ func TestEval(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
-			if res := lc.Eval(ObjectOpts{
+			opts := ObjectOpts{
 				Name:             tc.objectName,
 				UserTags:         tc.objectTags,
 				ModTime:          tc.objectModTime,
-				DeleteMarker:     tc.isExpiredDelMarker,
-				NumVersions:      1,
+				DeleteMarker:     tc.isDelMarker,
 				IsLatest:         !tc.isNoncurrent,
 				SuccessorModTime: tc.objectSuccessorModTime,
 				VersionID:        tc.versionID,
-			}); res.Action != tc.expectedAction {
+			}
+			opts.NumVersions = 1
+			if tc.hasManyVersions {
+				opts.NumVersions = 2 // at least one noncurrent version
+			}
+			if res := lc.Eval(opts); res.Action != tc.expectedAction {
 				t.Fatalf("Expected action: `%v`, got: `%v`", tc.expectedAction, res.Action)
 			}
 		})
@@ -1160,7 +1269,7 @@ func TestFilterRules(t *testing.T) {
 		opts     ObjectOpts
 		hasRules bool
 	}{
-		{ // Delete marker should match filter without tags
+		{ // Delete marker shouldn't match filter without tags
 			lc: Lifecycle{
 				Rules: []Rule{
 					rules[0],
@@ -1171,7 +1280,7 @@ func TestFilterRules(t *testing.T) {
 				IsLatest:     true,
 				Name:         "obj-1",
 			},
-			hasRules: true,
+			hasRules: false,
 		},
 		{ // PUT version with no matching tags
 			lc: Lifecycle{
@@ -1267,5 +1376,88 @@ func TestFilterRules(t *testing.T) {
 				t.Fatalf("%d: Expected no rules to match but got matches %v", i+1, rules)
 			}
 		})
+	}
+}
+
+// TestDeleteAllVersions tests ordering among events, especially ones which
+// expire all versions like ExpiredObjectDeleteAllVersions and
+// DelMarkerExpiration
+func TestDeleteAllVersions(t *testing.T) {
+	// ExpiredObjectDeleteAllVersions
+	lc := Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "ExpiredObjectDeleteAllVersions-20",
+				Status: "Enabled",
+				Expiration: Expiration{
+					set:       true,
+					DeleteAll: Boolean{val: true, set: true},
+					Days:      20,
+				},
+			},
+			{
+				ID:     "Transition-10",
+				Status: "Enabled",
+				Transition: Transition{
+					set:          true,
+					StorageClass: "WARM-1",
+					Days:         10,
+				},
+			},
+		},
+	}
+	opts := ObjectOpts{
+		Name:        "foo.txt",
+		ModTime:     time.Now().UTC().Add(-10 * 24 * time.Hour), // created 10 days ago
+		Size:        0,
+		VersionID:   uuid.New().String(),
+		IsLatest:    true,
+		NumVersions: 4,
+	}
+
+	event := lc.eval(opts, time.Time{})
+	if event.Action != TransitionAction {
+		t.Fatalf("Expected %v action but got %v", TransitionAction, event.Action)
+	}
+	// The earlier upcoming lifecycle event must be picked, i.e rule with id "Transition-10"
+	if exp := ExpectedExpiryTime(opts.ModTime, 10); exp != event.Due {
+		t.Fatalf("Expected due %v but got %v, ruleID=%v", exp, event.Due, event.RuleID)
+	}
+
+	// DelMarkerExpiration
+	lc = Lifecycle{
+		Rules: []Rule{
+			{
+				ID:     "delmarker-exp-20",
+				Status: "Enabled",
+				DelMarkerExpiration: DelMarkerExpiration{
+					Days: 20,
+				},
+			},
+			{
+				ID:     "delmarker-exp-10",
+				Status: "Enabled",
+				DelMarkerExpiration: DelMarkerExpiration{
+					Days: 10,
+				},
+			},
+		},
+	}
+	opts = ObjectOpts{
+		Name:         "foo.txt",
+		ModTime:      time.Now().UTC().Add(-10 * 24 * time.Hour), // created 10 days ago
+		Size:         0,
+		VersionID:    uuid.New().String(),
+		IsLatest:     true,
+		DeleteMarker: true,
+		NumVersions:  4,
+	}
+	event = lc.eval(opts, time.Time{})
+	if event.Action != DelMarkerDeleteAllVersionsAction {
+		t.Fatalf("Expected %v action but got %v", DelMarkerDeleteAllVersionsAction, event.Action)
+	}
+	// The earlier upcoming lifecycle event must be picked, i.e rule with id "delmarker-exp-10"
+	if exp := ExpectedExpiryTime(opts.ModTime, 10); exp != event.Due {
+		t.Fatalf("Expected due %v but got %v, ruleID=%v", exp, event.Due, event.RuleID)
 	}
 }

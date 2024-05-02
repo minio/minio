@@ -63,6 +63,7 @@ const (
 	ObjectManyVersions
 	ObjectLargeVersions
 	PrefixManyFolders
+	ILMDelMarkerExpirationDelete
 
 	objectSingleTypesEnd
 	// Start Compound types that require expansion:
@@ -199,6 +200,8 @@ func (name Name) String() string {
 		return "s3:ObjectRemoved:NoOP"
 	case ObjectRemovedDeleteAllVersions:
 		return "s3:ObjectRemoved:DeleteAllVersions"
+	case ILMDelMarkerExpirationDelete:
+		return "s3:LifecycleDelMarkerExpiration:Delete"
 	case ObjectReplicationAll:
 		return "s3:Replication:*"
 	case ObjectReplicationFailed:
@@ -324,6 +327,8 @@ func ParseName(s string) (Name, error) {
 		return ObjectRemovedNoOP, nil
 	case "s3:ObjectRemoved:DeleteAllVersions":
 		return ObjectRemovedDeleteAllVersions, nil
+	case "s3:LifecycleDelMarkerExpiration:Delete":
+		return ILMDelMarkerExpirationDelete, nil
 	case "s3:Replication:*":
 		return ObjectReplicationAll, nil
 	case "s3:Replication:OperationFailedReplication":

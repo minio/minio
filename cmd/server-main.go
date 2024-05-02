@@ -28,12 +28,14 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
+	"github.com/dustin/go-humanize"
 	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
@@ -178,20 +180,37 @@ var ServerFlags = []cli.Flag{
 		Hidden: true,
 		EnvVar: "MINIO_MEMLIMIT",
 	},
-}
-
-var gatewayCmd = cli.Command{
-	Name:            "gateway",
-	Usage:           "start object storage gateway",
-	Hidden:          true,
-	Flags:           append(ServerFlags, GlobalFlags...),
-	HideHelpCommand: true,
-	Action:          gatewayMain,
-}
-
-func gatewayMain(ctx *cli.Context) error {
-	logger.Fatal(errInvalidArgument, "Gateway is deprecated, To continue to use Gateway please use releases no later than 'RELEASE.2022-10-24T18-35-07Z'. We recommend all our users to migrate from gateway mode to server mode. Please read https://blog.min.io/deprecation-of-the-minio-gateway/")
-	return nil
+	cli.IntFlag{
+		Name:   "send-buf-size",
+		Value:  4 * humanize.MiByte,
+		EnvVar: "MINIO_SEND_BUF_SIZE",
+		Hidden: true,
+	},
+	cli.IntFlag{
+		Name:   "recv-buf-size",
+		Value:  4 * humanize.MiByte,
+		EnvVar: "MINIO_RECV_BUF_SIZE",
+		Hidden: true,
+	},
+	cli.StringFlag{
+		Name:   "log-dir",
+		Usage:  "specify the directory to save the server log",
+		EnvVar: "MINIO_LOG_DIR",
+		Hidden: true,
+	},
+	cli.IntFlag{
+		Name:   "log-size",
+		Usage:  "specify the maximum server log file size in bytes before its rotated",
+		Value:  10 * humanize.MiByte,
+		EnvVar: "MINIO_LOG_SIZE",
+		Hidden: true,
+	},
+	cli.BoolFlag{
+		Name:   "log-compress",
+		Usage:  "specify if we want the rotated logs to be gzip compressed or not",
+		EnvVar: "MINIO_LOG_COMPRESS",
+		Hidden: true,
+	},
 }
 
 var serverCmd = cli.Command{
@@ -367,6 +386,8 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 		ClientReadTimeout:  ctxt.ConnClientReadDeadline,
 		ClientWriteTimeout: ctxt.ConnClientWriteDeadline,
 		Interface:          ctxt.Interface,
+		SendBufSize:        ctxt.SendBufSize,
+		RecvBufSize:        ctxt.RecvBufSize,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -388,9 +409,6 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	// (non-)minio process is listening on IPv4 of given port.
 	// To avoid this error situation we check for port availability.
 	logger.FatalIf(xhttp.CheckPortAvailability(globalMinioHost, globalMinioPort, globalTCPOptions), "Unable to start the server")
-
-	globalConnReadDeadline = ctxt.ConnReadDeadline
-	globalConnWriteDeadline = ctxt.ConnWriteDeadline
 }
 
 func initAllSubsystems(ctx context.Context) {
@@ -655,6 +673,30 @@ func getServerListenAddrs() []string {
 	return addrs.ToSlice()
 }
 
+var globalLoggerOutput io.WriteCloser
+
+func initializeLogRotate(ctx *cli.Context) (io.WriteCloser, error) {
+	lgDir := ctx.String("log-dir")
+	if lgDir == "" {
+		return os.Stderr, nil
+	}
+	lgDirAbs, err := filepath.Abs(lgDir)
+	if err != nil {
+		return nil, err
+	}
+	lgSize := ctx.Int("log-size")
+	output, err := logger.NewDir(logger.Options{
+		Directory:       lgDirAbs,
+		MaximumFileSize: int64(lgSize),
+		Compress:        ctx.Bool("log-compress"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	logger.EnableJSON()
+	return output, nil
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
 	var warnings []string
@@ -667,11 +709,23 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize globalConsoleSys system
 	bootstrapTrace("newConsoleLogger", func() {
-		globalConsoleSys = NewConsoleLogger(GlobalContext)
+		output, err := initializeLogRotate(ctx)
+		if err == nil {
+			logger.Output = output
+			globalConsoleSys = NewConsoleLogger(GlobalContext, output)
+			globalLoggerOutput = output
+		} else {
+			logger.Output = os.Stderr
+			globalConsoleSys = NewConsoleLogger(GlobalContext, os.Stderr)
+		}
 		logger.AddSystemTarget(GlobalContext, globalConsoleSys)
 
 		// Set node name, only set for distributed setup.
 		globalConsoleSys.SetNodeName(globalLocalNodeName)
+		if err != nil {
+			// We can only log here since we need globalConsoleSys initialized
+			logger.Fatal(err, "invalid --logrorate-dir option")
+		}
 	})
 
 	// Always load ENV variables from files first.

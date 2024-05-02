@@ -194,19 +194,20 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 ## Drive Metrics
 
-| Name                                   | Description                                                                         |
-|:---------------------------------------|:------------------------------------------------------------------------------------|
-| `minio_node_drive_free_bytes`          | Total storage available on a drive.                                                 |
-| `minio_node_drive_free_inodes`         | Total free inodes.                                                                  |
-| `minio_node_drive_latency_us`          | Average last minute latency in µs for drive API storage operations.                 |
-| `minio_node_drive_offline_total`       | Total drives offline in this node.                                                  |
-| `minio_node_drive_online_total`        | Total drives online in this node.                                                   |
-| `minio_node_drive_total`               | Total drives in this node.                                                          |
-| `minio_node_drive_total_bytes`         | Total storage on a drive.                                                           |
-| `minio_node_drive_used_bytes`          | Total storage used on a drive.                                                      |
-| `minio_node_drive_errors_timeout`      | Total number of drive timeout errors since server start                             |
-| `minio_node_drive_errors_availability` | Total number of drive I/O errors, permission denied and timeouts since server start |
-| `minio_node_drive_io_waiting`          | Total number I/O operations waiting on drive                                        |
+| Name                                   | Description                                                         |
+|:---------------------------------------|:--------------------------------------------------------------------|
+| `minio_node_drive_free_bytes`          | Total storage available on a drive.                                 |
+| `minio_node_drive_free_inodes`         | Total free inodes.                                                  |
+| `minio_node_drive_latency_us`          | Average last minute latency in µs for drive API storage operations. |
+| `minio_node_drive_offline_total`       | Total drives offline in this node.                                  |
+| `minio_node_drive_online_total`        | Total drives online in this node.                                   |
+| `minio_node_drive_total`               | Total drives in this node.                                          |
+| `minio_node_drive_total_bytes`         | Total storage on a drive.                                           |
+| `minio_node_drive_used_bytes`          | Total storage used on a drive.                                      |
+| `minio_node_drive_errors_timeout`      | Total number of drive timeout errors since server start             |
+| `minio_node_drive_errors_ioerror`      | Total number of drive I/O errors since server start                 |
+| `minio_node_drive_errors_availability` | Total number of drive I/O errors, timeouts since server start       |
+| `minio_node_drive_io_waiting`          | Total number I/O operations waiting on drive                        |
 
 ## Identity and Access Management (IAM) Metrics
 

@@ -929,7 +929,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	ctx := newContext(r, w, "AssumeRoleWithCustomToken")
 
 	claims := make(map[string]interface{})
-	defer logger.AuditLog(ctx, w, r, claims)
+
+	auditLogFilterKeys := []string{stsToken}
+	defer logger.AuditLog(ctx, w, r, claims, auditLogFilterKeys...)
 
 	if !globalIAMSys.Initialized() {
 		writeSTSErrorResponse(ctx, w, ErrSTSIAMNotInitialized, errIAMNotInitialized)

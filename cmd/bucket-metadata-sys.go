@@ -46,6 +46,7 @@ type BucketMetadataSys struct {
 	objAPI ObjectLayer
 
 	sync.RWMutex
+	initialized bool
 	metadataMap map[string]BucketMetadata
 }
 
@@ -433,6 +434,8 @@ func (sys *BucketMetadataSys) GetConfigFromDisk(ctx context.Context, bucket stri
 	return loadBucketMetadata(ctx, objAPI, bucket)
 }
 
+var errBucketMetadataNotInitialized = errors.New("bucket metadata not initialized yet")
+
 // GetConfig returns a specific configuration from the bucket metadata.
 // The returned object may not be modified.
 // reloaded will be true if metadata refreshed from disk
@@ -454,6 +457,10 @@ func (sys *BucketMetadataSys) GetConfig(ctx context.Context, bucket string) (met
 	}
 	meta, err = loadBucketMetadata(ctx, objAPI, bucket)
 	if err != nil {
+		if !sys.Initialized() {
+			// bucket metadata not yet initialized
+			return newBucketMetadata(bucket), reloaded, errBucketMetadataNotInitialized
+		}
 		return meta, reloaded, err
 	}
 	sys.Lock()
@@ -498,9 +505,10 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	}
 
 	errs := g.Wait()
-	for _, err := range errs {
+	for index, err := range errs {
 		if err != nil {
-			internalLogIf(ctx, err, logger.WarningKind)
+			internalLogOnceIf(ctx, fmt.Errorf("Unable to load bucket metadata, will be retried: %w", err),
+				"load-bucket-metadata-"+buckets[index].Name, logger.WarningKind)
 		}
 	}
 
@@ -583,6 +591,14 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 	}
 }
 
+// Initialized indicates if bucket metadata sys is initialized atleast once.
+func (sys *BucketMetadataSys) Initialized() bool {
+	sys.RLock()
+	defer sys.RUnlock()
+
+	return sys.initialized
+}
+
 // Loads bucket metadata for all buckets into BucketMetadataSys.
 func (sys *BucketMetadataSys) init(ctx context.Context, buckets []BucketInfo) {
 	count := 100 // load 100 bucket metadata at a time.
@@ -595,6 +611,10 @@ func (sys *BucketMetadataSys) init(ctx context.Context, buckets []BucketInfo) {
 		sys.concurrentLoad(ctx, buckets[:count], failedBuckets)
 		buckets = buckets[count:]
 	}
+
+	sys.Lock()
+	sys.initialized = true
+	sys.Unlock()
 
 	if globalIsDistErasure {
 		go sys.refreshBucketsMetadataLoop(ctx, failedBuckets)

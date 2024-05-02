@@ -43,10 +43,7 @@ unset MINIO_KMS_KES_KEY_FILE
 unset MINIO_KMS_KES_ENDPOINT
 unset MINIO_KMS_KES_KEY_NAME
 
-(
-	cd ./docs/debugging/s3-check-md5
-	go install -v
-)
+go install -v github.com/minio/minio/docs/debugging/s3-check-md5@latest
 
 wget -q -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
 	chmod +x mc

@@ -806,14 +806,37 @@ func TestIAMImportAssetWithLDAP(t *testing.T) {
 
 	exportContentStrings := map[string]string{
 		allPoliciesFile: `{"consoleAdmin":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["admin:*"]},{"Effect":"Allow","Action":["kms:*"]},{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::*"]}]},"diagnostics":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["admin:Prometheus","admin:Profiling","admin:ServerTrace","admin:ConsoleLog","admin:ServerInfo","admin:TopLocksInfo","admin:OBDInfo","admin:BandwidthMonitor"],"Resource":["arn:aws:s3:::*"]}]},"readonly":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:GetBucketLocation","s3:GetObject"],"Resource":["arn:aws:s3:::*"]}]},"readwrite":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:*"],"Resource":["arn:aws:s3:::*"]}]},"writeonly":{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":["s3:PutObject"],"Resource":["arn:aws:s3:::*"]}]}}`,
-		allUsersFile:    `{}`,
-		allGroupsFile:   `{}`,
+
+		// Built-in user should be imported without errors even if LDAP is
+		// enabled.
+		allUsersFile: `{
+  "foo": {
+    "secretKey": "foobar123",
+    "status": "enabled"
+  }
+}
+`,
+		// Built-in groups should be imported without errors even if LDAP is
+		// enabled.
+		allGroupsFile: `{
+  "mygroup": {
+    "version": 1,
+    "status": "enabled",
+    "members": [
+      "foo"
+    ],
+    "updatedAt": "2024-04-23T21:34:43.587429659Z"
+  }
+}
+`,
+		// The `cn=projecty,..` group below is not under a configured DN, but we
+		// should still import without an error.
 		allSvcAcctsFile: `{
     "u4ccRswj62HV3Ifwima7": {
         "parent": "uid=svc.algorithm,OU=swengg,DC=min,DC=io",
         "accessKey": "u4ccRswj62HV3Ifwima7",
         "secretKey": "ZoEoZdLlzVbOlT9rbhD7ZN7TLyiYXSAlB79uGEge",
-        "groups": ["cn=project.c,ou=groups,OU=swengg,DC=min,DC=io"],
+        "groups": ["cn=project.c,ou=groups,OU=swengg,DC=min,DC=io", "cn=projecty,ou=groups,ou=hwengg,dc=min,dc=io"],
         "claims": {
             "accessKey": "u4ccRswj62HV3Ifwima7",
             "ldapUser": "uid=svc.algorithm,ou=swengg,dc=min,dc=io",
@@ -828,13 +851,31 @@ func TestIAMImportAssetWithLDAP(t *testing.T) {
     }
 }
 `,
-		userPolicyMappingsFile: `{}`,
-		// Contains duplicate mapping with same policy, we should not error out.
+		// Built-in user-to-policies mapping should be imported without errors
+		// even if LDAP is enabled.
+		userPolicyMappingsFile: `{
+  "foo": {
+    "version": 0,
+    "policy": "readwrite",
+    "updatedAt": "2024-04-23T21:34:43.815519816Z"
+  }
+}
+`,
+		// Contains:
+		//
+		// 1. duplicate mapping with same policy, we should not error out;
+		//
+		// 2. non-LDAP group mapping, we should not error out;
 		groupPolicyMappingsFile: `{
     "cn=project.c,ou=groups,ou=swengg,DC=min,dc=io": {
         "version": 0,
         "policy": "consoleAdmin",
         "updatedAt": "2024-04-17T23:54:28.442998301Z"
+    },
+    "mygroup": {
+        "version": 0,
+        "policy": "consoleAdmin",
+        "updatedAt": "2024-04-23T21:34:43.66922872Z"
     },
     "cn=project.c,ou=groups,OU=swengg,DC=min,DC=io": {
         "version": 0,

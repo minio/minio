@@ -12,16 +12,18 @@ metadata:
   annotations: {{- toYaml .Values.consoleService.annotations | nindent 4 }}
   {{- end }}
 spec:
-  {{- if (or (eq .Values.consoleService.type "ClusterIP" "") (empty .Values.consoleService.type)) }}
-  type: ClusterIP
-  {{- if not (empty .Values.consoleService.clusterIP) }}
+  type: {{ .Values.consoleService.type }}
+  {{- if and (eq .Values.consoleService.type "ClusterIP") .Values.consoleService.clusterIP }}
   clusterIP: {{ .Values.consoleService.clusterIP }}
   {{- end }}
-  {{- else if eq .Values.consoleService.type "LoadBalancer" }}
-  type: {{ .Values.consoleService.type }}
-  loadBalancerIP: {{ default "" .Values.consoleService.loadBalancerIP }}
-  {{- else }}
-  type: {{ .Values.consoleService.type }}
+  {{- if or (eq .Values.consoleService.type "LoadBalancer") (eq .Values.consoleService.type "NodePort") }}
+  externalTrafficPolicy: {{ .Values.consoleService.externalTrafficPolicy | quote }}
+  {{- end }}
+  {{- if and (eq .Values.consoleService.type "LoadBalancer") .Values.consoleService.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges: {{ .Values.consoleService.loadBalancerSourceRanges }}
+  {{ end }}
+  {{- if and (eq .Values.consoleService.type "LoadBalancer") (not (empty .Values.consoleService.loadBalancerIP)) }}
+  loadBalancerIP: {{ .Values.consoleService.loadBalancerIP }}
   {{- end }}
   ports:
     - name: {{ $scheme }}

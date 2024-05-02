@@ -40,6 +40,85 @@ func (s *sftpLogger) Info(tag xsftp.LogType, msg string) {
 	logger.Info(msg)
 }
 
+const (
+	kexAlgoDH1SHA1                = "diffie-hellman-group1-sha1"
+	kexAlgoDH14SHA1               = "diffie-hellman-group14-sha1"
+	kexAlgoDH14SHA256             = "diffie-hellman-group14-sha256"
+	kexAlgoDH16SHA512             = "diffie-hellman-group16-sha512"
+	kexAlgoECDH256                = "ecdh-sha2-nistp256"
+	kexAlgoECDH384                = "ecdh-sha2-nistp384"
+	kexAlgoECDH521                = "ecdh-sha2-nistp521"
+	kexAlgoCurve25519SHA256LibSSH = "curve25519-sha256@libssh.org"
+	kexAlgoCurve25519SHA256       = "curve25519-sha256"
+
+	chacha20Poly1305ID = "chacha20-poly1305@openssh.com"
+	gcm256CipherID     = "aes256-gcm@openssh.com"
+	aes128cbcID        = "aes128-cbc"
+	tripledescbcID     = "3des-cbc"
+)
+
+// https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.22.0:ssh/common.go;l=46
+// preferredKexAlgos specifies the default preference for key-exchange
+// algorithms in preference order. The diffie-hellman-group16-sha512 algorithm
+// is disabled by default because it is a bit slower than the others.
+var preferredKexAlgos = []string{
+	kexAlgoCurve25519SHA256, kexAlgoCurve25519SHA256LibSSH,
+	kexAlgoECDH256, kexAlgoECDH384, kexAlgoECDH521,
+	kexAlgoDH14SHA256, kexAlgoDH14SHA1,
+}
+
+// supportedKexAlgos specifies the supported key-exchange algorithms in
+// preference order.
+// https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.22.0:ssh/common.go;l=44
+var supportedKexAlgos = []string{
+	kexAlgoCurve25519SHA256, kexAlgoCurve25519SHA256LibSSH,
+	// P384 and P521 are not constant-time yet, but since we don't
+	// reuse ephemeral keys, using them for ECDH should be OK.
+	kexAlgoECDH256, kexAlgoECDH384, kexAlgoECDH521,
+	kexAlgoDH14SHA256, kexAlgoDH16SHA512, kexAlgoDH14SHA1,
+	kexAlgoDH1SHA1,
+}
+
+// supportedPubKeyAuthAlgos specifies the supported client public key
+// authentication algorithms. Note that this doesn't include certificate types
+// since those use the underlying algorithm. This list is sent to the client if
+// it supports the server-sig-algs extension. Order is irrelevant.
+// https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.22.0:ssh/common.go;l=142
+var supportedPubKeyAuthAlgos = []string{
+	ssh.KeyAlgoED25519,
+	ssh.KeyAlgoSKED25519, ssh.KeyAlgoSKECDSA256,
+	ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521,
+	ssh.KeyAlgoRSASHA256, ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSA,
+	ssh.KeyAlgoDSA,
+}
+
+// supportedCiphers lists ciphers we support but might not recommend.
+// https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.22.0:ssh/common.go;l=28
+var supportedCiphers = []string{
+	"aes128-ctr", "aes192-ctr", "aes256-ctr",
+	"aes128-gcm@openssh.com", gcm256CipherID,
+	chacha20Poly1305ID,
+	"arcfour256", "arcfour128", "arcfour",
+	aes128cbcID,
+	tripledescbcID,
+}
+
+// preferredCiphers specifies the default preference for ciphers.
+// https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.22.0:ssh/common.go;l=37
+var preferredCiphers = []string{
+	"aes128-gcm@openssh.com", gcm256CipherID,
+	chacha20Poly1305ID,
+	"aes128-ctr", "aes192-ctr", "aes256-ctr",
+}
+
+// supportedMACs specifies a default set of MAC algorithms in preference order.
+// This is based on RFC 4253, section 6.4, but with hmac-md5 variants removed
+// because they have reached the end of their useful life.
+// https://cs.opensource.google/go/x/crypto/+/refs/tags/v0.22.0:ssh/common.go;l=85
+var supportedMACs = []string{
+	"hmac-sha2-256-etm@openssh.com", "hmac-sha2-512-etm@openssh.com", "hmac-sha2-256", "hmac-sha2-512", "hmac-sha1", "hmac-sha1-96",
+}
+
 func (s *sftpLogger) Error(tag xsftp.LogType, err error) {
 	switch tag {
 	case xsftp.AcceptNetworkError:
@@ -53,13 +132,41 @@ func (s *sftpLogger) Error(tag xsftp.LogType, err error) {
 	}
 }
 
+func filterAlgos(arg string, want []string, allowed []string) []string {
+	var filteredAlgos []string
+	found := false
+	for _, algo := range want {
+		if len(algo) == 0 {
+			continue
+		}
+		for _, allowedAlgo := range allowed {
+			algo := strings.ToLower(strings.TrimSpace(algo))
+			if algo == allowedAlgo {
+				filteredAlgos = append(filteredAlgos, algo)
+				found = true
+				break
+			}
+		}
+		if !found {
+			logger.Fatal(fmt.Errorf("unknown algorithm %q passed to --sftp=%s\nValid algorithms: %v", algo, arg, strings.Join(allowed, ", ")), "unable to start SFTP server")
+		}
+	}
+	if len(filteredAlgos) == 0 {
+		logger.Fatal(fmt.Errorf("no valid algorithms passed to --sftp=%s\nValid algorithms: %v", arg, strings.Join(allowed, ", ")), "unable to start SFTP server")
+	}
+	return filteredAlgos
+}
+
 func startSFTPServer(args []string) {
 	var (
 		port          int
 		publicIP      string
 		sshPrivateKey string
 	)
-
+	allowPubKeys := supportedPubKeyAuthAlgos
+	allowKexAlgos := preferredKexAlgos
+	allowCiphers := preferredCiphers
+	allowMACs := supportedMACs
 	var err error
 	for _, arg := range args {
 		tokens := strings.SplitN(arg, "=", 2)
@@ -82,6 +189,14 @@ func startSFTPServer(args []string) {
 			publicIP = host
 		case "ssh-private-key":
 			sshPrivateKey = tokens[1]
+		case "pub-key-algos":
+			allowPubKeys = filterAlgos(arg, strings.Split(tokens[1], ","), supportedPubKeyAuthAlgos)
+		case "kex-algos":
+			allowKexAlgos = filterAlgos(arg, strings.Split(tokens[1], ","), supportedKexAlgos)
+		case "cipher-algos":
+			allowCiphers = filterAlgos(arg, strings.Split(tokens[1], ","), supportedCiphers)
+		case "mac-algos":
+			allowMACs = filterAlgos(arg, strings.Split(tokens[1], ","), supportedMACs)
 		}
 	}
 
@@ -106,6 +221,12 @@ func startSFTPServer(args []string) {
 	// An SSH server is represented by a ServerConfig, which holds
 	// certificate details and handles authentication of ServerConns.
 	sshConfig := &ssh.ServerConfig{
+		Config: ssh.Config{
+			KeyExchanges: allowKexAlgos,
+			Ciphers:      allowCiphers,
+			MACs:         allowMACs,
+		},
+		PublicKeyAuthAlgorithms: allowPubKeys,
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
 			if globalIAMSys.LDAPConfig.Enabled() {
 				sa, _, err := globalIAMSys.getServiceAccount(context.Background(), c.User())

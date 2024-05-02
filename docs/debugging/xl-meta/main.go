@@ -96,6 +96,7 @@ FLAGS:
 		// versionID ->
 		combineFiles := make(map[string][]string)
 		decode := func(r io.Reader, file string) ([]byte, error) {
+			file = strings.ReplaceAll(file, ":", "_")
 			b, err := io.ReadAll(r)
 			if err != nil {
 				return nil, err
@@ -106,6 +107,7 @@ FLAGS:
 			}
 			filemap[file] = make(map[string]string)
 			buf := bytes.NewBuffer(nil)
+			v0 := ""
 			var data xlMetaInlineData
 			switch minor {
 			case 0:
@@ -178,6 +180,11 @@ FLAGS:
 					var ei erasureInfo
 					if err := json.Unmarshal(buf.Bytes(), &ei); err == nil && ei.V2Obj != nil {
 						verID := uuid.UUID(header.VersionID).String()
+						if verID == "00000000-0000-0000-0000-000000000000" {
+							// If the version ID is all zeros, use the signature as version ID.
+							verID = fmt.Sprintf("null/%08x", header.Signature)
+							v0 = verID
+						}
 						idx := ei.V2Obj.EcIndex
 						filemap[file][verID] = fmt.Sprintf("%s/shard-%02d-of-%02d", verID, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
 						filemap[file][verID+".json"] = buf.String()
@@ -226,21 +233,31 @@ FLAGS:
 				err := data.files(func(name string, data []byte) {
 					fn := fmt.Sprintf("%s-%s.data", file, name)
 					if c.Bool("combine") {
+						if name == "null" {
+							name = v0
+						}
+
 						f := filemap[file][name]
 						if f != "" {
 							fn = f + ".data"
-							os.MkdirAll(filepath.Dir(fn), os.ModePerm)
+							err = os.MkdirAll(filepath.Dir(fn), os.ModePerm)
+							if err != nil {
+								fmt.Println("MkdirAll:", filepath.Dir(fn), err)
+							}
 							err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
 							combineFiles[name] = append(combineFiles[name], fn)
 							if err != nil {
-								fmt.Println("ERR:", err)
+								fmt.Println("WriteFile:", err)
 							}
-							_ = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
+							err = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
+							if err != nil {
+								fmt.Println("combine WriteFile:", err)
+							}
 						}
 					}
 					err = os.WriteFile(fn, data, os.ModePerm)
 					if err != nil {
-						fmt.Println(err)
+						fmt.Println("WriteFile:", err)
 					}
 				})
 				if err != nil {

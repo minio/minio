@@ -238,7 +238,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	// Initialize if LDAP is enabled
 	ldapConfig, err := xldap.Lookup(s, globalRootCAs)
 	if err != nil {
-		iamLogIf(ctx, fmt.Errorf("Unable to parse LDAP configuration: %w", err), logger.WarningKind)
+		iamLogIf(ctx, fmt.Errorf("Unable to load LDAP configuration (LDAP configuration will be disabled!): %w", err), logger.WarningKind)
 	}
 
 	stsTLSConfig, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
@@ -1269,10 +1269,6 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin
 		return updatedAt, errServerNotInitialized
 	}
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
-	}
-
 	if !auth.IsAccessKeyValid(accessKey) {
 		return updatedAt, auth.ErrInvalidAccessKeyLength
 	}
@@ -1507,12 +1503,14 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 
 		hasDiff := false
 
-		validatedParent, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
+		// For the parent value, we require that the parent exists in the LDAP
+		// server and is under a configured base DN.
+		validatedParent, isUnderBaseDN, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
 		if err != nil {
 			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", parent, err))
 			continue
 		}
-		if validatedParent == "" {
+		if validatedParent == "" || !isUnderBaseDN {
 			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", parent)
 			collectedErrors = append(collectedErrors, err)
 			continue
@@ -1522,9 +1520,11 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			hasDiff = true
 		}
 
-		var validatedGroups []string
+		var normalizedGroups []string
 		for _, group := range groups {
-			validatedGroup, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
+			// For a group, we store the normalized DN even if it not under a
+			// configured base DN.
+			validatedGroup, _, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
 			if err != nil {
 				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", group, err))
 				continue
@@ -1538,13 +1538,13 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			if validatedGroup != group {
 				hasDiff = true
 			}
-			validatedGroups = append(validatedGroups, validatedGroup)
+			normalizedGroups = append(normalizedGroups, validatedGroup)
 		}
 
 		if hasDiff {
 			updatedCreateReq := createReq
 			updatedCreateReq.Parent = validatedParent
-			updatedCreateReq.Groups = validatedGroups
+			updatedCreateReq.Groups = normalizedGroups
 
 			updatedKeysMap[ak] = updatedCreateReq
 		}
@@ -1561,6 +1561,37 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 	}
 
 	return nil
+}
+
+func (sys *IAMSys) getStoredLDAPPolicyMappingKeys(ctx context.Context, isGroup bool) set.StringSet {
+	entityKeysInStorage := set.NewStringSet()
+	if iamOS, ok := sys.store.IAMStorageAPI.(*IAMObjectStore); ok {
+		// Load existing mapping keys from the cached listing for
+		// `IAMObjectStore`.
+		iamFilesListing := iamOS.cachedIAMListing.Load().(map[string][]string)
+		listKey := policyDBSTSUsersListKey
+		if isGroup {
+			listKey = policyDBGroupsListKey
+		}
+		for _, item := range iamFilesListing[listKey] {
+			stsUserName := strings.TrimSuffix(item, ".json")
+			entityKeysInStorage.Add(stsUserName)
+		}
+	} else {
+		// For non-iam object store, we copy the mapping keys from the cache.
+		cache := sys.store.rlock()
+		defer sys.store.runlock()
+		cachedPolicyMap := cache.iamSTSPolicyMap
+		if isGroup {
+			cachedPolicyMap = cache.iamGroupPolicyMap
+		}
+		cachedPolicyMap.Range(func(k string, v MappedPolicy) bool {
+			entityKeysInStorage.Add(k)
+			return true
+		})
+	}
+
+	return entityKeysInStorage
 }
 
 // NormalizeLDAPMappingImport - validates the LDAP policy mappings. Keys in the
@@ -1584,7 +1615,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	// We map keys that correspond to LDAP DNs and validate that they exist in
 	// the LDAP server.
-	var dnValidator func(*libldap.Conn, string) (string, error) = sys.LDAPConfig.GetValidatedUserDN
+	var dnValidator func(*libldap.Conn, string) (string, bool, error) = sys.LDAPConfig.GetValidatedUserDN
 	if isGroup {
 		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
 	}
@@ -1598,12 +1629,12 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			// not a valid DN, ignore.
 			continue
 		}
-		validatedDN, err := dnValidator(conn, k)
+		validatedDN, underBaseDN, err := dnValidator(conn, k)
 		if err != nil {
 			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", k, err))
 			continue
 		}
-		if validatedDN == "" {
+		if validatedDN == "" || !underBaseDN {
 			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", k)
 			collectedErrors = append(collectedErrors, err)
 			continue
@@ -1618,6 +1649,8 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 	if len(collectedErrors) > 0 {
 		return fmt.Errorf("errors validating LDAP DN: %w", errors.Join(collectedErrors...))
 	}
+
+	entityKeysInStorage := sys.getStoredLDAPPolicyMappingKeys(ctx, isGroup)
 
 	for normKey, origKeys := range normalizedDNKeysMap {
 		if len(origKeys) > 1 {
@@ -1643,6 +1676,12 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			// ones from the map.
 			for i := 1; i < len(origKeys); i++ {
 				delete(policyMap, origKeys[i])
+
+				// Remove the mapping from storage by setting the policy to "".
+				if entityKeysInStorage.Contains(origKeys[i]) {
+					// Ignore any deletion error.
+					_, _ = sys.PolicyDBSet(ctx, origKeys[i], "", stsUser, isGroup)
+				}
 			}
 		}
 
@@ -1652,6 +1691,11 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 		mappingValue := policyMap[origKeys[0]]
 		delete(policyMap, origKeys[0])
 		policyMap[normKey] = mappingValue
+		// Remove the mapping from storage by setting the policy to "".
+		if entityKeysInStorage.Contains(origKeys[0]) {
+			// Ignore any deletion error.
+			_, _ = sys.PolicyDBSet(ctx, origKeys[0], "", stsUser, isGroup)
+		}
 	}
 	return nil
 }
@@ -1700,10 +1744,6 @@ func (sys *IAMSys) notifyForGroup(ctx context.Context, group string) {
 func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []string) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
-	}
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
 	}
 
 	updatedAt, err = sys.store.AddUsersToGroup(ctx, group, members)
@@ -1777,34 +1817,12 @@ func (sys *IAMSys) ListGroups(ctx context.Context) (r []string, err error) {
 	}
 }
 
-// PolicyDBSet - sets a policy for a user or group in the PolicyDB - the user doesn't have to exist since sometimes they are virtuals
+// PolicyDBSet - sets a policy for a user or group in the PolicyDB. This does
+// not validate if the user/group exists - that is the responsibility of the
+// caller.
 func (sys *IAMSys) PolicyDBSet(ctx context.Context, name, policy string, userType IAMUserType, isGroup bool) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
-	}
-
-	if sys.LDAPConfig.Enabled() {
-		if isGroup {
-			var foundGroupDN string
-			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, name); err != nil {
-				iamLogIf(ctx, err)
-				return
-			} else if foundGroupDN == "" {
-				err = errNoSuchGroup
-				return
-			}
-			name = foundGroupDN
-		} else {
-			var foundUserDN string
-			if foundUserDN, err = sys.LDAPConfig.GetValidatedDNForUsername(name); err != nil {
-				iamLogIf(ctx, err)
-				return
-			} else if foundUserDN == "" {
-				err = errNoSuchUser
-				return
-			}
-			name = foundUserDN
-		}
 	}
 
 	updatedAt, err = sys.store.PolicyDBSet(ctx, name, policy, userType, isGroup)
@@ -1935,10 +1953,11 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	} else {
 		if isAttach {
 			var foundGroupDN string
-			if foundGroupDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
 				iamLogIf(ctx, err)
 				return
-			} else if foundGroupDN == "" {
+			} else if foundGroupDN == "" || !underBaseDN {
 				err = errNoSuchGroup
 				return
 			}

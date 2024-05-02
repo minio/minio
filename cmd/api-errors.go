@@ -263,6 +263,7 @@ const (
 	ErrInvalidResourceName
 	ErrInvalidLifecycleQueryParameter
 	ErrServerNotInitialized
+	ErrBucketMetadataNotInitialized
 	ErrRequestTimedout
 	ErrClientDisconnected
 	ErrTooManyRequests
@@ -1295,7 +1296,12 @@ var errorCodes = errorCodeMap{
 	},
 	ErrServerNotInitialized: {
 		Code:           "XMinioServerNotInitialized",
-		Description:    "Server not initialized, please try again.",
+		Description:    "Server not initialized yet, please try again.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrBucketMetadataNotInitialized: {
+		Code:           "XMinioBucketMetadataNotInitialized",
+		Description:    "Bucket metadata not initialized yet, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrMalformedJSON: {
@@ -2211,6 +2217,10 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidMaxParts
 	case ioutil.ErrOverread:
 		apiErr = ErrExcessData
+	case errServerNotInitialized:
+		apiErr = ErrServerNotInitialized
+	case errBucketMetadataNotInitialized:
+		apiErr = ErrBucketMetadataNotInitialized
 	}
 
 	// Compression errors

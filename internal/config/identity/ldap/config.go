@@ -183,15 +183,15 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 		return l, nil
 	}
 	l.LDAP = ldap.Config{
-		Enabled:       true,
 		RootCAs:       rootCAs,
 		ServerAddr:    ldapServer,
 		SRVRecordName: getCfgVal(SRVRecordName),
 	}
 
-	// Parse explicitly enable=on/off flag. If not set, defaults to `true`
-	// because ServerAddr is set.
+	// Parse explicitly set enable=on/off flag.
+	isEnableFlagExplicitlySet := false
 	if v := getCfgVal(config.Enable); v != "" {
+		isEnableFlagExplicitlySet = true
 		l.LDAP.Enabled, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
@@ -232,9 +232,16 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	l.LDAP.GroupSearchFilter = getCfgVal(GroupSearchFilter)
 	l.LDAP.GroupSearchBaseDistName = getCfgVal(GroupSearchBaseDN)
 
+	// If enable flag was not explicitly set, we treat it as implicitly set at
+	// this point as necessary configuration is available.
+	if !isEnableFlagExplicitlySet && !l.LDAP.Enabled {
+		l.LDAP.Enabled = true
+	}
 	// Validate and test configuration.
 	valResult := l.LDAP.Validate()
 	if !valResult.IsOk() {
+		// Set to false if configuration fails to validate.
+		l.LDAP.Enabled = false
 		return l, valResult
 	}
 
