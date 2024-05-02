@@ -221,18 +221,15 @@ func (h *metricsV3Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pathComponents := mux.Vars(r)["pathComps"]
 	isListingRequest := r.Form.Has("list")
 
-	// Parse optional buckets query parameter.
-	bucketsParam := r.Form["buckets"]
-	buckets := make([]string, 0, len(bucketsParam))
-	for _, bp := range bucketsParam {
-		bp = strings.TrimSpace(bp)
-		if bp == "" {
-			continue
-		}
-		splits := strings.Split(bp, ",")
-		for _, split := range splits {
-			buckets = append(buckets, strings.TrimSpace(split))
-		}
+	buckets := []string{}
+	if strings.HasPrefix(pathComponents, "/bucket/") {
+		// bucket specific metrics, extract the bucket name from the path.
+		// it's the last part of the path. e.g. /bucket/api/<bucket-name>
+		bucketIdx := strings.LastIndex(pathComponents, "/")
+		buckets = append(buckets, pathComponents[bucketIdx+1:])
+		// remove bucket from pathComponents as it is dyanamic and
+		// hence not included in the collector path.
+		pathComponents = pathComponents[:bucketIdx]
 	}
 
 	innerHandler := h.handle(pathComponents, isListingRequest, buckets)
