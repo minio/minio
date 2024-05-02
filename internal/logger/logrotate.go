@@ -18,7 +18,6 @@
 package logger
 
 import (
-	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,6 +25,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/klauspost/compress/gzip"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/pkg/v2/logger/message/log"
 )
