@@ -1199,17 +1199,15 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.Action)
 	}
 
-	if event.Action == lifecycle.NoneAction {
-		return event
-	}
-
-	if obj.IsLatest && event.Action == lifecycle.DeleteAllVersionsAction {
-		if lr.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
+	switch event.Action {
+	case lifecycle.DeleteAllVersionsAction, lifecycle.DelMarkerDeleteAllVersionsAction:
+		// Skip if bucket has object locking enabled; To prevent the
+		// possibility of violating an object retention on one of the
+		// noncurrent versions of this object.
+		if lr.LockEnabled {
 			return lifecycle.Event{Action: lifecycle.NoneAction}
 		}
-	}
 
-	switch event.Action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
 		// Defensive code, should never happen
 		if obj.VersionID == "" {
