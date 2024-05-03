@@ -2043,7 +2043,6 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 	var entries []chan metaCacheEntry
 
 	for poolIdx, erasureSet := range z.serverPools {
@@ -2054,6 +2053,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 			disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)
 			if len(disks) == 0 {
 				xioutil.SafeClose(results)
+				cancel()
 				return fmt.Errorf("Walk: no online disks found in pool %d, set %d", setIdx, poolIdx)
 			}
 			go func() {
@@ -2155,9 +2155,9 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	go func() {
 		defer cancel()
 		defer xioutil.SafeClose(results)
-		send := func(e ObjectInfo) bool {
+		send := func(oi ObjectInfo) bool {
 			select {
-			case results <- e:
+			case results <- oi:
 				return true
 			case <-ctx.Done():
 				return false

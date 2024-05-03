@@ -217,6 +217,27 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 		return nil, nil, err
 	}
 
+	// Wait up to 10 seconds for disks to come online.
+	pools := obj.(*erasureServerPools)
+	t := time.Now()
+	for _, pool := range pools.serverPools {
+		for _, sets := range pool.erasureDisks {
+			for _, s := range sets {
+				if !s.IsLocal() {
+					for {
+						if s.IsOnline() {
+							break
+						}
+						time.Sleep(100 * time.Millisecond)
+						if time.Since(t) > 10*time.Second {
+							return nil, nil, errors.New("timeout waiting for disk to come online")
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return obj, fsDirs, nil
 }
 
