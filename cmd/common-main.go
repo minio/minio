@@ -63,6 +63,7 @@ import (
 	"github.com/minio/pkg/v2/ellipses"
 	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/term"
 )
 
 // serverDebugLog will enable debug printing
@@ -73,6 +74,13 @@ var (
 )
 
 func init() {
+	if !term.IsTerminal(int(os.Stdout.Fd())) || !term.IsTerminal(int(os.Stderr.Fd())) {
+		color.TurnOff()
+	}
+	if env.Get("NO_COLOR", "") != "" || env.Get("TERM", "") == "dumb" {
+		color.TurnOff()
+	}
+
 	if runtime.GOOS == "windows" {
 		if mousetrap.StartedByExplorer() {
 			fmt.Printf("Don't double-click %s\n", os.Args[0])
