@@ -34,9 +34,10 @@ import (
 // appended to the path. e.g. if the collector path is /bucket/api, the endpoint
 // for the bucket "mybucket" would be /minio/metrics/v3/bucket/api/mybucket
 const (
-	apiRequestsCollectorPath          collectorPath = "/api/requests"
-	apiBucketCollectorPath            collectorPath = "/bucket/api"
-	apiBucketReplicationCollectorPath collectorPath = "/api/bucket/replication"
+	apiRequestsCollectorPath collectorPath = "/api/requests"
+
+	bucketAPICollectorPath         collectorPath = "/bucket/api"
+	bucketReplicationCollectorPath collectorPath = "/bucket/replication"
 
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
@@ -99,23 +100,23 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			loadAPIRequestsNetworkMetrics),
 	)
 
-	apiBucketMG := NewBucketMetricsGroup(apiBucketCollectorPath,
+	bucketAPIMG := NewBucketMetricsGroup(bucketAPICollectorPath,
 		[]MetricDescriptor{
-			apiBucketTrafficRecvBytesMD,
-			apiBucketTrafficSentBytesMD,
+			bucketAPITrafficRecvBytesMD,
+			bucketAPITrafficSentBytesMD,
 
-			apiBucketRequestsInFlightMD,
-			apiBucketRequestsTotalMD,
-			apiBucketRequestsCanceledMD,
-			apiBucketRequests4xxErrorsMD,
-			apiBucketRequests5xxErrorsMD,
+			bucketAPIRequestsInFlightMD,
+			bucketAPIRequestsTotalMD,
+			bucketAPIRequestsCanceledMD,
+			bucketAPIRequests4xxErrorsMD,
+			bucketAPIRequests5xxErrorsMD,
 
-			apiBucketRequestsTTFBSecondsDistributionMD,
+			bucketAPIRequestsTTFBSecondsDistributionMD,
 		},
-		JoinBucketLoaders(loadAPIBucketHTTPMetrics, loadAPIBucketTTFBMetrics),
+		JoinBucketLoaders(loadBucketAPIHTTPMetrics, loadBucketAPITTFBMetrics),
 	)
 
-	apiBucketReplicationMG := NewBucketMetricsGroup(apiBucketReplicationCollectorPath,
+	bucketReplicationMG := NewBucketMetricsGroup(bucketReplicationCollectorPath,
 		[]MetricDescriptor{
 			bucketReplLastHrFailedBytesMD,
 			bucketReplLastHrFailedCountMD,
@@ -137,7 +138,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			bucketReplTotalFailedCountMD,
 			bucketReplProxiedDeleteTaggingRequestsFailuresMD,
 		},
-		loadAPIBucketReplicationMetrics,
+		loadBucketReplicationMetrics,
 	)
 
 	systemNetworkInternodeMG := NewMetricsGroup(systemNetworkInternodeCollectorPath,
@@ -362,8 +363,8 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
-		apiBucketMG,
-		apiBucketReplicationMG,
+		bucketAPIMG,
+		bucketReplicationMG,
 
 		systemNetworkInternodeMG,
 		systemDriveMG,

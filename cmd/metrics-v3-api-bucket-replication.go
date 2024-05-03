@@ -106,9 +106,9 @@ var (
 		bucketL)
 )
 
-// loadAPIBucketReplicationMetrics - `BucketMetricsLoaderFn` for bucket replication metrics
+// loadBucketReplicationMetrics - `BucketMetricsLoaderFn` for bucket replication metrics
 // such as latency and sent bytes.
-func loadAPIBucketReplicationMetrics(ctx context.Context, m MetricValues, c *metricsCache, buckets []string) error {
+func loadBucketReplicationMetrics(ctx context.Context, m MetricValues, c *metricsCache, buckets []string) error {
 	if globalSiteReplicationSys.isEnabled() {
 		return nil
 	}
