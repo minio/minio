@@ -2036,13 +2036,13 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 // Walk a bucket, optionally prefix recursively, until we have returned
 // all the contents of the provided bucket+prefix.
 // TODO: Note that most errors will result in a truncated listing.
-func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- ObjectInfo, opts WalkOptions) error {
+func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- itemOrErr[ObjectInfo], opts WalkOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, ""); err != nil {
 		xioutil.SafeClose(results)
 		return err
 	}
-
-	ctx, cancel := context.WithCancel(ctx)
+	parentCtx := ctx
+	ctx, cancelCause := context.WithCancelCause(ctx)
 	var entries []chan metaCacheEntry
 
 	for poolIdx, erasureSet := range z.serverPools {
@@ -2053,8 +2053,9 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 			disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)
 			if len(disks) == 0 {
 				xioutil.SafeClose(results)
-				cancel()
-				return fmt.Errorf("Walk: no online disks found in pool %d, set %d", setIdx, poolIdx)
+				err := fmt.Errorf("Walk: no online disks found in pool %d, set %d", setIdx, poolIdx)
+				cancelCause(err)
+				return err
 			}
 			go func() {
 				defer xioutil.SafeClose(listOut)
@@ -2141,8 +2142,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 
 				if err := listPathRaw(ctx, lopts); err != nil {
-					storageLogIf(ctx, fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
-					cancel()
+					cancelCause(fmt.Errorf("listPathRaw returned %w: opts(%#v)", err, lopts))
 					return
 				}
 			}()
@@ -2153,13 +2153,24 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	merged := make(chan metaCacheEntry, 100)
 	vcfg, _ := globalBucketVersioningSys.Get(bucket)
 	go func() {
-		defer cancel()
+		defer cancelCause(nil)
 		defer xioutil.SafeClose(results)
+		sentErr := false
+		sendErr := func(err error) {
+			if !sentErr {
+				select {
+				case results <- itemOrErr[ObjectInfo]{Err: err}:
+					sentErr = true
+				case <-parentCtx.Done():
+				}
+			}
+		}
 		send := func(oi ObjectInfo) bool {
 			select {
-			case results <- oi:
+			case results <- itemOrErr[ObjectInfo]{Item: oi}:
 				return true
 			case <-ctx.Done():
+				sendErr(context.Cause(ctx))
 				return false
 			}
 		}
@@ -2167,6 +2178,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 			if opts.LatestOnly {
 				fi, err := entry.fileInfo(bucket)
 				if err != nil {
+					sendErr(err)
 					return
 				}
 				if opts.Filter != nil {
@@ -2184,6 +2196,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 			}
 			fivs, err := entry.fileInfoVersions(bucket)
 			if err != nil {
+				sendErr(err)
 				return
 			}
 

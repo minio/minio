@@ -356,7 +356,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	retryAttempts := ri.RetryAttempts
 	ctx, cancel := context.WithCancel(ctx)
 
-	results := make(chan ObjectInfo, 100)
+	results := make(chan itemOrErr[ObjectInfo], 100)
 	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
 		Marker: lastObject,
 		Filter: selectObj,
@@ -366,8 +366,14 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		return err
 	}
 
-	for result := range results {
-		result := result
+	for res := range results {
+		if res.Err != nil {
+			// Be sure that ObjectsFailed > 0.
+			ri.ObjectsFailed++
+			batchLogIf(ctx, res.Err)
+			continue
+		}
+		result := res.Item
 		sseKMS := crypto.S3KMS.IsEncrypted(result.UserDefined)
 		sseS3 := crypto.S3.IsEncrypted(result.UserDefined)
 		if !sseKMS && !sseS3 { // neither sse-s3 nor sse-kms disallowed

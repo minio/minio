@@ -1057,8 +1057,8 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
 
 	var (
-		walkCh = make(chan ObjectInfo, 100)
-		slowCh = make(chan ObjectInfo, 100)
+		walkCh = make(chan itemOrErr[ObjectInfo], 100)
+		slowCh = make(chan itemOrErr[ObjectInfo], 100)
 	)
 
 	if !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
@@ -1084,7 +1084,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 					if err := r.writeAsArchive(ctx, api, cl, batch); err != nil {
 						batchLogIf(ctx, err)
 						for _, b := range batch {
-							slowCh <- b
+							slowCh <- itemOrErr[ObjectInfo]{Item: b}
 						}
 					} else {
 						ri.trackCurrentBucketBatch(r.Source.Bucket, batch)
@@ -1095,12 +1095,12 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				}
 			}
 			for obj := range walkCh {
-				if obj.DeleteMarker || !obj.VersionPurgeStatus.Empty() || obj.Size >= int64(smallerThan) {
+				if obj.Item.DeleteMarker || !obj.Item.VersionPurgeStatus.Empty() || obj.Item.Size >= int64(smallerThan) {
 					slowCh <- obj
 					continue
 				}
 
-				batch = append(batch, obj)
+				batch = append(batch, obj.Item)
 
 				if len(batch) < *r.Source.Snowball.Batch {
 					continue
@@ -1153,8 +1153,12 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		prevObj := ""
 
 		skipReplicate := false
-		for result := range slowCh {
-			result := result
+		for res := range slowCh {
+			if res.Err != nil {
+				batchLogIf(ctx, res.Err)
+				continue
+			}
+			result := res.Item
 			if result.Name != prevObj {
 				prevObj = result.Name
 				skipReplicate = result.DeleteMarker && s3Type
@@ -1483,7 +1487,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 		jobType = string(madmin.BatchJobReplicate)
 	}
 
-	resultCh := make(chan ObjectInfo)
+	resultCh := make(chan itemOrErr[ObjectInfo])
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1495,8 +1499,12 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 
 	listResult := madmin.ListBatchJobsResult{}
 	for result := range resultCh {
+		if result.Err != nil {
+			batchLogIf(ctx, result.Err)
+			continue
+		}
 		req := &BatchJobRequest{}
-		if err := req.load(ctx, objectAPI, result.Name); err != nil {
+		if err := req.load(ctx, objectAPI, result.Item.Name); err != nil {
 			if !errors.Is(err, errNoSuchJob) {
 				batchLogIf(ctx, err)
 			}
@@ -1701,7 +1709,7 @@ func newBatchJobPool(ctx context.Context, o ObjectLayer, workers int) *BatchJobP
 }
 
 func (j *BatchJobPool) resume() {
-	results := make(chan ObjectInfo, 100)
+	results := make(chan itemOrErr[ObjectInfo], 100)
 	ctx, cancel := context.WithCancel(j.ctx)
 	defer cancel()
 	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, WalkOptions{}); err != nil {
@@ -1710,11 +1718,11 @@ func (j *BatchJobPool) resume() {
 	}
 	for result := range results {
 		// ignore batch-replicate.bin and batch-rotate.bin entries
-		if strings.HasSuffix(result.Name, slashSeparator) {
+		if strings.HasSuffix(result.Item.Name, slashSeparator) {
 			continue
 		}
 		req := &BatchJobRequest{}
-		if err := req.load(ctx, j.objLayer, result.Name); err != nil {
+		if err := req.load(ctx, j.objLayer, result.Item.Name); err != nil {
 			batchLogIf(ctx, err)
 			continue
 		}
