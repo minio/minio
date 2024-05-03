@@ -20,12 +20,15 @@ package cmd
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/bucket/lifecycle"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/versioning"
 )
 
@@ -139,5 +142,98 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 		default:
 			t.Errorf("Unexpected versionID being expired: %#v\n", obj)
 		}
+	}
+}
+
+func TestEvalActionFromLifecycle(t *testing.T) {
+	// Tests cover only ExpiredObjectDeleteAllVersions and DelMarkerExpiration actions
+	obj := ObjectInfo{
+		Name:        "foo",
+		ModTime:     time.Now().Add(-31 * 24 * time.Hour),
+		Size:        100 << 20,
+		VersionID:   uuid.New().String(),
+		IsLatest:    true,
+		NumVersions: 4,
+	}
+	delMarker := ObjectInfo{
+		Name:         "foo-deleted",
+		ModTime:      time.Now().Add(-61 * 24 * time.Hour),
+		Size:         0,
+		VersionID:    uuid.New().String(),
+		IsLatest:     true,
+		DeleteMarker: true,
+		NumVersions:  4,
+	}
+	deleteAllILM := `<LifecycleConfiguration>
+			    <Rule>
+		               <Expiration>
+		                  <Days>30</Days>
+	                          <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
+	                       </Expiration>
+	                       <Filter></Filter>
+	                       <Status>Enabled</Status>
+			       <ID>DeleteAllVersions</ID>
+	                    </Rule>
+	                 </LifecycleConfiguration>`
+	delMarkerILM := `<LifecycleConfiguration>
+                            <Rule>
+                              <ID>DelMarkerExpiration</ID>
+                              <Filter></Filter>
+                              <Status>Enabled</Status>
+                              <DelMarkerExpiration>
+                                <Days>60</Days>
+                              </DelMarkerExpiration>
+                             </Rule>
+                       </LifecycleConfiguration>`
+	deleteAllLc, err := lifecycle.ParseLifecycleConfig(strings.NewReader(deleteAllILM))
+	if err != nil {
+		t.Fatalf("Failed to parse deleteAllILM test ILM policy %v", err)
+	}
+	delMarkerLc, err := lifecycle.ParseLifecycleConfig(strings.NewReader(delMarkerILM))
+	if err != nil {
+		t.Fatalf("Failed to parse delMarkerILM test ILM policy %v", err)
+	}
+	tests := []struct {
+		ilm       lifecycle.Lifecycle
+		retention lock.Retention
+		obj       ObjectInfo
+		want      lifecycle.Action
+	}{
+		{
+			// with object locking
+			ilm:       *deleteAllLc,
+			retention: lock.Retention{LockEnabled: true},
+			obj:       obj,
+			want:      lifecycle.NoneAction,
+		},
+		{
+			// without object locking
+			ilm:       *deleteAllLc,
+			retention: lock.Retention{},
+			obj:       obj,
+			want:      lifecycle.DeleteAllVersionsAction,
+		},
+		{
+			// with object locking
+			ilm:       *delMarkerLc,
+			retention: lock.Retention{LockEnabled: true},
+			obj:       delMarker,
+			want:      lifecycle.NoneAction,
+		},
+		{
+			// without object locking
+			ilm:       *delMarkerLc,
+			retention: lock.Retention{},
+			obj:       delMarker,
+			want:      lifecycle.DelMarkerDeleteAllVersionsAction,
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("TestEvalAction-%d", i), func(t *testing.T) {
+			if got := evalActionFromLifecycle(context.TODO(), test.ilm, test.retention, nil, test.obj); got.Action != test.want {
+				t.Fatalf("Expected %v but got %v", test.want, got)
+			}
+		})
 	}
 }
