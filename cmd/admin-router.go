@@ -341,6 +341,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-jobs").HandlerFunc(
 			adminMiddleware(adminAPI.ListBatchJobs))
 
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/status-job").HandlerFunc(
+			adminMiddleware(adminAPI.BatchJobStatus))
+
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/describe-job").HandlerFunc(
 			adminMiddleware(adminAPI.DescribeBatchJob))
 		adminRouter.Methods(http.MethodDelete).Path(adminVersion + "/cancel-job").HandlerFunc(
