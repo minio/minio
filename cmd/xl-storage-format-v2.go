@@ -1100,8 +1100,8 @@ func (x *xlMetaV2) addVersion(ver xlMetaV2Version) error {
 		return err
 	}
 
-	// returns error if we have exceeded configured object max versions
-	if int64(len(x.versions)+1) > globalAPIConfig.getObjectMaxVersions() {
+	// returns error if non DELETE marker versions have exceeded configured object max versions
+	if int64(len(x.versions)+1) > globalAPIConfig.getObjectMaxVersions() && ver.DeleteMarker == nil {
 		return errMaxVersionsExceeded
 	}
 
