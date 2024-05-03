@@ -575,7 +575,7 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			configLogIf(ctx, fmt.Errorf("Invalid api configuration: %w", err))
 		}
 
-		globalAPIConfig.init(apiConfig, setDriveCounts)
+		globalAPIConfig.init(apiConfig, setDriveCounts, objAPI.Legacy())
 		autoGenerateRootCredentials() // Generate the KMS root credentials here since we don't know whether API root access is disabled until now.
 		setRemoteInstanceTransport(NewHTTPTransportWithTimeout(apiConfig.RemoteTransportDeadline))
 	case config.CompressionSubSys:

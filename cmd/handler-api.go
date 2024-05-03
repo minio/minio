@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,13 +39,11 @@ import (
 type apiConfig struct {
 	mu sync.RWMutex
 
-	requestsDeadline time.Duration
-	requestsPool     chan struct{}
-	clusterDeadline  time.Duration
-	listQuorum       string
-	corsAllowOrigins []string
-	// total drives per erasure set across pools.
-	totalDriveCount       int
+	requestsDeadline      time.Duration
+	requestsPool          chan struct{}
+	clusterDeadline       time.Duration
+	listQuorum            string
+	corsAllowOrigins      []string
 	replicationPriority   string
 	replicationMaxWorkers int
 	transitionWorkers     int
@@ -110,7 +109,7 @@ func availableMemory() (available uint64) {
 	return
 }
 
-func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
+func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -125,33 +124,34 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int) {
 	}
 	t.corsAllowOrigins = corsAllowOrigin
 
-	maxSetDrives := 0
-	for _, setDriveCount := range setDriveCounts {
-		t.totalDriveCount += setDriveCount
-		if setDriveCount > maxSetDrives {
-			maxSetDrives = setDriveCount
-		}
-	}
-
 	var apiRequestsMaxPerNode int
 	if cfg.RequestsMax <= 0 {
+		maxSetDrives := slices.Max(setDriveCounts)
+
 		// Returns 75% of max memory allowed
 		maxMem := availableMemory()
 
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
-		// ram_per_request is (2MiB+128KiB) * driveCount \
-		//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
 		blockSize := xioutil.LargeBlock + xioutil.SmallBlock
-		apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
-		if globalIsDistErasure {
-			logger.Info("Automatically configured API requests per node based on available memory on the system: %d", apiRequestsMaxPerNode)
+		if legacy {
+			// ram_per_request is (1MiB+32KiB) * driveCount \
+			//    + 2 * 10MiB (default erasure block size v1) + 2 * 1MiB (default erasure block size v2)
+			apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV1*2+blockSizeV2*2)))
+		} else {
+			// ram_per_request is (1MiB+32KiB) * driveCount \
+			//    + 2 * 1MiB (default erasure block size v2)
+			apiRequestsMaxPerNode = int(maxMem / uint64(maxSetDrives*blockSize+int(blockSizeV2*2)))
 		}
 	} else {
 		apiRequestsMaxPerNode = cfg.RequestsMax
 		if n := totalNodeCount(); n > 0 {
 			apiRequestsMaxPerNode /= n
 		}
+	}
+
+	if globalIsDistErasure {
+		logger.Info("Configured max API requests per node based on available memory: %d", apiRequestsMaxPerNode)
 	}
 
 	if cap(t.requestsPool) != apiRequestsMaxPerNode {
