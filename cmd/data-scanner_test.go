@@ -146,7 +146,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 }
 
 func TestEvalActionFromLifecycle(t *testing.T) {
-	// Tests cover only ExpiredObjectDeleteAllVersions and DelMarkerExpiration actions
+	// Tests cover only ExpiredObjectDeleteAllVersions and DeletedObjectExpiration actions
 	obj := ObjectInfo{
 		Name:        "foo",
 		ModTime:     time.Now().Add(-31 * 24 * time.Hour),
@@ -177,12 +177,12 @@ func TestEvalActionFromLifecycle(t *testing.T) {
 	                 </LifecycleConfiguration>`
 	delMarkerILM := `<LifecycleConfiguration>
                             <Rule>
-                              <ID>DelMarkerExpiration</ID>
+                              <ID>DeletedObjectExpiration</ID>
                               <Filter></Filter>
                               <Status>Enabled</Status>
-                              <DelMarkerExpiration>
+                              <DeletedObjectExpiration>
                                 <Days>60</Days>
-                              </DelMarkerExpiration>
+                              </DeletedObjectExpiration>
                              </Rule>
                        </LifecycleConfiguration>`
 	deleteAllLc, err := lifecycle.ParseLifecycleConfig(strings.NewReader(deleteAllILM))

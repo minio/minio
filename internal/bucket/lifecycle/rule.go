@@ -33,24 +33,24 @@ const (
 
 // Rule - a rule for lifecycle configuration.
 type Rule struct {
-	XMLName             xml.Name            `xml:"Rule"`
-	ID                  string              `xml:"ID,omitempty"`
-	Status              Status              `xml:"Status"`
-	Filter              Filter              `xml:"Filter,omitempty"`
-	Prefix              Prefix              `xml:"Prefix,omitempty"`
-	Expiration          Expiration          `xml:"Expiration,omitempty"`
-	Transition          Transition          `xml:"Transition,omitempty"`
-	DelMarkerExpiration DelMarkerExpiration `xml:"DelMarkerExpiration,omitempty"`
+	XMLName                 xml.Name                `xml:"Rule"`
+	ID                      string                  `xml:"ID,omitempty"`
+	Status                  Status                  `xml:"Status"`
+	Filter                  Filter                  `xml:"Filter,omitempty"`
+	Prefix                  Prefix                  `xml:"Prefix,omitempty"`
+	Expiration              Expiration              `xml:"Expiration,omitempty"`
+	Transition              Transition              `xml:"Transition,omitempty"`
+	DeletedObjectExpiration DeletedObjectExpiration `xml:"DeletedObjectExpiration,omitempty"`
 	// FIXME: add a type to catch unsupported AbortIncompleteMultipartUpload AbortIncompleteMultipartUpload `xml:"AbortIncompleteMultipartUpload,omitempty"`
 	NoncurrentVersionExpiration NoncurrentVersionExpiration `xml:"NoncurrentVersionExpiration,omitempty"`
 	NoncurrentVersionTransition NoncurrentVersionTransition `xml:"NoncurrentVersionTransition,omitempty"`
 }
 
 var (
-	errInvalidRuleID                  = Errorf("ID length is limited to 255 characters")
-	errEmptyRuleStatus                = Errorf("Status should not be empty")
-	errInvalidRuleStatus              = Errorf("Status must be set to either Enabled or Disabled")
-	errInvalidRuleDelMarkerExpiration = Errorf("Rule with DelMarkerExpiration cannot have tags based filtering")
+	errInvalidRuleID               = Errorf("ID length is limited to 255 characters")
+	errEmptyRuleStatus             = Errorf("Status should not be empty")
+	errInvalidRuleStatus           = Errorf("Status must be set to either Enabled or Disabled")
+	errInvalidRuleDelObjExpiration = Errorf("Rule with DeletedObjectExpiration cannot have tags based filtering")
 )
 
 // validateID - checks if ID is valid or not.
@@ -160,10 +160,10 @@ func (r Rule) Validate() error {
 	if err := r.validateNoncurrentTransition(); err != nil {
 		return err
 	}
-	if (!r.Filter.Tag.IsEmpty() || len(r.Filter.And.Tags) != 0) && !r.DelMarkerExpiration.Empty() {
-		return errInvalidRuleDelMarkerExpiration
+	if (!r.Filter.Tag.IsEmpty() || len(r.Filter.And.Tags) != 0) && !r.DeletedObjectExpiration.Empty() {
+		return errInvalidRuleDelObjExpiration
 	}
-	if !r.Expiration.set && !r.Transition.set && !r.NoncurrentVersionExpiration.set && !r.NoncurrentVersionTransition.set && r.DelMarkerExpiration.Empty() {
+	if !r.Expiration.set && !r.Transition.set && !r.NoncurrentVersionExpiration.set && !r.NoncurrentVersionTransition.set && r.DeletedObjectExpiration.Empty() {
 		return errXMLNotWellFormed
 	}
 	return nil

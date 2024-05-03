@@ -385,9 +385,9 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 			}
 		}
 
-		// DelMarkerExpiration
-		if obj.IsLatest && obj.DeleteMarker && !rule.DelMarkerExpiration.Empty() {
-			if due, ok := rule.DelMarkerExpiration.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
+		// DeletedObjectExpiration
+		if obj.IsLatest && obj.DeleteMarker && !rule.DeletedObjectExpiration.Empty() {
+			if due, ok := rule.DeletedObjectExpiration.NextDue(obj); ok && (now.IsZero() || now.After(due)) {
 				events = append(events, Event{
 					Action: DelMarkerDeleteAllVersionsAction,
 					RuleID: rule.ID,
@@ -396,7 +396,7 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 			}
 			// No other conflicting actions in this rule can apply to an object with current version as DEL marker
 			// Note: There could be other rules with earlier expiration which need to be considered.
-			// See TestDelMarkerExpiration
+			// See TestDeletedObjectExpiration
 			continue
 		}
 

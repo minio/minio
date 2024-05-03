@@ -1322,7 +1322,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	case lifecycle.DeleteAllVersionsAction:
 		eventName = event.ObjectRemovedDeleteAllVersions
 	case lifecycle.DelMarkerDeleteAllVersionsAction:
-		eventName = event.ILMDelMarkerExpirationDelete
+		eventName = event.ILMDelObjExpirationDelete
 	}
 	// Notify object deleted event.
 	sendEvent(eventArgs{

@@ -69,7 +69,7 @@ func TestNameString(t *testing.T) {
 		{ObjectRemovedAll, "s3:ObjectRemoved:*"},
 		{ObjectRemovedDelete, "s3:ObjectRemoved:Delete"},
 		{ObjectRemovedDeleteAllVersions, "s3:ObjectRemoved:DeleteAllVersions"},
-		{ILMDelMarkerExpirationDelete, "s3:LifecycleDelMarkerExpiration:Delete"},
+		{ILMDelObjExpirationDelete, "s3:LifecycleDeletedObjectExpiration:Delete"},
 		{ObjectRemovedNoOP, "s3:ObjectRemoved:NoOP"},
 		{ObjectCreatedPutRetention, "s3:ObjectCreated:PutRetention"},
 		{ObjectCreatedPutLegalHold, "s3:ObjectCreated:PutLegalHold"},
@@ -221,7 +221,7 @@ func TestParseName(t *testing.T) {
 		{"s3:ObjectAccessed:*", ObjectAccessedAll, false},
 		{"s3:ObjectRemoved:Delete", ObjectRemovedDelete, false},
 		{"s3:ObjectRemoved:NoOP", ObjectRemovedNoOP, false},
-		{"s3:LifecycleDelMarkerExpiration:Delete", ILMDelMarkerExpirationDelete, false},
+		{"s3:LifecycleDeletedObjectExpiration:Delete", ILMDelObjExpirationDelete, false},
 		{"", blankName, true},
 	}
 

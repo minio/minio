@@ -22,23 +22,23 @@ import (
 	"time"
 )
 
-var errInvalidDaysDelMarkerExpiration = Errorf("Days must be a positive integer with DelMarkerExpiration")
+var errInvalidDaysDeletedObjExpiration = Errorf("Days must be a positive integer with DeletedObjectExpiration")
 
-// DelMarkerExpiration used to xml encode/decode ILM action by the same name
-type DelMarkerExpiration struct {
-	XMLName xml.Name `xml:"DelMarkerExpiration"`
+// DeletedObjectExpiration used to xml encode/decode ILM action by the same name
+type DeletedObjectExpiration struct {
+	XMLName xml.Name `xml:"DeletedObjectExpiration"`
 	Days    int      `xml:"Days,omitempty"`
 }
 
-// Empty returns if a DelMarkerExpiration XML element is empty.
-// Used to detect if lifecycle.Rule contained a DelMarkerExpiration element.
-func (de DelMarkerExpiration) Empty() bool {
+// Empty returns if a DeletedObjectExpiration XML element is empty.
+// Used to detect if lifecycle.Rule contained a DeletedObjectExpiration element.
+func (de DeletedObjectExpiration) Empty() bool {
 	return de.Days == 0
 }
 
-// UnmarshalXML decodes a single XML element into a DelMarkerExpiration value
-func (de *DelMarkerExpiration) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) error {
-	type delMarkerExpiration DelMarkerExpiration
+// UnmarshalXML decodes a single XML element into a DeletedObjectExpiration value
+func (de *DeletedObjectExpiration) UnmarshalXML(dec *xml.Decoder, start xml.StartElement) error {
+	type delMarkerExpiration DeletedObjectExpiration
 	var dexp delMarkerExpiration
 	err := dec.DecodeElement(&dexp, &start)
 	if err != nil {
@@ -46,26 +46,26 @@ func (de *DelMarkerExpiration) UnmarshalXML(dec *xml.Decoder, start xml.StartEle
 	}
 
 	if dexp.Days <= 0 {
-		return errInvalidDaysDelMarkerExpiration
+		return errInvalidDaysDeletedObjExpiration
 	}
 
-	*de = DelMarkerExpiration(dexp)
+	*de = DeletedObjectExpiration(dexp)
 	return nil
 }
 
-// MarshalXML encodes a DelMarkerExpiration value into an XML element
-func (de DelMarkerExpiration) MarshalXML(enc *xml.Encoder, start xml.StartElement) error {
+// MarshalXML encodes a DeletedObjectExpiration value into an XML element
+func (de DeletedObjectExpiration) MarshalXML(enc *xml.Encoder, start xml.StartElement) error {
 	if de.Empty() {
 		return nil
 	}
 
-	type delMarkerExpiration DelMarkerExpiration
+	type delMarkerExpiration DeletedObjectExpiration
 	return enc.EncodeElement(delMarkerExpiration(de), start)
 }
 
-// NextDue returns upcoming DelMarkerExpiration date for obj if
+// NextDue returns upcoming DeletedObjectExpiration date for obj if
 // applicable, returns false otherwise.
-func (de DelMarkerExpiration) NextDue(obj ObjectOpts) (time.Time, bool) {
+func (de DeletedObjectExpiration) NextDue(obj ObjectOpts) (time.Time, bool) {
 	if !obj.IsLatest || !obj.DeleteMarker {
 		return time.Time{}, false
 	}
