@@ -595,7 +595,7 @@ type InvalidRange struct {
 }
 
 func (e InvalidRange) Error() string {
-	return fmt.Sprintf("The requested range \"bytes %d -> %d of %d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
+	return fmt.Sprintf("The requested range 'bytes=%d-%d' is not satisfiable", e.OffsetBegin, e.OffsetEnd)
 }
 
 // ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.
@@ -758,6 +758,9 @@ func isErrMethodNotAllowed(err error) bool {
 }
 
 func isErrInvalidRange(err error) bool {
+	if errors.Is(err, errInvalidRange) {
+		return true
+	}
 	_, ok := err.(InvalidRange)
 	return ok
 }

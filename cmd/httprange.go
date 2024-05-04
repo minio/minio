@@ -60,7 +60,11 @@ func (h *HTTPRangeSpec) GetLength(resourceSize int64) (rangeLength int64, err er
 		}
 
 	case h.Start >= resourceSize:
-		return 0, errInvalidRange
+		return 0, InvalidRange{
+			OffsetBegin:  h.Start,
+			OffsetEnd:    h.End,
+			ResourceSize: resourceSize,
+		}
 
 	case h.End > -1:
 		end := h.End
