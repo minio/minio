@@ -1231,6 +1231,7 @@ type batchReplicationJobError struct {
 	Code           string
 	Description    string
 	HTTPStatusCode int
+	ObjectSize     int64
 }
 
 func (e batchReplicationJobError) Error() string {
