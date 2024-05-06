@@ -182,7 +182,7 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 	// one specified otherwise, return a 304 (not modified).
 	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
 	if ifNoneMatchETagHeader != "" {
-		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
+		if ifNoneMatchETagHeader == "*" || isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
 			writeHeaders()
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
