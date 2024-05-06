@@ -350,7 +350,7 @@ func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 			hashLogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
 			checksums = 0
 			parts = nil
-		} else {
+		} else if len(parts) > 0 {
 			checksums = len(parts) / c.Type.RawByteLen()
 		}
 		if !c.Type.Is(ChecksumIncludesMultipart) {
