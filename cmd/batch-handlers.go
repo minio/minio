@@ -1517,10 +1517,8 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	listResult := madmin.ListBatchJobsResult{}
 	for result := range resultCh {
 		if result.Err != nil {
-			// TODO: We will not receive any more results.
-			// We should probably fail here so client retries.
 			batchLogIf(ctx, result.Err)
-			continue
+			return
 		}
 		req := &BatchJobRequest{}
 		if err := req.load(ctx, objectAPI, result.Item.Name); err != nil {

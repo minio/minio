@@ -584,10 +584,10 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		versionsCount int
 		toDel         []expireObjInfo
 	)
+	failed := true
 	for result := range results {
 		if result.Err != nil {
-			// TODO: We will not receive any more results.
-			// We should fail the batch job or have it resume.
+			failed = true
 			batchLogIf(ctx, result.Err)
 			continue
 		}
@@ -665,8 +665,8 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	<-expireDoneCh // waits for the expire goroutine to complete
 	wk.Wait()      // waits for all expire workers to retire
 
-	ri.Complete = ri.ObjectsFailed == 0
-	ri.Failed = ri.ObjectsFailed > 0
+	ri.Complete = !failed && ri.ObjectsFailed == 0
+	ri.Failed = failed || ri.ObjectsFailed > 0
 	globalBatchJobsMetrics.save(job.ID, ri)
 
 	// Close the saverQuitCh - this also triggers saving in-memory state
