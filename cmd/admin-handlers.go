@@ -50,6 +50,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/handlers"
@@ -1627,6 +1628,47 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func isAllowedRWAccess(r *http.Request, cred auth.Credentials, bucketName string) (rd, wr bool) {
+	owner := cred.AccessKey == globalActiveCred.AccessKey
+
+	// Set prefix value for "s3:prefix" policy conditionals.
+	r.Header.Set("prefix", "")
+
+	// Set delimiter value for "s3:delimiter" policy conditionals.
+	r.Header.Set("delimiter", SlashSeparator)
+
+	isAllowedAccess := func(bucketName string) (rd, wr bool) {
+		if globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.GetObjectAction,
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          cred.Claims,
+		}) {
+			rd = true
+		}
+
+		if globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.PutObjectAction,
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          cred.Claims,
+		}) {
+			wr = true
+		}
+
+		return rd, wr
+	}
+	return isAllowedAccess(bucketName)
+}
+
 // ObjectSpeedTestHandler - reports maximum speed of a cluster by performing PUT and
 // GET operations on the server, supports auto tuning by default by automatically
 // increasing concurrency and stopping when we have reached the limits on the
@@ -1635,9 +1677,22 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
+	objectAPI, creds := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
+	}
+
+	if !globalAPIConfig.permitRootAccess() {
+		rd, wr := isAllowedRWAccess(r, creds, globalObjectPerfBucket)
+		if !rd || !wr {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
+				Code: "XMinioSpeedtestInsufficientPermissions",
+				Message: fmt.Sprintf("%s does not have read and write access to '%s' bucket", creds.AccessKey,
+					globalObjectPerfBucket),
+				StatusCode: http.StatusForbidden,
+			}), r.URL)
+			return
+		}
 	}
 
 	sizeStr := r.Form.Get(peerRESTSize)
@@ -1648,6 +1703,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	autotune := r.Form.Get("autotune") == "true"
 	noClear := r.Form.Get("noclear") == "true"
 	enableSha256 := r.Form.Get("enableSha256") == "true"
+	enableMultipart := r.Form.Get("enableMultipart") == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1721,6 +1777,8 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		storageClass:     storageClass,
 		bucketName:       customBucket,
 		enableSha256:     enableSha256,
+		enableMultipart:  enableMultipart,
+		creds:            creds,
 	})
 	var prevResult madmin.SpeedTestResult
 	for {

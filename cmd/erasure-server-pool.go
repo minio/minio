@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -642,6 +642,15 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 		// let's the rest shutdown
 	}
 	return nil
+}
+
+// Legacy returns 'true' if distribution algo is CRCMOD
+func (z *erasureServerPools) Legacy() (ok bool) {
+	ok = true
+	for _, set := range z.serverPools {
+		ok = ok && set.Legacy()
+	}
+	return ok
 }
 
 func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
