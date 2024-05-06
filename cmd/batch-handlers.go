@@ -1517,7 +1517,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	listResult := madmin.ListBatchJobsResult{}
 	for result := range resultCh {
 		if result.Err != nil {
-			batchLogIf(ctx, result.Err)
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, result.Err), r.URL)
 			return
 		}
 		req := &BatchJobRequest{}
