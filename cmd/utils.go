@@ -1136,3 +1136,9 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 	}
 	return nil
 }
+
+// helper type to return either item or error.
+type itemOrErr[V any] struct {
+	Item V
+	Err  error
+}
