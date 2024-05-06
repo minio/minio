@@ -472,17 +472,17 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 						stopFn(toDelCopy[i], err)
 						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
 						failed++
-						if attempts == retryAttempts { // all retry attempts failed, record failure
-							if oi, ok := oiCache.Get(toDelCopy[i]); ok {
-								ri.trackCurrentBucketObject(r.Bucket, *oi, false)
-							}
-						} else {
+						if oi, ok := oiCache.Get(toDelCopy[i]); ok {
+							ri.trackCurrentBucketObject(r.Bucket, *oi, false, attempts)
+						}
+						if attempts != retryAttempts {
+							// retry
 							toDel = append(toDel, toDelCopy[i])
 						}
 					} else {
 						stopFn(toDelCopy[i], nil)
 						if oi, ok := oiCache.Get(toDelCopy[i]); ok {
-							ri.trackCurrentBucketObject(r.Bucket, *oi, true)
+							ri.trackCurrentBucketObject(r.Bucket, *oi, true, attempts)
 						}
 					}
 				}
@@ -586,6 +586,8 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	)
 	for result := range results {
 		if result.Err != nil {
+			// TODO: We will not receive any more results.
+			// We should fail the batch job or have it resume.
 			batchLogIf(ctx, result.Err)
 			continue
 		}

@@ -447,7 +447,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 				} else {
 					stopFn(oi, nil)
 				}
-				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success)
+				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success, attempts)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
@@ -690,6 +690,7 @@ type batchJobInfo struct {
 	StartTime     time.Time `json:"startTime" msg:"st"`
 	LastUpdate    time.Time `json:"lastUpdate" msg:"lu"`
 	RetryAttempts int       `json:"retryAttempts" msg:"ra"`
+	Attempts      int       `json:"attempts" msg:"at"`
 
 	Complete bool `json:"complete" msg:"cmp"`
 	Failed   bool `json:"failed" msg:"fld"`
@@ -833,13 +834,15 @@ func (ri *batchJobInfo) clone() *batchJobInfo {
 		ObjectsFailed:    ri.ObjectsFailed,
 		BytesTransferred: ri.BytesTransferred,
 		BytesFailed:      ri.BytesFailed,
+		Attempts:         ri.Attempts,
 	}
 }
 
-func (ri *batchJobInfo) countItem(size int64, dmarker, success bool) {
+func (ri *batchJobInfo) countItem(size int64, dmarker, success bool, attempt int) {
 	if ri == nil {
 		return
 	}
+	ri.Attempts++
 	if success {
 		if dmarker {
 			ri.DeleteMarkers++
@@ -847,7 +850,19 @@ func (ri *batchJobInfo) countItem(size int64, dmarker, success bool) {
 			ri.Objects++
 			ri.BytesTransferred += size
 		}
+		if attempt > 1 {
+			if dmarker {
+				ri.DeleteMarkersFailed--
+			} else {
+				ri.ObjectsFailed--
+				ri.BytesFailed += size
+			}
+		}
 	} else {
+		if attempt > 1 {
+			// Only count first attempt
+			return
+		}
 		if dmarker {
 			ri.DeleteMarkersFailed++
 		} else {
@@ -921,7 +936,7 @@ func (ri *batchJobInfo) trackMultipleObjectVersions(bucket string, info ObjectIn
 	}
 }
 
-func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, success bool) {
+func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, success bool, attempt int) {
 	if ri == nil {
 		return
 	}
@@ -931,7 +946,7 @@ func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo,
 
 	ri.Bucket = bucket
 	ri.Object = info.Name
-	ri.countItem(info.Size, info.DeleteMarker, success)
+	ri.countItem(info.Size, info.DeleteMarker, success, attempt)
 }
 
 func (ri *batchJobInfo) trackCurrentBucketBatch(bucket string, batch []ObjectInfo) {
@@ -945,7 +960,7 @@ func (ri *batchJobInfo) trackCurrentBucketBatch(bucket string, batch []ObjectInf
 	ri.Bucket = bucket
 	for i := range batch {
 		ri.Object = batch[i].Name
-		ri.countItem(batch[i].Size, batch[i].DeleteMarker, true)
+		ri.countItem(batch[i].Size, batch[i].DeleteMarker, true, 1)
 	}
 }
 
@@ -1155,6 +1170,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		skipReplicate := false
 		for res := range slowCh {
 			if res.Err != nil {
+				ri.Failed = true
 				batchLogIf(ctx, res.Err)
 				continue
 			}
@@ -1187,7 +1203,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				} else {
 					stopFn(result, nil)
 				}
-				ri.trackCurrentBucketObject(r.Source.Bucket, result, success)
+				ri.trackCurrentBucketObject(r.Source.Bucket, result, success, attempts)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
@@ -1501,6 +1517,8 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	listResult := madmin.ListBatchJobsResult{}
 	for result := range resultCh {
 		if result.Err != nil {
+			// TODO: We will not receive any more results.
+			// We should probably fail here so client retries.
 			batchLogIf(ctx, result.Err)
 			continue
 		}
@@ -1718,6 +1736,10 @@ func (j *BatchJobPool) resume() {
 		return
 	}
 	for result := range results {
+		if result.Err != nil {
+			batchLogIf(j.ctx, result.Err)
+			continue
+		}
 		// ignore batch-replicate.bin and batch-rotate.bin entries
 		if strings.HasSuffix(result.Item.Name, slashSeparator) {
 			continue

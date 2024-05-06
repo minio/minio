@@ -2869,8 +2869,9 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	}
 	for res := range objInfoCh {
 		if res.Err != nil {
+			resyncStatus = ResyncFailed
 			replLogIf(ctx, res.Err)
-			continue
+			return
 		}
 		select {
 		case <-s.resyncCancelCh:
@@ -3159,6 +3160,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 		for res := range objInfoCh {
 			if res.Err != nil {
 				diffCh <- madmin.DiffInfo{Err: res.Err}
+				return
 			}
 			if contextCanceled(ctx) {
 				// Just consume input...
