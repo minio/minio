@@ -347,10 +347,16 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 		}
 		delete(checkHeader, formCanonicalName)
 	}
-	// For SignV2 - Signature field will be ignored
-	// Policy is generated from Signature with other fields, so it should be ignored
+	// For SignV2 - Signature/AWSAccessKeyId field will be ignored.
 	if _, ok := formValues[xhttp.AmzSignatureV2]; ok {
 		delete(checkHeader, xhttp.AmzSignatureV2)
+		for k := range checkHeader {
+			// case-insensitivity for AWSAccessKeyId
+			if strings.EqualFold(k, xhttp.AmzAccessKeyID) {
+				delete(checkHeader, k)
+				break
+			}
+		}
 	}
 
 	if len(checkHeader) != 0 {
