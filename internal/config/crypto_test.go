@@ -53,7 +53,7 @@ func TestEncryptDecrypt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to decode master key: %v", err)
 	}
-	KMS, err := kms.New("my-key", key)
+	KMS, err := kms.NewBuiltin("my-key", key)
 	if err != nil {
 		t.Fatalf("Failed to create KMS: %v", err)
 	}
@@ -88,7 +88,7 @@ func BenchmarkEncrypt(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to decode master key: %v", err)
 	}
-	KMS, err := kms.New("my-key", key)
+	KMS, err := kms.NewBuiltin("my-key", key)
 	if err != nil {
 		b.Fatalf("Failed to create KMS: %v", err)
 	}

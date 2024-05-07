@@ -3970,7 +3970,7 @@ func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				Help:      "Number of KMS requests that succeeded",
 				Type:      counterMetric,
 			},
-			Value: float64(metric.RequestOK),
+			Value: float64(metric.ReqOK),
 		})
 		metrics = append(metrics, MetricV2{
 			Description: MetricDescription{
@@ -3980,7 +3980,7 @@ func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				Help:      "Number of KMS requests that failed due to some error. (HTTP 4xx status code)",
 				Type:      counterMetric,
 			},
-			Value: float64(metric.RequestErr),
+			Value: float64(metric.ReqErr),
 		})
 		metrics = append(metrics, MetricV2{
 			Description: MetricDescription{
@@ -3990,19 +3990,8 @@ func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				Help:      "Number of KMS requests that failed due to some internal failure. (HTTP 5xx status code)",
 				Type:      counterMetric,
 			},
-			Value: float64(metric.RequestFail),
+			Value: float64(metric.ReqFail),
 		})
-		metrics = append(metrics, MetricV2{
-			Description: MetricDescription{
-				Namespace: clusterMetricNamespace,
-				Subsystem: kmsSubsystem,
-				Name:      kmsUptime,
-				Help:      "The time the KMS has been up and running in seconds.",
-				Type:      counterMetric,
-			},
-			Value: metric.UpTime.Seconds(),
-		})
-
 		return metrics
 	})
 	return mg
