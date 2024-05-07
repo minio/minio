@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio/minio/internal/amztime"
@@ -325,6 +326,9 @@ func canonicalizeETag(etag string) string {
 // isETagEqual return true if the canonical representations of two ETag strings
 // are equal, false otherwise
 func isETagEqual(left, right string) bool {
+	if strings.TrimSpace(right) == "*" {
+		return true
+	}
 	return canonicalizeETag(left) == canonicalizeETag(right)
 }
 
