@@ -139,6 +139,9 @@ func minioConfigToConsoleFeatures() {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
 	}
+	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
+		os.Setenv("CONSOLE_BROWSER_REDIRECT_URL", value)
+	}
 	// pass the console subpath configuration
 	if globalBrowserRedirectURL != nil {
 		subPath := path.Clean(pathJoin(strings.TrimSpace(globalBrowserRedirectURL.Path), SlashSeparator))
