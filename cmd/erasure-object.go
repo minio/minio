@@ -1808,6 +1808,14 @@ func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object
 
 func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {
 	disks := er.getDisks()
+	// Assume (N/2 + 1) quorum for Delete()
+	// this is a theoretical assumption such that
+	// for delete's we do not need to honor storage
+	// class for objects that have reduced quorum
+	// due to storage class - this only needs to be honored
+	// for Read() requests alone that we already do.
+	writeQuorum := len(disks)/2 + 1
+
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
 		index := index
@@ -1821,12 +1829,9 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 			})
 		}, index)
 	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+
+	// return errors if any during deletion
+	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
 // DeleteObject - deletes an object, this call doesn't necessary reply
