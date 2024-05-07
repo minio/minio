@@ -1478,7 +1478,7 @@ var errorCodes = errorCodeMap{
 	ErrTooManyRequests: {
 		Code:           "TooManyRequests",
 		Description:    "Deadline exceeded while waiting in incoming queue, please reduce your request rate",
-		HTTPStatusCode: http.StatusServiceUnavailable,
+		HTTPStatusCode: http.StatusTooManyRequests,
 	},
 	ErrUnsupportedMetadata: {
 		Code:           "InvalidArgument",
