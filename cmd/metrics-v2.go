@@ -294,6 +294,8 @@ const (
 	kmsRequestsError   = "request_error"
 	kmsRequestsFail    = "request_failure"
 	kmsUptime          = "uptime"
+
+	webhookOnline = "online"
 )
 
 const (

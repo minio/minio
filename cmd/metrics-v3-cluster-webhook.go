@@ -24,7 +24,6 @@ import (
 )
 
 const (
-	webhookOnline         = "online"
 	webhookQueueLength    = "queue_length"
 	webhookTotalMessages  = "total_messages"
 	webhookFailedMessages = "failed_messages"
@@ -33,10 +32,7 @@ const (
 )
 
 var (
-	allWebhookLabels = []string{nameL, endpointL}
-	webhookOnlineMD  = NewGaugeMD(webhookOnline,
-		"Is the webhook online?",
-		allWebhookLabels...)
+	allWebhookLabels        = []string{nameL, endpointL}
 	webhookFailedMessagesMD = NewCounterMD(webhookFailedMessages,
 		"Number of messages that failed to send",
 		allWebhookLabels...)
@@ -48,17 +44,12 @@ var (
 		allWebhookLabels...)
 )
 
-// loadClusterWebhookMetrics - `MetricsLoaderFn` for cluster webhook
+// loadLoggerWebhookMetrics - `MetricsLoaderFn` for logger webhook
 // such as failed messages and total messages.
-func loadClusterWebhookMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
+func loadLoggerWebhookMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
 	tgts := append(logger.SystemTargets(), logger.AuditTargets()...)
 	for _, t := range tgts {
-		isOnline := 0
-		if t.IsOnline(ctx) {
-			isOnline = 1
-		}
 		labels := []string{nameL, t.String(), endpointL, t.Endpoint()}
-		m.Set(webhookOnline, float64(isOnline), labels...)
 		m.Set(webhookFailedMessages, float64(t.Stats().FailedMessages), labels...)
 		m.Set(webhookQueueLength, float64(t.Stats().QueueLength), labels...)
 		m.Set(webhookTotalMessages, float64(t.Stats().TotalMessages), labels...)

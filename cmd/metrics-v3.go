@@ -50,9 +50,9 @@ const (
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
-	clusterWebhookCollectorPath      collectorPath = "/cluster/webhook"
 
-	auditCollectorPath collectorPath = "/audit"
+	auditCollectorPath         collectorPath = "/audit"
+	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
 )
 
 const (
@@ -292,14 +292,13 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterIAMMetrics,
 	)
 
-	clusterWebhookMG := NewMetricsGroup(clusterWebhookCollectorPath,
+	clusterWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
 			webhookFailedMessagesMD,
-			webhookOnlineMD,
 			webhookQueueLengthMD,
 			webhookTotalMessagesMD,
 		},
-		loadClusterWebhookMetrics,
+		loadLoggerWebhookMetrics,
 	)
 
 	auditMG := NewMetricsGroup(auditCollectorPath,
