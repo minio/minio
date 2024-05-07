@@ -242,3 +242,16 @@ hmac-sha1
 hmac-sha1-96
 ```
 
+### Certificate-based authentication
+
+`--sftp=trusted-user-ca-key=...` specifies a file containing public key of certificate authority that is trusted
+to sign user certificates for authentication.
+
+Implementation is identical with "TrustedUserCAKeys" setting in OpenSSH server with exception that only one CA
+key can be defined.
+
+If a certificate is presented for authentication and has its signing CA key is in this file, then it may be
+used for authentication for any user listed in the certificate's principals list. 
+
+Note that certificates that lack a list of principals will not be permitted for authentication using trusted-user-ca-key.
+For more details on certificates, see the CERTIFICATES section in ssh-keygen(1).
