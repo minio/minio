@@ -18,6 +18,7 @@
 package cachevalue
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,11 +30,6 @@ type Opts struct {
 	// even if updating the value errors out.
 	// Returns the last good value AND the error.
 	ReturnLastGood bool
-
-	// If CacheError is set, errors will be cached as well
-	// and not continuously try to update.
-	// Should not be combined with ReturnLastGood.
-	CacheError bool
 
 	// If NoWait is set, Get() will return the last good value,
 	// if TTL has expired but 2x TTL has not yet passed,
@@ -50,7 +46,7 @@ type Cache[T any] struct {
 	// Only one caller will call this function at any time, others will be blocking.
 	// The returned value can no longer be modified once returned.
 	// Should be set before calling Get().
-	updateFn func() (T, error)
+	updateFn func(ctx context.Context) (T, error)
 
 	// ttl for a cached value.
 	ttl time.Duration
@@ -62,10 +58,7 @@ type Cache[T any] struct {
 	Once sync.Once
 
 	// Managed values.
-	valErr atomic.Pointer[struct {
-		v T
-		e error
-	}]
+	val          atomic.Pointer[T]
 	lastUpdateMs atomic.Int64
 	updating     sync.Mutex
 }
@@ -78,7 +71,7 @@ func New[T any]() *Cache[T] {
 
 // NewFromFunc allocates a new cached value instance and initializes it with an
 // update function, making it ready for use.
-func NewFromFunc[T any](ttl time.Duration, opts Opts, update func() (T, error)) *Cache[T] {
+func NewFromFunc[T any](ttl time.Duration, opts Opts, update func(ctx context.Context) (T, error)) *Cache[T] {
 	return &Cache[T]{
 		ttl:      ttl,
 		updateFn: update,
@@ -88,7 +81,7 @@ func NewFromFunc[T any](ttl time.Duration, opts Opts, update func() (T, error)) 
 
 // InitOnce initializes the cache with a TTL and an update function. It is
 // guaranteed to be called only once.
-func (t *Cache[T]) InitOnce(ttl time.Duration, opts Opts, update func() (T, error)) {
+func (t *Cache[T]) InitOnce(ttl time.Duration, opts Opts, update func(ctx context.Context) (T, error)) {
 	t.Once.Do(func() {
 		t.ttl = ttl
 		t.updateFn = update
@@ -96,61 +89,68 @@ func (t *Cache[T]) InitOnce(ttl time.Duration, opts Opts, update func() (T, erro
 	})
 }
 
-// Get will return a cached value or fetch a new one.
+// GetWithCtx will return a cached value or fetch a new one.
+// passes a caller context, if caller context cancels nothing
+// is cached.
 // Tf the Update function returns an error the value is forwarded as is and not cached.
-func (t *Cache[T]) Get() (T, error) {
-	v := t.valErr.Load()
+func (t *Cache[T]) GetWithCtx(ctx context.Context) (T, error) {
+	v := t.val.Load()
 	ttl := t.ttl
 	vTime := t.lastUpdateMs.Load()
 	tNow := time.Now().UnixMilli()
 	if v != nil && tNow-vTime < ttl.Milliseconds() {
-		if v.e == nil {
-			return v.v, nil
-		}
-		if v.e != nil && t.opts.CacheError || t.opts.ReturnLastGood {
-			return v.v, v.e
-		}
+		return *v, nil
 	}
 
-	// Fetch new value.
-	if t.opts.NoWait && v != nil && tNow-vTime < ttl.Milliseconds()*2 && (v.e == nil || t.opts.CacheError) {
+	// Fetch new value asynchronously, while we do not return an error
+	// if v != nil value or
+	if t.opts.NoWait && v != nil && tNow-vTime < ttl.Milliseconds()*2 {
 		if t.updating.TryLock() {
 			go func() {
 				defer t.updating.Unlock()
-				t.update()
+				t.update(context.Background())
 			}()
 		}
-		return v.v, v.e
+		return *v, nil
 	}
 
 	// Get lock. Either we get it or we wait for it.
 	t.updating.Lock()
+	defer t.updating.Unlock()
+
 	if time.Since(time.UnixMilli(t.lastUpdateMs.Load())) < ttl {
 		// There is a new value, release lock and return it.
-		v = t.valErr.Load()
-		t.updating.Unlock()
-		return v.v, v.e
-	}
-	t.update()
-	v = t.valErr.Load()
-	t.updating.Unlock()
-	return v.v, v.e
-}
-
-func (t *Cache[T]) update() {
-	val, err := t.updateFn()
-	if err != nil {
-		if t.opts.ReturnLastGood {
-			// Keep last good value.
-			v := t.valErr.Load()
-			if v != nil {
-				val = v.v
-			}
+		if v = t.val.Load(); v != nil {
+			return *v, nil
 		}
 	}
-	t.valErr.Store(&struct {
-		v T
-		e error
-	}{v: val, e: err})
+
+	if err := t.update(ctx); err != nil {
+		var empty T
+		return empty, err
+	}
+
+	return *t.val.Load(), nil
+}
+
+// Get will return a cached value or fetch a new one.
+// Tf the Update function returns an error the value is forwarded as is and not cached.
+func (t *Cache[T]) Get() (T, error) {
+	return t.GetWithCtx(context.Background())
+}
+
+func (t *Cache[T]) update(ctx context.Context) error {
+	val, err := t.updateFn(ctx)
+	if err != nil {
+		if t.opts.ReturnLastGood && t.val.Load() != nil {
+			// Keep last good value, so update
+			// does not return an error.
+			return nil
+		}
+		return err
+	}
+
+	t.val.Store(&val)
 	t.lastUpdateMs.Store(time.Now().UnixMilli())
+	return nil
 }

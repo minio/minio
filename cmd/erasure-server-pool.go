@@ -1962,8 +1962,8 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 	if opts.Cached {
 		listBucketsCache.InitOnce(time.Second,
 			cachevalue.Opts{ReturnLastGood: true, NoWait: true},
-			func() ([]BucketInfo, error) {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			func(ctx context.Context) ([]BucketInfo, error) {
+				ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
 				buckets, err = z.s3Peer.ListBuckets(ctx, opts)
@@ -1980,7 +1980,7 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 			},
 		)
 
-		return listBucketsCache.Get()
+		return listBucketsCache.GetWithCtx(ctx)
 	}
 
 	buckets, err = z.s3Peer.ListBuckets(ctx, opts)
