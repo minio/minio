@@ -1231,7 +1231,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	if opts.WantChecksum != nil {
-		err := opts.WantChecksum.Matches(checksumCombined)
+		err := opts.WantChecksum.Matches(checksumCombined, len(parts))
 		if err != nil {
 			return oi, err
 		}
