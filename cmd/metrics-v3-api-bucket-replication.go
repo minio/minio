@@ -93,7 +93,7 @@ var (
 		"Total number of bytes replicated to the target",
 		bucketL)
 	bucketReplSentCountMD = NewCounterMD(bucketReplSentCount,
-		"Total number of bytes replicated to this bucket from another source bucket",
+		"Total number of objects replicated to the target",
 		bucketL)
 	bucketReplTotalFailedBytesMD = NewCounterMD(bucketReplTotalFailedBytes,
 		"Total number of bytes failed at least once to replicate since server start",
