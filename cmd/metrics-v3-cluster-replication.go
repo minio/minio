@@ -34,7 +34,6 @@ const (
 	replicationMaxQueuedBytes        = "max_queued_bytes"
 	replicationMaxQueuedCount        = "max_queued_count"
 	replicationMaxTransferRate       = "max_transfer_rate"
-	replicationRecentBacklogCount    = "recent_backlog_count"
 )
 
 var (
@@ -62,8 +61,6 @@ var (
 		"Maximum number of objects queued for replication since server start")
 	replicationMaxTransferRateMD = NewGaugeMD(replicationMaxTransferRate,
 		"Maximum replication transfer rate in bytes/sec seen since server start")
-	replicationRecentBacklogCountMD = NewGaugeMD(replicationRecentBacklogCount,
-		"Total number of objects seen in replication backlog in the last 5 minutes")
 )
 
 // loadClusterReplicationMetrics - `MetricsLoaderFn` for cluster replication metrics
@@ -87,8 +84,6 @@ func loadClusterReplicationMetrics(ctx context.Context, m MetricValues, c *metri
 	m.Set(replicationAverageActiveWorkers, float64(qa.Avg))
 	m.Set(replicationCurrentActiveWorkers, float64(qa.Curr))
 	m.Set(replicationMaxActiveWorkers, float64(qa.Max))
-
-	m.Set(replicationRecentBacklogCount, float64(qs.MRFStats.LastFailedCount))
 
 	if len(qs.XferStats) > 0 {
 		tots := qs.XferStats[Total]
