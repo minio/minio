@@ -1497,7 +1497,13 @@ func TestHealObjectErasure(t *testing.T) {
 	er.getDisks = func() []StorageAPI {
 		// Nil more than half the disks, to remove write quorum.
 		for i := 0; i <= len(erasureDisks)/2; i++ {
-			erasureDisks[i] = nil
+			err := erasureDisks[i].Delete(context.Background(), bucket, object, DeleteOptions{
+				Recursive: true,
+				Immediate: false,
+			})
+			if err != nil {
+				t.Fatalf("Failed to delete a file - %v", err)
+			}
 		}
 		return erasureDisks
 	}
