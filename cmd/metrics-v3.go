@@ -53,7 +53,8 @@ const (
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
-	clusterReplicationCollectorPath  collectorPath = "/cluster/replication"
+
+	clusterReplicationCollectorPath collectorPath = "/replication"
 
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
@@ -329,15 +330,15 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			replicationAverageActiveWorkersMD,
 			replicationAverageQueuedBytesMD,
 			replicationAverageQueuedCountMD,
-			replicationAverageTransferRateMD,
+			replicationAverageDataTransferRateMD,
 			replicationCurrentActiveWorkersMD,
-			replicationCurrentTransferRateMD,
+			replicationCurrentDataTransferRateMD,
 			replicationLastMinuteQueuedBytesMD,
 			replicationLastMinuteQueuedCountMD,
 			replicationMaxActiveWorkersMD,
 			replicationMaxQueuedBytesMD,
 			replicationMaxQueuedCountMD,
-			replicationMaxTransferRateMD,
+			replicationMaxDataTransferRateMD,
 		},
 		loadClusterReplicationMetrics,
 	)

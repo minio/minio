@@ -22,18 +22,18 @@ import (
 )
 
 const (
-	replicationAverageActiveWorkers  = "average_active_workers"
-	replicationAverageQueuedBytes    = "average_queued_bytes"
-	replicationAverageQueuedCount    = "average_queued_count"
-	replicationAverageTransferRate   = "average_transfer_rate"
-	replicationCurrentActiveWorkers  = "current_active_workers"
-	replicationCurrentTransferRate   = "current_transfer_rate"
-	replicationLastMinuteQueuedBytes = "last_minute_queued_bytes"
-	replicationLastMinuteQueuedCount = "last_minute_queued_count"
-	replicationMaxActiveWorkers      = "max_active_workers"
-	replicationMaxQueuedBytes        = "max_queued_bytes"
-	replicationMaxQueuedCount        = "max_queued_count"
-	replicationMaxTransferRate       = "max_transfer_rate"
+	replicationAverageActiveWorkers    = "average_active_workers"
+	replicationAverageQueuedBytes      = "average_queued_bytes"
+	replicationAverageQueuedCount      = "average_queued_count"
+	replicationAverageDataTransferRate = "average_data_transfer_rate"
+	replicationCurrentActiveWorkers    = "current_active_workers"
+	replicationCurrentDataTransferRate = "current_data_transfer_rate"
+	replicationLastMinuteQueuedBytes   = "last_minute_queued_bytes"
+	replicationLastMinuteQueuedCount   = "last_minute_queued_count"
+	replicationMaxActiveWorkers        = "max_active_workers"
+	replicationMaxQueuedBytes          = "max_queued_bytes"
+	replicationMaxQueuedCount          = "max_queued_count"
+	replicationMaxDataTransferRate     = "max_data_transfer_rate"
 )
 
 var (
@@ -43,12 +43,12 @@ var (
 		"Average number of bytes queued for replication since server start")
 	replicationAverageQueuedCountMD = NewGaugeMD(replicationAverageQueuedCount,
 		"Average number of objects queued for replication since server start")
-	replicationAverageTransferRateMD = NewGaugeMD(replicationAverageTransferRate,
-		"Average replication transfer rate in bytes/sec")
+	replicationAverageDataTransferRateMD = NewGaugeMD(replicationAverageDataTransferRate,
+		"Average replication data transfer rate in bytes/sec")
 	replicationCurrentActiveWorkersMD = NewGaugeMD(replicationCurrentActiveWorkers,
 		"Total number of active replication workers")
-	replicationCurrentTransferRateMD = NewGaugeMD(replicationCurrentTransferRate,
-		"Current replication transfer rate in bytes/sec")
+	replicationCurrentDataTransferRateMD = NewGaugeMD(replicationCurrentDataTransferRate,
+		"Current replication data transfer rate in bytes/sec")
 	replicationLastMinuteQueuedBytesMD = NewGaugeMD(replicationLastMinuteQueuedBytes,
 		"Number of bytes queued for replication in the last full minute")
 	replicationLastMinuteQueuedCountMD = NewGaugeMD(replicationLastMinuteQueuedCount,
@@ -59,8 +59,8 @@ var (
 		"Maximum number of bytes queued for replication since server start")
 	replicationMaxQueuedCountMD = NewGaugeMD(replicationMaxQueuedCount,
 		"Maximum number of objects queued for replication since server start")
-	replicationMaxTransferRateMD = NewGaugeMD(replicationMaxTransferRate,
-		"Maximum replication transfer rate in bytes/sec seen since server start")
+	replicationMaxDataTransferRateMD = NewGaugeMD(replicationMaxDataTransferRate,
+		"Maximum replication data transfer rate in bytes/sec seen since server start")
 )
 
 // loadClusterReplicationMetrics - `MetricsLoaderFn` for cluster replication metrics
@@ -87,9 +87,9 @@ func loadClusterReplicationMetrics(ctx context.Context, m MetricValues, c *metri
 
 	if len(qs.XferStats) > 0 {
 		tots := qs.XferStats[Total]
-		m.Set(replicationAverageTransferRate, tots.Avg)
-		m.Set(replicationCurrentTransferRate, tots.Curr)
-		m.Set(replicationMaxTransferRate, tots.Peak)
+		m.Set(replicationAverageDataTransferRate, tots.Avg)
+		m.Set(replicationCurrentDataTransferRate, tots.Curr)
+		m.Set(replicationMaxDataTransferRate, tots.Peak)
 	}
 
 	return nil
