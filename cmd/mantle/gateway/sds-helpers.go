@@ -22,8 +22,8 @@ var (
 
 func init() {
 	path := "./cmd/mantle/configMantle/config-mantle.json"
-	if env := os.Getenv(SDS_CONFIG_PATH); env != "" {
-		path = env
+	if p := os.Getenv(SDS_CONFIG_PATH); p != "" {
+		path = p
 	}
 
 	f, err := os.Open(path)
