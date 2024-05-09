@@ -736,35 +736,16 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 				bestIdx = otherIdx
 				continue
 			}
+			// We should make sure to avoid objects and directories
+			// of this fashion such as
+			//  - foo-1
+			//  - foo-1/
+			// we should avoid this situation by making sure that
+			// we compare the `foo-1/` after path.Clean() to
+			// de-dup the entries.
 			if path.Clean(best.name) == path.Clean(other.name) {
-				// We may be in a situation where we have a directory and an object with the same name.
-				// In that case we will drop the directory entry.
-				// This should however not be confused with an object with a trailing slash.
-				dirMatches := best.isDir() == other.isDir()
-				suffixMatches := strings.HasSuffix(best.name, slashSeparator) == strings.HasSuffix(other.name, slashSeparator)
-
-				// Simple case. Both are same type with same suffix.
-				if dirMatches && suffixMatches {
-					toMerge = append(toMerge, otherIdx)
-					continue
-				}
-
-				if !dirMatches && !suffixMatches {
-					// We have an object `name` and a directory `name/`.
-					if other.isDir() {
-						// Discard the directory.
-						if err := selectFrom(otherIdx); err != nil {
-							return err
-						}
-						continue
-					}
-					// Replace directory with object.
-					toMerge = toMerge[:0]
-					best = other
-					bestIdx = otherIdx
-					continue
-				}
-				// Return as separate entries.
+				toMerge = append(toMerge, otherIdx)
+				continue
 			}
 			if best.name > other.name {
 				toMerge = toMerge[:0]
