@@ -455,8 +455,8 @@ type healSequence struct {
 	// Number of total items healed against item type
 	healedItemsMap map[madmin.HealItemType]int64
 
-	// Number of total items where healing failed against endpoint and drive state
-	healFailedItemsMap map[string]int64
+	// Number of total items where healing failed against item type
+	healFailedItemsMap map[madmin.HealItemType]int64
 
 	// The time of the last scan/heal activity
 	lastHealActivity time.Time
@@ -497,7 +497,7 @@ func newHealSequence(ctx context.Context, bucket, objPrefix, clientAddr string,
 		ctx:                   ctx,
 		scannedItemsMap:       make(map[madmin.HealItemType]int64),
 		healedItemsMap:        make(map[madmin.HealItemType]int64),
-		healFailedItemsMap:    make(map[string]int64),
+		healFailedItemsMap:    make(map[madmin.HealItemType]int64),
 	}
 }
 
@@ -543,12 +543,12 @@ func (h *healSequence) getHealedItemsMap() map[madmin.HealItemType]int64 {
 
 // getHealFailedItemsMap - returns map of all items where heal failed against
 // drive endpoint and status
-func (h *healSequence) getHealFailedItemsMap() map[string]int64 {
+func (h *healSequence) getHealFailedItemsMap() map[madmin.HealItemType]int64 {
 	h.mutex.RLock()
 	defer h.mutex.RUnlock()
 
 	// Make a copy before returning the value
-	retMap := make(map[string]int64, len(h.healFailedItemsMap))
+	retMap := make(map[madmin.HealItemType]int64, len(h.healFailedItemsMap))
 	for k, v := range h.healFailedItemsMap {
 		retMap[k] = v
 	}
@@ -556,29 +556,27 @@ func (h *healSequence) getHealFailedItemsMap() map[string]int64 {
 	return retMap
 }
 
-func (h *healSequence) countFailed(res madmin.HealResultItem) {
+func (h *healSequence) countFailed(healType madmin.HealItemType) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	for _, d := range res.After.Drives {
-		// For failed items we report the endpoint and drive state
-		// This will help users take corrective actions for drives
-		h.healFailedItemsMap[d.Endpoint+","+d.State]++
-	}
-
+	h.healFailedItemsMap[healType]++
 	h.lastHealActivity = UTCNow()
 }
 
-func (h *healSequence) countHeals(healType madmin.HealItemType, healed bool) {
+func (h *healSequence) countScanned(healType madmin.HealItemType) {
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 
-	if !healed {
-		h.scannedItemsMap[healType]++
-	} else {
-		h.healedItemsMap[healType]++
-	}
+	h.scannedItemsMap[healType]++
+	h.lastHealActivity = UTCNow()
+}
 
+func (h *healSequence) countHealed(healType madmin.HealItemType) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	h.healedItemsMap[healType]++
 	h.lastHealActivity = UTCNow()
 }
 
@@ -734,7 +732,7 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		task.opts.ScanMode = madmin.HealNormalScan
 	}
 
-	h.countHeals(healType, false)
+	h.countScanned(healType)
 
 	if source.noWait {
 		select {
@@ -766,6 +764,11 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 	// task queued, now wait for the response.
 	select {
 	case res := <-task.respCh:
+		if res.err == nil {
+			h.countHealed(healType)
+		} else {
+			h.countFailed(healType)
+		}
 		if !h.reportProgress {
 			if errors.Is(res.err, errSkipFile) { // this is only sent usually by nopHeal
 				return nil
