@@ -361,7 +361,7 @@ type MetricsGroupOpts struct {
 func (g *MetricsGroupV2) RegisterRead(read func(context.Context) []MetricV2) {
 	g.metricsCache = cachevalue.NewFromFunc(g.cacheInterval,
 		cachevalue.Opts{ReturnLastGood: true},
-		func() ([]MetricV2, error) {
+		func(ctx context.Context) ([]MetricV2, error) {
 			if g.metricsGroupOpts.dependGlobalObjectAPI {
 				objLayer := newObjectLayerFn()
 				// Service not initialized yet

@@ -191,8 +191,13 @@ func (client *storageRESTClient) String() string {
 	return client.endpoint.String()
 }
 
-// IsOnline - returns whether RPC client failed to connect or not.
+// IsOnline - returns whether client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
+	return client.restClient.IsOnline() || client.IsOnlineWS()
+}
+
+// IsOnlineWS - returns whether websocket client failed to connect or not.
+func (client *storageRESTClient) IsOnlineWS() bool {
 	return client.gridConn.State() == grid.StateConnected
 }
 
@@ -254,7 +259,7 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
-	if !client.IsOnline() {
+	if !client.IsOnlineWS() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
 		// were attempted. This can lead to false success under certain conditions
@@ -275,7 +280,7 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOptions) (info DiskInfo, err error) {
-	if !client.IsOnline() {
+	if !client.IsOnlineWS() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
 		// were attempted. This can lead to false success under certain conditions
@@ -302,10 +307,9 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		return info, nil
 	} // In all other cases cache the value upto 1sec.
 
-	client.diskInfoCache.InitOnce(time.Second,
-		cachevalue.Opts{CacheError: true},
-		func() (info DiskInfo, err error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	client.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
+		func(ctx context.Context) (info DiskInfo, err error) {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
 			nopts := DiskInfoOptions{DiskID: *client.diskID.Load(), Metrics: true}
@@ -321,7 +325,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		},
 	)
 
-	return client.diskInfoCache.Get()
+	return client.diskInfoCache.GetWithCtx(ctx)
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.

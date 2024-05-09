@@ -867,7 +867,7 @@ func (c *Connection) updateState(s State) {
 		return
 	}
 	if s == StateConnected {
-		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
 	}
 	atomic.StoreUint32((*uint32)(&c.state), uint32(s))
 	if debugPrint {
