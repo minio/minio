@@ -15,34 +15,57 @@ minio server --config config.yaml
 Lets you start MinIO server with all inputs to start MinIO server provided via this configuration file, once the configuration file is provided all other pre-existing values on disk for configuration are overridden by the new values set in this configuration file.
 
 Following is an example YAML configuration structure.
-```
-version: v1
-address: ':9000'
-rootUser: 'minioadmin'
-rootPassword: 'pBU94AGAY85e'
-console-address: ':9001'
-certs-dir: '/home/user/.minio/certs/'
+```yaml
+version: v2
+address: ":9000"
+rootUser: "minioadmin"
+rootPassword: "minioadmin"
+console-address: ":9001"
+certs-dir: "/home/user/.minio/certs/"
 pools: # Specify the nodes and drives with pools
-  -
-	- 'https://server-example-pool1:9000/mnt/disk{1...4}/'
-	- 'https://server{1...2}-pool1:9000/mnt/disk{1...4}/'
-	- 'https://server3-pool1:9000/mnt/disk{1...4}/'
-	- 'https://server4-pool1:9000/mnt/disk{1...4}/'
-  -
-	- 'https://server-example-pool2:9000/mnt/disk{1...4}/'
-	- 'https://server{1...2}-pool2:9000/mnt/disk{1...4}/'
-	- 'https://server3-pool2:9000/mnt/disk{1...4}/'
-	- 'https://server4-pool2:9000/mnt/disk{1...4}/'
-
-...
+  - args:
+      - "https://server-example-pool1:9000/mnt/disk{1...4}/"
+      - "https://server{1...2}-pool1:9000/mnt/disk{1...4}/"
+      - "https://server3-pool1:9000/mnt/disk{1...4}/"
+      - "https://server4-pool1:9000/mnt/disk{1...4}/"
+  - args:
+      - "https://server-example-pool2:9000/mnt/disk{1...4}/"
+      - "https://server{1...2}-pool2:9000/mnt/disk{1...4}/"
+      - "https://server3-pool2:9000/mnt/disk{1...4}/"
+      - "https://server4-pool2:9000/mnt/disk{1...4}/"
+  # more args
 
 options:
   ftp: # settings for MinIO to act as an ftp server
-	address: ':8021'
-	passive-port-range: '30000-40000'
+    address: ":8021"
+    passive-port-range: "30000-40000"
   sftp: # settings for MinIO to act as an sftp server
-	address: ':8022'
-	ssh-private-key: '/home/user/.ssh/id_rsa'
+    address: ":8022"
+    ssh-private-key: "/home/user/.ssh/id_rsa"
+```
+
+If you are using the config `v1` YAML you should migrate your `pools:` field values to the following format
+
+`v1` format
+```yaml
+pools: # Specify the nodes and drives with pools
+  -
+    - "https://server-example-pool1:9000/mnt/disk{1...4}/"
+    - "https://server{1...2}-pool1:9000/mnt/disk{1...4}/"
+    - "https://server3-pool1:9000/mnt/disk{1...4}/"
+    - "https://server4-pool1:9000/mnt/disk{1...4}/"
+```
+
+to `v2` format
+
+```yaml
+pools:
+  - args:
+      - "https://server-example-pool1:9000/mnt/disk{1...4}/"
+      - "https://server{1...2}-pool1:9000/mnt/disk{1...4}/"
+      - "https://server3-pool1:9000/mnt/disk{1...4}/"
+      - "https://server4-pool1:9000/mnt/disk{1...4}/"
+    set-drive-count: 4 # Advanced option, must be used under guidance from MinIO team.
 ```
 
 ### Things to know

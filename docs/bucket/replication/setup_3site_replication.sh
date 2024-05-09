@@ -43,10 +43,7 @@ unset MINIO_KMS_KES_KEY_FILE
 unset MINIO_KMS_KES_ENDPOINT
 unset MINIO_KMS_KES_KEY_NAME
 
-(
-	cd ./docs/debugging/s3-check-md5
-	go install -v
-)
+go install -v github.com/minio/minio/docs/debugging/s3-check-md5@latest
 
 wget -q -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
 	chmod +x mc
@@ -166,7 +163,7 @@ echo "Set default governance retention 30d"
 ./mc retention set --default governance 30d sitea/olockbucket
 
 echo "Copying data to source sitea/bucket"
-./mc cp --encrypt "sitea/" --quiet /etc/hosts sitea/bucket
+./mc cp --enc-s3 "sitea/" --quiet /etc/hosts sitea/bucket
 sleep 1
 
 echo "Copying data to source sitea/olockbucket"
@@ -197,7 +194,7 @@ head -c 221227088 </dev/urandom >200M
 ./mc.RELEASE.2021-03-12T03-36-59Z cp --config-dir ~/.mc --encrypt "sitea" --quiet 200M "sitea/bucket/200M-enc-v1"
 ./mc.RELEASE.2021-03-12T03-36-59Z cp --config-dir ~/.mc --quiet 200M "sitea/bucket/200M-v1"
 
-./mc cp --encrypt "sitea" --quiet 200M "sitea/bucket/200M-enc-v2"
+./mc cp --enc-s3 "sitea" --quiet 200M "sitea/bucket/200M-enc-v2"
 ./mc cp --quiet 200M "sitea/bucket/200M-v2"
 
 sleep 10

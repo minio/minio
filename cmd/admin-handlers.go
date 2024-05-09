@@ -50,6 +50,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/estream"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/dsync"
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/handlers"
@@ -1576,7 +1577,8 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 
 // NetperfHandler - perform mesh style network throughput test
 func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
@@ -1596,6 +1598,15 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 	}
 	ctx = lkctx.Context()
 	defer nsLock.Unlock(lkctx)
+
+	// Freeze all incoming S3 API calls before running speedtest.
+	globalNotificationSys.ServiceFreeze(ctx, true)
+
+	// Unfreeze as soon as request context is canceled or when the function returns.
+	go func() {
+		<-ctx.Done()
+		globalNotificationSys.ServiceFreeze(ctx, false)
+	}()
 
 	durationStr := r.Form.Get(peerRESTDuration)
 	duration, err := time.ParseDuration(durationStr)
@@ -1617,16 +1628,71 @@ func (a adminAPIHandlers) NetperfHandler(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func isAllowedRWAccess(r *http.Request, cred auth.Credentials, bucketName string) (rd, wr bool) {
+	owner := cred.AccessKey == globalActiveCred.AccessKey
+
+	// Set prefix value for "s3:prefix" policy conditionals.
+	r.Header.Set("prefix", "")
+
+	// Set delimiter value for "s3:delimiter" policy conditionals.
+	r.Header.Set("delimiter", SlashSeparator)
+
+	isAllowedAccess := func(bucketName string) (rd, wr bool) {
+		if globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.GetObjectAction,
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          cred.Claims,
+		}) {
+			rd = true
+		}
+
+		if globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.PutObjectAction,
+			BucketName:      bucketName,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			ObjectName:      "",
+			Claims:          cred.Claims,
+		}) {
+			wr = true
+		}
+
+		return rd, wr
+	}
+	return isAllowedAccess(bucketName)
+}
+
 // ObjectSpeedTestHandler - reports maximum speed of a cluster by performing PUT and
 // GET operations on the server, supports auto tuning by default by automatically
 // increasing concurrency and stopping when we have reached the limits on the
 // system.
 func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
+	objectAPI, creds := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
 		return
+	}
+
+	if !globalAPIConfig.permitRootAccess() {
+		rd, wr := isAllowedRWAccess(r, creds, globalObjectPerfBucket)
+		if !rd || !wr {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, AdminError{
+				Code: "XMinioSpeedtestInsufficientPermissions",
+				Message: fmt.Sprintf("%s does not have read and write access to '%s' bucket", creds.AccessKey,
+					globalObjectPerfBucket),
+				StatusCode: http.StatusForbidden,
+			}), r.URL)
+			return
+		}
 	}
 
 	sizeStr := r.Form.Get(peerRESTSize)
@@ -1637,6 +1703,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	autotune := r.Form.Get("autotune") == "true"
 	noClear := r.Form.Get("noclear") == "true"
 	enableSha256 := r.Form.Get("enableSha256") == "true"
+	enableMultipart := r.Form.Get("enableMultipart") == "true"
 
 	size, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -1692,8 +1759,11 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
 
-	// unfreeze all incoming S3 API calls after speedtest.
-	defer globalNotificationSys.ServiceFreeze(ctx, false)
+	// Unfreeze as soon as request context is canceled or when the function returns.
+	go func() {
+		<-ctx.Done()
+		globalNotificationSys.ServiceFreeze(ctx, false)
+	}()
 
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
@@ -1707,6 +1777,8 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 		storageClass:     storageClass,
 		bucketName:       customBucket,
 		enableSha256:     enableSha256,
+		enableMultipart:  enableMultipart,
+		creds:            creds,
 	})
 	var prevResult madmin.SpeedTestResult
 	for {
@@ -1793,7 +1865,8 @@ func validateObjPerfOptions(ctx context.Context, storageInfo madmin.StorageInfo,
 
 // DriveSpeedtestHandler - reports throughput of drives available in the cluster
 func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, policy.HealthInfoAdminAction)
 	if objectAPI == nil {
@@ -1803,8 +1876,11 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 	// Freeze all incoming S3 API calls before running speedtest.
 	globalNotificationSys.ServiceFreeze(ctx, true)
 
-	// unfreeze all incoming S3 API calls after speedtest.
-	defer globalNotificationSys.ServiceFreeze(ctx, false)
+	// Unfreeze as soon as request context is canceled or when the function returns.
+	go func() {
+		<-ctx.Done()
+		globalNotificationSys.ServiceFreeze(ctx, false)
+	}()
 
 	serial := r.Form.Get("serial") == "true"
 	blockSizeStr := r.Form.Get("blocksize")
@@ -2097,7 +2173,9 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := GlobalKMS.CreateKey(ctx, r.Form.Get("key-id")); err != nil {
+	if err := GlobalKMS.CreateKey(ctx, &kms.CreateKeyRequest{
+		Name: r.Form.Get("key-id"),
+	}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -2118,22 +2196,12 @@ func (a adminAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	stat, err := GlobalKMS.Stat(ctx)
+	stat, err := GlobalKMS.Status(ctx)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
 	}
-
-	status := madmin.KMSStatus{
-		Name:         stat.Name,
-		DefaultKeyID: stat.DefaultKey,
-		Endpoints:    make(map[string]madmin.ItemState, len(stat.Endpoints)),
-	}
-	for _, endpoint := range stat.Endpoints {
-		status.Endpoints[endpoint] = madmin.ItemOnline // TODO(aead): Implement an online check for mTLS
-	}
-
-	resp, err := json.Marshal(status)
+	resp, err := json.Marshal(stat)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
@@ -2155,15 +2223,9 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	stat, err := GlobalKMS.Stat(ctx)
-	if err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-		return
-	}
-
 	keyID := r.Form.Get("key-id")
 	if keyID == "" {
-		keyID = stat.DefaultKey
+		keyID = GlobalKMS.DefaultKey
 	}
 	response := madmin.KMSKeyStatus{
 		KeyID: keyID,
@@ -2171,7 +2233,10 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 
 	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(ctx, keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{
+		Name:           keyID,
+		AssociatedData: kmsContext,
+	})
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -2184,7 +2249,11 @@ func (a adminAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	decryptedKey, err := GlobalKMS.Decrypt(ctx, &kms.DecryptRequest{
+		Name:           key.KeyID,
+		Ciphertext:     key.Ciphertext,
+		AssociatedData: kmsContext,
+	})
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -2337,8 +2406,7 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		KMS:           fetchKMSStatus(),
-		KMSStatus:     fetchKMSStatusV2(ctx),
+		KMSStatus:     fetchKMSStatus(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
@@ -2376,7 +2444,7 @@ func getKubernetesInfo(dctx context.Context) madmin.KubernetesInfo {
 	}
 
 	client := &http.Client{
-		Transport: globalHealthChkTransport,
+		Transport: globalRemoteTargetTransport,
 		Timeout:   10 * time.Second,
 	}
 
@@ -2948,66 +3016,25 @@ func fetchLambdaInfo() []map[string][]madmin.TargetIDStatus {
 	return notify
 }
 
-// fetchKMSStatus fetches KMS-related status information.
-func fetchKMSStatus() madmin.KMS {
-	kmsStat := madmin.KMS{}
-	if GlobalKMS == nil {
-		kmsStat.Status = "disabled"
-		return kmsStat
-	}
-
-	stat, err := GlobalKMS.Stat(context.Background())
-	if err != nil {
-		kmsStat.Status = string(madmin.ItemOffline)
-		return kmsStat
-	}
-	if len(stat.Endpoints) == 0 {
-		kmsStat.Status = stat.Name
-		return kmsStat
-	}
-	kmsStat.Status = string(madmin.ItemOnline)
-
-	kmsContext := kms.Context{"MinIO admin API": "ServerInfoHandler"} // Context for a test key operation
-	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(context.Background(), "", kmsContext)
-	if err != nil {
-		kmsStat.Encrypt = fmt.Sprintf("Encryption failed: %v", err)
-	} else {
-		kmsStat.Encrypt = "success"
-	}
-
-	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
-	switch {
-	case err != nil:
-		kmsStat.Decrypt = fmt.Sprintf("Decryption failed: %v", err)
-	case subtle.ConstantTimeCompare(key.Plaintext, decryptedKey) != 1:
-		kmsStat.Decrypt = "Decryption failed: decrypted key does not match generated key"
-	default:
-		kmsStat.Decrypt = "success"
-	}
-	return kmsStat
-}
-
-// fetchKMSStatusV2 fetches KMS-related status information for all instances
-func fetchKMSStatusV2(ctx context.Context) []madmin.KMS {
+// fetchKMSStatus fetches KMS-related status information for all instances
+func fetchKMSStatus(ctx context.Context) []madmin.KMS {
 	if GlobalKMS == nil {
 		return []madmin.KMS{}
 	}
 
-	results := GlobalKMS.Verify(ctx)
-
-	stats := []madmin.KMS{}
-	for _, result := range results {
-		stats = append(stats, madmin.KMS{
-			Status:   result.Status,
-			Endpoint: result.Endpoint,
-			Encrypt:  result.Encrypt,
-			Decrypt:  result.Decrypt,
-			Version:  result.Version,
-		})
+	stat, err := GlobalKMS.Status(ctx)
+	if err != nil {
+		kmsLogIf(ctx, err, "failed to fetch KMS status information")
+		return []madmin.KMS{}
 	}
 
+	stats := make([]madmin.KMS, 0, len(stat.Endpoints))
+	for endpoint, state := range stat.Endpoints {
+		stats = append(stats, madmin.KMS{
+			Status:   string(state),
+			Endpoint: endpoint,
+		})
+	}
 	return stats
 }
 

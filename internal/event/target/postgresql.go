@@ -26,9 +26,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	_ "github.com/lib/pq" // Register postgres driver
 
@@ -101,6 +103,10 @@ func (p PostgreSQLArgs) Validate() error {
 	if p.Table == "" {
 		return fmt.Errorf("empty table name")
 	}
+	if err := validatePsqlTableName(p.Table); err != nil {
+		return err
+	}
+
 	if p.Format != "" {
 		f := strings.ToLower(p.Format)
 		if f != event.NamespaceFormat && f != event.AccessFormat {
@@ -443,4 +449,44 @@ func NewPostgreSQLTarget(id string, args PostgreSQLArgs, loggerOnce logger.LogOn
 	}
 
 	return target, nil
+}
+
+var errInvalidPsqlTablename = errors.New("invalid PostgreSQL table")
+
+func validatePsqlTableName(name string) error {
+	// check for quoted string (string may not contain a quote)
+	if match, err := regexp.MatchString("^\"[^\"]+\"$", name); err != nil {
+		return err
+	} else if match {
+		return nil
+	}
+
+	// normalize the name to letters, digits, _ or $
+	valid := true
+	cleaned := strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsLetter(r):
+			return 'a'
+		case unicode.IsDigit(r):
+			return '0'
+		case r == '_', r == '$':
+			return r
+		default:
+			valid = false
+			return -1
+		}
+	}, name)
+
+	if valid {
+		// check for simple name or quoted name
+		// - letter/underscore followed by one or more letter/digit/underscore
+		// - any text between quotes (text cannot contain a quote itself)
+		if match, err := regexp.MatchString("^[a_][a0_$]*$", cleaned); err != nil {
+			return err
+		} else if match {
+			return nil
+		}
+	}
+
+	return errInvalidPsqlTablename
 }

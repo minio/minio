@@ -447,7 +447,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 				} else {
 					stopFn(oi, nil)
 				}
-				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success)
+				ri.trackCurrentBucketObject(r.Target.Bucket, oi, success, attempts)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
@@ -690,6 +690,7 @@ type batchJobInfo struct {
 	StartTime     time.Time `json:"startTime" msg:"st"`
 	LastUpdate    time.Time `json:"lastUpdate" msg:"lu"`
 	RetryAttempts int       `json:"retryAttempts" msg:"ra"`
+	Attempts      int       `json:"attempts" msg:"at"`
 
 	Complete bool `json:"complete" msg:"cmp"`
 	Failed   bool `json:"failed" msg:"fld"`
@@ -833,13 +834,15 @@ func (ri *batchJobInfo) clone() *batchJobInfo {
 		ObjectsFailed:    ri.ObjectsFailed,
 		BytesTransferred: ri.BytesTransferred,
 		BytesFailed:      ri.BytesFailed,
+		Attempts:         ri.Attempts,
 	}
 }
 
-func (ri *batchJobInfo) countItem(size int64, dmarker, success bool) {
+func (ri *batchJobInfo) countItem(size int64, dmarker, success bool, attempt int) {
 	if ri == nil {
 		return
 	}
+	ri.Attempts++
 	if success {
 		if dmarker {
 			ri.DeleteMarkers++
@@ -847,7 +850,19 @@ func (ri *batchJobInfo) countItem(size int64, dmarker, success bool) {
 			ri.Objects++
 			ri.BytesTransferred += size
 		}
+		if attempt > 1 {
+			if dmarker {
+				ri.DeleteMarkersFailed--
+			} else {
+				ri.ObjectsFailed--
+				ri.BytesFailed += size
+			}
+		}
 	} else {
+		if attempt > 1 {
+			// Only count first attempt
+			return
+		}
 		if dmarker {
 			ri.DeleteMarkersFailed++
 		} else {
@@ -921,7 +936,7 @@ func (ri *batchJobInfo) trackMultipleObjectVersions(bucket string, info ObjectIn
 	}
 }
 
-func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, success bool) {
+func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo, success bool, attempt int) {
 	if ri == nil {
 		return
 	}
@@ -931,7 +946,7 @@ func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo,
 
 	ri.Bucket = bucket
 	ri.Object = info.Name
-	ri.countItem(info.Size, info.DeleteMarker, success)
+	ri.countItem(info.Size, info.DeleteMarker, success, attempt)
 }
 
 func (ri *batchJobInfo) trackCurrentBucketBatch(bucket string, batch []ObjectInfo) {
@@ -945,7 +960,7 @@ func (ri *batchJobInfo) trackCurrentBucketBatch(bucket string, batch []ObjectInf
 	ri.Bucket = bucket
 	for i := range batch {
 		ri.Object = batch[i].Name
-		ri.countItem(batch[i].Size, batch[i].DeleteMarker, true)
+		ri.countItem(batch[i].Size, batch[i].DeleteMarker, true, 1)
 	}
 }
 
@@ -1057,8 +1072,8 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
 
 	var (
-		walkCh = make(chan ObjectInfo, 100)
-		slowCh = make(chan ObjectInfo, 100)
+		walkCh = make(chan itemOrErr[ObjectInfo], 100)
+		slowCh = make(chan itemOrErr[ObjectInfo], 100)
 	)
 
 	if !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
@@ -1084,7 +1099,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 					if err := r.writeAsArchive(ctx, api, cl, batch); err != nil {
 						batchLogIf(ctx, err)
 						for _, b := range batch {
-							slowCh <- b
+							slowCh <- itemOrErr[ObjectInfo]{Item: b}
 						}
 					} else {
 						ri.trackCurrentBucketBatch(r.Source.Bucket, batch)
@@ -1095,12 +1110,12 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				}
 			}
 			for obj := range walkCh {
-				if obj.DeleteMarker || !obj.VersionPurgeStatus.Empty() || obj.Size >= int64(smallerThan) {
+				if obj.Item.DeleteMarker || !obj.Item.VersionPurgeStatus.Empty() || obj.Item.Size >= int64(smallerThan) {
 					slowCh <- obj
 					continue
 				}
 
-				batch = append(batch, obj)
+				batch = append(batch, obj.Item)
 
 				if len(batch) < *r.Source.Snowball.Batch {
 					continue
@@ -1153,8 +1168,13 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		prevObj := ""
 
 		skipReplicate := false
-		for result := range slowCh {
-			result := result
+		for res := range slowCh {
+			if res.Err != nil {
+				ri.Failed = true
+				batchLogIf(ctx, res.Err)
+				continue
+			}
+			result := res.Item
 			if result.Name != prevObj {
 				prevObj = result.Name
 				skipReplicate = result.DeleteMarker && s3Type
@@ -1183,7 +1203,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				} else {
 					stopFn(result, nil)
 				}
-				ri.trackCurrentBucketObject(r.Source.Bucket, result, success)
+				ri.trackCurrentBucketObject(r.Source.Bucket, result, success, attempts)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
@@ -1231,6 +1251,7 @@ type batchReplicationJobError struct {
 	Code           string
 	Description    string
 	HTTPStatusCode int
+	ObjectSize     int64
 }
 
 func (e batchReplicationJobError) Error() string {
@@ -1483,7 +1504,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 		jobType = string(madmin.BatchJobReplicate)
 	}
 
-	resultCh := make(chan ObjectInfo)
+	resultCh := make(chan itemOrErr[ObjectInfo])
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -1495,8 +1516,12 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 
 	listResult := madmin.ListBatchJobsResult{}
 	for result := range resultCh {
+		if result.Err != nil {
+			writeErrorResponseJSON(ctx, w, toAPIError(ctx, result.Err), r.URL)
+			return
+		}
 		req := &BatchJobRequest{}
-		if err := req.load(ctx, objectAPI, result.Name); err != nil {
+		if err := req.load(ctx, objectAPI, result.Item.Name); err != nil {
 			if !errors.Is(err, errNoSuchJob) {
 				batchLogIf(ctx, err)
 			}
@@ -1701,7 +1726,7 @@ func newBatchJobPool(ctx context.Context, o ObjectLayer, workers int) *BatchJobP
 }
 
 func (j *BatchJobPool) resume() {
-	results := make(chan ObjectInfo, 100)
+	results := make(chan itemOrErr[ObjectInfo], 100)
 	ctx, cancel := context.WithCancel(j.ctx)
 	defer cancel()
 	if err := j.objLayer.Walk(ctx, minioMetaBucket, batchJobPrefix, results, WalkOptions{}); err != nil {
@@ -1709,12 +1734,16 @@ func (j *BatchJobPool) resume() {
 		return
 	}
 	for result := range results {
+		if result.Err != nil {
+			batchLogIf(j.ctx, result.Err)
+			continue
+		}
 		// ignore batch-replicate.bin and batch-rotate.bin entries
-		if strings.HasSuffix(result.Name, slashSeparator) {
+		if strings.HasSuffix(result.Item.Name, slashSeparator) {
 			continue
 		}
 		req := &BatchJobRequest{}
-		if err := req.load(ctx, j.objLayer, result.Name); err != nil {
+		if err := req.load(ctx, j.objLayer, result.Item.Name); err != nil {
 			batchLogIf(ctx, err)
 			continue
 		}

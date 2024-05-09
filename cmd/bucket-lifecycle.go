@@ -721,9 +721,9 @@ func auditTierActions(ctx context.Context, tier string, bytes int64) func(err er
 
 // getTransitionedObjectReader returns a reader from the transitioned tier.
 func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, oi ObjectInfo, opts ObjectOptions) (gr *GetObjectReader, err error) {
-	tgtClient, err := globalTierConfigMgr.getDriver(oi.TransitionedObject.Tier)
+	tgtClient, err := globalTierConfigMgr.getDriver(ctx, oi.TransitionedObject.Tier)
 	if err != nil {
-		return nil, fmt.Errorf("transition storage class not configured")
+		return nil, fmt.Errorf("transition storage class not configured: %w", err)
 	}
 
 	fn, off, length, err := NewGetObjectReader(rs, oi, opts)

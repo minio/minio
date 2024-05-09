@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"go/build"
+	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -32,6 +34,7 @@ import (
 
 	"github.com/minio/highwayhash"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/color"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/v2/logger/message/log"
 )
@@ -49,8 +52,12 @@ const (
 	InfoKind    = madmin.LogKindInfo
 )
 
-// DisableErrorLog avoids printing error/event/info kind of logs
-var DisableErrorLog = false
+var (
+	// DisableErrorLog avoids printing error/event/info kind of logs
+	DisableErrorLog = false
+	// Output allows configuring custom writer, defaults to os.Stderr
+	Output io.Writer = os.Stderr
+)
 
 var trimStrings []string
 
@@ -73,11 +80,13 @@ var (
 
 // EnableQuiet - turns quiet option on.
 func EnableQuiet() {
+	color.TurnOff() // no colored outputs necessary in quiet mode.
 	quietFlag = true
 }
 
 // EnableJSON - outputs logs in json format.
 func EnableJSON() {
+	color.TurnOff() // no colored outputs necessary in JSON mode.
 	jsonFlag = true
 	quietFlag = true
 }

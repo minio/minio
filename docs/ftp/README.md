@@ -167,3 +167,91 @@ Unlike SFTP server, FTP server is insecure by default. To operate under TLS mode
 > certs from the server certificate chain, this is mainly to add simplicity of setup. However if you wish to terminate
 > TLS certificates via a different domain for your FTP servers you may choose the above command line options.
 
+
+### Custom Algorithms (SFTP)
+
+Custom algorithms can be specified via command line parameters.
+Algorithms are comma separated. 
+Note that valid values does not in all cases represent default values.
+
+`--sftp=pub-key-algos=...` specifies the supported client public key
+authentication algorithms. Note that this doesn't include certificate types
+since those use the underlying algorithm. This list is sent to the client if
+it supports the server-sig-algs extension. Order is irrelevant.
+
+Valid values
+```
+ssh-ed25519
+sk-ssh-ed25519@openssh.com
+sk-ecdsa-sha2-nistp256@openssh.com
+ecdsa-sha2-nistp256
+ecdsa-sha2-nistp384
+ecdsa-sha2-nistp521
+rsa-sha2-256
+rsa-sha2-512
+ssh-rsa
+ssh-dss
+```
+
+`--sftp=kex-algos=...` specifies the supported key-exchange algorithms in preference order.
+
+Valid values: 
+
+```
+curve25519-sha256
+curve25519-sha256@libssh.org
+ecdh-sha2-nistp256
+ecdh-sha2-nistp384
+ecdh-sha2-nistp521
+diffie-hellman-group14-sha256
+diffie-hellman-group16-sha512
+diffie-hellman-group14-sha1
+diffie-hellman-group1-sha1
+```
+
+`--sftp=cipher-algos=...` specifies the allowed cipher algorithms. 
+If unspecified then a sensible default is used.
+
+Valid values: 
+```
+aes128-ctr
+aes192-ctr
+aes256-ctr
+aes128-gcm@openssh.com
+aes256-gcm@openssh.com
+chacha20-poly1305@openssh.com
+arcfour256
+arcfour128
+arcfour
+aes128-cbc
+3des-cbc
+```
+
+`--sftp=mac-algos=...` specifies a default set of MAC algorithms in preference order.
+This is based on RFC 4253, section 6.4, but with hmac-md5 variants removed because they have 
+reached the end of their useful life.
+
+Valid values: 
+
+```
+hmac-sha2-256-etm@openssh.com
+hmac-sha2-512-etm@openssh.com
+hmac-sha2-256
+hmac-sha2-512
+hmac-sha1
+hmac-sha1-96
+```
+
+### Certificate-based authentication
+
+`--sftp=trusted-user-ca-key=...` specifies a file containing public key of certificate authority that is trusted
+to sign user certificates for authentication.
+
+Implementation is identical with "TrustedUserCAKeys" setting in OpenSSH server with exception that only one CA
+key can be defined.
+
+If a certificate is presented for authentication and has its signing CA key is in this file, then it may be
+used for authentication for any user listed in the certificate's principals list. 
+
+Note that certificates that lack a list of principals will not be permitted for authentication using trusted-user-ca-key.
+For more details on certificates, see the CERTIFICATES section in ssh-keygen(1).

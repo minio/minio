@@ -32,6 +32,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/cachevalue"
+	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 )
@@ -98,7 +99,7 @@ type xlStorageDiskIDCheck struct {
 func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 	p.metricsCache.InitOnce(5*time.Second,
 		cachevalue.Opts{},
-		func() (DiskMetrics, error) {
+		func(ctx context.Context) (DiskMetrics, error) {
 			diskMetric := DiskMetrics{
 				LastMinute: make(map[string]AccElem, len(p.apiLatencies)),
 				APICalls:   make(map[string]uint64, len(p.apiCalls)),
@@ -113,7 +114,7 @@ func (p *xlStorageDiskIDCheck) getMetrics() DiskMetrics {
 		},
 	)
 
-	diskMetric, _ := p.metricsCache.Get()
+	diskMetric, _ := p.metricsCache.GetWithCtx(context.Background())
 	// Do not need this value to be cached.
 	diskMetric.TotalErrorsTimeout = p.totalErrsTimeout.Load()
 	diskMetric.TotalErrorsAvailability = p.totalErrsAvailability.Load()
@@ -460,10 +461,10 @@ func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPat
 	return w.Run(func() error { return p.storage.RenameFile(ctx, srcVolume, srcPath, dstVolume, dstPath) })
 }
 
-func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (sign uint64, err error) {
+func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (res RenameDataResp, err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricRenameData, srcPath, fi.DataDir, dstVolume, dstPath)
 	if err != nil {
-		return 0, err
+		return res, err
 	}
 	defer func() {
 		if err == nil && !skipAccessChecks(dstVolume) {
@@ -472,7 +473,14 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 		done(&err)
 	}()
 
-	return xioutil.WithDeadline[uint64](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (result uint64, err error) {
+	// Copy inline data to a new buffer to function with deadlines.
+	if len(fi.Data) > 0 {
+		fi.Data = append(grid.GetByteBufferCap(len(fi.Data))[:0], fi.Data...)
+	}
+	return xioutil.WithDeadline[RenameDataResp](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (res RenameDataResp, err error) {
+		if len(fi.Data) > 0 {
+			defer grid.PutByteBuffer(fi.Data)
+		}
 		return p.storage.RenameData(ctx, srcVolume, srcPath, fi, dstVolume, dstPath, opts)
 	})
 }
@@ -901,7 +909,8 @@ func (p *xlStorageDiskIDCheck) monitorDiskStatus(spent time.Duration, fn string)
 		})
 
 		if err == nil {
-			logger.Event(context.Background(), "node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
+			logger.Event(context.Background(), "healthcheck",
+				"node(%s): Read/Write/Delete successful, bringing drive %s online", globalLocalNodeName, p.storage.String())
 			p.health.status.Store(diskHealthOK)
 			p.health.waiting.Add(-1)
 			return

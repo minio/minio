@@ -33,6 +33,8 @@ type DeleteOptions struct {
 	Recursive bool `msg:"r"`
 	Immediate bool `msg:"i"`
 	UndoWrite bool `msg:"u"`
+	// OldDataDir of the previous object
+	OldDataDir string `msg:"o,omitempty"` // old data dir used only when to revert a rename()
 }
 
 // BaseOptions represents common options for all Storage API calls
@@ -152,6 +154,15 @@ func (f *FileInfoVersions) findVersionIndex(v string) int {
 	if f == nil || v == "" {
 		return -1
 	}
+	if v == nullVersionID {
+		for i, ver := range f.Versions {
+			if ver.VersionID == "" {
+				return i
+			}
+		}
+		return -1
+	}
+
 	for i, ver := range f.Versions {
 		if ver.VersionID == v {
 			return i
@@ -481,8 +492,14 @@ type WriteAllHandlerParams struct {
 }
 
 // RenameDataResp - RenameData()'s response.
+// Provides information about the final state of Rename()
+//   - on xl.meta (array of versions) on disk to check for version disparity
+//   - on rewrite dataDir on disk that must be additionally purged
+//     only after as a 2-phase call, allowing the older dataDir to
+//     hang-around in-case we need some form of recovery.
 type RenameDataResp struct {
-	Signature uint64 `msg:"sig"`
+	Sign       []byte
+	OldDataDir string // contains '<uuid>', it is designed to be passed as value to Delete(bucket, pathJoin(object, dataDir))
 }
 
 // LocalDiskIDs - GetLocalIDs response.

@@ -194,6 +194,11 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("DriveID: %s not found", format.Erasure.This)
 }
 
+// Legacy returns 'true' if distribution algo is CRCMOD
+func (s *erasureSets) Legacy() (ok bool) {
+	return s.distributionAlgo == formatErasureVersionV2DistributionAlgoV1
+}
+
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *erasureSets) connectDisks() {

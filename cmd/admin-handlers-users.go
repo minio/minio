@@ -271,7 +271,14 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
-		updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+
+		if globalIAMSys.LDAPConfig.Enabled() {
+			// We don't allow internal group manipulation in this API when LDAP
+			// is enabled for now.
+			err = errIAMActionNotAllowed
+		} else {
+			updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+		}
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -504,6 +511,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	if err = json.Unmarshal(configBytes, &ureq); err != nil {
 		adminLogIf(ctx, err)
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminConfigBadJSON), r.URL)
+		return
+	}
+
+	// We don't allow internal user creation with LDAP enabled for now.
+	if globalIAMSys.LDAPConfig.Enabled() {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
 		return
 	}
 
@@ -1026,8 +1039,13 @@ func (a adminAPIHandlers) ListServiceAccounts(w http.ResponseWriter, r *http.Req
 	for _, svc := range serviceAccounts {
 		expiryTime := svc.Expiration
 		serviceAccountList = append(serviceAccountList, madmin.ServiceAccountInfo{
-			AccessKey:  svc.AccessKey,
-			Expiration: &expiryTime,
+			Description:   svc.Description,
+			ParentUser:    svc.ParentUser,
+			Name:          svc.Name,
+			AccountStatus: svc.Status,
+			AccessKey:     svc.AccessKey,
+			ImpliedPolicy: svc.IsImpliedPolicy(),
+			Expiration:    &expiryTime,
 		})
 	}
 
@@ -1199,9 +1217,9 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	bucketStorageCache.InitOnce(10*time.Second,
-		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
-		func() (DataUsageInfo, error) {
-			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
+		cachevalue.Opts{ReturnLastGood: true},
+		func(ctx context.Context) (DataUsageInfo, error) {
+			ctx, done := context.WithTimeout(ctx, 2*time.Second)
 			defer done()
 
 			return loadDataUsageFromBackend(ctx, objectAPI)
@@ -1556,7 +1574,12 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	}))
 }
 
-// SetPolicyForUserOrGroup - PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
+// SetPolicyForUserOrGroup - sets a policy on a user or a group.
+//
+// PUT /minio/admin/v3/set-policy?policy=xxx&user-or-group=?[&is-group]
+//
+// Deprecated: This API is replaced by attach/detach policy APIs for specific
+// type of users (builtin or LDAP).
 func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1608,6 +1631,32 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	userType := regUser
 	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType {
 		userType = stsUser
+
+		// Validate that the user or group exists in LDAP and use the normalized
+		// form of the entityName (which will be an LDAP DN).
+		var err error
+		if isGroup {
+			var foundGroupDN string
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
+				iamLogIf(ctx, err)
+			} else if foundGroupDN == "" || !underBaseDN {
+				err = errNoSuchGroup
+			}
+			entityName = foundGroupDN
+		} else {
+			var foundUserDN string
+			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
+				iamLogIf(ctx, err)
+			} else if foundUserDN == "" {
+				err = errNoSuchUser
+			}
+			entityName = foundUserDN
+		}
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 	}
 
 	updatedAt, err := globalIAMSys.PolicyDBSet(ctx, entityName, policyName, userType, isGroup)
@@ -1763,8 +1812,19 @@ const (
 	userPolicyMappingsFile    = "user_mappings.json"
 	groupPolicyMappingsFile   = "group_mappings.json"
 	stsUserPolicyMappingsFile = "stsuser_mappings.json"
-	iamAssetsDir              = "iam-assets"
+
+	iamAssetsDir = "iam-assets"
 )
+
+var iamExportFiles = []string{
+	allPoliciesFile,
+	allUsersFile,
+	allGroupsFile,
+	allSvcAcctsFile,
+	userPolicyMappingsFile,
+	groupPolicyMappingsFile,
+	stsUserPolicyMappingsFile,
+}
 
 // ExportIAMHandler - exports all iam info as a zipped file
 func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
@@ -1804,16 +1864,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
-	iamFiles := []string{
-		allPoliciesFile,
-		allUsersFile,
-		allGroupsFile,
-		allSvcAcctsFile,
-		userPolicyMappingsFile,
-		groupPolicyMappingsFile,
-		stsUserPolicyMappingsFile,
-	}
-	for _, f := range iamFiles {
+	for _, f := range iamExportFiles {
 		iamFile := pathJoin(iamAssetsDir, f)
 		switch f {
 		case allPoliciesFile:
@@ -1898,7 +1949,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 					return
 				}
-				_, policy, err := globalIAMSys.GetServiceAccount(ctx, acc.Credentials.AccessKey)
+				sa, policy, err := globalIAMSys.GetServiceAccount(ctx, acc.Credentials.AccessKey)
 				if err != nil {
 					writeErrorResponse(ctx, w, exportError(ctx, err, iamFile, ""), r.URL)
 					return
@@ -1920,6 +1971,9 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					Claims:        claims,
 					SessionPolicy: json.RawMessage(policyJSON),
 					Status:        acc.Credentials.Status,
+					Name:          sa.Name,
+					Description:   sa.Description,
+					Expiration:    &sa.Expiration,
 				}
 			}
 
@@ -2152,12 +2206,12 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					// If group does not exist, then check if the group has beginning and end space characters
 					// we will reject such group names.
 					if errors.Is(gerr, errNoSuchGroup) && hasSpaceBE(group) {
-						writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, err, allGroupsFile, group), r.URL)
+						writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, gerr, allGroupsFile, group), r.URL)
 						return
 					}
 				}
 				if _, gerr := globalIAMSys.AddUsersToGroup(ctx, group, grpInfo.Members); gerr != nil {
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, allGroupsFile, group), r.URL)
+					writeErrorResponseJSON(ctx, w, importError(ctx, gerr, allGroupsFile, group), r.URL)
 					return
 				}
 			}
@@ -2184,6 +2238,16 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, allSvcAcctsFile, ""), r.URL)
 				return
 			}
+
+			// Validations for LDAP enabled deployments.
+			if globalIAMSys.LDAPConfig.Enabled() {
+				err := globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, ""), r.URL)
+					return
+				}
+			}
+
 			for user, svcAcctReq := range serviceAcctReqs {
 				var sp *policy.Policy
 				var err error
@@ -2194,7 +2258,8 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 				}
-				// service account access key cannot have space characters beginning and end of the string.
+				// service account access key cannot have space characters
+				// beginning and end of the string.
 				if hasSpaceBE(svcAcctReq.AccessKey) {
 					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
 					return
@@ -2220,20 +2285,14 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					updateReq = false
 				}
 				if updateReq {
-					opts := updateServiceAccountOpts{
-						secretKey:     svcAcctReq.SecretKey,
-						status:        svcAcctReq.Status,
-						name:          svcAcctReq.Name,
-						description:   svcAcctReq.Description,
-						expiration:    svcAcctReq.Expiration,
-						sessionPolicy: sp,
-					}
-					_, err = globalIAMSys.UpdateServiceAccount(ctx, svcAcctReq.AccessKey, opts)
+					// If the service account exists, we remove it to ensure a
+					// clean import.
+					err := globalIAMSys.DeleteServiceAccount(ctx, svcAcctReq.AccessKey, true)
 					if err != nil {
-						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
+						delErr := fmt.Errorf("failed to delete existing service account(%s) before importing it: %w", svcAcctReq.AccessKey, err)
+						writeErrorResponseJSON(ctx, w, importError(ctx, delErr, allSvcAcctsFile, user), r.URL)
 						return
 					}
-					continue
 				}
 				opts := newServiceAccountOpts{
 					accessKey:                  user,
@@ -2244,18 +2303,6 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					description:                svcAcctReq.Description,
 					expiration:                 svcAcctReq.Expiration,
 					allowSiteReplicatorAccount: false,
-				}
-
-				// In case of LDAP we need to resolve the targetUser to a DN and
-				// query their groups:
-				if globalIAMSys.LDAPConfig.Enabled() {
-					opts.claims[ldapUserN] = svcAcctReq.AccessKey // simple username
-					targetUser, _, err := globalIAMSys.LDAPConfig.LookupUserDN(svcAcctReq.AccessKey)
-					if err != nil {
-						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
-						return
-					}
-					opts.claims[ldapUser] = targetUser // username DN
 				}
 
 				if _, _, err = globalIAMSys.NewServiceAccount(ctx, svcAcctReq.Parent, svcAcctReq.Groups, opts); err != nil {
@@ -2326,6 +2373,17 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, groupPolicyMappingsFile, ""), r.URL)
 				return
 			}
+
+			// Validations for LDAP enabled deployments.
+			if globalIAMSys.LDAPConfig.Enabled() {
+				isGroup := true
+				err := globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, ""), r.URL)
+					return
+				}
+			}
+
 			for g, pm := range grpPolicyMap {
 				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
@@ -2355,6 +2413,16 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 				writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminConfigBadJSON, err, stsUserPolicyMappingsFile, ""), r.URL)
 				return
 			}
+
+			// Validations for LDAP enabled deployments.
+			if globalIAMSys.LDAPConfig.Enabled() {
+				isGroup := true
+				err := globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
+				if err != nil {
+					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, ""), r.URL)
+					return
+				}
+			}
 			for u, pm := range userPolicyMap {
 				// disallow setting policy mapping if user is a temporary user
 				ok, _, err := globalIAMSys.IsTempUser(u)
@@ -2366,6 +2434,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					writeErrorResponseJSON(ctx, w, importError(ctx, errIAMActionNotAllowed, stsUserPolicyMappingsFile, u), r.URL)
 					return
 				}
+
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
 					return

@@ -20,10 +20,7 @@ package cmd
 import (
 	"crypto/subtle"
 	"encoding/json"
-	"io"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
@@ -46,22 +43,12 @@ func (a kmsAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	stat, err := GlobalKMS.Stat(ctx)
+	stat, err := GlobalKMS.Status(ctx)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
 	}
-
-	status := madmin.KMSStatus{
-		Name:         stat.Name,
-		DefaultKeyID: stat.DefaultKey,
-		Endpoints:    make(map[string]madmin.ItemState, len(stat.Endpoints)),
-	}
-	for _, endpoint := range stat.Endpoints {
-		status.Endpoints[endpoint] = madmin.ItemOnline // TODO(aead): Implement an online check for mTLS
-	}
-
-	resp, err := json.Marshal(status)
+	resp, err := json.Marshal(stat)
 	if err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 		return
@@ -81,11 +68,6 @@ func (a kmsAPIHandlers) KMSMetricsHandler(w http.ResponseWriter, r *http.Request
 
 	if GlobalKMS == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-
-	if _, ok := GlobalKMS.(kms.KeyManager); !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
 		return
 	}
 
@@ -116,13 +98,7 @@ func (a kmsAPIHandlers) KMSAPIsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manager, ok := GlobalKMS.(kms.StatusManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	apis, err := manager.APIs(ctx)
+	apis, err := GlobalKMS.APIs(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -153,13 +129,7 @@ func (a kmsAPIHandlers) KMSVersionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	manager, ok := GlobalKMS.(kms.StatusManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	version, err := manager.Version(ctx)
+	version, err := GlobalKMS.Version(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -177,10 +147,6 @@ func (a kmsAPIHandlers) KMSVersionHandler(w http.ResponseWriter, r *http.Request
 func (a kmsAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Request) {
 	// If env variable MINIO_KMS_SECRET_KEY is populated, prevent creation of new keys
 	ctx := newContext(r, w, "KMSCreateKey")
-	if GlobalKMS != nil && GlobalKMS.IsLocal() {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSDefaultKeyAlreadyConfigured), r.URL)
-		return
-	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSCreateKeyAction)
@@ -193,39 +159,7 @@ func (a kmsAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	manager, ok := GlobalKMS.(kms.KeyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-
-	if err := manager.CreateKey(ctx, r.Form.Get("key-id")); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// KMSDeleteKeyHandler - DELETE /minio/kms/v1/key/delete?key-id=<master-key-id>
-func (a kmsAPIHandlers) KMSDeleteKeyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSDeleteKey")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDeleteKeyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.KeyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	if err := manager.DeleteKey(ctx, r.Form.Get("key-id")); err != nil {
+	if err := GlobalKMS.CreateKey(ctx, &kms.CreateKeyRequest{Name: r.Form.Get("key-id")}); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -235,15 +169,6 @@ func (a kmsAPIHandlers) KMSDeleteKeyHandler(w http.ResponseWriter, r *http.Reque
 // KMSListKeysHandler - GET /minio/kms/v1/key/list?pattern=<pattern>
 func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "KMSListKeys")
-	if GlobalKMS != nil && GlobalKMS.IsLocal() {
-		res, err := json.Marshal(GlobalKMS.List())
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
-		writeSuccessResponseJSON(w, res)
-		return
-	}
 	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
 
 	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSListKeysAction)
@@ -255,28 +180,16 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
-	manager, ok := GlobalKMS.(kms.KeyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	keys, err := manager.ListKeys(ctx)
+	names, _, err := GlobalKMS.ListKeyNames(ctx, &kms.ListRequest{
+		Prefix: r.Form.Get("pattern"),
+	})
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	pattern := r.Form.Get("pattern")
-	if !strings.Contains(pattern, "*") {
-		pattern += "*"
-	}
-
-	var values []kes.KeyInfo
-	for name, err := keys.SeekTo(ctx, pattern); err != io.EOF; name, err = keys.Next(ctx) {
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
+	values := make([]kes.KeyInfo, 0, len(names))
+	for _, name := range names {
 		values = append(values, kes.KeyInfo{
 			Name: name,
 		})
@@ -286,41 +199,6 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 	} else {
 		writeSuccessResponseJSON(w, res)
 	}
-}
-
-type importKeyRequest struct {
-	Bytes string
-}
-
-// KMSImportKeyHandler - POST /minio/kms/v1/key/import?key-id=<master-key-id>
-func (a kmsAPIHandlers) KMSImportKeyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSImportKey")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSImportKeyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.KeyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	var request importKeyRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	if err := manager.ImportKey(ctx, r.Form.Get("key-id"), []byte(request.Bytes)); err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	writeSuccessResponseHeadersOnly(w)
 }
 
 // KMSKeyStatusHandler - GET /minio/kms/v1/key/status?key-id=<master-key-id>
@@ -338,15 +216,9 @@ func (a kmsAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	stat, err := GlobalKMS.Stat(ctx)
-	if err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-		return
-	}
-
 	keyID := r.Form.Get("key-id")
 	if keyID == "" {
-		keyID = stat.DefaultKey
+		keyID = GlobalKMS.DefaultKey
 	}
 	response := madmin.KMSKeyStatus{
 		KeyID: keyID,
@@ -354,7 +226,7 @@ func (a kmsAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Reque
 
 	kmsContext := kms.Context{"MinIO admin API": "KMSKeyStatusHandler"} // Context for a test key operation
 	// 1. Generate a new key using the KMS.
-	key, err := GlobalKMS.GenerateKey(ctx, keyID, kmsContext)
+	key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{Name: keyID, AssociatedData: kmsContext})
 	if err != nil {
 		response.EncryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -367,7 +239,11 @@ func (a kmsAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// 2. Verify that we can indeed decrypt the (encrypted) key
-	decryptedKey, err := GlobalKMS.DecryptKey(key.KeyID, key.Ciphertext, kmsContext)
+	decryptedKey, err := GlobalKMS.Decrypt(ctx, &kms.DecryptRequest{
+		Name:           key.KeyID,
+		Ciphertext:     key.Ciphertext,
+		AssociatedData: kmsContext,
+	})
 	if err != nil {
 		response.DecryptionErr = err.Error()
 		resp, err := json.Marshal(response)
@@ -397,297 +273,4 @@ func (a kmsAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeSuccessResponseJSON(w, resp)
-}
-
-// KMSDescribePolicyHandler - GET /minio/kms/v1/policy/describe?policy=<policy>
-func (a kmsAPIHandlers) KMSDescribePolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSDescribePolicy")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDescribePolicyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.PolicyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	policy, err := manager.DescribePolicy(ctx, r.Form.Get("policy"))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	p, err := json.Marshal(policy)
-	if err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-		return
-	}
-	writeSuccessResponseJSON(w, p)
-}
-
-// KMSAssignPolicyHandler - POST /minio/kms/v1/policy/assign?policy=<policy>
-func (a kmsAPIHandlers) KMSAssignPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSAssignPolicy")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSAssignPolicyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-	return
-}
-
-// KMSDeletePolicyHandler - DELETE /minio/kms/v1/policy/delete?policy=<policy>
-func (a kmsAPIHandlers) KMSDeletePolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSDeletePolicy")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDeletePolicyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-	return
-}
-
-// KMSListPoliciesHandler - GET /minio/kms/v1/policy/list?pattern=<pattern>
-func (a kmsAPIHandlers) KMSListPoliciesHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSListPolicies")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSListPoliciesAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.PolicyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	policies, err := manager.ListPolicies(ctx)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	pattern := r.Form.Get("pattern")
-	if !strings.Contains(pattern, "*") {
-		pattern += "*"
-	}
-
-	var values []kes.PolicyInfo
-	for name, err := policies.SeekTo(ctx, pattern); err != io.EOF; name, err = policies.Next(ctx) {
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
-		values = append(values, kes.PolicyInfo{
-			Name: name,
-		})
-	}
-	if res, err := json.Marshal(values); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-	} else {
-		writeSuccessResponseJSON(w, res)
-	}
-}
-
-// KMSGetPolicyHandler - GET /minio/kms/v1/policy/get?policy=<policy>
-func (a kmsAPIHandlers) KMSGetPolicyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSGetPolicy")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSGetPolicyAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.PolicyManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	policy, err := manager.GetPolicy(ctx, r.Form.Get("policy"))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	if p, err := json.Marshal(policy); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-	} else {
-		writeSuccessResponseJSON(w, p)
-	}
-}
-
-// KMSDescribeIdentityHandler - GET /minio/kms/v1/identity/describe?identity=<identity>
-func (a kmsAPIHandlers) KMSDescribeIdentityHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSDescribeIdentity")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDescribeIdentityAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.IdentityManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	identity, err := manager.DescribeIdentity(ctx, r.Form.Get("identity"))
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	i, err := json.Marshal(identity)
-	if err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-		return
-	}
-	writeSuccessResponseJSON(w, i)
-}
-
-type describeSelfIdentityResponse struct {
-	Policy     *kes.Policy `json:"policy"`
-	PolicyName string      `json:"policyName"`
-	Identity   string      `json:"identity"`
-	IsAdmin    bool        `json:"isAdmin"`
-	CreatedAt  time.Time   `json:"createdAt"`
-	CreatedBy  string      `json:"createdBy"`
-}
-
-// KMSDescribeSelfIdentityHandler - GET /minio/kms/v1/identity/describe-self
-func (a kmsAPIHandlers) KMSDescribeSelfIdentityHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSDescribeSelfIdentity")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDescribeSelfIdentityAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.IdentityManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	identity, policy, err := manager.DescribeSelfIdentity(ctx)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-	res := &describeSelfIdentityResponse{
-		Policy:     policy,
-		PolicyName: identity.Policy,
-		Identity:   identity.Identity.String(),
-		IsAdmin:    identity.IsAdmin,
-		CreatedAt:  identity.CreatedAt,
-		CreatedBy:  identity.CreatedBy.String(),
-	}
-	i, err := json.Marshal(res)
-	if err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-		return
-	}
-	writeSuccessResponseJSON(w, i)
-}
-
-// KMSDeleteIdentityHandler - DELETE /minio/kms/v1/identity/delete?identity=<identity>
-func (a kmsAPIHandlers) KMSDeleteIdentityHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSDeleteIdentity")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSDeleteIdentityAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-	return
-}
-
-// KMSListIdentitiesHandler - GET /minio/kms/v1/identity/list?pattern=<pattern>
-func (a kmsAPIHandlers) KMSListIdentitiesHandler(w http.ResponseWriter, r *http.Request) {
-	ctx := newContext(r, w, "KMSListIdentities")
-	defer logger.AuditLog(ctx, w, r, mustGetClaimsFromToken(r))
-
-	objectAPI, _ := validateAdminReq(ctx, w, r, policy.KMSListIdentitiesAction)
-	if objectAPI == nil {
-		return
-	}
-
-	if GlobalKMS == nil {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
-		return
-	}
-	manager, ok := GlobalKMS.(kms.IdentityManager)
-	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNotImplemented), r.URL)
-		return
-	}
-	identities, err := manager.ListIdentities(ctx)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
-
-	pattern := r.Form.Get("pattern")
-	if !strings.Contains(pattern, "*") {
-		pattern += "*"
-	}
-
-	var values []kes.IdentityInfo
-	for name, err := identities.SeekTo(ctx, pattern); err != io.EOF; name, err = identities.Next(ctx) {
-		if err != nil {
-			writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-			return
-		}
-		values = append(values, kes.IdentityInfo{
-			Identity: name,
-		})
-	}
-	if res, err := json.Marshal(values); err != nil {
-		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
-	} else {
-		writeSuccessResponseJSON(w, res)
-	}
 }

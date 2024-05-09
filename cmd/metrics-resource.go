@@ -50,15 +50,6 @@ const (
 	interfaceTxBytes  MetricName = "tx_bytes"
 	interfaceTxErrors MetricName = "tx_errors"
 
-	// memory stats
-	memUsed      MetricName = "used"
-	memUsedPerc  MetricName = "used_perc"
-	memFree      MetricName = "free"
-	memShared    MetricName = "shared"
-	memBuffers   MetricName = "buffers"
-	memCache     MetricName = "cache"
-	memAvailable MetricName = "available"
-
 	// cpu stats
 	cpuUser       MetricName = "user"
 	cpuSystem     MetricName = "system"
@@ -171,14 +162,7 @@ func init() {
 	resourceCollector = newMinioResourceCollector(resourceMetricsGroups)
 }
 
-func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64, labels map[string]string, isCumulative bool) {
-	resourceMetricsMapMu.Lock()
-	defer resourceMetricsMapMu.Unlock()
-	subsysMetrics, found := resourceMetricsMap[subSys]
-	if !found {
-		subsysMetrics = ResourceMetrics{}
-	}
-
+func getResourceKey(name MetricName, labels map[string]string) string {
 	// labels are used to uniquely identify a metric
 	// e.g. reads_per_sec_{drive} inside the map
 	sfx := ""
@@ -189,7 +173,18 @@ func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64,
 		sfx += v
 	}
 
-	key := string(name) + "_" + sfx
+	return string(name) + "_" + sfx
+}
+
+func updateResourceMetrics(subSys MetricSubsystem, name MetricName, val float64, labels map[string]string, isCumulative bool) {
+	resourceMetricsMapMu.Lock()
+	defer resourceMetricsMapMu.Unlock()
+	subsysMetrics, found := resourceMetricsMap[subSys]
+	if !found {
+		subsysMetrics = ResourceMetrics{}
+	}
+
+	key := getResourceKey(name, labels)
 	metric, found := subsysMetrics[key]
 	if !found {
 		metric = ResourceMetric{

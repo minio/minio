@@ -143,13 +143,9 @@ type jentry struct {
 }
 
 func deleteObjectFromRemoteTier(ctx context.Context, objName, rvID, tierName string) error {
-	w, err := globalTierConfigMgr.getDriver(tierName)
+	w, err := globalTierConfigMgr.getDriver(ctx, tierName)
 	if err != nil {
 		return err
 	}
-	err = w.Remove(ctx, objName, remoteVersionID(rvID))
-	if err != nil {
-		return err
-	}
-	return nil
+	return w.Remove(ctx, objName, remoteVersionID(rvID))
 }

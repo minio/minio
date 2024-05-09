@@ -131,7 +131,6 @@ func TestGetHostIP(t *testing.T) {
 		expectedErr    error
 	}{
 		{"localhost", set.CreateStringSet("127.0.0.1"), nil},
-		{"example.org", set.CreateStringSet("93.184.216.34"), nil},
 	}
 
 	for _, testCase := range testCases {
@@ -147,8 +146,16 @@ func TestGetHostIP(t *testing.T) {
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 
-		if testCase.expectedIPList != nil && testCase.expectedIPList.Intersection(ipList).IsEmpty() {
-			t.Fatalf("host: expected = %v, got = %v", testCase.expectedIPList, ipList)
+		if testCase.expectedIPList != nil {
+			var found bool
+			for _, ip := range ipList.ToSlice() {
+				if testCase.expectedIPList.Contains(ip) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("host: expected = %v, got = %v", testCase.expectedIPList, ipList)
+			}
 		}
 	}
 }

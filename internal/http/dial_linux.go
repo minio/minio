@@ -39,9 +39,16 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 
 			_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 
+			{
+				// Enable big buffers
+				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_SNDBUF, opts.SendBufSize)
+
+				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, opts.RecvBufSize)
+			}
+
 			// Enable TCP open
-			// https://lwn.net/Articles/508865/ - 16k queue size.
-			_ = syscall.SetsockoptInt(fd, syscall.SOL_TCP, unix.TCP_FASTOPEN, 16*1024)
+			// https://lwn.net/Articles/508865/ - 32k queue size.
+			_ = syscall.SetsockoptInt(fd, syscall.SOL_TCP, unix.TCP_FASTOPEN, 32*1024)
 
 			// Enable TCP fast connect
 			// TCPFastOpenConnect sets the underlying socket to use
@@ -53,17 +60,22 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 			// "Set TCP_QUICKACK. If you find a case where that makes things worse, let me know."
 			_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_QUICKACK, 1)
 
-			// The time (in seconds) the connection needs to remain idle before
-			// TCP starts sending keepalive probes
-			_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 15)
+			/// Enable keep-alive
+			{
+				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_KEEPALIVE, 1)
 
-			// Number of probes.
-			// ~ cat /proc/sys/net/ipv4/tcp_keepalive_probes (defaults to 9, we reduce it to 5)
-			_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
+				// The time (in seconds) the connection needs to remain idle before
+				// TCP starts sending keepalive probes
+				_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPIDLE, 15)
 
-			// Wait time after successful probe in seconds.
-			// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 15 secs)
-			_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 15)
+				// Number of probes.
+				// ~ cat /proc/sys/net/ipv4/tcp_keepalive_probes (defaults to 9, we reduce it to 5)
+				_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 5)
+
+				// Wait time after successful probe in seconds.
+				// ~ cat /proc/sys/net/ipv4/tcp_keepalive_intvl (defaults to 75 secs, we reduce it to 15 secs)
+				_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 15)
+			}
 
 			// Set tcp user timeout in addition to the keep-alive - tcp-keepalive is not enough to close a socket
 			// with dead end because tcp-keepalive is not fired when there is data in the socket buffer.
@@ -92,17 +104,6 @@ type DialContext func(ctx context.Context, network, address string) (net.Conn, e
 
 // NewInternodeDialContext setups a custom dialer for internode communication
 func NewInternodeDialContext(dialTimeout time.Duration, opts TCPOptions) DialContext {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout: dialTimeout,
-			Control: setTCPParametersFn(opts),
-		}
-		return dialer.DialContext(ctx, network, addr)
-	}
-}
-
-// NewCustomDialContext setups a custom dialer for any external communication and proxies.
-func NewCustomDialContext(dialTimeout time.Duration, opts TCPOptions) DialContext {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			Timeout: dialTimeout,

@@ -149,4 +149,12 @@ var (
 		}
 		return fmt.Sprintf
 	}()
+
+	TurnOff = func() {
+		color.NoColor = true
+	}
+
+	TurnOn = func() {
+		color.NoColor = false
+	}
 )

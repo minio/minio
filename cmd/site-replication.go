@@ -856,12 +856,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 	if err := errors.Unwrap(makeBucketConcErr); err != nil {
 		return err
 	}
-
-	if err := errors.Unwrap(makeRemotesConcErr); err != nil {
-		return err
-	}
-
-	return nil
+	return errors.Unwrap(makeRemotesConcErr)
 }
 
 // DeleteBucketHook - called during a regular delete bucket call when cluster
@@ -1282,7 +1277,13 @@ func (c *SiteReplicationSys) PeerIAMUserChangeHandler(ctx context.Context, chang
 			// only changing the account status.
 			_, err = globalIAMSys.SetUserStatus(ctx, change.AccessKey, userReq.Status)
 		} else {
-			_, err = globalIAMSys.CreateUser(ctx, change.AccessKey, userReq)
+			// We don't allow internal user creation with LDAP enabled for now
+			// (both sites must have LDAP disabled).
+			if globalIAMSys.LDAPConfig.Enabled() {
+				err = errIAMActionNotAllowed
+			} else {
+				_, err = globalIAMSys.CreateUser(ctx, change.AccessKey, userReq)
+			}
 		}
 	}
 	if err != nil {
@@ -1312,8 +1313,14 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 		if updReq.Status != "" && len(updReq.Members) == 0 {
 			_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 		} else {
-			_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
-			if err == nil && updReq.Status != madmin.GroupEnabled {
+			if globalIAMSys.LDAPConfig.Enabled() {
+				// We don't allow internal group manipulation in this API when
+				// LDAP is enabled for now (both sites must have LDAP disabled).
+				err = errIAMActionNotAllowed
+			} else {
+				_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
+			}
+			if err == nil && updReq.Status != "" {
 				_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 			}
 		}
@@ -1417,7 +1424,40 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 		}
 	}
 
-	_, err := globalIAMSys.PolicyDBSet(ctx, mapping.UserOrGroup, mapping.Policy, IAMUserType(mapping.UserType), mapping.IsGroup)
+	// When LDAP is enabled, we verify that the user or group exists in LDAP and
+	// use the normalized form of the entityName (which will be an LDAP DN).
+	userType := IAMUserType(mapping.UserType)
+	isGroup := mapping.IsGroup
+	entityName := mapping.UserOrGroup
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType && userType == stsUser {
+
+		// Validate that the user or group exists in LDAP and use the normalized
+		// form of the entityName (which will be an LDAP DN).
+		var err error
+		if isGroup {
+			var foundGroupDN string
+			var underBaseDN bool
+			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
+				iamLogIf(ctx, err)
+			} else if foundGroupDN == "" || !underBaseDN {
+				err = errNoSuchGroup
+			}
+			entityName = foundGroupDN
+		} else {
+			var foundUserDN string
+			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
+				iamLogIf(ctx, err)
+			} else if foundUserDN == "" {
+				err = errNoSuchUser
+			}
+			entityName = foundUserDN
+		}
+		if err != nil {
+			return wrapSRErr(err)
+		}
+	}
+
+	_, err := globalIAMSys.PolicyDBSet(ctx, entityName, mapping.Policy, userType, isGroup)
 	if err != nil {
 		return wrapSRErr(err)
 	}
@@ -5736,7 +5776,7 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 
 	for _, bi := range buckets {
 		bucket := bi.Name
-		if _, err := getReplicationConfig(ctx, bucket); err != nil {
+		if _, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucket); err != nil {
 			res.Buckets = append(res.Buckets, madmin.ResyncBucketStatus{
 				ErrDetail: err.Error(),
 				Bucket:    bucket,

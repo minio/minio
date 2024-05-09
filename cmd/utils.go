@@ -26,7 +26,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -48,7 +47,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
-	"github.com/minio/minio/internal/deadlineconn"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
@@ -594,29 +592,17 @@ func NewInternodeHTTPTransport(maxIdleConnsPerHost int) func() http.RoundTripper
 	}.NewInternodeHTTPTransport(maxIdleConnsPerHost)
 }
 
-// NewCustomHTTPProxyTransport is used only for proxied requests, specifically
-// only supports HTTP/1.1
-func NewCustomHTTPProxyTransport() func() *http.Transport {
-	return xhttp.ConnSettings{
-		LookupHost:       globalDNSCache.LookupHost,
-		DialTimeout:      rest.DefaultTimeout,
-		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.TLSCiphers(),
-		CurvePreferences: fips.TLSCurveIDs(),
-		EnableHTTP2:      false,
-		TCPOptions:       globalTCPOptions,
-	}.NewCustomHTTPProxyTransport()
-}
-
 // NewHTTPTransportWithClientCerts returns a new http configuration
 // used while communicating with the cloud backends.
-func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transport {
+func NewHTTPTransportWithClientCerts(clientCert, clientKey string) http.RoundTripper {
 	s := xhttp.ConnSettings{
-		LookupHost:  globalDNSCache.LookupHost,
-		DialTimeout: defaultDialTimeout,
-		RootCAs:     globalRootCAs,
-		TCPOptions:  globalTCPOptions,
-		EnableHTTP2: false,
+		LookupHost:       globalDNSCache.LookupHost,
+		DialTimeout:      defaultDialTimeout,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		TCPOptions:       globalTCPOptions,
+		EnableHTTP2:      false,
 	}
 
 	if clientCert != "" && clientKey != "" {
@@ -633,7 +619,7 @@ func NewHTTPTransportWithClientCerts(clientCert, clientKey string) *http.Transpo
 		return transport
 	}
 
-	return s.NewHTTPTransportWithTimeout(1 * time.Minute)
+	return globalRemoteTargetTransport
 }
 
 // NewHTTPTransport returns a new http configuration
@@ -648,45 +634,26 @@ const defaultDialTimeout = 5 * time.Second
 // NewHTTPTransportWithTimeout allows setting a timeout.
 func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 	return xhttp.ConnSettings{
-		DialContext: newCustomDialContext(),
-		LookupHost:  globalDNSCache.LookupHost,
-		DialTimeout: defaultDialTimeout,
-		RootCAs:     globalRootCAs,
-		TCPOptions:  globalTCPOptions,
-		EnableHTTP2: false,
+		LookupHost:       globalDNSCache.LookupHost,
+		DialTimeout:      defaultDialTimeout,
+		RootCAs:          globalRootCAs,
+		TCPOptions:       globalTCPOptions,
+		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		EnableHTTP2:      false,
 	}.NewHTTPTransportWithTimeout(timeout)
-}
-
-// newCustomDialContext setups a custom dialer for any external communication and proxies.
-func newCustomDialContext() xhttp.DialContext {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		dialer := &net.Dialer{
-			Timeout:   15 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}
-
-		conn, err := dialer.DialContext(ctx, network, addr)
-		if err != nil {
-			return nil, err
-		}
-
-		dconn := deadlineconn.New(conn).
-			WithReadDeadline(globalConnReadDeadline).
-			WithWriteDeadline(globalConnWriteDeadline)
-
-		return dconn, nil
-	}
 }
 
 // NewRemoteTargetHTTPTransport returns a new http configuration
 // used while communicating with the remote replication targets.
 func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	return xhttp.ConnSettings{
-		DialContext: newCustomDialContext(),
-		LookupHost:  globalDNSCache.LookupHost,
-		RootCAs:     globalRootCAs,
-		TCPOptions:  globalTCPOptions,
-		EnableHTTP2: false,
+		LookupHost:       globalDNSCache.LookupHost,
+		RootCAs:          globalRootCAs,
+		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
+		CurvePreferences: fips.TLSCurveIDs(),
+		TCPOptions:       globalTCPOptions,
+		EnableHTTP2:      false,
 	}.NewRemoteTargetHTTPTransport(insecure)
 }
 
@@ -1160,16 +1127,18 @@ func ptr[T any](a T) *T {
 	return &a
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
+// sleepContext sleeps for d duration or until ctx is done.
+func sleepContext(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
 	}
-	return b
+	return nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+// helper type to return either item or error.
+type itemOrErr[V any] struct {
+	Item V
+	Err  error
 }

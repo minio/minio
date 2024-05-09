@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -27,6 +27,7 @@ import (
 
 	"github.com/minio/dperf/pkg/dperf"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
@@ -41,6 +42,8 @@ type speedTestOpts struct {
 	storageClass     string
 	bucketName       string
 	enableSha256     bool
+	enableMultipart  bool
+	creds            auth.Credentials
 }
 
 // Get the max throughput and iops numbers.
@@ -107,12 +110,14 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 
 				// if the default concurrency yields zero results, throw an error.
 				if throughputHighestResults[i].Downloads == 0 && opts.concurrencyStart == concurrency {
-					errStr = fmt.Sprintf("no results for downloads upon first attempt, concurrency %d and duration %s", opts.concurrencyStart, opts.duration)
+					errStr = fmt.Sprintf("no results for downloads upon first attempt, concurrency %d and duration %s",
+						opts.concurrencyStart, opts.duration)
 				}
 
 				// if the default concurrency yields zero results, throw an error.
 				if throughputHighestResults[i].Uploads == 0 && opts.concurrencyStart == concurrency {
-					errStr = fmt.Sprintf("no results for uploads upon first attempt, concurrency %d and duration %s", opts.concurrencyStart, opts.duration)
+					errStr = fmt.Sprintf("no results for uploads upon first attempt, concurrency %d and duration %s",
+						opts.concurrencyStart, opts.duration)
 				}
 
 				result.PUTStats.Servers = append(result.PUTStats.Servers, madmin.SpeedTestStatServer{
@@ -160,12 +165,14 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			}
 
 			sopts := speedTestOpts{
-				objectSize:   opts.objectSize,
-				concurrency:  concurrency,
-				duration:     opts.duration,
-				storageClass: opts.storageClass,
-				bucketName:   opts.bucketName,
-				enableSha256: opts.enableSha256,
+				objectSize:      opts.objectSize,
+				concurrency:     concurrency,
+				duration:        opts.duration,
+				storageClass:    opts.storageClass,
+				bucketName:      opts.bucketName,
+				enableSha256:    opts.enableSha256,
+				enableMultipart: opts.enableMultipart,
+				creds:           opts.creds,
 			}
 
 			results := globalNotificationSys.SpeedTest(ctx, sopts)

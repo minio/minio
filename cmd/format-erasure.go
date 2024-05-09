@@ -443,11 +443,8 @@ func checkFormatErasureValues(formats []*formatErasureV3, disks []StorageAPI, se
 			return fmt.Errorf("%s drive is already being used in another erasure deployment. (Number of drives specified: %d but the number of drives found in the %s drive's format.json: %d)",
 				disks[i], len(formats), humanize.Ordinal(i+1), len(formatErasure.Erasure.Sets)*len(formatErasure.Erasure.Sets[0]))
 		}
-		// Only if custom erasure drive count is set, verify if the
-		// set_drive_count was manually set - we need to honor what is
-		// present on the drives.
-		if globalCustomErasureDriveCount && len(formatErasure.Erasure.Sets[0]) != setDriveCount {
-			return fmt.Errorf("%s drive is already formatted with %d drives per erasure set. This cannot be changed to %d, please revert your MINIO_ERASURE_SET_DRIVE_COUNT setting", disks[i], len(formatErasure.Erasure.Sets[0]), setDriveCount)
+		if len(formatErasure.Erasure.Sets[0]) != setDriveCount {
+			return fmt.Errorf("%s drive is already formatted with %d drives per erasure set. This cannot be changed to %d", disks[i], len(formatErasure.Erasure.Sets[0]), setDriveCount)
 		}
 	}
 	return nil

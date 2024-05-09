@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -34,6 +35,8 @@ type metricsCache struct {
 	dataUsageInfo       *cachevalue.Cache[DataUsageInfo]
 	esetHealthResult    *cachevalue.Cache[HealthResult]
 	driveMetrics        *cachevalue.Cache[storageMetrics]
+	memoryMetrics       *cachevalue.Cache[madmin.MemInfo]
+	cpuMetrics          *cachevalue.Cache[madmin.CPUMetrics]
 	clusterDriveMetrics *cachevalue.Cache[storageMetrics]
 	nodesUpDown         *cachevalue.Cache[nodesOnline]
 }
@@ -43,6 +46,8 @@ func newMetricsCache() *metricsCache {
 		dataUsageInfo:       newDataUsageInfoCache(),
 		esetHealthResult:    newESetHealthResultCache(),
 		driveMetrics:        newDriveMetricsCache(),
+		memoryMetrics:       newMemoryMetricsCache(),
+		cpuMetrics:          newCPUMetricsCache(),
 		clusterDriveMetrics: newClusterStorageInfoCache(),
 		nodesUpDown:         newNodesUpDownCache(),
 	}
@@ -53,7 +58,7 @@ type nodesOnline struct {
 }
 
 func newNodesUpDownCache() *cachevalue.Cache[nodesOnline] {
-	loadNodesUpDown := func() (v nodesOnline, err error) {
+	loadNodesUpDown := func(ctx context.Context) (v nodesOnline, err error) {
 		v.Online, v.Offline = globalNotificationSys.GetPeerOnlineCount()
 		return
 	}
@@ -80,7 +85,7 @@ type storageMetrics struct {
 }
 
 func newDataUsageInfoCache() *cachevalue.Cache[DataUsageInfo] {
-	loadDataUsage := func() (u DataUsageInfo, err error) {
+	loadDataUsage := func(ctx context.Context) (u DataUsageInfo, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return
@@ -96,7 +101,7 @@ func newDataUsageInfoCache() *cachevalue.Cache[DataUsageInfo] {
 }
 
 func newESetHealthResultCache() *cachevalue.Cache[HealthResult] {
-	loadHealth := func() (r HealthResult, err error) {
+	loadHealth := func(ctx context.Context) (r HealthResult, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return
@@ -153,7 +158,7 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 		prevDriveIOStatsRefreshedAt time.Time
 	)
 
-	loadDriveMetrics := func() (v storageMetrics, err error) {
+	loadDriveMetrics := func(ctx context.Context) (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return
@@ -198,8 +203,58 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 		loadDriveMetrics)
 }
 
+func newCPUMetricsCache() *cachevalue.Cache[madmin.CPUMetrics] {
+	loadCPUMetrics := func(ctx context.Context) (v madmin.CPUMetrics, err error) {
+		var types madmin.MetricType = madmin.MetricsCPU
+
+		m := collectLocalMetrics(types, collectMetricsOpts{
+			hosts: map[string]struct{}{
+				globalLocalNodeName: {},
+			},
+		})
+
+		for _, hm := range m.ByHost {
+			if hm.CPU != nil {
+				v = *hm.CPU
+				break
+			}
+		}
+
+		return
+	}
+
+	return cachevalue.NewFromFunc(1*time.Minute,
+		cachevalue.Opts{ReturnLastGood: true},
+		loadCPUMetrics)
+}
+
+func newMemoryMetricsCache() *cachevalue.Cache[madmin.MemInfo] {
+	loadMemoryMetrics := func(ctx context.Context) (v madmin.MemInfo, err error) {
+		var types madmin.MetricType = madmin.MetricsMem
+
+		m := collectLocalMetrics(types, collectMetricsOpts{
+			hosts: map[string]struct{}{
+				globalLocalNodeName: {},
+			},
+		})
+
+		for _, hm := range m.ByHost {
+			if hm.Mem != nil && len(hm.Mem.Info.Addr) > 0 {
+				v = hm.Mem.Info
+				break
+			}
+		}
+
+		return
+	}
+
+	return cachevalue.NewFromFunc(1*time.Minute,
+		cachevalue.Opts{ReturnLastGood: true},
+		loadMemoryMetrics)
+}
+
 func newClusterStorageInfoCache() *cachevalue.Cache[storageMetrics] {
-	loadStorageInfo := func() (v storageMetrics, err error) {
+	loadStorageInfo := func(ctx context.Context) (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return storageMetrics{}, nil

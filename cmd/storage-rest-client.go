@@ -54,6 +54,9 @@ func isNetworkError(err error) bool {
 		if down := xnet.IsNetworkOrHostDown(nerr.Err, false); down {
 			return true
 		}
+		if errors.Is(nerr.Err, rest.ErrClientClosed) {
+			return true
+		}
 	}
 	if errors.Is(err, grid.ErrDisconnected) {
 		return true
@@ -61,7 +64,7 @@ func isNetworkError(err error) bool {
 	// More corner cases suitable for storage REST API
 	switch {
 	// A peer node can be in shut down phase and proactively
-	// return 503 server closed error,consider it as an offline node
+	// return 503 server closed error, consider it as an offline node
 	case strings.Contains(err.Error(), http.ErrServerClosed.Error()):
 		return true
 	// Corner case, the server closed the connection with a keep-alive timeout
@@ -188,8 +191,13 @@ func (client *storageRESTClient) String() string {
 	return client.endpoint.String()
 }
 
-// IsOnline - returns whether RPC client failed to connect or not.
+// IsOnline - returns whether client failed to connect or not.
 func (client *storageRESTClient) IsOnline() bool {
+	return client.restClient.IsOnline() || client.IsOnlineWS()
+}
+
+// IsOnlineWS - returns whether websocket client failed to connect or not.
+func (client *storageRESTClient) IsOnlineWS() bool {
 	return client.gridConn.State() == grid.StateConnected
 }
 
@@ -251,7 +259,7 @@ func (client *storageRESTClient) NSScanner(ctx context.Context, cache dataUsageC
 }
 
 func (client *storageRESTClient) GetDiskID() (string, error) {
-	if !client.IsOnline() {
+	if !client.IsOnlineWS() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
 		// were attempted. This can lead to false success under certain conditions
@@ -272,7 +280,7 @@ func (client *storageRESTClient) SetDiskID(id string) {
 }
 
 func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOptions) (info DiskInfo, err error) {
-	if !client.IsOnline() {
+	if !client.IsOnlineWS() {
 		// make sure to check if the disk is offline, since the underlying
 		// value is cached we should attempt to invalidate it if such calls
 		// were attempted. This can lead to false success under certain conditions
@@ -299,10 +307,9 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		return info, nil
 	} // In all other cases cache the value upto 1sec.
 
-	client.diskInfoCache.InitOnce(time.Second,
-		cachevalue.Opts{CacheError: true},
-		func() (info DiskInfo, err error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	client.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
+		func(ctx context.Context) (info DiskInfo, err error) {
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
 			nopts := DiskInfoOptions{DiskID: *client.diskID.Load(), Metrics: true}
@@ -318,7 +325,7 @@ func (client *storageRESTClient) DiskInfo(ctx context.Context, opts DiskInfoOpti
 		},
 	)
 
-	return client.diskInfoCache.Get()
+	return client.diskInfoCache.GetWithCtx(ctx)
 }
 
 // MakeVolBulk - create multiple volumes in a bulk operation.
@@ -440,7 +447,9 @@ func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, 
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
-func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo, dstVolume, dstPath string, opts RenameOptions) (sign uint64, err error) {
+func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcPath string, fi FileInfo,
+	dstVolume, dstPath string, opts RenameOptions,
+) (res RenameDataResp, err error) {
 	params := RenameDataHandlerParams{
 		DiskID:    *client.diskID.Load(),
 		SrcVolume: srcVolume,
@@ -457,11 +466,11 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 		resp, err = storageRenameDataInlineRPC.Call(ctx, client.gridConn, &RenameDataInlineHandlerParams{params})
 	}
 	if err != nil {
-		return 0, toStorageErr(err)
+		return res, toStorageErr(err)
 	}
 
 	defer storageRenameDataRPC.PutResponse(resp)
-	return resp.Signature, nil
+	return *resp, nil
 }
 
 // where we keep old *Readers

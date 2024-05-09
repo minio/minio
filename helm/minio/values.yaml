@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2024-03-03T17-50-39Z
+  tag: RELEASE.2024-04-18T19-09-19Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2024-03-03T00-13-08Z
+  tag: RELEASE.2024-04-18T16-45-29Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
@@ -45,6 +45,9 @@ ignoreChartChecksums: false
 
 ## Additional arguments to pass to minio binary
 extraArgs: []
+# example for enabling FTP:
+#   - --ftp=\"address=:8021\"
+#   - --ftp=\"passive-port-range=10000-10010\"
 
 ## Additional volumes to minio container
 extraVolumes: []
@@ -179,6 +182,18 @@ service:
   externalIPs: []
   annotations: {}
 
+  ## service.loadBalancerSourceRanges Addresses that are allowed when service is LoadBalancer
+  ## https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
+  ##
+  #loadBalancerSourceRanges:
+  #   - 10.10.10.0/24
+  loadBalancerSourceRanges: []
+
+  ## service.externalTrafficPolicy minio service external traffic policy
+  ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+  ##
+  externalTrafficPolicy: Cluster
+
 ## Configure Ingress based on the documentation here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ##
 
@@ -211,6 +226,17 @@ consoleService:
   loadBalancerIP: ~
   externalIPs: []
   annotations: {}
+  ## consoleService.loadBalancerSourceRanges Addresses that are allowed when service is LoadBalancer
+  ## https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
+  ##
+  #loadBalancerSourceRanges:
+  #   - 10.10.10.0/24
+  loadBalancerSourceRanges: []
+
+  ## servconsoleServiceice.externalTrafficPolicy minio service external traffic policy
+  ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+  ##
+  externalTrafficPolicy: Cluster
 
 consoleIngress:
   enabled: false

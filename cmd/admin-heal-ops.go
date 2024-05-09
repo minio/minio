@@ -63,8 +63,8 @@ const (
 )
 
 var (
-	errHealIdleTimeout   = fmt.Errorf("healing results were not consumed for too long")
-	errHealStopSignalled = fmt.Errorf("heal stop signaled")
+	errHealIdleTimeout   = errors.New("healing results were not consumed for too long")
+	errHealStopSignalled = errors.New("heal stop signaled")
 
 	errFnHealFromAPIErr = func(ctx context.Context, err error) error {
 		apiErr := toAdminAPIErr(ctx, err)

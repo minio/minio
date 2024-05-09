@@ -67,7 +67,7 @@ minio server --address 127.0.0.1:9008 "http://127.0.0.1:9007/tmp/multisited/data
 	"http://127.0.0.1:9008/tmp/multisited/data/disterasure/xl{5...8}" >/tmp/sited_2.log 2>&1 &
 
 # Wait to make sure all MinIO instances are up
-sleep 20s
+sleep 30s
 
 export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
 export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
@@ -79,6 +79,8 @@ export MC_HOST_sited=http://minio:minio123@127.0.0.1:9008
 
 ## Setup site replication
 ./mc admin replicate add sitea siteb --replicate-ilm-expiry
+
+sleep 10s
 
 ## Add warm tier
 ./mc ilm tier add minio sitea WARM-TIER --endpoint http://localhost:9006 --access-key minio --secret-key minio123 --bucket bucket
@@ -101,7 +103,8 @@ if [ "$flag2" != "true" ]; then
 fi
 
 ## Check if ILM expiry rules replicated
-sleep 20
+sleep 30s
+
 ./mc ilm rule list siteb/bucket
 count=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules | length')
 if [ $count -ne 1 ]; then
@@ -146,7 +149,8 @@ fi
 ## Check edit of ILM expiry rule and its replication
 id=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[] | select(.Expiration.Days==3) | .ID' | sed 's/"//g')
 ./mc ilm edit --id "${id}" --expire-days "100" sitea/bucket
-sleep 30
+sleep 30s
+
 count1=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Expiration.Days')
 count2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Expiration.Days')
 if [ $count1 -ne 100 ]; then
@@ -173,7 +177,8 @@ fi
 
 ## Perform individual updates of rules to sites
 ./mc ilm edit --id "${id}" --expire-days "999" sitea/bucket
-sleep 1
+sleep 5s
+
 ./mc ilm edit --id "${id}" --expire-days "888" siteb/bucket # when ilm expiry re-enabled, this should win
 
 ## Check re-enabling of ILM expiry rules replication
@@ -190,7 +195,7 @@ if [ "$flag" != "true" ]; then
 fi
 
 ## Check if latest updated rules get replicated to all sites post re-enable of ILM expiry rules replication
-sleep 30
+sleep 30s
 count1=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Expiration.Days')
 count2=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Expiration.Days')
 if [ $count1 -ne 888 ]; then
@@ -211,7 +216,8 @@ fi
 
 ## Check replication of edit of prefix, tags and status of ILM Expiry Rules
 ./mc ilm rule edit --id "${id}" --prefix "newprefix" --tags "ntag1=nval1&ntag2=nval2" --disable sitea/bucket
-sleep 30
+sleep 30s
+
 nprefix=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Prefix' | sed 's/"//g')
 ntagName1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Key' | sed 's/"//g')
 ntagVal1=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[0].Filter.And.Tags[0].Value' | sed 's/"//g')
@@ -233,7 +239,8 @@ fi
 
 ## Check replication of deleted ILM expiry rules
 ./mc ilm rule remove --id "${id}" sitea/bucket
-sleep 30
+sleep 30s
+
 # should error as rule doesn't exist
 error=$(./mc ilm rule list siteb/bucket --json | jq '.error.cause.message' | sed 's/"//g')
 if [ "$error" != "The lifecycle configuration does not exist" ]; then
@@ -245,7 +252,8 @@ fi
 # Add rules again as previous tests removed all
 ./mc ilm add sitea/bucket --transition-days 0 --transition-tier WARM-TIER --transition-days 0 --noncurrent-expire-days 2 --expire-days 3 --prefix "myprefix" --tags "tag1=val1&tag2=val2"
 ./mc admin replicate add sitea siteb sited
-sleep 30
+sleep 30s
+
 # Check site replication info and status for new site
 sitesCount=$(mc admin replicate info sited --json | jq '.sites | length')
 if [ ${sitesCount} -ne 3 ]; then
@@ -282,7 +290,8 @@ fi
 id=$(./mc ilm rule list siteb/bucket --json | jq '.config.Rules[] | select(.Expiration.Days==3) | .ID' | sed 's/"//g')
 # Remove rule from siteb
 ./mc ilm rule remove --id "${id}" siteb/bucket
-sleep 30 # allow to replicate
+sleep 30s # allow to replicate
+
 # sitea should still contain the transition portion of rule
 transitionRuleDays=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Transition.Days')
 expirationRuleDet=$(./mc ilm rule list sitea/bucket --json | jq '.config.Rules[0].Expiration')

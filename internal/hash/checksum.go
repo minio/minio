@@ -27,6 +27,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio/internal/hash/sha256"
@@ -71,9 +72,10 @@ const (
 
 // Checksum is a type and base 64 encoded value.
 type Checksum struct {
-	Type    ChecksumType
-	Encoded string
-	Raw     []byte
+	Type      ChecksumType
+	Encoded   string
+	Raw       []byte
+	WantParts int
 }
 
 // Is returns if c is all of t.
@@ -260,13 +262,14 @@ func ReadPartCheckSums(b []byte) (res []map[string]string) {
 		}
 		// Skip main checksum
 		b = b[length:]
-		if !typ.Is(ChecksumIncludesMultipart) {
-			continue
-		}
 		parts, n := binary.Uvarint(b)
 		if n <= 0 {
 			break
 		}
+		if !typ.Is(ChecksumIncludesMultipart) {
+			continue
+		}
+
 		if len(res) == 0 {
 			res = make([]map[string]string, parts)
 		}
@@ -292,11 +295,25 @@ func NewChecksumWithType(alg ChecksumType, value string) *Checksum {
 	if !alg.IsSet() {
 		return nil
 	}
+	wantParts := 0
+	if strings.ContainsRune(value, '-') {
+		valSplit := strings.Split(value, "-")
+		if len(valSplit) != 2 {
+			return nil
+		}
+		value = valSplit[0]
+		nParts, err := strconv.Atoi(valSplit[1])
+		if err != nil {
+			return nil
+		}
+		alg |= ChecksumMultipart
+		wantParts = nParts
+	}
 	bvalue, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {
 		return nil
 	}
-	c := Checksum{Type: alg, Encoded: value, Raw: bvalue}
+	c := Checksum{Type: alg, Encoded: value, Raw: bvalue, WantParts: wantParts}
 	if !c.Valid() {
 		return nil
 	}
@@ -325,12 +342,15 @@ func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 	b = append(b, crc...)
 	if c.Type.Is(ChecksumMultipart) {
 		var checksums int
+		if c.WantParts > 0 && !c.Type.Is(ChecksumIncludesMultipart) {
+			checksums = c.WantParts
+		}
 		// Ensure we don't divide by 0:
 		if c.Type.RawByteLen() == 0 || len(parts)%c.Type.RawByteLen() != 0 {
 			hashLogIf(context.Background(), fmt.Errorf("internal error: Unexpected checksum length: %d, each checksum %d", len(parts), c.Type.RawByteLen()))
 			checksums = 0
 			parts = nil
-		} else {
+		} else if len(parts) > 0 {
 			checksums = len(parts) / c.Type.RawByteLen()
 		}
 		if !c.Type.Is(ChecksumIncludesMultipart) {
@@ -358,7 +378,7 @@ func (c Checksum) Valid() bool {
 }
 
 // Matches returns whether given content matches c.
-func (c Checksum) Matches(content []byte) error {
+func (c Checksum) Matches(content []byte, parts int) error {
 	if len(c.Encoded) == 0 {
 		return nil
 	}
@@ -368,6 +388,13 @@ func (c Checksum) Matches(content []byte) error {
 		return err
 	}
 	sum := hasher.Sum(nil)
+	if c.WantParts > 0 && c.WantParts != parts {
+		return ChecksumMismatch{
+			Want: fmt.Sprintf("%s-%d", c.Encoded, c.WantParts),
+			Got:  fmt.Sprintf("%s-%d", base64.StdEncoding.EncodeToString(sum), parts),
+		}
+	}
+
 	if !bytes.Equal(sum, c.Raw) {
 		return ChecksumMismatch{
 			Want: c.Encoded,

@@ -27,13 +27,13 @@ import (
 // Converts underlying storage error. Convenience function written to
 // handle all cases where we have known types of errors returned by
 // underlying storage layer.
-func toObjectErr(err error, params ...string) error {
-	if err == nil {
+func toObjectErr(oerr error, params ...string) error {
+	if oerr == nil {
 		return nil
 	}
 
 	// Unwarp the error first
-	err = unwrapAll(err)
+	err := unwrapAll(oerr)
 
 	if err == context.Canceled {
 		return context.Canceled
@@ -157,6 +157,9 @@ func toObjectErr(err error, params ...string) error {
 		if len(params) >= 2 {
 			apiErr.Object = decodeDirObject(params[1])
 		}
+		if v, ok := oerr.(InsufficientReadQuorum); ok {
+			apiErr.Type = v.Type
+		}
 		return apiErr
 	case errErasureWriteQuorum.Error():
 		apiErr := InsufficientWriteQuorum{}
@@ -201,8 +204,34 @@ func (e SlowDown) Error() string {
 	return "Please reduce your request rate"
 }
 
+// RQErrType reason for read quorum error.
+type RQErrType int
+
+const (
+	// RQInsufficientOnlineDrives - not enough online drives.
+	RQInsufficientOnlineDrives RQErrType = 1 << iota
+	// RQInconsistentMeta - inconsistent metadata.
+	RQInconsistentMeta
+)
+
+func (t RQErrType) String() string {
+	switch t {
+	case RQInsufficientOnlineDrives:
+		return "InsufficientOnlineDrives"
+	case RQInconsistentMeta:
+		return "InconsistentMeta"
+	default:
+		return "Unknown"
+	}
+}
+
 // InsufficientReadQuorum storage cannot satisfy quorum for read operation.
-type InsufficientReadQuorum GenericError
+type InsufficientReadQuorum struct {
+	Bucket string
+	Object string
+	Err    error
+	Type   RQErrType
+}
 
 func (e InsufficientReadQuorum) Error() string {
 	return "Storage resources are insufficient for the read operation " + e.Bucket + "/" + e.Object
@@ -566,7 +595,7 @@ type InvalidRange struct {
 }
 
 func (e InvalidRange) Error() string {
-	return fmt.Sprintf("The requested range \"bytes %d -> %d of %d\" is not satisfiable.", e.OffsetBegin, e.OffsetEnd, e.ResourceSize)
+	return fmt.Sprintf("The requested range 'bytes=%d-%d' is not satisfiable", e.OffsetBegin, e.OffsetEnd)
 }
 
 // ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.
@@ -729,6 +758,9 @@ func isErrMethodNotAllowed(err error) bool {
 }
 
 func isErrInvalidRange(err error) bool {
+	if errors.Is(err, errInvalidRange) {
+		return true
+	}
 	_, ok := err.(InvalidRange)
 	return ok
 }

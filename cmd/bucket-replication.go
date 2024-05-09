@@ -81,13 +81,10 @@ const (
 // gets replication config associated to a given bucket name.
 func getReplicationConfig(ctx context.Context, bucketName string) (rc *replication.Config, err error) {
 	rCfg, _, err := globalBucketMetadataSys.GetReplicationConfig(ctx, bucketName)
-	if err != nil {
-		if errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucketName}) || errors.Is(err, errInvalidArgument) {
-			return rCfg, err
-		}
-		logger.CriticalIf(ctx, err)
+	if err != nil && !errors.Is(err, BucketReplicationConfigNotFound{Bucket: bucketName}) {
+		return rCfg, err
 	}
-	return rCfg, err
+	return rCfg, nil
 }
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
@@ -261,10 +258,16 @@ func mustReplicate(ctx context.Context, bucket, object string, mopts mustReplica
 	if mopts.replicationRequest { // incoming replication request on target cluster
 		return
 	}
+
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
+		replLogOnceIf(ctx, err, bucket)
 		return
 	}
+	if cfg == nil {
+		return
+	}
+
 	opts := replication.ObjectOpts{
 		Name:           object,
 		SSEC:           crypto.SSEC.IsEncrypted(mopts.meta),
@@ -312,6 +315,7 @@ var standardHeaders = []string{
 func hasReplicationRules(ctx context.Context, bucket string, objects []ObjectToDelete) bool {
 	c, err := getReplicationConfig(ctx, bucket)
 	if err != nil || c == nil {
+		replLogOnceIf(ctx, err, bucket)
 		return false
 	}
 	for _, obj := range objects {
@@ -331,6 +335,7 @@ func isStandardHeader(matchHeaderKey string) bool {
 func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelete, oi ObjectInfo, delOpts ObjectOptions, gerr error) (dsc ReplicateDecision) {
 	rcfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || rcfg == nil {
+		replLogOnceIf(ctx, err, bucket)
 		return
 	}
 	// If incoming request is a replication request, it does not need to be re-replicated.
@@ -993,7 +998,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 	object := ri.Name
 
 	cfg, err := getReplicationConfig(ctx, bucket)
-	if err != nil {
+	if err != nil || cfg == nil {
 		replLogOnceIf(ctx, err, "get-replication-config-"+bucket)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
@@ -2231,6 +2236,8 @@ func getProxyTargets(ctx context.Context, bucket, object string, opts ObjectOpti
 	}
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil || cfg == nil {
+		replLogOnceIf(ctx, err, bucket)
+
 		return &madmin.BucketTargets{}
 	}
 	topts := replication.ObjectOpts{Name: object}
@@ -2725,7 +2732,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 		s.workerCh <- struct{}{}
 	}()
 	// Allocate new results channel to receive ObjectInfo.
-	objInfoCh := make(chan ObjectInfo)
+	objInfoCh := make(chan itemOrErr[ObjectInfo])
 	cfg, err := getReplicationConfig(ctx, opts.bucket)
 	if err != nil {
 		replLogIf(ctx, fmt.Errorf("replication resync of %s for arn %s failed with %w", opts.bucket, opts.arn, err))
@@ -2860,7 +2867,12 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			}
 		}(ctx, i)
 	}
-	for obj := range objInfoCh {
+	for res := range objInfoCh {
+		if res.Err != nil {
+			resyncStatus = ResyncFailed
+			replLogIf(ctx, res.Err)
+			return
+		}
 		select {
 		case <-s.resyncCancelCh:
 			resyncStatus = ResyncCanceled
@@ -2869,11 +2881,11 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			return
 		default:
 		}
-		if heal && lastCheckpoint != "" && lastCheckpoint != obj.Name {
+		if heal && lastCheckpoint != "" && lastCheckpoint != res.Item.Name {
 			continue
 		}
 		lastCheckpoint = ""
-		roi := getHealReplicateObjectInfo(obj, rcfg)
+		roi := getHealReplicateObjectInfo(res.Item, rcfg)
 		if !roi.ExistingObjResync.mustResync() {
 			continue
 		}
@@ -3124,7 +3136,7 @@ func saveResyncStatus(ctx context.Context, bucket string, brs BucketReplicationR
 func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, opts madmin.ReplDiffOpts) (chan madmin.DiffInfo, error) {
 	cfg, err := getReplicationConfig(ctx, bucket)
 	if err != nil {
-		replLogIf(ctx, err)
+		replLogOnceIf(ctx, err, bucket)
 		return nil, err
 	}
 	tgts, err := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
@@ -3133,7 +3145,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 		return nil, err
 	}
 
-	objInfoCh := make(chan ObjectInfo, 10)
+	objInfoCh := make(chan itemOrErr[ObjectInfo], 10)
 	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, WalkOptions{}); err != nil {
 		replLogIf(ctx, err)
 		return nil, err
@@ -3145,11 +3157,17 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	diffCh := make(chan madmin.DiffInfo, 4000)
 	go func() {
 		defer xioutil.SafeClose(diffCh)
-		for obj := range objInfoCh {
+		for res := range objInfoCh {
+			if res.Err != nil {
+				diffCh <- madmin.DiffInfo{Err: res.Err}
+				return
+			}
 			if contextCanceled(ctx) {
 				// Just consume input...
 				continue
 			}
+			obj := res.Item
+
 			// Ignore object prefixes which are excluded
 			// from versioning via the MinIO bucket versioning extension.
 			if globalBucketVersioningSys.PrefixSuspended(bucket, obj.Name) {
@@ -3217,7 +3235,11 @@ func QueueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, ret
 	if oi.ModTime.IsZero() {
 		return
 	}
-	rcfg, _ := getReplicationConfig(ctx, bucket)
+	rcfg, err := getReplicationConfig(ctx, bucket)
+	if err != nil {
+		replLogOnceIf(ctx, err, bucket)
+		return
+	}
 	tgts, _ := globalBucketTargetSys.ListBucketTargets(ctx, bucket)
 	queueReplicationHeal(ctx, bucket, oi, replicationConfig{
 		Config:  rcfg,

@@ -81,6 +81,6 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/", mainHandler)
 
-	log.Print("Listing on :8081")
+	log.Print("Listening on :8081")
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }

@@ -22,7 +22,7 @@ jobs:
 
     strategy:
       matrix:
-        go-version: [1.21.x]
+        go-version: [1.22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +35,12 @@ jobs:
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-decom
+
+      - name: Test ILM
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-ilm
 
       - name: Test Config File
         run: |

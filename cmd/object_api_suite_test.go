@@ -521,11 +521,11 @@ func enableCompression(t *testing.T, encrypt bool) {
 	globalCompressConfigMu.Unlock()
 	if encrypt {
 		globalAutoEncryption = encrypt
-		var err error
-		GlobalKMS, err = kms.Parse("my-minio-key:5lF+0pJM0OWwlQrvK2S/I7W9mO4a6rJJI7wzj7v09cw=")
+		KMS, err := kms.ParseSecretKey("my-minio-key:5lF+0pJM0OWwlQrvK2S/I7W9mO4a6rJJI7wzj7v09cw=")
 		if err != nil {
 			t.Fatal(err)
 		}
+		GlobalKMS = KMS
 	}
 }
 
@@ -536,11 +536,11 @@ func enableEncryption(t *testing.T) {
 	globalCompressConfigMu.Unlock()
 
 	globalAutoEncryption = true
-	var err error
-	GlobalKMS, err = kms.Parse("my-minio-key:5lF+0pJM0OWwlQrvK2S/I7W9mO4a6rJJI7wzj7v09cw=")
+	KMS, err := kms.ParseSecretKey("my-minio-key:5lF+0pJM0OWwlQrvK2S/I7W9mO4a6rJJI7wzj7v09cw=")
 	if err != nil {
 		t.Fatal(err)
 	}
+	GlobalKMS = KMS
 }
 
 func resetCompressEncryption() {

@@ -57,23 +57,8 @@ func registerKMSRouter(router *mux.Router) {
 		kmsRouter.Methods(http.MethodGet).Path(version + "/version").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSVersionHandler)))
 		// KMS Key APIs
 		kmsRouter.Methods(http.MethodPost).Path(version+"/key/create").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSCreateKeyHandler))).Queries("key-id", "{key-id:.*}")
-		kmsRouter.Methods(http.MethodPost).Path(version+"/key/import").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSImportKeyHandler))).Queries("key-id", "{key-id:.*}")
-		kmsRouter.Methods(http.MethodDelete).Path(version+"/key/delete").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDeleteKeyHandler))).Queries("key-id", "{key-id:.*}")
 		kmsRouter.Methods(http.MethodGet).Path(version+"/key/list").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSListKeysHandler))).Queries("pattern", "{pattern:.*}")
 		kmsRouter.Methods(http.MethodGet).Path(version + "/key/status").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSKeyStatusHandler)))
-
-		// KMS Policy APIs
-		kmsRouter.Methods(http.MethodPost).Path(version+"/policy/assign").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSAssignPolicyHandler))).Queries("policy", "{policy:.*}")
-		kmsRouter.Methods(http.MethodGet).Path(version+"/policy/describe").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDescribePolicyHandler))).Queries("policy", "{policy:.*}")
-		kmsRouter.Methods(http.MethodGet).Path(version+"/policy/get").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSGetPolicyHandler))).Queries("policy", "{policy:.*}")
-		kmsRouter.Methods(http.MethodDelete).Path(version+"/policy/delete").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDeletePolicyHandler))).Queries("policy", "{policy:.*}")
-		kmsRouter.Methods(http.MethodGet).Path(version+"/policy/list").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSListPoliciesHandler))).Queries("pattern", "{pattern:.*}")
-
-		// KMS Identity APIs
-		kmsRouter.Methods(http.MethodGet).Path(version+"/identity/describe").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDescribeIdentityHandler))).Queries("identity", "{identity:.*}")
-		kmsRouter.Methods(http.MethodGet).Path(version + "/identity/describe-self").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDescribeSelfIdentityHandler)))
-		kmsRouter.Methods(http.MethodDelete).Path(version+"/identity/delete").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSDeleteIdentityHandler))).Queries("identity", "{identity:.*}")
-		kmsRouter.Methods(http.MethodGet).Path(version+"/identity/list").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSListIdentitiesHandler))).Queries("pattern", "{pattern:.*}")
 	}
 
 	// If none of the routes match add default error handler routes

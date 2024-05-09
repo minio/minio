@@ -361,7 +361,7 @@ type MetricsGroupOpts struct {
 func (g *MetricsGroupV2) RegisterRead(read func(context.Context) []MetricV2) {
 	g.metricsCache = cachevalue.NewFromFunc(g.cacheInterval,
 		cachevalue.Opts{ReturnLastGood: true},
-		func() ([]MetricV2, error) {
+		func(ctx context.Context) ([]MetricV2, error) {
 			if g.metricsGroupOpts.dependGlobalObjectAPI {
 				objLayer := newObjectLayerFn()
 				// Service not initialized yet
@@ -537,6 +537,16 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 		Subsystem: driveSubsystem,
 		Name:      "errors_timeout",
 		Help:      "Total number of drive timeout errors since server start",
+		Type:      counterMetric,
+	}
+}
+
+func getNodeDriveIOErrorsMD() MetricDescription {
+	return MetricDescription{
+		Namespace: nodeMetricNamespace,
+		Subsystem: driveSubsystem,
+		Name:      "errors_ioerror",
+		Help:      "Total number of drive I/O errors since server start",
 		Type:      counterMetric,
 	}
 }
@@ -907,7 +917,7 @@ func getRepFailedBytesTotalMD(namespace MetricNamespace) MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      totalFailedBytes,
 		Help:      "Total number of bytes failed at least once to replicate since server start",
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -917,7 +927,7 @@ func getRepFailedOperationsTotalMD(namespace MetricNamespace) MetricDescription 
 		Subsystem: replicationSubsystem,
 		Name:      totalFailedCount,
 		Help:      "Total number of objects which failed replication since server start",
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -927,7 +937,7 @@ func getRepSentBytesMD(namespace MetricNamespace) MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      sentBytes,
 		Help:      "Total number of bytes replicated to the target",
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -951,7 +961,7 @@ func getRepReceivedBytesMD(namespace MetricNamespace) MetricDescription {
 		Subsystem: replicationSubsystem,
 		Name:      receivedBytes,
 		Help:      helpText,
-		Type:      gaugeMetric,
+		Type:      counterMetric,
 	}
 }
 
@@ -3522,6 +3532,12 @@ func getLocalStorageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				})
 
 				metrics = append(metrics, MetricV2{
+					Description:    getNodeDriveIOErrorsMD(),
+					Value:          float64(disk.Metrics.TotalErrorsAvailability - disk.Metrics.TotalErrorsTimeout),
+					VariableLabels: map[string]string{"drive": disk.DrivePath},
+				})
+
+				metrics = append(metrics, MetricV2{
 					Description:    getNodeDriveAvailabilityErrorsMD(),
 					Value:          float64(disk.Metrics.TotalErrorsAvailability),
 					VariableLabels: map[string]string{"drive": disk.DrivePath},
@@ -3900,7 +3916,7 @@ func getWebhookMetrics() *MetricsGroupV2 {
 					Subsystem: webhookSubsystem,
 					Name:      webhookQueueLength,
 					Help:      "Webhook queue length",
-					Type:      counterMetric,
+					Type:      gaugeMetric,
 				},
 				VariableLabels: labels,
 				Value:          float64(t.Stats().QueueLength),
@@ -3954,7 +3970,7 @@ func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				Help:      "Number of KMS requests that succeeded",
 				Type:      counterMetric,
 			},
-			Value: float64(metric.RequestOK),
+			Value: float64(metric.ReqOK),
 		})
 		metrics = append(metrics, MetricV2{
 			Description: MetricDescription{
@@ -3964,7 +3980,7 @@ func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				Help:      "Number of KMS requests that failed due to some error. (HTTP 4xx status code)",
 				Type:      counterMetric,
 			},
-			Value: float64(metric.RequestErr),
+			Value: float64(metric.ReqErr),
 		})
 		metrics = append(metrics, MetricV2{
 			Description: MetricDescription{
@@ -3974,19 +3990,8 @@ func getKMSMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 				Help:      "Number of KMS requests that failed due to some internal failure. (HTTP 5xx status code)",
 				Type:      counterMetric,
 			},
-			Value: float64(metric.RequestFail),
+			Value: float64(metric.ReqFail),
 		})
-		metrics = append(metrics, MetricV2{
-			Description: MetricDescription{
-				Namespace: clusterMetricNamespace,
-				Subsystem: kmsSubsystem,
-				Name:      kmsUptime,
-				Help:      "The time the KMS has been up and running in seconds.",
-				Type:      counterMetric,
-			},
-			Value: metric.UpTime.Seconds(),
-		})
-
 		return metrics
 	})
 	return mg

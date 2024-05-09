@@ -171,7 +171,8 @@ type serverCtxt struct {
 	ReadHeaderTimeout   time.Duration
 	MaxIdleConnsPerHost int
 
-	CrossDomainXML string
+	SendBufSize, RecvBufSize int
+	CrossDomainXML           string
 	// The layout of disks as interpreted
 	Layout disksLayout
 }
@@ -241,7 +242,7 @@ var (
 	globalBucketMonitor     *bandwidth.Monitor
 	globalPolicySys         *PolicySys
 	globalIAMSys            *IAMSys
-	globalBytePoolCap       *bpool.BytePoolCap
+	globalBytePoolCap       atomic.Pointer[bpool.BytePoolCap]
 
 	globalLifecycleSys       *LifecycleSys
 	globalBucketSSEConfigSys *BucketSSEConfigSys
@@ -348,7 +349,7 @@ var (
 	globalDNSConfig dns.Store
 
 	// GlobalKMS initialized KMS configuration
-	GlobalKMS kms.KMS
+	GlobalKMS *kms.KMS
 
 	// Common lock for various subsystems performing the leader tasks
 	globalLeaderLock *sharedLock
@@ -398,11 +399,7 @@ var (
 
 	globalInternodeTransport http.RoundTripper
 
-	globalProxyTransport http.RoundTripper
-
 	globalRemoteTargetTransport http.RoundTripper
-
-	globalHealthChkTransport http.RoundTripper
 
 	globalDNSCache = &dnscache.Resolver{
 		Timeout: 5 * time.Second,
@@ -449,9 +446,6 @@ var (
 	// Public key for subnet confidential information
 	subnetAdminPublicKey    = []byte("-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEAyC+ol5v0FP+QcsR6d1KypR/063FInmNEFsFzbEwlHQyEQN3O7kNI\nwVDN1vqp1wDmJYmv4VZGRGzfFw1q+QV7K1TnysrEjrqpVxfxzDQCoUadAp8IxLLc\ns2fjyDNxnZjoC6fTID9C0khKnEa5fPZZc3Ihci9SiCGkPmyUyCGVSxWXIKqL2Lrj\nyDc0pGeEhWeEPqw6q8X2jvTC246tlzqpDeNsPbcv2KblXRcKniQNbBrizT37CKHQ\nM6hc9kugrZbFuo8U5/4RQvZPJnx/DVjLDyoKo2uzuVQs4s+iBrA5sSSLp8rPED/3\n6DgWw3e244Dxtrg972dIT1IOqgn7KUJzVQIDAQAB\n-----END PUBLIC KEY-----")
 	subnetAdminPublicKeyDev = []byte("-----BEGIN PUBLIC KEY-----\nMIIBCgKCAQEArhQYXQd6zI4uagtVfthAPOt6i4AYHnEWCoNeAovM4MNl42I9uQFh\n3VHkbWj9Gpx9ghf6PgRgK+8FcFvy+StmGcXpDCiFywXX24uNhcZjscX1C4Esk0BW\nidfI2eXYkOlymD4lcK70SVgJvC693Qa7Z3FE1KU8Nfv2bkxEE4bzOkojX9t6a3+J\nR8X6Z2U8EMlH1qxJPgiPogELhWP0qf2Lq7GwSAflo1Tj/ytxvD12WrnE0Rrj/8yP\nSnp7TbYm91KocKMExlmvx3l2XPLxeU8nf9U0U+KOmorejD3MDMEPF+tlk9LB3JWP\nZqYYe38rfALVTn4RVJriUcNOoEpEyC0WEwIDAQAB\n-----END PUBLIC KEY-----")
-
-	globalConnReadDeadline  time.Duration
-	globalConnWriteDeadline time.Duration
 
 	// dynamic sleeper to avoid thundering herd for trash folder expunge routine
 	deleteCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)

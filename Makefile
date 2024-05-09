@@ -53,6 +53,10 @@ test-root-disable: install-race
 	@echo "Running minio root lockdown tests"
 	@env bash $(PWD)/buildscripts/disable-root.sh
 
+test-ilm: install-race
+	@echo "Running ILM tests"
+	@env bash $(PWD)/docs/bucket/replication/setup_ilm_expiry_replication.sh
+
 test-decom: install-race
 	@echo "Running minio decom tests"
 	@env bash $(PWD)/docs/distributed/decom.sh
@@ -80,6 +84,10 @@ test-iam: build ## verify IAM (external IDP, etcd backends)
 	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
 	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
+
+test-iam-ldap-upgrade-import: build ## verify IAM (external LDAP IDP)
+	@echo "Running upgrade tests for IAM (LDAP backend)"
+	@env bash $(PWD)/buildscripts/minio-iam-ldap-upgrade-import-test.sh
 
 test-sio-error:
 	@(env bash $(PWD)/docs/bucket/replication/sio-error.sh)
@@ -123,6 +131,7 @@ verify-healing: ## verify healing and replacing disks with minio binary
 	@echo "Verify healing build with race"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
+	@(env bash $(PWD)/buildscripts/verify-healing-empty-erasure-set.sh)
 	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
 verify-healing-with-root-disks: ## verify healing root disks

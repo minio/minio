@@ -1,5 +1,5 @@
 ---
-name: Test GitHub Action
+name: Spelling
 on: [pull_request]
 
 jobs:

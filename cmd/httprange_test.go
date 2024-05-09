@@ -72,7 +72,7 @@ func TestHTTPRequestRangeSpec(t *testing.T) {
 		if err == nil {
 			t.Errorf("Case %d: Did not get an expected error - got %v", i, rs)
 		}
-		if err == errInvalidRange {
+		if isErrInvalidRange(err) {
 			t.Errorf("Case %d: Got invalid range error instead of a parse error", i)
 		}
 		if rs != nil {
@@ -95,7 +95,7 @@ func TestHTTPRequestRangeSpec(t *testing.T) {
 		if err1 == nil {
 			o, l, err2 = rs.GetOffsetLength(resourceSize)
 		}
-		if err1 == errInvalidRange || (err1 == nil && err2 == errInvalidRange) {
+		if isErrInvalidRange(err1) || (err1 == nil && isErrInvalidRange(err2)) {
 			continue
 		}
 		t.Errorf("Case %d: Expected errInvalidRange but: %v %v %d %d %v", i, rs, err1, o, l, err2)

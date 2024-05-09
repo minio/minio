@@ -29,12 +29,18 @@ import (
 //
 // These are paths under the top-level /minio/metrics/v3 metrics endpoint. Each
 // of these paths returns a set of V3 metrics.
+//
+// Per-bucket metrics endpoints always start with /bucket and the bucket name is
+// appended to the path. e.g. if the collector path is /bucket/api, the endpoint
+// for the bucket "mybucket" would be /minio/metrics/v3/bucket/api/mybucket
 const (
 	apiRequestsCollectorPath collectorPath = "/api/requests"
-	apiBucketCollectorPath   collectorPath = "/api/bucket"
+	apiBucketCollectorPath   collectorPath = "/bucket/api"
 
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
+	systemMemoryCollectorPath           collectorPath = "/system/memory"
+	systemCPUCollectorPath              collectorPath = "/system/cpu"
 	systemProcessCollectorPath          collectorPath = "/system/process"
 	systemGoCollectorPath               collectorPath = "/system/go"
 
@@ -42,6 +48,9 @@ const (
 	clusterUsageObjectsCollectorPath collectorPath = "/cluster/usage/objects"
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
+	clusterAuditCollectorPath        collectorPath = "/cluster/audit"
+	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
+	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
 )
 
 const (
@@ -112,6 +121,57 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadNetworkInternodeMetrics,
 	)
 
+	systemMemoryMG := NewMetricsGroup(systemMemoryCollectorPath,
+		[]MetricDescriptor{
+			memTotalMD,
+			memUsedMD,
+			memFreeMD,
+			memAvailableMD,
+			memBuffersMD,
+			memCacheMD,
+			memSharedMD,
+			memUsedPercMD,
+		},
+		loadMemoryMetrics,
+	)
+
+	systemCPUMG := NewMetricsGroup(systemCPUCollectorPath,
+		[]MetricDescriptor{
+			sysCPUAvgIdleMD,
+			sysCPUAvgIOWaitMD,
+			sysCPULoadMD,
+			sysCPULoadPercMD,
+			sysCPUNiceMD,
+			sysCPUStealMD,
+			sysCPUSystemMD,
+			sysCPUUserMD,
+		},
+		loadCPUMetrics,
+	)
+
+	systemProcessMG := NewMetricsGroup(systemProcessCollectorPath,
+		[]MetricDescriptor{
+			processLocksReadTotalMD,
+			processLocksWriteTotalMD,
+			processCPUTotalSecondsMD,
+			processGoRoutineTotalMD,
+			processIORCharBytesMD,
+			processIOReadBytesMD,
+			processIOWCharBytesMD,
+			processIOWriteBytesMD,
+			processStarttimeSecondsMD,
+			processUptimeSecondsMD,
+			processFileDescriptorLimitTotalMD,
+			processFileDescriptorOpenTotalMD,
+			processSyscallReadTotalMD,
+			processSyscallWriteTotalMD,
+			processResidentMemoryBytesMD,
+			processVirtualMemoryBytesMD,
+			processVirtualMemoryMaxBytesMD,
+		},
+		loadProcessMetrics,
+	)
+
 	systemDriveMG := NewMetricsGroup(systemDriveCollectorPath,
 		[]MetricDescriptor{
 			driveUsedBytesMD,
@@ -121,6 +181,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			driveFreeInodesMD,
 			driveTotalInodesMD,
 			driveTimeoutErrorsMD,
+			driveIOErrorsMD,
 			driveAvailabilityErrorsMD,
 			driveWaitingIOMD,
 			driveAPILatencyMD,
@@ -203,17 +264,58 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterErasureSetMetrics,
 	)
 
+	clusterAuditMG := NewMetricsGroup(clusterAuditCollectorPath,
+		[]MetricDescriptor{
+			auditFailedMessagesMD,
+			auditTargetQueueLengthMD,
+			auditTotalMessagesMD,
+		},
+		loadClusterAuditMetrics,
+	)
+
+	clusterNotificationMG := NewMetricsGroup(clusterNotificationCollectorPath,
+		[]MetricDescriptor{
+			notificationCurrentSendInProgressMD,
+			notificationEventsErrorsTotalMD,
+			notificationEventsSentTotalMD,
+			notificationEventsSkippedTotalMD,
+		},
+		loadClusterNotificationMetrics,
+	)
+
+	clusterIAMMG := NewMetricsGroup(clusterIAMCollectorPath,
+		[]MetricDescriptor{
+			lastSyncDurationMillisMD,
+			pluginAuthnServiceFailedRequestsMinuteMD,
+			pluginAuthnServiceLastFailSecondsMD,
+			pluginAuthnServiceLastSuccSecondsMD,
+			pluginAuthnServiceSuccAvgRttMsMinuteMD,
+			pluginAuthnServiceSuccMaxRttMsMinuteMD,
+			pluginAuthnServiceTotalRequestsMinuteMD,
+			sinceLastSyncMillisMD,
+			syncFailuresMD,
+			syncSuccessesMD,
+		},
+		loadClusterIAMMetrics,
+	)
+
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
 
 		systemNetworkInternodeMG,
 		systemDriveMG,
+		systemMemoryMG,
+		systemCPUMG,
+		systemProcessMG,
 
 		clusterHealthMG,
 		clusterUsageObjectsMG,
 		clusterUsageBucketsMG,
 		clusterErasureSetMG,
+		clusterAuditMG,
+		clusterNotificationMG,
+		clusterIAMMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These
@@ -243,13 +345,10 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 	}
 
 	// Prepare to register the collectors. Other than `MetricGroup` collectors,
-	// we also have standard collectors like `ProcessCollector` and `GoCollector`.
+	// we also have standard collectors like `GoCollector`.
 
 	// Create all Non-`MetricGroup` collectors here.
 	collectors := map[collectorPath]prometheus.Collector{
-		systemProcessCollectorPath: collectors.NewProcessCollector(collectors.ProcessCollectorOpts{
-			ReportErrors: true,
-		}),
 		systemGoCollectorPath: collectors.NewGoCollector(),
 	}
 

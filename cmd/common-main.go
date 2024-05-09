@@ -21,10 +21,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -49,7 +47,6 @@ import (
 	"github.com/minio/console/api/operations"
 	consoleoauth2 "github.com/minio/console/pkg/auth/idp/oauth2"
 	consoleCerts "github.com/minio/console/pkg/certs"
-	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -60,9 +57,9 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/certs"
 	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/ellipses"
 	"github.com/minio/pkg/v2/env"
 	xnet "github.com/minio/pkg/v2/net"
+	"golang.org/x/term"
 )
 
 // serverDebugLog will enable debug printing
@@ -73,6 +70,13 @@ var (
 )
 
 func init() {
+	if !term.IsTerminal(int(os.Stdout.Fd())) || !term.IsTerminal(int(os.Stderr.Fd())) {
+		color.TurnOff()
+	}
+	if env.Get("NO_COLOR", "") != "" || env.Get("TERM", "") == "dumb" {
+		color.TurnOff()
+	}
+
 	if runtime.GOOS == "windows" {
 		if mousetrap.StartedByExplorer() {
 			fmt.Printf("Don't double-click %s\n", os.Args[0])
@@ -130,6 +134,9 @@ func minioConfigToConsoleFeatures() {
 		if value := env.Get(config.EnvMinIOLogQueryAuthToken, ""); value != "" {
 			os.Setenv("CONSOLE_LOG_QUERY_AUTH_TOKEN", value)
 		}
+	}
+	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
+		os.Setenv("CONSOLE_BROWSER_REDIRECT_URL", value)
 	}
 	// pass the console subpath configuration
 	if globalBrowserRedirectURL != nil {
@@ -401,6 +408,8 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
 	ctxt.ConnClientReadDeadline = ctx.Duration("conn-client-read-deadline")
 	ctxt.ConnClientWriteDeadline = ctx.Duration("conn-client-write-deadline")
+	ctxt.SendBufSize = ctx.Int("send-buf-size")
+	ctxt.RecvBufSize = ctx.Int("recv-buf-size")
 
 	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
@@ -852,128 +861,28 @@ func loadRootCredentials() {
 // Initialize KMS global variable after valiadating and loading the configuration.
 // It depends on KMS env variables and global cli flags.
 func handleKMSConfig() {
-	if env.IsSet(kms.EnvKMSSecretKey) && env.IsSet(kms.EnvKESEndpoint) {
-		logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKMSSecretKey, kms.EnvKESEndpoint))
+	present, err := kms.IsPresent()
+	if err != nil {
+		logger.Fatal(err, "Invalid KMS configuration specified")
+	}
+	if !present {
+		return
 	}
 
-	if env.IsSet(kms.EnvKMSSecretKey) {
-		KMS, err := kms.Parse(env.Get(kms.EnvKMSSecretKey, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to parse the KMS secret key inherited from the shell environment")
-		}
-		GlobalKMS = KMS
+	KMS, err := kms.Connect(GlobalContext, &kms.ConnectionOptions{
+		CADir: globalCertsCADir.Get(),
+	})
+	if err != nil {
+		logger.Fatal(err, "Failed to connect to KMS")
 	}
-	if env.IsSet(kms.EnvKESEndpoint) {
-		if env.IsSet(kms.EnvKESAPIKey) {
-			if env.IsSet(kms.EnvKESClientKey) {
-				logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientKey))
-			}
-			if env.IsSet(kms.EnvKESClientCert) {
-				logger.Fatal(errors.New("ambiguous KMS configuration"), fmt.Sprintf("The environment contains %q as well as %q", kms.EnvKESAPIKey, kms.EnvKESClientCert))
-			}
-		}
-		if !env.IsSet(kms.EnvKESKeyName) {
-			logger.Fatal(errors.New("Invalid KES configuration"), fmt.Sprintf("The mandatory environment variable %q not set", kms.EnvKESKeyName))
-		}
 
-		var endpoints []string
-		for _, endpoint := range strings.Split(env.Get(kms.EnvKESEndpoint, ""), ",") {
-			if strings.TrimSpace(endpoint) == "" {
-				continue
-			}
-			if !ellipses.HasEllipses(endpoint) {
-				endpoints = append(endpoints, endpoint)
-				continue
-			}
-			patterns, err := ellipses.FindEllipsesPatterns(endpoint)
-			if err != nil {
-				logger.Fatal(err, fmt.Sprintf("Invalid KES endpoint %q", endpoint))
-			}
-			for _, lbls := range patterns.Expand() {
-				endpoints = append(endpoints, strings.Join(lbls, ""))
-			}
-		}
-		rootCAs, err := certs.GetRootCAs(env.Get(kms.EnvKESServerCA, globalCertsCADir.Get()))
-		if err != nil {
-			logger.Fatal(err, fmt.Sprintf("Unable to load X.509 root CAs for KES from %q", env.Get(kms.EnvKESServerCA, globalCertsCADir.Get())))
-		}
-
-		var kmsConf kms.Config
-		if env.IsSet(kms.EnvKESAPIKey) {
-			key, err := kes.ParseAPIKey(env.Get(kms.EnvKESAPIKey, ""))
-			if err != nil {
-				logger.Fatal(err, fmt.Sprintf("Failed to parse KES API key from %q", env.Get(kms.EnvKESAPIKey, "")))
-			}
-			kmsConf = kms.Config{
-				Endpoints:    endpoints,
-				DefaultKeyID: env.Get(kms.EnvKESKeyName, ""),
-				APIKey:       key,
-				RootCAs:      rootCAs,
-			}
-		} else {
-			loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
-				// Manually load the certificate and private key into memory.
-				// We need to check whether the private key is encrypted, and
-				// if so, decrypt it using the user-provided password.
-				certBytes, err := os.ReadFile(certFile)
-				if err != nil {
-					return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
-				}
-				keyBytes, err := os.ReadFile(keyFile)
-				if err != nil {
-					return tls.Certificate{}, fmt.Errorf("Unable to load KES client private key as specified by the shell environment: %v", err)
-				}
-				privateKeyPEM, rest := pem.Decode(bytes.TrimSpace(keyBytes))
-				if len(rest) != 0 {
-					return tls.Certificate{}, errors.New("Unable to load KES client private key as specified by the shell environment: private key contains additional data")
-				}
-				if x509.IsEncryptedPEMBlock(privateKeyPEM) {
-					keyBytes, err = x509.DecryptPEMBlock(privateKeyPEM, []byte(env.Get(kms.EnvKESClientPassword, "")))
-					if err != nil {
-						return tls.Certificate{}, fmt.Errorf("Unable to decrypt KES client private key as specified by the shell environment: %v", err)
-					}
-					keyBytes = pem.EncodeToMemory(&pem.Block{Type: privateKeyPEM.Type, Bytes: keyBytes})
-				}
-				certificate, err := tls.X509KeyPair(certBytes, keyBytes)
-				if err != nil {
-					return tls.Certificate{}, fmt.Errorf("Unable to load KES client certificate as specified by the shell environment: %v", err)
-				}
-				return certificate, nil
-			}
-
-			reloadCertEvents := make(chan tls.Certificate, 1)
-			certificate, err := certs.NewCertificate(env.Get(kms.EnvKESClientCert, ""), env.Get(kms.EnvKESClientKey, ""), loadX509KeyPair)
-			if err != nil {
-				logger.Fatal(err, "Failed to load KES client certificate")
-			}
-			certificate.Watch(context.Background(), 15*time.Minute, syscall.SIGHUP)
-			certificate.Notify(reloadCertEvents)
-
-			kmsConf = kms.Config{
-				Endpoints:        endpoints,
-				DefaultKeyID:     env.Get(kms.EnvKESKeyName, ""),
-				Certificate:      certificate,
-				ReloadCertEvents: reloadCertEvents,
-				RootCAs:          rootCAs,
-			}
-		}
-
-		kmsLogger := Logger{}
-		KMS, err := kms.NewWithConfig(kmsConf, kmsLogger)
-		if err != nil {
-			logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
-		}
-		// Try to generate a data encryption key. Only try to create key if this fails.
-		// This implicitly checks that we can communicate to KES.
-		// We don't treat a policy error as failure condition since MinIO may not have the permission
-		// to create keys - just to generate/decrypt data encryption keys.
-		if _, err = KMS.GenerateKey(GlobalContext, env.Get(kms.EnvKESKeyName, ""), kms.Context{}); err != nil && errors.Is(err, kes.ErrKeyNotFound) {
-			if err = KMS.CreateKey(context.Background(), env.Get(kms.EnvKESKeyName, "")); err != nil && !errors.Is(err, kes.ErrKeyExists) && !errors.Is(err, kes.ErrNotAllowed) {
-				logger.Fatal(err, "Unable to initialize a connection to KES as specified by the shell environment")
-			}
-		}
-		GlobalKMS = KMS
+	if _, err = KMS.GenerateKey(GlobalContext, &kms.GenerateKeyRequest{}); errors.Is(err, kms.ErrKeyNotFound) {
+		err = KMS.CreateKey(GlobalContext, &kms.CreateKeyRequest{Name: KMS.DefaultKey})
 	}
+	if err != nil && !errors.Is(err, kms.ErrKeyExists) && !errors.Is(err, kms.ErrPermission) {
+		logger.Fatal(err, "Failed to connect to KMS")
+	}
+	GlobalKMS = KMS
 }
 
 func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
