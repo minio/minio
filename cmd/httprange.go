@@ -197,7 +197,7 @@ func (h *HTTPRangeSpec) ToHeader() (string, error) {
 	case h.Start > -1:
 		end = ""
 	default:
-		return "", fmt.Errorf("does not have valid range value")
+		return "", errors.New("does not have valid range value")
 	}
 	return fmt.Sprintf("bytes=%s-%s", start, end), nil
 }
