@@ -1217,9 +1217,9 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	bucketStorageCache.InitOnce(10*time.Second,
-		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
-		func() (DataUsageInfo, error) {
-			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
+		cachevalue.Opts{ReturnLastGood: true},
+		func(ctx context.Context) (DataUsageInfo, error) {
+			ctx, done := context.WithTimeout(ctx, 2*time.Second)
 			defer done()
 
 			return loadDataUsageFromBackend(ctx, objectAPI)

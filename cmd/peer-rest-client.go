@@ -116,7 +116,7 @@ func (client *peerRESTClient) call(method string, values url.Values, body io.Rea
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	if client == nil || !client.IsOnline() {
+	if client == nil {
 		return nil, errPeerNotReachable
 	}
 
@@ -129,6 +129,10 @@ func (client *peerRESTClient) callWithContext(ctx context.Context, method string
 		return respBody, nil
 	}
 
+	if xnet.IsNetworkOrHostDown(err, true) {
+		return nil, errPeerNotReachable
+	}
+
 	return nil, err
 }
 
@@ -139,7 +143,11 @@ func (client *peerRESTClient) String() string {
 
 // IsOnline returns true if the peer client is online.
 func (client *peerRESTClient) IsOnline() bool {
-	return client.restClient.IsOnline()
+	conn := client.gridConn()
+	if conn == nil {
+		return false
+	}
+	return client.restClient.IsOnline() || conn.State() == grid.StateConnected
 }
 
 // Close - marks the client as closed.
