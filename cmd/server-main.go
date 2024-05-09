@@ -212,6 +212,12 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_LOG_COMPRESS",
 		Hidden: true,
 	},
+	cli.StringFlag{
+		Name:   "log-prefix",
+		Usage:  "specify the log prefix name for the server log",
+		EnvVar: "MINIO_LOG_PREFIX",
+		Hidden: true,
+	},
 }
 
 var serverCmd = cli.Command{
@@ -737,10 +743,19 @@ func initializeLogRotate(ctx *cli.Context) (io.WriteCloser, error) {
 		return nil, err
 	}
 	lgSize := ctx.Int("log-size")
+
+	var fileNameFunc func() string
+	if ctx.IsSet("log-prefix") {
+		fileNameFunc = func() string {
+			return fmt.Sprintf("%s-%s.log", ctx.String("log-prefix"), fmt.Sprintf("%X", time.Now().UTC().UnixNano()))
+		}
+	}
+
 	output, err := logger.NewDir(logger.Options{
 		Directory:       lgDirAbs,
 		MaximumFileSize: int64(lgSize),
 		Compress:        ctx.Bool("log-compress"),
+		FileNameFunc:    fileNameFunc,
 	})
 	if err != nil {
 		return nil, err
