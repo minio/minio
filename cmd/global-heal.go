@@ -71,7 +71,7 @@ func newBgHealSequence() *healSequence {
 		reportProgress:     false,
 		scannedItemsMap:    make(map[madmin.HealItemType]int64),
 		healedItemsMap:     make(map[madmin.HealItemType]int64),
-		healFailedItemsMap: make(map[string]int64),
+		healFailedItemsMap: make(map[madmin.HealItemType]int64),
 	}
 }
 
