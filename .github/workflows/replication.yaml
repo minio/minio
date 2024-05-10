@@ -21,7 +21,7 @@ jobs:
 
     strategy:
       matrix:
-        go-version: [1.18.x, 1.19.x]
+        go-version: [1.21, 1.22]
 
     steps:
       - uses: actions/checkout@v2
