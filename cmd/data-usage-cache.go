@@ -765,6 +765,7 @@ func (d *dataUsageCache) forceCompact(limit int) {
 			}
 		}
 	}
+	found[top] = struct{}{}
 	mark(*topE)
 
 	// Delete all entries not found.
