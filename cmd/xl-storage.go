@@ -417,6 +417,10 @@ func (s *xlStorage) Healing() *healingTracker {
 	if err != nil {
 		return nil
 	}
+	if len(b) == 0 {
+		// 'healing.bin' might be truncated
+		return nil
+	}
 	h := newHealingTracker()
 	_, err = h.UnmarshalMsg(b)
 	bugLogIf(GlobalContext, err)

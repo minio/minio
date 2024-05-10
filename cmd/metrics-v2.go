@@ -536,7 +536,7 @@ func getNodeDriveTimeoutErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_timeout",
-		Help:      "Total number of drive timeout errors since server start",
+		Help:      "Total number of drive timeout errors since server uptime",
 		Type:      counterMetric,
 	}
 }
@@ -546,7 +546,7 @@ func getNodeDriveIOErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_ioerror",
-		Help:      "Total number of drive I/O errors since server start",
+		Help:      "Total number of drive I/O errors since server uptime",
 		Type:      counterMetric,
 	}
 }
@@ -556,7 +556,7 @@ func getNodeDriveAvailabilityErrorsMD() MetricDescription {
 		Namespace: nodeMetricNamespace,
 		Subsystem: driveSubsystem,
 		Name:      "errors_availability",
-		Help:      "Total number of drive I/O errors, timeouts since server start",
+		Help:      "Total number of drive I/O errors, timeouts since server uptime",
 		Type:      counterMetric,
 	}
 }
@@ -686,7 +686,7 @@ func getUsageLastScanActivityMD() MetricDescription {
 		Namespace: minioMetricNamespace,
 		Subsystem: usageSubsystem,
 		Name:      lastActivityTime,
-		Help:      "Time elapsed (in nano seconds) since last scan activity.",
+		Help:      "Time elapsed (in nano seconds) since last scan activity",
 		Type:      gaugeMetric,
 	}
 }
@@ -856,7 +856,7 @@ func getClusterRepLinkTotalOfflineDurationMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      linkDowntimeTotalDuration,
-		Help:      "Total downtime of replication link in seconds since server start",
+		Help:      "Total downtime of replication link in seconds since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -916,7 +916,7 @@ func getRepFailedBytesTotalMD(namespace MetricNamespace) MetricDescription {
 		Namespace: namespace,
 		Subsystem: replicationSubsystem,
 		Name:      totalFailedBytes,
-		Help:      "Total number of bytes failed at least once to replicate since server start",
+		Help:      "Total number of bytes failed at least once to replicate since server uptime",
 		Type:      counterMetric,
 	}
 }
@@ -926,7 +926,7 @@ func getRepFailedOperationsTotalMD(namespace MetricNamespace) MetricDescription 
 		Namespace: namespace,
 		Subsystem: replicationSubsystem,
 		Name:      totalFailedCount,
-		Help:      "Total number of objects which failed replication since server start",
+		Help:      "Total number of objects which failed replication since server uptime",
 		Type:      counterMetric,
 	}
 }
@@ -994,7 +994,7 @@ func getClusterRepCredentialErrorsMD(namespace MetricNamespace) MetricDescriptio
 		Namespace: namespace,
 		Subsystem: replicationSubsystem,
 		Name:      credentialErrors,
-		Help:      "Total number of replication credential errors since server start",
+		Help:      "Total number of replication credential errors since server uptime",
 		Type:      counterMetric,
 	}
 }
@@ -1044,7 +1044,7 @@ func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxActiveWorkers,
-		Help:      "Maximum number of active replication workers seen since server start",
+		Help:      "Maximum number of active replication workers seen since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1064,7 +1064,7 @@ func getClusterRepLinkLatencyMaxMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxLinkLatency,
-		Help:      "Maximum replication link latency in milliseconds seen since server start",
+		Help:      "Maximum replication link latency in milliseconds seen since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1084,7 +1084,7 @@ func getClusterReplAvgQueuedOperationsMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgInQueueCount,
-		Help:      "Average number of objects queued for replication since server start",
+		Help:      "Average number of objects queued for replication since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1094,7 +1094,7 @@ func getClusterReplAvgQueuedBytesMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgInQueueBytes,
-		Help:      "Average number of bytes queued for replication since server start",
+		Help:      "Average number of bytes queued for replication since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1104,7 +1104,7 @@ func getClusterReplMaxQueuedOperationsMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxInQueueCount,
-		Help:      "Maximum number of objects queued for replication since server start",
+		Help:      "Maximum number of objects queued for replication since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1114,7 +1114,7 @@ func getClusterReplMaxQueuedBytesMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxInQueueBytes,
-		Help:      "Maximum number of bytes queued for replication since server start",
+		Help:      "Maximum number of bytes queued for replication since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1134,7 +1134,7 @@ func getClusterReplMaxTransferRateMD() MetricDescription {
 		Namespace: clusterMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxTransferRate,
-		Help:      "Maximum replication transfer rate in bytes/sec seen since server start",
+		Help:      "Maximum replication transfer rate in bytes/sec seen since server uptime",
 		Type:      gaugeMetric,
 	}
 }
@@ -1454,8 +1454,8 @@ func getHealObjectsTotalMD() MetricDescription {
 		Namespace: healMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      total,
-		Help:      "Objects scanned in current self healing run",
-		Type:      gaugeMetric,
+		Help:      "Objects scanned since server uptime",
+		Type:      counterMetric,
 	}
 }
 
@@ -1464,8 +1464,8 @@ func getHealObjectsHealTotalMD() MetricDescription {
 		Namespace: healMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      healTotal,
-		Help:      "Objects healed in current self healing run",
-		Type:      gaugeMetric,
+		Help:      "Objects healed since server uptime",
+		Type:      counterMetric,
 	}
 }
 
@@ -1474,8 +1474,8 @@ func getHealObjectsFailTotalMD() MetricDescription {
 		Namespace: healMetricNamespace,
 		Subsystem: objectsSubsystem,
 		Name:      errorsTotal,
-		Help:      "Objects for which healing failed in current self healing run",
-		Type:      gaugeMetric,
+		Help:      "Objects with healing failed since server uptime",
+		Type:      counterMetric,
 	}
 }
 
@@ -1484,7 +1484,7 @@ func getHealLastActivityTimeMD() MetricDescription {
 		Namespace: healMetricNamespace,
 		Subsystem: timeSubsystem,
 		Name:      lastActivityTime,
-		Help:      "Time elapsed (in nano seconds) since last self healing activity.",
+		Help:      "Time elapsed (in nano seconds) since last self healing activity",
 		Type:      gaugeMetric,
 	}
 }
@@ -2105,7 +2105,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: scannerSubsystem,
 					Name:      "objects_scanned",
-					Help:      "Total number of unique objects scanned since server start",
+					Help:      "Total number of unique objects scanned since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanObject)),
@@ -2115,7 +2115,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: scannerSubsystem,
 					Name:      "versions_scanned",
-					Help:      "Total number of object versions scanned since server start",
+					Help:      "Total number of object versions scanned since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(globalScannerMetrics.lifetime(scannerMetricApplyVersion)),
@@ -2125,7 +2125,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: scannerSubsystem,
 					Name:      "directories_scanned",
-					Help:      "Total number of directories scanned since server start",
+					Help:      "Total number of directories scanned since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanFolder)),
@@ -2135,7 +2135,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: scannerSubsystem,
 					Name:      "bucket_scans_started",
-					Help:      "Total number of bucket scans started since server start",
+					Help:      "Total number of bucket scans started since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDrive) + uint64(globalScannerMetrics.activeDrives())),
@@ -2145,7 +2145,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: scannerSubsystem,
 					Name:      "bucket_scans_finished",
-					Help:      "Total number of bucket scans finished since server start",
+					Help:      "Total number of bucket scans finished since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(globalScannerMetrics.lifetime(scannerMetricScanBucketDrive)),
@@ -2155,7 +2155,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: ilmSubsystem,
 					Name:      "versions_scanned",
-					Help:      "Total number of object versions checked for ilm actions since server start",
+					Help:      "Total number of object versions checked for ilm actions since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(globalScannerMetrics.lifetime(scannerMetricILM)),
@@ -2172,7 +2172,7 @@ func getScannerNodeMetrics() *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: ilmSubsystem,
 					Name:      MetricName("action_count_" + toSnake(action.String())),
-					Help:      "Total action outcome of lifecycle checks since server start",
+					Help:      "Total action outcome of lifecycle checks since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(v),
@@ -2212,7 +2212,7 @@ func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: iamSubsystem,
 					Name:      "since_last_sync_millis",
-					Help:      "Time (in milliseconds) since last successful IAM data sync.",
+					Help:      "Time (in milliseconds) since last successful IAM data sync",
 					Type:      gaugeMetric,
 				},
 				Value: float64(sinceLastSyncMillis),
@@ -2222,7 +2222,7 @@ func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: iamSubsystem,
 					Name:      "sync_successes",
-					Help:      "Number of successful IAM data syncs since server start.",
+					Help:      "Number of successful IAM data syncs since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(atomic.LoadUint64(&globalIAMSys.TotalRefreshSuccesses)),
@@ -2232,7 +2232,7 @@ func getIAMNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 					Namespace: nodeMetricNamespace,
 					Subsystem: iamSubsystem,
 					Name:      "sync_failures",
-					Help:      "Number of failed IAM data syncs since server start.",
+					Help:      "Number of failed IAM data syncs since server uptime",
 					Type:      counterMetric,
 				},
 				Value: float64(atomic.LoadUint64(&globalIAMSys.TotalRefreshFailures)),
@@ -2667,14 +2667,10 @@ func getFailedItems(seq *healSequence) (m []MetricV2) {
 	items := seq.getHealFailedItemsMap()
 	m = make([]MetricV2, 0, len(items))
 	for k, v := range items {
-		s := strings.Split(k, ",")
 		m = append(m, MetricV2{
-			Description: getHealObjectsFailTotalMD(),
-			VariableLabels: map[string]string{
-				"mount_path":    s[0],
-				"volume_status": s[1],
-			},
-			Value: float64(v),
+			Description:    getHealObjectsFailTotalMD(),
+			VariableLabels: map[string]string{"type": string(k)},
+			Value:          float64(v),
 		})
 	}
 	return
