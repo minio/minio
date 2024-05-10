@@ -292,7 +292,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterIAMMetrics,
 	)
 
-	clusterWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
+	loggerWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
 			webhookFailedMessagesMD,
 			webhookQueueLengthMD,
@@ -328,7 +328,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterIAMMG,
 
 		auditMG,
-		clusterWebhookMG,
+		loggerWebhookMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These
