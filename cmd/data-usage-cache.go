@@ -729,6 +729,52 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 	}
 }
 
+// forceCompact will force compact the cache of the top entry.
+// If the number of children is more than limit*100, it will compact self.
+// When above the limit a cleanup will also be performed to remove any possible abandoned entries.
+func (d *dataUsageCache) forceCompact(limit int) {
+	if d == nil || len(d.Cache) <= limit {
+		return
+	}
+	top := hashPath(d.Info.Name).Key()
+	topE := d.find(top)
+	if topE == nil {
+		scannerLogIf(GlobalContext, errors.New("forceCompact: root not found"))
+		return
+	}
+	// If off by 2 orders of magnitude, compact self and log error.
+	if len(topE.Children) > dataScannerForceCompactAtFolders {
+		// If we still have too many children, compact self.
+		scannerLogOnceIf(GlobalContext, fmt.Errorf("forceCompact: %q has %d children. Force compacting. Expect reduced scanner performance", d.Info.Name, len(topE.Children)), d.Info.Name)
+		d.reduceChildrenOf(hashPath(d.Info.Name), limit, true)
+	}
+	if len(d.Cache) <= limit {
+		return
+	}
+
+	// Check for abandoned entries.
+	found := make(map[string]struct{}, len(d.Cache))
+
+	// Mark all children recursively
+	var mark func(entry dataUsageEntry)
+	mark = func(entry dataUsageEntry) {
+		for k := range entry.Children {
+			found[k] = struct{}{}
+			if ch, ok := d.Cache[k]; ok {
+				mark(ch)
+			}
+		}
+	}
+	mark(*topE)
+
+	// Delete all entries not found.
+	for k := range d.Cache {
+		if _, ok := found[k]; !ok {
+			delete(d.Cache, k)
+		}
+	}
+}
+
 // StringAll returns a detailed string representation of all entries in the cache.
 func (d *dataUsageCache) StringAll() string {
 	// Remove bloom filter from print.
