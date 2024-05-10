@@ -261,6 +261,10 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			erasureSetOnlineDrivesCountMD,
 			erasureSetHealingDrivesCountMD,
 			erasureSetHealthMD,
+			erasureSetReadToleranceMD,
+			erasureSetWriteToleranceMD,
+			erasureSetReadHealthMD,
+			erasureSetWriteHealthMD,
 		},
 		loadClusterErasureSetMetrics,
 	)
