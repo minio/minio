@@ -2,10 +2,10 @@ name: VulnCheck
 on:
   pull_request:
     branches:
-      - master
+      - gateway
   push:
     branches:
-      - master
+      - gateway
 jobs:
   vulncheck:
     name: Analysis

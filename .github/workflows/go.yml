@@ -3,7 +3,7 @@ name: Functional Tests
 on:
   pull_request:
     branches:
-    - master
+    - gateway
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
