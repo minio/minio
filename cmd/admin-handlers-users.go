@@ -2476,6 +2476,12 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err)
 	}
 
+	if createReq.Expiration != nil && !createReq.Expiration.IsZero() {
+		// truncate expiration at the second.
+		truncateTime := createReq.Expiration.Truncate(time.Second)
+		createReq.Expiration = &truncateTime
+	}
+
 	// service account access key cannot have space characters beginning and end of the string.
 	if hasSpaceBE(createReq.AccessKey) {
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument)
