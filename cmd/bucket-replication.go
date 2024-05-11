@@ -1542,13 +1542,15 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		} else {
 			_, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts)
 		}
-		if rinfo.Err != nil && minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
-			rinfo.ReplicationStatus = replication.Failed
-			replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
-				bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
-		}
-		if rinfo.Err != nil && minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-			globalBucketTargetSys.markOffline(tgt.EndpointURL())
+		if rinfo.Err != nil {
+			if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
+				rinfo.ReplicationStatus = replication.Failed
+				replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
+					bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
+			}
+			if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+				globalBucketTargetSys.markOffline(tgt.EndpointURL())
+			}
 		}
 	}
 	return
@@ -1568,7 +1570,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			break
 		}
 		if minio.ToErrorResponse(err).Code == "PreconditionFailed" {
-			return err
+			return nil
 		}
 		attempts++
 		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
@@ -1643,6 +1645,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
+			SourceETag:  objInfo.ETag,
 			// always set this to distinguish between `mc mirror` replication and serverside
 			ReplicationRequest: true,
 		},
