@@ -135,7 +135,7 @@ func ReadinessCheckHandler(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
 		defer cancel()
 
-		if _, err := GlobalKMS.GenerateKey(ctx, "", kms.Context{"healthcheck": ""}); err != nil {
+		if _, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{AssociatedData: kms.Context{"healthcheck": ""}}); err != nil {
 			switch r.Method {
 			case http.MethodHead:
 				apiErr := toAPIError(r.Context(), err)

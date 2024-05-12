@@ -80,6 +80,7 @@ var (
 
 // EnableQuiet - turns quiet option on.
 func EnableQuiet() {
+	color.TurnOff() // no colored outputs necessary in quiet mode.
 	quietFlag = true
 }
 

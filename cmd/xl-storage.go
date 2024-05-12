@@ -331,7 +331,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 
 	// Initialize DiskInfo cache
 	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
-		func() (DiskInfo, error) {
+		func(ctx context.Context) (DiskInfo, error) {
 			dcinfo := DiskInfo{}
 			di, err := getDiskInfo(s.drivePath)
 			if err != nil {
@@ -415,6 +415,10 @@ func (s *xlStorage) Healing() *healingTracker {
 		bucketMetaPrefix, healingTrackerFilename)
 	b, err := os.ReadFile(healingFile)
 	if err != nil {
+		return nil
+	}
+	if len(b) == 0 {
+		// 'healing.bin' might be truncated
 		return nil
 	}
 	h := newHealingTracker()
@@ -752,8 +756,8 @@ func (s *xlStorage) setWriteAttribute(writeCount uint64) error {
 
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
-func (s *xlStorage) DiskInfo(_ context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
-	info, err = s.diskInfoCache.Get()
+func (s *xlStorage) DiskInfo(ctx context.Context, _ DiskInfoOptions) (info DiskInfo, err error) {
+	info, err = s.diskInfoCache.GetWithCtx(ctx)
 	info.NRRequests = s.nrRequests
 	info.Rotational = s.rotational
 	info.MountPath = s.drivePath

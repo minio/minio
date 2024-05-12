@@ -1542,13 +1542,15 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		} else {
 			_, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts)
 		}
-		if rinfo.Err != nil && minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
-			rinfo.ReplicationStatus = replication.Failed
-			replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
-				bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
-		}
-		if rinfo.Err != nil && minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-			globalBucketTargetSys.markOffline(tgt.EndpointURL())
+		if rinfo.Err != nil {
+			if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
+				rinfo.ReplicationStatus = replication.Failed
+				replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
+					bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
+			}
+			if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+				globalBucketTargetSys.markOffline(tgt.EndpointURL())
+			}
 		}
 	}
 	return
@@ -1568,7 +1570,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			break
 		}
 		if minio.ToErrorResponse(err).Code == "PreconditionFailed" {
-			return err
+			return nil
 		}
 		attempts++
 		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
@@ -1643,6 +1645,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
+			SourceETag:  objInfo.ETag,
 			// always set this to distinguish between `mc mirror` replication and serverside
 			ReplicationRequest: true,
 		},
@@ -2732,7 +2735,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 		s.workerCh <- struct{}{}
 	}()
 	// Allocate new results channel to receive ObjectInfo.
-	objInfoCh := make(chan ObjectInfo)
+	objInfoCh := make(chan itemOrErr[ObjectInfo])
 	cfg, err := getReplicationConfig(ctx, opts.bucket)
 	if err != nil {
 		replLogIf(ctx, fmt.Errorf("replication resync of %s for arn %s failed with %w", opts.bucket, opts.arn, err))
@@ -2867,7 +2870,12 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			}
 		}(ctx, i)
 	}
-	for obj := range objInfoCh {
+	for res := range objInfoCh {
+		if res.Err != nil {
+			resyncStatus = ResyncFailed
+			replLogIf(ctx, res.Err)
+			return
+		}
 		select {
 		case <-s.resyncCancelCh:
 			resyncStatus = ResyncCanceled
@@ -2876,11 +2884,11 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			return
 		default:
 		}
-		if heal && lastCheckpoint != "" && lastCheckpoint != obj.Name {
+		if heal && lastCheckpoint != "" && lastCheckpoint != res.Item.Name {
 			continue
 		}
 		lastCheckpoint = ""
-		roi := getHealReplicateObjectInfo(obj, rcfg)
+		roi := getHealReplicateObjectInfo(res.Item, rcfg)
 		if !roi.ExistingObjResync.mustResync() {
 			continue
 		}
@@ -3140,7 +3148,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 		return nil, err
 	}
 
-	objInfoCh := make(chan ObjectInfo, 10)
+	objInfoCh := make(chan itemOrErr[ObjectInfo], 10)
 	if err := objAPI.Walk(ctx, bucket, opts.Prefix, objInfoCh, WalkOptions{}); err != nil {
 		replLogIf(ctx, err)
 		return nil, err
@@ -3152,11 +3160,17 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 	diffCh := make(chan madmin.DiffInfo, 4000)
 	go func() {
 		defer xioutil.SafeClose(diffCh)
-		for obj := range objInfoCh {
+		for res := range objInfoCh {
+			if res.Err != nil {
+				diffCh <- madmin.DiffInfo{Err: res.Err}
+				return
+			}
 			if contextCanceled(ctx) {
 				// Just consume input...
 				continue
 			}
+			obj := res.Item
+
 			// Ignore object prefixes which are excluded
 			// from versioning via the MinIO bucket versioning extension.
 			if globalBucketVersioningSys.PrefixSuspended(bucket, obj.Name) {

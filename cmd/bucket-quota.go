@@ -49,8 +49,8 @@ var bucketStorageCache = cachevalue.New[DataUsageInfo]()
 func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 	bucketStorageCache.InitOnce(10*time.Second,
 		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
-		func() (DataUsageInfo, error) {
-			ctx, done := context.WithTimeout(context.Background(), 2*time.Second)
+		func(ctx context.Context) (DataUsageInfo, error) {
+			ctx, done := context.WithTimeout(ctx, 2*time.Second)
 			defer done()
 
 			return loadDataUsageFromBackend(ctx, objAPI)
@@ -59,8 +59,8 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 }
 
 // GetBucketUsageInfo return bucket usage info for a given bucket
-func (sys *BucketQuotaSys) GetBucketUsageInfo(bucket string) (BucketUsageInfo, error) {
-	dui, err := bucketStorageCache.Get()
+func (sys *BucketQuotaSys) GetBucketUsageInfo(ctx context.Context, bucket string) (BucketUsageInfo, error) {
+	dui, err := bucketStorageCache.GetWithCtx(ctx)
 	timedout := OperationTimedOut{}
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &timedout) {
 		if len(dui.BucketsUsage) > 0 {
@@ -118,7 +118,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
 
-		bui, err := sys.GetBucketUsageInfo(bucket)
+		bui, err := sys.GetBucketUsageInfo(ctx, bucket)
 		if err != nil {
 			return err
 		}

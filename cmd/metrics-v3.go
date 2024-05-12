@@ -29,9 +29,13 @@ import (
 //
 // These are paths under the top-level /minio/metrics/v3 metrics endpoint. Each
 // of these paths returns a set of V3 metrics.
+//
+// Per-bucket metrics endpoints always start with /bucket and the bucket name is
+// appended to the path. e.g. if the collector path is /bucket/api, the endpoint
+// for the bucket "mybucket" would be /minio/metrics/v3/bucket/api/mybucket
 const (
 	apiRequestsCollectorPath collectorPath = "/api/requests"
-	apiBucketCollectorPath   collectorPath = "/api/bucket"
+	apiBucketCollectorPath   collectorPath = "/bucket/api"
 
 	systemNetworkInternodeCollectorPath collectorPath = "/system/network/internode"
 	systemDriveCollectorPath            collectorPath = "/system/drive"
@@ -44,9 +48,10 @@ const (
 	clusterUsageObjectsCollectorPath collectorPath = "/cluster/usage/objects"
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
-	clusterAuditCollectorPath        collectorPath = "/cluster/audit"
 	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
+
+	auditCollectorPath collectorPath = "/audit"
 )
 
 const (
@@ -260,15 +265,6 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterErasureSetMetrics,
 	)
 
-	clusterAuditMG := NewMetricsGroup(clusterAuditCollectorPath,
-		[]MetricDescriptor{
-			auditFailedMessagesMD,
-			auditTargetQueueLengthMD,
-			auditTotalMessagesMD,
-		},
-		loadClusterAuditMetrics,
-	)
-
 	clusterNotificationMG := NewMetricsGroup(clusterNotificationCollectorPath,
 		[]MetricDescriptor{
 			notificationCurrentSendInProgressMD,
@@ -295,6 +291,15 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterIAMMetrics,
 	)
 
+	auditMG := NewMetricsGroup(auditCollectorPath,
+		[]MetricDescriptor{
+			auditFailedMessagesMD,
+			auditTargetQueueLengthMD,
+			auditTotalMessagesMD,
+		},
+		loadAuditMetrics,
+	)
+
 	allMetricGroups := []*MetricsGroup{
 		apiRequestsMG,
 		apiBucketMG,
@@ -309,9 +314,10 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterUsageObjectsMG,
 		clusterUsageBucketsMG,
 		clusterErasureSetMG,
-		clusterAuditMG,
 		clusterNotificationMG,
 		clusterIAMMG,
+
+		auditMG,
 	}
 
 	// Bucket metrics are special, they always include the bucket label. These

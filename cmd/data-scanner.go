@@ -53,7 +53,7 @@ const (
 	dataScannerCompactLeastObject    = 500                              // Compact when there is less than this many objects in a branch.
 	dataScannerCompactAtChildren     = 10000                            // Compact when there are this many children in a branch.
 	dataScannerCompactAtFolders      = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
-	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
+	dataScannerForceCompactAtFolders = 250_000                          // Compact when this many subfolders in a single folder (even top level).
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling   = true
@@ -349,6 +349,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		// No useful information...
 		return cache, err
 	}
+	s.newCache.forceCompact(dataScannerCompactAtChildren)
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
@@ -1199,17 +1200,15 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 		console.Debugf(applyActionsLogPrefix+" lifecycle: Secondary scan: %v\n", event.Action)
 	}
 
-	if event.Action == lifecycle.NoneAction {
-		return event
-	}
-
-	if obj.IsLatest && event.Action == lifecycle.DeleteAllVersionsAction {
-		if lr.LockEnabled && enforceRetentionForDeletion(ctx, obj) {
+	switch event.Action {
+	case lifecycle.DeleteAllVersionsAction, lifecycle.DelMarkerDeleteAllVersionsAction:
+		// Skip if bucket has object locking enabled; To prevent the
+		// possibility of violating an object retention on one of the
+		// noncurrent versions of this object.
+		if lr.LockEnabled {
 			return lifecycle.Event{Action: lifecycle.NoneAction}
 		}
-	}
 
-	switch event.Action {
 	case lifecycle.DeleteVersionAction, lifecycle.DeleteRestoredVersionAction:
 		// Defensive code, should never happen
 		if obj.VersionID == "" {

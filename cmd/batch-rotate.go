@@ -95,6 +95,7 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 	if e.Type == ssekms && spaces {
 		return crypto.ErrInvalidEncryptionKeyID
 	}
+
 	if e.Type == ssekms && GlobalKMS != nil {
 		ctx := kms.Context{}
 		if e.Context != "" {
@@ -113,7 +114,7 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 			e.kmsContext[k] = v
 		}
 		ctx["MinIO batch API"] = "batchrotate" // Context for a test key operation
-		if _, err := GlobalKMS.GenerateKey(GlobalContext, e.Key, ctx); err != nil {
+		if _, err := GlobalKMS.GenerateKey(GlobalContext, &kms.GenerateKeyRequest{Name: e.Key, AssociatedData: ctx}); err != nil {
 			return err
 		}
 	}
@@ -356,7 +357,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	retryAttempts := ri.RetryAttempts
 	ctx, cancel := context.WithCancel(ctx)
 
-	results := make(chan ObjectInfo, 100)
+	results := make(chan itemOrErr[ObjectInfo], 100)
 	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
 		Marker: lastObject,
 		Filter: selectObj,
@@ -365,9 +366,14 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		// Do not need to retry if we can't list objects on source.
 		return err
 	}
-
-	for result := range results {
-		result := result
+	failed := false
+	for res := range results {
+		if res.Err != nil {
+			failed = true
+			batchLogIf(ctx, res.Err)
+			break
+		}
+		result := res.Item
 		sseKMS := crypto.S3KMS.IsEncrypted(result.UserDefined)
 		sseS3 := crypto.S3.IsEncrypted(result.UserDefined)
 		if !sseKMS && !sseS3 { // neither sse-s3 nor sse-kms disallowed
@@ -377,7 +383,6 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		go func() {
 			defer wk.Give()
 			for attempts := 1; attempts <= retryAttempts; attempts++ {
-				attempts := attempts
 				stopFn := globalBatchJobsMetrics.trace(batchJobMetricKeyRotation, job.ID, attempts)
 				success := true
 				if err := r.KeyRotate(ctx, api, result); err != nil {
@@ -387,8 +392,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				} else {
 					stopFn(result, nil)
 				}
-				ri.trackCurrentBucketObject(r.Bucket, result, success)
-				ri.RetryAttempts = attempts
+				ri.trackCurrentBucketObject(r.Bucket, result, success, attempts)
 				globalBatchJobsMetrics.save(job.ID, ri)
 				// persist in-memory state to disk after every 10secs.
 				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
@@ -407,8 +411,8 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	}
 	wk.Wait()
 
-	ri.Complete = ri.ObjectsFailed == 0
-	ri.Failed = ri.ObjectsFailed > 0
+	ri.Complete = !failed && ri.ObjectsFailed == 0
+	ri.Failed = failed || ri.ObjectsFailed > 0
 	globalBatchJobsMetrics.save(job.ID, ri)
 	// persist in-memory state to disk.
 	batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
@@ -475,8 +479,5 @@ func (r *BatchJobKeyRotateV1) Validate(ctx context.Context, job BatchJobRequest,
 		}
 	}
 
-	if err := r.Flags.Retry.Validate(); err != nil {
-		return err
-	}
-	return nil
+	return r.Flags.Retry.Validate()
 }

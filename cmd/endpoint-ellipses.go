@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/cespare/xxhash/v2"
@@ -134,7 +133,7 @@ func possibleSetCountsWithSymmetry(setCounts []uint64, argPatterns []ellipses.Ar
 // on each index, this function also determines the final set size
 // The final set size has the affinity towards choosing smaller
 // indexes (total sets)
-func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint64, argPatterns []ellipses.ArgPattern) (setIndexes [][]uint64, err error) {
+func getSetIndexes(args []string, totalSizes []uint64, setDriveCount uint64, argPatterns []ellipses.ArgPattern) (setIndexes [][]uint64, err error) {
 	if len(totalSizes) == 0 || len(args) == 0 {
 		return nil, errInvalidArgument
 	}
@@ -142,7 +141,7 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 	setIndexes = make([][]uint64, len(totalSizes))
 	for _, totalSize := range totalSizes {
 		// Check if totalSize has minimum range upto setSize
-		if totalSize < setSizes[0] || totalSize < customSetDriveCount {
+		if totalSize < setSizes[0] || totalSize < setDriveCount {
 			msg := fmt.Sprintf("Incorrect number of endpoints provided %s", args)
 			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
 		}
@@ -167,11 +166,11 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 	var setSize uint64
 	// Custom set drive count allows to override automatic distribution.
 	// only meant if you want to further optimize drive distribution.
-	if customSetDriveCount > 0 {
+	if setDriveCount > 0 {
 		msg := fmt.Sprintf("Invalid set drive count. Acceptable values for %d number drives are %d", commonSize, setCounts)
 		var found bool
 		for _, ss := range setCounts {
-			if ss == customSetDriveCount {
+			if ss == setDriveCount {
 				found = true
 			}
 		}
@@ -180,8 +179,7 @@ func getSetIndexes(args []string, totalSizes []uint64, customSetDriveCount uint6
 		}
 
 		// No automatic symmetry calculation expected, user is on their own
-		setSize = customSetDriveCount
-		globalCustomErasureDriveCount = true
+		setSize = setDriveCount
 	} else {
 		// Returns possible set counts with symmetry.
 		setCounts = possibleSetCountsWithSymmetry(setCounts, argPatterns)
@@ -256,7 +254,7 @@ func getTotalSizes(argPatterns []ellipses.ArgPattern) []uint64 {
 // Parses all arguments and returns an endpointSet which is a collection
 // of endpoints following the ellipses pattern, this is what is used
 // by the object layer for initializing itself.
-func parseEndpointSet(customSetDriveCount uint64, args ...string) (ep endpointSet, err error) {
+func parseEndpointSet(setDriveCount uint64, args ...string) (ep endpointSet, err error) {
 	argPatterns := make([]ellipses.ArgPattern, len(args))
 	for i, arg := range args {
 		patterns, perr := ellipses.FindEllipsesPatterns(arg)
@@ -266,7 +264,7 @@ func parseEndpointSet(customSetDriveCount uint64, args ...string) (ep endpointSe
 		argPatterns[i] = patterns
 	}
 
-	ep.setIndexes, err = getSetIndexes(args, getTotalSizes(argPatterns), customSetDriveCount, argPatterns)
+	ep.setIndexes, err = getSetIndexes(args, getTotalSizes(argPatterns), setDriveCount, argPatterns)
 	if err != nil {
 		return endpointSet{}, config.ErrInvalidErasureEndpoints(nil).Msg(err.Error())
 	}
@@ -281,23 +279,14 @@ func parseEndpointSet(customSetDriveCount uint64, args ...string) (ep endpointSe
 // specific set size.
 // For example: {1...64} is divided into 4 sets each of size 16.
 // This applies to even distributed setup syntax as well.
-func GetAllSets(args ...string) ([][]string, error) {
-	var customSetDriveCount uint64
-	if v := env.Get(EnvErasureSetDriveCount, ""); v != "" {
-		driveCount, err := strconv.Atoi(v)
-		if err != nil {
-			return nil, config.ErrInvalidErasureSetSize(err)
-		}
-		customSetDriveCount = uint64(driveCount)
-	}
-
+func GetAllSets(setDriveCount uint64, args ...string) ([][]string, error) {
 	var setArgs [][]string
 	if !ellipses.HasEllipses(args...) {
 		var setIndexes [][]uint64
 		// Check if we have more one args.
 		if len(args) > 1 {
 			var err error
-			setIndexes, err = getSetIndexes(args, []uint64{uint64(len(args))}, customSetDriveCount, nil)
+			setIndexes, err = getSetIndexes(args, []uint64{uint64(len(args))}, setDriveCount, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -311,7 +300,7 @@ func GetAllSets(args ...string) ([][]string, error) {
 		}
 		setArgs = s.Get()
 	} else {
-		s, err := parseEndpointSet(customSetDriveCount, args...)
+		s, err := parseEndpointSet(setDriveCount, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -335,8 +324,6 @@ func GetAllSets(args ...string) ([][]string, error) {
 const (
 	EnvErasureSetDriveCount = "MINIO_ERASURE_SET_DRIVE_COUNT"
 )
-
-var globalCustomErasureDriveCount = false
 
 type node struct {
 	nodeName string
@@ -366,8 +353,13 @@ func (el *endpointsList) add(arg string) error {
 	return nil
 }
 
+type poolArgs struct {
+	args          []string
+	setDriveCount uint64
+}
+
 // buildDisksLayoutFromConfFile supports with and without ellipses transparently.
-func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err error) {
+func buildDisksLayoutFromConfFile(pools []poolArgs) (layout disksLayout, err error) {
 	if len(pools) == 0 {
 		return layout, errInvalidArgument
 	}
@@ -375,7 +367,7 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 	for _, list := range pools {
 		var endpointsList endpointsList
 
-		for _, arg := range list {
+		for _, arg := range list.args {
 			switch {
 			case ellipses.HasList(arg):
 				patterns, err := ellipses.FindListPatterns(arg)
@@ -436,7 +428,7 @@ func buildDisksLayoutFromConfFile(pools [][]string) (layout disksLayout, err err
 			}
 		}
 
-		setArgs, err := GetAllSets(eps...)
+		setArgs, err := GetAllSets(list.setDriveCount, eps...)
 		if err != nil {
 			return layout, err
 		}
@@ -469,9 +461,15 @@ func mergeDisksLayoutFromArgs(args []string, ctxt *serverCtxt) (err error) {
 
 	var setArgs [][]string
 
+	v, err := env.GetInt(EnvErasureSetDriveCount, 0)
+	if err != nil {
+		return err
+	}
+	setDriveCount := uint64(v)
+
 	// None of the args have ellipses use the old style.
 	if ok {
-		setArgs, err = GetAllSets(args...)
+		setArgs, err = GetAllSets(setDriveCount, args...)
 		if err != nil {
 			return err
 		}
@@ -487,7 +485,7 @@ func mergeDisksLayoutFromArgs(args []string, ctxt *serverCtxt) (err error) {
 			// TODO: support SNSD deployments to be decommissioned in future
 			return fmt.Errorf("all args must have ellipses for pool expansion (%w) args: %s", errInvalidArgument, args)
 		}
-		setArgs, err = GetAllSets(arg)
+		setArgs, err = GetAllSets(setDriveCount, arg)
 		if err != nil {
 			return err
 		}

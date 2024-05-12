@@ -106,7 +106,7 @@ func (ssekms) IsEncrypted(metadata map[string]string) bool {
 // UnsealObjectKey extracts and decrypts the sealed object key
 // from the metadata using KMS and returns the decrypted object
 // key.
-func (s3 ssekms) UnsealObjectKey(k kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
+func (s3 ssekms) UnsealObjectKey(k *kms.KMS, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	if k == nil {
 		return key, Errorf("KMS not configured")
 	}
@@ -120,7 +120,11 @@ func (s3 ssekms) UnsealObjectKey(k kms.KMS, metadata map[string]string, bucket, 
 	} else if _, ok := ctx[bucket]; !ok {
 		ctx[bucket] = path.Join(bucket, object)
 	}
-	unsealKey, err := k.DecryptKey(keyID, kmsKey, ctx)
+	unsealKey, err := k.Decrypt(context.TODO(), &kms.DecryptRequest{
+		Name:           keyID,
+		Ciphertext:     kmsKey,
+		AssociatedData: ctx,
+	})
 	if err != nil {
 		return key, err
 	}

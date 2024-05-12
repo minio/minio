@@ -42,9 +42,9 @@ var (
 		targetID)
 )
 
-// loadClusterAuditMetrics - `MetricsLoaderFn` for cluster audit
+// loadAuditMetrics - `MetricsLoaderFn` for audit
 // such as failed messages and total messages.
-func loadClusterAuditMetrics(_ context.Context, m MetricValues, c *metricsCache) error {
+func loadAuditMetrics(_ context.Context, m MetricValues, c *metricsCache) error {
 	audit := logger.CurrentStats()
 	for id, st := range audit {
 		labels := []string{targetID, id}

@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/storageclass"
-	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v2/console"
 	"github.com/minio/pkg/v2/wildcard"
@@ -71,7 +70,7 @@ func newBgHealSequence() *healSequence {
 		reportProgress:     false,
 		scannedItemsMap:    make(map[madmin.HealItemType]int64),
 		healedItemsMap:     make(map[madmin.HealItemType]int64),
-		healFailedItemsMap: make(map[string]int64),
+		healFailedItemsMap: make(map[madmin.HealItemType]int64),
 	}
 }
 
@@ -141,6 +140,14 @@ func getLocalBackgroundHealStatus(ctx context.Context, o ObjectLayer) (madmin.Bg
 	return status, true
 }
 
+type healEntryResult struct {
+	bytes     uint64
+	success   bool
+	skipped   bool
+	entryDone bool
+	name      string
+}
+
 // healErasureSet lists and heals all objects in a specific erasure set
 func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, tracker *healingTracker) error {
 	scanMode := madmin.HealNormalScan
@@ -187,21 +194,68 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 	jt, _ := workers.New(int(numHealers))
 
+	healEntryDone := func(name string) healEntryResult {
+		return healEntryResult{
+			entryDone: true,
+			name:      name,
+		}
+	}
+
+	healEntrySuccess := func(sz uint64) healEntryResult {
+		return healEntryResult{
+			bytes:   sz,
+			success: true,
+		}
+	}
+
+	healEntryFailure := func(sz uint64) healEntryResult {
+		return healEntryResult{
+			bytes: sz,
+		}
+	}
+
+	healEntrySkipped := func(sz uint64) healEntryResult {
+		return healEntryResult{
+			bytes:   sz,
+			skipped: true,
+		}
+	}
+
+	// Collect updates to tracker from concurrent healEntry calls
+	results := make(chan healEntryResult, 1000)
+	defer close(results)
+
+	go func() {
+		for res := range results {
+			if res.entryDone {
+				tracker.setObject(res.name)
+				if time.Since(tracker.getLastUpdate()) > time.Minute {
+					healingLogIf(ctx, tracker.update(ctx))
+				}
+				continue
+			}
+
+			tracker.updateProgress(res.success, res.skipped, res.bytes)
+		}
+	}()
+
 	var retErr error
+
 	// Heal all buckets with all objects
 	for _, bucket := range healBuckets {
 		if tracker.isHealed(bucket) {
 			continue
 		}
+
 		var forwardTo string
 		// If we resume to the same bucket, forward to last known item.
-		if b := tracker.getBucket(); b != "" {
-			if b == bucket {
-				forwardTo = tracker.getObject()
-			} else {
-				// Reset to where last bucket ended if resuming.
-				tracker.resume()
-			}
+		b := tracker.getBucket()
+		if b == bucket {
+			forwardTo = tracker.getObject()
+		}
+		if b != "" {
+			// Reset to where last bucket ended if resuming.
+			tracker.resume()
 		}
 		tracker.setObject("")
 		tracker.setBucket(bucket)
@@ -280,37 +334,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		fallbackDisks := disks[expectedDisks:]
 		disks = disks[:expectedDisks]
 
-		type healEntryResult struct {
-			bytes     uint64
-			success   bool
-			skipped   bool
-			entryDone bool
-			name      string
-		}
-		healEntryDone := func(name string) healEntryResult {
-			return healEntryResult{
-				entryDone: true,
-				name:      name,
-			}
-		}
-		healEntrySuccess := func(sz uint64) healEntryResult {
-			return healEntryResult{
-				bytes:   sz,
-				success: true,
-			}
-		}
-		healEntryFailure := func(sz uint64) healEntryResult {
-			return healEntryResult{
-				bytes: sz,
-			}
-		}
-		healEntrySkipped := func(sz uint64) healEntryResult {
-			return healEntryResult{
-				bytes:   sz,
-				skipped: true,
-			}
-		}
-
 		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 			if lc == nil {
 				return false
@@ -330,22 +353,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				return false
 			}
 		}
-
-		// Collect updates to tracker from concurrent healEntry calls
-		results := make(chan healEntryResult, 1000)
-		go func() {
-			for res := range results {
-				if res.entryDone {
-					tracker.setObject(res.name)
-					if time.Since(tracker.getLastUpdate()) > time.Minute {
-						healingLogIf(ctx, tracker.update(ctx))
-					}
-					continue
-				}
-
-				tracker.updateProgress(res.success, res.skipped, res.bytes)
-			}
-		}()
 
 		send := func(result healEntryResult) bool {
 			select {
@@ -393,7 +400,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			var result healEntryResult
 			fivs, err := entry.fileInfoVersions(bucket)
 			if err != nil {
-				_, err := er.HealObject(ctx, bucket, encodedEntryName, "",
+				res, err := er.HealObject(ctx, bucket, encodedEntryName, "",
 					madmin.HealOpts{
 						ScanMode: scanMode,
 						Remove:   healDeleteDangling,
@@ -407,7 +414,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					result = healEntryFailure(0)
 					healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, entry.name, err))
 				} else {
-					result = healEntrySuccess(0)
+					result = healEntrySuccess(uint64(res.ObjectSize))
 				}
 
 				send(result)
@@ -430,11 +437,12 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					continue
 				}
 
-				if _, err := er.HealObject(ctx, bucket, encodedEntryName,
+				res, err := er.HealObject(ctx, bucket, encodedEntryName,
 					version.VersionID, madmin.HealOpts{
 						ScanMode: scanMode,
 						Remove:   healDeleteDangling,
-					}); err != nil {
+					})
+				if err != nil {
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// queueing happens across namespace, ignore
 						// objects that are not found.
@@ -449,22 +457,20 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 						healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
 					}
 				} else {
-					result = healEntrySuccess(uint64(version.Size))
+					result = healEntrySuccess(uint64(res.ObjectSize))
 				}
 
 				if !send(result) {
 					return
 				}
 			}
+
 			// All versions resulted in 'ObjectNotFound/VersionNotFound'
 			if versionNotFound == len(fivs.Versions) {
 				return
 			}
-			select {
-			case <-ctx.Done():
-				return
-			case results <- healEntryDone(entry.name):
-			}
+
+			send(healEntryDone(entry.name))
 
 			// Wait and proceed if there are active requests
 			waitForLowHTTPReq()
@@ -502,7 +508,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			finished: nil,
 		})
 		jt.Wait() // synchronize all the concurrent heal jobs
-		xioutil.SafeClose(results)
 		if err != nil {
 			// Set this such that when we return this function
 			// we let the caller retry this disk again for the

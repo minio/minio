@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -57,7 +58,7 @@ type nodesOnline struct {
 }
 
 func newNodesUpDownCache() *cachevalue.Cache[nodesOnline] {
-	loadNodesUpDown := func() (v nodesOnline, err error) {
+	loadNodesUpDown := func(ctx context.Context) (v nodesOnline, err error) {
 		v.Online, v.Offline = globalNotificationSys.GetPeerOnlineCount()
 		return
 	}
@@ -84,7 +85,7 @@ type storageMetrics struct {
 }
 
 func newDataUsageInfoCache() *cachevalue.Cache[DataUsageInfo] {
-	loadDataUsage := func() (u DataUsageInfo, err error) {
+	loadDataUsage := func(ctx context.Context) (u DataUsageInfo, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return
@@ -100,7 +101,7 @@ func newDataUsageInfoCache() *cachevalue.Cache[DataUsageInfo] {
 }
 
 func newESetHealthResultCache() *cachevalue.Cache[HealthResult] {
-	loadHealth := func() (r HealthResult, err error) {
+	loadHealth := func(ctx context.Context) (r HealthResult, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return
@@ -157,7 +158,7 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 		prevDriveIOStatsRefreshedAt time.Time
 	)
 
-	loadDriveMetrics := func() (v storageMetrics, err error) {
+	loadDriveMetrics := func(ctx context.Context) (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return
@@ -203,7 +204,7 @@ func newDriveMetricsCache() *cachevalue.Cache[storageMetrics] {
 }
 
 func newCPUMetricsCache() *cachevalue.Cache[madmin.CPUMetrics] {
-	loadCPUMetrics := func() (v madmin.CPUMetrics, err error) {
+	loadCPUMetrics := func(ctx context.Context) (v madmin.CPUMetrics, err error) {
 		var types madmin.MetricType = madmin.MetricsCPU
 
 		m := collectLocalMetrics(types, collectMetricsOpts{
@@ -228,7 +229,7 @@ func newCPUMetricsCache() *cachevalue.Cache[madmin.CPUMetrics] {
 }
 
 func newMemoryMetricsCache() *cachevalue.Cache[madmin.MemInfo] {
-	loadMemoryMetrics := func() (v madmin.MemInfo, err error) {
+	loadMemoryMetrics := func(ctx context.Context) (v madmin.MemInfo, err error) {
 		var types madmin.MetricType = madmin.MetricsMem
 
 		m := collectLocalMetrics(types, collectMetricsOpts{
@@ -253,7 +254,7 @@ func newMemoryMetricsCache() *cachevalue.Cache[madmin.MemInfo] {
 }
 
 func newClusterStorageInfoCache() *cachevalue.Cache[storageMetrics] {
-	loadStorageInfo := func() (v storageMetrics, err error) {
+	loadStorageInfo := func(ctx context.Context) (v storageMetrics, err error) {
 		objLayer := newObjectLayerFn()
 		if objLayer == nil {
 			return storageMetrics{}, nil

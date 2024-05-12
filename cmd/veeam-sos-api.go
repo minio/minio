@@ -156,7 +156,7 @@ func veeamSOSAPIGetObject(ctx context.Context, bucket, object string, rs *HTTPRa
 		}
 
 		q, _ := globalBucketQuotaSys.Get(ctx, bucket)
-		binfo, _ := globalBucketQuotaSys.GetBucketUsageInfo(bucket)
+		binfo, _ := globalBucketQuotaSys.GetBucketUsageInfo(ctx, bucket)
 
 		ci := capacityInfo{
 			Used: int64(binfo.Size),

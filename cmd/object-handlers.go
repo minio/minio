@@ -488,21 +488,24 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			reader *GetObjectReader
 			perr   error
 		)
-		proxytgts := getProxyTargets(ctx, bucket, object, opts)
-		if !proxytgts.Empty() {
-			globalReplicationStats.incProxy(bucket, getObjectAPI, false)
-			// proxy to replication target if active-active replication is in place.
-			reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
-			if perr != nil {
-				globalReplicationStats.incProxy(bucket, getObjectAPI, true)
-				proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
-				if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
-					!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
-					replLogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+		// avoid proxying if version is a delete marker
+		if !isErrMethodNotAllowed(err) && !(gr != nil && gr.ObjInfo.DeleteMarker) {
+			proxytgts := getProxyTargets(ctx, bucket, object, opts)
+			if !proxytgts.Empty() {
+				globalReplicationStats.incProxy(bucket, getObjectAPI, false)
+				// proxy to replication target if active-active replication is in place.
+				reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
+				if perr != nil {
+					globalReplicationStats.incProxy(bucket, getObjectAPI, true)
+					proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
+					if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
+						!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
+						replLogIf(ctx, fmt.Errorf("Proxying request (replication) failed for %s/%s(%s) - %w", bucket, object, opts.VersionID, perr))
+					}
 				}
-			}
-			if reader != nil && proxy.Proxy && perr == nil {
-				gr = reader
+				if reader != nil && proxy.Proxy && perr == nil {
+					gr = reader
+				}
 			}
 		}
 		if reader == nil || !proxy.Proxy {
@@ -1024,7 +1027,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	var proxy proxyResult
-	if err != nil {
+	if err != nil && !objInfo.DeleteMarker && !isErrMethodNotAllowed(err) {
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {

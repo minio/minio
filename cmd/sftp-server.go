@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/subtle"
 	"errors"
@@ -162,6 +163,7 @@ func startSFTPServer(args []string) {
 		port          int
 		publicIP      string
 		sshPrivateKey string
+		userCaKeyFile string
 	)
 	allowPubKeys := supportedPubKeyAuthAlgos
 	allowKexAlgos := preferredKexAlgos
@@ -197,6 +199,8 @@ func startSFTPServer(args []string) {
 			allowCiphers = filterAlgos(arg, strings.Split(tokens[1], ","), supportedCiphers)
 		case "mac-algos":
 			allowMACs = filterAlgos(arg, strings.Split(tokens[1], ","), supportedMACs)
+		case "trusted-user-ca-key":
+			userCaKeyFile = tokens[1]
 		}
 	}
 
@@ -276,6 +280,56 @@ func startSFTPServer(args []string) {
 			}
 			return nil, errAuthentication
 		},
+	}
+
+	if userCaKeyFile != "" {
+		keyBytes, err := os.ReadFile(userCaKeyFile)
+		if err != nil {
+			logger.Fatal(fmt.Errorf("invalid arguments passed, trusted user certificate authority public key file is not accessible: %v", err), "unable to start SFTP server")
+		}
+
+		caPublicKey, _, _, _, err := ssh.ParseAuthorizedKey(keyBytes)
+		if err != nil {
+			logger.Fatal(fmt.Errorf("invalid arguments passed, trusted user certificate authority public key file is not parseable: %v", err), "unable to start SFTP server")
+		}
+
+		sshConfig.PublicKeyCallback = func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			_, ok := globalIAMSys.GetUser(context.Background(), c.User())
+			if !ok {
+				return nil, errNoSuchUser
+			}
+
+			// Verify that client provided certificate, not only public key.
+			cert, ok := key.(*ssh.Certificate)
+			if !ok {
+				return nil, errSftpPublicKeyWithoutCert
+			}
+
+			// ssh.CheckCert called by ssh.Authenticate accepts certificates
+			// with empty principles list so we block those in here.
+			if len(cert.ValidPrincipals) == 0 {
+				return nil, errSftpCertWithoutPrincipals
+			}
+
+			// Verify that certificate provided by user is issued by trusted CA,
+			// username in authentication request matches to identities in certificate
+			// and that certificate type is correct.
+			checker := ssh.CertChecker{}
+			checker.IsUserAuthority = func(k ssh.PublicKey) bool {
+				return bytes.Equal(k.Marshal(), caPublicKey.Marshal())
+			}
+			_, err = checker.Authenticate(c, key)
+			if err != nil {
+				return nil, err
+			}
+
+			return &ssh.Permissions{
+				CriticalOptions: map[string]string{
+					"accessKey": c.User(),
+				},
+				Extensions: make(map[string]string),
+			}, nil
+		}
 	}
 
 	sshConfig.AddHostKey(private)

@@ -194,6 +194,11 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 	return -1, -1, fmt.Errorf("DriveID: %s not found", format.Erasure.This)
 }
 
+// Legacy returns 'true' if distribution algo is CRCMOD
+func (s *erasureSets) Legacy() (ok bool) {
+	return s.distributionAlgo == formatErasureVersionV2DistributionAlgoV1
+}
+
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
 func (s *erasureSets) connectDisks() {
@@ -549,10 +554,10 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 }
 
 type auditObjectOp struct {
-	Name  string   `json:"name"`
-	Pool  int      `json:"poolId"`
-	Set   int      `json:"setId"`
-	Disks []string `json:"disks"`
+	Name   string   `json:"name"`
+	Pool   int      `json:"poolId"`
+	Set    int      `json:"setId"`
+	Drives []string `json:"drives"`
 }
 
 // Add erasure set information to the current context
@@ -562,10 +567,10 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 	}
 
 	op := auditObjectOp{
-		Name:  decodeDirObject(object),
-		Pool:  set.poolIndex + 1,
-		Set:   set.setIndex + 1,
-		Disks: set.getEndpointStrings(),
+		Name:   decodeDirObject(object),
+		Pool:   set.poolIndex + 1,
+		Set:    set.setIndex + 1,
+		Drives: set.getEndpointStrings(),
 	}
 
 	logger.GetReqInfo(ctx).AppendTags("objectLocation", op)

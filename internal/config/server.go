@@ -29,14 +29,34 @@ type Opts struct {
 	} `yaml:"sftp"`
 }
 
+// ServerConfigVersion struct is used to extract the version
+type ServerConfigVersion struct {
+	Version string `yaml:"version"`
+}
+
+// ServerConfigCommon struct for server config common options
+type ServerConfigCommon struct {
+	RootUser    string `yaml:"rootUser"`
+	RootPwd     string `yaml:"rootPassword"`
+	Addr        string `yaml:"address"`
+	ConsoleAddr string `yaml:"console-address"`
+	CertsDir    string `yaml:"certs-dir"`
+	Options     Opts   `yaml:"options"`
+}
+
+// ServerConfigV1 represents a MinIO configuration file v1
+type ServerConfigV1 struct {
+	ServerConfigVersion
+	ServerConfigCommon
+	Pools [][]string `yaml:"pools"`
+}
+
 // ServerConfig represents a MinIO configuration file
 type ServerConfig struct {
-	Version     string     `yaml:"version"`
-	RootUser    string     `yaml:"rootUser"`
-	RootPwd     string     `yaml:"rootPassword"`
-	Addr        string     `yaml:"address"`
-	ConsoleAddr string     `yaml:"console-address"`
-	CertsDir    string     `yaml:"certs-dir"`
-	Pools       [][]string `yaml:"pools"`
-	Options     Opts       `yaml:"options"`
+	ServerConfigVersion
+	ServerConfigCommon
+	Pools []struct {
+		Args          []string `yaml:"args"`
+		SetDriveCount uint64   `yaml:"set-drive-count"`
+	} `yaml:"pools"`
 }

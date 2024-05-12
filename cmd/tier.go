@@ -558,7 +558,7 @@ func loadTierConfig(ctx context.Context, objAPI ObjectLayer) (*TierConfigMgr, er
 	}
 
 	if len(data) <= 4 {
-		return nil, fmt.Errorf("tierConfigInit: no data")
+		return nil, errors.New("tierConfigInit: no data")
 	}
 
 	// Read header

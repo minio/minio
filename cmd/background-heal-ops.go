@@ -133,19 +133,20 @@ func (h *healRoutine) AddWorker(ctx context.Context, objAPI ObjectLayer, bgSeq *
 				}
 			}
 
-			if bgSeq != nil {
-				// We increment relevant counter based on the heal result for prometheus reporting.
-				if err != nil {
-					bgSeq.countFailed(res)
-				} else {
-					bgSeq.countHeals(res.Type, false)
-				}
-			}
-
 			if task.respCh != nil {
 				task.respCh <- healResult{result: res, err: err}
+				continue
 			}
 
+			// when respCh is not set caller is not waiting but we
+			// update the relevant metrics for them
+			if bgSeq != nil {
+				if err == nil {
+					bgSeq.countHealed(res.Type)
+				} else {
+					bgSeq.countFailed(res.Type)
+				}
+			}
 		case <-ctx.Done():
 			return
 		}

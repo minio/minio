@@ -119,3 +119,9 @@ var errInvalidMaxParts = errors.New("Part number is greater than the maximum all
 
 // error returned for session policies > 2048
 var errSessionPolicyTooLarge = errors.New("Session policy should not exceed 2048 characters")
+
+// error returned in SFTP when user used public key without certificate
+var errSftpPublicKeyWithoutCert = errors.New("public key authentication without certificate is not accepted")
+
+// error returned in SFTP when user used certificate which does not contain principal(s)
+var errSftpCertWithoutPrincipals = errors.New("certificates without principal(s) are not accepted")

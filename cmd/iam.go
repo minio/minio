@@ -1672,6 +1672,11 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 					normKey, origKeys)
 			}
 
+			if len(origKeys[1:]) > 0 {
+				// Log that extra DN mappings will not be imported.
+				iamLogEvent(ctx, "import-ldap-normalize: extraneous DN mappings found for LDAP DN[%s]: %v will not be imported", origKeys[0], origKeys[1:])
+			}
+
 			// Policies mapped to the DN's are the same, so we remove the extra
 			// ones from the map.
 			for i := 1; i < len(origKeys); i++ {
@@ -1680,7 +1685,11 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 				// Remove the mapping from storage by setting the policy to "".
 				if entityKeysInStorage.Contains(origKeys[i]) {
 					// Ignore any deletion error.
-					_, _ = sys.PolicyDBSet(ctx, origKeys[i], "", stsUser, isGroup)
+					_, delErr := sys.PolicyDBSet(ctx, origKeys[i], "", stsUser, isGroup)
+					if delErr != nil {
+						logErr := fmt.Errorf("failed to delete extraneous LDAP DN mapping for `%s`: %w", origKeys[i], delErr)
+						iamLogIf(ctx, logErr)
+					}
 				}
 			}
 		}
@@ -1691,10 +1700,16 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 		mappingValue := policyMap[origKeys[0]]
 		delete(policyMap, origKeys[0])
 		policyMap[normKey] = mappingValue
+		iamLogEvent(ctx, "import-ldap-normalize: normalized LDAP DN mapping from `%s` to `%s`", origKeys[0], normKey)
+
 		// Remove the mapping from storage by setting the policy to "".
 		if entityKeysInStorage.Contains(origKeys[0]) {
 			// Ignore any deletion error.
-			_, _ = sys.PolicyDBSet(ctx, origKeys[0], "", stsUser, isGroup)
+			_, delErr := sys.PolicyDBSet(ctx, origKeys[0], "", stsUser, isGroup)
+			if delErr != nil {
+				logErr := fmt.Errorf("failed to delete extraneous LDAP DN mapping for `%s`: %w", origKeys[0], delErr)
+				iamLogIf(ctx, logErr)
+			}
 		}
 	}
 	return nil

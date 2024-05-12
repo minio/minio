@@ -472,17 +472,17 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 						stopFn(toDelCopy[i], err)
 						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
 						failed++
-						if attempts == retryAttempts { // all retry attempts failed, record failure
-							if oi, ok := oiCache.Get(toDelCopy[i]); ok {
-								ri.trackCurrentBucketObject(r.Bucket, *oi, false)
-							}
-						} else {
+						if oi, ok := oiCache.Get(toDelCopy[i]); ok {
+							ri.trackCurrentBucketObject(r.Bucket, *oi, false, attempts)
+						}
+						if attempts != retryAttempts {
+							// retry
 							toDel = append(toDel, toDelCopy[i])
 						}
 					} else {
 						stopFn(toDelCopy[i], nil)
 						if oi, ok := oiCache.Get(toDelCopy[i]); ok {
-							ri.trackCurrentBucketObject(r.Bucket, *oi, true)
+							ri.trackCurrentBucketObject(r.Bucket, *oi, true, attempts)
 						}
 					}
 				}
@@ -537,7 +537,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	results := make(chan ObjectInfo, workerSize)
+	results := make(chan itemOrErr[ObjectInfo], workerSize)
 	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
 		Marker:       lastObject,
 		LatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
@@ -584,11 +584,18 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		versionsCount int
 		toDel         []expireObjInfo
 	)
+	failed := true
 	for result := range results {
+		if result.Err != nil {
+			failed = true
+			batchLogIf(ctx, result.Err)
+			continue
+		}
+
 		// Apply filter to find the matching rule to apply expiry
 		// actions accordingly.
 		// nolint:gocritic
-		if result.IsLatest {
+		if result.Item.IsLatest {
 			// send down filtered entries to be deleted using
 			// DeleteObjects method
 			if len(toDel) > 10 { // batch up to 10 objects/versions to be expired simultaneously.
@@ -609,7 +616,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 			var match BatchJobExpireFilter
 			var found bool
 			for _, rule := range r.Rules {
-				if rule.Matches(result, now) {
+				if rule.Matches(result.Item, now) {
 					match = rule
 					found = true
 					break
@@ -619,18 +626,18 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 				continue
 			}
 
-			prevObj = result
+			prevObj = result.Item
 			matchedFilter = match
 			versionsCount = 1
 			// Include the latest version
 			if matchedFilter.Purge.RetainVersions == 0 {
 				toDel = append(toDel, expireObjInfo{
-					ObjectInfo: result,
+					ObjectInfo: result.Item,
 					ExpireAll:  true,
 				})
 				continue
 			}
-		} else if prevObj.Name == result.Name {
+		} else if prevObj.Name == result.Item.Name {
 			if matchedFilter.Purge.RetainVersions == 0 {
 				continue // including latest version in toDel suffices, skipping other versions
 			}
@@ -643,7 +650,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 			continue // retain versions
 		}
 		toDel = append(toDel, expireObjInfo{
-			ObjectInfo: result,
+			ObjectInfo: result.Item,
 		})
 	}
 	// Send any remaining objects downstream
@@ -658,8 +665,8 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	<-expireDoneCh // waits for the expire goroutine to complete
 	wk.Wait()      // waits for all expire workers to retire
 
-	ri.Complete = ri.ObjectsFailed == 0
-	ri.Failed = ri.ObjectsFailed > 0
+	ri.Complete = !failed && ri.ObjectsFailed == 0
+	ri.Failed = failed || ri.ObjectsFailed > 0
 	globalBatchJobsMetrics.save(job.ID, ri)
 
 	// Close the saverQuitCh - this also triggers saving in-memory state

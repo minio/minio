@@ -22,7 +22,7 @@ jobs:
 
     strategy:
       matrix:
-        go-version: [1.21.x]
+        go-version: [1.22.x]
 
     steps:
       - uses: actions/checkout@v4

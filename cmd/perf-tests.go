@@ -33,6 +33,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/pkg/v2/randreader"
@@ -72,7 +73,7 @@ func (f *firstByteRecorder) Read(p []byte) (n int, err error) {
 }
 
 // Runs the speedtest on local MinIO process.
-func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, error) {
+func selfSpeedTest(ctx context.Context, opts speedTestOpts) (res SpeedTestResult, err error) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
 		return SpeedTestResult{}, errServerNotInitialized
@@ -96,7 +97,24 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	popts := minio.PutObjectOptions{
 		UserMetadata:         userMetadata,
 		DisableContentSha256: !opts.enableSha256,
-		DisableMultipart:     true,
+		DisableMultipart:     !opts.enableMultipart,
+	}
+
+	clnt := globalMinioClient
+	if !globalAPIConfig.permitRootAccess() {
+		region := globalSite.Region
+		if region == "" {
+			region = "us-east-1"
+		}
+		clnt, err = minio.New(globalLocalNodeName, &minio.Options{
+			Creds:     credentials.NewStaticV4(opts.creds.AccessKey, opts.creds.SecretKey, opts.creds.SessionToken),
+			Secure:    globalIsTLS,
+			Transport: globalRemoteTargetTransport,
+			Region:    region,
+		})
+		if err != nil {
+			return res, err
+		}
 	}
 
 	var mu sync.Mutex
@@ -109,7 +127,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 				t := time.Now()
 				reader := newRandomReader(opts.objectSize)
 				tmpObjName := pathJoin(objNamePrefix, fmt.Sprintf("%d/%d", i, objCountPerThread[i]))
-				info, err := globalMinioClient.PutObject(uploadsCtx, opts.bucketName, tmpObjName, reader, int64(opts.objectSize), popts)
+				info, err := clnt.PutObject(uploadsCtx, opts.bucketName, tmpObjName, reader, int64(opts.objectSize), popts)
 				if err != nil {
 					if !contextCanceled(uploadsCtx) && !errors.Is(err, context.Canceled) {
 						errOnce.Do(func() {
@@ -150,7 +168,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (SpeedTestResult, er
 	var downloadTTFB madmin.TimeDurations
 	wg.Add(opts.concurrency)
 
-	c := minio.Core{Client: globalMinioClient}
+	c := minio.Core{Client: clnt}
 	for i := 0; i < opts.concurrency; i++ {
 		go func(i int) {
 			defer wg.Done()

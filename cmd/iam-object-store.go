@@ -645,36 +645,37 @@ func (iamOS *IAMObjectStore) deleteGroupInfo(ctx context.Context, name string) e
 	return err
 }
 
-// helper type for listIAMConfigItems
-type itemOrErr struct {
-	Item string
-	Err  error
-}
-
 // Lists objects in the minioMetaBucket at the given path prefix. All returned
 // items have the pathPrefix removed from their names.
-func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix string) <-chan itemOrErr {
-	ch := make(chan itemOrErr)
+func listIAMConfigItems(ctx context.Context, objAPI ObjectLayer, pathPrefix string) <-chan itemOrErr[string] {
+	ch := make(chan itemOrErr[string])
 
 	go func() {
 		defer xioutil.SafeClose(ch)
 
 		// Allocate new results channel to receive ObjectInfo.
-		objInfoCh := make(chan ObjectInfo)
+		objInfoCh := make(chan itemOrErr[ObjectInfo])
 
 		if err := objAPI.Walk(ctx, minioMetaBucket, pathPrefix, objInfoCh, WalkOptions{}); err != nil {
 			select {
-			case ch <- itemOrErr{Err: err}:
+			case ch <- itemOrErr[string]{Err: err}:
 			case <-ctx.Done():
 			}
 			return
 		}
 
 		for obj := range objInfoCh {
-			item := strings.TrimPrefix(obj.Name, pathPrefix)
+			if obj.Err != nil {
+				select {
+				case ch <- itemOrErr[string]{Err: obj.Err}:
+				case <-ctx.Done():
+					return
+				}
+			}
+			item := strings.TrimPrefix(obj.Item.Name, pathPrefix)
 			item = strings.TrimSuffix(item, SlashSeparator)
 			select {
-			case ch <- itemOrErr{Item: item}:
+			case ch <- itemOrErr[string]{Item: item}:
 			case <-ctx.Done():
 				return
 			}

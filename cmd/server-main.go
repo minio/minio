@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -211,6 +212,12 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_LOG_COMPRESS",
 		Hidden: true,
 	},
+	cli.StringFlag{
+		Name:   "log-prefix",
+		Usage:  "specify the log prefix name for the server log",
+		EnvVar: "MINIO_LOG_PREFIX",
+		Hidden: true,
+	},
 }
 
 var serverCmd = cli.Command{
@@ -287,23 +294,7 @@ func serverCmdArgs(ctx *cli.Context) []string {
 	return strings.Fields(v)
 }
 
-func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
-	rd, err := Open(configFile)
-	if err != nil {
-		return err
-	}
-	defer rd.Close()
-
-	cf := &config.ServerConfig{}
-	dec := yaml.NewDecoder(rd)
-	dec.SetStrict(true)
-	if err = dec.Decode(cf); err != nil {
-		return err
-	}
-	if cf.Version != "v1" {
-		return fmt.Errorf("unexpected version: %s", cf.Version)
-	}
-
+func configCommonToSrvCtx(cf config.ServerConfigCommon, ctxt *serverCtxt) {
 	ctxt.RootUser = cf.RootUser
 	ctxt.RootPwd = cf.RootPwd
 
@@ -331,8 +322,75 @@ func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
 	if cf.Options.SFTP.SSHPrivateKey != "" {
 		ctxt.SFTP = append(ctxt.SFTP, fmt.Sprintf("ssh-private-key=%s", cf.Options.SFTP.SSHPrivateKey))
 	}
+}
 
-	ctxt.Layout, err = buildDisksLayoutFromConfFile(cf.Pools)
+func mergeServerCtxtFromConfigFile(configFile string, ctxt *serverCtxt) error {
+	rd, err := xioutil.ReadFile(configFile)
+	if err != nil {
+		return err
+	}
+
+	cfReader := bytes.NewReader(rd)
+
+	cv := config.ServerConfigVersion{}
+	if err = yaml.Unmarshal(rd, &cv); err != nil {
+		return err
+	}
+
+	switch cv.Version {
+	case "v1", "v2":
+	default:
+		return fmt.Errorf("unexpected version: %s", cv.Version)
+	}
+
+	cfCommon := config.ServerConfigCommon{}
+	if err = yaml.Unmarshal(rd, &cfCommon); err != nil {
+		return err
+	}
+
+	configCommonToSrvCtx(cfCommon, ctxt)
+
+	v, err := env.GetInt(EnvErasureSetDriveCount, 0)
+	if err != nil {
+		return err
+	}
+	setDriveCount := uint64(v)
+
+	var pools []poolArgs
+	switch cv.Version {
+	case "v1":
+		cfV1 := config.ServerConfigV1{}
+		if err = yaml.Unmarshal(rd, &cfV1); err != nil {
+			return err
+		}
+
+		pools = make([]poolArgs, 0, len(cfV1.Pools))
+		for _, list := range cfV1.Pools {
+			pools = append(pools, poolArgs{
+				args:          list,
+				setDriveCount: setDriveCount,
+			})
+		}
+	case "v2":
+		cf := config.ServerConfig{}
+		cfReader.Seek(0, io.SeekStart)
+		if err = yaml.Unmarshal(rd, &cf); err != nil {
+			return err
+		}
+
+		pools = make([]poolArgs, 0, len(cf.Pools))
+		for _, list := range cf.Pools {
+			driveCount := list.SetDriveCount
+			if setDriveCount > 0 {
+				driveCount = setDriveCount
+			}
+			pools = append(pools, poolArgs{
+				args:          list.Args,
+				setDriveCount: driveCount,
+			})
+		}
+	}
+	ctxt.Layout, err = buildDisksLayoutFromConfFile(pools)
 	return err
 }
 
@@ -685,10 +743,19 @@ func initializeLogRotate(ctx *cli.Context) (io.WriteCloser, error) {
 		return nil, err
 	}
 	lgSize := ctx.Int("log-size")
+
+	var fileNameFunc func() string
+	if ctx.IsSet("log-prefix") {
+		fileNameFunc = func() string {
+			return fmt.Sprintf("%s-%s.log", ctx.String("log-prefix"), fmt.Sprintf("%X", time.Now().UTC().UnixNano()))
+		}
+	}
+
 	output, err := logger.NewDir(logger.Options{
 		Directory:       lgDirAbs,
 		MaximumFileSize: int64(lgSize),
 		Compress:        ctx.Bool("log-compress"),
+		FileNameFunc:    fileNameFunc,
 	})
 	if err != nil {
 		return nil, err

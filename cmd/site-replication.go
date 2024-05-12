@@ -856,12 +856,7 @@ func (c *SiteReplicationSys) MakeBucketHook(ctx context.Context, bucket string, 
 	if err := errors.Unwrap(makeBucketConcErr); err != nil {
 		return err
 	}
-
-	if err := errors.Unwrap(makeRemotesConcErr); err != nil {
-		return err
-	}
-
-	return nil
+	return errors.Unwrap(makeRemotesConcErr)
 }
 
 // DeleteBucketHook - called during a regular delete bucket call when cluster
