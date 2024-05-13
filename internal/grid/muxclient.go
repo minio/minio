@@ -136,7 +136,7 @@ func (m *muxClient) send(msg message) error {
 	m.respMu.Lock()
 	defer m.respMu.Unlock()
 	if m.closed {
-		return errors.New("mux client closed")
+		return ErrDisconnected
 	}
 	return m.sendLocked(msg)
 }
@@ -347,8 +347,14 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 				m.addErrorNonBlockingClose(respHandler, ErrDisconnected)
 				return
 			}
-			// Send new ping.
-			gridLogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
+			select {
+			case <-m.ctx.Done():
+				// Client canceled. Don't block.
+				// Next loop will catch it.
+			default:
+				// Send new ping.
+				gridLogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
+			}
 		}
 	}
 }
