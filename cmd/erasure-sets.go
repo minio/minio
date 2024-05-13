@@ -554,10 +554,10 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 }
 
 type auditObjectOp struct {
-	Name  string   `json:"name"`
-	Pool  int      `json:"poolId"`
-	Set   int      `json:"setId"`
-	Disks []string `json:"disks"`
+	Name   string   `json:"name"`
+	Pool   int      `json:"poolId"`
+	Set    int      `json:"setId"`
+	Drives []string `json:"drives"`
 }
 
 // Add erasure set information to the current context
@@ -567,10 +567,10 @@ func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjec
 	}
 
 	op := auditObjectOp{
-		Name:  decodeDirObject(object),
-		Pool:  set.poolIndex + 1,
-		Set:   set.setIndex + 1,
-		Disks: set.getEndpointStrings(),
+		Name:   decodeDirObject(object),
+		Pool:   set.poolIndex + 1,
+		Set:    set.setIndex + 1,
+		Drives: set.getEndpointStrings(),
 	}
 
 	logger.GetReqInfo(ctx).AppendTags("objectLocation", op)

@@ -18,6 +18,10 @@ func iamLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "iam", err, errKind...)
 }
 
+func iamLogEvent(ctx context.Context, msg string, args ...interface{}) {
+	logger.Event(ctx, "iam", msg, args...)
+}
+
 func rebalanceLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "rebalance", err, errKind...)
 }

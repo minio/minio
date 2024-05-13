@@ -74,7 +74,7 @@ Setting this environment variable automatically enables audit logging to the HTT
 NOTE:
 
 - `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
-- Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
+- Additionally in the case of the erasure coded setup `tags.objectLocation` provides per object details about
   - Pool number the object operation was performed on.
   - Set number the object operation was performed on.
   - The list of drives participating in this operation belong to the set.
@@ -82,8 +82,9 @@ NOTE:
 ```json
 {
   "version": "1",
-  "deploymentid": "51bcc7b9-a447-4251-a940-d9d0aab9af69",
-  "time": "2021-10-08T00:46:36.801714978Z",
+  "deploymentid": "90e81272-45d9-4fe8-9c45-c9a7322bf4b5",
+  "time": "2024-05-09T07:38:10.449688982Z",
+  "event": "",
   "trigger": "incoming",
   "api": {
     "name": "PutObject",
@@ -91,51 +92,52 @@ NOTE:
     "object": "hosts",
     "status": "OK",
     "statusCode": 200,
-    "rx": 380,
-    "tx": 476,
-    "timeToResponse": "257694819ns"
+    "rx": 401,
+    "tx": 0,
+    "timeToResponse": "13309747ns",
+    "timeToResponseInNS": "13309747"
   },
   "remotehost": "127.0.0.1",
-  "requestID": "16ABE7A785E7AC2C",
-  "userAgent": "MinIO (linux; amd64) minio-go/v7.0.15 mc/DEVELOPMENT.2021-10-06T23-39-34Z",
+  "requestID": "17CDC1F4D7E69123",
+  "userAgent": "MinIO (linux; amd64) minio-go/v7.0.70 mc/RELEASE.2024-04-30T17-44-48Z",
+  "requestPath": "/testbucket/hosts",
+  "requestHost": "localhost:9000",
   "requestHeader": {
-    "Authorization": "AWS4-HMAC-SHA256 Credential=minio/20211008/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length,Signature=4c60a59e5eb3b0a68693c7fee9dbb5a8a509e0717668669194d37bf182fde031",
-    "Content-Length": "380",
+    "Accept-Encoding": "zstd,gzip",
+    "Authorization": "AWS4-HMAC-SHA256 Credential=minioadmin/20240509/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length,Signature=d4d6862e6cc61011a61fa801da71048ece4f32a0562cad6bb88bdda50d7fcb95",
+    "Content-Length": "401",
     "Content-Type": "application/octet-stream",
-    "User-Agent": "MinIO (linux; amd64) minio-go/v7.0.15 mc/DEVELOPMENT.2021-10-06T23-39-34Z",
+    "User-Agent": "MinIO (linux; amd64) minio-go/v7.0.70 mc/RELEASE.2024-04-30T17-44-48Z",
     "X-Amz-Content-Sha256": "STREAMING-AWS4-HMAC-SHA256-PAYLOAD",
-    "X-Amz-Date": "20211008T004636Z",
-    "X-Amz-Decoded-Content-Length": "207",
-    "X-Amz-Server-Side-Encryption": "aws:kms"
+    "X-Amz-Date": "20240509T073810Z",
+    "X-Amz-Decoded-Content-Length": "228"
   },
   "responseHeader": {
     "Accept-Ranges": "bytes",
     "Content-Length": "0",
-    "ETag": "4939450d1beec11e10a91ee7700bb593",
+    "ETag": "9fe7a344ef4227d3e53751e9d88ce41e",
     "Server": "MinIO",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "Vary": "Origin,Accept-Encoding",
-    "X-Amz-Request-Id": "16ABE7A785E7AC2C",
-    "X-Amz-Server-Side-Encryption": "aws:kms",
-    "X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id": "arn:aws:kms:my-minio-key",
+    "X-Amz-Id-2": "dd9025bab4ad464b049177c95eb6ebf374d3b3fd1af9251148b658df7ac2e3e8",
+    "X-Amz-Request-Id": "17CDC1F4D7E69123",
     "X-Content-Type-Options": "nosniff",
-    "X-Xss-Protection": "1; mode=block",
-    "x-amz-version-id": "ac4639f6-c544-4f3f-af1e-b4c0736f67f9"
+    "X-Xss-Protection": "1; mode=block"
   },
   "tags": {
-    "objectErasureMap": {
-      "hosts": {
-        "poolId": 1,
-        "setId": 1,
-        "drives": [
-          "/mnt/data1",
-          "/mnt/data2",
-          "/mnt/data3",
-          "/mnt/data4"
-        ]
-      }
+    "objectLocation": {
+      "name": "hosts",
+      "poolId": 1,
+      "setId": 1,
+      "drives": [
+        "/mnt/data1",
+        "/mnt/data2",
+        "/mnt/data3",
+        "/mnt/data4"
+      ]
     }
-  }
+  },
+  "accessKey": "minioadmin"
 }
 ```
 
@@ -176,7 +178,7 @@ On another terminal assuming you have `kafkacat` installed
 ```
 kafkacat -b localhost:29092 -t auditlog  -C
 
-{"version":"1","deploymentid":"8a1d8091-b874-45df-b9ea-e044eede6ace","time":"2021-07-13T02:00:47.020547414Z","trigger":"incoming","api":{"name":"ListBuckets","status":"OK","statusCode":200,"timeToFirstByte":"261795ns","timeToResponse":"312490ns"},"remotehost":"127.0.0.1","requestID":"16913736591C237F","userAgent":"MinIO (linux; amd64) minio-go/v7.0.11 mc/DEVELOPMENT.2021-07-09T02-22-26Z","requestHeader":{"Authorization":"AWS4-HMAC-SHA256 Credential=minio/20210713/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=7fe65c5467e05ca21de64094688da43f96f34fec82e8955612827079f4600527","User-Agent":"MinIO (linux; amd64) minio-go/v7.0.11 mc/DEVELOPMENT.2021-07-09T02-22-26Z","X-Amz-Content-Sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","X-Amz-Date":"20210713T020047Z"},"responseHeader":{"Accept-Ranges":"bytes","Content-Length":"547","Content-Security-Policy":"block-all-mixed-content","Content-Type":"application/xml","Server":"MinIO","Vary":"Origin,Accept-Encoding","X-Amz-Request-Id":"16913736591C237F","X-Xss-Protection":"1; mode=block"}}
+{"version":"1","deploymentid":"90e81272-45d9-4fe8-9c45-c9a7322bf4b5","time":"2024-05-09T07:38:10.449688982Z","event":"","trigger":"incoming","api":{"name":"PutObject","bucket":"testbucket","object":"hosts","status":"OK","statusCode":200,"rx":401,"tx":0,"timeToResponse":"13309747ns","timeToResponseInNS":"13309747"},"remotehost":"127.0.0.1","requestID":"17CDC1F4D7E69123","userAgent":"MinIO (linux; amd64) minio-go/v7.0.70 mc/RELEASE.2024-04-30T17-44-48Z","requestPath":"/testbucket/hosts","requestHost":"localhost:9000","requestHeader":{"Accept-Encoding":"zstd,gzip","Authorization":"AWS4-HMAC-SHA256 Credential=minioadmin/20240509/us-east-1/s3/aws4_request,SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length,Signature=d4d6862e6cc61011a61fa801da71048ece4f32a0562cad6bb88bdda50d7fcb95","Content-Length":"401","Content-Type":"application/octet-stream","User-Agent":"MinIO (linux; amd64) minio-go/v7.0.70 mc/RELEASE.2024-04-30T17-44-48Z","X-Amz-Content-Sha256":"STREAMING-AWS4-HMAC-SHA256-PAYLOAD","X-Amz-Date":"20240509T073810Z","X-Amz-Decoded-Content-Length":"228"},"responseHeader":{"Accept-Ranges":"bytes","Content-Length":"0","ETag":"9fe7a344ef4227d3e53751e9d88ce41e","Server":"MinIO","Strict-Transport-Security":"max-age=31536000; includeSubDomains","Vary":"Origin,Accept-Encoding","X-Amz-Id-2":"dd9025bab4ad464b049177c95eb6ebf374d3b3fd1af9251148b658df7ac2e3e8","X-Amz-Request-Id":"17CDC1F4D7E69123","X-Content-Type-Options":"nosniff","X-Xss-Protection":"1; mode=block"},"tags":{"objectLocation":{"name":"hosts","poolId":1,"setId":1,"drives":["/mnt/data1","/mnt/data2","/mnt/data3","/mnt/data4"]}},"accessKey":"minioadmin"}
 ```
 
 MinIO also honors environment variable for Kafka target Audit logging as shown below, this setting will override the endpoint settings in the MinIO server config.
@@ -215,7 +217,7 @@ Setting this environment variable automatically enables audit logging to the Kaf
 NOTE:
 
 - `timeToFirstByte` and `timeToResponse` will be expressed in Nanoseconds.
-- Additionally in the case of the erasure coded setup `tags.objectErasureMap` provides per object details about
+- Additionally in the case of the erasure coded setup `tags.objectLocation` provides per object details about
   - Pool number the object operation was performed on.
   - Set number the object operation was performed on.
   - The list of drives participating in this operation belong to the set.

@@ -1367,7 +1367,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				OutCapacity: 1,
 			}), "unable to register handler")
 
-			createStorage := func(server *storageRESTServer) bool {
+			createStorage := func(endpoint Endpoint) bool {
 				xl, err := newXLStorage(endpoint, false)
 				if err != nil {
 					// if supported errors don't fail, we proceed to
@@ -1391,19 +1391,19 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				return true
 			}
 
-			if createStorage(server) {
+			if createStorage(endpoint) {
 				continue
 			}
 
 			// Start async goroutine to create storage.
-			go func(server *storageRESTServer) {
+			go func(endpoint Endpoint) {
 				for {
 					time.Sleep(3 * time.Second)
-					if createStorage(server) {
+					if createStorage(endpoint) {
 						return
 					}
 				}
-			}(server)
+			}(endpoint)
 
 		}
 	}
