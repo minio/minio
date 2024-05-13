@@ -381,20 +381,23 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 // operation(s) on the object.
 func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	if opts.CheckPrecondFn != nil {
-		// Lock the object before reading.
-		lk := er.NewNSLock(bucket, object)
-		lkctx, err := lk.GetRLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return nil, err
+		if !opts.NoLock {
+			ns := er.NewNSLock(bucket, object)
+			lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+			if err != nil {
+				return nil, err
+			}
+			ctx = lkctx.Context()
+			defer ns.Unlock(lkctx)
+			opts.NoLock = true
 		}
-		rctx := lkctx.Context()
-		obj, err := er.getObjectInfo(rctx, bucket, object, opts)
-		lk.RUnlock(lkctx)
-		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) {
-			return nil, err
-		}
-		if opts.CheckPrecondFn(obj) {
+
+		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
+		if err == nil && opts.CheckPrecondFn(obj) {
 			return nil, PreConditionFailed{}
+		}
+		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
+			return nil, err
 		}
 	}
 
@@ -1003,6 +1006,27 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		auditObjectErasureSet(ctx, object, &er)
 	}
 
+	if opts.CheckPrecondFn != nil {
+		if !opts.NoLock {
+			ns := er.NewNSLock(bucket, object)
+			lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
+			if err != nil {
+				return ObjectInfo{}, err
+			}
+			ctx = lkctx.Context()
+			defer ns.Unlock(lkctx)
+			opts.NoLock = true
+		}
+
+		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
+		if err == nil && opts.CheckPrecondFn(obj) {
+			return ObjectInfo{}, PreConditionFailed{}
+		}
+		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
+			return ObjectInfo{}, err
+		}
+	}
+
 	// Hold write locks to verify uploaded parts, also disallows any
 	// parallel PutObjectPart() requests.
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
@@ -1237,14 +1261,15 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	// Hold namespace to complete the transaction
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return oi, err
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	if checksumType.IsSet() {
 		checksumType |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart

@@ -187,8 +187,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			driveAvailabilityErrorsMD,
 			driveWaitingIOMD,
 			driveAPILatencyMD,
-			driveHealingMD,
-			driveOnlineMD,
+			driveHealthMD,
 
 			driveOfflineCountMD,
 			driveOnlineCountMD,
