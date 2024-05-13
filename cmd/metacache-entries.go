@@ -749,9 +749,10 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 					continue
 				}
 
-				if !dirMatches && !suffixMatches {
-					// We have an object `name` and a directory `name/`.
+				if !dirMatches {
+					// We have an object `name` or 'name/' and a directory `name/`.
 					if other.isDir() {
+						console.Debugln("mergeEntryChannels: discarding directory", other.name, "for object", best.name)
 						// Discard the directory.
 						if err := selectFrom(otherIdx); err != nil {
 							return err
@@ -759,12 +760,13 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 						continue
 					}
 					// Replace directory with object.
+					console.Debugln("mergeEntryChannels: discarding directory", best.name, "for object", other.name)
 					toMerge = toMerge[:0]
 					best = other
 					bestIdx = otherIdx
 					continue
 				}
-				// Return as separate entries.
+				// Leave it to be resolved. Names are different.
 			}
 			if best.name > other.name {
 				toMerge = toMerge[:0]
