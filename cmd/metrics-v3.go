@@ -345,7 +345,6 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 
 	clusterConfigMG := NewMetricsGroup(clusterConfigCollectorPath,
 		[]MetricDescriptor{
-			configWriteQuorumMD,
 			configRRSParityMD,
 			configStandardParityMD,
 		},

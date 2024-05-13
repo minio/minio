@@ -20,14 +20,11 @@ package cmd
 import "context"
 
 const (
-	configWriteQuorum    = "write_quorum"
 	configRRSParity      = "rrs_parity"
 	configStandardParity = "standard_parity"
 )
 
 var (
-	configWriteQuorumMD = NewGaugeMD(configWriteQuorum,
-		"Maximum write quorum across all pools and sets")
 	configRRSParityMD = NewGaugeMD(configRRSParity,
 		"Reduced redundancy storage class parity")
 	configStandardParityMD = NewGaugeMD(configStandardParity,
