@@ -35,6 +35,10 @@ const (
 
 	sectorSize = uint64(512)
 	kib        = float64(1 << 10)
+
+	driveHealthOffline = float64(0)
+	driveHealthOnline  = float64(1)
+	driveHealthHealing = float64(2)
 )
 
 var allDriveLabels = []string{driveL, poolIndexL, setIndexL, driveIndexL}
@@ -51,8 +55,7 @@ const (
 	driveAvailabilityErrorsTotal = "availability_errors_total"
 	driveWaitingIO               = "waiting_io"
 	driveAPILatencyMicros        = "api_latency_micros"
-	driveHealing                 = "healing"
-	driveOnline                  = "online"
+	driveHealth                  = "health"
 
 	driveOfflineCount = "offline_count"
 	driveOnlineCount  = "online_count"
@@ -93,10 +96,8 @@ var (
 	driveAPILatencyMD = NewGaugeMD(driveAPILatencyMicros,
 		"Average last minute latency in µs for drive API storage operations",
 		append(allDriveLabels, apiL)...)
-	driveHealingMD = NewGaugeMD(driveHealing,
-		"Is it healing?", allDriveLabels...)
-	driveOnlineMD = NewGaugeMD(driveOnline,
-		"Is it online?", allDriveLabels...)
+	driveHealthMD = NewGaugeMD(driveHealth,
+		"Drive health (0 = offline, 1 = healthy, 2 = healing)", allDriveLabels...)
 
 	driveOfflineCountMD = NewGaugeMD(driveOfflineCount,
 		"Count of offline drives")
@@ -152,16 +153,18 @@ func (m *MetricValues) setDriveBasicMetrics(drive madmin.Disk, labels []string) 
 	m.Set(driveFreeInodes, float64(drive.FreeInodes), labels...)
 	m.Set(driveTotalInodes, float64(drive.UsedInodes+drive.FreeInodes), labels...)
 
-	var healing, online float64
-	if drive.Healing {
-		healing = 1
+	var health float64
+	switch drive.Healing {
+	case true:
+		health = driveHealthHealing
+	case false:
+		if drive.State == "ok" {
+			health = driveHealthOnline
+		} else {
+			health = driveHealthOffline
+		}
 	}
-	m.Set(driveHealing, healing, labels...)
-
-	if drive.State == "ok" {
-		online = 1
-	}
-	m.Set(driveOnline, online, labels...)
+	m.Set(driveHealth, health, labels...)
 }
 
 func (m *MetricValues) setDriveAPIMetrics(disk madmin.Disk, labels []string) {
