@@ -509,13 +509,11 @@ func (r *Config) GetSettings() madmin.OpenIDSettings {
 		return res
 	}
 	h := sha256.New()
+	hashedSecret := ""
 	for arn, provCfg := range r.arnProviderCfgsMap {
-		hashedSecret := ""
-		{
-			h.Reset()
-			h.Write([]byte(provCfg.ClientSecret))
-			hashedSecret = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-		}
+		h.Write([]byte(provCfg.ClientSecret))
+		hashedSecret = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+		h.Reset()
 		if arn != DummyRoleARN {
 			if res.Roles == nil {
 				res.Roles = make(map[string]madmin.OpenIDProviderSettings)
