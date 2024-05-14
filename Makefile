@@ -57,9 +57,9 @@ test-ilm: install-race
 	@echo "Running ILM tests"
 	@env bash $(PWD)/docs/bucket/replication/setup_ilm_expiry_replication.sh
 
-test-policies: install-race
+test-pbac: install-race
 	@echo "Running bucket policies tests"
-	@env bash $(PWD)/docs/bucket/policies/access-policies-tests.sh
+	@env bash $(PWD)/docs/iam/policies/pbac-tests.sh
 
 test-decom: install-race
 	@echo "Running minio decom tests"
