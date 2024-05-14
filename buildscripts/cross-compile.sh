@@ -39,14 +39,14 @@ function _build() {
     if [ "${CAN_BUILD_WITHOUT_DOCKER}" == "false" ]; then
       docker run --name runner -d -v $PWD:$PWD --workdir $PWD golang:1.22 sleep infinity
       docker exec -t runner git config --global --add safe.directory $PWD
-      docker exec -t runner go build -trimpath -tags kqueue --ldflags "${LDFLAGS}" -o ./bin/$os/$arch/minio 1>/dev/null
+      docker exec -t runner go build -trimpath -tags kqueue --ldflags "${LDFLAGS}" -o "./bin/minio_${os}_${arch}" 1>/dev/null
       MUID=$(id -u)
       MGID=$(id -g)
       docker exec -t runner chown -R $MUID:$MGID ./bin
       docker stop runner
       docker rm runner
     else
-      go build -trimpath -tags kqueue --ldflags "${LDFLAGS}" -o ./bin/$os/$arch/minio 1>/dev/null
+      go build -trimpath -tags kqueue --ldflags "${LDFLAGS}" -o "./bin/minio_${os}_${arch}" 1>/dev/null
     fi
 
 }
@@ -60,7 +60,7 @@ function _hash() {
   # package=$(go list -f '{{.ImportPath}}')
   printf -- "_hash --> %15s:%s\n" "${osarch}" "${package}"
 
-  sha256sum ./bin/$os/$arch/minio > ./bin/$os/$arch/minio.sha256sum
+  sha256sum "./bin/minio_${os}_${arch}" > "./bin/minio_${os}_${arch}".sha256sum
 }
 
 function _sign() {
@@ -72,7 +72,7 @@ function _sign() {
   # package=$(go list -f '{{.ImportPath}}')
   printf -- "_sign --> %15s:%s\n" "${osarch}" "${package}"
 
-  ./minisign -Sm ./bin/$os/$arch/minio -W
+  ./minisign -Sm "./bin/minio_${os}_${arch}" -W
   cp minisign.hash ./bin/$os/$arch/minisign.hash
 }
 
