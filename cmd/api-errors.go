@@ -287,6 +287,7 @@ const (
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
 	ErrAdminGroupDisabled
+	ErrAdminInvalidGroupName
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
 	ErrAdminPolicyChangeAlreadyApplied
@@ -2101,6 +2102,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Expected LDAP short username but was given full DN.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminInvalidGroupName: {
+		Code:           "XMinioInvalidGroupName",
+		Description:    "The group name is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience
@@ -2140,6 +2146,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
 		apiErr = ErrAdminGroupNotEmpty
+	case errGroupNameContainsReservedChars:
+		apiErr = ErrAdminInvalidGroupName
 	case errNoSuchJob:
 		apiErr = ErrAdminNoSuchJob
 	case errNoPolicyToAttachOrDetach:
@@ -2154,6 +2162,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooSmall
 	case errAuthentication:
 		apiErr = ErrAccessDenied
+	case auth.ErrContainsReservedChars:
+		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidAccessKeyLength:
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:
