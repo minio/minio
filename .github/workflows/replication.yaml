@@ -42,6 +42,12 @@ jobs:
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-ilm
 
+      - name: Test Access Policies
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-policies
+
       - name: Test Config File
         run: |
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
