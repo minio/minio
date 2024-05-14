@@ -1,0 +1,33 @@
+name: Go
+
+on:
+  push:
+    tags:
+      - 'RELEASE.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.3
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v4
+      - name: Build
+        env:
+          GO111MODULE: on
+        run: |
+          make crosscompile
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/*
+          draft: true
+          fail_on_unmatched_files: true

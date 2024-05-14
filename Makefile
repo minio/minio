@@ -58,8 +58,8 @@ verify-healing:
 
 # Builds minio locally.
 build: checks
-	@echo "Building minio binary to './minio'"
-	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@echo "Building minio binary to './bin/amd64/minio'"
+	@GO111MODULE=on CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/bin/amd64/minio 1>/dev/null
 
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
@@ -74,6 +74,14 @@ docker-hotfix: hotfix checks
 docker: build checks
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -t $(TAG) . -f Dockerfile.dev
+
+docker-release-ci: crosscompile checks
+	@echo "Building minio docker image '$(TAG)'"
+	@bash -c "./docker-buildx.sh"
+
+docker-release: crosscompile
+	@echo "Building minio docker image '$(TAG)'"
+	@bash -c "./docker-buildx.sh"
 
 # Builds minio and installs it to $GOPATH/bin.
 install: build

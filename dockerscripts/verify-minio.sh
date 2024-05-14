@@ -33,7 +33,7 @@ verify_signature() {
         return
     fi
     echo "verifying binary signature"
-    minisign -VQm /usr/bin/minio -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav
+    minisign -VQm /usr/bin/minio -P "$(cat /usr/bin/minisign.hash)"
 }
 
 main() {

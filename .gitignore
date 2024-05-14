@@ -22,3 +22,5 @@ prime/
 stage/
 .sia_temp/
 config.json
+bin/
+minisign.*
