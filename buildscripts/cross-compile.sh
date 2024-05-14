@@ -1,6 +1,6 @@
 #!/bin/bash
 
-HAS_CORRECT_GO=$(echo "${GOVERSION}" | grep "1.22")
+HAS_CORRECT_GO=$(go version | grep "1.22")
 CAN_BUILD_WITHOUT_DOCKER=${HAS_CORRECT_GO:-"false"}
 
 set -e
