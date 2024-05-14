@@ -54,10 +54,9 @@ const (
 	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
 
-	clusterReplicationCollectorPath collectorPath = "/replication"
-
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
+	replicationCollectorPath   collectorPath = "/replication"
 )
 
 const (
@@ -325,7 +324,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterIAMMetrics,
 	)
 
-	clusterReplicationMG := NewMetricsGroup(clusterReplicationCollectorPath,
+	clusterReplicationMG := NewMetricsGroup(replicationCollectorPath,
 		[]MetricDescriptor{
 			replicationAverageActiveWorkersMD,
 			replicationAverageQueuedBytesMD,
