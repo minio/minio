@@ -15,12 +15,18 @@ type config struct {
 }
 
 var (
-	mantleConfig   config
-	GATEWAY_ID_LEN = 24
+	mantleConfig    config
+	GATEWAY_ID_LEN  = 24
+	SDS_CONFIG_PATH = "SDS_CONFIG_PATH"
 )
 
 func init() {
-	f, err := os.Open("./cmd/mantle/configMantle/config-mantle.json")
+	path := "./cmd/mantle/configMantle/config-mantle.json"
+	if p := os.Getenv(SDS_CONFIG_PATH); p != "" {
+		path = p
+	}
+
+	f, err := os.Open(path)
 	defer f.Close()
 
 	if err != nil {
