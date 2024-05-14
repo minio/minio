@@ -42,7 +42,8 @@ const (
 	systemMemoryCollectorPath           collectorPath = "/system/memory"
 	systemCPUCollectorPath              collectorPath = "/system/cpu"
 	systemProcessCollectorPath          collectorPath = "/system/process"
-	systemGoCollectorPath               collectorPath = "/system/go"
+
+	debugGoCollectorPath collectorPath = "/debug/go"
 
 	clusterHealthCollectorPath       collectorPath = "/cluster/health"
 	clusterUsageObjectsCollectorPath collectorPath = "/cluster/usage/objects"
@@ -350,7 +351,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 
 	// Create all Non-`MetricGroup` collectors here.
 	collectors := map[collectorPath]prometheus.Collector{
-		systemGoCollectorPath: collectors.NewGoCollector(),
+		debugGoCollectorPath: collectors.NewGoCollector(),
 	}
 
 	// Add all `MetricGroup` collectors to the map.
