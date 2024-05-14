@@ -73,6 +73,7 @@ function _sign() {
   printf -- "_sign --> %15s:%s\n" "${osarch}" "${package}"
 
   ./minisign -Sm ./bin/$os/$arch/minio -W
+  cp minisign.hash ./bin/$os/$arch/minisign.hash
 }
 
 function main() {
