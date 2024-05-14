@@ -342,7 +342,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 
 	switch r.Method {
 	case "Setstat", "Rename", "Link", "Symlink":
-		return NotImplemented{}
+		return sftp.ErrSSHFxOpUnsupported
 
 	case "Rmdir":
 		bucket, prefix := path2BucketObject(r.Filepath)
