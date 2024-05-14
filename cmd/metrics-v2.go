@@ -295,10 +295,7 @@ const (
 	kmsRequestsFail    = "request_failure"
 	kmsUptime          = "uptime"
 
-	webhookOnline         = "online"
-	webhookQueueLength    = "queue_length"
-	webhookTotalMessages  = "total_messages"
-	webhookFailedMessages = "failed_messages"
+	webhookOnline = "online"
 )
 
 const (
