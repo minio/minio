@@ -1,6 +1,7 @@
 #!/bin/bash
 
-IS_CI=${CI_COMMIT_SHORT_SHA:-"false"}
+HAS_CORRECT_GO=$(echo "${GOVERSION}" | grep "1.22")
+CAN_BUILD_WITHOUT_DOCKER=${HAS_CORRECT_GO:-"false"}
 
 set -e
 # Enable tracing if set.
@@ -26,7 +27,7 @@ function _build() {
     export GO111MODULE=on
     export CGO_ENABLED=0
 
-    if [ "${IS_CI}" == "false" ]; then
+    if [ "${CAN_BUILD_WITHOUT_DOCKER}" == "false" ]; then
         package="github.com/minio/minio"
     else
         package=$(go list -f '{{.ImportPath}}')
@@ -35,7 +36,7 @@ function _build() {
     printf -- "_build --> %15s:%s\n" "${osarch}" "${package}"
 
     # go build -trimpath to build the binary.
-    if [ "${IS_CI}" == "false" ]; then
+    if [ "${CAN_BUILD_WITHOUT_DOCKER}" == "false" ]; then
       docker run --name runner -d -v $PWD:$PWD --workdir $PWD golang:1.22 sleep infinity
       docker exec -t runner git config --global --add safe.directory $PWD
       docker exec -t runner go build -trimpath -tags kqueue --ldflags "${LDFLAGS}" -o ./bin/$os/$arch/minio 1>/dev/null
@@ -75,6 +76,14 @@ function _sign() {
 }
 
 function main() {
+    echo "Get Minisign"
+
+    wget "https://github.com/jedisct1/minisign/releases/download/0.11/minisign-0.11-linux.tar.gz"
+
+    tar -zxvf minisign-0.11-linux.tar.gz
+
+    mv minisign-linux/x86_64/minisign /usr/bin/
+
     echo "Create Signing Config:"
     minisign -G -f -p minisign.pub -s ~/.minisign/minisign.key -W  | grep "\-P" | awk '{print $5}' 1> minisign.hash
 
