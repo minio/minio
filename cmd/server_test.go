@@ -1586,7 +1586,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	for _, objectName := range []string{"foo bar 1", "foo bar 2"} {
+	for _, objectName := range []string{"foo bar 1", "foo bar 2", "obj2", "obj2/"} {
 		buffer := bytes.NewReader([]byte("Hello World"))
 		request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, objectName),
 			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
@@ -1619,6 +1619,13 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 			},
 		},
 		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
+			[]string{
+				"<Key>obj2</Key>",
+				"<Key>obj2/</Key>",
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
