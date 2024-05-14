@@ -72,7 +72,7 @@ function _sign() {
   # package=$(go list -f '{{.ImportPath}}')
   printf -- "_sign --> %15s:%s\n" "${osarch}" "${package}"
 
-  minisign -Sm ./bin/$os/$arch/minio -W
+  ./minisign -Sm ./bin/$os/$arch/minio -W
 }
 
 function main() {
@@ -82,10 +82,10 @@ function main() {
 
     tar -zxvf minisign-0.11-linux.tar.gz
 
-    mv minisign-linux/x86_64/minisign /usr/bin/
+    mv minisign-linux/x86_64/minisign .
 
     echo "Create Signing Config:"
-    minisign -G -f -p minisign.pub -s ~/.minisign/minisign.key -W  | grep "\-P" | awk '{print $5}' 1> minisign.hash
+    ./minisign -G -f -p minisign.pub -s ~/.minisign/minisign.key -W  | grep "\-P" | awk '{print $5}' 1> minisign.hash
 
     echo "Testing builds for OS/Arch: ${SUPPORTED_OSARCH}"
     for each_osarch in ${SUPPORTED_OSARCH}; do
