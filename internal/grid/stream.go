@@ -89,12 +89,23 @@ func (s *Stream) Results(next func(b []byte) error) (err error) {
 				return nil
 			}
 			if resp.Err != nil {
+				s.cancel(resp.Err)
 				return resp.Err
 			}
 			err = next(resp.Msg)
 			if err != nil {
+				s.cancel(err)
 				return err
 			}
 		}
 	}
+}
+
+// Done
+func (s *Stream) Done() <-chan struct{} {
+	return s.ctx.Done()
+}
+
+func (s *Stream) Err() error {
+	return s.ctx.Err()
 }

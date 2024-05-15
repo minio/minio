@@ -1369,6 +1369,10 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 }
 
 func (c *Connection) handlePong(ctx context.Context, m message) {
+	if m.MuxID == 0 && m.Payload == nil {
+		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		return
+	}
 	var pong pongMsg
 	_, err := pong.UnmarshalMsg(m.Payload)
 	PutByteBuffer(m.Payload)
@@ -1388,7 +1392,9 @@ func (c *Connection) handlePong(ctx context.Context, m message) {
 
 func (c *Connection) handlePing(ctx context.Context, m message) {
 	if m.MuxID == 0 {
-		gridLogIf(ctx, c.queueMsg(m, &pongMsg{}))
+		m.Flags.Clear(FlagPayloadIsZero)
+		m.Op = OpPong
+		gridLogIf(ctx, c.queueMsg(m, nil))
 		return
 	}
 	// Single calls do not support pinging.
@@ -1605,8 +1611,16 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
 		c.connPingInterval = args[0].(time.Duration)
+		if c.connPingInterval < time.Second {
+			panic("CONN ping interval too low")
+		}
 	case debugSetClientPingDuration:
+		c.connMu.Lock()
+		defer c.connMu.Unlock()
 		c.clientPingInterval = args[0].(time.Duration)
+		if c.clientPingInterval < time.Second {
+			panic("client ping interval too low")
+		}
 	case debugAddToDeadline:
 		c.addDeadline = args[0].(time.Duration)
 	case debugIsOutgoingClosed:
