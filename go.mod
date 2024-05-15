@@ -253,3 +253,5 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 )
+
+replace github.com/minio/minio-go/v7 v7.0.70 => github.com/olljanat/minio-go/v7 v7.0.71-0.20240515111148-e8c107fb6a03

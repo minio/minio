@@ -335,7 +335,7 @@ func startSFTPServer(args []string) {
 	sshConfig.AddHostKey(private)
 
 	handleSFTPSession := func(channel ssh.Channel, sconn *ssh.ServerConn) {
-		server := sftp.NewRequestServer(channel, NewSFTPDriver(sconn.Permissions), sftp.WithRSAllocator())
+		server := sftp.NewRequestServer(channel, NewSFTPDriver(sconn), sftp.WithRSAllocator())
 		defer server.Close()
 		server.Serve()
 	}

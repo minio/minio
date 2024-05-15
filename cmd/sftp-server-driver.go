@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -40,8 +42,10 @@ import (
 )
 
 type sftpDriver struct {
-	permissions *ssh.Permissions
-	endpoint    string
+	permissions   *ssh.Permissions
+	endpoint      string
+	clientVersion string
+	clientIP      string
 }
 
 //msgp:ignore sftpMetrics
@@ -79,8 +83,9 @@ func (m *sftpMetrics) log(s *sftp.Request, user string) func(err error) {
 // - sftp.Filewrite
 // - sftp.Filelist
 // - sftp.Filecmd
-func NewSFTPDriver(perms *ssh.Permissions) sftp.Handlers {
-	handler := &sftpDriver{endpoint: fmt.Sprintf("127.0.0.1:%s", globalMinioPort), permissions: perms}
+func NewSFTPDriver(sconn *ssh.ServerConn) sftp.Handlers {
+	raddr, _, _ := net.SplitHostPort(sconn.RemoteAddr().String())
+	handler := &sftpDriver{endpoint: fmt.Sprintf("127.0.0.1:%s", globalMinioPort), clientVersion: string(sconn.ClientVersion()), clientIP: raddr, permissions: sconn.Permissions}
 	return sftp.Handlers{
 		FileGet:  handler,
 		FilePut:  handler,
@@ -90,6 +95,10 @@ func NewSFTPDriver(perms *ssh.Permissions) sftp.Handlers {
 }
 
 func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
+	headers := http.Header{
+		"User-Agent":      {f.clientVersion},
+		"X-Forwarded-For": {f.clientIP},
+	}
 	ui, ok := globalIAMSys.GetUser(context.Background(), f.AccessKey())
 	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
 		return nil, errNoSuchUser
@@ -154,9 +163,10 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		}
 
 		return minio.New(f.endpoint, &minio.Options{
-			Creds:     mcreds,
-			Secure:    globalIsTLS,
-			Transport: globalRemoteFTPClientTransport,
+			Creds:                mcreds,
+			Secure:               globalIsTLS,
+			Transport:            globalRemoteFTPClientTransport,
+			CustomRequestHeaders: headers,
 		})
 	}
 
@@ -168,9 +178,10 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 	}
 
 	return minio.New(f.endpoint, &minio.Options{
-		Creds:     credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
-		Secure:    globalIsTLS,
-		Transport: globalRemoteFTPClientTransport,
+		Creds:                credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
+		Secure:               globalIsTLS,
+		Transport:            globalRemoteFTPClientTransport,
+		CustomRequestHeaders: headers,
 	})
 }
 
@@ -303,6 +314,7 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ok, err := clnt.BucketExists(r.Context(), bucket)
 	if err != nil {
 		return nil, err
