@@ -346,7 +346,7 @@ func (e Erasure) Heal(ctx context.Context, writers []io.Writer, readers []io.Rea
 			return err
 		}
 
-		w := parallelWriter{
+		w := multiWriter{
 			writers:     writers,
 			writeQuorum: 1,
 			errs:        make([]error, len(writers)),
