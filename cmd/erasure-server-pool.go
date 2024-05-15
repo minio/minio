@@ -700,7 +700,7 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool)
 }
 
 func (z *erasureServerPools) StorageInfo(ctx context.Context, metrics bool) StorageInfo {
-	return globalNotificationSys.StorageInfo(z, metrics)
+	return globalNotificationSys.StorageInfo(ctx, z, metrics)
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
