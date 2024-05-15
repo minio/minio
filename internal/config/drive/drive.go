@@ -25,6 +25,10 @@ import (
 	"github.com/minio/pkg/v2/env"
 )
 
+const (
+	envMaxDriveTimeout = "MINIO_DRIVE_MAX_TIMEOUT"
+)
+
 // DefaultKVS - default KVS for drive
 var DefaultKVS = config.KVS{
 	config.KV{
@@ -65,8 +69,9 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if err = config.CheckValidKeys(config.DriveSubSys, kvs, DefaultKVS); err != nil {
 		return cfg, err
 	}
+
 	// if not set. Get default value from environment
-	d := kvs.GetWithDefault(MaxTimeout, DefaultKVS)
+	d := env.Get(envMaxDriveTimeout, kvs.GetWithDefault(MaxTimeout, DefaultKVS))
 	if d == "" {
 		d = env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
 		if d == "" {

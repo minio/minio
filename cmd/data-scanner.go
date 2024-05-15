@@ -53,7 +53,7 @@ const (
 	dataScannerCompactLeastObject    = 500                              // Compact when there is less than this many objects in a branch.
 	dataScannerCompactAtChildren     = 10000                            // Compact when there are this many children in a branch.
 	dataScannerCompactAtFolders      = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
-	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
+	dataScannerForceCompactAtFolders = 250_000                          // Compact when this many subfolders in a single folder (even top level).
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling   = true
@@ -349,6 +349,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		// No useful information...
 		return cache, err
 	}
+	s.newCache.forceCompact(dataScannerCompactAtChildren)
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil

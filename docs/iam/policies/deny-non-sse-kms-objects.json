@@ -1,0 +1,17 @@
+{
+   "Version":"2012-10-17",
+   "Id":"PutObjectPolicy",
+   "Statement":[{
+         "Sid":"DenyObjectsThatAreNotSSEKMS",
+         "Effect":"Deny",
+         "Principal":"*",
+         "Action":"s3:PutObject",
+         "Resource":"arn:aws:s3:::multi-key-poc/*",
+         "Condition":{
+            "Null":{
+               "s3:x-amz-server-side-encryption-aws-kms-key-id":"true"
+            }
+         }
+      }
+   ]
+}
