@@ -27,6 +27,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	apiGetObject = "GetObject"
+)
+
 // connStats - Network statistics
 // Count total input/output transferred bytes during
 // the server's life.
@@ -128,7 +132,7 @@ func (bh *bucketHTTPStats) updateHTTPStats(bucket, api string, w *xhttp.Response
 		return
 	}
 
-	if w != nil {
+	if w != nil && api == apiGetObject {
 		// Increment the prometheus http request response histogram with API, Bucket
 		bucketHTTPRequestsDuration.With(prometheus.Labels{
 			"api":    api,
@@ -433,7 +437,9 @@ func (st *HTTPStats) updateStats(api string, w *xhttp.ResponseRecorder) {
 	st.totalS3Requests.Inc(api)
 
 	// Increment the prometheus http request response histogram with appropriate label
-	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
+	if api == apiGetObject {
+		httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
+	}
 
 	code := w.StatusCode
 
