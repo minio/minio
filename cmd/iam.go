@@ -230,7 +230,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	globalServerConfigMu.RUnlock()
 
 	openidConfig, err := openid.LookupConfig(s,
-		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err), logger.WarningKind)
 	}
@@ -251,7 +251,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region)
+		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err), logger.WarningKind)
 	}
