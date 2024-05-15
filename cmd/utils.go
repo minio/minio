@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
@@ -1141,4 +1142,12 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 type itemOrErr[V any] struct {
 	Item V
 	Err  error
+}
+
+func filterStorageClass(ctx context.Context, s string) string {
+	// Veeam 14.0 and later clients are not compatible with custom storage classes.
+	if globalVeeamForceSC != "" && s != storageclass.STANDARD && s != storageclass.RRS && isVeeamClient(ctx) {
+		return globalVeeamForceSC
+	}
+	return s
 }
