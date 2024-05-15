@@ -123,10 +123,11 @@ type Connection struct {
 	baseFlags     Flags
 
 	// For testing only
-	debugInConn  net.Conn
-	debugOutConn net.Conn
-	addDeadline  time.Duration
-	connMu       sync.Mutex
+	debugInConn   net.Conn
+	debugOutConn  net.Conn
+	blockMessages atomic.Pointer[<-chan struct{}]
+	addDeadline   time.Duration
+	connMu        sync.Mutex
 }
 
 // Subroute is a connection subroute that can be used to route to a specific handler with the same handler ID.
@@ -975,6 +976,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				gridLogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				return
 			}
+			block := c.blockMessages.Load()
+			if block != nil && *block != nil {
+				<-*block
+			}
+
 			if c.incomingBytes != nil {
 				c.incomingBytes(int64(len(msg)))
 			}
@@ -1615,6 +1621,11 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		mid.respMu.Lock()
 		resp(mid.closed)
 		mid.respMu.Unlock()
+	case debugBlockInboundMessages:
+		c.connMu.Lock()
+		block := (<-chan struct{})(args[0].(chan struct{}))
+		c.blockMessages.Store(&block)
+		c.connMu.Unlock()
 	}
 }
 
