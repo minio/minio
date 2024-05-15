@@ -899,6 +899,20 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		if success {
 			validResp++
 		}
+
+		if totalResp >= minDisks && opts.FastGetObjInfo {
+			rw.Lock()
+			ok := countErrs(errs, errFileNotFound) >= minDisks || countErrs(errs, errFileVersionNotFound) >= minDisks
+			rw.Unlock()
+			if ok {
+				err = errFileNotFound
+				if opts.VersionID != "" {
+					err = errFileVersionNotFound
+				}
+				break
+			}
+		}
+
 		if totalResp < er.setDriveCount {
 			if !opts.FastGetObjInfo {
 				continue
