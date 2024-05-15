@@ -520,23 +520,21 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	}
 	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
 
-	if iamOS.usersSysType == MinIOUsersSysType {
-		bootstrapTraceMsg("loading regular IAM users")
-		regUsersList := listedConfigItems[usersListKey]
-		for _, item := range regUsersList {
-			userName := path.Dir(item)
-			if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-				return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
-			}
+	bootstrapTraceMsg("loading regular IAM users")
+	regUsersList := listedConfigItems[usersListKey]
+	for _, item := range regUsersList {
+		userName := path.Dir(item)
+		if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+			return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
 		}
+	}
 
-		bootstrapTraceMsg("loading regular IAM groups")
-		groupsList := listedConfigItems[groupsListKey]
-		for _, item := range groupsList {
-			group := path.Dir(item)
-			if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
-				return fmt.Errorf("unable to load the group `%s`: %w", group, err)
-			}
+	bootstrapTraceMsg("loading regular IAM groups")
+	groupsList := listedConfigItems[groupsListKey]
+	for _, item := range groupsList {
+		group := path.Dir(item)
+		if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
+			return fmt.Errorf("unable to load the group `%s`: %w", group, err)
 		}
 	}
 

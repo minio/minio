@@ -514,11 +514,12 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// We don't allow internal user creation with LDAP enabled for now.
-	if globalIAMSys.LDAPConfig.Enabled() {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
-		return
-	}
+	// LDAP TODO: Delete?
+	// // We don't allow internal user creation with LDAP enabled for now.
+	// if globalIAMSys.LDAPConfig.Enabled() {
+	// 	writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+	// 	return
+	// }
 
 	updatedAt, err := globalIAMSys.CreateUser(ctx, accessKey, ureq)
 	if err != nil {
