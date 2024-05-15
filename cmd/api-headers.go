@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -107,7 +108,7 @@ func setPartsCountHeaders(w http.ResponseWriter, objInfo ObjectInfo) {
 }
 
 // Write object header
-func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec, opts ObjectOptions) (err error) {
+func setObjectHeaders(ctx context.Context, w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSpec, opts ObjectOptions) (err error) {
 	// set common headers
 	setCommonHeaders(w)
 
@@ -212,7 +213,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, rs *HTTPRangeSp
 	if objInfo.IsRemote() {
 		// Check if object is being restored. For more information on x-amz-restore header see
 		// https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html#API_HeadObject_ResponseSyntax
-		w.Header()[xhttp.AmzStorageClass] = []string{objInfo.TransitionedObject.Tier}
+		w.Header()[xhttp.AmzStorageClass] = []string{filterStorageClass(ctx, objInfo.TransitionedObject.Tier)}
 	}
 
 	if lc, err := globalLifecycleSys.Get(objInfo.Bucket); err == nil {
