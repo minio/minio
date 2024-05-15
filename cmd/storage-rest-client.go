@@ -38,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/rest"
 	xnet "github.com/minio/pkg/v2/net"
@@ -662,6 +663,13 @@ func (client *storageRESTClient) ListDir(ctx context.Context, origvolume, volume
 
 // DeleteFile - deletes a file.
 func (client *storageRESTClient) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) error {
+	if !deleteOpts.Immediate {
+		// add deadlines for all non-immediate purges
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+		defer cancel()
+	}
+
 	_, err := storageDeleteFileRPC.Call(ctx, client.gridConn, &DeleteFileHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
@@ -727,6 +735,9 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 
 // RenameFile - renames a file.
 func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err = storageRenameFileRPC.Call(ctx, client.gridConn, &RenameFileHandlerParams{
 		DiskID:      *client.diskID.Load(),
 		SrcVolume:   srcVolume,
@@ -782,6 +793,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 	}
 	rd := msgpNewReader(respReader)
 	defer readMsgpReaderPoolPut(rd)
+
 	for {
 		var st StatInfo
 		err = st.DecodeMsg(rd)
@@ -791,6 +803,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 			}
 			break
 		}
+
 		stat = append(stat, st)
 	}
 
@@ -815,7 +828,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 
 	pr, pw := io.Pipe()
 	go func() {
-		pw.CloseWithError(waitForHTTPStream(respBody, pw))
+		pw.CloseWithError(waitForHTTPStream(respBody, ioutil.NewDeadlineWriter(pw, globalDriveConfig.GetMaxTimeout())))
 	}()
 	mr := msgp.NewReader(pr)
 	defer readMsgpReaderPoolPut(mr)
@@ -868,7 +881,6 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 	}
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-
 	if healthCheck {
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
