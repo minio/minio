@@ -74,8 +74,9 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser  = "ldapUser"     // this is a key name for a DN value
-	ldapUserN = "ldapUsername" // this is a key name for the short/login username
+	ldapUser       = "ldapUser"       // this is a key name for a normalized DN value
+	ldapActualUser = "ldapActualUser" // this is a key name for the actual DN value
+	ldapUserN      = "ldapUsername"   // this is a key name for the short/login username
 	// Claim key-prefix for LDAP attributes
 	ldapAttribPrefix = "ldapAttrib_"
 
@@ -677,6 +678,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 	ldapUserDN := lookupResult.NormDN
+	ldapActualUserDN := lookupResult.ActualDN
 
 	// Check if this user or their groups have a policy applied.
 	ldapPolicies, err := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
@@ -687,7 +689,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	if len(ldapPolicies) == 0 && newGlobalAuthZPluginFn() == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
-				ldapUserDN, strings.Join(groupDistNames, "`,`")))
+				ldapActualUserDN, strings.Join(groupDistNames, "`,`")))
 		return
 	}
 
@@ -699,6 +701,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	claims[expClaim] = UTCNow().Add(expiryDur).Unix()
 	claims[ldapUser] = ldapUserDN
+	claims[ldapActualUser] = ldapActualUserDN
 	claims[ldapUserN] = ldapUsername
 	// Add lookup up LDAP attributes as claims.
 	for attrib, value := range lookupResult.Attributes {

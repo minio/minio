@@ -1351,12 +1351,17 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
-	for parentUser := range parentUsers {
+	for parentUser, info := range parentUsers {
 		if !sys.LDAPConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
-		allDistNames = append(allDistNames, parentUser)
+		if info.subClaimValue != "" {
+			// we need to ask LDAP about the actual user DN not normalized DN.
+			allDistNames = append(allDistNames, info.subClaimValue)
+		} else {
+			allDistNames = append(allDistNames, parentUser)
+		}
 	}
 
 	expiredUsers, err := sys.LDAPConfig.GetNonEligibleUserDistNames(allDistNames)
