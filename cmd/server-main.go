@@ -1135,7 +1135,7 @@ func serverMain(ctx *cli.Context) {
 		}
 	}()
 
-	region := globalSite.Region
+	region := globalSite.Region()
 	if region == "" {
 		region = "us-east-1"
 	}

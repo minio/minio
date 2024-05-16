@@ -209,9 +209,8 @@ var (
 	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
 	globalInplaceUpdateDisabled = false
 
-	globalSite = config.Site{
-		Region: globalMinioDefaultRegion,
-	}
+	// Captures site name and region
+	globalSite config.Site
 
 	// MinIO local server address (in `host:port` format)
 	globalMinioAddr = ""
