@@ -271,14 +271,7 @@ func (a adminAPIHandlers) UpdateGroupMembers(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
-
-		if globalIAMSys.LDAPConfig.Enabled() {
-			// We don't allow internal group manipulation in this API when LDAP
-			// is enabled for now.
-			err = errIAMActionNotAllowed
-		} else {
-			updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
-		}
+		updatedAt, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -514,13 +507,6 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// LDAP TODO: Delete?
-	// // We don't allow internal user creation with LDAP enabled for now.
-	// if globalIAMSys.LDAPConfig.Enabled() {
-	// 	writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
-	// 	return
-	// }
-
 	updatedAt, err := globalIAMSys.CreateUser(ctx, accessKey, ureq)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -657,13 +643,13 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		requestorIsDerivedCredential = true
 	}
 
-	if globalIAMSys.GetUsersSysType() == MinIOUsersSysType && targetUser != cred.AccessKey {
+	if targetUser != cred.AccessKey {
 		// For internal IDP, ensure that the targetUser's parent account exists.
 		// It could be a regular user account or the root account.
 		_, isRegularUser := globalIAMSys.GetUser(ctx, targetUser)
 		if !isRegularUser && targetUser != globalActiveCred.AccessKey {
-			apiErr := toAdminAPIErr(ctx, errNoSuchUser)
-			apiErr.Description = fmt.Sprintf("Specified target user %s does not exist", targetUser)
+			errDesc := fmt.Errorf("%s does not exist", targetUser)
+			apiErr := errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, iamErrorLDAPHint(errNoSuchUser)), errDesc)
 			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 			return
 		}
@@ -697,21 +683,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 			}
 			opts.claims[k] = v
 		}
-	} else if globalIAMSys.LDAPConfig.Enabled() {
-		// In case of LDAP we need to resolve the targetUser to a DN and
-		// query their groups:
-		opts.claims[ldapUserN] = targetUser // simple username
-		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-			return
-		}
-		opts.claims[ldapUser] = targetUser // username DN
-
-		// NOTE: if not using LDAP, then internal IDP or open ID is
-		// being used - in the former, group info is enforced when
-		// generated credentials are used to make requests, and in the
-		// latter, a group notion is not supported.
 	}
 
 	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
@@ -1769,14 +1740,7 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 
 	updatedAt, addedOrRemoved, _, err := globalIAMSys.PolicyDBUpdateBuiltin(ctx, isAttach, par)
 	if err != nil {
-		if err == errNoSuchUser || err == errNoSuchGroup {
-			if globalIAMSys.LDAPConfig.Enabled() {
-				// When LDAP is enabled, warn user that they are using the wrong
-				// API. FIXME: error can be no such group as well - fix errNoSuchUserLDAPWarn
-				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUserLDAPWarn), r.URL)
-				return
-			}
-		}
+		err = iamErrorLDAPHint(err)
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
@@ -2450,95 +2414,4 @@ func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) {
 		return
 	}
 	condValues["DurationSeconds"] = []string{strconv.FormatInt(int64(exp.Sub(time.Now()).Seconds()), 10)}
-}
-
-func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
-	ctx := r.Context()
-
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil || globalNotificationSys == nil {
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrServerNotInitialized)
-	}
-
-	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
-	if s3Err != ErrNone {
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(s3Err)
-	}
-
-	password := cred.SecretKey
-	reqBytes, err := madmin.DecryptData(password, io.LimitReader(r.Body, r.ContentLength))
-	if err != nil {
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err)
-	}
-
-	var createReq madmin.AddServiceAccountReq
-	if err = json.Unmarshal(reqBytes, &createReq); err != nil {
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErrWithErr(ErrAdminConfigBadJSON, err)
-	}
-
-	if createReq.Expiration != nil && !createReq.Expiration.IsZero() {
-		// truncate expiration at the second.
-		truncateTime := createReq.Expiration.Truncate(time.Second)
-		createReq.Expiration = &truncateTime
-	}
-
-	// service account access key cannot have space characters beginning and end of the string.
-	if hasSpaceBE(createReq.AccessKey) {
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument)
-	}
-
-	if err := createReq.Validate(); err != nil {
-		// Since this validation would happen client side as well, we only send
-		// a generic error message here.
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument)
-	}
-	// If the request did not set a TargetUser, the service account is
-	// created for the request sender.
-	targetUser := createReq.TargetUser
-	if targetUser == "" {
-		targetUser = cred.AccessKey
-	}
-
-	description := createReq.Description
-	if description == "" {
-		description = createReq.Comment
-	}
-	opts := newServiceAccountOpts{
-		accessKey:   createReq.AccessKey,
-		secretKey:   createReq.SecretKey,
-		name:        createReq.Name,
-		description: description,
-		expiration:  createReq.Expiration,
-		claims:      make(map[string]interface{}),
-	}
-
-	condValues := getConditionValues(r, "", cred)
-	addExpirationToCondValues(createReq.Expiration, condValues)
-
-	// Check if action is allowed if creating access key for another user
-	// Check if action is explicitly denied if for self
-	if !globalIAMSys.IsAllowed(policy.Args{
-		AccountName:     cred.AccessKey,
-		Groups:          cred.Groups,
-		Action:          policy.CreateServiceAccountAdminAction,
-		ConditionValues: condValues,
-		IsOwner:         owner,
-		Claims:          cred.Claims,
-		DenyOnly:        (targetUser == cred.AccessKey || targetUser == cred.ParentUser),
-	}) {
-		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAccessDenied)
-	}
-
-	var sp *policy.Policy
-	if len(createReq.Policy) > 0 {
-		sp, err = policy.ParseConfig(bytes.NewReader(createReq.Policy))
-		if err != nil {
-			return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", toAdminAPIErr(ctx, err)
-		}
-	}
-
-	opts.sessionPolicy = sp
-
-	return ctx, cred, opts, createReq, targetUser, APIError{}
 }
