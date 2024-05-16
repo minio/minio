@@ -647,7 +647,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}()
 	}
 
-	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -786,7 +786,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	}
 
 	if _, ok := opts.ObjectAttributes[xhttp.StorageClass]; ok {
-		OA.StorageClass = objInfo.StorageClass
+		OA.StorageClass = filterStorageClass(ctx, objInfo.StorageClass)
 	}
 
 	objInfo.decryptPartsChecksums()
@@ -1173,7 +1173,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	// Set standard object headers.
-	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}

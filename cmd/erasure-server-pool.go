@@ -700,7 +700,7 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool)
 }
 
 func (z *erasureServerPools) StorageInfo(ctx context.Context, metrics bool) StorageInfo {
-	return globalNotificationSys.StorageInfo(z, metrics)
+	return globalNotificationSys.StorageInfo(ctx, z, metrics)
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
@@ -1387,8 +1387,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	// It requests unique blocks with a specific prefix.
 	// We skip scanning the parent directory for
 	// more objects matching the prefix.
-	ri := logger.GetReqInfo(ctx)
-	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
+	if isVeeamClient(ctx) && strings.HasSuffix(prefix, ".blk") {
 		opts.BaseDir = prefix
 		opts.Transient = true
 	}

@@ -1399,7 +1399,7 @@ func getListObjectVersionsURL(endPoint, bucketName, prefix, maxKeys, encodingTyp
 }
 
 // return URL for listing objects in the bucket with V2 API.
-func getListObjectsV2URL(endPoint, bucketName, prefix, maxKeys, fetchOwner, encodingType string) string {
+func getListObjectsV2URL(endPoint, bucketName, prefix, maxKeys, fetchOwner, encodingType, delimiter string) string {
 	queryValue := url.Values{}
 	queryValue.Set("list-type", "2") // Enables list objects V2 URL.
 	if maxKeys != "" {
@@ -1411,7 +1411,13 @@ func getListObjectsV2URL(endPoint, bucketName, prefix, maxKeys, fetchOwner, enco
 	if encodingType != "" {
 		queryValue.Set("encoding-type", encodingType)
 	}
-	return makeTestTargetURL(endPoint, bucketName, prefix, queryValue)
+	if prefix != "" {
+		queryValue.Set("prefix", prefix)
+	}
+	if delimiter != "" {
+		queryValue.Set("delimiter", delimiter)
+	}
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
 // return URL for a new multipart upload.
