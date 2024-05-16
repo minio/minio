@@ -27,8 +27,8 @@ import (
 	"github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/config/lambda/target"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 const (

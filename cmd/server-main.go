@@ -51,8 +51,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/env"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )

@@ -38,8 +38,8 @@ import (
 	"github.com/minio/minio/internal/dsync"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 // setsDsyncLockers is encapsulated type for Close()

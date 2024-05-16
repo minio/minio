@@ -33,7 +33,7 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
-	ldap "github.com/minio/pkg/v2/ldap"
+	ldap "github.com/minio/pkg/v3/ldap"
 	"golang.org/x/exp/slices"
 )
 

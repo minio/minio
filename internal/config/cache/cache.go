@@ -29,7 +29,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/env"
 	"github.com/tinylib/msgp/msgp"
 )
 

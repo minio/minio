@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/env"
 )
 
 const (

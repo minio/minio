@@ -33,8 +33,8 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/event/target"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/v2/net"
-	"github.com/minio/pkg/v2/quick"
+	xnet "github.com/minio/pkg/v3/net"
+	"github.com/minio/pkg/v3/quick"
 )
 
 // Save config file to corresponding backend
