@@ -389,15 +389,17 @@ func (m *muxClient) doPing(respHandler chan<- Response) (ok bool) {
 
 // responseCh is the channel to that goes to the requester.
 // internalResp is the channel that comes from the server.
-func (m *muxClient) handleTwowayResponses(responseCh chan<- Response, internalResp <-chan Response) {
+func (m *muxClient) handleTwowayResponses(errResp, responseCh chan<- Response, internalResp <-chan Response) {
 	defer func() {
 		m.parent.deleteMux(false, m.MuxID)
 		// addErrorNonBlockingClose will close the response channel.
 		if m.respErr.Load() == nil {
 			xioutil.SafeClose(responseCh)
 			// Drain internal responses.
-			for range internalResp {
-			}
+			go func() {
+				for range internalResp {
+				}
+			}()
 		}
 	}()
 	var pingTimer <-chan time.Time
@@ -410,6 +412,9 @@ func (m *muxClient) handleTwowayResponses(responseCh chan<- Response, internalRe
 waitForNext:
 	for {
 		select {
+		case <-m.ctx.Done():
+			m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
+			break waitForNext
 		case resp, ok := <-internalResp:
 			if !ok {
 				return
@@ -433,7 +438,7 @@ waitForNext:
 	}
 }
 
-func (m *muxClient) handleTwowayRequests(internalResp chan<- Response, requests <-chan []byte) {
+func (m *muxClient) handleTwowayRequests(errResp chan<- Response, requests <-chan []byte) {
 	var errState bool
 	if debugPrint {
 		start := time.Now()
@@ -458,7 +463,7 @@ func (m *muxClient) handleTwowayRequests(internalResp chan<- Response, requests 
 			if debugPrint {
 				fmt.Println("Client sending disconnect to mux", m.MuxID)
 			}
-			m.addErrorNonBlockingClose(internalResp, context.Cause(m.ctx))
+			m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
 			errState = true
 			continue
 		case req, ok := <-requests:
@@ -470,20 +475,19 @@ func (m *muxClient) handleTwowayRequests(internalResp chan<- Response, requests 
 				msg := message{
 					Op:    OpMuxClientMsg,
 					MuxID: m.MuxID,
-					Seq:   1,
 					Flags: FlagEOF,
 				}
 				msg.setZeroPayloadFlag()
 				err := m.send(msg)
 				if err != nil {
-					m.addErrorNonBlockingClose(internalResp, err)
+					m.addErrorNonBlockingClose(errResp, err)
 				}
 				return
 			}
 			// Grab a send token.
 			select {
 			case <-m.ctx.Done():
-				m.addErrorNonBlockingClose(internalResp, context.Cause(m.ctx))
+				m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
 				errState = true
 				continue
 			case <-m.outBlock:
@@ -498,7 +502,7 @@ func (m *muxClient) handleTwowayRequests(internalResp chan<- Response, requests 
 			err := m.send(msg)
 			PutByteBuffer(req)
 			if err != nil {
-				m.addErrorNonBlockingClose(internalResp, err)
+				m.addErrorNonBlockingClose(errResp, err)
 				errState = true
 				continue
 			}

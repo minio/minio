@@ -1107,7 +1107,7 @@ func testServerStreamNoPing(t *testing.T, local, remote *Manager, inCap int) {
 
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
-	remoteConn.debugMsg(debugSetClientPingDuration, 100*time.Millisecond)
+	remoteConn.debugMsg(debugSetClientPingDuration, time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
