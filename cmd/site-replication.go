@@ -1277,13 +1277,7 @@ func (c *SiteReplicationSys) PeerIAMUserChangeHandler(ctx context.Context, chang
 			// only changing the account status.
 			_, err = globalIAMSys.SetUserStatus(ctx, change.AccessKey, userReq.Status)
 		} else {
-			// We don't allow internal user creation with LDAP enabled for now
-			// (both sites must have LDAP disabled).
-			if globalIAMSys.LDAPConfig.Enabled() {
-				err = errIAMActionNotAllowed
-			} else {
-				_, err = globalIAMSys.CreateUser(ctx, change.AccessKey, userReq)
-			}
+			_, err = globalIAMSys.CreateUser(ctx, change.AccessKey, userReq)
 		}
 	}
 	if err != nil {
@@ -1313,13 +1307,7 @@ func (c *SiteReplicationSys) PeerGroupInfoChangeHandler(ctx context.Context, cha
 		if updReq.Status != "" && len(updReq.Members) == 0 {
 			_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 		} else {
-			if globalIAMSys.LDAPConfig.Enabled() {
-				// We don't allow internal group manipulation in this API when
-				// LDAP is enabled for now (both sites must have LDAP disabled).
-				err = errIAMActionNotAllowed
-			} else {
-				_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
-			}
+			_, err = globalIAMSys.AddUsersToGroup(ctx, updReq.Group, updReq.Members)
 			if err == nil && updReq.Status != "" {
 				_, err = globalIAMSys.SetGroupStatus(ctx, updReq.Group, updReq.Status == madmin.GroupEnabled)
 			}

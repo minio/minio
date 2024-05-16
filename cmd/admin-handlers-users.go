@@ -643,18 +643,6 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		requestorIsDerivedCredential = true
 	}
 
-	if targetUser != cred.AccessKey {
-		// For internal IDP, ensure that the targetUser's parent account exists.
-		// It could be a regular user account or the root account.
-		_, isRegularUser := globalIAMSys.GetUser(ctx, targetUser)
-		if !isRegularUser && targetUser != globalActiveCred.AccessKey {
-			errDesc := fmt.Errorf("%s does not exist", targetUser)
-			apiErr := errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, iamErrorLDAPHint(errNoSuchUser)), errDesc)
-			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
-			return
-		}
-	}
-
 	// Check if we are creating svc account for request sender.
 	isSvcAccForRequestor := false
 	if targetUser == requestorUser || targetUser == requestorParentUser {
@@ -682,6 +670,16 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 				continue
 			}
 			opts.claims[k] = v
+		}
+	} else {
+		// For internal IDP, ensure that the targetUser's parent account exists.
+		// It could be a regular user account or the root account.
+		_, isRegularUser := globalIAMSys.GetUser(ctx, targetUser)
+		if !isRegularUser {
+			errDesc := fmt.Errorf("%s does not exist", targetUser)
+			apiErr := errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, iamErrorLDAPHint(errNoSuchUser)), errDesc)
+			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
+			return
 		}
 	}
 

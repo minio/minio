@@ -254,8 +254,11 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 	stopFn := globalFtpMetrics.log(c, username)
 	defer stopFn(err)
 
-	if globalIAMSys.LDAPConfig.Enabled() {
-		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), username)
+	ui, ok := globalIAMSys.GetUser(context.Background(), username)
+	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
+		return false, nil
+	} else if !ok && globalIAMSys.LDAPConfig.Enabled() {
+		ui, _, err = globalIAMSys.getServiceAccount(context.Background(), username)
 		if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 			return false, err
 		}
@@ -267,13 +270,8 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 			ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
 			return len(ldapPolicies) > 0, nil
 		}
-		return subtle.ConstantTimeCompare([]byte(sa.Credentials.SecretKey), []byte(password)) == 1, nil
 	}
 
-	ui, ok := globalIAMSys.GetUser(context.Background(), username)
-	if !ok {
-		return false, nil
-	}
 	return subtle.ConstantTimeCompare([]byte(ui.Credentials.SecretKey), []byte(password)) == 1, nil
 }
 

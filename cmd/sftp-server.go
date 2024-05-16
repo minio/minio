@@ -232,8 +232,12 @@ func startSFTPServer(args []string) {
 		},
 		PublicKeyAuthAlgorithms: allowPubKeys,
 		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-			if globalIAMSys.LDAPConfig.Enabled() {
-				sa, _, err := globalIAMSys.getServiceAccount(context.Background(), c.User())
+			ui, ok := globalIAMSys.GetUser(context.Background(), c.User())
+			if !ok && !globalIAMSys.LDAPConfig.Enabled() {
+				return nil, errNoSuchUser
+			}
+			if !ok && globalIAMSys.LDAPConfig.Enabled() {
+				ui, _, err = globalIAMSys.getServiceAccount(context.Background(), c.User())
 				if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
 					return nil, err
 				}
@@ -254,20 +258,6 @@ func startSFTPServer(args []string) {
 						Extensions: make(map[string]string),
 					}, nil
 				}
-				if subtle.ConstantTimeCompare([]byte(sa.Credentials.SecretKey), pass) == 1 {
-					return &ssh.Permissions{
-						CriticalOptions: map[string]string{
-							"accessKey": c.User(),
-						},
-						Extensions: make(map[string]string),
-					}, nil
-				}
-				return nil, errAuthentication
-			}
-
-			ui, ok := globalIAMSys.GetUser(context.Background(), c.User())
-			if !ok {
-				return nil, errNoSuchUser
 			}
 
 			if subtle.ConstantTimeCompare([]byte(ui.Credentials.SecretKey), pass) == 1 {

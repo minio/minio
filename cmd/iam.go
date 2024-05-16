@@ -914,10 +914,6 @@ func (sys *IAMSys) SetUserStatus(ctx context.Context, accessKey string, status m
 		return updatedAt, errServerNotInitialized
 	}
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
-	}
-
 	updatedAt, err = sys.store.SetUserStatus(ctx, accessKey, status)
 	if err != nil {
 		return
@@ -1290,10 +1286,6 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin
 func (sys *IAMSys) SetUserSecretKey(ctx context.Context, accessKey string, secretKey string) error {
 	if !sys.Initialized() {
 		return errServerNotInitialized
-	}
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return errIAMActionNotAllowed
 	}
 
 	if !auth.IsAccessKeyValid(accessKey) {
@@ -1777,10 +1769,6 @@ func (sys *IAMSys) RemoveUsersFromGroup(ctx context.Context, group string, membe
 		return updatedAt, errServerNotInitialized
 	}
 
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
-	}
-
 	updatedAt, err = sys.store.RemoveUsersFromGroup(ctx, group, members)
 	if err != nil {
 		return updatedAt, err
@@ -1794,10 +1782,6 @@ func (sys *IAMSys) RemoveUsersFromGroup(ctx context.Context, group string, membe
 func (sys *IAMSys) SetGroupStatus(ctx context.Context, group string, enabled bool) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
-	}
-
-	if sys.usersSysType != MinIOUsersSysType {
-		return updatedAt, errIAMActionNotAllowed
 	}
 
 	updatedAt, err = sys.store.SetGroupStatus(ctx, group, enabled)

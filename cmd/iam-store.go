@@ -571,15 +571,13 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 		// Sets default canned policies, if none are set.
 		setDefaultCannedPolicies(newCache.iamPolicyDocsMap)
 
-		if store.getUsersSysType() == MinIOUsersSysType {
-			bootstrapTraceMsg("loading regular users")
-			if err := store.loadUsers(ctx, regUser, newCache.iamUsersMap); err != nil {
-				return err
-			}
-			bootstrapTraceMsg("loading regular groups")
-			if err := store.loadGroups(ctx, newCache.iamGroupsMap); err != nil {
-				return err
-			}
+		bootstrapTraceMsg("loading regular users")
+		if err := store.loadUsers(ctx, regUser, newCache.iamUsersMap); err != nil {
+			return err
+		}
+		bootstrapTraceMsg("loading regular groups")
+		if err := store.loadGroups(ctx, newCache.iamGroupsMap); err != nil {
+			return err
 		}
 
 		bootstrapTraceMsg("loading user policy mapping")
@@ -949,17 +947,15 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 	cache := store.lock()
 	defer store.unlock()
 
-	if store.getUsersSysType() == MinIOUsersSysType {
-		m := map[string]GroupInfo{}
-		err = store.loadGroups(ctx, m)
-		if err != nil {
-			return
-		}
-		cache.iamGroupsMap = m
-		cache.updatedAt = time.Now()
-		for k := range cache.iamGroupsMap {
-			res = append(res, k)
-		}
+	m := map[string]GroupInfo{}
+	err = store.loadGroups(ctx, m)
+	if err != nil {
+		return
+	}
+	cache.iamGroupsMap = m
+	cache.updatedAt = time.Now()
+	for k := range cache.iamGroupsMap {
+		res = append(res, k)
 	}
 
 	if store.getUsersSysType() == LDAPUsersSysType {
@@ -984,10 +980,8 @@ func (store *IAMStoreSys) listGroups(ctx context.Context) (res []string, err err
 	cache := store.rlock()
 	defer store.runlock()
 
-	if store.getUsersSysType() == MinIOUsersSysType {
-		for k := range cache.iamGroupsMap {
-			res = append(res, k)
-		}
+	for k := range cache.iamGroupsMap {
+		res = append(res, k)
 	}
 
 	if store.getUsersSysType() == LDAPUsersSysType {
@@ -1563,7 +1557,27 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 	cache := store.rlock()
 	defer store.runlock()
 
-	if store.getUsersSysType() != MinIOUsersSysType {
+	ui, found := cache.iamUsersMap[name]
+	if found {
+		cred := ui.Credentials
+		if cred.IsTemp() || cred.IsServiceAccount() {
+			return u, errIAMActionNotAllowed
+		}
+		pl, _ := cache.iamUserPolicyMap.Load(name)
+		return madmin.UserInfo{
+			PolicyName: pl.Policies,
+			Status: func() madmin.AccountStatus {
+				if cred.IsValid() {
+					return madmin.AccountEnabled
+				}
+				return madmin.AccountDisabled
+			}(),
+			MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
+			UpdatedAt: pl.UpdatedAt,
+		}, nil
+	} else if store.getUsersSysType() == LDAPUsersSysType {
+		// If user is not internal, check if it is an LDAP user
+
 		// If the user has a mapped policy or is a member of a group, we
 		// return that info. Otherwise we return error.
 		var groups []string
@@ -1598,27 +1612,8 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 			UpdatedAt:  mappedPolicy.UpdatedAt,
 		}, nil
 	}
+	return u, errNoSuchUser
 
-	ui, found := cache.iamUsersMap[name]
-	if !found {
-		return u, errNoSuchUser
-	}
-	cred := ui.Credentials
-	if cred.IsTemp() || cred.IsServiceAccount() {
-		return u, errIAMActionNotAllowed
-	}
-	pl, _ := cache.iamUserPolicyMap.Load(name)
-	return madmin.UserInfo{
-		PolicyName: pl.Policies,
-		Status: func() madmin.AccountStatus {
-			if cred.IsValid() {
-				return madmin.AccountEnabled
-			}
-			return madmin.AccountDisabled
-		}(),
-		MemberOf:  cache.iamUserGroupMemberships[name].ToSlice(),
-		UpdatedAt: pl.UpdatedAt,
-	}, nil
 }
 
 // PolicyMappingNotificationHandler - handles updating a policy mapping from storage.
