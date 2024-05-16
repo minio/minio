@@ -2472,16 +2472,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for _, disk := range storageInfo.Disks {
 		if opts.Maintenance {
-			var skip bool
 			globalLocalDrivesMu.RLock()
-			for _, drive := range globalLocalDrives {
-				if drive != nil && drive.Endpoint().String() == disk.Endpoint {
-					skip = true
-					break
-				}
-			}
+			_, ok := globalLocalDrivesMap[disk.Endpoint]
 			globalLocalDrivesMu.RUnlock()
-			if skip {
+			if ok {
 				continue
 			}
 		}

@@ -97,13 +97,6 @@ type ioret[V any] struct {
 	err error
 }
 
-// DeadlineWriter deadline writer with timeout
-type DeadlineWriter struct {
-	io.WriteCloser
-	timeout time.Duration
-	err     error
-}
-
 // WithDeadline will execute a function with a deadline and return a value of a given type.
 // If the deadline/context passes before the function finishes executing,
 // the zero value and the context error is returned.
@@ -145,21 +138,17 @@ func NewDeadlineWorker(timeout time.Duration) *DeadlineWorker {
 // channel so that the work function can attempt to exit gracefully.
 // Multiple calls to Run will run independently of each other.
 func (d *DeadlineWorker) Run(work func() error) error {
-	c := make(chan ioret[struct{}], 1)
-	t := time.NewTimer(d.timeout)
-	go func() {
-		c <- ioret[struct{}]{val: struct{}{}, err: work()}
-	}()
+	_, err := WithDeadline[struct{}](context.Background(), d.timeout, func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, work()
+	})
+	return err
+}
 
-	select {
-	case r := <-c:
-		if !t.Stop() {
-			<-t.C
-		}
-		return r.err
-	case <-t.C:
-		return context.DeadlineExceeded
-	}
+// DeadlineWriter deadline writer with timeout
+type DeadlineWriter struct {
+	io.WriteCloser
+	timeout time.Duration
+	err     error
 }
 
 // NewDeadlineWriter wraps a writer to make it respect given deadline

@@ -16,7 +16,7 @@ docker volume rm $(docker volume ls -f dangling=true) || true
 cd .github/workflows/mint
 
 docker-compose -f minio-${MODE}.yaml up -d
-sleep 30s
+sleep 1m
 
 docker system prune -f || true
 docker volume prune -f || true
@@ -25,6 +25,9 @@ docker volume rm $(docker volume ls -q -f dangling=true) || true
 # Stop two nodes, one of each pool, to check that all S3 calls work while quorum is still there
 [ "${MODE}" == "pools" ] && docker-compose -f minio-${MODE}.yaml stop minio2
 [ "${MODE}" == "pools" ] && docker-compose -f minio-${MODE}.yaml stop minio6
+
+# Pause one node, to check that all S3 calls work while one node goes wrong
+[ "${MODE}" == "resiliency" ] && docker-compose -f minio-${MODE}.yaml pause minio4
 
 docker run --rm --net=mint_default \
 	--name="mint-${MODE}-${JOB_NAME}" \

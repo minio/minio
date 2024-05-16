@@ -56,6 +56,10 @@ jobs:
         run: |
           ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "erasure" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
 
+      - name: resiliency
+        run: |
+          ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "resiliency" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
+
       - name: The job must cleanup
         if: ${{ always() }}
         run: |

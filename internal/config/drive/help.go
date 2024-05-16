@@ -22,12 +22,13 @@ import "github.com/minio/minio/internal/config"
 var (
 	// MaxTimeout is the max timeout for drive
 	MaxTimeout = "max_timeout"
+
 	// HelpDrive is help for drive
 	HelpDrive = config.HelpKVS{
 		config.HelpKV{
 			Key:         MaxTimeout,
 			Type:        "string",
-			Description: "set per call max_timeout for the drive, defaults to 2 minutes",
+			Description: "set per call max_timeout for the drive, defaults to 30 seconds",
 			Optional:    true,
 		},
 	}

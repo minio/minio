@@ -404,16 +404,13 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 
 	ctxt.FTP = ctx.StringSlice("ftp")
 	ctxt.SFTP = ctx.StringSlice("sftp")
-
 	ctxt.Interface = ctx.String("interface")
 	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
 	ctxt.SendBufSize = ctx.Int("send-buf-size")
 	ctxt.RecvBufSize = ctx.Int("recv-buf-size")
-
-	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
-	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
-	ctxt.MaxIdleConnsPerHost = ctx.Int("max-idle-conns-per-host")
+	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
+	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)

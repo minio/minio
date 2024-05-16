@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"math"
 	"net/http"
 	"os"
@@ -31,6 +30,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
+	xnet "github.com/minio/pkg/v2/net"
 )
 
 // getLocalServerProperty - returns madmin.ServerProperties for only the
@@ -64,9 +64,11 @@ func getLocalServerProperty(endpointServerPools EndpointServerPools, r *http.Req
 				if err := isServerResolvable(endpoint, 5*time.Second); err == nil {
 					network[nodeName] = string(madmin.ItemOnline)
 				} else {
-					network[nodeName] = string(madmin.ItemOffline)
-					// log once the error
-					peersLogOnceIf(context.Background(), err, nodeName)
+					if xnet.IsNetworkOrHostDown(err, false) {
+						network[nodeName] = string(madmin.ItemOffline)
+					} else if xnet.IsNetworkOrHostDown(err, true) {
+						network[nodeName] = "connection attempt timedout"
+					}
 				}
 			}
 		}
