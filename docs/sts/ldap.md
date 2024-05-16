@@ -34,18 +34,19 @@ KEY:
 identity_ldap  enable LDAP SSO support
 
 ARGS:
-MINIO_IDENTITY_LDAP_SERVER_ADDR*             (address)   AD/LDAP server address e.g. "myldap.com" or "myldapserver.com:1686"
-MINIO_IDENTITY_LDAP_SRV_RECORD_NAME          (string)    DNS SRV record name for LDAP service, if given, must be one of ldap, ldaps or on
-MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN*          (string)    DN for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD     (string)    Password for LDAP read-only service account used to perform DN and group lookups
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN*  (list)      ";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"
-MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER*   (string)    Search filter to lookup user DN
-MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER      (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
-MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN     (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
-MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY          (on|off)    trust server TLS without verification, defaults to "off" (verify)
-MINIO_IDENTITY_LDAP_SERVER_INSECURE          (on|off)    allow plain text connection to AD/LDAP server, defaults to "off"
-MINIO_IDENTITY_LDAP_SERVER_STARTTLS          (on|off)    use StartTLS connection to AD/LDAP server, defaults to "off"
-MINIO_IDENTITY_LDAP_COMMENT                  (sentence)  optionally add a comment to this setting
+MINIO_IDENTITY_LDAP_SERVER_ADDR*            (address)   AD/LDAP server address e.g. "myldap.com" or "myldapserver.com:636"
+MINIO_IDENTITY_LDAP_SRV_RECORD_NAME         (string)    DNS SRV record name for LDAP service, if given, must be one of "ldap", "ldaps" or "on"
+MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN          (string)    DN for LDAP read-only service account used to perform DN and group lookups
+MINIO_IDENTITY_LDAP_LOOKUP_BIND_PASSWORD    (string)    Password for LDAP read-only service account used to perform DN and group lookups
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN  (list)      ";" separated list of user search base DNs e.g. "dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER   (string)    Search filter to lookup user DN
+MINIO_IDENTITY_LDAP_USER_DN_ATTRIBUTES      (list)      "," separated list of user DN attributes e.g. "uid,cn,mail,sshPublicKey"
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER     (string)    search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"
+MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN    (list)      ";" separated list of group search base DNs e.g. "dc=myldapserver,dc=com"
+MINIO_IDENTITY_LDAP_TLS_SKIP_VERIFY         (on|off)    trust server TLS without verification (default: 'off')
+MINIO_IDENTITY_LDAP_SERVER_INSECURE         (on|off)    allow plain text connection to AD/LDAP server (default: 'off')
+MINIO_IDENTITY_LDAP_SERVER_STARTTLS         (on|off)    use StartTLS connection to AD/LDAP server (default: 'off')
+MINIO_IDENTITY_LDAP_COMMENT                 (sentence)  optionally add a comment to this setting
 ```
 
 ### LDAP server connectivity
@@ -104,6 +105,11 @@ The search filter must use the LDAP username to find the user DN. This is done v
 
 The returned user's DN and their password are then verified with the LDAP server. The user DN may also be associated with an [access policy](#managing-usergroup-access-policy).
 
+The User DN attributes configuration parameter:
+```
+MINIO_IDENTITY_LDAP_USER_DN_ATTRIBUTES      (list)      "," separated list of user DN attributes e.g. "uid,cn,mail,sshPublicKey"
+```
+is optional and can be used to specify additional attributes to lookup on the User DN record in the LDAP server. This is for certain display purposes and may be used for extended functionality that may be added in the future.
 
 ### Group membership search
 

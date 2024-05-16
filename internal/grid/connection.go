@@ -42,7 +42,7 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"

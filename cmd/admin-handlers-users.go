@@ -36,7 +36,8 @@ import (
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
+	xldap "github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -700,12 +701,19 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		// In case of LDAP we need to resolve the targetUser to a DN and
 		// query their groups:
 		opts.claims[ldapUserN] = targetUser // simple username
-		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
+		var lookupResult *xldap.DNSearchResult
+		lookupResult, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		targetUser = lookupResult.NormDN
 		opts.claims[ldapUser] = targetUser // username DN
+
+		// Add LDAP attributes that were looked up into the claims.
+		for attribKey, attribValue := range lookupResult.Attributes {
+			opts.claims[ldapAttribPrefix+attribKey] = attribValue
+		}
 
 		// NOTE: if not using LDAP, then internal IDP or open ID is
 		// being used - in the former, group info is enforced when
@@ -1636,22 +1644,22 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 		// form of the entityName (which will be an LDAP DN).
 		var err error
 		if isGroup {
-			var foundGroupDN string
+			var foundGroupDN *xldap.DNSearchResult
 			var underBaseDN bool
 			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
 				iamLogIf(ctx, err)
-			} else if foundGroupDN == "" || !underBaseDN {
+			} else if foundGroupDN == nil || !underBaseDN {
 				err = errNoSuchGroup
 			}
-			entityName = foundGroupDN
+			entityName = foundGroupDN.NormDN
 		} else {
-			var foundUserDN string
+			var foundUserDN *xldap.DNSearchResult
 			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
 				iamLogIf(ctx, err)
-			} else if foundUserDN == "" {
+			} else if foundUserDN == nil {
 				err = errNoSuchUser
 			}
-			entityName = foundUserDN
+			entityName = foundUserDN.NormDN
 		}
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
