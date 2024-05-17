@@ -564,16 +564,13 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 		if st.Requests != nil {
 			defer close(st.Requests)
 		}
-		if sendReq {
-			// Fill up queue.
-		sendReqs:
-			for {
-				select {
-				case st.Requests <- []byte("Hello"):
-					time.Sleep(10 * time.Millisecond)
-				default:
-					break sendReqs
-				}
+		// Fill up queue.
+		for sendReq {
+			select {
+			case st.Requests <- []byte("Hello"):
+				time.Sleep(10 * time.Millisecond)
+			default:
+				sendReq = false
 			}
 		}
 		cancel()
@@ -589,12 +586,11 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	t.Run("unbuffered", func(t *testing.T) {
 		testHandler(t, handlerTest, false)
 	})
-
-	t.Run("buffered", func(t *testing.T) {
-		testHandler(t, handlerTest2, true)
-	})
 	t.Run("buffered", func(t *testing.T) {
 		testHandler(t, handlerTest2, false)
+	})
+	t.Run("buffered", func(t *testing.T) {
+		testHandler(t, handlerTest2, true)
 	})
 }
 

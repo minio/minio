@@ -101,11 +101,14 @@ func (s *Stream) Results(next func(b []byte) error) (err error) {
 	}
 }
 
-// Done
+// Done will return a channel that will be closed when the stream is done.
+// This mirrors context.Done().
 func (s *Stream) Done() <-chan struct{} {
 	return s.ctx.Done()
 }
 
+// Err will return the error that caused the stream to end.
+// This mirrors context.Err().
 func (s *Stream) Err() error {
 	return s.ctx.Err()
 }
