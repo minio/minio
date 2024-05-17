@@ -876,11 +876,12 @@ func combine(files []string, out string) error {
 		return errors.New("no valid data found")
 	}
 	if missing > 0 {
+		fmt.Println(missing, "bytes missing. Truncating", len(m.filled)-lastValid-1, "from end.")
 		out += ".truncated"
 	} else {
+		fmt.Println("No bytes missing.")
 		out += ".complete"
 	}
-	fmt.Println(missing, "bytes missing. Truncating", len(m.filled)-lastValid-1, "from end.")
 	m.mapped = m.mapped[:lastValid+1]
 	err = os.WriteFile(out, m.mapped, os.ModePerm)
 	if err != nil {
@@ -1027,13 +1028,14 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 		out := names[i] + "-" + baseName
 		if missing > 0 {
 			out += ".truncated"
+			fmt.Println(missing, "bytes missing. Truncating", len(m.filled)-lastValid-1, "from end.")
 		} else {
 			out += ".complete"
+			fmt.Println("No bytes missing.")
 		}
 		if missing == 0 {
 			exportedSizes[m.size] = true
 		}
-		fmt.Println(missing, "bytes missing. Truncating", len(m.filled)-lastValid-1, "from end.")
 		m.mapped = m.mapped[:lastValid+1]
 		err = os.WriteFile(out, m.mapped, os.ModePerm)
 		if err != nil {
