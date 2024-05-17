@@ -491,13 +491,17 @@ reqLoop:
 		// Drain requests.
 		for {
 			select {
-			case r := <-requests:
+			case r, ok := <-requests:
+				if !ok {
+					return
+				}
 				PutByteBuffer(r)
 			default:
+				return
 			}
 		}
-		return
 	}
+
 	for !errState {
 		select {
 		case <-m.ctx.Done():

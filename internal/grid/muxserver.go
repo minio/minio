@@ -28,8 +28,6 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
-const lastPingThreshold = 4 * clientPingInterval
-
 type muxServer struct {
 	ID                 uint64
 	LastPing           int64
