@@ -426,6 +426,7 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrAddUserValidUTF
 	ErrAdminResourceInvalidArgument
 	ErrAdminAccountNotEligible
 	ErrAccountNotEligible
@@ -2105,6 +2106,11 @@ var errorCodes = errorCodeMap{
 	ErrAdminInvalidGroupName: {
 		Code:           "XMinioInvalidGroupName",
 		Description:    "The group name is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAddUserValidUTF: {
+		Code:           "XMinioInvalidUTF",
+		Description:    "Invalid UTF-8 character detected.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 }
