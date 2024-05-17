@@ -32,6 +32,7 @@ fi
 set +e
 
 export MC_HOST_minioadm=http://minioadmin:minioadmin@localhost:9100/
+./mc ready minioadm
 
 ./mc ls minioadm/
 
