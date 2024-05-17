@@ -66,7 +66,7 @@ func newMuxClient(ctx context.Context, muxID uint64, parent *Connection) *muxCli
 		ctx:                ctx,
 		cancelFn:           cancelFn,
 		parent:             parent,
-		LastPong:           time.Now().Unix(),
+		LastPong:           time.Now().UnixNano(),
 		BaseFlags:          parent.baseFlags,
 		clientPingInterval: parent.clientPingInterval,
 	}
@@ -315,7 +315,7 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 		ticker := time.NewTicker(m.clientPingInterval)
 		defer ticker.Stop()
 		pingTimer = ticker.C
-		atomic.StoreInt64(&m.LastPong, time.Now().Unix())
+		atomic.StoreInt64(&m.LastPong, time.Now().UnixNano())
 	}
 	defer m.parent.deleteMux(false, m.MuxID)
 	for {
@@ -369,7 +369,7 @@ func (m *muxClient) doPing(respHandler chan<- Response) (ok bool) {
 	}
 
 	// Only check ping when not closed.
-	if got := time.Since(time.Unix(atomic.LoadInt64(&m.LastPong), 0)); got > m.clientPingInterval*2 {
+	if got := time.Since(time.Unix(0, atomic.LoadInt64(&m.LastPong))); got > m.clientPingInterval*2 {
 		m.respMu.Unlock()
 		if debugPrint {
 			fmt.Printf("Mux %d: last pong %v ago, disconnecting\n", m.MuxID, got)
@@ -389,52 +389,17 @@ func (m *muxClient) doPing(respHandler chan<- Response) (ok bool) {
 
 // responseCh is the channel to that goes to the requester.
 // internalResp is the channel that comes from the server.
-func (m *muxClient) handleTwowayResponses(errResp, responseCh chan<- Response, internalResp <-chan Response) {
+func (m *muxClient) handleTwowayResponses(responseCh chan<- Response, internalResp <-chan Response) {
 	defer func() {
 		m.parent.deleteMux(false, m.MuxID)
 		// addErrorNonBlockingClose will close the response channel.
-		if m.respErr.Load() == nil {
-			xioutil.SafeClose(responseCh)
-			// Drain internal responses.
-			go func() {
-				for range internalResp {
-				}
-			}()
-		}
+		xioutil.SafeClose(responseCh)
 	}()
-	var pingTimer <-chan time.Time
-	if m.deadline == 0 || m.deadline > m.clientPingInterval {
-		ticker := time.NewTicker(m.clientPingInterval)
-		defer ticker.Stop()
-		pingTimer = ticker.C
-		atomic.StoreInt64(&m.LastPong, time.Now().Unix())
-	}
-waitForNext:
-	for {
-		select {
-		case <-m.ctx.Done():
-			m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
-			break waitForNext
-		case resp, ok := <-internalResp:
-			if !ok {
-				return
-			}
-			for {
-				select {
-				case responseCh <- resp:
-					m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID})
-					goto waitForNext
-				case <-pingTimer:
-					if !m.doPing(responseCh) {
-						return
-					}
-				}
-			}
-		case <-pingTimer:
-			if !m.doPing(responseCh) {
-				return
-			}
-		}
+
+	// Cancelation and errors are handled by handleTwowayRequests below.
+	for resp := range internalResp {
+		m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID})
+		responseCh <- resp
 	}
 }
 
@@ -447,17 +412,17 @@ func (m *muxClient) handleTwowayRequests(errResp chan<- Response, requests <-cha
 		}()
 	}
 
+	var pingTimer <-chan time.Time
+	if m.deadline == 0 || m.deadline > m.clientPingInterval {
+		ticker := time.NewTicker(m.clientPingInterval)
+		defer ticker.Stop()
+		pingTimer = ticker.C
+		atomic.StoreInt64(&m.LastPong, time.Now().UnixNano())
+	}
+
 	// Listen for client messages.
-	for {
-		if errState {
-			go func() {
-				// Drain requests.
-				for r := range requests {
-					PutByteBuffer(r)
-				}
-			}()
-			return
-		}
+reqLoop:
+	for !errState {
 		select {
 		case <-m.ctx.Done():
 			if debugPrint {
@@ -466,6 +431,11 @@ func (m *muxClient) handleTwowayRequests(errResp chan<- Response, requests <-cha
 			m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
 			errState = true
 			continue
+		case <-pingTimer:
+			if !m.doPing(errResp) {
+				errState = true
+				continue
+			}
 		case req, ok := <-requests:
 			if !ok {
 				// Done send EOF
@@ -482,14 +452,21 @@ func (m *muxClient) handleTwowayRequests(errResp chan<- Response, requests <-cha
 				if err != nil {
 					m.addErrorNonBlockingClose(errResp, err)
 				}
-				return
+				break reqLoop
 			}
 			// Grab a send token.
+		sendReq:
 			select {
 			case <-m.ctx.Done():
 				m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
 				errState = true
 				continue
+			case <-pingTimer:
+				if !m.doPing(errResp) {
+					errState = true
+					continue
+				}
+				goto sendReq
 			case <-m.outBlock:
 			}
 			msg := message{
@@ -507,6 +484,30 @@ func (m *muxClient) handleTwowayRequests(errResp chan<- Response, requests <-cha
 				continue
 			}
 			msg.Seq++
+		}
+	}
+
+	if errState {
+		// Drain requests.
+		for {
+			select {
+			case r := <-requests:
+				PutByteBuffer(r)
+			default:
+			}
+		}
+		return
+	}
+	for !errState {
+		select {
+		case <-m.ctx.Done():
+			if debugPrint {
+				fmt.Println("Client sending disconnect to mux", m.MuxID)
+			}
+			m.addErrorNonBlockingClose(errResp, context.Cause(m.ctx))
+			return
+		case <-pingTimer:
+			errState = !m.doPing(errResp)
 		}
 	}
 }
@@ -544,7 +545,7 @@ func (m *muxClient) response(seq uint32, r Response) {
 		m.addResponse(r)
 		return
 	}
-	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
+	atomic.StoreInt64(&m.LastPong, time.Now().UnixNano())
 	ok := m.addResponse(r)
 	if !ok {
 		PutByteBuffer(r.Msg)
@@ -595,7 +596,7 @@ func (m *muxClient) pong(msg pongMsg) {
 		m.addResponse(Response{Err: err})
 		return
 	}
-	atomic.StoreInt64(&m.LastPong, time.Now().Unix())
+	atomic.StoreInt64(&m.LastPong, time.Now().UnixNano())
 }
 
 // addResponse will add a response to the response channel.

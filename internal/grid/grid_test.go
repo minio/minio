@@ -539,12 +539,12 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	register(remote)
 
 	// local to remote
-	testHandler := func(t *testing.T, handler HandlerID) {
+	testHandler := func(t *testing.T, handler HandlerID, sendReq bool) {
 		remoteConn := local.Connection(remoteHost)
 		const testPayload = "Hello Grid World!"
 
 		ctx, cancel := context.WithCancel(context.Background())
-		st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
+		st, err := remoteConn.NewStream(ctx, handler, []byte(testPayload))
 		errFatal(err)
 		clientCanceled := make(chan time.Time, 1)
 		err = nil
@@ -561,6 +561,21 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 			clientCanceled <- time.Now()
 		}(t)
 		start := time.Now()
+		if st.Requests != nil {
+			defer close(st.Requests)
+		}
+		if sendReq {
+			// Fill up queue.
+		sendReqs:
+			for {
+				select {
+				case st.Requests <- []byte("Hello"):
+					time.Sleep(10 * time.Millisecond)
+				default:
+					break sendReqs
+				}
+			}
+		}
 		cancel()
 		<-serverCanceled
 		t.Log("server cancel time:", time.Since(start))
@@ -572,11 +587,14 @@ func testStreamCancel(t *testing.T, local, remote *Manager) {
 	}
 	// local to remote, unbuffered
 	t.Run("unbuffered", func(t *testing.T) {
-		testHandler(t, handlerTest)
+		testHandler(t, handlerTest, false)
 	})
 
 	t.Run("buffered", func(t *testing.T) {
-		testHandler(t, handlerTest2)
+		testHandler(t, handlerTest2, true)
+	})
+	t.Run("buffered", func(t *testing.T) {
+		testHandler(t, handlerTest2, false)
 	})
 }
 
@@ -1107,9 +1125,9 @@ func testServerStreamNoPing(t *testing.T, local, remote *Manager, inCap int) {
 
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
-	remoteConn.debugMsg(debugSetClientPingDuration, time.Second)
+	remoteConn.debugMsg(debugSetClientPingDuration, 100*time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
 	errFatal(err)
@@ -1161,7 +1179,7 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 						close(serverCanceled)
 						return NewRemoteErr(ctx.Err())
 					case resp <- []byte{1}:
-						time.Sleep(100 * time.Millisecond)
+						time.Sleep(10 * time.Millisecond)
 					}
 				}
 				// Just wait for it to cancel.
@@ -1178,9 +1196,9 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
-	remoteConn.debugMsg(debugSetClientPingDuration, time.Second)
+	remoteConn.debugMsg(debugSetClientPingDuration, 100*time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	st, err := remoteConn.NewStream(ctx, handlerTest, []byte(testPayload))
 	errFatal(err)
@@ -1190,8 +1208,7 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 
 	// Block until we have exceeded the deadline several times over.
 	nowBlocking := make(chan struct{})
-	time.AfterFunc(5*time.Second, func() {
-		fmt.Println("Canceling")
+	time.AfterFunc(time.Second, func() {
 		cancel()
 		close(nowBlocking)
 	})
@@ -1208,8 +1225,7 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 					return
 				case <-st.Done():
 				case st.Requests <- []byte{1}:
-					fmt.Println("sent request")
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(10 * time.Millisecond)
 				}
 			}
 		}()

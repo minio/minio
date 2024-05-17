@@ -1618,9 +1618,6 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
 		c.clientPingInterval = args[0].(time.Duration)
-		if c.clientPingInterval < time.Second {
-			panic("client ping interval too low")
-		}
 	case debugAddToDeadline:
 		c.addDeadline = args[0].(time.Duration)
 	case debugIsOutgoingClosed:

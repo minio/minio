@@ -37,7 +37,7 @@ import (
 type debugMsg int
 
 const (
-	debugPrint = true
+	debugPrint = false
 	debugReqs  = false
 )
 
