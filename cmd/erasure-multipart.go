@@ -200,11 +200,13 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		readDirFn(pathJoin(drivePath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			var modTime time.Time
-			// Upload IDs are of the form <UUID>x<UnixNano>, we can extract the time from the UUID.
-			if split := strings.Split(uploadIDDir, "x"); len(split) == 2 {
-				t, err := strconv.ParseInt(split[1], 10, 64)
-				if err == nil {
-					modTime = time.Unix(0, t)
+			// Upload IDs are of the form base64_url(<UUID>x<UnixNano>), we can extract the time from the UUID.
+			if b64, err := base64.RawURLEncoding.DecodeString(uploadIDDir); err == nil {
+				if split := strings.Split(string(b64), "x"); len(split) == 2 {
+					t, err := strconv.ParseInt(split[1], 10, 64)
+					if err == nil {
+						modTime = time.Unix(0, t)
+					}
 				}
 			}
 			// Fallback for older uploads without time in the ID.
