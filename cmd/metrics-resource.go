@@ -280,82 +280,70 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 func collectLocalResourceMetrics() {
 	var types madmin.MetricType = madmin.MetricsDisk | madmin.MetricNet | madmin.MetricsMem | madmin.MetricsCPU
 
-	m := collectLocalMetrics(types, collectMetricsOpts{
-		hosts: map[string]struct{}{
-			globalLocalNodeName: {},
-		},
-	})
-
-	for host, hm := range m.ByHost {
-		if len(host) > 0 {
-			if hm.Net != nil && len(hm.Net.NetStats.Name) > 0 {
-				stats := hm.Net.NetStats
-				labels := map[string]string{"interface": stats.Name}
-				updateResourceMetrics(interfaceSubsystem, interfaceRxBytes, float64(stats.RxBytes), labels, true)
-				updateResourceMetrics(interfaceSubsystem, interfaceRxErrors, float64(stats.RxErrors), labels, true)
-				updateResourceMetrics(interfaceSubsystem, interfaceTxBytes, float64(stats.TxBytes), labels, true)
-				updateResourceMetrics(interfaceSubsystem, interfaceTxErrors, float64(stats.TxErrors), labels, true)
-			}
-			if hm.Mem != nil && len(hm.Mem.Info.Addr) > 0 {
-				labels := map[string]string{}
-				stats := hm.Mem.Info
-				updateResourceMetrics(memSubsystem, total, float64(stats.Total), labels, false)
-				updateResourceMetrics(memSubsystem, memUsed, float64(stats.Used), labels, false)
-				perc := math.Round(float64(stats.Used*100*100)/float64(stats.Total)) / 100
-				updateResourceMetrics(memSubsystem, memUsedPerc, perc, labels, false)
-				updateResourceMetrics(memSubsystem, memFree, float64(stats.Free), labels, false)
-				updateResourceMetrics(memSubsystem, memShared, float64(stats.Shared), labels, false)
-				updateResourceMetrics(memSubsystem, memBuffers, float64(stats.Buffers), labels, false)
-				updateResourceMetrics(memSubsystem, memAvailable, float64(stats.Available), labels, false)
-				updateResourceMetrics(memSubsystem, memCache, float64(stats.Cache), labels, false)
-			}
-			if hm.CPU != nil {
-				labels := map[string]string{}
-				ts := hm.CPU.TimesStat
-				if ts != nil {
-					tot := ts.User + ts.System + ts.Idle + ts.Iowait + ts.Nice + ts.Steal
-					cpuUserVal := math.Round(ts.User/tot*100*100) / 100
-					updateResourceMetrics(cpuSubsystem, cpuUser, cpuUserVal, labels, false)
-					cpuSystemVal := math.Round(ts.System/tot*100*100) / 100
-					updateResourceMetrics(cpuSubsystem, cpuSystem, cpuSystemVal, labels, false)
-					cpuIdleVal := math.Round(ts.Idle/tot*100*100) / 100
-					updateResourceMetrics(cpuSubsystem, cpuIdle, cpuIdleVal, labels, false)
-					cpuIOWaitVal := math.Round(ts.Iowait/tot*100*100) / 100
-					updateResourceMetrics(cpuSubsystem, cpuIOWait, cpuIOWaitVal, labels, false)
-					cpuNiceVal := math.Round(ts.Nice/tot*100*100) / 100
-					updateResourceMetrics(cpuSubsystem, cpuNice, cpuNiceVal, labels, false)
-					cpuStealVal := math.Round(ts.Steal/tot*100*100) / 100
-					updateResourceMetrics(cpuSubsystem, cpuSteal, cpuStealVal, labels, false)
-				}
-				ls := hm.CPU.LoadStat
-				if ls != nil {
-					updateResourceMetrics(cpuSubsystem, cpuLoad1, ls.Load1, labels, false)
-					updateResourceMetrics(cpuSubsystem, cpuLoad5, ls.Load5, labels, false)
-					updateResourceMetrics(cpuSubsystem, cpuLoad15, ls.Load15, labels, false)
-					if hm.CPU.CPUCount > 0 {
-						perc := math.Round(ls.Load1*100*100/float64(hm.CPU.CPUCount)) / 100
-						updateResourceMetrics(cpuSubsystem, cpuLoad1Perc, perc, labels, false)
-						perc = math.Round(ls.Load5*100*100/float64(hm.CPU.CPUCount)) / 100
-						updateResourceMetrics(cpuSubsystem, cpuLoad5Perc, perc, labels, false)
-						perc = math.Round(ls.Load15*100*100/float64(hm.CPU.CPUCount)) / 100
-						updateResourceMetrics(cpuSubsystem, cpuLoad15Perc, perc, labels, false)
-					}
-				}
-			}
-			break // only one host expected
+	m := collectLocalMetrics(types, collectMetricsOpts{})
+	for _, hm := range m.ByHost {
+		if hm.Net != nil && len(hm.Net.NetStats.Name) > 0 {
+			stats := hm.Net.NetStats
+			labels := map[string]string{"interface": stats.Name}
+			updateResourceMetrics(interfaceSubsystem, interfaceRxBytes, float64(stats.RxBytes), labels, true)
+			updateResourceMetrics(interfaceSubsystem, interfaceRxErrors, float64(stats.RxErrors), labels, true)
+			updateResourceMetrics(interfaceSubsystem, interfaceTxBytes, float64(stats.TxBytes), labels, true)
+			updateResourceMetrics(interfaceSubsystem, interfaceTxErrors, float64(stats.TxErrors), labels, true)
 		}
+		if hm.Mem != nil && len(hm.Mem.Info.Addr) > 0 {
+			labels := map[string]string{}
+			stats := hm.Mem.Info
+			updateResourceMetrics(memSubsystem, total, float64(stats.Total), labels, false)
+			updateResourceMetrics(memSubsystem, memUsed, float64(stats.Used), labels, false)
+			perc := math.Round(float64(stats.Used*100*100)/float64(stats.Total)) / 100
+			updateResourceMetrics(memSubsystem, memUsedPerc, perc, labels, false)
+			updateResourceMetrics(memSubsystem, memFree, float64(stats.Free), labels, false)
+			updateResourceMetrics(memSubsystem, memShared, float64(stats.Shared), labels, false)
+			updateResourceMetrics(memSubsystem, memBuffers, float64(stats.Buffers), labels, false)
+			updateResourceMetrics(memSubsystem, memAvailable, float64(stats.Available), labels, false)
+			updateResourceMetrics(memSubsystem, memCache, float64(stats.Cache), labels, false)
+		}
+		if hm.CPU != nil {
+			labels := map[string]string{}
+			ts := hm.CPU.TimesStat
+			if ts != nil {
+				tot := ts.User + ts.System + ts.Idle + ts.Iowait + ts.Nice + ts.Steal
+				cpuUserVal := math.Round(ts.User/tot*100*100) / 100
+				updateResourceMetrics(cpuSubsystem, cpuUser, cpuUserVal, labels, false)
+				cpuSystemVal := math.Round(ts.System/tot*100*100) / 100
+				updateResourceMetrics(cpuSubsystem, cpuSystem, cpuSystemVal, labels, false)
+				cpuIdleVal := math.Round(ts.Idle/tot*100*100) / 100
+				updateResourceMetrics(cpuSubsystem, cpuIdle, cpuIdleVal, labels, false)
+				cpuIOWaitVal := math.Round(ts.Iowait/tot*100*100) / 100
+				updateResourceMetrics(cpuSubsystem, cpuIOWait, cpuIOWaitVal, labels, false)
+				cpuNiceVal := math.Round(ts.Nice/tot*100*100) / 100
+				updateResourceMetrics(cpuSubsystem, cpuNice, cpuNiceVal, labels, false)
+				cpuStealVal := math.Round(ts.Steal/tot*100*100) / 100
+				updateResourceMetrics(cpuSubsystem, cpuSteal, cpuStealVal, labels, false)
+			}
+			ls := hm.CPU.LoadStat
+			if ls != nil {
+				updateResourceMetrics(cpuSubsystem, cpuLoad1, ls.Load1, labels, false)
+				updateResourceMetrics(cpuSubsystem, cpuLoad5, ls.Load5, labels, false)
+				updateResourceMetrics(cpuSubsystem, cpuLoad15, ls.Load15, labels, false)
+				if hm.CPU.CPUCount > 0 {
+					perc := math.Round(ls.Load1*100*100/float64(hm.CPU.CPUCount)) / 100
+					updateResourceMetrics(cpuSubsystem, cpuLoad1Perc, perc, labels, false)
+					perc = math.Round(ls.Load5*100*100/float64(hm.CPU.CPUCount)) / 100
+					updateResourceMetrics(cpuSubsystem, cpuLoad5Perc, perc, labels, false)
+					perc = math.Round(ls.Load15*100*100/float64(hm.CPU.CPUCount)) / 100
+					updateResourceMetrics(cpuSubsystem, cpuLoad15Perc, perc, labels, false)
+				}
+			}
+		}
+		break // only one host expected
 	}
 
 	collectDriveMetrics(m)
 }
 
 func initLatestValues() {
-	m := collectLocalMetrics(madmin.MetricsDisk, collectMetricsOpts{
-		hosts: map[string]struct{}{
-			globalLocalNodeName: {},
-		},
-	})
-
+	m := collectLocalMetrics(madmin.MetricsDisk, collectMetricsOpts{})
 	latestDriveStatsMu.Lock()
 	latestDriveStats = map[string]madmin.DiskIOStats{}
 	for d, dm := range m.ByDisk {
