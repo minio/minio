@@ -677,7 +677,7 @@ func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSetti
 	}
 	s.OpenID = globalIAMSys.OpenIDConfig.GetSettings()
 	if s.OpenID.Enabled {
-		s.OpenID.Region = globalSite.Region
+		s.OpenID.Region = globalSite.Region()
 	}
 	return s
 }

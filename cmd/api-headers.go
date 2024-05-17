@@ -54,7 +54,7 @@ func setCommonHeaders(w http.ResponseWriter) {
 
 	// Set `x-amz-bucket-region` only if region is set on the server
 	// by default minio uses an empty region.
-	if region := globalSite.Region; region != "" {
+	if region := globalSite.Region(); region != "" {
 		w.Header().Set(xhttp.AmzBucketRegion, region)
 	}
 	w.Header().Set(xhttp.AcceptRanges, "bytes")
