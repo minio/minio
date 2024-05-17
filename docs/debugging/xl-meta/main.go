@@ -938,6 +938,21 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 				}
 			}
 
+			// If data+parity matches, combine.
+			if m.parity == otherM.parity && m.data == otherM.data {
+				for k, v := range m.parityData {
+					if otherM.parityData[k] == nil {
+						continue
+					}
+					for i, data := range v {
+						if data != nil || otherM.parityData[k][i] == nil {
+							continue
+						}
+						m.parityData[k][i] = otherM.parityData[k][i]
+					}
+				}
+			}
+
 			fmt.Printf("Data overlaps (%d bytes). Combining with %q.\n", ok, names[j])
 			for i := range otherM.filled {
 				if otherM.filled[i] == 1 {
