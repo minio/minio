@@ -954,9 +954,9 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	switch err.Code {
 	case "InvalidRegion":
-		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region)
+		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region())
 	case "AuthorizationHeaderMalformed":
-		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
+		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region())
 	}
 
 	// Similar check to http.checkWriteHeaderCode

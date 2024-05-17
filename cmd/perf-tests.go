@@ -102,7 +102,7 @@ func selfSpeedTest(ctx context.Context, opts speedTestOpts) (res SpeedTestResult
 
 	clnt := globalMinioClient
 	if !globalAPIConfig.permitRootAccess() {
-		region := globalSite.Region
+		region := globalSite.Region()
 		if region == "" {
 			region = "us-east-1"
 		}
