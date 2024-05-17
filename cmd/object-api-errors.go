@@ -705,6 +705,10 @@ func (e UnsupportedMetadata) Error() string {
 
 // isErrBucketNotFound - Check if error type is BucketNotFound.
 func isErrBucketNotFound(err error) bool {
+	if errors.Is(err, errVolumeNotFound) {
+		return true
+	}
+
 	var bkNotFound BucketNotFound
 	return errors.As(err, &bkNotFound)
 }
@@ -723,12 +727,20 @@ func isErrWriteQuorum(err error) bool {
 
 // isErrObjectNotFound - Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
+	if errors.Is(err, errFileNotFound) {
+		return true
+	}
+
 	var objNotFound ObjectNotFound
 	return errors.As(err, &objNotFound)
 }
 
 // isErrVersionNotFound - Check if error type is VersionNotFound.
 func isErrVersionNotFound(err error) bool {
+	if errors.Is(err, errFileVersionNotFound) {
+		return true
+	}
+
 	var versionNotFound VersionNotFound
 	return errors.As(err, &versionNotFound)
 }

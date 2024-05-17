@@ -111,7 +111,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 	now := UTCNow()
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 
-	region := globalSite.Region
+	region := globalSite.Region()
 	accessKeyID := globalActiveCred.AccessKey
 	testCases := []struct {
 		queryParams map[string]string

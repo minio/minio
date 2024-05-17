@@ -227,7 +227,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	// Generate response.
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	// Get current region.
-	region := globalSite.Region
+	region := globalSite.Region()
 	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,

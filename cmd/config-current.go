@@ -362,7 +362,7 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.IdentityOpenIDSubSys:
 		if _, err := openid.LookupConfig(s,
-			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
+			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region()); err != nil {
 			return err
 		}
 	case config.IdentityLDAPSubSys:
@@ -383,7 +383,7 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.IdentityPluginSubSys:
 		if _, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region); err != nil {
+			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region()); err != nil {
 			return err
 		}
 	case config.SubnetSubSys:
@@ -530,10 +530,11 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 	// but not federation.
 	globalBucketFederation = etcdCfg.PathPrefix == "" && etcdCfg.Enabled
 
-	globalSite, err = config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
+	siteCfg, err := config.LookupSite(s[config.SiteSubSys][config.Default], s[config.RegionSubSys][config.Default])
 	if err != nil {
 		configLogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
 	}
+	globalSite.Update(siteCfg)
 
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
 	if globalAutoEncryption && GlobalKMS == nil {
