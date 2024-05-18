@@ -39,7 +39,7 @@ export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 (minio server http://localhost:9000/tmp/xl/{1...10}/disk{0...1} 2>&1 >/dev/null) &
 pid=$!
 
-sleep 30s
+./mc ready myminio
 
 ./mc admin user add myminio/ minio123 minio123
 

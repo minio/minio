@@ -35,6 +35,8 @@ sleep 10
 ./mc alias set myminio1 http://localhost:9001 minioadmin minioadmin
 ./mc alias set myminio2 http://localhost:9101 minioadmin minioadmin
 
+./mc ready myminio1
+./mc ready myminio2
 sleep 1
 
 ./mc mb myminio1/testbucket/ --with-lock
