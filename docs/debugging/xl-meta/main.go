@@ -786,7 +786,6 @@ type mappedData struct {
 	mapped, filled             []byte
 	size, shards, data, parity int
 	parityData                 map[int]map[int][]byte
-	expectData                 string
 	blockOffset                int // Offset in bytes to start of block.
 	blocks                     int // 0 = one block.
 	objSize                    int
