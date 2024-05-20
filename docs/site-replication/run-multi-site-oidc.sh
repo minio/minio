@@ -57,11 +57,13 @@ if [ ! -f ./mc ]; then
 		chmod +x mc
 fi
 
-sleep 10
-
 export MC_HOST_minio1=http://minio:minio123@localhost:9001
 export MC_HOST_minio2=http://minio:minio123@localhost:9002
 export MC_HOST_minio3=http://minio:minio123@localhost:9003
+
+./mc ready minio1
+./mc ready minio2
+./mc ready minio3
 
 ./mc admin replicate add minio1 minio2 minio3
 

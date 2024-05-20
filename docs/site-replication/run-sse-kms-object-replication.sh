@@ -51,10 +51,11 @@ if [ ! -f ./mc ]; then
 	echo "done"
 fi
 
-sleep 10
-
 export MC_HOST_minio1=https://minio:minio123@localhost:9001
 export MC_HOST_minio2=https://minio:minio123@localhost:9002
+
+./mc ready minio1 --insecure
+./mc ready minio2 --insecure
 
 # Prepare data for tests
 echo -n "Preparing test data ..."

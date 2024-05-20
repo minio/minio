@@ -80,6 +80,9 @@ func runCallhome(ctx context.Context, objAPI ObjectLayer) bool {
 	ctx = lkctx.Context()
 	defer locker.Unlock(lkctx)
 
+	// Perform callhome once and then keep running it at regular intervals.
+	performCallhome(ctx)
+
 	callhomeTimer := time.NewTimer(globalCallhomeConfig.FrequencyDur())
 	defer callhomeTimer.Stop()
 
@@ -141,11 +144,14 @@ func performCallhome(ctx context.Context) {
 		select {
 		case hi, hasMore := <-healthInfoCh:
 			if !hasMore {
+				auditOptions := AuditLogOptions{Event: "callhome:diagnostics"}
 				// Received all data. Send to SUBNET and return
 				err := sendHealthInfo(ctx, healthInfo)
 				if err != nil {
 					internalLogIf(ctx, fmt.Errorf("Unable to perform callhome: %w", err))
+					auditOptions.Error = err.Error()
 				}
+				auditLogInternal(ctx, auditOptions)
 				return
 			}
 			healthInfo = hi
