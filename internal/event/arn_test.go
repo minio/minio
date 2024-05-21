@@ -115,7 +115,7 @@ func TestParseARN(t *testing.T) {
 
 	for i, testCase := range testCases {
 		arn, err := parseARN(testCase.s)
-		expectErr := (err != nil)
+		expectErr := err != nil
 
 		if expectErr != testCase.expectErr {
 			t.Fatalf("test %v: error: expected: %v, got: %v", i+1, testCase.expectErr, expectErr)
