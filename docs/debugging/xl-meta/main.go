@@ -859,7 +859,7 @@ func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
 		if blockNum < m.blocks {
 			m.size = ei.V2Obj.EcBSize
 		} else {
-			m.size = m.size - offset
+			m.size -= offset
 		}
 
 		b, err := os.ReadFile(file)
