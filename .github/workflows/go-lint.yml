@@ -3,12 +3,11 @@ name: Linters and Tests
 on:
   pull_request:
     branches:
-    - master
-    - next
+      - master
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
-concurrency: 
+concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
 
@@ -22,7 +21,7 @@ jobs:
     strategy:
       matrix:
         go-version: [1.22.x]
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-2019]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -30,11 +29,12 @@ jobs:
           go-version: ${{ matrix.go-version }}
           check-latest: true
       - name: Build on ${{ matrix.os }}
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-2019'
         env:
           CGO_ENABLED: 0
           GO111MODULE: on
         run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
           netsh int ipv4 set dynamicport tcp start=60000 num=61000
           go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
           go test -v --timeout 50m ./...
