@@ -186,6 +186,9 @@ FLAGS:
 							EcN      int
 							DDir     []byte
 							PartNums []int
+							MetaSys  struct {
+								Inline []byte `json:"x-minio-internal-inline-data"`
+							}
 						}
 					}
 					var ei erasureInfo
@@ -200,6 +203,9 @@ FLAGS:
 						filemap[file][verID] = fmt.Sprintf("%s/shard-%02d-of-%02d", verID, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
 						filemap[file][verID+".json"] = buf.String()
 						for _, i := range ei.V2Obj.PartNums {
+							if len(ei.V2Obj.MetaSys.Inline) != 0 {
+								break
+							}
 							file := file
 							dataFile := fmt.Sprintf("%s%s/part.%d", strings.TrimSuffix(file, "xl.meta"), uuid.UUID(ei.V2Obj.DDir).String(), i)
 							if i > 1 {
@@ -423,35 +429,46 @@ FLAGS:
 		}
 		sort.Strings(toPrint)
 		fmt.Printf("{\n%s\n}\n", strings.Join(toPrint, ",\n"))
-		for partName, data := range foundData {
-			if verid := partDataToVerID[partName]; verid != [2]string{} {
-				file := verid[0]
-				name := verid[1]
-				f := filemap[file][name]
-				fn := fmt.Sprintf("%s-%s.data", file, name)
-				if f != "" {
-					fn = f + ".data"
-					err := os.MkdirAll(filepath.Dir(fn), os.ModePerm)
-					if err != nil {
-						fmt.Println("MkdirAll:", filepath.Dir(fn), err)
+		if c.Bool("combine") {
+			for partName, data := range foundData {
+				if verid := partDataToVerID[partName]; verid != [2]string{} {
+					file := verid[0]
+					name := verid[1]
+					f := filemap[file][name]
+					fn := fmt.Sprintf("%s-%s.data", file, name)
+					if f != "" {
+						fn = f + ".data"
+						err := os.MkdirAll(filepath.Dir(fn), os.ModePerm)
+						if err != nil {
+							fmt.Println("MkdirAll:", filepath.Dir(fn), err)
+						}
+						err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
+						combineFiles[name] = append(combineFiles[name], fn)
+						if err != nil {
+							fmt.Println("WriteFile:", err)
+						}
+						err = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
+						if err != nil {
+							fmt.Println("combine WriteFile:", err)
+						}
+						fmt.Println("Remapped", partName, "to", fn)
 					}
-					err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
-					combineFiles[name] = append(combineFiles[name], fn)
+					delete(partDataToVerID, partName)
+					err := os.WriteFile(fn, data, os.ModePerm)
 					if err != nil {
 						fmt.Println("WriteFile:", err)
 					}
-					err = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
-					if err != nil {
-						fmt.Println("combine WriteFile:", err)
-					}
-					fmt.Println("Remapped", partName, "to", fn)
-				}
-				err := os.WriteFile(fn, data, os.ModePerm)
-				if err != nil {
-					fmt.Println("WriteFile:", err)
 				}
 			}
+			if len(partDataToVerID) > 0 {
+				fmt.Println("MISSING PART FILES:")
+				for k := range partDataToVerID {
+					fmt.Println(k)
+				}
+				fmt.Println("END MISSING PART FILES")
+			}
 		}
+
 		if len(combineFiles) > 0 {
 			if c.Bool("xver") {
 				if err := combineCrossVer(combineFiles, baseName); err != nil {
