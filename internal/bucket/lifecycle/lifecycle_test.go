@@ -63,25 +63,39 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
-		{ // invalid lifecycle config
+		{ // Using ExpiredObjectAllVersions element with an object locked bucket
 			inputConfig: `<LifecycleConfiguration>
-								  <Rule>
-								  <ID>testRule1</ID>
+                                        <Rule>
+                                          <ID>ExpiredObjectAllVersions with object locking</ID>
 		                          <Filter>
 		                             <Prefix>prefix</Prefix>
 		                          </Filter>
 		                          <Status>Enabled</Status>
-		                          <Expiration><Days>3</Days></Expiration>
-		                          </Rule>
-		                              <Rule>
-								  <ID>testRule2</ID>
+		                          <Expiration>
+			                    <Days>3</Days>
+				            <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
+			                  </Expiration>
+		                        </Rule>
+		                      </LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleBucketLocked,
+			lr: lock.Retention{
+				LockEnabled: true,
+			},
+		},
+		{ // Using DelMarkerExpiration action with an object locked bucket
+			inputConfig: `<LifecycleConfiguration>
+                                        <Rule>
+                                          <ID>DeleteMarkerExpiration with object locking</ID>
 		                          <Filter>
-		                             <Prefix>another-prefix</Prefix>
+		                             <Prefix>prefix</Prefix>
 		                          </Filter>
 		                          <Status>Enabled</Status>
-		                          <Expiration><Days>3</Days></Expiration>
-		                          </Rule>
-		                          </LifecycleConfiguration>`,
+		                          <DelMarkerExpiration>
+			                    <Days>3</Days>
+			                  </DelMarkerExpiration>
+		                        </Rule>
+		                      </LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: errLifecycleBucketLocked,
 			lr: lock.Retention{
