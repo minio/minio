@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -236,7 +237,7 @@ func ParseLifecycleConfig(reader io.Reader) (*Lifecycle, error) {
 }
 
 // Validate - validates the lifecycle configuration
-func (lc Lifecycle) Validate() error {
+func (lc Lifecycle) Validate(lr lock.Retention) error {
 	// Lifecycle config can't have more than 1000 rules
 	if len(lc.Rules) > 1000 {
 		return errLifecycleTooManyRules
@@ -250,6 +251,12 @@ func (lc Lifecycle) Validate() error {
 	for _, r := range lc.Rules {
 		if err := r.Validate(); err != nil {
 			return err
+		}
+		if (r.Expiration.DeleteMarker.val || // DeleteVersionAction
+			!r.DelMarkerExpiration.Empty() || // DelMarkerDeleteAllVersionsAction
+			!r.NoncurrentVersionExpiration.IsDaysNull() || // DeleteVersionAction
+			!r.Expiration.IsDaysNull()) && lr.LockEnabled {
+			return fmt.Errorf("DeleteAllVersions and DeleteMarkerDeleteAllVersions cannot be set when bucket lock is enabled")
 		}
 	}
 	// Make sure Rule ID is unique
