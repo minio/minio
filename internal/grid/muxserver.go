@@ -164,12 +164,20 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 
 // handleInbound sends unblocks when we have delivered the message to the handler.
 func (m *muxServer) handleInbound(c *Connection, inbound <-chan []byte, handlerIn chan<- []byte) {
-	for in := range inbound {
+	for {
 		select {
 		case <-m.ctx.Done():
 			return
-		case handlerIn <- in:
-			m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
+		case in, ok := <-inbound:
+			if !ok {
+				return
+			}
+			select {
+			case <-m.ctx.Done():
+				return
+			case handlerIn <- in:
+				m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
+			}
 		}
 	}
 }
@@ -261,7 +269,7 @@ func (m *muxServer) checkSeq(seq uint32) (ok bool) {
 		if debugPrint {
 			fmt.Printf("expected sequence %d, got %d\n", m.RecvSeq, seq)
 		}
-		m.disconnect(fmt.Sprintf("receive sequence number mismatch. want %d, got %d", m.RecvSeq, seq))
+		m.disconnect(fmt.Sprintf("receive sequence number mismatch. want %d, got %d", m.RecvSeq, seq), false)
 		return false
 	}
 	m.RecvSeq++
@@ -272,13 +280,13 @@ func (m *muxServer) message(msg message) {
 	if debugPrint {
 		fmt.Printf("muxServer: received message %d, length %d\n", msg.Seq, len(msg.Payload))
 	}
+	if !m.checkSeq(msg.Seq) {
+		return
+	}
 	m.recvMu.Lock()
 	defer m.recvMu.Unlock()
 	if cap(m.inbound) == 0 {
-		m.disconnect("did not expect inbound message")
-		return
-	}
-	if !m.checkSeq(msg.Seq) {
+		m.disconnect("did not expect inbound message", true)
 		return
 	}
 	// Note, on EOF no value can be sent.
@@ -300,7 +308,7 @@ func (m *muxServer) message(msg message) {
 			fmt.Printf("muxServer: Sent seq %d to handler\n", msg.Seq)
 		}
 	default:
-		m.disconnect("handler blocked")
+		m.disconnect("handler blocked", true)
 	}
 }
 
@@ -336,7 +344,9 @@ func (m *muxServer) ping(seq uint32) pongMsg {
 	}
 }
 
-func (m *muxServer) disconnect(msg string) {
+// disconnect will disconnect the mux.
+// m.recvMu must be locked when calling this function.
+func (m *muxServer) disconnect(msg string, locked bool) {
 	if debugPrint {
 		fmt.Println("Mux", m.ID, "disconnecting. Reason:", msg)
 	}
@@ -344,6 +354,11 @@ func (m *muxServer) disconnect(msg string) {
 		m.send(message{Op: OpMuxServerMsg, MuxID: m.ID, Flags: FlagPayloadIsErr | FlagEOF, Payload: []byte(msg)})
 	} else {
 		m.send(message{Op: OpDisconnectClientMux, MuxID: m.ID})
+	}
+	// Unlock, since we are calling deleteMux, which will call close - which will lock recvMu.
+	if locked {
+		m.recvMu.Unlock()
+		defer m.recvMu.Lock()
 	}
 	m.parent.deleteMux(true, m.ID)
 }
