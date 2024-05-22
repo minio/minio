@@ -502,6 +502,23 @@ type RenameDataResp struct {
 	OldDataDir string // contains '<uuid>', it is designed to be passed as value to Delete(bucket, pathJoin(object, dataDir))
 }
 
+const (
+	checkPartUnknown int = iota
+
+	// Changing the order can cause a data loss
+	// when running two nodes with incompatible versions
+	checkPartSuccess
+	checkPartDiskNotFound
+	checkPartVolumeNotFound
+	checkPartFileNotFound
+	checkPartFileCorrupt
+)
+
+// CheckPartsResp is a response of the storage CheckParts and VerifyFile APIs
+type CheckPartsResp struct {
+	Results []int
+}
+
 // LocalDiskIDs - GetLocalIDs response.
 type LocalDiskIDs struct {
 	IDs []string
