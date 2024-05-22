@@ -165,8 +165,12 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 // handleInbound sends unblocks when we have delivered the message to the handler.
 func (m *muxServer) handleInbound(c *Connection, inbound <-chan []byte, handlerIn chan<- []byte) {
 	for in := range inbound {
-		handlerIn <- in
-		m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
+		select {
+		case <-m.ctx.Done():
+			return
+		case handlerIn <- in:
+			m.send(message{Op: OpUnblockClMux, MuxID: m.ID, Flags: c.baseFlags})
+		}
 	}
 }
 
