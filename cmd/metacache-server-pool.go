@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
@@ -133,8 +134,8 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 				// request canceled, no entries to return
 				return entries, io.EOF
 			}
-			if !errors.Is(err, context.DeadlineExceeded) {
-				// Report error once per bucket, but continue listing.
+			if !IsErr(err, context.DeadlineExceeded, grid.ErrDisconnected) {
+				// Report error once per bucket, but continue listing.x
 				storageLogOnceIf(ctx, err, "GetMetacacheListing:"+o.Bucket)
 			}
 			o.Transient = true
