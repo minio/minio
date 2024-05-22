@@ -28,21 +28,20 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
-const lastPingThreshold = 4 * clientPingInterval
-
 type muxServer struct {
-	ID               uint64
-	LastPing         int64
-	SendSeq, RecvSeq uint32
-	Resp             chan []byte
-	BaseFlags        Flags
-	ctx              context.Context
-	cancel           context.CancelFunc
-	inbound          chan []byte
-	parent           *Connection
-	sendMu           sync.Mutex
-	recvMu           sync.Mutex
-	outBlock         chan struct{}
+	ID                 uint64
+	LastPing           int64
+	SendSeq, RecvSeq   uint32
+	Resp               chan []byte
+	BaseFlags          Flags
+	ctx                context.Context
+	cancel             context.CancelFunc
+	inbound            chan []byte
+	parent             *Connection
+	sendMu             sync.Mutex
+	recvMu             sync.Mutex
+	outBlock           chan struct{}
+	clientPingInterval time.Duration
 }
 
 func newMuxStateless(ctx context.Context, msg message, c *Connection, handler StatelessHandler) *muxServer {
@@ -89,16 +88,17 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}
 
 	m := muxServer{
-		ID:        msg.MuxID,
-		RecvSeq:   msg.Seq + 1,
-		SendSeq:   msg.Seq,
-		ctx:       ctx,
-		cancel:    cancel,
-		parent:    c,
-		inbound:   nil,
-		outBlock:  make(chan struct{}, outboundCap),
-		LastPing:  time.Now().Unix(),
-		BaseFlags: c.baseFlags,
+		ID:                 msg.MuxID,
+		RecvSeq:            msg.Seq + 1,
+		SendSeq:            msg.Seq,
+		ctx:                ctx,
+		cancel:             cancel,
+		parent:             c,
+		inbound:            nil,
+		outBlock:           make(chan struct{}, outboundCap),
+		LastPing:           time.Now().Unix(),
+		BaseFlags:          c.baseFlags,
+		clientPingInterval: c.clientPingInterval,
 	}
 	// Acknowledge Mux created.
 	// Send async.
@@ -153,7 +153,7 @@ func newMuxStream(ctx context.Context, msg message, c *Connection, handler Strea
 	}(m.outBlock)
 
 	// Remote aliveness check if needed.
-	if msg.DeadlineMS == 0 || msg.DeadlineMS > uint32(lastPingThreshold/time.Millisecond) {
+	if msg.DeadlineMS == 0 || msg.DeadlineMS > uint32(4*c.clientPingInterval/time.Millisecond) {
 		go func() {
 			wg.Wait()
 			m.checkRemoteAlive()
@@ -234,7 +234,7 @@ func (m *muxServer) handleRequests(ctx context.Context, msg message, send chan<-
 
 // checkRemoteAlive will check if the remote is alive.
 func (m *muxServer) checkRemoteAlive() {
-	t := time.NewTicker(lastPingThreshold / 4)
+	t := time.NewTicker(m.clientPingInterval)
 	defer t.Stop()
 	for {
 		select {
@@ -242,7 +242,7 @@ func (m *muxServer) checkRemoteAlive() {
 			return
 		case <-t.C:
 			last := time.Since(time.Unix(atomic.LoadInt64(&m.LastPing), 0))
-			if last > lastPingThreshold {
+			if last > 4*m.clientPingInterval {
 				gridLogIf(m.ctx, fmt.Errorf("canceling remote connection %s not seen for %v", m.parent, last))
 				m.close()
 				return
