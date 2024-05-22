@@ -30,6 +30,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -144,7 +145,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 				// no need to continue this test.
 				return
 			}
-			err = lc.Validate()
+			err = lc.Validate(lock.Retention{})
 			if err != tc.expectedValidationErr {
 				t.Fatalf("%d: Expected %v during validation but got %v", i+1, tc.expectedValidationErr, err)
 			}
@@ -779,7 +780,7 @@ func TestHasActiveRules(t *testing.T) {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
 			// To ensure input lifecycle configurations are valid
-			if err := lc.Validate(); err != nil {
+			if err := lc.Validate(lock.Retention{}); err != nil {
 				t.Fatalf("Invalid test case: %d %v", i+1, err)
 			}
 			if got := lc.HasActiveRules(tc.prefix); got != tc.want {
@@ -1365,7 +1366,7 @@ func TestFilterRules(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("test-%d", i+1), func(t *testing.T) {
-			if err := tc.lc.Validate(); err != nil {
+			if err := tc.lc.Validate(lock.Retention{}); err != nil {
 				t.Fatalf("Lifecycle validation failed - %v", err)
 			}
 			rules := tc.lc.FilterRules(tc.opts)

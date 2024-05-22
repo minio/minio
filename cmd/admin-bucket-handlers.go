@@ -837,9 +837,13 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				rpt.SetStatus(bucket, fileName, err)
 				continue
 			}
-
+			rcfg, err := globalBucketObjectLockSys.Get(bucket)
+			if err != nil {
+				rpt.SetStatus(bucket, fileName, err)
+				continue
+			}
 			// Validate the received bucket policy document
-			if err = bucketLifecycle.Validate(); err != nil {
+			if err = bucketLifecycle.Validate(rcfg); err != nil {
 				rpt.SetStatus(bucket, fileName, err)
 				continue
 			}
