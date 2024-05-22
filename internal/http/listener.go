@@ -22,9 +22,6 @@ import (
 	"fmt"
 	"net"
 	"syscall"
-	"time"
-
-	"github.com/minio/minio/internal/deadlineconn"
 )
 
 type acceptResult struct {
@@ -75,9 +72,7 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 	select {
 	case result, ok := <-listener.acceptCh:
 		if ok {
-			return deadlineconn.New(result.conn).
-				WithReadDeadline(listener.opts.ClientReadTimeout).
-				WithWriteDeadline(listener.opts.ClientWriteTimeout), result.err
+			return result.conn, result.err
 		}
 	case <-listener.ctx.Done():
 	}
@@ -122,12 +117,7 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 
 // TCPOptions specify customizable TCP optimizations on raw socket
 type TCPOptions struct {
-	UserTimeout int // this value is expected to be in milliseconds
-	// When the net.Conn is idle for more than ReadTimeout duration, we close the connection on the client proactively.
-	ClientReadTimeout time.Duration
-	// When the net.Conn is idle for more than WriteTimeout duration, we close the connection on the client proactively.
-	ClientWriteTimeout time.Duration
-
+	UserTimeout int              // this value is expected to be in milliseconds
 	SendBufSize int              // SO_SNDBUF size for the socket connection, NOTE: this sets server and client connection
 	RecvBufSize int              // SO_RECVBUF size for the socket connection, NOTE: this sets server and client connection
 	Interface   string           // This is a VRF device passed via `--interface` flag
