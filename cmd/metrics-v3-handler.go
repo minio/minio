@@ -105,8 +105,8 @@ func (h *metricsV3Server) listMetrics(path string) http.Handler {
 		if collPath.isDescendantOf(path) {
 			if v, ok := h.metricsData.mgMap[collPath]; ok {
 				matchingMG[collPath] = v
-			} else {
-				matchingMG[collPath] = h.metricsData.bucketMGMap[collPath]
+			} else if v, ok := h.metricsData.bucketMGMap[collPath]; ok {
+				matchingMG[collPath] = v
 			}
 		}
 	}

@@ -783,7 +783,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		}
 		switch fileName {
 		case bucketNotificationConfig:
-			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region, globalEventNotifier.targetList)
+			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region(), globalEventNotifier.targetList)
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
 				continue

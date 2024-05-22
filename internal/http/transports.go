@@ -31,6 +31,11 @@ import (
 // tlsClientSessionCacheSize is the cache size for client sessions.
 var tlsClientSessionCacheSize = 100
 
+const (
+	WriteBufferSize = 64 << 10 // WriteBufferSize 64KiB moving up from 4KiB default
+	ReadBufferSize  = 64 << 10 // ReadBufferSize 64KiB moving up from 4KiB default
+)
+
 // ConnSettings - contains connection settings.
 type ConnSettings struct {
 	DialContext DialContext // Custom dialContext, DialTimeout is ignored if this is already setup.
@@ -72,8 +77,8 @@ func (s ConnSettings) getDefaultTransport(maxIdleConnsPerHost int) *http.Transpo
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           dialContext,
 		MaxIdleConnsPerHost:   maxIdleConnsPerHost,
-		WriteBufferSize:       64 << 10, // 64KiB moving up from 4KiB default
-		ReadBufferSize:        64 << 10, // 64KiB moving up from 4KiB default
+		WriteBufferSize:       WriteBufferSize,
+		ReadBufferSize:        ReadBufferSize,
 		IdleConnTimeout:       15 * time.Second,
 		ResponseHeaderTimeout: 15 * time.Minute, // Conservative timeout is the default (for MinIO internode)
 		TLSHandshakeTimeout:   10 * time.Second,

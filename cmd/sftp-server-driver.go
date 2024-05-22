@@ -342,7 +342,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 
 	switch r.Method {
 	case "Setstat", "Rename", "Link", "Symlink":
-		return NotImplemented{}
+		return sftp.ErrSSHFxOpUnsupported
 
 	case "Rmdir":
 		bucket, prefix := path2BucketObject(r.Filepath)
@@ -398,7 +398,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 		}
 
 		if prefix == "" {
-			return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region})
+			return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region()})
 		}
 
 		dirPath := buildMinioDir(prefix)

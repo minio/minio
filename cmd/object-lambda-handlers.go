@@ -55,7 +55,7 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:    secure,
 		Transport: globalRemoteTargetTransport,
-		Region:    globalSite.Region,
+		Region:    globalSite.Region(),
 	})
 	if err != nil {
 		return levent.Event{}, err

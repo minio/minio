@@ -39,8 +39,8 @@ func TestServerConfig(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 
-	if globalSite.Region != globalMinioDefaultRegion {
-		t.Errorf("Expecting region `us-east-1` found %s", globalSite.Region)
+	if globalSite.Region() != globalMinioDefaultRegion {
+		t.Errorf("Expecting region `us-east-1` found %s", globalSite.Region())
 	}
 
 	// Set new region and verify.
@@ -52,8 +52,8 @@ func TestServerConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if site.Region != "us-west-1" {
-		t.Errorf("Expecting region `us-west-1` found %s", globalSite.Region)
+	if site.Region() != "us-west-1" {
+		t.Errorf("Expecting region `us-west-1` found %s", globalSite.Region())
 	}
 
 	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {

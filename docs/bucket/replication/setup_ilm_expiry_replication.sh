@@ -67,12 +67,16 @@ minio server --address 127.0.0.1:9008 "http://127.0.0.1:9007/tmp/multisited/data
 	"http://127.0.0.1:9008/tmp/multisited/data/disterasure/xl{5...8}" >/tmp/sited_2.log 2>&1 &
 
 # Wait to make sure all MinIO instances are up
-sleep 30s
 
 export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
 export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
 export MC_HOST_sitec=http://minio:minio123@127.0.0.1:9006
 export MC_HOST_sited=http://minio:minio123@127.0.0.1:9008
+
+./mc ready sitea
+./mc ready siteb
+./mc ready sitec
+./mc ready sited
 
 ./mc mb sitea/bucket
 ./mc mb sitec/bucket

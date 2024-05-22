@@ -109,7 +109,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	cred := globalActiveCred
 
 	// Get saved region.
-	region := globalSite.Region
+	region := globalSite.Region()
 
 	apiEndpointStr := strings.TrimSpace(strings.Join(apiEndpoints, "  "))
 	// Colorize the message and print.
@@ -146,7 +146,7 @@ func printLambdaTargets() {
 	}
 
 	arnMsg := color.Blue("Object Lambda ARNs: ")
-	for _, arn := range globalLambdaTargetList.List(globalSite.Region) {
+	for _, arn := range globalLambdaTargetList.List(globalSite.Region()) {
 		arnMsg += color.Bold(fmt.Sprintf("%s ", arn))
 	}
 	logger.Info(arnMsg + "\n")

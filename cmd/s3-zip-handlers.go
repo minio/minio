@@ -202,7 +202,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	defer rc.Close()
 
-	if err = setObjectHeaders(w, fileObjInfo, nil, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, fileObjInfo, nil, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -470,7 +470,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	}
 
 	// Set standard object headers.
-	if err = setObjectHeaders(w, objInfo, nil, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, objInfo, nil, opts); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}

@@ -425,11 +425,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 				return toObjectErr(err, bucket, object)
 			}
 		}
-		for i, r := range readers {
-			if r == nil {
-				onlineDisks[i] = OfflineDisk
-			}
-		}
 		// Track total bytes read from disk and written to the client.
 		totalBytesRead += partLength
 		// partOffset will be valid only for the first part, hence reset it to 0 for
@@ -899,6 +894,20 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		if success {
 			validResp++
 		}
+
+		if totalResp >= minDisks && opts.FastGetObjInfo {
+			rw.Lock()
+			ok := countErrs(errs, errFileNotFound) >= minDisks || countErrs(errs, errFileVersionNotFound) >= minDisks
+			rw.Unlock()
+			if ok {
+				err = errFileNotFound
+				if opts.VersionID != "" {
+					err = errFileVersionNotFound
+				}
+				break
+			}
+		}
+
 		if totalResp < er.setDriveCount {
 			if !opts.FastGetObjInfo {
 				continue
@@ -1541,7 +1550,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	if err = er.commitRenameDataDir(ctx, bucket, object, oldDataDir, onlineDisks); err != nil {
+	if err = er.commitRenameDataDir(ctx, bucket, object, oldDataDir, onlineDisks, writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -1787,7 +1796,7 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	return dobjects, errs
 }
 
-func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object, dataDir string, onlineDisks []StorageAPI) error {
+func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object, dataDir string, onlineDisks []StorageAPI, writeQuorum int) error {
 	if dataDir == "" {
 		return nil
 	}
@@ -1803,12 +1812,8 @@ func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object
 			})
 		}, index)
 	}
-	for _, err := range g.Wait() {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+
+	return reduceWriteQuorumErrs(ctx, g.Wait(), objectOpIgnoredErrs, writeQuorum)
 }
 
 func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string) error {

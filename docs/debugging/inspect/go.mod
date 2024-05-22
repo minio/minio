@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/klauspost/compress v1.17.4
+	github.com/klauspost/filepathx v1.1.1
 	github.com/minio/colorjson v1.0.6
 	github.com/minio/madmin-go/v3 v3.0.36
 	github.com/secure-io/sio-go v0.3.1

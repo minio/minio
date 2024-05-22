@@ -686,7 +686,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error = reqSignatureV4Verify(r, globalSite.Region, serviceS3); s3Error != ErrNone {
+		if s3Error = reqSignatureV4Verify(r, globalSite.Region(), serviceS3); s3Error != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 			return
 		}
@@ -996,6 +996,18 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 	multipartETag := etag.Multipart(completeETags...)
 	opts.UserDefined["etag"] = multipartETag.String()
+
+	if opts.PreserveETag != "" ||
+		r.Header.Get(xhttp.IfMatch) != "" ||
+		r.Header.Get(xhttp.IfNoneMatch) != "" {
+		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+			if _, err := DecryptObjectInfo(&oi, r); err != nil {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+				return true
+			}
+			return checkPreconditionsPUT(ctx, w, r, oi, opts)
+		}
+	}
 
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, complMultipartUpload.Parts, opts)
 	if err != nil {

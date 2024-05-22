@@ -176,7 +176,10 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_STS_DURATION", valueSession)
 	}
 
-	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
+	os.Setenv("CONSOLE_MINIO_SITE_NAME", globalSite.Name())
+	os.Setenv("CONSOLE_MINIO_SITE_REGION", globalSite.Region())
+	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region())
+
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
 	// This section sets Browser (console) stored config

@@ -647,7 +647,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}()
 	}
 
-	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -786,7 +786,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	}
 
 	if _, ok := opts.ObjectAttributes[xhttp.StorageClass]; ok {
-		OA.StorageClass = objInfo.StorageClass
+		OA.StorageClass = filterStorageClass(ctx, objInfo.StorageClass)
 	}
 
 	objInfo.decryptPartsChecksums()
@@ -1173,7 +1173,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	// Set standard object headers.
-	if err = setObjectHeaders(w, objInfo, rs, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
@@ -1328,7 +1328,7 @@ func getRemoteInstanceTransport() http.RoundTripper {
 // Returns a minio-go Client configured to access remote host described by destDNSRecord
 // Applicable only in a federated deployment
 var getRemoteInstanceClient = func(r *http.Request, host string) (*miniogo.Core, error) {
-	cred := getReqAccessCred(r, globalSite.Region)
+	cred := getReqAccessCred(r, globalSite.Region())
 	// In a federated deployment, all the instances share config files
 	// and hence expected to have same credentials.
 	core, err := miniogo.NewCore(host, &miniogo.Options{
@@ -2103,7 +2103,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 
 	case authTypePresigned, authTypeSigned:
-		if s3Err = reqSignatureV4Verify(r, globalSite.Region, serviceS3); s3Err != ErrNone {
+		if s3Err = reqSignatureV4Verify(r, globalSite.Region(), serviceS3); s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
 		}
@@ -2521,7 +2521,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		}
 
 	case authTypePresigned, authTypeSigned:
-		if s3Err = reqSignatureV4Verify(r, globalSite.Region, serviceS3); s3Err != ErrNone {
+		if s3Err = reqSignatureV4Verify(r, globalSite.Region(), serviceS3); s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return
 		}

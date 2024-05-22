@@ -59,11 +59,13 @@ site2_pid=$!
 minio server --config-dir /tmp/minio-ldap --address ":9003" /tmp/minio-ldap-idp3/{1...4} >/tmp/minio3_1.log 2>&1 &
 site3_pid=$!
 
-sleep 10
-
 export MC_HOST_minio1=http://minio:minio123@localhost:9001
 export MC_HOST_minio2=http://minio:minio123@localhost:9002
 export MC_HOST_minio3=http://minio:minio123@localhost:9003
+
+./mc ready minio1
+./mc ready minio2
+./mc ready minio3
 
 ./mc admin replicate add minio1 minio2 minio3
 

@@ -458,7 +458,7 @@ func (driver *ftpDriver) MakeDir(ctx *ftp.Context, objPath string) (err error) {
 	}
 
 	if prefix == "" {
-		return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region})
+		return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region()})
 	}
 
 	dirPath := buildMinioDir(prefix)

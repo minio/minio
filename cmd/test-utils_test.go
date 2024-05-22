@@ -750,7 +750,7 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize int64,
 	secretKey, signature string, currTime time.Time) (*http.Request, error,
 ) {
-	regionStr := globalSite.Region
+	regionStr := globalSite.Region()
 	var stream []byte
 	var buffer []byte
 	body.Seek(0, 0)
@@ -858,7 +858,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
 
-	region := globalSite.Region
+	region := globalSite.Region()
 	date := UTCNow()
 	scope := getScope(date, region)
 	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
@@ -986,7 +986,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	}
 	sort.Strings(headers)
 
-	region := globalSite.Region
+	region := globalSite.Region()
 
 	// Get canonical headers.
 	var buf bytes.Buffer
@@ -1399,7 +1399,7 @@ func getListObjectVersionsURL(endPoint, bucketName, prefix, maxKeys, encodingTyp
 }
 
 // return URL for listing objects in the bucket with V2 API.
-func getListObjectsV2URL(endPoint, bucketName, prefix, maxKeys, fetchOwner, encodingType string) string {
+func getListObjectsV2URL(endPoint, bucketName, prefix, maxKeys, fetchOwner, encodingType, delimiter string) string {
 	queryValue := url.Values{}
 	queryValue.Set("list-type", "2") // Enables list objects V2 URL.
 	if maxKeys != "" {
@@ -1411,7 +1411,13 @@ func getListObjectsV2URL(endPoint, bucketName, prefix, maxKeys, fetchOwner, enco
 	if encodingType != "" {
 		queryValue.Set("encoding-type", encodingType)
 	}
-	return makeTestTargetURL(endPoint, bucketName, prefix, queryValue)
+	if prefix != "" {
+		queryValue.Set("prefix", prefix)
+	}
+	if delimiter != "" {
+		queryValue.Set("delimiter", delimiter)
+	}
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
 // return URL for a new multipart upload.
