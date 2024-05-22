@@ -1122,6 +1122,7 @@ func testServerStreamNoPing(t *testing.T, local, remote *Manager, inCap int) {
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
 	remoteConn.debugMsg(debugSetClientPingDuration, 100*time.Millisecond)
+	defer remoteConn.debugMsg(debugSetClientPingDuration, clientPingInterval)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -1193,6 +1194,7 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 	remoteConn := local.Connection(remoteHost)
 	const testPayload = "Hello Grid World!"
 	remoteConn.debugMsg(debugSetClientPingDuration, 100*time.Millisecond)
+	defer remoteConn.debugMsg(debugSetClientPingDuration, clientPingInterval)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
