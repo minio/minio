@@ -39,10 +39,12 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 
 			_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 
-			{
+			if opts.SendBufSize > 0 {
 				// Enable big buffers
 				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_SNDBUF, opts.SendBufSize)
+			}
 
+			if opts.RecvBufSize > 0 {
 				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, opts.RecvBufSize)
 			}
 
