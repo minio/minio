@@ -39,6 +39,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		inputConfig           string
 		expectedParsingErr    error
 		expectedValidationErr error
+		lr                    lock.Retention
 	}{
 		{ // Valid lifecycle config
 			inputConfig: `<LifecycleConfiguration>
@@ -61,6 +62,37 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		                          </LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
+		},
+		{ // invalid lifecycle config
+			inputConfig: `<LifecycleConfiguration>
+								  <Rule>
+								  <ID>testRule1</ID>
+		                          <Filter>
+		                             <Prefix>prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                              <Rule>
+								  <ID>testRule2</ID>
+		                          <Filter>
+		                             <Prefix>another-prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration><Days>3</Days></Expiration>
+		                          </Rule>
+		                          </LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleBucketLocked,
+			lr: lock.Retention{
+				LockEnabled: true,
+			},
+		},
+		{ // lifecycle config with no rules
+			inputConfig: `<LifecycleConfiguration>
+		                          </LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleNoRule,
 		},
 		{ // Valid lifecycle config
 			inputConfig: `<LifecycleConfiguration>
@@ -145,9 +177,9 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 				// no need to continue this test.
 				return
 			}
-			err = lc.Validate(lock.Retention{})
+			err = lc.Validate(tc.lr)
 			if err != tc.expectedValidationErr {
-				t.Fatalf("%d: Expected %v during validation but got %v", i+1, tc.expectedValidationErr, err)
+				t.Fatalf("%d: Expected %v during validation but got %v, %v", i+1, tc.expectedValidationErr, err, err.Error() == tc.expectedValidationErr.Error())
 			}
 		})
 	}
