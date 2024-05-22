@@ -414,10 +414,11 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	setGlobalInternodeInterface(ctxt.Interface)
 
 	globalTCPOptions = xhttp.TCPOptions{
-		UserTimeout: int(ctxt.UserTimeout.Milliseconds()),
-		Interface:   ctxt.Interface,
-		SendBufSize: ctxt.SendBufSize,
-		RecvBufSize: ctxt.RecvBufSize,
+		UserTimeout:    int(ctxt.UserTimeout.Milliseconds()),
+		DriveOPTimeout: globalDriveConfig.GetOPTimeout,
+		Interface:      ctxt.Interface,
+		SendBufSize:    ctxt.SendBufSize,
+		RecvBufSize:    ctxt.RecvBufSize,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -816,6 +817,11 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	var getCert certs.GetCertificateFunc
+	if globalTLSCerts != nil {
+		getCert = globalTLSCerts.GetCertificate
+	}
+
 	// Check for updates in non-blocking manner.
 	go func() {
 		if !globalServerCtxt.Quiet && !globalInplaceUpdateDisabled {
@@ -842,12 +848,7 @@ func serverMain(ctx *cli.Context) {
 		warnings = append(warnings, color.YellowBold("- Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
-	var getCert certs.GetCertificateFunc
-	if globalTLSCerts != nil {
-		getCert = globalTLSCerts.GetCertificate
-	}
-
-	// Initialize gridn
+	// Initialize grid
 	bootstrapTrace("initGrid", func() {
 		logger.FatalIf(initGlobalGrid(GlobalContext, globalEndpoints), "Unable to configure server grid RPC services")
 	})
@@ -908,9 +909,6 @@ func serverMain(ctx *cli.Context) {
 			logFatalErrs(err, Endpoint{}, true)
 		}
 	})
-
-	xhttp.SetDeploymentID(globalDeploymentID())
-	xhttp.SetMinIOVersion(Version)
 
 	for _, n := range globalNodes {
 		nodeName := n.Host

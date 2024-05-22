@@ -57,7 +57,7 @@ done
 
 set +e
 
-sleep 10
+./mc ready minioadm/
 
 ./mc ls minioadm/
 if [ $? -ne 0 ]; then

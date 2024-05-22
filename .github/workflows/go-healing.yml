@@ -3,8 +3,7 @@ name: Healing Functional Tests
 on:
   pull_request:
     branches:
-    - master
-    - next
+      - master
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
