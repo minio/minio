@@ -36,7 +36,7 @@ var (
 	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
 	errLifecycleDuplicateID  = Errorf("Rule ID must be unique. Found same ID for more than one rule")
 	errXMLNotWellFormed      = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
-	errLifecycleBucketLocked = Errorf("--expire-day, --expire-delete-marker, --expire-all-object-versions and --noncurrent-expire-days can't be used for locked bucket")
+	errLifecycleBucketLocked = Errorf("ExpiredObjectAllVersions element and DelMarkerExpiration action cannot be used on an object locked bucket")
 )
 
 const (
@@ -253,10 +253,7 @@ func (lc Lifecycle) Validate(lr lock.Retention) error {
 		if err := r.Validate(); err != nil {
 			return err
 		}
-		if (r.Expiration.DeleteMarker.val || // DeleteVersionAction
-			!r.DelMarkerExpiration.Empty() || // DelMarkerDeleteAllVersionsAction
-			!r.NoncurrentVersionExpiration.IsDaysNull() || // DeleteVersionAction
-			!r.Expiration.IsDaysNull()) && lr.LockEnabled {
+		if lr.LockEnabled && (r.Expiration.DeleteAll.val || !r.DelMarkerExpiration.Empty()) {
 			return errLifecycleBucketLocked
 		}
 	}
