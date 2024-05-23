@@ -3,8 +3,7 @@ name: Shell formatting checks
 on:
   pull_request:
     branches:
-    - master
-    - next
+      - master
 
 permissions:
   contents: read

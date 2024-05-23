@@ -234,7 +234,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != test.expectedStatus {
-			t.Fatalf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, test.expectedStatus, rec.Code)
+			t.Fatalf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`, Resp: %s", i+1, instanceType, test.expectedStatus, rec.Code, rec.Body)
 		}
 	}
 

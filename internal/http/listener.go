@@ -23,8 +23,6 @@ import (
 	"net"
 	"syscall"
 	"time"
-
-	"github.com/minio/minio/internal/deadlineconn"
 )
 
 type acceptResult struct {
@@ -75,9 +73,7 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 	select {
 	case result, ok := <-listener.acceptCh:
 		if ok {
-			return deadlineconn.New(result.conn).
-				WithReadDeadline(listener.opts.ClientReadTimeout).
-				WithWriteDeadline(listener.opts.ClientWriteTimeout), result.err
+			return result.conn, result.err
 		}
 	case <-listener.ctx.Done():
 	}
@@ -123,15 +119,24 @@ func (listener *httpListener) Addrs() (addrs []net.Addr) {
 // TCPOptions specify customizable TCP optimizations on raw socket
 type TCPOptions struct {
 	UserTimeout int // this value is expected to be in milliseconds
-	// When the net.Conn is idle for more than ReadTimeout duration, we close the connection on the client proactively.
-	ClientReadTimeout time.Duration
-	// When the net.Conn is idle for more than WriteTimeout duration, we close the connection on the client proactively.
-	ClientWriteTimeout time.Duration
+
+	// When the net.Conn is a remote drive this value is honored, we close the connection to remote peer proactively.
+	DriveOPTimeout func() time.Duration
 
 	SendBufSize int              // SO_SNDBUF size for the socket connection, NOTE: this sets server and client connection
 	RecvBufSize int              // SO_RECVBUF size for the socket connection, NOTE: this sets server and client connection
 	Interface   string           // This is a VRF device passed via `--interface` flag
 	Trace       func(msg string) // Trace when starting.
+}
+
+// ForWebsocket returns TCPOptions valid for websocket net.Conn
+func (t TCPOptions) ForWebsocket() TCPOptions {
+	return TCPOptions{
+		UserTimeout: t.UserTimeout,
+		Interface:   t.Interface,
+		SendBufSize: t.SendBufSize,
+		RecvBufSize: t.RecvBufSize,
+	}
 }
 
 // newHTTPListener - creates new httpListener object which is interface compatible to net.Listener.

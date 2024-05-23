@@ -320,6 +320,9 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 }
 
 func (client *remotePeerS3Client) ListBuckets(ctx context.Context, opts BucketOptions) ([]BucketInfo, error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	bi, err := listBucketsRPC.Call(ctx, client.gridConn(), &opts)
 	if err != nil {
 		return nil, toStorageErr(err)
@@ -345,6 +348,9 @@ func (client *remotePeerS3Client) HealBucket(ctx context.Context, bucket string,
 		peerS3BucketDeleted: strconv.FormatBool(opts.Remove),
 	})
 
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err := healBucketRPC.Call(ctx, conn, mss)
 
 	// Initialize heal result info
@@ -366,6 +372,9 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 		peerS3Bucket:        bucket,
 		peerS3BucketDeleted: strconv.FormatBool(opts.Deleted),
 	})
+
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
 
 	volInfo, err := headBucketRPC.Call(ctx, conn, mss)
 	if err != nil {
@@ -418,6 +427,9 @@ func (client *remotePeerS3Client) MakeBucket(ctx context.Context, bucket string,
 		peerS3BucketForceCreate: strconv.FormatBool(opts.ForceCreate),
 	})
 
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err := makeBucketRPC.Call(ctx, conn, mss)
 	return toStorageErr(err)
 }
@@ -466,6 +478,9 @@ func (client *remotePeerS3Client) DeleteBucket(ctx context.Context, bucket strin
 		peerS3Bucket:            bucket,
 		peerS3BucketForceDelete: strconv.FormatBool(opts.Force),
 	})
+
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
 
 	_, err := deleteBucketRPC.Call(ctx, conn, mss)
 	return toStorageErr(err)

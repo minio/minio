@@ -258,6 +258,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			healTrace(healingMetricObject, startTime, bucket, object, &opts, err, &result)
 		}()
 	}
+
 	// Initialize heal result object
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemObject,

@@ -160,12 +160,7 @@ type serverCtxt struct {
 	FTP  []string
 	SFTP []string
 
-	UserTimeout             time.Duration
-	ConnReadDeadline        time.Duration
-	ConnWriteDeadline       time.Duration
-	ConnClientReadDeadline  time.Duration
-	ConnClientWriteDeadline time.Duration
-
+	UserTimeout         time.Duration
 	ShutdownTimeout     time.Duration
 	IdleTimeout         time.Duration
 	ReadHeaderTimeout   time.Duration
@@ -419,8 +414,9 @@ var (
 
 	// List of local drives to this node, this is only set during server startup,
 	// and is only mutated by HealFormat. Hold globalLocalDrivesMu to access.
-	globalLocalDrives   []StorageAPI
-	globalLocalDrivesMu sync.RWMutex
+	globalLocalDrives    []StorageAPI
+	globalLocalDrivesMap = make(map[string]StorageAPI)
+	globalLocalDrivesMu  sync.RWMutex
 
 	globalDriveMonitoring = env.Get("_MINIO_DRIVE_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn
 
