@@ -1143,7 +1143,8 @@ func testServerStreamNoPing(t *testing.T, local, remote *Manager, inCap int) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	t.Logf("error: %v", err)
+	t.Logf("response: %v", err)
+
 	// Check that remote is canceled.
 	<-serverCanceled
 	close(nowBlocking)
@@ -1245,7 +1246,7 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	t.Logf("error: %v", err)
+	t.Logf("response: %v", err)
 	// Check that remote is canceled.
 	<-serverCanceled
 }
