@@ -1,0 +1,78 @@
+version: '3.7'
+
+# Settings and configurations that are common for all containers
+x-minio-common: &minio-common
+  image: quay.io/minio/minio:${JOB_NAME}
+  command: server --console-address ":9001" http://minio{1...4}/rdata{1...2}
+  expose:
+    - "9000"
+    - "9001"
+  environment:
+    MINIO_CI_CD: "on"
+    MINIO_ROOT_USER: "minio"
+    MINIO_ROOT_PASSWORD: "minio123"
+    MINIO_KMS_SECRET_KEY: "my-minio-key:OSMM+vkKUTCvQs9YL/CVMIMt43HFhkUpqJxTmGl6rYw="
+    MINIO_DRIVE_MAX_TIMEOUT: "5s"
+  healthcheck:
+    test: ["CMD", "mc", "ready", "local"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  minio1:
+    <<: *minio-common
+    hostname: minio1
+    volumes:
+      - rdata1-1:/rdata1
+      - rdata1-2:/rdata2
+
+  minio2:
+    <<: *minio-common
+    hostname: minio2
+    volumes:
+      - rdata2-1:/rdata1
+      - rdata2-2:/rdata2
+
+  minio3:
+    <<: *minio-common
+    hostname: minio3
+    volumes:
+      - rdata3-1:/rdata1
+      - rdata3-2:/rdata2
+
+  minio4:
+    <<: *minio-common
+    hostname: minio4
+    volumes:
+      - rdata4-1:/rdata1
+      - rdata4-2:/rdata2
+
+  nginx:
+    image: nginx:1.19.2-alpine
+    hostname: nginx
+    volumes:
+      - ./nginx-4-node.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  rdata1-1:
+  rdata1-2:
+  rdata2-1:
+  rdata2-2:
+  rdata3-1:
+  rdata3-2:
+  rdata4-1:
+  rdata4-2:

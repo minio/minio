@@ -30,6 +30,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -38,6 +39,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		inputConfig           string
 		expectedParsingErr    error
 		expectedValidationErr error
+		lr                    lock.Retention
 	}{
 		{ // Valid lifecycle config
 			inputConfig: `<LifecycleConfiguration>
@@ -60,6 +62,51 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		                          </LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
+		},
+		{ // Using ExpiredObjectAllVersions element with an object locked bucket
+			inputConfig: `<LifecycleConfiguration>
+                                        <Rule>
+                                          <ID>ExpiredObjectAllVersions with object locking</ID>
+		                          <Filter>
+		                             <Prefix>prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <Expiration>
+			                    <Days>3</Days>
+				            <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
+			                  </Expiration>
+		                        </Rule>
+		                      </LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleBucketLocked,
+			lr: lock.Retention{
+				LockEnabled: true,
+			},
+		},
+		{ // Using DelMarkerExpiration action with an object locked bucket
+			inputConfig: `<LifecycleConfiguration>
+                                        <Rule>
+                                          <ID>DeleteMarkerExpiration with object locking</ID>
+		                          <Filter>
+		                             <Prefix>prefix</Prefix>
+		                          </Filter>
+		                          <Status>Enabled</Status>
+		                          <DelMarkerExpiration>
+			                    <Days>3</Days>
+			                  </DelMarkerExpiration>
+		                        </Rule>
+		                      </LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleBucketLocked,
+			lr: lock.Retention{
+				LockEnabled: true,
+			},
+		},
+		{ // lifecycle config with no rules
+			inputConfig: `<LifecycleConfiguration>
+		                          </LifecycleConfiguration>`,
+			expectedParsingErr:    nil,
+			expectedValidationErr: errLifecycleNoRule,
 		},
 		{ // Valid lifecycle config
 			inputConfig: `<LifecycleConfiguration>
@@ -144,7 +191,7 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 				// no need to continue this test.
 				return
 			}
-			err = lc.Validate()
+			err = lc.Validate(tc.lr)
 			if err != tc.expectedValidationErr {
 				t.Fatalf("%d: Expected %v during validation but got %v", i+1, tc.expectedValidationErr, err)
 			}
@@ -779,7 +826,7 @@ func TestHasActiveRules(t *testing.T) {
 				t.Fatalf("Got unexpected error: %v", err)
 			}
 			// To ensure input lifecycle configurations are valid
-			if err := lc.Validate(); err != nil {
+			if err := lc.Validate(lock.Retention{}); err != nil {
 				t.Fatalf("Invalid test case: %d %v", i+1, err)
 			}
 			if got := lc.HasActiveRules(tc.prefix); got != tc.want {
@@ -1365,7 +1412,7 @@ func TestFilterRules(t *testing.T) {
 
 	for i, tc := range tests {
 		t.Run(fmt.Sprintf("test-%d", i+1), func(t *testing.T) {
-			if err := tc.lc.Validate(); err != nil {
+			if err := tc.lc.Validate(lock.Retention{}); err != nil {
 				t.Fatalf("Lifecycle validation failed - %v", err)
 			}
 			rules := tc.lc.FilterRules(tc.opts)

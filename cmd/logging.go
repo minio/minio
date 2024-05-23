@@ -17,7 +17,9 @@ func replLogOnceIf(ctx context.Context, err error, id string, errKind ...interfa
 }
 
 func iamLogIf(ctx context.Context, err error, errKind ...interface{}) {
-	logger.LogIf(ctx, "iam", err, errKind...)
+	if !errors.Is(err, grid.ErrDisconnected) {
+		logger.LogIf(ctx, "iam", err, errKind...)
+	}
 }
 
 func iamLogEvent(ctx context.Context, msg string, args ...interface{}) {

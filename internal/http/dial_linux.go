@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/minio/minio/internal/deadlineconn"
 	"golang.org/x/sys/unix"
 )
 
@@ -39,10 +40,12 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 
 			_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 
-			{
-				// Enable big buffers
+			// Enable custom socket send/recv buffers.
+			if opts.SendBufSize > 0 {
 				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_SNDBUF, opts.SendBufSize)
+			}
 
+			if opts.RecvBufSize > 0 {
 				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, opts.RecvBufSize)
 			}
 
@@ -82,7 +85,9 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 			//    https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
 			// This is a sensitive configuration, it is better to set it to high values, > 60 secs since it can
 			// affect clients reading data with a very slow pace  (disappropriate with socket buffer sizes)
-			_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, opts.UserTimeout)
+			if opts.UserTimeout > 0 {
+				_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_USER_TIMEOUT, opts.UserTimeout)
+			}
 
 			if opts.Interface != "" {
 				if h, _, err := net.SplitHostPort(address); err == nil {
@@ -109,6 +114,16 @@ func NewInternodeDialContext(dialTimeout time.Duration, opts TCPOptions) DialCon
 			Timeout: dialTimeout,
 			Control: setTCPParametersFn(opts),
 		}
-		return dialer.DialContext(ctx, network, addr)
+		conn, err := dialer.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		if opts.DriveOPTimeout != nil {
+			// Read deadlines are sufficient for now as per various
+			// scenarios of hung node detection, we may add Write deadlines
+			// if needed later on.
+			return deadlineconn.New(conn).WithReadDeadline(opts.DriveOPTimeout()), nil
+		}
+		return conn, nil
 	}
 }

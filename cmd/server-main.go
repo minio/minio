@@ -104,32 +104,6 @@ var ServerFlags = []cli.Flag{
 		Hidden: true,
 	},
 	cli.DurationFlag{
-		Name:   "conn-client-read-deadline",
-		Usage:  "custom connection READ deadline for incoming requests",
-		Hidden: true,
-		EnvVar: "MINIO_CONN_CLIENT_READ_DEADLINE",
-	},
-	cli.DurationFlag{
-		Name:   "conn-client-write-deadline",
-		Usage:  "custom connection WRITE deadline for outgoing requests",
-		Hidden: true,
-		EnvVar: "MINIO_CONN_CLIENT_WRITE_DEADLINE",
-	},
-	cli.DurationFlag{
-		Name:   "conn-read-deadline",
-		Usage:  "custom connection READ deadline",
-		Hidden: true,
-		Value:  10 * time.Minute,
-		EnvVar: "MINIO_CONN_READ_DEADLINE",
-	},
-	cli.DurationFlag{
-		Name:   "conn-write-deadline",
-		Usage:  "custom connection WRITE deadline",
-		Hidden: true,
-		Value:  10 * time.Minute,
-		EnvVar: "MINIO_CONN_WRITE_DEADLINE",
-	},
-	cli.DurationFlag{
 		Name:   "conn-user-timeout",
 		Usage:  "custom TCP_USER_TIMEOUT for socket buffers",
 		Hidden: true,
@@ -440,12 +414,11 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	setGlobalInternodeInterface(ctxt.Interface)
 
 	globalTCPOptions = xhttp.TCPOptions{
-		UserTimeout:        int(ctxt.UserTimeout.Milliseconds()),
-		ClientReadTimeout:  ctxt.ConnClientReadDeadline,
-		ClientWriteTimeout: ctxt.ConnClientWriteDeadline,
-		Interface:          ctxt.Interface,
-		SendBufSize:        ctxt.SendBufSize,
-		RecvBufSize:        ctxt.RecvBufSize,
+		UserTimeout:    int(ctxt.UserTimeout.Milliseconds()),
+		DriveOPTimeout: globalDriveConfig.GetOPTimeout,
+		Interface:      ctxt.Interface,
+		SendBufSize:    ctxt.SendBufSize,
+		RecvBufSize:    ctxt.RecvBufSize,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -844,6 +817,11 @@ func serverMain(ctx *cli.Context) {
 		}
 	}
 
+	var getCert certs.GetCertificateFunc
+	if globalTLSCerts != nil {
+		getCert = globalTLSCerts.GetCertificate
+	}
+
 	// Check for updates in non-blocking manner.
 	go func() {
 		if !globalServerCtxt.Quiet && !globalInplaceUpdateDisabled {
@@ -870,12 +848,7 @@ func serverMain(ctx *cli.Context) {
 		warnings = append(warnings, color.YellowBold("- Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
 	}
 
-	var getCert certs.GetCertificateFunc
-	if globalTLSCerts != nil {
-		getCert = globalTLSCerts.GetCertificate
-	}
-
-	// Initialize gridn
+	// Initialize grid
 	bootstrapTrace("initGrid", func() {
 		logger.FatalIf(initGlobalGrid(GlobalContext, globalEndpoints), "Unable to configure server grid RPC services")
 	})
@@ -936,9 +909,6 @@ func serverMain(ctx *cli.Context) {
 			logFatalErrs(err, Endpoint{}, true)
 		}
 	})
-
-	xhttp.SetDeploymentID(globalDeploymentID())
-	xhttp.SetMinIOVersion(Version)
 
 	for _, n := range globalNodes {
 		nodeName := n.Host
