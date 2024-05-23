@@ -144,33 +144,33 @@ func loadAPIRequestsNetworkMetrics(ctx context.Context, m MetricValues, _ *metri
 
 // Metric Descriptions for bucket level S3 metrics.
 var (
-	apiBucketTrafficSentBytesMD = NewCounterMD(apiTrafficSentBytes,
+	bucketAPITrafficSentBytesMD = NewCounterMD(apiTrafficSentBytes,
 		"Total number of bytes received for a bucket", "bucket", "type")
-	apiBucketTrafficRecvBytesMD = NewCounterMD(apiTrafficRecvBytes,
+	bucketAPITrafficRecvBytesMD = NewCounterMD(apiTrafficRecvBytes,
 		"Total number of bytes sent for a bucket", "bucket", "type")
 
-	apiBucketRequestsInFlightMD = NewGaugeMD(apiRequestsInFlightTotal,
+	bucketAPIRequestsInFlightMD = NewGaugeMD(apiRequestsInFlightTotal,
 		"Total number of requests currently in flight for a bucket", "bucket", "name", "type")
-	apiBucketRequestsTotalMD = NewCounterMD(apiRequestsTotal,
+	bucketAPIRequestsTotalMD = NewCounterMD(apiRequestsTotal,
 		"Total number of requests for a bucket", "bucket", "name", "type")
-	apiBucketRequestsCanceledMD = NewCounterMD(apiRequestsCanceledTotal,
+	bucketAPIRequestsCanceledMD = NewCounterMD(apiRequestsCanceledTotal,
 		"Total number of requests canceled by the client for a bucket", "bucket", "name", "type")
-	apiBucketRequests4xxErrorsMD = NewCounterMD(apiRequests4xxErrorsTotal,
+	bucketAPIRequests4xxErrorsMD = NewCounterMD(apiRequests4xxErrorsTotal,
 		"Total number of requests with 4xx errors for a bucket", "bucket", "name", "type")
-	apiBucketRequests5xxErrorsMD = NewCounterMD(apiRequests5xxErrorsTotal,
+	bucketAPIRequests5xxErrorsMD = NewCounterMD(apiRequests5xxErrorsTotal,
 		"Total number of requests with 5xx errors for a bucket", "bucket", "name", "type")
 
-	apiBucketRequestsTTFBSecondsDistributionMD = NewCounterMD(apiRequestsTTFBSecondsDistribution,
+	bucketAPIRequestsTTFBSecondsDistributionMD = NewCounterMD(apiRequestsTTFBSecondsDistribution,
 		"Distribution of time to first byte across API calls for a bucket",
 		"bucket", "name", "le", "type")
 )
 
-// loadAPIBucketHTTPMetrics - loads bucket level S3 HTTP metrics.
+// loadBucketAPIHTTPMetrics - loads bucket level S3 HTTP metrics.
 //
 // This is a `MetricsLoaderFn`.
 //
 // This includes bucket level S3 HTTP metrics and S3 network in/out metrics.
-func loadAPIBucketHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsCache, buckets []string) error {
+func loadBucketAPIHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsCache, buckets []string) error {
 	if len(buckets) == 0 {
 		return nil
 	}
@@ -209,10 +209,10 @@ func loadAPIBucketHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsCac
 	return nil
 }
 
-// loadAPIBucketTTFBMetrics - loads bucket S3 TTFB metrics.
+// loadBucketAPITTFBMetrics - loads bucket S3 TTFB metrics.
 //
 // This is a `MetricsLoaderFn`.
-func loadAPIBucketTTFBMetrics(ctx context.Context, m MetricValues, _ *metricsCache, buckets []string) error {
+func loadBucketAPITTFBMetrics(ctx context.Context, m MetricValues, _ *metricsCache, buckets []string) error {
 	renameLabels := map[string]string{"api": "name"}
 	m.SetHistogram(apiRequestsTTFBSecondsDistribution, bucketHTTPRequestsDuration, renameLabels,
 		buckets, "type", "s3")
