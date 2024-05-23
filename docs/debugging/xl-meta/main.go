@@ -974,7 +974,7 @@ func combine(files []string, out string) error {
 			hasParity := 0
 			for idx, sh := range v {
 				split[idx] = sh
-				if idx >= k && len(v) > 0 {
+				if idx >= k && len(sh) > 0 {
 					hasParity++
 				}
 			}
@@ -1151,7 +1151,7 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						hasParity := 0
 						for idx, sh := range v {
 							split[idx] = sh
-							if idx >= k && len(v) > 0 {
+							if idx >= k && len(sh) > 0 {
 								hasParity++
 							}
 						}
