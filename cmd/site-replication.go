@@ -6211,7 +6211,13 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 		Rules:           rules,
 		ExpiryUpdatedAt: &updatedAt,
 	}
-	if err := finalLcCfg.Validate(); err != nil {
+
+	rcfg, err := globalBucketObjectLockSys.Get(bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := finalLcCfg.Validate(rcfg); err != nil {
 		return []byte{}, err
 	}
 	finalConfigData, err := xml.Marshal(finalLcCfg)
