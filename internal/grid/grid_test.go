@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1150,7 +1151,7 @@ func testServerStreamNoPing(t *testing.T, local, remote *Manager, inCap int) {
 	close(nowBlocking)
 }
 
-// testServerStreamNoPing will test if server and client handle ping even when blocked.
+// testServerStreamPingRunning will test if server and client handle ping even when blocked.
 func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int, blockResp, blockReq bool) {
 	defer testlogger.T.SetErrorTB(t)()
 	errFatal := func(err error) {
@@ -1207,9 +1208,12 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 
 	// Block until we have exceeded the deadline several times over.
 	nowBlocking := make(chan struct{})
+	var mu sync.Mutex
 	time.AfterFunc(time.Second, func() {
+		mu.Lock()
 		cancel()
 		close(nowBlocking)
+		mu.Unlock()
 	})
 	if inCap > 0 {
 		go func() {
@@ -1231,13 +1235,10 @@ func testServerStreamPingRunning(t *testing.T, local, remote *Manager, inCap int
 	}
 	// Check that local returned.
 	err = st.Results(func(b []byte) error {
-		select {
-		case <-nowBlocking:
-		case <-st.Done():
-			return ctx.Err()
-		}
-		return nil
+		<-st.Done()
+		return ctx.Err()
 	})
+	mu.Lock()
 	select {
 	case <-nowBlocking:
 	default:
