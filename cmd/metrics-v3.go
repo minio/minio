@@ -51,12 +51,12 @@ const (
 	clusterUsageObjectsCollectorPath collectorPath = "/cluster/usage/objects"
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
-	clusterNotificationCollectorPath collectorPath = "/cluster/notification"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
 
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
 	replicationCollectorPath   collectorPath = "/replication"
+	notificationCollectorPath  collectorPath = "/notification"
 )
 
 const (
@@ -298,7 +298,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterErasureSetMetrics,
 	)
 
-	clusterNotificationMG := NewMetricsGroup(clusterNotificationCollectorPath,
+	clusterNotificationMG := NewMetricsGroup(notificationCollectorPath,
 		[]MetricDescriptor{
 			notificationCurrentSendInProgressMD,
 			notificationEventsErrorsTotalMD,
