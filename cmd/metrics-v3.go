@@ -58,6 +58,7 @@ const (
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
 	replicationCollectorPath   collectorPath = "/replication"
 	notificationCollectorPath  collectorPath = "/notification"
+	scannerCollectorPath       collectorPath = "/scanner"
 )
 
 const (
@@ -351,6 +352,18 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterConfigMetrics,
 	)
 
+	scannerMG := NewMetricsGroup(scannerCollectorPath,
+		[]MetricDescriptor{
+			scannerBucketScansFinishedMD,
+			scannerBucketScansStartedMD,
+			scannerDirectoriesScannedMD,
+			scannerObjectsScannedMD,
+			scannerVersionsScannedMD,
+			scannerLastActivitySecondsMD,
+		},
+		loadClusterScannerMetrics,
+	)
+
 	loggerWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
 			webhookFailedMessagesMD,
@@ -389,6 +402,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterReplicationMG,
 		clusterConfigMG,
 
+		scannerMG,
 		auditMG,
 		loggerWebhookMG,
 	}
