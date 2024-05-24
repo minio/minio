@@ -36,7 +36,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/color"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/v2/logger/message/log"
+	"github.com/minio/pkg/v3/logger/message/log"
 )
 
 // HighwayHash key for logging in anonymous mode

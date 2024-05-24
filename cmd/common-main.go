@@ -55,10 +55,10 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/term"
 )
 

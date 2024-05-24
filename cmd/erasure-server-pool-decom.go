@@ -37,9 +37,9 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/workers"
 )
 
 // PoolDecommissionInfo currently decommissioning information

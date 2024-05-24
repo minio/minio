@@ -56,9 +56,9 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/pubsub"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 // minio configuration related constants.

@@ -23,7 +23,7 @@ import (
 	"errors"
 	"hash/crc32"
 
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 // counterMap type adds GetValueWithQuorum method to a map[T]int used to count occurrences of values of type T.

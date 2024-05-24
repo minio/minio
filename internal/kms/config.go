@@ -33,9 +33,9 @@ import (
 
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/kms-go/kms"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/ellipses"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/ellipses"
+	"github.com/minio/pkg/v3/env"
 )
 
 // Environment variables for MinIO KMS.

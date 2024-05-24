@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 

@@ -36,8 +36,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/wildcard"
 )
 
 const (
@@ -76,6 +76,8 @@ const (
 	// LDAP claim keys
 	ldapUser  = "ldapUser"     // this is a key name for a DN value
 	ldapUserN = "ldapUsername" // this is a key name for the short/login username
+	// Claim key-prefix for LDAP attributes
+	ldapAttribPrefix = "ldapAttrib_"
 
 	// Role Claim key
 	roleArnClaim = "roleArn"
@@ -668,12 +670,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(ldapUsername, ldapPassword)
+	lookupResult, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
 		err = fmt.Errorf("LDAP server error: %w", err)
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
+	ldapUserDN := lookupResult.NormDN
 
 	// Check if this user or their groups have a policy applied.
 	ldapPolicies, err := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
@@ -697,6 +700,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	claims[expClaim] = UTCNow().Add(expiryDur).Unix()
 	claims[ldapUser] = ldapUserDN
 	claims[ldapUserN] = ldapUsername
+	// Add lookup up LDAP attributes as claims.
+	for attrib, value := range lookupResult.Attributes {
+		claims[ldapAttribPrefix+attrib] = value
+	}
 
 	if len(sessionPolicyStr) > 0 {
 		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))

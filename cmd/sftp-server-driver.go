@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/mimedb"
+	"github.com/minio/pkg/v3/mimedb"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -101,7 +101,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		}
 		var mcreds *credentials.Credentials
 		if errors.Is(err, errNoSuchServiceAccount) {
-			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
+			lookupResult, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
 			if err != nil {
 				return nil, err
 			}
@@ -115,6 +115,14 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 				claims[k] = v
 			}
 
+			// Set LDAP claims.
+			claims[ldapUserN] = f.AccessKey()
+			claims[ldapUser] = lookupResult.NormDN
+			// Add LDAP attributes that were looked up into the claims.
+			for attribKey, attribValue := range lookupResult.Attributes {
+				claims[ldapAttribPrefix+attribKey] = attribValue
+			}
+
 			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
 			if err != nil {
 				return nil, err
@@ -122,7 +130,7 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 
 			// Set the parent of the temporary access key, this is useful
 			// in obtaining service accounts by this cred.
-			cred.ParentUser = targetUser
+			cred.ParentUser = lookupResult.NormDN
 
 			// Set this value to LDAP groups, LDAP user can be part
 			// of large number of groups

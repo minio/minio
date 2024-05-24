@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/mimedb"
+	"github.com/minio/pkg/v3/mimedb"
 	ftp "goftp.io/server/v2"
 )
 
@@ -260,11 +260,11 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 			return false, err
 		}
 		if errors.Is(err, errNoSuchServiceAccount) {
-			ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(username, password)
+			lookupRes, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(username, password)
 			if err != nil {
 				return false, err
 			}
-			ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
+			ldapPolicies, _ := globalIAMSys.PolicyDBGet(lookupRes.NormDN, groupDistNames...)
 			return len(ldapPolicies) > 0, nil
 		}
 		return subtle.ConstantTimeCompare([]byte(sa.Credentials.SecretKey), []byte(password)) == 1, nil
@@ -290,11 +290,11 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 
 		var mcreds *credentials.Credentials
 		if errors.Is(err, errNoSuchServiceAccount) {
-			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
+			lookupResult, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
 			if err != nil {
 				return nil, err
 			}
-			ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
+			ldapPolicies, _ := globalIAMSys.PolicyDBGet(lookupResult.NormDN, targetGroups...)
 			if len(ldapPolicies) == 0 {
 				return nil, errAuthentication
 			}
@@ -304,8 +304,14 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 			}
 			claims := make(map[string]interface{})
 			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-			claims[ldapUser] = targetUser
+
+			claims[ldapUser] = lookupResult.NormDN
 			claims[ldapUserN] = ctx.Sess.LoginUser()
+
+			// Add LDAP attributes that were looked up into the claims.
+			for attribKey, attribValue := range lookupResult.Attributes {
+				claims[ldapAttribPrefix+attribKey] = attribValue
+			}
 
 			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
 			if err != nil {
@@ -314,7 +320,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 
 			// Set the parent of the temporary access key, this is useful
 			// in obtaining service accounts by this cred.
-			cred.ParentUser = targetUser
+			cred.ParentUser = lookupResult.NormDN
 
 			// Set this value to LDAP groups, LDAP user can be part
 			// of large number of groups

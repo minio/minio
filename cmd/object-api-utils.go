@@ -48,8 +48,8 @@ import (
 	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/trie"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/trie"
+	"github.com/minio/pkg/v3/wildcard"
 	"github.com/valyala/bytebufferpool"
 	"golang.org/x/exp/slices"
 )

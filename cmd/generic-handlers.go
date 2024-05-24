@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/grid"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
