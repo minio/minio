@@ -52,6 +52,7 @@ const (
 	clusterUsageBucketsCollectorPath collectorPath = "/cluster/usage/buckets"
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
+	clusterConfigCollectorPath       collectorPath = "/cluster/config"
 
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
@@ -342,6 +343,14 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterReplicationMetrics,
 	)
 
+	clusterConfigMG := NewMetricsGroup(clusterConfigCollectorPath,
+		[]MetricDescriptor{
+			configRRSParityMD,
+			configStandardParityMD,
+		},
+		loadClusterConfigMetrics,
+	)
+
 	loggerWebhookMG := NewMetricsGroup(loggerWebhookCollectorPath,
 		[]MetricDescriptor{
 			webhookFailedMessagesMD,
@@ -378,6 +387,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		clusterNotificationMG,
 		clusterIAMMG,
 		clusterReplicationMG,
+		clusterConfigMG,
 
 		auditMG,
 		loggerWebhookMG,
