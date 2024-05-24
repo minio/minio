@@ -53,7 +53,6 @@ const (
 	clusterErasureSetCollectorPath   collectorPath = "/cluster/erasure-set"
 	clusterIAMCollectorPath          collectorPath = "/cluster/iam"
 	clusterConfigCollectorPath       collectorPath = "/cluster/config"
-	clusterScannerCollectorPath      collectorPath = "/cluster/scanner"
 
 	auditCollectorPath         collectorPath = "/audit"
 	loggerWebhookCollectorPath collectorPath = "/logger/webhook"
