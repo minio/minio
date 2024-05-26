@@ -19,7 +19,7 @@ function start_minio_3_node() {
 	export MINIO_ERASURE_SET_DRIVE_COUNT=6
 	export MINIO_CI_CD=1
 
-	start_port=$2
+	start_port=$1
 	args=""
 	for i in $(seq 1 3); do
 		args="$args http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/1/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/2/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/3/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/4/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/5/ http://127.0.0.1:$((start_port + i))${WORK_DIR}/$i/6/"
@@ -37,7 +37,8 @@ function start_minio_3_node() {
 	pid3=$!
 	disown $pid3
 
-	sleep "$1"
+	export MC_HOST_myminio="http://minio:minio123@127.0.0.1:$((start_port + 1))"
+	/tmp/mc ready myminio
 
 	if ! ps -p $pid1 1>&2 >/dev/null; then
 		echo "server1 log:"
@@ -99,10 +100,15 @@ function __init__() {
 
 	## version is purposefully set to '3' for minio to migrate configuration file
 	echo '{"version": "3", "credential": {"accessKey": "minio", "secretKey": "minio123"}, "region": "us-east-1"}' >"$MINIO_CONFIG_DIR/config.json"
+
+	if [ ! -f /tmp/mc ]; then
+		wget --quiet -O /tmp/mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
+			chmod +x /tmp/mc
+	fi
 }
 
 function perform_test() {
-	start_minio_3_node 120 $2
+	start_minio_3_node $2
 
 	echo "Testing Distributed Erasure setup healing of drives"
 	echo "Remove the contents of the disks belonging to '${1}' erasure set"
@@ -110,7 +116,7 @@ function perform_test() {
 	rm -rf ${WORK_DIR}/${1}/*/
 
 	set -x
-	start_minio_3_node 120 $2
+	start_minio_3_node $2
 
 	rv=$(check_online)
 	if [ "$rv" == "1" ]; then
