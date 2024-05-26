@@ -31,7 +31,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 //go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE
@@ -258,6 +258,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			healTrace(healingMetricObject, startTime, bucket, object, &opts, err, &result)
 		}()
 	}
+
 	// Initialize heal result object
 	result = madmin.HealResultItem{
 		Type:      madmin.HealItemObject,
@@ -411,7 +412,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// Allow for dangling deletes, on versions that have DataDir missing etc.
 		// this would end up restoring the correct readable versions.
-		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, dataErrs, ObjectOptions{
+		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, nil, ObjectOptions{
 			VersionID: versionID,
 		})
 		errs = make([]error, len(errs))

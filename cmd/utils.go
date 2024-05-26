@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
+	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
@@ -56,10 +57,10 @@ import (
 	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/env"
-	xaudit "github.com/minio/pkg/v2/logger/message/audit"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/env"
+	xaudit "github.com/minio/pkg/v3/logger/message/audit"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/oauth2"
 )
 
@@ -1141,4 +1142,12 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 type itemOrErr[V any] struct {
 	Item V
 	Err  error
+}
+
+func filterStorageClass(ctx context.Context, s string) string {
+	// Veeam 14.0 and later clients are not compatible with custom storage classes.
+	if globalVeeamForceSC != "" && s != storageclass.STANDARD && s != storageclass.RRS && isVeeamClient(ctx) {
+		return globalVeeamForceSC
+	}
+	return s
 }

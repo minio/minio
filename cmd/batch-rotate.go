@@ -33,8 +33,8 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/workers"
 )
 
 // keyrotate:

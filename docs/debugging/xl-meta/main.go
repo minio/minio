@@ -28,7 +28,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,9 +65,9 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}
 `
+	isPart := regexp.MustCompile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/part\\.[0-9]+$")
 
 	app.HideHelpCommand = true
-
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Usage:  "print each file as a separate line without formatting",
@@ -84,6 +86,10 @@ FLAGS:
 			Usage: "combine inline data",
 			Name:  "combine",
 		},
+		cli.BoolFlag{
+			Usage: "combine inline data across versions when size matches",
+			Name:  "xver",
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
@@ -93,6 +99,9 @@ FLAGS:
 		}
 		// file / version / file
 		filemap := make(map[string]map[string]string)
+		foundData := make(map[string][]byte)
+		partDataToVerID := make(map[string][2]string)
+		var baseName string
 		// versionID ->
 		combineFiles := make(map[string][]string)
 		decode := func(r io.Reader, file string) ([]byte, error) {
@@ -171,10 +180,15 @@ FLAGS:
 					}
 					type erasureInfo struct {
 						V2Obj *struct {
-							EcDist  []int
-							EcIndex int
-							EcM     int
-							EcN     int
+							EcDist   []int
+							EcIndex  int
+							EcM      int
+							EcN      int
+							DDir     []byte
+							PartNums []int
+							MetaSys  struct {
+								Inline []byte `json:"x-minio-internal-inline-data"`
+							}
 						}
 					}
 					var ei erasureInfo
@@ -188,6 +202,22 @@ FLAGS:
 						idx := ei.V2Obj.EcIndex
 						filemap[file][verID] = fmt.Sprintf("%s/shard-%02d-of-%02d", verID, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
 						filemap[file][verID+".json"] = buf.String()
+						for _, i := range ei.V2Obj.PartNums {
+							if len(ei.V2Obj.MetaSys.Inline) != 0 {
+								break
+							}
+							file := file
+							dataFile := fmt.Sprintf("%s%s/part.%d", strings.TrimSuffix(file, "xl.meta"), uuid.UUID(ei.V2Obj.DDir).String(), i)
+							if i > 1 {
+								file = fmt.Sprintf("%s/part.%d", file, i)
+								filemap[file] = make(map[string]string)
+								filemap[file][verID] = fmt.Sprintf("%s/part.%d/shard-%02d-of-%02d", verID, i, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
+								filemap[file][verID+".json"] = buf.String()
+							}
+							partDataToVerID[dataFile] = [2]string{file, verID}
+						}
+					} else if err != nil {
+						fmt.Println("Error:", err)
 					}
 					return nil
 				})
@@ -229,6 +259,14 @@ FLAGS:
 							return '_'
 						}
 					}, file)
+				}
+				if baseName == "" {
+					if strings.HasSuffix(file, "/xl.meta") {
+						baseName = strings.TrimSuffix(file, "/xl.meta")
+						if idx := strings.LastIndexByte(baseName, '/'); idx > 0 {
+							baseName = baseName[idx+1:]
+						}
+					}
 				}
 				err := data.files(func(name string, data []byte) {
 					fn := fmt.Sprintf("%s-%s.data", file, name)
@@ -334,7 +372,10 @@ FLAGS:
 					return err
 				}
 				for _, file := range zr.File {
-					if !file.FileInfo().IsDir() && strings.HasSuffix(file.Name, "xl.meta") {
+					if file.FileInfo().IsDir() {
+						continue
+					}
+					if strings.HasSuffix(file.Name, "xl.meta") {
 						r, err := file.Open()
 						if err != nil {
 							return err
@@ -352,6 +393,18 @@ FLAGS:
 							}
 						}
 						toPrint = append(toPrint, fmt.Sprintf("\t%s: %s", string(b), string(b2)))
+					} else if c.Bool("combine") && isPart.MatchString(file.Name) {
+						// name := isPart.FindString(file.Name)
+						name := strings.ReplaceAll(file.Name, ":", "_")
+						r, err := file.Open()
+						if err != nil {
+							return err
+						}
+						all, err := io.ReadAll(r)
+						if err != nil {
+							return err
+						}
+						foundData[name] = all
 					}
 				}
 			} else {
@@ -376,11 +429,56 @@ FLAGS:
 		}
 		sort.Strings(toPrint)
 		fmt.Printf("{\n%s\n}\n", strings.Join(toPrint, ",\n"))
+		if c.Bool("combine") {
+			for partName, data := range foundData {
+				if verid := partDataToVerID[partName]; verid != [2]string{} {
+					file := verid[0]
+					name := verid[1]
+					f := filemap[file][name]
+					fn := fmt.Sprintf("%s-%s.data", file, name)
+					if f != "" {
+						fn = f + ".data"
+						err := os.MkdirAll(filepath.Dir(fn), os.ModePerm)
+						if err != nil {
+							fmt.Println("MkdirAll:", filepath.Dir(fn), err)
+						}
+						err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
+						combineFiles[name] = append(combineFiles[name], fn)
+						if err != nil {
+							fmt.Println("WriteFile:", err)
+						}
+						err = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
+						if err != nil {
+							fmt.Println("combine WriteFile:", err)
+						}
+						fmt.Println("Remapped", partName, "to", fn)
+					}
+					delete(partDataToVerID, partName)
+					err := os.WriteFile(fn, data, os.ModePerm)
+					if err != nil {
+						fmt.Println("WriteFile:", err)
+					}
+				}
+			}
+			if len(partDataToVerID) > 0 {
+				fmt.Println("MISSING PART FILES:")
+				for k := range partDataToVerID {
+					fmt.Println(k)
+				}
+				fmt.Println("END MISSING PART FILES")
+			}
+		}
 
 		if len(combineFiles) > 0 {
-			for k, v := range combineFiles {
-				if err := combine(v, k); err != nil {
+			if c.Bool("xver") {
+				if err := combineCrossVer(combineFiles, baseName); err != nil {
 					fmt.Println("ERROR:", err)
+				}
+			} else {
+				for k, v := range combineFiles {
+					if err := combine(v, k+"-"+baseName); err != nil {
+						fmt.Println("ERROR:", err)
+					}
 				}
 			}
 		}
@@ -709,104 +807,157 @@ func (z xlMetaV2VersionHeaderV2) MarshalJSON() (o []byte, err error) {
 	return json.Marshal(tmp)
 }
 
-func combine(files []string, out string) error {
+type mappedData struct {
+	mapped, filled             []byte
+	size, shards, data, parity int
+	parityData                 map[int]map[int][]byte
+	blockOffset                int // Offset in bytes to start of block.
+	blocks                     int // 0 = one block.
+	objSize, partSize          int
+}
+
+func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
+	var m mappedData
 	sort.Strings(files)
-	var size, shards, data, parity int
-	mapped := make([]byte, size)
-	filled := make([]byte, size)
-	parityData := make(map[int]map[int][]byte)
-	fmt.Printf("Attempting to combine version %q.\n", out)
+	m.parityData = make(map[int]map[int][]byte)
 	for _, file := range files {
-		b, err := os.ReadFile(file)
-		if err != nil {
-			return err
-		}
 		meta, err := os.ReadFile(file + ".json")
 		if err != nil {
-			return err
+			return nil, err
 		}
 		type erasureInfo struct {
 			V2Obj *struct {
-				EcDist  []int
-				EcIndex int
-				EcM     int
-				EcN     int
-				Size    int
+				EcDist    []int
+				EcIndex   int
+				EcM       int
+				EcN       int
+				Size      int
+				EcBSize   int
+				PartNums  []int
+				PartSizes []int
 			}
 		}
 		var ei erasureInfo
 		var idx int
 		if err := json.Unmarshal(meta, &ei); err == nil && ei.V2Obj != nil {
-			if size == 0 {
-				size = ei.V2Obj.Size
-				mapped = make([]byte, size)
-				filled = make([]byte, size)
+			if m.objSize == 0 {
+				m.objSize = ei.V2Obj.Size
 			}
-			data = ei.V2Obj.EcM
-			parity = ei.V2Obj.EcN
-			if shards == 0 {
-				shards = data + parity
+			m.data = ei.V2Obj.EcM
+			m.parity = ei.V2Obj.EcN
+			if m.shards == 0 {
+				m.shards = m.data + m.parity
 			}
 			idx = ei.V2Obj.EcIndex - 1
-			fmt.Println("Read shard", ei.V2Obj.EcIndex, "Data shards", data, "Parity", parity, fmt.Sprintf("(%s)", file))
-			if ei.V2Obj.Size != size {
-				return fmt.Errorf("size mismatch. Meta size: %d", ei.V2Obj.Size)
+			fmt.Println("Read shard", ei.V2Obj.EcIndex, "Data shards", m.data, "Parity", m.parity, fmt.Sprintf("(%s)", file))
+			if ei.V2Obj.Size != m.objSize {
+				return nil, fmt.Errorf("size mismatch. Meta size: %d, Prev: %d", ei.V2Obj.Size, m.objSize)
+			}
+			for i, s := range ei.V2Obj.PartNums {
+				if s == partNum {
+					m.size = ei.V2Obj.PartSizes[i]
+					m.partSize = ei.V2Obj.PartSizes[i]
+					break
+				}
 			}
 		} else {
-			return err
+			return nil, err
+		}
+
+		offset := ei.V2Obj.EcBSize * blockNum
+		if offset >= m.size {
+			return nil, fmt.Errorf("block %d out of range. offset %d > size %d", blockNum, offset, m.size)
+		}
+		m.blockOffset = offset
+		m.blocks = (m.size + ei.V2Obj.EcBSize - 1) / ei.V2Obj.EcBSize
+		if m.blocks > 0 {
+			m.blocks--
+		}
+		if blockNum < m.blocks {
+			m.size = ei.V2Obj.EcBSize
+		} else {
+			m.size -= offset
+		}
+
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
 		}
 		if len(b) < 32 {
-			return fmt.Errorf("file %s too short", file)
+			return nil, fmt.Errorf("file %s too short", file)
 		}
-		// Trim hash. Fine for inline data, since only one block.
-		b = b[32:]
 
-		set := parityData[data]
+		// Extract block data.
+		ssz := shardSize(ei.V2Obj.EcBSize, ei.V2Obj.EcM)
+		b, err = bitrot(b, blockNum*ssz, ssz)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("Block data size:", m.size, "Shard size", ssz, "Got Shard:", len(b), "Bitrot ok")
+
+		if m.mapped == nil {
+			m.mapped = make([]byte, m.size)
+			m.filled = make([]byte, m.size)
+		}
+
+		set := m.parityData[m.data]
 		if set == nil {
 			set = make(map[int][]byte)
 		}
 		set[idx] = b
-		parityData[data] = set
+		m.parityData[m.data] = set
 
 		// Combine
 		start := len(b) * idx
-		if start >= len(mapped) {
+		if start >= len(m.mapped) {
 			continue
 		}
-		copy(mapped[start:], b)
+		copy(m.mapped[start:], b)
 		for j := range b {
-			if j+start >= len(filled) {
+			if j+start >= len(m.filled) {
 				break
 			}
-			filled[j+start] = 1
+			m.filled[j+start] = 1
 		}
 	}
+	return &m, nil
+}
 
+func combine(files []string, out string) error {
+	fmt.Printf("Attempting to combine version %q.\n", out)
+	m, err := readAndMap(files, 1, 0)
+	if err != nil {
+		return err
+	}
+	if m.blocks > 0 {
+		// TODO: Support multiple blocks. For now use -xver.
+		return fmt.Errorf("multiple blocks found, only one block supported. Try with -xver")
+	}
 	lastValid := 0
 	missing := 0
-	for i := range filled {
-		if filled[i] == 1 {
+	for i := range m.filled {
+		if m.filled[i] == 1 {
 			lastValid = i
 		} else {
 			missing++
 		}
 	}
-	if missing > 0 && len(parityData) > 0 {
+	if missing > 0 && len(m.parityData) > 0 {
 		fmt.Println("Attempting to reconstruct using parity sets:")
-		for k, v := range parityData {
+		for k, v := range m.parityData {
 			if missing == 0 {
 				break
 			}
-			fmt.Println("* Setup: Data shards:", k, "- Parity blocks:", len(v))
-			rs, err := reedsolomon.New(k, shards-k)
+			fmt.Println("* Setup: Data shards:", k, "- Parity blocks:", m.shards-k)
+			rs, err := reedsolomon.New(k, m.shards-k)
 			if err != nil {
 				return err
 			}
-			split, err := rs.Split(mapped)
+			split, err := rs.Split(m.mapped)
 			if err != nil {
 				return err
 			}
-			splitFilled, err := rs.Split(filled)
+			splitFilled, err := rs.Split(m.filled)
 			if err != nil {
 				return err
 			}
@@ -823,7 +974,7 @@ func combine(files []string, out string) error {
 			hasParity := 0
 			for idx, sh := range v {
 				split[idx] = sh
-				if idx >= k && len(v) > 0 {
+				if idx >= k && len(sh) > 0 {
 					hasParity++
 				}
 			}
@@ -833,9 +984,9 @@ func combine(files []string, out string) error {
 				fmt.Println("Could reconstruct completely")
 				for i, data := range split[:k] {
 					start := i * len(data)
-					copy(mapped[start:], data)
+					copy(m.mapped[start:], data)
 				}
-				lastValid = size - 1
+				lastValid = m.size - 1
 				missing = 0
 			} else {
 				fmt.Println("Could NOT reconstruct:", err)
@@ -846,16 +997,273 @@ func combine(files []string, out string) error {
 		return errors.New("no valid data found")
 	}
 	if missing > 0 {
-		out += ".truncated"
+		fmt.Println(missing, "bytes missing. Truncating", len(m.filled)-lastValid-1, "from end.")
+		out += ".incomplete"
 	} else {
+		fmt.Println("No bytes missing.")
 		out += ".complete"
 	}
-	fmt.Println(missing, "bytes missing. Truncating", len(filled)-lastValid-1, "from end.")
-	mapped = mapped[:lastValid+1]
-	err := os.WriteFile(out, mapped, os.ModePerm)
+	m.mapped = m.mapped[:lastValid+1]
+	err = os.WriteFile(out, m.mapped, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	fmt.Println("Wrote output to", out)
 	return nil
+}
+
+func combineCrossVer(all map[string][]string, baseName string) error {
+	names := make([][]string, 0)
+	/// part, verID, file
+	files := make([]map[string][]string, 0)
+	partNums := make(map[int]int)
+	for k, v := range all {
+		for _, file := range v {
+			part := getPartNum(file)
+			partIdx, ok := partNums[part]
+			if !ok {
+				partIdx = len(names)
+				partNums[part] = partIdx
+				names = append(names, nil)
+				files = append(files, make(map[string][]string))
+			}
+			names[partIdx] = append(names[partIdx], k)
+			files[partIdx][k] = append(files[partIdx][k], file)
+		}
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	for part, partIdx := range partNums {
+		if len(files[partIdx]) == 0 {
+			continue
+		}
+		exportedSizes := make(map[int]bool)
+	nextFile:
+		for key, file := range files[partIdx] {
+			fmt.Println("Reading base version", file[0], "part", part)
+			var combined []byte
+			var missingAll int
+			var lastValidAll int
+			for block := 0; ; block++ {
+				fmt.Printf("Block %d, Base version %q. Part %d. Files %d\n", block+1, key, part, len(file))
+				m, err := readAndMap(file, part, block)
+				if err != nil {
+					return err
+				}
+				if exportedSizes[m.objSize] {
+					fmt.Println("Skipping version", key, "as it has already been exported.")
+					continue nextFile
+				}
+			compareFile:
+				for otherKey, other := range files[partIdx] {
+					if key == otherKey {
+						continue
+					}
+					otherPart := getPartNum(other[0])
+					if part != otherPart {
+						fmt.Println("part ", part, " != other part", otherPart, other[0])
+						continue
+					}
+					// fmt.Println("part ", part, "other part", otherPart, other[0])
+					fmt.Printf("Reading version %q Part %d.\n", otherKey, otherPart)
+					// os.Exit(0)
+					otherM, err := readAndMap(other, part, block)
+					if err != nil {
+						fmt.Println(err)
+						continue
+					}
+					if m.objSize != otherM.objSize {
+						continue
+					}
+					var ok int
+					for i, filled := range otherM.filled[:m.size] {
+						if filled == 1 && m.filled[i] == 1 {
+							if m.mapped[i] != otherM.mapped[i] {
+								fmt.Println("Data mismatch at byte", i, "-  Disregarding version", otherKey)
+								continue compareFile
+							}
+							ok++
+						}
+					}
+
+					// If data+parity matches, combine.
+					if m.parity == otherM.parity && m.data == otherM.data {
+						for k, v := range m.parityData {
+							if otherM.parityData[k] == nil {
+								continue
+							}
+							for i, data := range v {
+								if data != nil || otherM.parityData[k][i] == nil {
+									continue
+								}
+								m.parityData[k][i] = otherM.parityData[k][i]
+							}
+						}
+					}
+
+					fmt.Printf("Data overlaps (%d bytes). Combining with %q.\n", ok, otherKey)
+					for i := range otherM.filled {
+						if otherM.filled[i] == 1 {
+							m.filled[i] = 1
+							m.mapped[i] = otherM.mapped[i]
+						}
+					}
+				}
+				lastValid := 0
+				missing := 0
+				for i := range m.filled {
+					if m.filled[i] == 1 {
+						lastValid = i
+					} else {
+						missing++
+					}
+				}
+				if missing > 0 && len(m.parityData) > 0 {
+					fmt.Println("Attempting to reconstruct using parity sets:")
+					for k, v := range m.parityData {
+						if missing == 0 {
+							break
+						}
+						fmt.Println("* Setup: Data shards:", k, "- Parity blocks:", m.shards-k)
+						rs, err := reedsolomon.New(k, m.shards-k)
+						if err != nil {
+							return err
+						}
+						split, err := rs.Split(m.mapped)
+						if err != nil {
+							return err
+						}
+						splitFilled, err := rs.Split(m.filled)
+						if err != nil {
+							return err
+						}
+						ok := len(splitFilled)
+						for i, sh := range splitFilled {
+							for _, v := range sh {
+								if v == 0 {
+									split[i] = nil
+									ok--
+									break
+								}
+							}
+						}
+						hasParity := 0
+						for idx, sh := range v {
+							split[idx] = sh
+							if idx >= k && len(sh) > 0 {
+								hasParity++
+							}
+						}
+						fmt.Printf("Have %d complete remapped data shards and %d complete parity shards. ", ok, hasParity)
+
+						if err := rs.ReconstructData(split); err == nil {
+							fmt.Println("Could reconstruct completely")
+							for i, data := range split[:k] {
+								start := i * len(data)
+								copy(m.mapped[start:], data)
+							}
+							lastValid = m.size - 1
+							missing = 0
+						} else {
+							fmt.Println("Could NOT reconstruct:", err)
+						}
+					}
+				}
+				if m.blockOffset != len(combined) {
+					return fmt.Errorf("Block offset mismatch. Expected %d got %d", m.blockOffset, len(combined))
+				}
+				combined = append(combined, m.mapped[:m.size]...)
+				missingAll += missing
+				if lastValid > 0 {
+					lastValidAll = lastValid + m.blockOffset
+				}
+				if m.blocks == block {
+					if len(combined) != m.partSize {
+						fmt.Println("Combined size mismatch. Expected", m.partSize, "got", len(combined))
+					}
+					fmt.Println("Reached block", block+1, "of", m.blocks+1, "for", key, ". Done.")
+					break
+				}
+			}
+			if lastValidAll == 0 {
+				return errors.New("no valid data found")
+			}
+			out := fmt.Sprintf("%s-%s.%05d", key, baseName, part)
+			if len(files) == 1 {
+				out = fmt.Sprintf("%s-%s", key, baseName)
+			}
+			if missingAll > 0 {
+				out += ".incomplete"
+				fmt.Println(missingAll, "bytes missing. Truncating", len(combined)-lastValidAll-1, "from end.")
+			} else {
+				out += ".complete"
+				fmt.Println("No bytes missing.")
+			}
+			if missingAll == 0 {
+				exportedSizes[len(combined)] = true
+			}
+			combined = combined[:lastValidAll+1]
+			err := os.WriteFile(out, combined, os.ModePerm)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Wrote output to", out)
+		}
+	}
+	return nil
+}
+
+// bitrot returns a shard beginning at startOffset after doing bitrot checks.
+func bitrot(val []byte, startOffset, shardSize int) ([]byte, error) {
+	var res []byte
+	for len(val) >= 32 {
+		want := val[:32]
+		data := val[32:]
+		if len(data) > shardSize {
+			data = data[:shardSize]
+		}
+
+		const magicHighwayHash256Key = "\x4b\xe7\x34\xfa\x8e\x23\x8a\xcd\x26\x3e\x83\xe6\xbb\x96\x85\x52\x04\x0f\x93\x5d\xa3\x9f\x44\x14\x97\xe0\x9d\x13\x22\xde\x36\xa0"
+
+		hh, _ := highwayhash.New([]byte(magicHighwayHash256Key))
+		hh.Write(data)
+		if !bytes.Equal(want, hh.Sum(nil)) {
+			return res, fmt.Errorf("bitrot detected")
+		}
+		res = append(res, data...)
+		val = val[32+len(data):]
+		if len(res) > startOffset {
+			return res[startOffset:], nil
+		}
+	}
+	return res, fmt.Errorf("bitrot: data too short to get block. len(res)=%d, startOffset=%d", len(res), startOffset)
+}
+
+// shardSize returns the shard size for a given block size and data blocks.
+func shardSize(blockSize, dataBlocks int) (sz int) {
+	if dataBlocks == 0 {
+		// do nothing on invalid input
+		return
+	}
+	// Make denominator positive
+	if dataBlocks < 0 {
+		blockSize = -blockSize
+		dataBlocks = -dataBlocks
+	}
+	sz = blockSize / dataBlocks
+	if blockSize > 0 && blockSize%dataBlocks != 0 {
+		sz++
+	}
+	return
+}
+
+var rePartNum = regexp.MustCompile("/part\\.([0-9]+)/")
+
+func getPartNum(s string) int {
+	if m := rePartNum.FindStringSubmatch(s); len(m) > 1 {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	return 1
 }

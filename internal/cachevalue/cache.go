@@ -92,7 +92,7 @@ func (t *Cache[T]) InitOnce(ttl time.Duration, opts Opts, update func(ctx contex
 // GetWithCtx will return a cached value or fetch a new one.
 // passes a caller context, if caller context cancels nothing
 // is cached.
-// Tf the Update function returns an error the value is forwarded as is and not cached.
+// If the Update function returns an error the value is forwarded as is and not cached.
 func (t *Cache[T]) GetWithCtx(ctx context.Context) (T, error) {
 	v := t.val.Load()
 	ttl := t.ttl

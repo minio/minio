@@ -29,7 +29,7 @@ import (
 	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 
 	"github.com/minio/minio/internal/auth"
 	levent "github.com/minio/minio/internal/config/lambda/event"
@@ -55,7 +55,7 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 		Creds:     credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:    secure,
 		Transport: globalRemoteTargetTransport,
-		Region:    globalSite.Region,
+		Region:    globalSite.Region(),
 	})
 	if err != nil {
 		return levent.Event{}, err

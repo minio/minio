@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 
+	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -15,7 +17,9 @@ func replLogOnceIf(ctx context.Context, err error, id string, errKind ...interfa
 }
 
 func iamLogIf(ctx context.Context, err error, errKind ...interface{}) {
-	logger.LogIf(ctx, "iam", err, errKind...)
+	if !errors.Is(err, grid.ErrDisconnected) {
+		logger.LogIf(ctx, "iam", err, errKind...)
+	}
 }
 
 func iamLogEvent(ctx context.Context, msg string, args ...interface{}) {
@@ -43,15 +47,21 @@ func authZLogIf(ctx context.Context, err error, errKind ...interface{}) {
 }
 
 func peersLogIf(ctx context.Context, err error, errKind ...interface{}) {
-	logger.LogIf(ctx, "peers", err, errKind...)
+	if !errors.Is(err, grid.ErrDisconnected) {
+		logger.LogIf(ctx, "peers", err, errKind...)
+	}
 }
 
 func peersLogAlwaysIf(ctx context.Context, err error, errKind ...interface{}) {
-	logger.LogAlwaysIf(ctx, "peers", err, errKind...)
+	if !errors.Is(err, grid.ErrDisconnected) {
+		logger.LogAlwaysIf(ctx, "peers", err, errKind...)
+	}
 }
 
 func peersLogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
-	logger.LogOnceIf(ctx, "peers", err, id, errKind...)
+	if !errors.Is(err, grid.ErrDisconnected) {
+		logger.LogOnceIf(ctx, "peers", err, id, errKind...)
+	}
 }
 
 func bugLogIf(ctx context.Context, err error, errKind ...interface{}) {

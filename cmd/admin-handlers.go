@@ -59,9 +59,9 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/logger/message/log"
-	xnet "github.com/minio/pkg/v2/net"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/logger/message/log"
+	xnet "github.com/minio/pkg/v3/net"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/secure-io/sio-go"
 	"github.com/zeebo/xxh3"
 )
@@ -1431,7 +1431,7 @@ func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmi
 
 	if globalIsDistErasure {
 		// Get heal status from other peers
-		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus()
+		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus(ctx)
 		var errCount int
 		for _, nerr := range nerrs {
 			if nerr.Err != nil {
@@ -2347,7 +2347,7 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 	notifyTarget := fetchLambdaInfo()
 
 	local := getLocalServerProperty(globalEndpoints, r, metrics)
-	servers := globalNotificationSys.ServerInfo(metrics)
+	servers := globalNotificationSys.ServerInfo(ctx, metrics)
 	servers = append(servers, local)
 
 	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
@@ -2416,7 +2416,7 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 	return madmin.InfoMessage{
 		Mode:          string(mode),
 		Domain:        domain,
-		Region:        globalSite.Region,
+		Region:        globalSite.Region(),
 		SQSARN:        globalEventNotifier.GetARNList(false),
 		DeploymentID:  globalDeploymentID(),
 		Buckets:       buckets,

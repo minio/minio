@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/minio/minio/internal/bucket/object/lock"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -35,6 +36,7 @@ var (
 	errLifecycleNoRule       = Errorf("Lifecycle configuration should have at least one rule")
 	errLifecycleDuplicateID  = Errorf("Rule ID must be unique. Found same ID for more than one rule")
 	errXMLNotWellFormed      = Errorf("The XML you provided was not well-formed or did not validate against our published schema")
+	errLifecycleBucketLocked = Errorf("ExpiredObjectAllVersions element and DelMarkerExpiration action cannot be used on an object locked bucket")
 )
 
 const (
@@ -236,7 +238,7 @@ func ParseLifecycleConfig(reader io.Reader) (*Lifecycle, error) {
 }
 
 // Validate - validates the lifecycle configuration
-func (lc Lifecycle) Validate() error {
+func (lc Lifecycle) Validate(lr lock.Retention) error {
 	// Lifecycle config can't have more than 1000 rules
 	if len(lc.Rules) > 1000 {
 		return errLifecycleTooManyRules
@@ -250,6 +252,9 @@ func (lc Lifecycle) Validate() error {
 	for _, r := range lc.Rules {
 		if err := r.Validate(); err != nil {
 			return err
+		}
+		if lr.LockEnabled && (r.Expiration.DeleteAll.val || !r.DelMarkerExpiration.Empty()) {
+			return errLifecycleBucketLocked
 		}
 	}
 	// Make sure Rule ID is unique

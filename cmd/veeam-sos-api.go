@@ -22,8 +22,11 @@ import (
 	"context"
 	"encoding/xml"
 	"io"
+	"os"
+	"strings"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/logger"
 )
 
 // From Veeam-SOSAPI_1.0_Document_v1.02d.pdf
@@ -83,6 +86,11 @@ type apiEndpoints struct {
 	STSEndpoint string `xml:"STSEndpoint"`
 }
 
+// globalVeeamForceSC is set by the environment variable _MINIO_VEEAM_FORCE_SC
+// This will override the storage class returned by the storage backend if it is non-standard
+// and we detect a Veeam client by checking the User Agent.
+var globalVeeamForceSC = os.Getenv("_MINIO_VEEAM_FORCE_SC")
+
 type systemInfo struct {
 	XMLName              xml.Name `xml:"SystemInfo" json:"-"`
 	ProtocolVersion      string   `xml:"ProtocolVersion"`
@@ -115,6 +123,7 @@ type capacityInfo struct {
 const (
 	systemXMLObject   = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/system.xml"
 	capacityXMLObject = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml"
+	veeamAgentSubstr  = "APN/1.0 Veeam/1.0"
 )
 
 func isVeeamSOSAPIObject(object string) bool {
@@ -124,6 +133,12 @@ func isVeeamSOSAPIObject(object string) bool {
 	default:
 		return false
 	}
+}
+
+// isVeeamClient - returns true if the request is from Veeam client.
+func isVeeamClient(ctx context.Context) bool {
+	ri := logger.GetReqInfo(ctx)
+	return ri != nil && strings.Contains(ri.UserAgent, veeamAgentSubstr)
 }
 
 func veeamSOSAPIHeadObject(ctx context.Context, bucket, object string, opts ObjectOptions) (ObjectInfo, error) {

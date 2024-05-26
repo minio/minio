@@ -40,7 +40,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/s3select"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 	"github.com/zeebo/xxh3"
 )
 
@@ -663,11 +663,12 @@ func genTransitionObjName(bucket string) (string, error) {
 // is moved to the transition tier. Note that in the case of encrypted objects, entire encrypted stream is moved
 // to the transition tier without decrypting or re-encrypting.
 func transitionObject(ctx context.Context, objectAPI ObjectLayer, oi ObjectInfo, lae lcAuditEvent) (err error) {
+	timeILM := globalScannerMetrics.timeILM(lae.Action)
 	defer func() {
 		if err != nil {
 			return
 		}
-		globalScannerMetrics.timeILM(lae.Action)(1)
+		timeILM(1)
 	}()
 
 	opts := ObjectOptions{

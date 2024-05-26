@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // Validate all the ListObjects query arguments, returns an APIErrorCode
@@ -124,7 +124,7 @@ func (api objectAPIHandlers) listObjectVersionsHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	response := generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo, checkObjMeta)
+	response := generateListVersionsResponse(ctx, bucket, prefix, marker, versionIDMarker, delimiter, encodingType, maxkeys, listObjectVersionsInfo, checkObjMeta)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponseList(response))
@@ -219,7 +219,7 @@ func (api objectAPIHandlers) listObjectsV2Handler(ctx context.Context, w http.Re
 		return
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter,
+	response := generateListObjectsV2Response(ctx, bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter,
 		delimiter, encodingType, fetchOwner, listObjectsV2Info.IsTruncated,
 		maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes, checkObjMeta)
 
@@ -318,7 +318,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType, maxKeys, listObjectsInfo)
+	response := generateListObjectsV1Response(ctx, bucket, prefix, marker, delimiter, encodingType, maxKeys, listObjectsInfo)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponseList(response))

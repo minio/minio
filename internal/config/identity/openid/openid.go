@@ -36,9 +36,9 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	"github.com/minio/minio/internal/hash/sha256"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // OpenID keys and envs.
@@ -509,13 +509,11 @@ func (r *Config) GetSettings() madmin.OpenIDSettings {
 		return res
 	}
 	h := sha256.New()
+	hashedSecret := ""
 	for arn, provCfg := range r.arnProviderCfgsMap {
-		hashedSecret := ""
-		{
-			h.Reset()
-			h.Write([]byte(provCfg.ClientSecret))
-			hashedSecret = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
-		}
+		h.Write([]byte(provCfg.ClientSecret))
+		hashedSecret = base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+		h.Reset()
 		if arn != DummyRoleARN {
 			if res.Roles == nil {
 				res.Roles = make(map[string]madmin.OpenIDProviderSettings)

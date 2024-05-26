@@ -24,7 +24,7 @@ import (
 	consoleapi "github.com/minio/console/api"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/wildcard"
 	"github.com/rs/cors"
 )
 
@@ -64,7 +64,7 @@ func setObjectLayer(o ObjectLayer) {
 	globalObjLayerMutex.Unlock()
 }
 
-// objectAPIHandler implements and provides http handlers for S3 API.
+// objectAPIHandlers implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 }

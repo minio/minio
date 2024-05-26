@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 
 	"github.com/IBM/sarama"
 	saramatls "github.com/IBM/sarama/tools/tls"

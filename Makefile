@@ -57,12 +57,17 @@ test-ilm: install-race
 	@echo "Running ILM tests"
 	@env bash $(PWD)/docs/bucket/replication/setup_ilm_expiry_replication.sh
 
+test-pbac: install-race
+	@echo "Running bucket policies tests"
+	@env bash $(PWD)/docs/iam/policies/pbac-tests.sh
+
 test-decom: install-race
 	@echo "Running minio decom tests"
 	@env bash $(PWD)/docs/distributed/decom.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted.sh
 	@env bash $(PWD)/docs/distributed/decom-encrypted-sse-s3.sh
 	@env bash $(PWD)/docs/distributed/decom-compressed-sse-s3.sh
+	@env bash $(PWD)/docs/distributed/decom-encrypted-kes.sh
 
 test-versioning: install-race
 	@echo "Running minio versioning tests"

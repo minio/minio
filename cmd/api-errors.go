@@ -48,7 +48,7 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // APIError structure
@@ -458,9 +458,9 @@ func (e errorCodeMap) ToAPIErrWithErr(errCode APIErrorCode, err error) APIError 
 	if err != nil {
 		apiErr.Description = fmt.Sprintf("%s (%s)", apiErr.Description, err)
 	}
-	if globalSite.Region != "" {
+	if region := globalSite.Region(); region != "" {
 		if errCode == ErrAuthorizationHeaderMalformed {
-			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
+			apiErr.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", region)
 			return apiErr
 		}
 	}
@@ -2595,7 +2595,7 @@ func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID,
 		BucketName:       reqInfo.BucketName,
 		Key:              reqInfo.ObjectName,
 		Resource:         resource,
-		Region:           globalSite.Region,
+		Region:           globalSite.Region(),
 		RequestID:        requestID,
 		HostID:           hostID,
 		ActualObjectSize: err.ObjectSize,

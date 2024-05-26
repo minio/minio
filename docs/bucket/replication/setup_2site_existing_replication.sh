@@ -56,10 +56,11 @@ minio server --address 127.0.0.1:9003 "http://127.0.0.1:9003/tmp/multisiteb/data
 minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
 	"http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
 
-sleep 10s
-
 export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
 export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
+
+./mc ready sitea
+./mc ready siteb
 
 ./mc mb sitea/bucket
 

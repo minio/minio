@@ -30,7 +30,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/minio/pkg/v2/ellipses"
+	"github.com/minio/pkg/v3/ellipses"
 )
 
 type xl struct {

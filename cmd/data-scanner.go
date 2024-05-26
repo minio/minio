@@ -43,7 +43,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v3/console"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -53,7 +53,7 @@ const (
 	dataScannerCompactLeastObject    = 500                              // Compact when there is less than this many objects in a branch.
 	dataScannerCompactAtChildren     = 10000                            // Compact when there are this many children in a branch.
 	dataScannerCompactAtFolders      = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
-	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
+	dataScannerForceCompactAtFolders = 250_000                          // Compact when this many subfolders in a single folder (even top level).
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling   = true
@@ -349,6 +349,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		// No useful information...
 		return cache, err
 	}
+	s.newCache.forceCompact(dataScannerCompactAtChildren)
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
@@ -1239,29 +1240,22 @@ func applyTransitionRule(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) 
 	return true
 }
 
-func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) bool {
-	var err error
-	defer func() {
-		if err != nil {
-			return
-		}
-		// Note: DeleteAllVersions action is not supported for
-		// transitioned objects
-		globalScannerMetrics.timeILM(lcEvent.Action)(1)
-	}()
-
-	if err = expireTransitionedObject(ctx, objLayer, &obj, lcEvent, src); err != nil {
+func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) (ok bool) {
+	timeILM := globalScannerMetrics.timeILM(lcEvent.Action)
+	if err := expireTransitionedObject(ctx, objLayer, &obj, lcEvent, src); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
 		ilmLogIf(ctx, err)
 		return false
 	}
+	timeILM(1)
+
 	// Notification already sent in *expireTransitionedObject*, just return 'true' here.
 	return true
 }
 
-func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) bool {
+func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) (ok bool) {
 	traceFn := globalLifecycleSys.trace(obj)
 	opts := ObjectOptions{
 		Expiration: ExpirationOptions{Expire: true},
@@ -1283,8 +1277,10 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		dobj ObjectInfo
 		err  error
 	)
+
+	timeILM := globalScannerMetrics.timeILM(lcEvent.Action)
 	defer func() {
-		if err != nil {
+		if !ok {
 			return
 		}
 
@@ -1293,7 +1289,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			if lcEvent.Action.DeleteAll() {
 				numVersions = uint64(obj.NumVersions)
 			}
-			globalScannerMetrics.timeILM(lcEvent.Action)(numVersions)
+			timeILM(numVersions)
 		}
 	}()
 

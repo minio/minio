@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 // Object was stored with additional erasure codes due to degraded system at upload time
@@ -344,9 +344,14 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		return FileInfo{}, InsufficientReadQuorum{Err: errErasureReadQuorum, Type: RQInconsistentMeta}
 	}
 
-	// Find the successor mod time in quorum, otherwise leave the
-	// candidate's successor modTime as found
-	succModTimeMap := make(map[time.Time]int)
+	// objProps represents properties that go beyond a single version
+	type objProps struct {
+		succModTime time.Time
+		numVersions int
+	}
+	// Find the successor mod time and numVersions in quorum, otherwise leave the
+	// candidate as found
+	otherPropsMap := make(counterMap[objProps])
 	var candidate FileInfo
 	var found bool
 	for i, hash := range metaHashes {
@@ -356,24 +361,21 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 					candidate = metaArr[i]
 					found = true
 				}
-				succModTimeMap[metaArr[i].SuccessorModTime]++
+				props := objProps{
+					succModTime: metaArr[i].SuccessorModTime,
+					numVersions: metaArr[i].NumVersions,
+				}
+				otherPropsMap[props]++
 			}
-		}
-	}
-	var succModTime time.Time
-	var smodTimeQuorum bool
-	for smodTime, count := range succModTimeMap {
-		if count >= quorum {
-			smodTimeQuorum = true
-			succModTime = smodTime
-			break
 		}
 	}
 
 	if found {
-		if smodTimeQuorum {
-			candidate.SuccessorModTime = succModTime
-			candidate.IsLatest = succModTime.IsZero()
+		// Update candidate FileInfo with succModTime and numVersions in quorum when available
+		if props, ok := otherPropsMap.GetValueWithQuorum(quorum); ok {
+			candidate.SuccessorModTime = props.succModTime
+			candidate.IsLatest = props.succModTime.IsZero()
+			candidate.NumVersions = props.numVersions
 		}
 		return candidate, nil
 	}

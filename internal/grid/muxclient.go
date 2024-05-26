@@ -331,6 +331,7 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 			if !ok {
 				return
 			}
+		sendResp:
 			select {
 			case respHandler <- resp:
 				m.respMu.Lock()
@@ -341,16 +342,47 @@ func (m *muxClient) handleOneWayStream(respHandler chan<- Response, respServer <
 			case <-m.ctx.Done():
 				// Client canceled. Don't block.
 				// Next loop will catch it.
+			case <-pingTimer:
+				if !m.doPing(respHandler) {
+					return
+				}
+				goto sendResp
 			}
 		case <-pingTimer:
-			if time.Since(time.Unix(atomic.LoadInt64(&m.LastPong), 0)) > clientPingInterval*2 {
-				m.addErrorNonBlockingClose(respHandler, ErrDisconnected)
+			if !m.doPing(respHandler) {
 				return
 			}
-			// Send new ping.
-			gridLogIf(m.ctx, m.send(message{Op: OpPing, MuxID: m.MuxID}))
 		}
 	}
+}
+
+// doPing checks last ping time and sends another ping.
+func (m *muxClient) doPing(respHandler chan<- Response) (ok bool) {
+	m.respMu.Lock()
+	if m.closed {
+		m.respMu.Unlock()
+		// Already closed. This is not an error state;
+		// we may just be delivering the last responses.
+		return true
+	}
+
+	// Only check ping when not closed.
+	if got := time.Since(time.Unix(atomic.LoadInt64(&m.LastPong), 0)); got > clientPingInterval*2 {
+		m.respMu.Unlock()
+		if debugPrint {
+			fmt.Printf("Mux %d: last pong %v ago, disconnecting\n", m.MuxID, got)
+		}
+		m.addErrorNonBlockingClose(respHandler, ErrDisconnected)
+		return false
+	}
+
+	// Send new ping
+	err := m.sendLocked(message{Op: OpPing, MuxID: m.MuxID})
+	m.respMu.Unlock()
+	if err != nil {
+		m.addErrorNonBlockingClose(respHandler, err)
+	}
+	return err == nil
 }
 
 // responseCh is the channel to that goes to the requester.

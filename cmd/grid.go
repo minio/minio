@@ -36,8 +36,12 @@ var globalGridStart = make(chan struct{})
 
 func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 	hosts, local := eps.GridHosts()
+	lookupHost := globalDNSCache.LookupHost
 	g, err := grid.NewManager(ctx, grid.ManagerOptions{
-		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(globalDNSCache.LookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions))),
+		// Pass Dialer for websocket grid, make sure we do not
+		// provide any DriveOPTimeout() function, as that is not
+		// useful over persistent connections.
+		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions.ForWebsocket()))),
 		Local:        local,
 		Hosts:        hosts,
 		AddAuth:      newCachedAuthToken(),
