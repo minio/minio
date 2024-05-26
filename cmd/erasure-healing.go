@@ -412,7 +412,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	if !latestMeta.XLV1 && !latestMeta.Deleted && disksToHealCount > latestMeta.Erasure.ParityBlocks {
 		// Allow for dangling deletes, on versions that have DataDir missing etc.
 		// this would end up restoring the correct readable versions.
-		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, nil, ObjectOptions{
+		m, err := er.deleteIfDangling(ctx, bucket, object, partsMetadata, errs, dataErrs, ObjectOptions{
 			VersionID: versionID,
 		})
 		errs = make([]error, len(errs))
