@@ -1415,6 +1415,16 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	if formValues.Get(xhttp.AmzObjectTagging) != "" {
+		tags, err := tags.ParseObjectXML(strings.NewReader(formValues.Get(xhttp.AmzObjectTagging)))
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		tagsStr := tags.String()
+		opts.UserDefined[xhttp.AmzObjectTagging] = tagsStr
+	}
+
 	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
