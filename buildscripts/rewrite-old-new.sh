@@ -45,7 +45,8 @@ function verify_rewrite() {
 	"${MINIO_OLD[@]}" --address ":$start_port" "${WORK_DIR}/xl{1...16}" >"${WORK_DIR}/server1.log" 2>&1 &
 	pid=$!
 	disown $pid
-	sleep 10
+
+	"${WORK_DIR}/mc" ready minio/
 
 	if ! ps -p ${pid} 1>&2 >/dev/null; then
 		echo "server1 log:"
@@ -77,7 +78,8 @@ function verify_rewrite() {
 	"${MINIO[@]}" --address ":$start_port" "${WORK_DIR}/xl{1...16}" >"${WORK_DIR}/server1.log" 2>&1 &
 	pid=$!
 	disown $pid
-	sleep 10
+
+	"${WORK_DIR}/mc" ready minio/
 
 	if ! ps -p ${pid} 1>&2 >/dev/null; then
 		echo "server1 log:"
@@ -87,14 +89,12 @@ function verify_rewrite() {
 		exit 1
 	fi
 
-	go install -v github.com/minio/minio/docs/debugging/s3-check-md5@latest
-
-	if ! s3-check-md5 \
+	if ! ./s3-check-md5 \
 		-debug \
 		-versions \
 		-access-key minio \
 		-secret-key minio123 \
-		-endpoint http://127.0.0.1:${start_port}/ 2>&1 | grep INTACT; then
+		-endpoint "http://127.0.0.1:${start_port}/" 2>&1 | grep INTACT; then
 		echo "server1 log:"
 		cat "${WORK_DIR}/server1.log"
 		echo "FAILED"
@@ -114,7 +114,7 @@ function verify_rewrite() {
 	go run ./buildscripts/heal-manual.go "127.0.0.1:${start_port}" "minio" "minio123"
 	sleep 1
 
-	if ! s3-check-md5 \
+	if ! ./s3-check-md5 \
 		-debug \
 		-versions \
 		-access-key minio \

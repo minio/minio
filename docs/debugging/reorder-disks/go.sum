@@ -1,2 +1,2 @@
-github.com/minio/pkg/v2 v2.0.6 h1:n+PpbSMaJK1FfQkP55l1y0wj5Hi9R5w2DtGhxiGdP9I=
-github.com/minio/pkg/v2 v2.0.6/go.mod h1:Z9Z/LzhTIxZ6zhPeW658vmLRilRek3zBOqNB9j+lxSY=
+github.com/minio/pkg/v3 v3.0.1 h1:qts6g9rYjAdeomRdwjnMc1IaQ6KbaJs3dwqBntXziaw=
+github.com/minio/pkg/v3 v3.0.1/go.mod h1:53gkSUVHcfYoskOs5YAJ3D99nsd2SKru90rdE9whlXU=
