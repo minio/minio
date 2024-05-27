@@ -132,16 +132,17 @@ func sshPasswordAuth(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) 
 }
 
 func authenticateSSHConnection(c ssh.ConnMetadata, key ssh.PublicKey, pass []byte) (*ssh.Permissions, error) {
-	var user string
-	if strings.HasSuffix(c.User(), "=ldap") {
-		user = strings.Replace(c.User(), "=ldap", "", -1)
+	user, found := strings.CutSuffix(c.User(), "=ldap")
+	if found {
 		return processLDAPAuthentication(key, pass, user)
-	} else if strings.HasSuffix(c.User(), "=svc") {
-		user = strings.Replace(c.User(), "=svc", "", -1)
-		goto internalAuth
-	} else {
-		user = c.User()
 	}
+
+	user, found = strings.CutSuffix(c.User(), "=svc")
+	if found {
+		goto internalAuth
+	}
+
+	user = c.User()
 
 	if globalIAMSys.LDAPConfig.Enabled() {
 		perms, _ := processLDAPAuthentication(key, pass, user)
