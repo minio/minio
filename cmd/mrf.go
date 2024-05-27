@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -62,14 +63,13 @@ type PartialOperation struct {
 type mrfState struct {
 	opCh chan PartialOperation
 
-	closing   chan struct{}
-	closeOnce sync.Once
+	closing int32
+	wg      sync.WaitGroup
 }
 
 func newMRFState() mrfState {
 	return mrfState{
-		opCh:    make(chan PartialOperation, mrfOpsQueueSize),
-		closing: make(chan struct{}),
+		opCh: make(chan PartialOperation, mrfOpsQueueSize),
 	}
 }
 
@@ -79,11 +79,14 @@ func (m *mrfState) addPartialOp(op PartialOperation) {
 		return
 	}
 
+	m.wg.Add(1)
+	defer m.wg.Done()
+
+	if atomic.LoadInt32(&m.closing) == 1 {
+		return
+	}
+
 	select {
-	case <-m.closing:
-		m.closeOnce.Do(func() {
-			close(m.opCh)
-		})
 	case m.opCh <- op:
 	default:
 	}
@@ -92,7 +95,11 @@ func (m *mrfState) addPartialOp(op PartialOperation) {
 // Do not accept new MRF operations anymore and start to save
 // the current heal status in one available disk
 func (m *mrfState) shutdown() {
-	close(m.closing)
+	atomic.StoreInt32(&m.closing, 1)
+
+	m.wg.Wait()
+
+	close(m.opCh)
 
 	if len(m.opCh) > 0 {
 		healingLogEvent(context.Background(), "Saving MRF healing data (%d entries)", len(m.opCh))
