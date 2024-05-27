@@ -200,7 +200,7 @@ require (
 	github.com/minio/filepath v1.0.0 // indirect
 	github.com/minio/mc v0.0.0-20240430174448-dcb911bed9d5 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/minio/pkg/v2 v2.0.17 // indirect
+	github.com/minio/pkg/v2 v2.0.19 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
