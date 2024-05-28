@@ -301,8 +301,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// LDAP specific service accounts ops
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp/ldap/add-service-account").HandlerFunc(adminMiddleware(adminAPI.AddServiceAccountLDAP))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/ldap/list-access-keys").
-			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).
-			Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/ldap/list-access-keys-v2").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAPv2)).Queries("listType", "{listType:.*}")
 
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(adminMiddleware(adminAPI.ListLDAPPolicyMappingEntities))
