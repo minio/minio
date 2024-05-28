@@ -67,6 +67,12 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         UserDNAttributes,
+			Description: `"," separated list of user DN attributes e.g. "uid,cn,mail,sshPublicKey"` + defaultHelpPostfix(UserDNAttributes),
+			Optional:    true,
+			Type:        "list",
+		},
+		config.HelpKV{
 			Key:         GroupSearchFilter,
 			Description: `search filter for groups e.g. "(&(objectclass=groupOfNames)(memberUid=%s))"` + defaultHelpPostfix(GroupSearchFilter),
 			Optional:    true,

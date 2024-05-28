@@ -238,10 +238,8 @@ if [ $ret -ne 0 ]; then
 	exit 1
 fi
 
-go install -v github.com/minio/minio/docs/debugging/s3-check-md5@latest
-
-s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned
-s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned-1
+./s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned
+./s3-check-md5 -versions -access-key minioadmin -secret-key minioadmin -endpoint http://127.0.0.1:9001/ -bucket versioned-1
 
 kill $pid
 kill $kes_pid

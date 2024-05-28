@@ -43,8 +43,8 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/sync/errgroup"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/pkg/v3/wildcard"
 )
 
 type erasureServerPools struct {
@@ -1647,12 +1647,17 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 						}
 					}
 				}
-				if o.DeleteMarker {
+				switch {
+				case o.DeleteMarker:
 					loi.Objects = append(loi.Objects, ObjectInfo{Bucket: bucket, IsDir: true, Name: prefix})
 					return loi, nil
-				} else if len(li.Objects) == 1 {
+				case len(li.Objects) >= 1:
 					loi.Objects = append(loi.Objects, o)
-					loi.Prefixes = append(loi.Prefixes, path.Join(opts.Prefix, pfx))
+					if pfx != "" {
+						loi.Prefixes = append(loi.Prefixes, path.Join(opts.Prefix, pfx))
+					}
+				case len(li.Prefixes) > 0:
+					loi.Prefixes = append(loi.Prefixes, li.Prefixes...)
 				}
 			}
 			return loi, nil
@@ -2472,16 +2477,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for _, disk := range storageInfo.Disks {
 		if opts.Maintenance {
-			var skip bool
 			globalLocalDrivesMu.RLock()
-			for _, drive := range globalLocalDrives {
-				if drive != nil && drive.Endpoint().String() == disk.Endpoint {
-					skip = true
-					break
-				}
-			}
+			_, ok := globalLocalDrivesMap[disk.Endpoint]
 			globalLocalDrivesMu.RUnlock()
-			if skip {
+			if ok {
 				continue
 			}
 		}

@@ -25,7 +25,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/v2/ldap"
+	"github.com/minio/pkg/v3/ldap"
 )
 
 const (
@@ -67,6 +67,7 @@ const (
 	LookupBindPassword = "lookup_bind_password"
 	UserDNSearchBaseDN = "user_dn_search_base_dn"
 	UserDNSearchFilter = "user_dn_search_filter"
+	UserDNAttributes   = "user_dn_attributes"
 	GroupSearchFilter  = "group_search_filter"
 	GroupSearchBaseDN  = "group_search_base_dn"
 	TLSSkipVerify      = "tls_skip_verify"
@@ -81,6 +82,7 @@ const (
 	EnvUsernameFormat     = "MINIO_IDENTITY_LDAP_USERNAME_FORMAT"
 	EnvUserDNSearchBaseDN = "MINIO_IDENTITY_LDAP_USER_DN_SEARCH_BASE_DN"
 	EnvUserDNSearchFilter = "MINIO_IDENTITY_LDAP_USER_DN_SEARCH_FILTER"
+	EnvUserDNAttributes   = "MINIO_IDENTITY_LDAP_USER_DN_ATTRIBUTES"
 	EnvGroupSearchFilter  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_FILTER"
 	EnvGroupSearchBaseDN  = "MINIO_IDENTITY_LDAP_GROUP_SEARCH_BASE_DN"
 	EnvLookupBindDN       = "MINIO_IDENTITY_LDAP_LOOKUP_BIND_DN"
@@ -116,6 +118,10 @@ var (
 		},
 		config.KV{
 			Key:   UserDNSearchFilter,
+			Value: "",
+		},
+		config.KV{
+			Key:   UserDNAttributes,
 			Value: "",
 		},
 		config.KV{
@@ -227,6 +233,7 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	// User DN search configuration
 	l.LDAP.UserDNSearchFilter = getCfgVal(UserDNSearchFilter)
 	l.LDAP.UserDNSearchBaseDistName = getCfgVal(UserDNSearchBaseDN)
+	l.LDAP.UserDNAttributes = getCfgVal(UserDNAttributes)
 
 	// Group search params configuration
 	l.LDAP.GroupSearchFilter = getCfgVal(GroupSearchFilter)

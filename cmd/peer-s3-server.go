@@ -22,7 +22,7 @@ import (
 	"errors"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 const (

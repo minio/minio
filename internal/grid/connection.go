@@ -42,6 +42,7 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
+	xnet "github.com/minio/pkg/v3/net"
 	"github.com/puzpuzpuz/xsync/v3"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
@@ -678,9 +679,8 @@ func (c *Connection) connect() {
 				return
 			}
 			if gotState != StateConnecting {
-				// Don't print error on first attempt,
-				// and after that only once per hour.
-				gridLogOnceIf(c.ctx, fmt.Errorf("grid: %s connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), toDial)
+				// Don't print error on first attempt, and after that only once per hour.
+				gridLogOnceIf(c.ctx, fmt.Errorf("grid: %s re-connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), toDial)
 			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
@@ -973,7 +973,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
 				cancel(ErrDisconnected)
-				gridLogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
+				if !xnet.IsNetworkOrHostDown(err, true) {
+					gridLogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
+				}
 				return
 			}
 			block := c.blockMessages.Load()
@@ -989,7 +991,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			var m message
 			subID, remain, err := m.parse(msg)
 			if err != nil {
-				gridLogIf(ctx, fmt.Errorf("ws parse package: %w", err))
+				if !xnet.IsNetworkOrHostDown(err, true) {
+					gridLogIf(ctx, fmt.Errorf("ws parse package: %w", err))
+				}
 				cancel(ErrDisconnected)
 				return
 			}
@@ -1010,7 +1014,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				var next []byte
 				next, remain, err = msgp.ReadBytesZC(remain)
 				if err != nil {
-					gridLogIf(ctx, fmt.Errorf("ws read merged: %w", err))
+					if !xnet.IsNetworkOrHostDown(err, true) {
+						gridLogIf(ctx, fmt.Errorf("ws read merged: %w", err))
+					}
 					cancel(ErrDisconnected)
 					return
 				}
@@ -1018,7 +1024,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				m.Payload = nil
 				subID, _, err = m.parse(next)
 				if err != nil {
-					gridLogIf(ctx, fmt.Errorf("ws parse merged: %w", err))
+					if !xnet.IsNetworkOrHostDown(err, true) {
+						gridLogIf(ctx, fmt.Errorf("ws parse merged: %w", err))
+					}
 					cancel(ErrDisconnected)
 					return
 				}
@@ -1125,18 +1133,24 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			buf.Reset()
 			err := wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 			if err != nil {
-				gridLogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
+				if !xnet.IsNetworkOrHostDown(err, true) {
+					gridLogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
+				}
 				return
 			}
 			PutByteBuffer(toSend)
+
 			err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
 			if err != nil {
 				gridLogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
 				return
 			}
+
 			_, err = buf.WriteTo(conn)
 			if err != nil {
-				gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
+				if !xnet.IsNetworkOrHostDown(err, true) {
+					gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
+				}
 				return
 			}
 			continue
@@ -1169,18 +1183,24 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		buf.Reset()
 		err = wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 		if err != nil {
-			gridLogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
+			if !xnet.IsNetworkOrHostDown(err, true) {
+				gridLogIf(ctx, fmt.Errorf("ws writeMessage: %w", err))
+			}
 			return
 		}
-		// buf is our local buffer, so we can reuse it.
+
 		err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
 		if err != nil {
 			gridLogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
 			return
 		}
+
+		// buf is our local buffer, so we can reuse it.
 		_, err = buf.WriteTo(conn)
 		if err != nil {
-			gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
+			if !xnet.IsNetworkOrHostDown(err, true) {
+				gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
+			}
 			return
 		}
 

@@ -55,10 +55,10 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/term"
 )
 
@@ -404,20 +404,13 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 
 	ctxt.FTP = ctx.StringSlice("ftp")
 	ctxt.SFTP = ctx.StringSlice("sftp")
-
 	ctxt.Interface = ctx.String("interface")
 	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
-	ctxt.ConnReadDeadline = ctx.Duration("conn-read-deadline")
-	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
-	ctxt.ConnClientReadDeadline = ctx.Duration("conn-client-read-deadline")
-	ctxt.ConnClientWriteDeadline = ctx.Duration("conn-client-write-deadline")
 	ctxt.SendBufSize = ctx.Int("send-buf-size")
 	ctxt.RecvBufSize = ctx.Int("recv-buf-size")
-
-	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
-	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
-	ctxt.MaxIdleConnsPerHost = ctx.Int("max-idle-conns-per-host")
+	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
+	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)

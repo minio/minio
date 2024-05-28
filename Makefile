@@ -45,7 +45,7 @@ lint-fix: getdeps ## runs golangci-lint suite of linters with automatic fixes
 	@$(GOLANGCI) run --build-tags kqueue --timeout=10m --config ./.golangci.yml --fix
 
 check: test
-test: verifiers build build-debugging ## builds minio, runs linters, tests
+test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
 	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -v -tags kqueue ./...
 
@@ -127,37 +127,32 @@ test-site-replication-minio: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of SSE-C objects with compression enabled for site"
 	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication-with-compression.sh)
 
-verify: ## verify minio various setups
+verify: install-race ## verify minio various setups
 	@echo "Verifying build with race"
-	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
-verify-healing: ## verify healing and replacing disks with minio binary
+verify-healing: install-race ## verify healing and replacing disks with minio binary
 	@echo "Verify healing build with race"
-	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing.sh)
 	@(env bash $(PWD)/buildscripts/verify-healing-empty-erasure-set.sh)
 	@(env bash $(PWD)/buildscripts/heal-inconsistent-versions.sh)
 
-verify-healing-with-root-disks: ## verify healing root disks
+verify-healing-with-root-disks: install-race ## verify healing root disks
 	@echo "Verify healing with root drives"
-	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/verify-healing-with-root-disks.sh)
 
-verify-healing-with-rewrite: ## verify healing to rewrite old xl.meta -> new xl.meta
+verify-healing-with-rewrite: install-race ## verify healing to rewrite old xl.meta -> new xl.meta
 	@echo "Verify healing with rewrite"
-	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/rewrite-old-new.sh)
 
-verify-healing-inconsistent-versions: ## verify resolving inconsistent versions
+verify-healing-inconsistent-versions: install-race ## verify resolving inconsistent versions
 	@echo "Verify resolving inconsistent versions build with race"
-	@GORACE=history_size=7 CGO_ENABLED=1 go build -race -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@(env bash $(PWD)/buildscripts/resolve-right-versions.sh)
 
 build-debugging:
 	@(env bash $(PWD)/docs/debugging/build.sh)
 
-build: checks ## builds minio to $(PWD)
+build: checks build-debugging ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
 	@CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
@@ -196,15 +191,15 @@ docker: build ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
 
-install-race: checks ## builds minio to $(PWD)
+install-race: checks build-debugging ## builds minio to $(PWD)
 	@echo "Building minio binary with -race to './minio'"
 	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@echo "Installing minio binary with -race to '$(GOPATH)/bin/minio'"
-	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
+	@mkdir -p $(GOPATH)/bin && cp -af $(PWD)/minio $(GOPATH)/bin/minio
 
 install: build ## builds minio and installs it to $GOPATH/bin.
 	@echo "Installing minio binary to '$(GOPATH)/bin/minio'"
-	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/minio $(GOPATH)/bin/minio
+	@mkdir -p $(GOPATH)/bin && cp -af $(PWD)/minio $(GOPATH)/bin/minio
 	@echo "Installation successful. To learn more, try \"minio --help\"."
 
 clean: ## cleanup all generated assets

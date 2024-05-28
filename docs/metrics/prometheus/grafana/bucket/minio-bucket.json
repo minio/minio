@@ -506,14 +506,14 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket,api) (increase(minio_bucket_requests_inflight_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket,api) (minio_bucket_requests_inflight_total{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket,api}}",
           "refId": "A"
         }
       ],
-      "title": "Inflight Requests Rate",
+      "title": "Inflight Requests",
       "type": "timeseries"
     },
     {
@@ -1018,14 +1018,14 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (increase(minio_bucket_usage_object_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (minio_bucket_usage_object_total{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
           "refId": "A"
         }
       ],
-      "title": "Objects Increase Rate",
+      "title": "Objects",
       "type": "timeseries"
     },
     {
@@ -1146,14 +1146,14 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (increase(minio_bucket_usage_version_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (minio_bucket_usage_version_total{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
           "refId": "A"
         }
       ],
-      "title": "Versions Increase Rate",
+      "title": "Versions",
       "type": "timeseries"
     },
     {
@@ -1274,14 +1274,14 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (increase(minio_bucket_usage_deletemarker_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (minio_bucket_usage_deletemarker_total{job=\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
           "refId": "A"
         }
       ],
-      "title": "Delete Markers Increase Rate",
+      "title": "Delete Markers",
       "type": "timeseries"
     },
     {

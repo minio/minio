@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/logger"
-	xsftp "github.com/minio/pkg/v2/sftp"
+	xsftp "github.com/minio/pkg/v3/sftp"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -238,20 +238,31 @@ func startSFTPServer(args []string) {
 					return nil, err
 				}
 				if errors.Is(err, errNoSuchServiceAccount) {
-					targetUser, targetGroups, err := globalIAMSys.LDAPConfig.Bind(c.User(), string(pass))
+					lookupResult, targetGroups, err := globalIAMSys.LDAPConfig.Bind(c.User(), string(pass))
 					if err != nil {
 						return nil, err
 					}
+					targetUser := lookupResult.NormDN
 					ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
 					if len(ldapPolicies) == 0 {
 						return nil, errAuthentication
 					}
+					criticalOptions := map[string]string{
+						ldapUser:       targetUser,
+						ldapActualUser: lookupResult.ActualDN,
+						ldapUserN:      c.User(),
+					}
+					for attribKey, attribValue := range lookupResult.Attributes {
+						// we skip multi-value attributes here, as they cannot
+						// be stored in the critical options.
+						if len(attribValue) == 1 {
+							criticalOptions[ldapAttribPrefix+attribKey] = attribValue[0]
+						}
+					}
+
 					return &ssh.Permissions{
-						CriticalOptions: map[string]string{
-							ldapUser:  targetUser,
-							ldapUserN: c.User(),
-						},
-						Extensions: make(map[string]string),
+						CriticalOptions: criticalOptions,
+						Extensions:      make(map[string]string),
 					}, nil
 				}
 				if subtle.ConstantTimeCompare([]byte(sa.Credentials.SecretKey), pass) == 1 {

@@ -27,7 +27,7 @@ import (
 	"github.com/minio/minio/internal/config/policy/opa"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/quick"
+	"github.com/minio/pkg/v3/quick"
 )
 
 // FileLogger is introduced to workaround the dependency about logrus
