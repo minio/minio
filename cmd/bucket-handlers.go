@@ -1425,6 +1425,9 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 		tagsStr := tags.String()
 		opts.UserDefined[xhttp.AmzObjectTagging] = tagsStr
+	} else {
+		// avoid user set an invalid tag using `X-Amz-Tagging`
+		delete(opts.UserDefined, xhttp.AmzObjectTagging)
 	}
 
 	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, opts)
