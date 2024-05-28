@@ -72,6 +72,8 @@ const (
 
 	xMinIOErrCodeHeader = "x-minio-error-code"
 	xMinIOErrDescHeader = "x-minio-error-desc"
+
+	postPolicyBucketTagging = "tagging"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -1415,8 +1417,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if formValues.Get(xhttp.AmzObjectTagging) != "" {
-		tags, err := tags.ParseObjectXML(strings.NewReader(formValues.Get(xhttp.AmzObjectTagging)))
+	if formValues.Get(postPolicyBucketTagging) != "" {
+		tags, err := tags.ParseObjectXML(strings.NewReader(formValues.Get(postPolicyBucketTagging)))
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
