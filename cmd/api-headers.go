@@ -136,7 +136,7 @@ func setObjectHeaders(ctx context.Context, w http.ResponseWriter, objInfo Object
 	// Set tag count if object has tags
 	if len(objInfo.UserTags) > 0 {
 		tags, _ := tags.ParseObjectTags(objInfo.UserTags)
-		if tags.Count() > 0 {
+		if tags != nil && tags.Count() > 0 {
 			w.Header()[xhttp.AmzTagCount] = []string{strconv.Itoa(tags.Count())}
 			if opts.Tagging {
 				// This is MinIO only extension to return back tags along with the count.
