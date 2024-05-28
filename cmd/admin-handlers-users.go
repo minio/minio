@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
@@ -471,6 +472,11 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 	// Check if accessKey has beginning and end space characters, this only applies to new users.
 	if !exists && hasSpaceBE(accessKey) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+
+	if !utf8.ValidString(accessKey) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAddUserValidUTF), r.URL)
 		return
 	}
 
