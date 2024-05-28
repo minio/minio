@@ -1273,6 +1273,10 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin
 		return updatedAt, auth.ErrInvalidAccessKeyLength
 	}
 
+	if auth.ContainsReservedChars(accessKey) {
+		return updatedAt, auth.ErrContainsReservedChars
+	}
+
 	if !auth.IsSecretKeyValid(ureq.SecretKey) {
 		return updatedAt, auth.ErrInvalidSecretKeyLength
 	}
@@ -1764,6 +1768,10 @@ func (sys *IAMSys) notifyForGroup(ctx context.Context, group string) {
 func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []string) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
+	}
+
+	if auth.ContainsReservedChars(group) {
+		return updatedAt, errGroupNameContainsReservedChars
 	}
 
 	updatedAt, err = sys.store.AddUsersToGroup(ctx, group, members)
