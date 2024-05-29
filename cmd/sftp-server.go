@@ -426,7 +426,7 @@ func startSFTPServer(args []string) {
 		case "trusted-user-ca-key":
 			userCaKeyFile = tokens[1]
 		case "disable-password-auth":
-			disablePassAuth = true
+			disablePassAuth, _ = strconv.ParseBool(tokens[1])
 		}
 	}
 
