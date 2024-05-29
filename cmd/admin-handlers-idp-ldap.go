@@ -562,6 +562,10 @@ func (a adminAPIHandlers) ListAccessKeysLDAPv2(w http.ResponseWriter, r *http.Re
 	case madmin.AccessKeyListAll:
 		listSTSKeys = true
 		listServiceAccounts = true
+	default:
+		err := errors.New("invalid list type")
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
+		return
 	}
 
 	for dn, accessKeys := range accessKeyMap {
