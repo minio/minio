@@ -800,29 +800,22 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		readCloser.Close()
 	}
 
-	var bb []byte
+	var reader io.Reader
 	if !isSysCall(bucket) {
 		configId := getConfigId(ctx, fs.fsPath, bucket)
-		bb, err = gateway.Get(readCloser, configId)
-
+		reader, size, err = gateway.Get(readCloser, configId)
 		if err != nil {
 			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
 		}
-		size = int64(len(bb))
-		objInfo.Size = size
+	} else {
+		reader = readCloser
 	}
 
 	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts)
 	if rErr != nil {
 		return nil, rErr
 	}
-	//TODO:put this in a fct
-	var reader io.Reader
-	if len(bb) >= 0 && bb != nil {
-		reader = bytes.NewReader(bb)
-	} else {
-		reader = readCloser
-	}
+
 	r := io.LimitReader(reader, length)
 
 	// Check if range is valid
@@ -835,7 +828,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(r, h, bb, closeFn, rwPoolUnlocker, nsUnlocker)
+	return objReaderFn(r, h, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // Create a new fs.json file, if the existing one is corrupt. Should happen very rarely.

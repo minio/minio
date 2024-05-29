@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/xml"
@@ -533,8 +532,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	// Write object content to response body
-	bw, err := xioutil.Copy(httpWriter, gr)
-	if err != nil {
+	if _, err := xioutil.Copy(httpWriter, gr); err != nil {
 		if !httpWriter.HasWritten() && !statusCodeWritten {
 			// write error response only if no data or headers has been written to client yet
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -544,16 +542,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			logger.LogIf(ctx, fmt.Errorf("Unable to write all the data to client %w", err))
 		}
 		return
-	}
-
-	if bw == 0 && gr.BunkerBytes != nil {
-		_, err = io.Copy(httpWriter, bytes.NewReader(gr.BunkerBytes))
-		if err != nil {
-			if !httpWriter.HasWritten() && !statusCodeWritten { // write error response only if no data or headers has been written to client yet
-				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-			}
-			return
-		}
 	}
 
 	if err = httpWriter.Close(); err != nil {
