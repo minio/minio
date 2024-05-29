@@ -1044,7 +1044,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	_, err = mp.NextRawPart()
 	// can't use errors.Is(err, io.EOF) because err wrapped with io.EOF using `fmt.Errorf("multipart: NextPart: %w", err)`
-	if err != io.EOF {
+	if err != nil && err != io.EOF {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
 		return
 	}
