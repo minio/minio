@@ -2235,14 +2235,14 @@ func (z *xlMetaV2VersionHeader) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		z.Flags = xlFlags(zb0003)
 	}
-	z.EcM, err = dc.ReadUint8()
-	if err != nil {
-		err = msgp.WrapError(err, "EcM")
-		return
-	}
 	z.EcN, err = dc.ReadUint8()
 	if err != nil {
 		err = msgp.WrapError(err, "EcN")
+		return
+	}
+	z.EcM, err = dc.ReadUint8()
+	if err != nil {
+		err = msgp.WrapError(err, "EcM")
 		return
 	}
 	return
@@ -2280,14 +2280,14 @@ func (z *xlMetaV2VersionHeader) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Flags")
 		return
 	}
-	err = en.WriteUint8(z.EcM)
-	if err != nil {
-		err = msgp.WrapError(err, "EcM")
-		return
-	}
 	err = en.WriteUint8(z.EcN)
 	if err != nil {
 		err = msgp.WrapError(err, "EcN")
+		return
+	}
+	err = en.WriteUint8(z.EcM)
+	if err != nil {
+		err = msgp.WrapError(err, "EcM")
 		return
 	}
 	return
@@ -2303,8 +2303,8 @@ func (z *xlMetaV2VersionHeader) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendBytes(o, (z.Signature)[:])
 	o = msgp.AppendUint8(o, uint8(z.Type))
 	o = msgp.AppendUint8(o, uint8(z.Flags))
-	o = msgp.AppendUint8(o, z.EcM)
 	o = msgp.AppendUint8(o, z.EcN)
+	o = msgp.AppendUint8(o, z.EcM)
 	return
 }
 
@@ -2353,14 +2353,14 @@ func (z *xlMetaV2VersionHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		z.Flags = xlFlags(zb0003)
 	}
-	z.EcM, bts, err = msgp.ReadUint8Bytes(bts)
-	if err != nil {
-		err = msgp.WrapError(err, "EcM")
-		return
-	}
 	z.EcN, bts, err = msgp.ReadUint8Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "EcN")
+		return
+	}
+	z.EcM, bts, err = msgp.ReadUint8Bytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "EcM")
 		return
 	}
 	o = bts

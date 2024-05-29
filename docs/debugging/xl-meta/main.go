@@ -710,7 +710,7 @@ type xlMetaV2VersionHeaderV2 struct {
 	Signature [4]byte
 	Type      uint8
 	Flags     uint8
-	EcM, EcN  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
+	EcN, EcM  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -768,19 +768,19 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 			var zb0004 uint8
 			zb0004, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "EcM")
+				err = msgp.WrapError(err, "EcN")
 				return
 			}
-			z.EcM = zb0004
+			z.EcN = zb0004
 		}
 		{
 			var zb0005 uint8
 			zb0005, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "EcN")
+				err = msgp.WrapError(err, "EcM")
 				return
 			}
-			z.EcN = zb0005
+			z.EcM = zb0005
 		}
 	}
 	o = bts
