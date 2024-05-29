@@ -1042,7 +1042,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		// we have found the File part of the request we are done processing multipart-form
 		break
 	}
-
+	_, err = mp.NextRawPart()
+	// can't use errors.Is(err, io.EOF) because err wrapped with io.EOF using `fmt.Errorf("multipart: NextPart: %w", err)`
+	if err != io.EOF {
+		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+		return
+	}
 	if keyName, ok := formValues["Key"]; !ok {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedPOSTRequest)
 		apiErr.Description = fmt.Sprintf("%s (%v)", apiErr.Description, errors.New("The name of the uploaded key is missing"))
