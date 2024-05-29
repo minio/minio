@@ -729,6 +729,8 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 		writer.Write(objData)
 		// Close before creating the new request.
 		w.Close()
+	} else {
+		w.Close()
 	}
 
 	// Set the body equal to the created policy.
