@@ -36,7 +36,7 @@ import (
 
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/target/types"
-	"github.com/minio/pkg/v2/logger/message/log"
+	"github.com/minio/pkg/v3/logger/message/log"
 )
 
 const (

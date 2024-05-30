@@ -22,18 +22,21 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/env"
 )
 
+// Drive specific timeout environment variables
 const (
-	envMaxDriveTimeout = "MINIO_DRIVE_MAX_TIMEOUT"
+	EnvMaxDriveTimeout       = "MINIO_DRIVE_MAX_TIMEOUT"
+	EnvMaxDriveTimeoutLegacy = "_MINIO_DRIVE_MAX_TIMEOUT"
+	EnvMaxDiskTimeoutLegacy  = "_MINIO_DISK_MAX_TIMEOUT"
 )
 
 // DefaultKVS - default KVS for drive
 var DefaultKVS = config.KVS{
 	config.KV{
 		Key:   MaxTimeout,
-		Value: "",
+		Value: "30s",
 	},
 }
 
@@ -53,8 +56,13 @@ func (c *Config) Update(new Config) error {
 	return nil
 }
 
-// GetMaxTimeout - returns the max timeout value.
+// GetMaxTimeout - returns the per call drive operation timeout
 func (c *Config) GetMaxTimeout() time.Duration {
+	return c.GetOPTimeout()
+}
+
+// GetOPTimeout - returns the per call drive operation timeout
+func (c *Config) GetOPTimeout() time.Duration {
 	configLk.RLock()
 	defer configLk.RUnlock()
 
@@ -71,35 +79,32 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	}
 
 	// if not set. Get default value from environment
-	d := env.Get(envMaxDriveTimeout, kvs.GetWithDefault(MaxTimeout, DefaultKVS))
+	d := env.Get(EnvMaxDriveTimeout, env.Get(EnvMaxDriveTimeoutLegacy, env.Get(EnvMaxDiskTimeoutLegacy, kvs.GetWithDefault(MaxTimeout, DefaultKVS))))
 	if d == "" {
-		d = env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
-		if d == "" {
-			d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
-		}
-	}
-
-	dur, _ := time.ParseDuration(d)
-	if dur < time.Second {
 		cfg.MaxTimeout = 30 * time.Second
 	} else {
-		cfg.MaxTimeout = getMaxTimeout(dur)
+		dur, _ := time.ParseDuration(d)
+		if dur < time.Second {
+			cfg.MaxTimeout = 30 * time.Second
+		} else {
+			cfg.MaxTimeout = getMaxTimeout(dur)
+		}
 	}
 	return cfg, err
 }
 
 func getMaxTimeout(t time.Duration) time.Duration {
-	if t < time.Second {
-		// get default value
-		d := env.Get("_MINIO_DRIVE_MAX_TIMEOUT", "")
-		if d == "" {
-			d = env.Get("_MINIO_DISK_MAX_TIMEOUT", "")
-		}
-		dur, _ := time.ParseDuration(d)
-		if dur < time.Second {
-			return 30 * time.Second
-		}
-		return dur
+	if t > time.Second {
+		return t
 	}
-	return t
+	// get default value
+	d := env.Get(EnvMaxDriveTimeoutLegacy, env.Get(EnvMaxDiskTimeoutLegacy, ""))
+	if d == "" {
+		return 30 * time.Second
+	}
+	dur, _ := time.ParseDuration(d)
+	if dur < time.Second {
+		return 30 * time.Second
+	}
+	return dur
 }

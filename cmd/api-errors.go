@@ -48,7 +48,7 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // APIError structure
@@ -287,6 +287,7 @@ const (
 	ErrAdminNoSuchGroup
 	ErrAdminGroupNotEmpty
 	ErrAdminGroupDisabled
+	ErrAdminInvalidGroupName
 	ErrAdminNoSuchJob
 	ErrAdminNoSuchPolicy
 	ErrAdminPolicyChangeAlreadyApplied
@@ -425,6 +426,7 @@ const (
 	ErrAdminProfilerNotEnabled
 	ErrInvalidDecompressedSize
 	ErrAddUserInvalidArgument
+	ErrAddUserValidUTF
 	ErrAdminResourceInvalidArgument
 	ErrAdminAccountNotEligible
 	ErrAccountNotEligible
@@ -2101,6 +2103,16 @@ var errorCodes = errorCodeMap{
 		Description:    "Expected LDAP short username but was given full DN.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminInvalidGroupName: {
+		Code:           "XMinioInvalidGroupName",
+		Description:    "The group name is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAddUserValidUTF: {
+		Code:           "XMinioInvalidUTF",
+		Description:    "Invalid UTF-8 character detected.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience
@@ -2140,6 +2152,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
 		apiErr = ErrAdminGroupNotEmpty
+	case errGroupNameContainsReservedChars:
+		apiErr = ErrAdminInvalidGroupName
 	case errNoSuchJob:
 		apiErr = ErrAdminNoSuchJob
 	case errNoPolicyToAttachOrDetach:
@@ -2154,6 +2168,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooSmall
 	case errAuthentication:
 		apiErr = ErrAccessDenied
+	case auth.ErrContainsReservedChars:
+		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidAccessKeyLength:
 		apiErr = ErrAdminInvalidAccessKey
 	case auth.ErrInvalidSecretKeyLength:

@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -185,6 +186,9 @@ FLAGS:
 							EcN      int
 							DDir     []byte
 							PartNums []int
+							MetaSys  struct {
+								Inline []byte `json:"x-minio-internal-inline-data"`
+							}
 						}
 					}
 					var ei erasureInfo
@@ -199,7 +203,17 @@ FLAGS:
 						filemap[file][verID] = fmt.Sprintf("%s/shard-%02d-of-%02d", verID, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
 						filemap[file][verID+".json"] = buf.String()
 						for _, i := range ei.V2Obj.PartNums {
+							if len(ei.V2Obj.MetaSys.Inline) != 0 {
+								break
+							}
+							file := file
 							dataFile := fmt.Sprintf("%s%s/part.%d", strings.TrimSuffix(file, "xl.meta"), uuid.UUID(ei.V2Obj.DDir).String(), i)
+							if i > 1 {
+								file = fmt.Sprintf("%s/part.%d", file, i)
+								filemap[file] = make(map[string]string)
+								filemap[file][verID] = fmt.Sprintf("%s/part.%d/shard-%02d-of-%02d", verID, i, idx, ei.V2Obj.EcN+ei.V2Obj.EcM)
+								filemap[file][verID+".json"] = buf.String()
+							}
 							partDataToVerID[dataFile] = [2]string{file, verID}
 						}
 					} else if err != nil {
@@ -415,38 +429,49 @@ FLAGS:
 		}
 		sort.Strings(toPrint)
 		fmt.Printf("{\n%s\n}\n", strings.Join(toPrint, ",\n"))
-		for partName, data := range foundData {
-			if verid := partDataToVerID[partName]; verid != [2]string{} {
-				file := verid[0]
-				name := verid[1]
-				f := filemap[file][name]
-				fn := fmt.Sprintf("%s-%s.data", file, name)
-				if f != "" {
-					fn = f + ".data"
-					err := os.MkdirAll(filepath.Dir(fn), os.ModePerm)
-					if err != nil {
-						fmt.Println("MkdirAll:", filepath.Dir(fn), err)
+		if c.Bool("combine") {
+			for partName, data := range foundData {
+				if verid := partDataToVerID[partName]; verid != [2]string{} {
+					file := verid[0]
+					name := verid[1]
+					f := filemap[file][name]
+					fn := fmt.Sprintf("%s-%s.data", file, name)
+					if f != "" {
+						fn = f + ".data"
+						err := os.MkdirAll(filepath.Dir(fn), os.ModePerm)
+						if err != nil {
+							fmt.Println("MkdirAll:", filepath.Dir(fn), err)
+						}
+						err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
+						combineFiles[name] = append(combineFiles[name], fn)
+						if err != nil {
+							fmt.Println("WriteFile:", err)
+						}
+						err = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
+						if err != nil {
+							fmt.Println("combine WriteFile:", err)
+						}
+						fmt.Println("Remapped", partName, "to", fn)
 					}
-					err = os.WriteFile(fn+".json", []byte(filemap[file][name+".json"]), os.ModePerm)
-					combineFiles[name] = append(combineFiles[name], fn)
+					delete(partDataToVerID, partName)
+					err := os.WriteFile(fn, data, os.ModePerm)
 					if err != nil {
 						fmt.Println("WriteFile:", err)
 					}
-					err = os.WriteFile(filepath.Dir(fn)+"/filename.txt", []byte(file), os.ModePerm)
-					if err != nil {
-						fmt.Println("combine WriteFile:", err)
-					}
-					fmt.Println("Remapped", partName, "to", fn)
-				}
-				err := os.WriteFile(fn, data, os.ModePerm)
-				if err != nil {
-					fmt.Println("WriteFile:", err)
 				}
 			}
+			if len(partDataToVerID) > 0 {
+				fmt.Println("MISSING PART FILES:")
+				for k := range partDataToVerID {
+					fmt.Println(k)
+				}
+				fmt.Println("END MISSING PART FILES")
+			}
 		}
+
 		if len(combineFiles) > 0 {
 			if c.Bool("xver") {
-				if err := combineCrossVer(combineFiles, baseName, foundData); err != nil {
+				if err := combineCrossVer(combineFiles, baseName); err != nil {
 					fmt.Println("ERROR:", err)
 				}
 			} else {
@@ -685,7 +710,7 @@ type xlMetaV2VersionHeaderV2 struct {
 	Signature [4]byte
 	Type      uint8
 	Flags     uint8
-	EcM, EcN  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
+	EcN, EcM  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -743,19 +768,19 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 			var zb0004 uint8
 			zb0004, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "EcM")
+				err = msgp.WrapError(err, "EcN")
 				return
 			}
-			z.EcM = zb0004
+			z.EcN = zb0004
 		}
 		{
 			var zb0005 uint8
 			zb0005, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "EcN")
+				err = msgp.WrapError(err, "EcM")
 				return
 			}
-			z.EcN = zb0005
+			z.EcM = zb0005
 		}
 	}
 	o = bts
@@ -788,30 +813,28 @@ type mappedData struct {
 	parityData                 map[int]map[int][]byte
 	blockOffset                int // Offset in bytes to start of block.
 	blocks                     int // 0 = one block.
-	objSize                    int
+	objSize, partSize          int
 }
 
-func readAndMap(files []string, blockNum int) (*mappedData, error) {
+func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
 	var m mappedData
 	sort.Strings(files)
 	m.parityData = make(map[int]map[int][]byte)
 	for _, file := range files {
-		b, err := os.ReadFile(file)
-		if err != nil {
-			return nil, err
-		}
 		meta, err := os.ReadFile(file + ".json")
 		if err != nil {
 			return nil, err
 		}
 		type erasureInfo struct {
 			V2Obj *struct {
-				EcDist  []int
-				EcIndex int
-				EcM     int
-				EcN     int
-				Size    int
-				EcBSize int
+				EcDist    []int
+				EcIndex   int
+				EcM       int
+				EcN       int
+				Size      int
+				EcBSize   int
+				PartNums  []int
+				PartSizes []int
 			}
 		}
 		var ei erasureInfo
@@ -830,25 +853,38 @@ func readAndMap(files []string, blockNum int) (*mappedData, error) {
 			if ei.V2Obj.Size != m.objSize {
 				return nil, fmt.Errorf("size mismatch. Meta size: %d, Prev: %d", ei.V2Obj.Size, m.objSize)
 			}
+			for i, s := range ei.V2Obj.PartNums {
+				if s == partNum {
+					m.size = ei.V2Obj.PartSizes[i]
+					m.partSize = ei.V2Obj.PartSizes[i]
+					break
+				}
+			}
 		} else {
 			return nil, err
 		}
-		if len(b) < 32 {
-			return nil, fmt.Errorf("file %s too short", file)
-		}
+
 		offset := ei.V2Obj.EcBSize * blockNum
-		if offset > ei.V2Obj.Size {
-			return nil, fmt.Errorf("block %d out of range. offset %d > size %d", blockNum, offset, ei.V2Obj.Size)
+		if offset >= m.size {
+			return nil, fmt.Errorf("block %d out of range. offset %d > size %d", blockNum, offset, m.size)
 		}
 		m.blockOffset = offset
-		m.blocks = (ei.V2Obj.Size + ei.V2Obj.EcBSize - 1) / ei.V2Obj.EcBSize
+		m.blocks = (m.size + ei.V2Obj.EcBSize - 1) / ei.V2Obj.EcBSize
 		if m.blocks > 0 {
 			m.blocks--
 		}
 		if blockNum < m.blocks {
 			m.size = ei.V2Obj.EcBSize
 		} else {
-			m.size = ei.V2Obj.Size - offset
+			m.size -= offset
+		}
+
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		if len(b) < 32 {
+			return nil, fmt.Errorf("file %s too short", file)
 		}
 
 		// Extract block data.
@@ -889,7 +925,7 @@ func readAndMap(files []string, blockNum int) (*mappedData, error) {
 
 func combine(files []string, out string) error {
 	fmt.Printf("Attempting to combine version %q.\n", out)
-	m, err := readAndMap(files, 0)
+	m, err := readAndMap(files, 1, 0)
 	if err != nil {
 		return err
 	}
@@ -938,7 +974,7 @@ func combine(files []string, out string) error {
 			hasParity := 0
 			for idx, sh := range v {
 				split[idx] = sh
-				if idx >= k && len(v) > 0 {
+				if idx >= k && len(sh) > 0 {
 					hasParity++
 				}
 			}
@@ -976,179 +1012,204 @@ func combine(files []string, out string) error {
 	return nil
 }
 
-func combineCrossVer(all map[string][]string, baseName string, additional map[string][]byte) error {
-	names := make([]string, 0, len(all))
-	files := make([][]string, 0, len(all))
+func combineCrossVer(all map[string][]string, baseName string) error {
+	names := make([][]string, 0)
+	/// part, verID, file
+	files := make([]map[string][]string, 0)
+	partNums := make(map[int]int)
 	for k, v := range all {
-		names = append(names, k)
-		files = append(files, v)
-	}
-	if len(files) <= 1 {
-		if len(files) == 0 {
-			return nil
+		for _, file := range v {
+			part := getPartNum(file)
+			partIdx, ok := partNums[part]
+			if !ok {
+				partIdx = len(names)
+				partNums[part] = partIdx
+				names = append(names, nil)
+				files = append(files, make(map[string][]string))
+			}
+			names[partIdx] = append(names[partIdx], k)
+			files[partIdx][k] = append(files[partIdx][k], file)
 		}
-		return combine(files[0], names[0])
 	}
-	exportedSizes := make(map[int]bool)
-nextFile:
-	for i, file := range files {
-		var combined []byte
-		var missingAll int
-		var lastValidAll int
-		for block := 0; ; block++ {
-			fmt.Printf("Block %d, Base version %q.\n", block+1, names[i])
-			m, err := readAndMap(file, block)
+	if len(files) == 0 {
+		return nil
+	}
+	for part, partIdx := range partNums {
+		if len(files[partIdx]) == 0 {
+			continue
+		}
+		exportedSizes := make(map[int]bool)
+	nextFile:
+		for key, file := range files[partIdx] {
+			fmt.Println("Reading base version", file[0], "part", part)
+			var combined []byte
+			var missingAll int
+			var lastValidAll int
+			for block := 0; ; block++ {
+				fmt.Printf("Block %d, Base version %q. Part %d. Files %d\n", block+1, key, part, len(file))
+				m, err := readAndMap(file, part, block)
+				if err != nil {
+					return err
+				}
+				if exportedSizes[m.objSize] {
+					fmt.Println("Skipping version", key, "as it has already been exported.")
+					continue nextFile
+				}
+			compareFile:
+				for otherKey, other := range files[partIdx] {
+					if key == otherKey {
+						continue
+					}
+					otherPart := getPartNum(other[0])
+					if part != otherPart {
+						fmt.Println("part ", part, " != other part", otherPart, other[0])
+						continue
+					}
+					// fmt.Println("part ", part, "other part", otherPart, other[0])
+					fmt.Printf("Reading version %q Part %d.\n", otherKey, otherPart)
+					// os.Exit(0)
+					otherM, err := readAndMap(other, part, block)
+					if err != nil {
+						fmt.Println(err)
+						continue
+					}
+					if m.objSize != otherM.objSize {
+						continue
+					}
+					var ok int
+					for i, filled := range otherM.filled[:m.size] {
+						if filled == 1 && m.filled[i] == 1 {
+							if m.mapped[i] != otherM.mapped[i] {
+								fmt.Println("Data mismatch at byte", i, "-  Disregarding version", otherKey)
+								continue compareFile
+							}
+							ok++
+						}
+					}
+
+					// If data+parity matches, combine.
+					if m.parity == otherM.parity && m.data == otherM.data {
+						for k, v := range m.parityData {
+							if otherM.parityData[k] == nil {
+								continue
+							}
+							for i, data := range v {
+								if data != nil || otherM.parityData[k][i] == nil {
+									continue
+								}
+								m.parityData[k][i] = otherM.parityData[k][i]
+							}
+						}
+					}
+
+					fmt.Printf("Data overlaps (%d bytes). Combining with %q.\n", ok, otherKey)
+					for i := range otherM.filled {
+						if otherM.filled[i] == 1 {
+							m.filled[i] = 1
+							m.mapped[i] = otherM.mapped[i]
+						}
+					}
+				}
+				lastValid := 0
+				missing := 0
+				for i := range m.filled {
+					if m.filled[i] == 1 {
+						lastValid = i
+					} else {
+						missing++
+					}
+				}
+				if missing > 0 && len(m.parityData) > 0 {
+					fmt.Println("Attempting to reconstruct using parity sets:")
+					for k, v := range m.parityData {
+						if missing == 0 {
+							break
+						}
+						fmt.Println("* Setup: Data shards:", k, "- Parity blocks:", m.shards-k)
+						rs, err := reedsolomon.New(k, m.shards-k)
+						if err != nil {
+							return err
+						}
+						split, err := rs.Split(m.mapped)
+						if err != nil {
+							return err
+						}
+						splitFilled, err := rs.Split(m.filled)
+						if err != nil {
+							return err
+						}
+						ok := len(splitFilled)
+						for i, sh := range splitFilled {
+							for _, v := range sh {
+								if v == 0 {
+									split[i] = nil
+									ok--
+									break
+								}
+							}
+						}
+						hasParity := 0
+						for idx, sh := range v {
+							split[idx] = sh
+							if idx >= k && len(sh) > 0 {
+								hasParity++
+							}
+						}
+						fmt.Printf("Have %d complete remapped data shards and %d complete parity shards. ", ok, hasParity)
+
+						if err := rs.ReconstructData(split); err == nil {
+							fmt.Println("Could reconstruct completely")
+							for i, data := range split[:k] {
+								start := i * len(data)
+								copy(m.mapped[start:], data)
+							}
+							lastValid = m.size - 1
+							missing = 0
+						} else {
+							fmt.Println("Could NOT reconstruct:", err)
+						}
+					}
+				}
+				if m.blockOffset != len(combined) {
+					return fmt.Errorf("Block offset mismatch. Expected %d got %d", m.blockOffset, len(combined))
+				}
+				combined = append(combined, m.mapped[:m.size]...)
+				missingAll += missing
+				if lastValid > 0 {
+					lastValidAll = lastValid + m.blockOffset
+				}
+				if m.blocks == block {
+					if len(combined) != m.partSize {
+						fmt.Println("Combined size mismatch. Expected", m.partSize, "got", len(combined))
+					}
+					fmt.Println("Reached block", block+1, "of", m.blocks+1, "for", key, ". Done.")
+					break
+				}
+			}
+			if lastValidAll == 0 {
+				return errors.New("no valid data found")
+			}
+			out := fmt.Sprintf("%s-%s.%05d", key, baseName, part)
+			if len(files) == 1 {
+				out = fmt.Sprintf("%s-%s", key, baseName)
+			}
+			if missingAll > 0 {
+				out += ".incomplete"
+				fmt.Println(missingAll, "bytes missing. Truncating", len(combined)-lastValidAll-1, "from end.")
+			} else {
+				out += ".complete"
+				fmt.Println("No bytes missing.")
+			}
+			if missingAll == 0 {
+				exportedSizes[len(combined)] = true
+			}
+			combined = combined[:lastValidAll+1]
+			err := os.WriteFile(out, combined, os.ModePerm)
 			if err != nil {
 				return err
 			}
-			if exportedSizes[m.objSize] {
-				fmt.Println("Skipping version", names[i], "as it has already been exported.")
-				continue nextFile
-			}
-		compareFile:
-			for j, other := range files {
-				if i == j {
-					continue
-				}
-				fmt.Printf("Reading version %q.\n", names[j])
-				otherM, err := readAndMap(other, block)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				}
-				if m.objSize != otherM.objSize {
-					continue
-				}
-				var ok int
-				for i, filled := range otherM.filled[:m.size] {
-					if filled == 1 && m.filled[i] == 1 {
-						if m.mapped[i] != otherM.mapped[i] {
-							fmt.Println("Data mismatch at byte", i, "-  Disregarding version", names[j])
-							continue compareFile
-						}
-						ok++
-					}
-				}
-
-				// If data+parity matches, combine.
-				if m.parity == otherM.parity && m.data == otherM.data {
-					for k, v := range m.parityData {
-						if otherM.parityData[k] == nil {
-							continue
-						}
-						for i, data := range v {
-							if data != nil || otherM.parityData[k][i] == nil {
-								continue
-							}
-							m.parityData[k][i] = otherM.parityData[k][i]
-						}
-					}
-				}
-
-				fmt.Printf("Data overlaps (%d bytes). Combining with %q.\n", ok, names[j])
-				for i := range otherM.filled {
-					if otherM.filled[i] == 1 {
-						m.filled[i] = 1
-						m.mapped[i] = otherM.mapped[i]
-					}
-				}
-			}
-			lastValid := 0
-			missing := 0
-			for i := range m.filled {
-				if m.filled[i] == 1 {
-					lastValid = i
-				} else {
-					missing++
-				}
-			}
-			if missing > 0 && len(m.parityData) > 0 {
-				fmt.Println("Attempting to reconstruct using parity sets:")
-				for k, v := range m.parityData {
-					if missing == 0 {
-						break
-					}
-					fmt.Println("* Setup: Data shards:", k, "- Parity blocks:", m.shards-k)
-					rs, err := reedsolomon.New(k, m.shards-k)
-					if err != nil {
-						return err
-					}
-					split, err := rs.Split(m.mapped)
-					if err != nil {
-						return err
-					}
-					splitFilled, err := rs.Split(m.filled)
-					if err != nil {
-						return err
-					}
-					ok := len(splitFilled)
-					for i, sh := range splitFilled {
-						for _, v := range sh {
-							if v == 0 {
-								split[i] = nil
-								ok--
-								break
-							}
-						}
-					}
-					hasParity := 0
-					for idx, sh := range v {
-						split[idx] = sh
-						if idx >= k && len(v) > 0 {
-							hasParity++
-						}
-					}
-					fmt.Printf("Have %d complete remapped data shards and %d complete parity shards. ", ok, hasParity)
-
-					if err := rs.ReconstructData(split); err == nil {
-						fmt.Println("Could reconstruct completely")
-						for i, data := range split[:k] {
-							start := i * len(data)
-							copy(m.mapped[start:], data)
-						}
-						lastValid = m.size - 1
-						missing = 0
-					} else {
-						fmt.Println("Could NOT reconstruct:", err)
-					}
-				}
-			}
-			if m.blockOffset != len(combined) {
-				return fmt.Errorf("Block offset mismatch. Expected %d got %d", m.blockOffset, len(combined))
-			}
-			combined = append(combined, m.mapped[:m.size]...)
-			missingAll += missing
-			if lastValid > 0 {
-				lastValidAll = lastValid + m.blockOffset
-			}
-			if m.blocks == block {
-				if len(combined) != m.objSize {
-					fmt.Println("Combined size mismatch. Expected", m.objSize, "got", len(combined))
-				}
-				fmt.Println("Reached block", block+1, "of", m.blocks+1, "for", names[i], ". Done.")
-				break
-			}
+			fmt.Println("Wrote output to", out)
 		}
-		if lastValidAll == 0 {
-			return errors.New("no valid data found")
-		}
-		out := names[i] + "-" + baseName
-		if missingAll > 0 {
-			out += ".incomplete"
-			fmt.Println(missingAll, "bytes missing. Truncating", len(combined)-lastValidAll-1, "from end.")
-		} else {
-			out += ".complete"
-			fmt.Println("No bytes missing.")
-		}
-		if missingAll == 0 {
-			exportedSizes[len(combined)] = true
-		}
-		combined = combined[:lastValidAll+1]
-		err := os.WriteFile(out, combined, os.ModePerm)
-		if err != nil {
-			return err
-		}
-		fmt.Println("Wrote output to", out)
 	}
 	return nil
 }
@@ -1195,4 +1256,14 @@ func shardSize(blockSize, dataBlocks int) (sz int) {
 		sz++
 	}
 	return
+}
+
+var rePartNum = regexp.MustCompile("/part\\.([0-9]+)/")
+
+func getPartNum(s string) int {
+	if m := rePartNum.FindStringSubmatch(s); len(m) > 1 {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	return 1
 }

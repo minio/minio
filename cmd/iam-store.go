@@ -33,7 +33,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -1946,6 +1946,12 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 
 		subClaimValue := cred.ParentUser
 		if v, ok := claims[subClaim]; ok {
+			subFromToken, ok := v.(string)
+			if ok {
+				subClaimValue = subFromToken
+			}
+		}
+		if v, ok := claims[ldapActualUser]; ok {
 			subFromToken, ok := v.(string)
 			if ok {
 				subClaimValue = subFromToken

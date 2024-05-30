@@ -57,10 +57,10 @@ import (
 	"github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/rest"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/env"
-	xaudit "github.com/minio/pkg/v2/logger/message/audit"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/env"
+	xaudit "github.com/minio/pkg/v3/logger/message/audit"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/oauth2"
 )
 

@@ -46,8 +46,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/mimedb"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/mimedb"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 // list all errors which can be ignored in object operations.
@@ -423,11 +423,6 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			}
 			if err != nil {
 				return toObjectErr(err, bucket, object)
-			}
-		}
-		for i, r := range readers {
-			if r == nil {
-				onlineDisks[i] = OfflineDisk
 			}
 		}
 		// Track total bytes read from disk and written to the client.

@@ -47,7 +47,7 @@ import (
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 var errDiskStale = errors.New("drive stale")
@@ -80,11 +80,7 @@ func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	globalLocalDrivesMu.RLock()
 	defer globalLocalDrivesMu.RUnlock()
 	if len(globalLocalSetDrives) == 0 {
-		for _, drive := range globalLocalDrives {
-			if drive != nil && drive.Endpoint().Equal(endpoint) {
-				return drive
-			}
-		}
+		return globalLocalDrivesMap[endpoint.String()]
 	}
 	return globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx]
 }
@@ -1387,6 +1383,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				defer globalLocalDrivesMu.Unlock()
 
 				globalLocalDrives = append(globalLocalDrives, storage)
+				globalLocalDrivesMap[endpoint.String()] = storage
 				globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
 				return true
 			}

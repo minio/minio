@@ -202,6 +202,9 @@ func (p *parallelReader) Read(dst [][]byte) ([][]byte, error) {
 
 				// This will be communicated upstream.
 				p.orgReaders[bufIdx] = nil
+				if br, ok := p.readers[i].(io.Closer); ok {
+					br.Close()
+				}
 				p.readers[i] = nil
 
 				// Since ReadAt returned error, trigger another read.

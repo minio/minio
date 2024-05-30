@@ -15,13 +15,14 @@ WORK_DIR="$PWD/.verify-$RANDOM"
 export MINT_MODE=core
 export MINT_DATA_DIR="$WORK_DIR/data"
 export SERVER_ENDPOINT="127.0.0.1:9000"
+export MC_HOST_verify="http://minio:minio123@${SERVER_ENDPOINT}/"
+export MC_HOST_verify_ipv6="http://minio:minio123@[::1]:9000/"
 export ACCESS_KEY="minio"
 export SECRET_KEY="minio123"
 export ENABLE_HTTPS=0
 export GO111MODULE=on
 export GOGC=25
 export ENABLE_ADMIN=1
-
 export MINIO_CI_CD=1
 
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
@@ -36,18 +37,21 @@ function start_minio_fs() {
 	export MINIO_ROOT_USER=$ACCESS_KEY
 	export MINIO_ROOT_PASSWORD=$SECRET_KEY
 	"${MINIO[@]}" server "${WORK_DIR}/fs-disk" >"$WORK_DIR/fs-minio.log" 2>&1 &
-	sleep 10
+
+	"${WORK_DIR}/mc" ready verify
 }
 
 function start_minio_erasure() {
 	"${MINIO[@]}" server "${WORK_DIR}/erasure-disk1" "${WORK_DIR}/erasure-disk2" "${WORK_DIR}/erasure-disk3" "${WORK_DIR}/erasure-disk4" >"$WORK_DIR/erasure-minio.log" 2>&1 &
-	sleep 15
+
+	"${WORK_DIR}/mc" ready verify
 }
 
 function start_minio_erasure_sets() {
 	export MINIO_ENDPOINTS="${WORK_DIR}/erasure-disk-sets{1...32}"
 	"${MINIO[@]}" server >"$WORK_DIR/erasure-minio-sets.log" 2>&1 &
-	sleep 15
+
+	"${WORK_DIR}/mc" ready verify
 }
 
 function start_minio_pool_erasure_sets() {
@@ -57,7 +61,7 @@ function start_minio_pool_erasure_sets() {
 	"${MINIO[@]}" server --address ":9000" >"$WORK_DIR/pool-minio-9000.log" 2>&1 &
 	"${MINIO[@]}" server --address ":9001" >"$WORK_DIR/pool-minio-9001.log" 2>&1 &
 
-	sleep 40
+	"${WORK_DIR}/mc" ready verify
 }
 
 function start_minio_pool_erasure_sets_ipv6() {
@@ -67,7 +71,7 @@ function start_minio_pool_erasure_sets_ipv6() {
 	"${MINIO[@]}" server --address="[::1]:9000" >"$WORK_DIR/pool-minio-ipv6-9000.log" 2>&1 &
 	"${MINIO[@]}" server --address="[::1]:9001" >"$WORK_DIR/pool-minio-ipv6-9001.log" 2>&1 &
 
-	sleep 40
+	"${WORK_DIR}/mc" ready verify_ipv6
 }
 
 function start_minio_dist_erasure() {
@@ -78,7 +82,7 @@ function start_minio_dist_erasure() {
 		"${MINIO[@]}" server --address ":900${i}" >"$WORK_DIR/dist-minio-900${i}.log" 2>&1 &
 	done
 
-	sleep 40
+	"${WORK_DIR}/mc" ready verify
 }
 
 function run_test_fs() {
@@ -222,7 +226,7 @@ function __init__() {
 		exit 1
 	fi
 
-	(cd "${MC_BUILD_DIR}" && go build -o "$WORK_DIR/mc")
+	(cd "${MC_BUILD_DIR}" && go build -o "${WORK_DIR}/mc")
 
 	# remove mc source.
 	purge "${MC_BUILD_DIR}"

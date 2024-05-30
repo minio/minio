@@ -37,7 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // API suite container common to both ErasureSD and Erasure.
@@ -1671,7 +1671,7 @@ func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	for _, objectName := range []string{"pfx/a/1.txt", "pfx/b/2.txt", "pfx/", "pfx2/c/3.txt", "pfx2/d/3.txt", "pfx1/1.txt", "pfx2/"} {
+	for _, objectName := range []string{"pfx/a/1.txt", "pfx/b/2.txt", "pfx/", "pfx2/c/3.txt", "pfx2/d/3.txt", "pfx1/1.txt", "pfx2/", "pfx3/", "pfx4/"} {
 		buffer := bytes.NewReader([]byte(""))
 		request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, objectName),
 			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
@@ -1680,7 +1680,7 @@ func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
 		c.Assert(err, nil)
 		c.Assert(response.StatusCode, http.StatusOK)
 	}
-	for _, objectName := range []string{"pfx2/c/3.txt", "pfx2/d/3.txt", "pfx2/"} {
+	for _, objectName := range []string{"pfx2/c/3.txt", "pfx2/d/3.txt", "pfx2/", "pfx3/"} {
 		delRequest, err := newTestSignedRequest(http.MethodDelete, getDeleteObjectURL(s.endPoint, bucketName, objectName),
 			0, nil, s.accessKey, s.secretKey, s.signer)
 		c.Assert(err, nil)
@@ -1697,7 +1697,6 @@ func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
 			getListObjectsV2URL(s.endPoint, bucketName, "pfx/a/", "2", "", "", "/"),
 			[]string{
 				"<Contents><Key>pfx/a/1.txt</Key>",
-				"<CommonPrefixes><Prefix>pfx/a</Prefix></CommonPrefixes>",
 			},
 			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
 		},
@@ -1720,21 +1719,24 @@ func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
 		{
 			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/c", "2", "true", "", "/"),
 			[]string{
-				"<Prefix>pfx2/c</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<Prefix>pfx2/c</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix>",
 			},
 			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
 		},
 		{
 			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/c", "2", "true", "", "/"),
 			[]string{
-				"<Prefix>pfx2/c</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<Prefix>pfx2/c</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes>",
 			},
 			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
 		},
 		{
 			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/", "2", "false", "", "/"),
 			[]string{
-				"<Prefix>pfx2/</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<Prefix>pfx2/</Prefix><KeyCount>2</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes><CommonPrefixes><Prefix>pfx2/d/</Prefix></CommonPrefixes>",
 			},
 			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
 		},
@@ -1748,9 +1750,38 @@ func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
 		{
 			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/", "2", "false", "", "/"),
 			[]string{
-				"<Prefix>pfx2/</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<Prefix>pfx2/</Prefix><KeyCount>2</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes><CommonPrefixes><Prefix>pfx2/d/</Prefix></CommonPrefixes>",
 			},
 			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx3/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx3/</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx4/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx4/</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated><Contents><Key>pfx4/</Key>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx3/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx3/</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+			},
+			"",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx4/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx4/</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated><Contents><Key>pfx4/</Key>",
+			},
+			"",
 		},
 	}
 	for _, testCase := range testCases {

@@ -123,7 +123,7 @@ type capacityInfo struct {
 const (
 	systemXMLObject   = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/system.xml"
 	capacityXMLObject = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml"
-	veeamAgentSubstr  = "1.0 Veeam/1.0 Backup"
+	veeamAgentSubstr  = "APN/1.0 Veeam/1.0"
 )
 
 func isVeeamSOSAPIObject(object string) bool {

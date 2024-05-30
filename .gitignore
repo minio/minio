@@ -44,3 +44,12 @@ docs/debugging/pprofgoparser/pprofgoparser
 docs/debugging/reorder-disks/reorder-disks
 docs/debugging/populate-hard-links/populate-hardlinks
 docs/debugging/xattr/xattr
+hash-set
+healing-bin
+inspect
+pprofgoparser
+reorder-disks
+s3-check-md5
+s3-verify
+xattr
+xl-meta

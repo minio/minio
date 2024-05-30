@@ -20,7 +20,7 @@ package target
 import (
 	"testing"
 
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 func TestNSQArgs_Validate(t *testing.T) {

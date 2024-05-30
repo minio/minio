@@ -29,8 +29,8 @@ import (
 	"testing"
 
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/pkg/v2/policy"
-	"github.com/minio/pkg/v2/policy/condition"
+	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/policy/condition"
 )
 
 func getAnonReadOnlyBucketPolicy(bucketName string) *policy.BucketPolicy {

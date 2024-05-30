@@ -49,8 +49,8 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/ldap"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/policy"
 	etcd "go.etcd.io/etcd/client/v3"
 )
 
@@ -1273,6 +1273,10 @@ func (sys *IAMSys) CreateUser(ctx context.Context, accessKey string, ureq madmin
 		return updatedAt, auth.ErrInvalidAccessKeyLength
 	}
 
+	if auth.ContainsReservedChars(accessKey) {
+		return updatedAt, auth.ErrContainsReservedChars
+	}
+
 	if !auth.IsSecretKeyValid(ureq.SecretKey) {
 		return updatedAt, auth.ErrInvalidSecretKeyLength
 	}
@@ -1351,12 +1355,17 @@ func (sys *IAMSys) purgeExpiredCredentialsForExternalSSO(ctx context.Context) {
 func (sys *IAMSys) purgeExpiredCredentialsForLDAP(ctx context.Context) {
 	parentUsers := sys.store.GetAllParentUsers()
 	var allDistNames []string
-	for parentUser := range parentUsers {
+	for parentUser, info := range parentUsers {
 		if !sys.LDAPConfig.IsLDAPUserDN(parentUser) {
 			continue
 		}
 
-		allDistNames = append(allDistNames, parentUser)
+		if info.subClaimValue != "" {
+			// we need to ask LDAP about the actual user DN not normalized DN.
+			allDistNames = append(allDistNames, info.subClaimValue)
+		} else {
+			allDistNames = append(allDistNames, parentUser)
+		}
 	}
 
 	expiredUsers, err := sys.LDAPConfig.GetNonEligibleUserDistNames(allDistNames)
@@ -1510,13 +1519,13 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", parent, err))
 			continue
 		}
-		if validatedParent == "" || !isUnderBaseDN {
+		if validatedParent == nil || !isUnderBaseDN {
 			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", parent)
 			collectedErrors = append(collectedErrors, err)
 			continue
 		}
 
-		if validatedParent != parent {
+		if validatedParent.NormDN != parent {
 			hasDiff = true
 		}
 
@@ -1529,21 +1538,21 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", group, err))
 				continue
 			}
-			if validatedGroup == "" {
+			if validatedGroup == nil {
 				err := fmt.Errorf("DN `%s` was not found in the LDAP directory", group)
 				collectedErrors = append(collectedErrors, err)
 				continue
 			}
 
-			if validatedGroup != group {
+			if validatedGroup.NormDN != group {
 				hasDiff = true
 			}
-			normalizedGroups = append(normalizedGroups, validatedGroup)
+			normalizedGroups = append(normalizedGroups, validatedGroup.NormDN)
 		}
 
 		if hasDiff {
 			updatedCreateReq := createReq
-			updatedCreateReq.Parent = validatedParent
+			updatedCreateReq.Parent = validatedParent.NormDN
 			updatedCreateReq.Groups = normalizedGroups
 
 			updatedKeysMap[ak] = updatedCreateReq
@@ -1615,7 +1624,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	// We map keys that correspond to LDAP DNs and validate that they exist in
 	// the LDAP server.
-	var dnValidator func(*libldap.Conn, string) (string, bool, error) = sys.LDAPConfig.GetValidatedUserDN
+	var dnValidator func(*libldap.Conn, string) (*ldap.DNSearchResult, bool, error) = sys.LDAPConfig.GetValidatedUserDN
 	if isGroup {
 		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
 	}
@@ -1634,14 +1643,14 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", k, err))
 			continue
 		}
-		if validatedDN == "" || !underBaseDN {
+		if validatedDN == nil || !underBaseDN {
 			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", k)
 			collectedErrors = append(collectedErrors, err)
 			continue
 		}
 
-		if validatedDN != k {
-			normalizedDNKeysMap[validatedDN] = append(normalizedDNKeysMap[validatedDN], k)
+		if validatedDN.NormDN != k {
+			normalizedDNKeysMap[validatedDN.NormDN] = append(normalizedDNKeysMap[validatedDN.NormDN], k)
 		}
 	}
 
@@ -1759,6 +1768,10 @@ func (sys *IAMSys) notifyForGroup(ctx context.Context, group string) {
 func (sys *IAMSys) AddUsersToGroup(ctx context.Context, group string, members []string) (updatedAt time.Time, err error) {
 	if !sys.Initialized() {
 		return updatedAt, errServerNotInitialized
+	}
+
+	if auth.ContainsReservedChars(group) {
+		return updatedAt, errGroupNameContainsReservedChars
 	}
 
 	updatedAt, err = sys.store.AddUsersToGroup(ctx, group, members)
@@ -1948,37 +1961,39 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 	}
 
 	var dn string
+	var dnResult *ldap.DNSearchResult
 	var isGroup bool
 	if r.User != "" {
-		dn, err = sys.LDAPConfig.GetValidatedDNForUsername(r.User)
+		dnResult, err = sys.LDAPConfig.GetValidatedDNForUsername(r.User)
 		if err != nil {
 			iamLogIf(ctx, err)
 			return
 		}
-		if dn == "" {
-			// Still attempt to detach if provided user is a DN.
+		if dnResult == nil {
+			// dn not found - still attempt to detach if provided user is a DN.
 			if !isAttach && sys.LDAPConfig.IsLDAPUserDN(r.User) {
 				dn = r.User
 			} else {
 				err = errNoSuchUser
 				return
 			}
+		} else {
+			dn = dnResult.NormDN
 		}
 		isGroup = false
 	} else {
 		if isAttach {
-			var foundGroupDN string
 			var underBaseDN bool
-			if foundGroupDN, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
+			if dnResult, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
 				iamLogIf(ctx, err)
 				return
-			} else if foundGroupDN == "" || !underBaseDN {
+			} else if dnResult == nil || !underBaseDN {
 				err = errNoSuchGroup
 				return
 			}
 			// We use the group DN returned by the LDAP server (this may not
 			// equal the input group name, but we assume it is canonical).
-			dn = foundGroupDN
+			dn = dnResult.NormDN
 		} else {
 			dn = r.Group
 		}

@@ -2,5 +2,6 @@
 
 export CGO_ENABLED=0
 for dir in docs/debugging/*/; do
-	go build -C ${dir} -v
+	bin=$(basename ${dir})
+	go build -C ${dir} -o ${PWD}/${bin}
 done
