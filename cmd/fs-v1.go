@@ -800,15 +800,12 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		readCloser.Close()
 	}
 
-	var reader io.Reader
 	if !isSysCall(bucket) {
 		configId := getConfigId(ctx, fs.fsPath, bucket)
-		reader, size, err = gateway.Get(readCloser, configId)
+		readCloser, size, err = gateway.Get(readCloser, configId)
 		if err != nil {
 			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
 		}
-	} else {
-		reader = readCloser
 	}
 
 	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts)
@@ -816,7 +813,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, rErr
 	}
 
-	r := io.LimitReader(reader, length)
+	r := io.LimitReader(readCloser, length)
 
 	// Check if range is valid
 	if off > size || off+length > size {
@@ -918,7 +915,6 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 	if !isSysCall(bucket) {
 		// Read the object, doesn't exist returns an s3 compatible error.
 		fsObjPath := pathJoin(fs.fsPath, bucket, object)
-		//TODO:offset is 0, it may cause bug-----------------------
 		readCloser, _, err := fsOpenFile(ctx, fsObjPath, 0)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -982,7 +978,6 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 	if !isSysCall(bucket) {
 		// Read the object, doesn't exist returns an s3 compatible error.
 		fsObjPath := pathJoin(fs.fsPath, bucket, object)
-		//TODO:offset is 0, it may cause bug-----------------------
 		readCloser, _, err := fsOpenFile(ctx, fsObjPath, 0)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
