@@ -277,6 +277,10 @@ func (es *expiryState) getWorkerCh(h uint64) chan<- expiryOp {
 }
 
 func (es *expiryState) ResizeWorkers(n int) {
+	if n == 0 {
+		n = 100
+	}
+
 	// Lock to avoid multiple resizes to happen at the same time.
 	es.mu.Lock()
 	defer es.mu.Unlock()
@@ -538,6 +542,10 @@ func (t *transitionState) UpdateWorkers(n int) {
 }
 
 func (t *transitionState) updateWorkers(n int) {
+	if n == 0 {
+		n = 100
+	}
+
 	for t.numWorkers < n {
 		go t.worker(t.objAPI)
 		t.numWorkers++
