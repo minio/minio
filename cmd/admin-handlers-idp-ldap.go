@@ -457,8 +457,8 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 	writeSuccessResponseJSON(w, encryptedData)
 }
 
-// ListAccessKeysLDAPv2 - GET /minio/admin/v3/idp/ldap/list-access-keys-v2
-func (a adminAPIHandlers) ListAccessKeysLDAPv2(w http.ResponseWriter, r *http.Request) {
+// ListAccessKeysLDAPBulk - GET /minio/admin/v3/idp/ldap/list-access-keys-bulk
+func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// Get current object layer instance.
