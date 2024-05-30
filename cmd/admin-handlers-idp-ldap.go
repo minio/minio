@@ -545,15 +545,15 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 	} else {
 		for _, userDN := range userDNs {
 			// Validate the userDN
-			validatedDN, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
+			foundResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
 			}
-			if validatedDN == "" {
+			if foundResult == nil {
 				continue
 			}
-			accessKeyMap[validatedDN] = madmin.ListAccessKeysLDAPResp{}
+			accessKeyMap[foundResult.NormDN] = madmin.ListAccessKeysLDAPResp{}
 		}
 	}
 
