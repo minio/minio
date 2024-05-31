@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"crypto/subtle"
 	"errors"
@@ -55,7 +54,10 @@ const (
 	tripledescbcID     = "3des-cbc"
 )
 
-var errPublicKeyBadFormat = errors.New("The public key provided could not be parsed")
+var (
+	sftpErrPublicKeyBadFormat = errors.New("the public key provided could not be parsed")
+	sftpErrUserHasNoPolicies  = errors.New("no policies present on this account")
+)
 
 // if the sftp parameter --trusted-user-ca-key is set, then
 // the final form of the key file will be set as this variable.
@@ -185,6 +187,9 @@ internalAuth:
 }
 
 func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (perms *ssh.Permissions, err error) {
+	var lookupResult *xldap.DNSearchResult
+	var targetGroups []string
+
 	if pass != nil {
 		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), user)
 		if err == nil {
@@ -205,14 +210,7 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 		if !errors.Is(err, errNoSuchServiceAccount) {
 			return nil, err
 		}
-	}
 
-	var lookupResult *xldap.DNSearchResult
-	var targetGroups []string
-
-	if pass != nil {
-
-		// IS THIS THE SAME AS LOOKUP DN ???
 		lookupResult, targetGroups, err = globalIAMSys.LDAPConfig.Bind(user, string(pass))
 		if err != nil {
 			return nil, err
@@ -225,15 +223,17 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 			return nil, err
 		}
 
+	} else {
+		return nil, errAuthentication
 	}
 
 	if lookupResult == nil {
-		return nil, errAuthentication
+		return nil, errNoSuchUser
 	}
 
 	ldapPolicies, _ := globalIAMSys.PolicyDBGet(lookupResult.NormDN, targetGroups...)
 	if len(ldapPolicies) == 0 {
-		return nil, errAuthentication
+		return nil, sftpErrUserHasNoPolicies
 	}
 
 	claims := make(map[string]interface{})
@@ -247,10 +247,10 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 		if attribKey == "sshPublicKey" && key != nil {
 			key2, _, _, _, err := ssh.ParseAuthorizedKey([]byte(attribValue[0]))
 			if err != nil {
-				return nil, errPublicKeyBadFormat
+				return nil, sftpErrPublicKeyBadFormat
 			}
 
-			if !bytes.Equal(key2.Marshal(), key.Marshal()) {
+			if subtle.ConstantTimeCompare(key2.Marshal(), key.Marshal()) != 1 {
 				return nil, errAuthentication
 			}
 		}
@@ -329,8 +329,12 @@ func validateKey(c ssh.ConnMetadata, clientKey ssh.PublicKey) (err error) {
 	// and that certificate type is correct.
 	checker := ssh.CertChecker{}
 	checker.IsUserAuthority = func(k ssh.PublicKey) bool {
-		return bytes.Equal(caPublicKey.Marshal(), k.Marshal())
+		if subtle.ConstantTimeCompare(caPublicKey.Marshal(), k.Marshal()) == 1 {
+			return true
+		}
+		return false
 	}
+
 	_, err = checker.Authenticate(c, clientKey)
 	return
 }
@@ -425,7 +429,7 @@ func startSFTPServer(args []string) {
 			allowMACs = filterAlgos(arg, strings.Split(tokens[1], ","), supportedMACs)
 		case "trusted-user-ca-key":
 			userCaKeyFile = tokens[1]
-		case "disable-password-auth":
+		case "password-auth":
 			disablePassAuth, _ = strconv.ParseBool(tokens[1])
 		}
 	}
