@@ -91,11 +91,11 @@ func availableMemory() (available uint64) {
 	available = 2048 * blockSizeV2 * 2 // Default to 4 GiB when we can't find the limits.
 
 	if runtime.GOOS == "linux" {
-		// Useful in container mode
+		// Honor cgroup limits if set.
 		limit := cgroupMemLimit()
 		if limit > 0 {
-			// A valid value is found, return its 75%
-			available = (limit * 3) / 4
+			// A valid value is found, return its 90%
+			available = (limit * 9) / 10
 			return
 		}
 	} // for all other platforms limits are based on virtual memory.
@@ -104,8 +104,9 @@ func availableMemory() (available uint64) {
 	if err != nil {
 		return
 	}
-	// A valid value is available return its 75%
-	available = (memStats.Available * 3) / 4
+
+	// A valid value is available return its 90%
+	available = (memStats.Available * 9) / 10
 	return
 }
 
@@ -129,7 +130,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 		maxSetDrives := slices.Max(setDriveCounts)
 
 		// Returns 75% of max memory allowed
-		maxMem := availableMemory()
+		maxMem := globalServerCtxt.MemLimit
 
 		// max requests per node is calculated as
 		// total_ram / ram_per_request

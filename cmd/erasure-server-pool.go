@@ -104,7 +104,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	// Initialize byte pool once for all sets, bpool size is set to
 	// setCount * setDriveCount with each memory upto blockSizeV2.
 	buffers := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
-	buffers.Populate()
+	if n >= 16384 {
+		// pre-populate buffers only n >= 16384 which is (32Gi/2Mi)
+		// for all setups smaller than this avoid pre-alloc.
+		buffers.Populate()
+	}
 	globalBytePoolCap.Store(buffers)
 
 	var localDrives []StorageAPI
@@ -165,6 +169,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	if !globalIsDistErasure {
 		globalLocalDrivesMu.Lock()
 		globalLocalDrives = localDrives
+		for _, drive := range localDrives {
+			globalLocalDrivesMap[drive.Endpoint().String()] = drive
+		}
 		globalLocalDrivesMu.Unlock()
 	}
 

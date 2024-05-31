@@ -38,6 +38,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// Maximum write offset for incoming SFTP blocks.
+// Set to 100MiB to prevent hostile DOS attacks.
+const ftpMaxWriteOffset = 100 << 20
+
 type sftpDriver struct {
 	permissions *ssh.Permissions
 	endpoint    string
@@ -185,6 +189,9 @@ func (w *writerAt) WriteAt(b []byte, offset int64) (n int, err error) {
 		n, err = w.w.Write(b)
 		w.nextOffset += int64(n)
 	} else {
+		if offset > w.nextOffset+ftpMaxWriteOffset {
+			return 0, fmt.Errorf("write offset %d is too far ahead of next offset %d", offset, w.nextOffset)
+		}
 		w.buffer[offset] = make([]byte, len(b))
 		copy(w.buffer[offset], b)
 		n = len(b)

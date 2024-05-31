@@ -33,9 +33,9 @@ var (
 		return config.DefaultHelpPostfix(DefaultKVS, key)
 	}
 
-	// HelpILM holds configuration keys and their default values for the ILM
+	// Help holds configuration keys and their default values for the ILM
 	// subsystem
-	HelpILM = config.HelpKVS{
+	Help = config.HelpKVS{
 		config.HelpKV{
 			Key:         transitionWorkers,
 			Type:        "number",
