@@ -59,7 +59,7 @@ func main() {
 		}
 
 		// Prompt for decryption key if no --key or --private-key are provided
-		if len(privateKey) == 0 {
+		if len(privateKey) == 0 && !*stdin {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("Enter Decryption Key: ")
 
