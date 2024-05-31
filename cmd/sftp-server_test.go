@@ -132,8 +132,8 @@ func (s *TestSuiteIAM) SFTPPublicKeyAuthentication(c *check) {
 func (s *TestSuiteIAM) SFTPFailedAuthDueToMissingPolicy(c *check) {
 	newSSHCon := newSSHConnMock("dillon=ldap")
 	_, err := sshPasswordAuth(newSSHCon, []byte("dillon"))
-	if err == nil || !errors.Is(err, sftpErrUserHasNoPolicies) {
-		c.Fatalf("expected err(%s) but got (%s)", sftpErrUserHasNoPolicies, err)
+	if err == nil || !errors.Is(err, errSFTPUserHasNoPolicies) {
+		c.Fatalf("expected err(%s) but got (%s)", errSFTPUserHasNoPolicies, err)
 	}
 
 	newSSHCon = newSSHConnMock("dillon")
@@ -162,7 +162,7 @@ func (s *TestSuiteIAM) SFTPFailedForcedServiceAccountAuthOnLDAPUser(c *check) {
 func (s *TestSuiteIAM) SFTPFailedAuthDueToInvalidPassword(c *check) {
 	newSSHCon := newSSHConnMock("dillon")
 	_, err := sshPasswordAuth(newSSHCon, []byte("dillon_error"))
-	if err == nil || !errors.Is(err, errAuthentication) {
+	if err == nil || !errors.Is(err, errNoSuchUser) {
 		c.Fatalf("expected err(%s) but got (%s)", errNoSuchUser, err)
 	}
 }
