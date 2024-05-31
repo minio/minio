@@ -19,6 +19,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -814,6 +815,7 @@ type mappedData struct {
 	blockOffset                int // Offset in bytes to start of block.
 	blocks                     int // 0 = one block.
 	objSize, partSize          int
+	wantMD5                    string
 }
 
 func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
@@ -835,6 +837,9 @@ func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
 				EcBSize   int
 				PartNums  []int
 				PartSizes []int
+				MetaUsr   struct {
+					Etag string `json:"etag"`
+				}
 			}
 		}
 		var ei erasureInfo
@@ -845,11 +850,14 @@ func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
 			}
 			m.data = ei.V2Obj.EcM
 			m.parity = ei.V2Obj.EcN
+			if len(ei.V2Obj.PartNums) == 1 && !strings.ContainsRune(ei.V2Obj.MetaUsr.Etag, '-') {
+				m.wantMD5 = ei.V2Obj.MetaUsr.Etag
+			}
 			if m.shards == 0 {
 				m.shards = m.data + m.parity
 			}
 			idx = ei.V2Obj.EcIndex - 1
-			fmt.Println("Read shard", ei.V2Obj.EcIndex, "Data shards", m.data, "Parity", m.parity, fmt.Sprintf("(%s)", file))
+			fmt.Println("Read shard", ei.V2Obj.EcIndex, fmt.Sprintf("(%s)", file))
 			if ei.V2Obj.Size != m.objSize {
 				return nil, fmt.Errorf("size mismatch. Meta size: %d, Prev: %d", ei.V2Obj.Size, m.objSize)
 			}
@@ -893,7 +901,6 @@ func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Println("Block data size:", m.size, "Shard size", ssz, "Got Shard:", len(b), "Bitrot ok")
 
 		if m.mapped == nil {
 			m.mapped = make([]byte, m.size)
@@ -912,6 +919,7 @@ func readAndMap(files []string, partNum, blockNum int) (*mappedData, error) {
 		if start >= len(m.mapped) {
 			continue
 		}
+		fmt.Println("Block data size:", m.size, "Shard size", ssz, "Got Shard:", len(b), "Bitrot ok", "Start", start, "End", start+len(b))
 		copy(m.mapped[start:], b)
 		for j := range b {
 			if j+start >= len(m.filled) {
@@ -1038,14 +1046,23 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 		if len(files[partIdx]) == 0 {
 			continue
 		}
+		var wantMD5 string
 		exportedSizes := make(map[int]bool)
+		// block -> data
+		combineSharedBlocks := make(map[int][]byte)
+		combineFilledBlocks := make(map[int][]byte)
 	nextFile:
 		for key, file := range files[partIdx] {
 			fmt.Println("Reading base version", file[0], "part", part)
 			var combined []byte
 			var missingAll int
 			var lastValidAll int
+
+			attempt := 0
 			for block := 0; ; block++ {
+				combineFilled := combineFilledBlocks[block]
+				combineShared := combineSharedBlocks[block]
+			nextAttempt:
 				fmt.Printf("Block %d, Base version %q. Part %d. Files %d\n", block+1, key, part, len(file))
 				m, err := readAndMap(file, part, block)
 				if err != nil {
@@ -1055,11 +1072,30 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 					fmt.Println("Skipping version", key, "as it has already been exported.")
 					continue nextFile
 				}
+				addedFiles := 0
 			compareFile:
 				for otherKey, other := range files[partIdx] {
+					addedFiles++
+					if attempt > 0 && len(m.filled) == len(combineFilled) {
+						fmt.Println("Merging previous global data")
+						filled := 0
+						missing := 0
+						for i, v := range combineFilled {
+							if v == 1 {
+								m.filled[i] = 1
+								m.mapped[i] = combineShared[i]
+								filled++
+							} else {
+								missing++
+							}
+						}
+						fmt.Println("Missing", missing, "bytes. Filled", filled, "bytes.")
+						break
+					}
 					if key == otherKey {
 						continue
 					}
+
 					otherPart := getPartNum(other[0])
 					if part != otherPart {
 						fmt.Println("part ", part, " != other part", otherPart, other[0])
@@ -1075,16 +1111,6 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 					}
 					if m.objSize != otherM.objSize {
 						continue
-					}
-					var ok int
-					for i, filled := range otherM.filled[:m.size] {
-						if filled == 1 && m.filled[i] == 1 {
-							if m.mapped[i] != otherM.mapped[i] {
-								fmt.Println("Data mismatch at byte", i, "-  Disregarding version", otherKey)
-								continue compareFile
-							}
-							ok++
-						}
 					}
 
 					// If data+parity matches, combine.
@@ -1102,6 +1128,17 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						}
 					}
 
+					var ok int
+					for i, filled := range otherM.filled[:m.size] {
+						if filled == 1 && m.filled[i] == 1 {
+							if m.mapped[i] != otherM.mapped[i] {
+								fmt.Println("Data mismatch at byte", i, "-  Disregarding version", otherKey)
+								continue compareFile
+							}
+							ok++
+						}
+					}
+
 					fmt.Printf("Data overlaps (%d bytes). Combining with %q.\n", ok, otherKey)
 					for i := range otherM.filled {
 						if otherM.filled[i] == 1 {
@@ -1110,6 +1147,7 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						}
 					}
 				}
+
 				lastValid := 0
 				missing := 0
 				for i := range m.filled {
@@ -1130,7 +1168,7 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						if err != nil {
 							return err
 						}
-						split, err := rs.Split(m.mapped)
+						splitData, err := rs.Split(m.mapped)
 						if err != nil {
 							return err
 						}
@@ -1138,35 +1176,172 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						if err != nil {
 							return err
 						}
-						ok := len(splitFilled)
-						for i, sh := range splitFilled {
-							for _, v := range sh {
+						// Fill padding...
+						padding := len(splitFilled[0])*k - len(m.filled)
+						for i := 0; i < padding; i++ {
+							arr := splitFilled[k-1]
+							arr[len(arr)-i-1] = 1
+						}
+
+						hasParity := 0
+						parityOK := make([]bool, m.shards)
+						for idx, sh := range v {
+							splitData[idx] = sh
+							if idx >= k && len(sh) > 0 {
+								parityOK[idx] = true
+								hasParity++
+								for i := range splitFilled[idx] {
+									splitFilled[idx][i] = 1
+								}
+							}
+						}
+
+						splitDataShards := make([]byte, len(splitFilled[0]))
+						for _, sh := range splitFilled {
+							for i, v := range sh {
+								splitDataShards[i] += v
+							}
+						}
+						var hist [256]int
+						for _, v := range splitDataShards {
+							hist[v]++
+						}
+
+						for _, v := range hist[m.data-hasParity : m.shards] {
+							if attempt > 0 {
+								break
+							}
+							if v == 0 {
+								continue
+							}
+							for i, v := range hist[:m.shards] {
+								if v > 0 {
+									if i < m.data {
+										fmt.Println("- Shards:", i, "of", m.data, "Bytes:", v, "Missing: ", v*(m.data-i+hasParity))
+									} else {
+										fmt.Println("+ Shards:", i, "of", m.data, "Bytes:", v, "Recovering: ", v*(m.data-i+hasParity))
+									}
+								}
+							}
+							fmt.Println("Attempting to reconstruct with partial shards")
+							offset := 0
+							startOffset := 0
+							shardConfig := make([]byte, k)
+							reconstructAbleConfig := false
+							shards := make([][]byte, m.shards)
+							for i := range shards {
+								shards[i] = make([]byte, 0, len(splitData[0]))
+							}
+							for offset < len(splitDataShards) {
+								newConfig := false
+								for shardIdx, shard := range splitFilled[:k] {
+									if shardConfig[shardIdx] != shard[offset] {
+										newConfig = true
+										break
+									}
+								}
+								if newConfig {
+									if offset > startOffset && reconstructAbleConfig {
+										reconPartial(shards, k, parityOK, splitData, startOffset, offset, rs, shardConfig, splitFilled)
+									}
+									// Update to new config and add current
+									valid := 0
+									for shardIdx, shard := range splitFilled[:k] {
+										shardConfig[shardIdx] = shard[offset]
+										valid += int(shard[offset])
+										if shard[offset] == 0 {
+											shards[shardIdx] = shards[shardIdx][:0]
+										} else {
+											shards[shardIdx] = append(shards[shardIdx][:0], splitData[shardIdx][offset])
+										}
+									}
+									reconstructAbleConfig = valid >= m.data-hasParity && valid < m.data
+									startOffset = offset
+									offset++
+									continue
+								}
+								for shardIdx, ok := range shardConfig {
+									if ok != 0 {
+										shards[shardIdx] = append(shards[shardIdx], splitData[shardIdx][offset])
+									}
+								}
+								offset++
+							}
+							if offset > startOffset && reconstructAbleConfig {
+								reconPartial(shards, k, parityOK, splitData, startOffset, offset, rs, shardConfig, splitFilled)
+							}
+
+							var buf bytes.Buffer
+							if err := rs.Join(&buf, splitFilled, m.size); err == nil {
+								m.filled = buf.Bytes()
+							}
+							buf = bytes.Buffer{}
+							if err := rs.Join(&buf, splitData, m.size); err == nil {
+								m.mapped = buf.Bytes()
+							}
+							for i, v := range m.filled {
 								if v == 0 {
-									split[i] = nil
-									ok--
+									m.mapped[i] = 0
+								}
+							}
+							break
+						}
+						ok := k
+						for i, sh := range splitFilled {
+							for j, v := range sh {
+								if v == 0 {
+									splitData[i] = nil
+									if i < k {
+										fmt.Println("Shard", i, "is missing data from offset", i*len(sh)+j)
+										ok--
+									}
 									break
 								}
 							}
 						}
-						hasParity := 0
-						for idx, sh := range v {
-							split[idx] = sh
-							if idx >= k && len(sh) > 0 {
-								hasParity++
+
+						missing = 0
+						lastValid = 0
+						for i := range m.filled {
+							if m.filled[i] == 1 {
+								lastValid = i
+							} else {
+								missing++
 							}
 						}
-						fmt.Printf("Have %d complete remapped data shards and %d complete parity shards. ", ok, hasParity)
+						fmt.Printf("Have %d complete remapped data shards and %d complete parity shards (%d bytes missing). ", ok, hasParity, missing)
 
-						if err := rs.ReconstructData(split); err == nil {
-							fmt.Println("Could reconstruct completely")
-							for i, data := range split[:k] {
+						if err := rs.ReconstructData(splitData); err == nil {
+							fmt.Println("Could reconstruct completely.")
+							for i, data := range splitData[:k] {
 								start := i * len(data)
 								copy(m.mapped[start:], data)
 							}
 							lastValid = m.size - 1
 							missing = 0
+							attempt = 2
+							wantMD5 = m.wantMD5
 						} else {
-							fmt.Println("Could NOT reconstruct:", err)
+							fmt.Println("Could NOT reconstruct:", err, " - Need", m.data, "shards.")
+							if attempt == 0 {
+								if len(combineShared) == 0 {
+									combineShared = make([]byte, len(m.mapped))
+									combineFilled = make([]byte, len(m.filled))
+								}
+								for i := range m.filled {
+									if m.filled[i] == 1 && combineFilled[i] == 0 {
+										combineShared[i] = m.mapped[i]
+										combineFilled[i] = 1
+									}
+								}
+								combineFilledBlocks[block] = combineFilled
+								combineSharedBlocks[block] = combineShared
+								fmt.Println("Retrying with merged data")
+								if addedFiles >= len(files[partIdx]) {
+									attempt++
+									goto nextAttempt
+								}
+							}
 						}
 					}
 				}
@@ -1182,7 +1357,7 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 					if len(combined) != m.partSize {
 						fmt.Println("Combined size mismatch. Expected", m.partSize, "got", len(combined))
 					}
-					fmt.Println("Reached block", block+1, "of", m.blocks+1, "for", key, ". Done.")
+					fmt.Println("Reached block", block+1, "of", m.blocks+1, "for", key, "Done.")
 					break
 				}
 			}
@@ -1195,16 +1370,31 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 			}
 			if missingAll > 0 {
 				out += ".incomplete"
-				fmt.Println(missingAll, "bytes missing. Truncating", len(combined)-lastValidAll-1, "from end.")
+				fmt.Println(missingAll, "bytes missing.")
 			} else {
-				out += ".complete"
-				fmt.Println("No bytes missing.")
+				if wantMD5 != "" {
+					sum := md5.Sum(combined)
+					gotMD5 := hex.EncodeToString(sum[:])
+					if gotMD5 != wantMD5 {
+						fmt.Println("MD5 mismatch. Expected", wantMD5, "got", gotMD5)
+						out += ".mismatch"
+					} else {
+						fmt.Println("MD5 verified.")
+						out = fmt.Sprintf("verified/%s", baseName)
+					}
+				} else {
+					out = fmt.Sprintf("complete/%s.%05d", baseName, part)
+					fmt.Println("No bytes missing.")
+				}
 			}
 			if missingAll == 0 {
 				exportedSizes[len(combined)] = true
 			}
-			combined = combined[:lastValidAll+1]
-			err := os.WriteFile(out, combined, os.ModePerm)
+			err := os.MkdirAll(filepath.Dir(out), os.ModePerm)
+			if err != nil {
+				return err
+			}
+			err = os.WriteFile(out, combined, os.ModePerm)
 			if err != nil {
 				return err
 			}
@@ -1212,6 +1402,46 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 		}
 	}
 	return nil
+}
+
+func reconPartial(shards [][]byte, k int, parityOK []bool, splitData [][]byte, startOffset int, offset int, rs reedsolomon.Encoder, shardConfig []byte, splitFilled [][]byte) {
+	// Add parity
+	for i := range shards[k:] {
+		shards[i+k] = nil
+		if parityOK[i+k] {
+			shards[i+k] = splitData[i+k][startOffset:offset]
+		}
+	}
+	// Reconstruct with current config.
+	if err := rs.ReconstructData(shards); err != nil {
+		panic(fmt.Sprintln("Internal error, could NOT partially reconstruct:", err))
+	}
+	// Copy reconstructed data back.
+	verified := 0
+	reconstructed := 0
+	for shardsIdx, ok := range shardConfig {
+		if ok == 0 {
+			copy(splitData[shardsIdx][startOffset:], shards[shardsIdx])
+			for i := range shards[shardsIdx] {
+				if splitFilled[shardsIdx][startOffset+i] == 1 {
+					fmt.Println("Internal error: Found filled data at", startOffset+i)
+				}
+				splitFilled[shardsIdx][startOffset+i] = 1
+			}
+			reconstructed += len(shards[shardsIdx])
+		} else {
+			for i := range shards[shardsIdx] {
+				if splitFilled[shardsIdx][startOffset+i] == 0 {
+					fmt.Println("Internal error: Expected filled data at", startOffset+i)
+				}
+				if splitData[shardsIdx][startOffset+i] != shards[shardsIdx][i] {
+					fmt.Println("Internal error: Mismatch at", startOffset+i)
+				}
+				verified++
+			}
+		}
+	}
+	fmt.Println("Reconstructed", reconstructed, "bytes and verified", verified, "bytes of partial shard with config", shardConfig)
 }
 
 // bitrot returns a shard beginning at startOffset after doing bitrot checks.
