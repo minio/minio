@@ -55,8 +55,8 @@ const (
 )
 
 var (
-	sftpErrPublicKeyBadFormat = errors.New("the public key provided could not be parsed")
-	sftpErrUserHasNoPolicies  = errors.New("no policies present on this account")
+	errSFTPPublicKeyBadFormat = errors.New("the public key provided could not be parsed")
+	errSFTPUserHasNoPolicies  = errors.New("no policies present on this account")
 )
 
 // if the sftp parameter --trusted-user-ca-key is set, then
@@ -190,6 +190,10 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 	var lookupResult *xldap.DNSearchResult
 	var targetGroups []string
 
+	if pass == nil && key == nil {
+		return nil, errAuthentication
+	}
+
 	if pass != nil {
 		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), user)
 		if err == nil {
@@ -223,8 +227,6 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 			return nil, err
 		}
 
-	} else {
-		return nil, errAuthentication
 	}
 
 	if lookupResult == nil {
@@ -233,7 +235,7 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 
 	ldapPolicies, _ := globalIAMSys.PolicyDBGet(lookupResult.NormDN, targetGroups...)
 	if len(ldapPolicies) == 0 {
-		return nil, sftpErrUserHasNoPolicies
+		return nil, errSFTPUserHasNoPolicies
 	}
 
 	claims := make(map[string]interface{})
@@ -247,7 +249,7 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 		if attribKey == "sshPublicKey" && key != nil {
 			key2, _, _, _, err := ssh.ParseAuthorizedKey([]byte(attribValue[0]))
 			if err != nil {
-				return nil, sftpErrPublicKeyBadFormat
+				return nil, errSFTPPublicKeyBadFormat
 			}
 
 			if subtle.ConstantTimeCompare(key2.Marshal(), key.Marshal()) != 1 {

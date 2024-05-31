@@ -54,9 +54,10 @@ func TestSFTPAuthentication(t *testing.T) {
 
 				suite.SetUpSuite(c)
 
-				suite.SFTP_ValidUserLoginWithServiceAccount(c)
+				suite.SFTPServiceAccountLogin(c)
+				suite.SFTPInvalidServiceAccountPassword(c)
 
-				// LDAP
+				// LDAP tests
 				ldapServer := os.Getenv(EnvTestLDAPServer)
 				if ldapServer == "" {
 					c.Skipf("Skipping LDAP test as no LDAP server is provided via %s", EnvTestLDAPServer)
@@ -64,15 +65,15 @@ func TestSFTPAuthentication(t *testing.T) {
 
 				suite.SetUpLDAP(c, ldapServer)
 
-				suite.SFTP_LDAP_FailedAuthenticationDueToMissingPolicy(c)
-				suite.SFTP_LDAP_FailedAuthenticationDueToInvalidUser(c)
-				suite.SFTP_LDAP_FailedForcedServiceAccountAuthOnLDAPUser(c)
+				suite.SFTPFailedAuthDueToMissingPolicy(c)
+				suite.SFTPFailedAuthDueToInvalidUser(c)
+				suite.SFTPFailedForcedServiceAccountAuthOnLDAPUser(c)
+				suite.SFTPFailedAuthDueToInvalidPassword(c)
 
-				suite.SFTP_LDAP_ValidUserLoginWithPassword(c)
+				suite.SFTPValidLDAPLoginWithPassword(c)
 
-				// Public Key Authentication
-				suite.SFTP_LDAP_PublicKeyAuthentication(c)
-				suite.SFTP_LDAP_FailedPublicKeyAuthenticationInvalidKey(c)
+				suite.SFTPPublicKeyAuthentication(c)
+				suite.SFTPFailedPublicKeyAuthenticationInvalidKey(c)
 
 				suite.TearDownSuite(c)
 			},
@@ -80,7 +81,7 @@ func TestSFTPAuthentication(t *testing.T) {
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_FailedPublicKeyAuthenticationInvalidKey(c *check) {
+func (s *TestSuiteIAM) SFTPFailedPublicKeyAuthenticationInvalidKey(c *check) {
 	keyBytes, err := os.ReadFile("./testdata/invalid_test_key.pub")
 	if err != nil {
 		c.Fatalf("could not read test key file: %s", err)
@@ -104,7 +105,7 @@ func (s *TestSuiteIAM) SFTP_LDAP_FailedPublicKeyAuthenticationInvalidKey(c *chec
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_PublicKeyAuthentication(c *check) {
+func (s *TestSuiteIAM) SFTPPublicKeyAuthentication(c *check) {
 	keyBytes, err := os.ReadFile("./testdata/dillon_test_key.pub")
 	if err != nil {
 		c.Fatalf("could not read test key file: %s", err)
@@ -128,7 +129,7 @@ func (s *TestSuiteIAM) SFTP_LDAP_PublicKeyAuthentication(c *check) {
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_FailedAuthenticationDueToMissingPolicy(c *check) {
+func (s *TestSuiteIAM) SFTPFailedAuthDueToMissingPolicy(c *check) {
 	newSSHCon := newSSHConnMock("dillon=ldap")
 	_, err := sshPasswordAuth(newSSHCon, []byte("dillon"))
 	if err == nil || !errors.Is(err, sftpErrUserHasNoPolicies) {
@@ -142,7 +143,7 @@ func (s *TestSuiteIAM) SFTP_LDAP_FailedAuthenticationDueToMissingPolicy(c *check
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_FailedAuthenticationDueToInvalidUser(c *check) {
+func (s *TestSuiteIAM) SFTPFailedAuthDueToInvalidUser(c *check) {
 	newSSHCon := newSSHConnMock("dillon_error")
 	_, err := sshPasswordAuth(newSSHCon, []byte("dillon_error"))
 	if err == nil || !errors.Is(err, errNoSuchUser) {
@@ -150,7 +151,7 @@ func (s *TestSuiteIAM) SFTP_LDAP_FailedAuthenticationDueToInvalidUser(c *check) 
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_FailedForcedServiceAccountAuthOnLDAPUser(c *check) {
+func (s *TestSuiteIAM) SFTPFailedForcedServiceAccountAuthOnLDAPUser(c *check) {
 	newSSHCon := newSSHConnMock("dillon=svc")
 	_, err := sshPasswordAuth(newSSHCon, []byte("dillon"))
 	if err == nil || !errors.Is(err, errNoSuchUser) {
@@ -158,7 +159,7 @@ func (s *TestSuiteIAM) SFTP_LDAP_FailedForcedServiceAccountAuthOnLDAPUser(c *che
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_FailedAuthenticationDueToInvalidPassword(c *check) {
+func (s *TestSuiteIAM) SFTPFailedAuthDueToInvalidPassword(c *check) {
 	newSSHCon := newSSHConnMock("dillon")
 	_, err := sshPasswordAuth(newSSHCon, []byte("dillon_error"))
 	if err == nil || !errors.Is(err, errAuthentication) {
@@ -166,7 +167,35 @@ func (s *TestSuiteIAM) SFTP_LDAP_FailedAuthenticationDueToInvalidPassword(c *che
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_ValidUserLoginWithServiceAccount(c *check) {
+func (s *TestSuiteIAM) SFTPInvalidServiceAccountPassword(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err := s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	err = s.adm.SetPolicy(ctx, "readwrite", accessKey, false)
+	if err != nil {
+		c.Fatalf("unable to set policy: %v", err)
+	}
+
+	newSSHCon := newSSHConnMock(accessKey + "=svc")
+	_, err = sshPasswordAuth(newSSHCon, []byte("invalid"))
+	if err == nil || !errors.Is(err, errAuthentication) {
+		c.Fatalf("expected err(%s) but got (%s)", errAuthentication, err)
+	}
+
+	newSSHCon = newSSHConnMock(accessKey)
+	_, err = sshPasswordAuth(newSSHCon, []byte("invalid"))
+	if err == nil || !errors.Is(err, errAuthentication) {
+		c.Fatalf("expected err(%s) but got (%s)", errAuthentication, err)
+	}
+}
+
+func (s *TestSuiteIAM) SFTPServiceAccountLogin(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
@@ -194,7 +223,7 @@ func (s *TestSuiteIAM) SFTP_ValidUserLoginWithServiceAccount(c *check) {
 	}
 }
 
-func (s *TestSuiteIAM) SFTP_LDAP_ValidUserLoginWithPassword(c *check) {
+func (s *TestSuiteIAM) SFTPValidLDAPLoginWithPassword(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
 
