@@ -364,6 +364,8 @@ github.com/klauspost/cpuid/v2 v2.2.7 h1:ZWSB3igEs+d0qvnxR/ZBzXVmxkgt8DdzP6m9pfuV
 github.com/klauspost/cpuid/v2 v2.2.7/go.mod h1:Lcz8mBdAVJIBVzewtcLocK12l3Y+JytZYpaMropDUws=
 github.com/klauspost/filepathx v1.1.1 h1:201zvAsL1PhZvmXTP+QLer3AavWrO3U1NILWpniHK4w=
 github.com/klauspost/filepathx v1.1.1/go.mod h1:XWxdp8rEw4gupPBrxrV5Q57dL/71xj0OgV1gKt2zTfU=
+github.com/klauspost/madmin-go/v3 v3.0.0-20240531101314-9fddbcbd1db2 h1:qYJkd16op/27ULiKUyrVrnWXr8F8LU6P0n8c7AIezGc=
+github.com/klauspost/madmin-go/v3 v3.0.0-20240531101314-9fddbcbd1db2/go.mod h1:IFAwr0XMrdsLovxAdCcuq/eoL4nRuMVQQv0iubJANQw=
 github.com/klauspost/pgzip v1.2.6 h1:8RXeL5crjEUFnR2/Sn6GJNWtSQ3Dk8pq4CL3jvdDyjU=
 github.com/klauspost/pgzip v1.2.6/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
 github.com/klauspost/readahead v1.4.0 h1:w4hQ3BpdLjBnRQkZyNi+nwdHU7eGP9buTexWK9lU7gY=
@@ -454,8 +456,6 @@ github.com/minio/kms-go/kes v0.3.0 h1:SU8VGVM/Hk9w1OiSby3OatkcojooUqIdDHl6dtM6Nk
 github.com/minio/kms-go/kes v0.3.0/go.mod h1:w6DeVT878qEOU3nUrYVy1WOT5H1Ig9hbDIh698NYJKY=
 github.com/minio/kms-go/kms v0.4.0 h1:cLPZceEp+05xHotVBaeFJrgL7JcXM4lBy6PU0idkE7I=
 github.com/minio/kms-go/kms v0.4.0/go.mod h1:q12CehiIy2qgBnDKq6Q7wmPi2PHSyRVug5DKp0HAVeE=
-github.com/minio/madmin-go/v3 v3.0.52 h1:X2zoNfEkrgql9Hlal6Nfw7pAqLAM47yZy4i7yb2bUVk=
-github.com/minio/madmin-go/v3 v3.0.52/go.mod h1:IFAwr0XMrdsLovxAdCcuq/eoL4nRuMVQQv0iubJANQw=
 github.com/minio/mc v0.0.0-20240524090849-a8fdcbe7cb2f h1:UPxKkqMqyHNb+68hTq+PDIUYAqAbbplUujEyP5Ez9rs=
 github.com/minio/mc v0.0.0-20240524090849-a8fdcbe7cb2f/go.mod h1:d/mgZMbu2yRNyYOwVqvRBV25pKMfAz7fijObWSXkqpA=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
