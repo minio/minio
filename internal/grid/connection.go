@@ -1605,8 +1605,6 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 	conn := 0
 	if c.State() == StateConnected {
 		conn++
-	} else {
-		conn--
 	}
 	m := madmin.RPCMetrics{
 		CollectedAt:      time.Now(),
