@@ -122,6 +122,10 @@ type Connection struct {
 	outgoingBytes func(n int64) // Record outgoing bytes.
 	trace         *tracer       // tracer for this connection.
 	baseFlags     Flags
+	outBytes      atomic.Int64
+	inBytes       atomic.Int64
+	inMessages    atomic.Int64
+	outMessages   atomic.Int64
 
 	// For testing only
 	debugInConn  net.Conn
@@ -232,12 +236,24 @@ func newConnection(o connectionParams) *Connection {
 		clientPingInterval: clientPingInterval,
 		connPingInterval:   connPingInterval,
 		tlsConfig:          o.tlsConfig,
-		incomingBytes:      o.incomingBytes,
-		outgoingBytes:      o.outgoingBytes,
 	}
 	if debugPrint {
 		// Random Mux ID
 		c.NextID = rand.Uint64()
+	}
+
+	// Record per connection stats.
+	c.outgoingBytes = func(n int64) {
+		if o.outgoingBytes != nil {
+			o.outgoingBytes(n)
+		}
+		c.outBytes.Add(n)
+	}
+	c.incomingBytes = func(n int64) {
+		if o.incomingBytes != nil {
+			o.incomingBytes(n)
+		}
+		c.inBytes.Add(n)
 	}
 	if !strings.HasPrefix(o.remote, "https://") && !strings.HasPrefix(o.remote, "wss://") {
 		c.baseFlags |= FlagCRCxxh3
@@ -995,11 +1011,13 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				fmt.Printf("%s Got msg: %v\n", c.Local, m)
 			}
 			if m.Op != OpMerged {
+				c.inMessages.Add(1)
 				c.handleMsg(ctx, m, subID)
 				continue
 			}
 			// Handle merged messages.
 			messages := int(m.Seq)
+			c.inMessages.Add(int64(messages))
 			for i := 0; i < messages; i++ {
 				if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 					cancel(ErrDisconnected)
@@ -1100,6 +1118,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			queueSize += len(toSend)
 			continue
 		}
+		c.outMessages.Add(int64(len(queue) + 1))
+		if c.outgoingBytes != nil {
+			c.outgoingBytes(int64(len(toSend) + queueSize))
+		}
+
 		c.connChange.L.Lock()
 		for {
 			state := c.State()
@@ -1578,11 +1601,28 @@ func (c *Connection) State() State {
 }
 
 // Stats returns the current connection stats.
-func (c *Connection) Stats() ConnectionStats {
-	return ConnectionStats{
-		IncomingStreams: c.inStream.Size(),
-		OutgoingStreams: c.outgoing.Size(),
+func (c *Connection) Stats() madmin.RPCMetrics {
+	conn := 0
+	if c.State() == StateConnected {
+		conn++
 	}
+	m := madmin.RPCMetrics{
+		CollectedAt:      time.Now(),
+		Connected:        conn,
+		Disconnected:     1 - conn,
+		IncomingStreams:  c.inStream.Size(),
+		OutgoingStreams:  c.outgoing.Size(),
+		IncomingBytes:    c.inBytes.Load(),
+		OutgoingBytes:    c.outBytes.Load(),
+		IncomingMessages: c.inMessages.Load(),
+		OutgoingMessages: c.outMessages.Load(),
+		OutQueue:         len(c.outQueue),
+		LastPongTime:     time.Unix(c.LastPong, 0).UTC(),
+	}
+	m.ByDestination = map[string]madmin.RPCMetrics{
+		c.Remote: m,
+	}
+	return m
 }
 
 func (c *Connection) debugMsg(d debugMsg, args ...any) {
