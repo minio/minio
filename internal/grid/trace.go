@@ -105,6 +105,7 @@ func (c *muxClient) traceRoundtrip(ctx context.Context, t *tracer, h HandlerID, 
 		Duration:  end.Sub(start),
 		Path:      t.Subroute,
 		Error:     errString,
+		Bytes:     int64(len(req) + len(resp)),
 		HTTP: &madmin.TraceHTTPStats{
 			ReqInfo: madmin.TraceRequestInfo{
 				Time:    start,
