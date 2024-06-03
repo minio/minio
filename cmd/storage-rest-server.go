@@ -731,11 +731,9 @@ type closeNotifier struct {
 
 func (c *closeNotifier) Read(p []byte) (n int, err error) {
 	n, err = c.rc.Read(p)
-	if err != nil {
-		if c.done != nil {
-			xioutil.SafeClose(c.done)
-			c.done = nil
-		}
+	if c.done != nil {
+		xioutil.SafeClose(c.done)
+		c.done = nil
 	}
 	return n, err
 }
