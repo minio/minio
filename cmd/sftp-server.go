@@ -144,7 +144,6 @@ func authenticateSSHConnection(c ssh.ConnMetadata, key ssh.PublicKey, pass []byt
 		goto internalAuth
 	}
 
-	user = c.User()
 
 	if globalIAMSys.LDAPConfig.Enabled() {
 		perms, _ := processLDAPAuthentication(key, pass, user)
