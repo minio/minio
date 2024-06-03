@@ -45,16 +45,14 @@ type Target interface {
 
 type targetsList struct {
 	list []Target
-	mu   *sync.RWMutex
+	mu   sync.RWMutex
 }
 
 func newTargetsList() *targetsList {
-	return &targetsList{
-		mu: &sync.RWMutex{},
-	}
+	return &targetsList{}
 }
 
-func (tl targetsList) get() []Target {
+func (tl *targetsList) get() []Target {
 	tl.mu.RLock()
 	defer tl.mu.RUnlock()
 
