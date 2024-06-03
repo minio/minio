@@ -104,7 +104,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	// Initialize byte pool once for all sets, bpool size is set to
 	// setCount * setDriveCount with each memory upto blockSizeV2.
 	buffers := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
-	buffers.Populate()
+	if n >= 16384 {
+		// pre-populate buffers only n >= 16384 which is (32Gi/2Mi)
+		// for all setups smaller than this avoid pre-alloc.
+		buffers.Populate()
+	}
 	globalBytePoolCap.Store(buffers)
 
 	var localDrives []StorageAPI
@@ -165,6 +169,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	if !globalIsDistErasure {
 		globalLocalDrivesMu.Lock()
 		globalLocalDrives = localDrives
+		for _, drive := range localDrives {
+			globalLocalDrivesMap[drive.Endpoint().String()] = drive
+		}
 		globalLocalDrivesMu.Unlock()
 	}
 
@@ -1535,7 +1542,7 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		return loi, nil
 	}
 	ri := logger.GetReqInfo(ctx)
-	hadoop := ri != nil && strings.Contains(ri.UserAgent, `Hadoop `) && strings.Contains(ri.UserAgent, "scala/")
+	hadoop := ri != nil && strings.Contains(ri.UserAgent, "Hadoop ") && strings.Contains(ri.UserAgent, "scala/")
 	matches := func() bool {
 		if prefix == "" {
 			return false
@@ -1600,7 +1607,7 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		// }
 		if matches() {
 			objInfo, err := z.GetObjectInfo(ctx, bucket, path.Dir(prefix), ObjectOptions{NoLock: true})
-			if err == nil {
+			if err == nil || objInfo.IsLatest && objInfo.DeleteMarker {
 				if opts.Lifecycle != nil {
 					evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, opts.Replication.Config, objInfo)
 					if evt.Action.Delete() {
@@ -1626,41 +1633,29 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		// and throw a 404 exception. This is especially a problem for spark jobs overwriting the same partition
 		// repeatedly. This workaround recursively lists the top 3 entries including delete markers to reflect the
 		// correct state of the directory in the list results.
-		opts.Recursive = true
-		opts.InclDeleted = true
-		opts.Limit = maxKeys + 1
-		li, err := listFn(ctx, opts, opts.Limit)
-		if err == nil {
-			switch {
-			case len(li.Objects) == 0 && len(li.Prefixes) == 0:
-				return loi, nil
-			case len(li.Objects) > 0 || len(li.Prefixes) > 0:
-				var o ObjectInfo
-				var pfx string
-				if len(li.Objects) > 0 {
-					o = li.Objects[0]
-					p := strings.TrimPrefix(o.Name, opts.Prefix)
-					if p != "" {
-						sidx := strings.Index(p, "/")
-						if sidx > 0 {
-							pfx = p[:sidx]
-						}
-					}
-				}
-				switch {
-				case o.DeleteMarker:
-					loi.Objects = append(loi.Objects, ObjectInfo{Bucket: bucket, IsDir: true, Name: prefix})
-					return loi, nil
-				case len(li.Objects) >= 1:
-					loi.Objects = append(loi.Objects, o)
-					if pfx != "" {
-						loi.Prefixes = append(loi.Prefixes, path.Join(opts.Prefix, pfx))
-					}
-				case len(li.Prefixes) > 0:
-					loi.Prefixes = append(loi.Prefixes, li.Prefixes...)
-				}
+		if strings.HasSuffix(opts.Prefix, SlashSeparator) {
+			li, err := listFn(ctx, opts, maxKeys)
+			if err != nil {
+				return loi, err
 			}
-			return loi, nil
+			if len(li.Objects) == 0 {
+				prefixes := li.Prefixes[:0]
+				for _, prefix := range li.Prefixes {
+					objInfo, _ := z.GetObjectInfo(ctx, bucket, pathJoin(prefix, "_SUCCESS"), ObjectOptions{NoLock: true})
+					if objInfo.IsLatest && objInfo.DeleteMarker {
+						continue
+					}
+					prefixes = append(prefixes, prefix)
+				}
+				if len(prefixes) > 0 {
+					objInfo, _ := z.GetObjectInfo(ctx, bucket, pathJoin(opts.Prefix, "_SUCCESS"), ObjectOptions{NoLock: true})
+					if objInfo.IsLatest && objInfo.DeleteMarker {
+						return loi, nil
+					}
+				}
+				li.Prefixes = prefixes
+			}
+			return li, nil
 		}
 	}
 

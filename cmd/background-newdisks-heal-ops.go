@@ -453,10 +453,6 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 
 	healingLogEvent(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
 
-	if len(tracker.QueuedBuckets) > 0 {
-		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)
-	}
-
 	if serverDebugLog {
 		tracker.printTo(os.Stdout)
 		fmt.Printf("\n")

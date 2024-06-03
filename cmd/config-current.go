@@ -240,6 +240,11 @@ func initHelp() {
 			Description: "manage Browser HTTP specific features, such as Security headers, etc.",
 			Optional:    true,
 		},
+		config.HelpKV{
+			Key:         config.ILMSubSys,
+			Description: "manage ILM settings for expiration and transition workers",
+			Optional:    true,
+		},
 	}
 
 	if globalIsErasure {
@@ -288,6 +293,7 @@ func initHelp() {
 		config.DriveSubSys:          drive.HelpDrive,
 		config.CacheSubSys:          cache.Help,
 		config.BrowserSubSys:        browser.Help,
+		config.ILMSubSys:            ilm.Help,
 	}
 
 	config.RegisterHelpSubSys(helpMap)
