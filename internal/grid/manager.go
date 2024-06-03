@@ -334,3 +334,13 @@ func (m *Manager) debugMsg(d debugMsg, args ...any) {
 		c.debugMsg(d, args...)
 	}
 }
+
+// ConnStats returns the connection statistics for all connections.
+func (m *Manager) ConnStats() madmin.RPCMetrics {
+	var res madmin.RPCMetrics
+	for _, c := range m.targets {
+		t := c.Stats()
+		res.Merge(&t)
+	}
+	return res
+}
