@@ -1231,6 +1231,11 @@ func isSysCall(path string) bool {
 }
 
 func writeId(path string, id string) error {
+	dir := filepath.Dir(path)
+	err := os.MkdirAll(dir, os.ModePerm)
+	if err != nil {
+		return err
+	}
 
 	f, err := os.Create(path)
 	if err != nil {
