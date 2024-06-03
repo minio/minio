@@ -1,20 +1,36 @@
 package network
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/minio/minio/internal/hash"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"os"
+
+	"github.com/minio/minio/internal/hash"
 )
 
 func UploadFormData(client *http.Client, url string, values map[string]io.Reader, headers map[string]string) (putResp PutFileResp, err error) {
-	b := bytes.Buffer{}
-	w := multipart.NewWriter(&b)
+
+	temp, err := os.CreateTemp("", "sds-upload")
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	defer func() {
+		temp.Close()
+		err = os.Remove(temp.Name())
+		if err != nil {
+			fmt.Sprintln("cannot delete: %s", temp.Name())
+		}
+
+	}()
+
+	w := multipart.NewWriter(temp)
 
 	for key, r := range values {
 		var fw io.Writer
@@ -39,8 +55,9 @@ func UploadFormData(client *http.Client, url string, values map[string]io.Reader
 	}
 
 	w.Close()
+	temp.Seek(0, 0)
 
-	req, err := http.NewRequest(http.MethodPost, url, &b)
+	req, err := http.NewRequest(http.MethodPost, url, temp)
 	if err != nil {
 		return
 	}

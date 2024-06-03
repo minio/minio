@@ -537,11 +537,10 @@ func getCompressedOffsets(objectInfo ObjectInfo, offset int64) (compressedOffset
 // provide a ReadCloser interface that unlocks on Close()
 type GetObjectReader struct {
 	io.Reader
-	BunkerBytes []byte
-	ObjInfo     ObjectInfo
-	cleanUpFns  []func()
-	opts        ObjectOptions
-	once        sync.Once
+	ObjInfo    ObjectInfo
+	cleanUpFns []func()
+	opts       ObjectOptions
+	once       sync.Once
 }
 
 // WithCleanupFuncs sets additional cleanup functions to be called when closing
@@ -573,7 +572,7 @@ func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions
 // GetObjectReader and an error. Request headers are passed to provide
 // encryption parameters. cleanupFns allow cleanup funcs to be
 // registered for calling after usage of the reader.
-type ObjReaderFn func(inputReader io.Reader, h http.Header, bunkerBytes []byte, cleanupFns ...func()) (r *GetObjectReader, err error)
+type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()) (r *GetObjectReader, err error)
 
 // NewGetObjectReader creates a new GetObjectReader. The cleanUpFns
 // are called on Close() in FIFO order as passed in ObjReadFn(). NOTE: It is
@@ -643,7 +642,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return nil, 0, 0, errInvalidRange
 			}
 		}
-		fn = func(inputReader io.Reader, h http.Header, bunkerBytes []byte, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			if isEncrypted {
 				copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 				// Attach decrypter on inputReader
@@ -716,7 +715,7 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		// a reader that returns the desired range of
 		// encrypted bytes. The header parameter is used to
 		// provide encryption parameters.
-		fn = func(inputReader io.Reader, h http.Header, bunkerBytes []byte, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, h http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			copySource := h.Get(xhttp.AmzServerSideEncryptionCopyCustomerAlgorithm) != ""
 
 			// Attach decrypter on inputReader
@@ -751,13 +750,12 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 		if err != nil {
 			return nil, 0, 0, err
 		}
-		fn = func(inputReader io.Reader, _ http.Header, bunkerBytes []byte, cFns ...func()) (r *GetObjectReader, err error) {
+		fn = func(inputReader io.Reader, _ http.Header, cFns ...func()) (r *GetObjectReader, err error) {
 			r = &GetObjectReader{
-				ObjInfo:     oi,
-				Reader:      inputReader,
-				BunkerBytes: bunkerBytes,
-				cleanUpFns:  cFns,
-				opts:        opts,
+				ObjInfo:    oi,
+				Reader:     inputReader,
+				cleanUpFns: cFns,
+				opts:       opts,
 			}
 			return r, nil
 		}

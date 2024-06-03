@@ -800,30 +800,20 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		readCloser.Close()
 	}
 
-	var bb []byte
 	if !isSysCall(bucket) {
 		configId := getConfigId(ctx, fs.fsPath, bucket)
-		bb, err = gateway.Get(readCloser, configId)
-
+		readCloser, size, err = gateway.Get(readCloser, configId)
 		if err != nil {
 			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
 		}
-		size = int64(len(bb))
-		objInfo.Size = size
 	}
 
 	objReaderFn, off, length, rErr := NewGetObjectReader(rs, objInfo, opts)
 	if rErr != nil {
 		return nil, rErr
 	}
-	//TODO:put this in a fct
-	var reader io.Reader
-	if len(bb) >= 0 && bb != nil {
-		reader = bytes.NewReader(bb)
-	} else {
-		reader = readCloser
-	}
-	r := io.LimitReader(reader, length)
+
+	r := io.LimitReader(readCloser, length)
 
 	// Check if range is valid
 	if off > size || off+length > size {
@@ -835,7 +825,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		return nil, err
 	}
 
-	return objReaderFn(r, h, bb, closeFn, rwPoolUnlocker, nsUnlocker)
+	return objReaderFn(r, h, closeFn, rwPoolUnlocker, nsUnlocker)
 }
 
 // Create a new fs.json file, if the existing one is corrupt. Should happen very rarely.
@@ -925,7 +915,6 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 	if !isSysCall(bucket) {
 		// Read the object, doesn't exist returns an s3 compatible error.
 		fsObjPath := pathJoin(fs.fsPath, bucket, object)
-		//TODO:offset is 0, it may cause bug-----------------------
 		readCloser, _, err := fsOpenFile(ctx, fsObjPath, 0)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -989,7 +978,6 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 	if !isSysCall(bucket) {
 		// Read the object, doesn't exist returns an s3 compatible error.
 		fsObjPath := pathJoin(fs.fsPath, bucket, object)
-		//TODO:offset is 0, it may cause bug-----------------------
 		readCloser, _, err := fsOpenFile(ctx, fsObjPath, 0)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)

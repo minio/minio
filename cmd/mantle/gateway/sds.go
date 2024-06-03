@@ -29,24 +29,16 @@ func Put(f *hash.Reader, fn string, configId string) (string, error) {
 	return putResp.Id, nil
 }
 
-func Get(r io.Reader, configId string) (bb []byte, err error) {
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return
-	}
+func Get(r io.Reader, configId string) (readCloser io.ReadCloser, bodyLength int64, err error) {
+	fileId := GetId(r)
 
 	client := &http.Client{}
-	resp, err := network.Get(client, urlJoin("files", string(b)), setMantleHeaders(configId))
+	resp, err := network.Get(client, urlJoin("files", fileId), setMantleHeaders(configId))
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	bb, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
-	return
+	return resp.Body, resp.ContentLength, nil
 }
 
 type sdsFileInfo struct {
