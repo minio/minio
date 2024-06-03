@@ -72,6 +72,7 @@ func NewLifecycleSys() *LifecycleSys {
 }
 
 func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string) madmin.TraceInfo {
+	sz, _ := oi.GetActualSize()
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceILM,
 		Time:      startTime,
@@ -79,6 +80,7 @@ func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event 
 		FuncName:  event,
 		Duration:  duration,
 		Path:      pathJoin(oi.Bucket, oi.Name),
+		Bytes:     sz,
 		Error:     "",
 		Message:   getSource(4),
 		Custom:    map[string]string{"version-id": oi.VersionID},
