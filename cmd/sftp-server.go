@@ -57,6 +57,7 @@ const (
 var (
 	errSFTPPublicKeyBadFormat = errors.New("the public key provided could not be parsed")
 	errSFTPUserHasNoPolicies  = errors.New("no policies present on this account")
+	errSFTPLDAPNotEnabled     = errors.New("ldap authentication is not enabled")
 )
 
 // if the sftp parameter --trusted-user-ca-key is set, then
@@ -136,6 +137,9 @@ func sshPasswordAuth(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) 
 func authenticateSSHConnection(c ssh.ConnMetadata, key ssh.PublicKey, pass []byte) (*ssh.Permissions, error) {
 	user, found := strings.CutSuffix(c.User(), "=ldap")
 	if found {
+		if !globalIAMSys.LDAPConfig.Enabled() {
+			return nil, errSFTPLDAPNotEnabled
+		}
 		return processLDAPAuthentication(key, pass, user)
 	}
 
@@ -143,7 +147,6 @@ func authenticateSSHConnection(c ssh.ConnMetadata, key ssh.PublicKey, pass []byt
 	if found {
 		goto internalAuth
 	}
-
 
 	if globalIAMSys.LDAPConfig.Enabled() {
 		perms, _ := processLDAPAuthentication(key, pass, user)
