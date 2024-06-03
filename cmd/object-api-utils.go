@@ -1219,7 +1219,7 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 		}
 		// Log disk errors.
 		peersLogIf(context.Background(), errors.New(strings.Join(errs, ", ")))
-		return false, fmt.Errorf("not enough online disks to calculate the available space, expected (%d)/(%d)", (len(di)/2)+1, nDisks)
+		return false, fmt.Errorf("not enough online disks to calculate the available space, expected (%d)/(%d)", nDisks, (len(di)/2)+1)
 	}
 
 	// Check we have enough on each disk, ignoring diskFillFraction.
