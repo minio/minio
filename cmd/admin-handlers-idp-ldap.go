@@ -20,6 +20,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -283,6 +284,18 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		targetUser = lookupResult.NormDN
 		opts.claims[ldapUser] = targetUser // DN
 		opts.claims[ldapActualUser] = lookupResult.ActualDN
+
+		// Check if this user or their groups have a policy applied.
+		ldapPolicies, err := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if len(ldapPolicies) == 0 {
+			err = fmt.Errorf("No policy set for user `%s` or any of their groups: `%s`", opts.claims[ldapActualUser], strings.Join(targetGroups, "`,`"))
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminNoSuchUser, err), r.URL)
+			return
+		}
 
 		// Add LDAP attributes that were looked up into the claims.
 		for attribKey, attribValue := range lookupResult.Attributes {
