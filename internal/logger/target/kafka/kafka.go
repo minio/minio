@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -168,9 +169,8 @@ func (h *Target) Init(ctx context.Context) error {
 }
 
 func (h *Target) initQueueStore(ctx context.Context) (err error) {
-	var queueStore store.Store[interface{}]
 	queueDir := filepath.Join(h.kconfig.QueueDir, h.Name())
-	queueStore = store.NewQueueStore[interface{}](queueDir, uint64(h.kconfig.QueueSize), kafkaLoggerExtension)
+	queueStore := store.NewQueueStore[interface{}](queueDir, uint64(h.kconfig.QueueSize), kafkaLoggerExtension)
 	if err = queueStore.Open(); err != nil {
 		return fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
 	}
@@ -234,6 +234,10 @@ func (h *Target) send(entry interface{}) error {
 
 // Init initialize kafka target
 func (h *Target) init() error {
+	if os.Getenv("_MINIO_KAFKA_DEBUG") != "" {
+		sarama.DebugLogger = log.Default()
+	}
+
 	sconfig := sarama.NewConfig()
 	if h.kconfig.Version != "" {
 		kafkaVersion, err := sarama.ParseKafkaVersion(h.kconfig.Version)

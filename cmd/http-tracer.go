@@ -142,6 +142,7 @@ func httpTracerMiddleware(h http.Handler) http.Handler {
 			Time:      reqStartTime,
 			Duration:  reqEndTime.Sub(respRecorder.StartTime),
 			Path:      reqPath,
+			Bytes:     int64(inputBytes + respRecorder.Size()),
 			HTTP: &madmin.TraceHTTPStats{
 				ReqInfo: madmin.TraceRequestInfo{
 					Time:     reqStartTime,

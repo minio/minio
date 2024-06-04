@@ -39,6 +39,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// Maximum write offset for incoming SFTP blocks.
+// Set to 100MiB to prevent hostile DOS attacks.
+const ftpMaxWriteOffset = 100 << 20
+
 type sftpDriver struct {
 	permissions *ssh.Permissions
 	endpoint    string
@@ -49,7 +53,7 @@ type sftpMetrics struct{}
 
 var globalSftpMetrics sftpMetrics
 
-func sftpTrace(s *sftp.Request, startTime time.Time, source string, user string, err error) madmin.TraceInfo {
+func sftpTrace(s *sftp.Request, startTime time.Time, source string, user string, err error, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -58,18 +62,25 @@ func sftpTrace(s *sftp.Request, startTime time.Time, source string, user string,
 		TraceType: madmin.TraceFTP,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  fmt.Sprintf("sftp USER=%s COMMAND=%s PARAM=%s, Source=%s", user, s.Method, s.Filepath, source),
+		FuncName:  s.Method,
 		Duration:  time.Since(startTime),
 		Path:      s.Filepath,
 		Error:     errStr,
+		Bytes:     sz,
+		Custom: map[string]string{
+			"user":   user,
+			"cmd":    s.Method,
+			"param":  s.Filepath,
+			"source": source,
+		},
 	}
 }
 
-func (m *sftpMetrics) log(s *sftp.Request, user string) func(err error) {
+func (m *sftpMetrics) log(s *sftp.Request, user string) func(sz int64, err error) {
 	startTime := time.Now()
 	source := getSource(2)
-	return func(err error) {
-		globalTrace.Publish(sftpTrace(s, startTime, source, user, err))
+	return func(sz int64, err error) {
+		globalTrace.Publish(sftpTrace(s, startTime, source, user, err, sz))
 	}
 }
 
@@ -190,8 +201,9 @@ func (f *sftpDriver) AccessKey() string {
 }
 
 func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
+	// This is not timing the actual read operation, but the time it takes to prepare the reader.
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	flags := r.Pflags()
 	if !flags.Read {
@@ -269,6 +281,9 @@ func (w *writerAt) WriteAt(b []byte, offset int64) (n int, err error) {
 		n, err = w.w.Write(b)
 		w.nextOffset += int64(n)
 	} else {
+		if offset > w.nextOffset+ftpMaxWriteOffset {
+			return 0, fmt.Errorf("write offset %d is too far ahead of next offset %d", offset, w.nextOffset)
+		}
 		w.buffer[offset] = make([]byte, len(b))
 		copy(w.buffer[offset], b)
 		n = len(b)
@@ -294,7 +309,12 @@ again:
 
 func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer func() {
+		if err != nil {
+			// If there is an error, we never started the goroutine.
+			stopFn(0, err)
+		}
+	}()
 
 	flags := r.Pflags()
 	if !flags.Write {
@@ -329,10 +349,11 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	}
 	wa.wg.Add(1)
 	go func() {
-		_, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
+		oi, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
 			ContentType:          mimedb.TypeByExtension(path.Ext(object)),
 			DisableContentSha256: true,
 		})
+		stopFn(oi.Size, err)
 		pr.CloseWithError(err)
 		wa.wg.Done()
 	}()
@@ -341,7 +362,7 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 
 func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	clnt, err := f.getMinIOClient()
 	if err != nil {
@@ -437,7 +458,7 @@ func (f listerAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
 
 func (f *sftpDriver) Filelist(r *sftp.Request) (la sftp.ListerAt, err error) {
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	clnt, err := f.getMinIOClient()
 	if err != nil {

@@ -78,6 +78,10 @@ const (
 	inheritedPolicyType = "inherited-policy"
 )
 
+const (
+	maxSVCSessionPolicySize = 4096
+)
+
 // IAMSys - config system.
 type IAMSys struct {
 	// Need to keep them here to keep alignment - ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
@@ -977,7 +981,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 		if err != nil {
 			return auth.Credentials{}, time.Time{}, err
 		}
-		if len(policyBuf) > 2048 {
+		if len(policyBuf) > maxSVCSessionPolicySize {
 			return auth.Credentials{}, time.Time{}, errSessionPolicyTooLarge
 		}
 	}

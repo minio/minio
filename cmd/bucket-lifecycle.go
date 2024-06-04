@@ -72,6 +72,7 @@ func NewLifecycleSys() *LifecycleSys {
 }
 
 func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string) madmin.TraceInfo {
+	sz, _ := oi.GetActualSize()
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceILM,
 		Time:      startTime,
@@ -79,6 +80,7 @@ func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event 
 		FuncName:  event,
 		Duration:  duration,
 		Path:      pathJoin(oi.Bucket, oi.Name),
+		Bytes:     sz,
 		Error:     "",
 		Message:   getSource(4),
 		Custom:    map[string]string{"version-id": oi.VersionID},
@@ -277,6 +279,10 @@ func (es *expiryState) getWorkerCh(h uint64) chan<- expiryOp {
 }
 
 func (es *expiryState) ResizeWorkers(n int) {
+	if n == 0 {
+		n = 100
+	}
+
 	// Lock to avoid multiple resizes to happen at the same time.
 	es.mu.Lock()
 	defer es.mu.Unlock()
@@ -538,6 +544,10 @@ func (t *transitionState) UpdateWorkers(n int) {
 }
 
 func (t *transitionState) updateWorkers(n int) {
+	if n == 0 {
+		n = 100
+	}
+
 	for t.numWorkers < n {
 		go t.worker(t.objAPI)
 		t.numWorkers++

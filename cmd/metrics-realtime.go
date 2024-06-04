@@ -132,6 +132,15 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 			m.Aggregated.CPU.LoadStat = loadStat
 		}
 	}
+	if types.Contains(madmin.MetricsRPC) {
+		gr := globalGrid.Load()
+		if gr == nil {
+			m.Errors = append(m.Errors, fmt.Sprintf("%s: Grid not initialized", byHostName))
+		} else {
+			stats := gr.ConnStats()
+			m.Aggregated.RPC = &stats
+		}
+	}
 	// Add types...
 
 	// ByHost is a shallow reference, so careful about sharing.

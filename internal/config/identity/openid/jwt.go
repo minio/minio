@@ -133,7 +133,7 @@ const (
 )
 
 // Validate - validates the id_token.
-func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims jwtgo.MapClaims) error {
+func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims map[string]interface{}) error {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
 		"RS256", "RS384", "RS512",
@@ -156,14 +156,15 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return fmt.Errorf("Role %s does not exist", arn)
 	}
 
-	jwtToken, err := jp.ParseWithClaims(token, &claims, keyFuncCallback)
+	mclaims := jwtgo.MapClaims(claims)
+	jwtToken, err := jp.ParseWithClaims(token, &mclaims, keyFuncCallback)
 	if err != nil {
 		// Re-populate the public key in-case the JWKS
 		// pubkeys are refreshed
 		if err = r.PopulatePublicKey(arn); err != nil {
 			return err
 		}
-		jwtToken, err = jwtgo.ParseWithClaims(token, &claims, keyFuncCallback)
+		jwtToken, err = jwtgo.ParseWithClaims(token, &mclaims, keyFuncCallback)
 		if err != nil {
 			return err
 		}
@@ -173,11 +174,11 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		return ErrTokenExpired
 	}
 
-	if err = updateClaimsExpiry(dsecs, claims); err != nil {
+	if err = updateClaimsExpiry(dsecs, mclaims); err != nil {
 		return err
 	}
 
-	if err = r.updateUserinfoClaims(ctx, arn, accessToken, claims); err != nil {
+	if err = r.updateUserinfoClaims(ctx, arn, accessToken, mclaims); err != nil {
 		return err
 	}
 
@@ -190,7 +191,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 	// array of case sensitive strings. In the common special case
 	// when there is one audience, the aud value MAY be a single
 	// case sensitive
-	audValues, ok := policy.GetValuesFromClaims(claims, audClaim)
+	audValues, ok := policy.GetValuesFromClaims(mclaims, audClaim)
 	if !ok {
 		return errors.New("STS JWT Token has `aud` claim invalid, `aud` must match configured OpenID Client ID")
 	}
@@ -204,7 +205,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		// be included even when the authorized party is the same
 		// as the sole audience. The azp value is a case sensitive
 		// string containing a StringOrURI value
-		azpValues, ok := policy.GetValuesFromClaims(claims, azpClaim)
+		azpValues, ok := policy.GetValuesFromClaims(mclaims, azpClaim)
 		if !ok {
 			return errors.New("STS JWT Token has `azp` claim invalid, `azp` must match configured OpenID Client ID")
 		}

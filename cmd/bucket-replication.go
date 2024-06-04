@@ -2849,17 +2849,19 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 						ReplicationProxyRequest: "false",
 					},
 				})
+				sz := roi.Size
 				if err != nil {
 					if roi.DeleteMarker && isErrMethodNotAllowed(ErrorRespToObjectError(err, opts.bucket, roi.Name)) {
 						st.ReplicatedCount++
 					} else {
 						st.FailedCount++
 					}
+					sz = 0
 				} else {
 					st.ReplicatedCount++
 					st.ReplicatedSize += roi.Size
 				}
-				traceFn(err)
+				traceFn(sz, err)
 				select {
 				case <-ctx.Done():
 					return
@@ -2974,17 +2976,17 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 	return nil
 }
 
-func (s *replicationResyncer) trace(resyncID string, path string) func(err error) {
+func (s *replicationResyncer) trace(resyncID string, path string) func(sz int64, err error) {
 	startTime := time.Now()
-	return func(err error) {
+	return func(sz int64, err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceReplicationResync) > 0 {
-			globalTrace.Publish(replicationResyncTrace(resyncID, startTime, duration, path, err))
+			globalTrace.Publish(replicationResyncTrace(resyncID, startTime, duration, path, err, sz))
 		}
 	}
 }
 
-func replicationResyncTrace(resyncID string, startTime time.Time, duration time.Duration, path string, err error) madmin.TraceInfo {
+func replicationResyncTrace(resyncID string, startTime time.Time, duration time.Duration, path string, err error, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -2998,6 +3000,7 @@ func replicationResyncTrace(resyncID string, startTime time.Time, duration time.
 		Duration:  duration,
 		Path:      path,
 		Error:     errStr,
+		Bytes:     sz,
 	}
 }
 
