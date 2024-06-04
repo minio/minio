@@ -38,7 +38,39 @@ function start_minio_3_node() {
 	disown $pid3
 
 	export MC_HOST_myminio="http://minio:minio123@127.0.0.1:$((start_port + 1))"
+
 	/tmp/mc ready myminio
+
+	# Wait for all drives to be online and formatted
+	while [ $(/tmp/mc admin info --json myminio | jq '.info.servers[].drives[].state | select(. != "ok")' | wc -l) -gt 0 ]; do sleep 1; done
+	# Wait for all drives to be healed
+	while [ $(/tmp/mc admin info --json myminio | jq '.info.servers[].drives[].healing | select(. != null) | select(. == true)' | wc -l) -gt 0 ]; do sleep 1; done
+
+	# Wait for Status: in MinIO output
+	while true; do
+		rv=$(check_online)
+		if [ "$rv" != "1" ]; then
+			# success
+			break
+		fi
+
+		# Check if we should retry
+		retry=$((retry + 1))
+		if [ $retry -le 20 ]; then
+			sleep 5
+			continue
+		fi
+
+		# Failure
+		for i in $(seq 1 3); do
+			echo "server$i log:"
+			cat "${WORK_DIR}/dist-minio-server$i.log"
+		done
+		pkill -9 minio
+		echo "FAILED"
+		purge "$WORK_DIR"
+		exit 1
+	done
 
 	if ! ps -p $pid1 1>&2 >/dev/null; then
 		echo "server1 log:"
@@ -90,7 +122,7 @@ function check_online() {
 }
 
 function purge() {
-	rm -rf "$1"
+	echo rm -rf "$1"
 }
 
 function __init__() {
@@ -117,18 +149,6 @@ function perform_test() {
 
 	set -x
 	start_minio_3_node $2
-
-	rv=$(check_online)
-	if [ "$rv" == "1" ]; then
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		pkill -9 minio
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
-	fi
 }
 
 function main() {

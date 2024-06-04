@@ -834,7 +834,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Set system resources to maximum.
 	bootstrapTrace("setMaxResources", func() {
-		_ = setMaxResources(ctx)
+		_ = setMaxResources(globalServerCtxt)
 	})
 
 	// Verify kernel release and version.

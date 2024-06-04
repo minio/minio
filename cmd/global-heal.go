@@ -530,7 +530,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	tracker.setObject("")
 	tracker.setBucket("")
 
-	return retErr
+	if retErr != nil {
+		return retErr
+	}
+
+	// Last sanity check
+	if len(tracker.QueuedBuckets) > 0 {
+		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)
+	}
+
+	return nil
 }
 
 func healBucket(bucket string, scan madmin.HealScanMode) error {

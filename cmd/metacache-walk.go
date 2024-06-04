@@ -405,7 +405,7 @@ func (p *xlStorageDiskIDCheck) WalkDir(ctx context.Context, opts WalkDirOptions,
 	if err != nil {
 		return err
 	}
-	defer done(&err)
+	defer done(0, &err)
 
 	return p.storage.WalkDir(ctx, opts, wr)
 }

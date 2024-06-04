@@ -22,7 +22,6 @@ import (
 	"runtime/debug"
 
 	"github.com/dustin/go-humanize"
-	"github.com/minio/cli"
 	"github.com/minio/madmin-go/v3/kernel"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/sys"
@@ -45,7 +44,7 @@ func oldLinux() bool {
 	return currentKernel < kernel.Version(4, 0, 0)
 }
 
-func setMaxResources(ctx *cli.Context) (err error) {
+func setMaxResources(ctx serverCtxt) (err error) {
 	// Set the Go runtime max threads threshold to 90% of kernel setting.
 	sysMaxThreads, err := sys.GetMaxThreads()
 	if err == nil {
@@ -72,32 +71,28 @@ func setMaxResources(ctx *cli.Context) (err error) {
 		return err
 	}
 
-	// Set max memory limit as current memory limit.
-	if _, maxLimit, err = sys.GetMaxMemoryLimit(); err != nil {
+	_, vssLimit, err := sys.GetMaxMemoryLimit()
+	if err != nil {
 		return err
 	}
 
-	// set debug memory limit instead of GOMEMLIMIT env
-	_ = setDebugMemoryLimit(ctx)
-
-	err = sys.SetMaxMemoryLimit(maxLimit, maxLimit)
-	return err
-}
-
-func setDebugMemoryLimit(ctx *cli.Context) error {
-	if ctx == nil {
-		return nil
+	if vssLimit > 0 && vssLimit < humanize.GiByte {
+		logger.Info("WARNING: maximum virtual memory limit (%s) is too small for 'go runtime', please consider setting `ulimit -v` to unlimited",
+			humanize.IBytes(vssLimit))
 	}
-	if ctx.IsSet("memlimit") {
-		memlimit := ctx.String("memlimit")
-		if memlimit == "" {
-			memlimit = ctx.GlobalString("memlimit")
-		}
-		mlimit, err := humanize.ParseBytes(memlimit)
-		if err != nil {
-			return err
-		}
-		debug.SetMemoryLimit(int64(mlimit))
+
+	if ctx.MemLimit > 0 {
+		maxLimit = ctx.MemLimit
 	}
+
+	if maxLimit > 0 {
+		debug.SetMemoryLimit(int64(maxLimit))
+	}
+
+	// Do not use RLIMIT_AS as that is not useful and at times on systems < 4Gi
+	// this can crash the Go runtime if the value is smaller refer
+	// - https://github.com/golang/go/issues/38010
+	// - https://github.com/golang/go/issues/43699
+	// So do not add `sys.SetMaxMemoryLimit()` this is not useful for any practical purposes.
 	return nil
 }

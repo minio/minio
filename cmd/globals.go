@@ -160,6 +160,8 @@ type serverCtxt struct {
 	FTP  []string
 	SFTP []string
 
+	MemLimit uint64
+
 	UserTimeout         time.Duration
 	ShutdownTimeout     time.Duration
 	IdleTimeout         time.Duration
