@@ -1206,19 +1206,18 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	}
 
 	if nDisks < len(di)/2 || nDisks <= 0 {
-		var errs []string
-		for _, disk := range di {
+		var errs []error
+		for index, disk := range di {
 			if disk == nil {
-				continue
-			}
-			if disk.Error != "" {
-				errs = append(errs, fmt.Sprintf("disk %s: %s", disk.Endpoint, disk.Error))
+				errs = append(errs, fmt.Errorf("disk[%d]: offline", index))
+			} else if disk.Error != "" {
+				errs = append(errs, fmt.Errorf("disk %s: %s", disk.Endpoint, disk.Error))
 			} else if disk.Total == 0 {
-				errs = append(errs, fmt.Sprintf("disk %s: total is zero", disk.Endpoint))
+				errs = append(errs, fmt.Errorf("disk %s: total is zero", disk.Endpoint))
 			}
 		}
 		// Log disk errors.
-		peersLogIf(context.Background(), errors.New(strings.Join(errs, ", ")))
+		peersLogIf(context.Background(), errors.Join(errs...))
 		return false, fmt.Errorf("not enough online disks to calculate the available space, need %d, found %d", (len(di)/2)+1, nDisks)
 	}
 
