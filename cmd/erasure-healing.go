@@ -1065,6 +1065,7 @@ func healTrace(funcName healingMetric, startTime time.Time, bucket, object strin
 		if result != nil {
 			tr.Custom["version-id"] = result.VersionID
 			tr.Custom["disks"] = strconv.Itoa(result.DiskCount)
+			tr.Bytes = result.ObjectSize
 		}
 	}
 	if err != nil {
