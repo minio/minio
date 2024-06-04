@@ -794,9 +794,23 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 	case <-sys.configLoaded:
 		ldapUsers := make(map[string]madmin.UserInfo)
 		for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+			if !sys.LDAPConfig.IsLDAPUserDN(user) {
+				continue
+			}
 			ldapUsers[user] = madmin.UserInfo{
 				PolicyName: policy,
 				Status:     madmin.AccountEnabled,
+			}
+		}
+		for user := range sys.store.GetAllParentUsers() {
+			if _, ok := ldapUsers[user]; ok {
+				continue
+			}
+			if !sys.LDAPConfig.IsLDAPUserDN(user) {
+				continue
+			}
+			ldapUsers[user] = madmin.UserInfo{
+				Status: madmin.AccountEnabled,
 			}
 		}
 		return ldapUsers, nil
