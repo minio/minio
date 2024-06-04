@@ -1208,11 +1208,12 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	if nDisks < len(di)/2 || nDisks <= 0 {
 		var errs []error
 		for index, disk := range di {
-			if disk == nil {
+			switch {
+			case disk == nil:
 				errs = append(errs, fmt.Errorf("disk[%d]: offline", index))
-			} else if disk.Error != "" {
+			case disk.Error != "":
 				errs = append(errs, fmt.Errorf("disk %s: %s", disk.Endpoint, disk.Error))
-			} else if disk.Total == 0 {
+			case disk.Total == 0:
 				errs = append(errs, fmt.Errorf("disk %s: total is zero", disk.Endpoint))
 			}
 		}
