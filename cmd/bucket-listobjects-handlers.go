@@ -231,7 +231,7 @@ func parseRequestToken(token string) (subToken string, nodeIndex int) {
 	if token == "" {
 		return token, -1
 	}
-	i := strings.Index(token, ":")
+	i := strings.Index(token, getBatchJobIDSeparator())
 	if i < 0 {
 		return token, -1
 	}
