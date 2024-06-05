@@ -293,7 +293,7 @@ func (s *BatchJobSize) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // getBatchJobIDSeparator - returns the separator to be used in the batch job ID
 // windows requires `_` as the separator `:` will be an invalid one
 func getBatchJobIDSeparator() string {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return "_"
 	}
 	return ":"
