@@ -23,22 +23,36 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
-func getFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts bool) (FileInfoVersions, error) {
+func getFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts, inclFreeVersions bool) (FileInfoVersions, error) {
 	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path, allParts)
 	if err != nil {
 		return fivs, err
 	}
 	n := 0
+	if !inclFreeVersions {
+		for _, fi := range fivs.Versions {
+			// Filter our tier object delete marker
+			if !fi.TierFreeVersion() {
+				fivs.Versions[n] = fi
+				n++
+			} else {
+				fivs.FreeVersions = append(fivs.FreeVersions, fi)
+			}
+		}
+		fivs.Versions = fivs.Versions[:n]
+		// Update numversions
+		for i := range fivs.Versions {
+			fivs.Versions[i].NumVersions = n
+		}
+		return fivs, nil
+	}
 	for _, fi := range fivs.Versions {
-		// Filter our tier object delete marker
-		if !fi.TierFreeVersion() {
-			fivs.Versions[n] = fi
-			n++
-		} else {
+		if fi.TierFreeVersion() {
 			fivs.FreeVersions = append(fivs.FreeVersions, fi)
+		} else {
+			n++
 		}
 	}
-	fivs.Versions = fivs.Versions[:n]
 	// Update numversions
 	for i := range fivs.Versions {
 		fivs.Versions[i].NumVersions = n

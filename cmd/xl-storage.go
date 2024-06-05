@@ -586,7 +586,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), false)
+		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), false, false)
 		metaDataPoolPut(buf)
 		if err != nil {
 			res["err"] = err.Error()
@@ -605,8 +605,16 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			sizeS.tiers[storageclass.RRS] = tierStats{}
 		}
 
+		versions := make([]FileInfo, 0, len(fivs.Versions))
+		for _, version := range fivs.Versions {
+			if version.TierFreeVersion() {
+				continue
+			}
+			versions = append(versions, version)
+		}
+
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
-		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions, globalExpiryState)
+		objInfos, err := item.applyVersionActions(ctx, objAPI, versions, globalExpiryState)
 		done()
 
 		if err != nil {
