@@ -809,6 +809,36 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 	}
 }
 
+type queryPolicyOpts struct {
+	users  map[string]set.StringSet
+	groups []string
+	policy []string
+}
+
+// createQueryPolicyOpts - creates a query object for policy entities with users mapped to groups.
+func (sys *IAMSys) createQueryPolicyOpts(q madmin.PolicyEntitiesQuery, ldap bool) queryPolicyOpts {
+	newQ := queryPolicyOpts{
+		groups: q.Groups,
+		policy: q.Policy,
+	}
+	if ldap {
+		var err error
+		newQ.users, err = sys.LDAPConfig.LookupGroupMemberships(q.Users, nil)
+		if err != nil {
+			newQ.users = make(map[string]set.StringSet, len(q.Users))
+			for _, user := range q.Users {
+				newQ.users[user] = nil
+			}
+		}
+	} else {
+		newQ.users = make(map[string]set.StringSet, len(q.Users))
+		for _, user := range q.Users {
+			newQ.users[user] = nil
+		}
+	}
+	return newQ
+}
+
 // QueryLDAPPolicyEntities - queries policy associations for LDAP users/groups/policies.
 func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyEntitiesQuery) (*madmin.PolicyEntitiesResult, error) {
 	if !sys.Initialized() {
@@ -819,6 +849,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 		return nil, errIAMActionNotAllowed
 	}
 
+	//opts := sys.createQueryPolicyOpts(q, true)
 	select {
 	case <-sys.configLoaded:
 		pe := sys.store.ListPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
