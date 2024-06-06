@@ -1240,6 +1240,11 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 		return
 	}
 
+	// Set the encrypted size for SSE-C objects
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		size = objInfo.Size
+	}
+
 	if tgt.Bucket == "" {
 		replLogIf(ctx, fmt.Errorf("unable to replicate object %s(%s), bucket is empty for target %s", objInfo.Name, objInfo.VersionID, tgt.EndpointURL()))
 		sendEvent(eventArgs{
