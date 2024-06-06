@@ -1227,22 +1227,23 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	// make sure we have the latest metadata for metrics calculation
 	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
-	size, err := objInfo.GetActualSize()
-	if err != nil {
-		replLogIf(ctx, err)
-		sendEvent(eventArgs{
-			EventName:  event.ObjectReplicationNotTracked,
-			BucketName: bucket,
-			Object:     objInfo,
-			UserAgent:  "Internal: [Replication]",
-			Host:       globalLocalNodeName,
-		})
-		return
-	}
-
 	// Set the encrypted size for SSE-C objects
+	var size int64
 	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
 		size = objInfo.Size
+	} else {
+		size, err = objInfo.GetActualSize()
+		if err != nil {
+			replLogIf(ctx, err)
+			sendEvent(eventArgs{
+				EventName:  event.ObjectReplicationNotTracked,
+				BucketName: bucket,
+				Object:     objInfo,
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
+			})
+			return
+		}
 	}
 
 	if tgt.Bucket == "" {
