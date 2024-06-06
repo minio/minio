@@ -2,6 +2,8 @@ module github.com/minio/minio
 
 go 1.21
 
+replace github.com/minio/madmin-go/v3 => github.com/taran-p/madmin-go/v3 v3.10.1-0.20240606204813-55a2c38ac0b1
+
 require (
 	cloud.google.com/go/storage v1.41.0
 	github.com/Azure/azure-storage-blob-go v0.15.0
