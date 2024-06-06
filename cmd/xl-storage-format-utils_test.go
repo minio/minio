@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"slices"
 	"sort"
 	"testing"
 	"time"
@@ -145,7 +146,7 @@ func TestGetFileInfoVersions(t *testing.T) {
 	}
 	xl := xlMetaV2{}
 	var versions []FileInfo
-	var freeVersionIDs []string
+	var allVersionIDs, freeVersionIDs []string
 	for i := 0; i < 5; i++ {
 		fi := basefi
 		fi.VersionID = mustGetUUID()
@@ -167,8 +168,10 @@ func TestGetFileInfoVersions(t *testing.T) {
 			// delete this version leading to a free version
 			xl.DeleteVersion(fi)
 			freeVersionIDs = append(freeVersionIDs, fi.TierFreeVersionID())
+			allVersionIDs = append(allVersionIDs, fi.TierFreeVersionID())
 		} else {
 			versions = append(versions, fi)
+			allVersionIDs = append(allVersionIDs, fi.VersionID)
 		}
 	}
 	buf, err := xl.AppendTo(nil)
@@ -178,6 +181,17 @@ func TestGetFileInfoVersions(t *testing.T) {
 	fivs, err := getFileInfoVersions(buf, basefi.Volume, basefi.Name, true, false)
 	if err != nil {
 		t.Fatalf("getFileInfoVersions failed: %v", err)
+	}
+	chkNumVersions := func(fis []FileInfo) bool {
+		for i := 0; i < len(fis)-1; i++ {
+			if fis[i].NumVersions != fis[i+1].NumVersions {
+				return false
+			}
+		}
+		return true
+	}
+	if !chkNumVersions(fivs.Versions) {
+		t.Fatalf("Expected all versions to have the same NumVersions")
 	}
 
 	sort.Slice(versions, func(i, j int) bool {
@@ -194,11 +208,30 @@ func TestGetFileInfoVersions(t *testing.T) {
 		if fi.VersionID != versions[i].VersionID {
 			t.Fatalf("getFileInfoVersions: versions don't match at %d, version id expected %s but got %s", i, fi.VersionID, versions[i].VersionID)
 		}
+		if fi.NumVersions != len(fivs.Versions) {
+			t.Fatalf("getFileInfoVersions: version with %s version id expected to have %d as NumVersions but got %d", fi.VersionID, len(fivs.Versions), fi.NumVersions)
+		}
 	}
 
 	for i, free := range fivs.FreeVersions {
 		if free.VersionID != freeVersionIDs[i] {
 			t.Fatalf("getFileInfoVersions: free versions don't match at %d, version id expected %s but got %s", i, free.VersionID, freeVersionIDs[i])
+		}
+	}
+
+	// versions are stored in xl-meta sorted in descending order of their ModTime
+	slices.Reverse(allVersionIDs)
+
+	fivs, err = getFileInfoVersions(buf, basefi.Volume, basefi.Name, true, true)
+	if err != nil {
+		t.Fatalf("getFileInfoVersions failed: %v", err)
+	}
+	if !chkNumVersions(fivs.Versions) {
+		t.Fatalf("Expected all versions to have the same NumVersions")
+	}
+	for i, fi := range fivs.Versions {
+		if fi.VersionID != allVersionIDs[i] {
+			t.Fatalf("getFileInfoVersions: all versions don't match at %d expected %s but got %s", i, allVersionIDs[i], fi.VersionID)
 		}
 	}
 }

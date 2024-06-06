@@ -605,16 +605,8 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 			sizeS.tiers[storageclass.RRS] = tierStats{}
 		}
 
-		versions := make([]FileInfo, 0, len(fivs.Versions))
-		for _, version := range fivs.Versions {
-			if version.TierFreeVersion() {
-				continue
-			}
-			versions = append(versions, version)
-		}
-
 		done := globalScannerMetrics.time(scannerMetricApplyAll)
-		objInfos, err := item.applyVersionActions(ctx, objAPI, versions, globalExpiryState)
+		objInfos, err := item.applyVersionActions(ctx, objAPI, fivs.Versions, globalExpiryState)
 		done()
 
 		if err != nil {
