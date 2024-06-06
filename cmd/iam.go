@@ -2000,20 +2000,22 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 		isGroup = false
 	} else {
-		if isAttach {
-			var underBaseDN bool
-			if dnResult, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
-				iamLogIf(ctx, err)
-				return
-			} else if dnResult == nil || !underBaseDN {
+		var underBaseDN bool
+		if dnResult, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
+			iamLogIf(ctx, err)
+			return
+		}
+		if dnResult == nil || !underBaseDN {
+			if !isAttach {
+				dn = r.Group
+			} else {
 				err = errNoSuchGroup
 				return
 			}
+		} else {
 			// We use the group DN returned by the LDAP server (this may not
 			// equal the input group name, but we assume it is canonical).
 			dn = dnResult.NormDN
-		} else {
-			dn = r.Group
 		}
 		isGroup = true
 	}

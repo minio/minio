@@ -273,13 +273,10 @@ const (
 	vmemory          = "virtual_memory_bytes"
 	cpu              = "cpu_total_seconds"
 
-	expiryPendingTasks           MetricName = "expiry_pending_tasks"
 	expiryMissedTasks            MetricName = "expiry_missed_tasks"
 	expiryMissedFreeVersions     MetricName = "expiry_missed_freeversions"
 	expiryMissedTierJournalTasks MetricName = "expiry_missed_tierjournal_tasks"
 	expiryNumWorkers             MetricName = "expiry_num_workers"
-	transitionPendingTasks       MetricName = "transition_pending_tasks"
-	transitionActiveTasks        MetricName = "transition_active_tasks"
 	transitionMissedTasks        MetricName = "transition_missed_immediate_tasks"
 
 	transitionedBytes    MetricName = "transitioned_bytes"

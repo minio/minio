@@ -1327,11 +1327,7 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 	poolInfo := z.poolMeta.Pools[idx].Clone()
 	if poolInfo.Decommission != nil {
 		poolInfo.Decommission.TotalSize = pi.Total
-		if poolInfo.Decommission.Failed || poolInfo.Decommission.Canceled {
-			poolInfo.Decommission.CurrentSize = pi.Free
-		} else {
-			poolInfo.Decommission.CurrentSize = poolInfo.Decommission.StartSize + poolInfo.Decommission.BytesDone
-		}
+		poolInfo.Decommission.CurrentSize = pi.Free
 	} else {
 		poolInfo.Decommission = &PoolDecommissionInfo{
 			TotalSize:   pi.Total,

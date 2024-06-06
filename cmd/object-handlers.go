@@ -384,6 +384,10 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	cachedResult := globalCacheConfig.Enabled() && opts.VersionID == ""
+	if _, ok := crypto.IsRequested(r.Header); ok {
+		// No need to check cache for encrypted objects.
+		cachedResult = false
+	}
 
 	var update bool
 	if cachedResult {
@@ -606,6 +610,8 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
+		// Never store encrypted objects in cache.
+		update = false
 		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	}
 
@@ -949,7 +955,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	cachedResult := globalCacheConfig.Enabled() && opts.VersionID == ""
-
+	if _, ok := crypto.IsRequested(r.Header); ok {
+		// No need to check cache for encrypted objects.
+		cachedResult = false
+	}
 	var update bool
 	if cachedResult {
 		rc := &cache.CondCheck{}
@@ -1043,6 +1052,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				return
 			}
 		}
+	}
+	if _, ok := crypto.IsEncrypted(objInfo.UserDefined); ok {
+		// Never store encrypted objects in cache.
+		update = false
 	}
 
 	if objInfo.UserTags != "" {
@@ -2139,7 +2152,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	var buf *bytebufferpool.ByteBuffer
-	if globalCacheConfig.MatchesSize(size) {
+	// Disable cache for encrypted objects - headers are applied with sseConfig.Apply if auto encrypted.
+	if globalCacheConfig.MatchesSize(size) && !crypto.Requested(r.Header) {
 		buf = bytebufferpool.Get()
 		defer bytebufferpool.Put(buf)
 	}

@@ -141,14 +141,14 @@ func initHealingTracker(disk StorageAPI, healID string) *healingTracker {
 	return h
 }
 
-func (h healingTracker) getLastUpdate() time.Time {
+func (h *healingTracker) getLastUpdate() time.Time {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	return h.LastUpdate
 }
 
-func (h healingTracker) getBucket() string {
+func (h *healingTracker) getBucket() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -162,7 +162,7 @@ func (h *healingTracker) setBucket(bucket string) {
 	h.Bucket = bucket
 }
 
-func (h healingTracker) getObject() string {
+func (h *healingTracker) getObject() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 

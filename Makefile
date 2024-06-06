@@ -106,7 +106,10 @@ test-replication-3site:
 test-delete-replication:
 	@(env bash $(PWD)/docs/bucket/replication/delete-replication.sh)
 
-test-replication: install-race test-replication-2site test-replication-3site test-delete-replication test-sio-error ## verify multi site replication
+test-delete-marker-proxying:
+	@(env bash $(PWD)/docs/bucket/replication/test_del_marker_proxying.sh)
+
+test-replication: install-race test-replication-2site test-replication-3site test-delete-replication test-sio-error test-delete-marker-proxying ## verify multi site replication
 	@echo "Running tests for replicating three sites"
 
 test-site-replication-ldap: install-race ## verify automatic site replication

@@ -8,6 +8,10 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
+func proxyLogIf(ctx context.Context, err error, errKind ...interface{}) {
+	logger.LogIf(ctx, "proxy", err, errKind...)
+}
+
 func replLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "replication", err, errKind...)
 }

@@ -1476,7 +1476,7 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 
 func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
 	// TODO: support custom storage class for remote replication
-	putOpts, err = putReplicationOpts(ctx, "", objInfo)
+	putOpts, err = putReplicationOpts(ctx, "", objInfo, 0)
 	if err != nil {
 		return putOpts, err
 	}
@@ -1633,7 +1633,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	job.ID = fmt.Sprintf("%s:%d", shortuuid.New(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
+	job.ID = fmt.Sprintf("%s%s%d", shortuuid.New(), getBatchJobIDSeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	job.User = user
 	job.Started = time.Now()
 

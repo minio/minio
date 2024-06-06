@@ -414,11 +414,12 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	setGlobalInternodeInterface(ctxt.Interface)
 
 	globalTCPOptions = xhttp.TCPOptions{
-		UserTimeout:    int(ctxt.UserTimeout.Milliseconds()),
-		DriveOPTimeout: globalDriveConfig.GetOPTimeout,
-		Interface:      ctxt.Interface,
-		SendBufSize:    ctxt.SendBufSize,
-		RecvBufSize:    ctxt.RecvBufSize,
+		UserTimeout: int(ctxt.UserTimeout.Milliseconds()),
+		// FIXME: Bring this back when we have valid way to handle deadlines
+		//		DriveOPTimeout: globalDriveConfig.GetOPTimeout,
+		Interface:   ctxt.Interface,
+		SendBufSize: ctxt.SendBufSize,
+		RecvBufSize: ctxt.RecvBufSize,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -430,7 +431,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 		RoundTripper: globalRemoteTargetTransport,
 		Logger: func(err error) {
 			if err != nil && !errors.Is(err, context.Canceled) {
-				replLogIf(GlobalContext, err)
+				proxyLogIf(GlobalContext, err)
 			}
 		},
 	})
