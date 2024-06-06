@@ -177,8 +177,9 @@ func shouldHealObjectOnDisk(erErr error, partsErrs []int, meta FileInfo, latestM
 				}
 			}
 		}
+		return false, nil
 	}
-	return false, nil
+	return false, erErr
 }
 
 const (
