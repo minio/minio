@@ -884,7 +884,7 @@ func (c *Connection) updateState(s State) {
 		return
 	}
 	if s == StateConnected {
-		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 	}
 	atomic.StoreUint32((*uint32)(&c.state), uint32(s))
 	if debugPrint {
@@ -1100,7 +1100,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			lastPong := atomic.LoadInt64(&c.LastPong)
 			if lastPong > 0 {
-				lastPongTime := time.Unix(lastPong, 0)
+				lastPongTime := time.Unix(0, lastPong)
 				if d := time.Since(lastPongTime); d > connPingInterval*2 {
 					gridLogIf(ctx, fmt.Errorf("host %s last pong too old (%v); disconnecting", c.Remote, d.Round(time.Millisecond)))
 					return
@@ -1111,7 +1111,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if err != nil {
 				gridLogIf(ctx, err)
 				// Fake it...
-				atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+				atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 				continue
 			}
 		case toSend = <-c.outQueue:
@@ -1413,7 +1413,7 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 
 func (c *Connection) handlePong(ctx context.Context, m message) {
 	if m.MuxID == 0 && m.Payload == nil {
-		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 		return
 	}
 	var pong pongMsg
@@ -1421,7 +1421,7 @@ func (c *Connection) handlePong(ctx context.Context, m message) {
 	PutByteBuffer(m.Payload)
 	gridLogIf(ctx, err)
 	if m.MuxID == 0 {
-		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 		return
 	}
 	if v, ok := c.outgoing.Load(m.MuxID); ok {
@@ -1635,7 +1635,7 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 		IncomingMessages: c.inMessages.Load(),
 		OutgoingMessages: c.outMessages.Load(),
 		OutQueue:         len(c.outQueue),
-		LastPongTime:     time.Unix(c.LastPong, 0).UTC(),
+		LastPongTime:     time.Unix(0, c.LastPong).UTC(),
 	}
 	m.ByDestination = map[string]madmin.RPCMetrics{
 		c.Remote: m,
