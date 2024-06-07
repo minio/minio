@@ -2276,11 +2276,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
-			return
-		}
-
 		reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
