@@ -300,7 +300,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 		}, nil
 	}
 	// Too small gains to reuse cache here.
-	return getFileInfoVersions(e.metadata, bucket, e.name, false)
+	return getFileInfoVersions(e.metadata, bucket, e.name, false, true)
 }
 
 // metaCacheEntries is a slice of metacache entries.
