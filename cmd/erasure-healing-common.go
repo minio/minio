@@ -415,7 +415,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// parts. This is considered an outdated disk, since
 			// it needs healing too.
 			verifyResp, verifyErr = onlineDisk.VerifyFile(ctx, bucket, object, meta)
-		case madmin.HealNormalScan:
+		default:
 			verifyResp, verifyErr = onlineDisk.CheckParts(ctx, bucket, object, meta)
 		}
 
