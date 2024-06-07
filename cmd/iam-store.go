@@ -1911,6 +1911,11 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 	cache := store.rlock()
 	defer store.runlock()
 
+	return store.getParentUsers(cache)
+}
+
+// assumes store is locked by caller.
+func (store *IAMStoreSys) getParentUsers(cache *iamCache) map[string]ParentUserInfo {
 	res := map[string]ParentUserInfo{}
 	for _, ui := range cache.iamUsersMap {
 		cred := ui.Credentials
@@ -1979,6 +1984,38 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 	}
 
 	return res
+}
+
+// GetAllSTSUserMappings - Loads all STS user policy mappings from storage and
+// returns them. Also gets any STS users that do not have policy mappings but have
+// Service Accounts or STS keys (This is useful if the user is part of a group)
+func (store *IAMStoreSys) GetAllSTSUserMappings(userPredicate func(string) bool) (map[string]string, error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	stsMap := make(map[string]string)
+	m := xsync.NewMapOf[string, MappedPolicy]()
+	if err := store.loadMappedPolicies(context.Background(), stsUser, false, m); err != nil {
+		return nil, err
+	}
+
+	m.Range(func(user string, mappedPolicy MappedPolicy) bool {
+		if userPredicate != nil && !userPredicate(user) {
+			return true
+		}
+		stsMap[user] = mappedPolicy.Policies
+		return true
+	})
+
+	for user := range store.getParentUsers(cache) {
+		if _, ok := stsMap[user]; !ok {
+			if userPredicate != nil && !userPredicate(user) {
+				continue
+			}
+			stsMap[user] = ""
+		}
+	}
+	return stsMap, nil
 }
 
 // Assumes store is locked by caller. If users is empty, returns all user mappings.
