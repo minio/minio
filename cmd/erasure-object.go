@@ -276,7 +276,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 
-	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
+	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts, h)
 	if err != nil {
 		return nil, err
 	}

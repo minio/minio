@@ -763,9 +763,9 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func getCRCMeta(oi ObjectInfo, partNum int) map[string]string {
+func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) map[string]string {
 	meta := make(map[string]string)
-	cs := oi.decryptChecksums(partNum)
+	cs := oi.decryptChecksums(partNum, h)
 	for k, v := range cs {
 		cksum := hash.NewChecksumString(k, v)
 		if cksum == nil {
@@ -785,7 +785,8 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				if strings.EqualFold(k, ReservedMetadataPrefixLower+"crc") {
-					for k, v := range getCRCMeta(objInfo, partNum) {
+					// TODO: We do not have the SSE-C key here, so we cannot calculate the CRC for SSE-C objects.
+					for k, v := range getCRCMeta(objInfo, partNum, nil) {
 						meta[k] = v
 					}
 				}
@@ -803,7 +804,8 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	}
 
 	if len(objInfo.Checksum) > 0 {
-		for k, v := range getCRCMeta(objInfo, 0) {
+		// TODO: We do not have the SSE-C key here, so we cannot calculate the CRC for SSE-C objects.
+		for k, v := range getCRCMeta(objInfo, 0, nil) {
 			meta[k] = v
 		}
 	}
@@ -1646,7 +1648,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
-		crc := getCRCMeta(objInfo, partInfo.Number)
+		crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
 		for k, v := range crc {
 			cHeader.Add(k, v)
 		}
@@ -2219,12 +2221,12 @@ type proxyResult struct {
 
 // get Reader from replication target if active-active replication is in place and
 // this node returns a 404
-func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, _ http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
+func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
 	tgt, oi, proxy := proxyHeadToRepTarget(ctx, bucket, object, rs, opts, proxyTargets)
 	if !proxy.Proxy {
 		return nil, proxy, nil
 	}
-	fn, _, _, err := NewGetObjectReader(nil, oi, opts)
+	fn, _, _, err := NewGetObjectReader(nil, oi, opts, h)
 	if err != nil {
 		return nil, proxy, err
 	}

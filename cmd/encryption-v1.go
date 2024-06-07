@@ -1077,13 +1077,17 @@ func metadataEncrypter(key crypto.ObjectKey) objectMetaEncryptFn {
 }
 
 // metadataDecrypter reverses metadataEncrypter.
-func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
+func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 	return func(baseKey string, input []byte) ([]byte, error) {
 		if len(input) == 0 {
 			return input, nil
 		}
-
-		key, err := decryptObjectMeta(nil, o.Bucket, o.Name, o.UserDefined)
+		var key []byte
+		if k, err := crypto.SSEC.ParseHTTP(h); err == nil {
+			key = k[:]
+		}
+		fmt.Println("GOT SSE-C KEY", key)
+		key, err := decryptObjectMeta(key, o.Bucket, o.Name, o.UserDefined)
 		if err != nil {
 			return nil, err
 		}
@@ -1095,13 +1099,13 @@ func (o *ObjectInfo) metadataDecrypter() objectMetaDecryptFn {
 
 // decryptChecksums will attempt to decode checksums and return it/them if set.
 // if part > 0, and we have the checksum for the part that will be returned.
-func (o *ObjectInfo) decryptPartsChecksums() {
+func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 	data := o.Checksum
 	if len(data) == 0 {
 		return
 	}
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
-		decrypted, err := o.metadataDecrypter()("object-checksum", data)
+		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
 		if err != nil {
 			encLogIf(GlobalContext, err)
 			return
@@ -1157,13 +1161,13 @@ func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn
 
 // decryptChecksums will attempt to decode checksums and return it/them if set.
 // if part > 0, and we have the checksum for the part that will be returned.
-func (o *ObjectInfo) decryptChecksums(part int) map[string]string {
+func (o *ObjectInfo) decryptChecksums(part int, h http.Header) map[string]string {
 	data := o.Checksum
 	if len(data) == 0 {
 		return nil
 	}
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
-		decrypted, err := o.metadataDecrypter()("object-checksum", data)
+		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
 		if err != nil {
 			encLogIf(GlobalContext, err)
 			return nil

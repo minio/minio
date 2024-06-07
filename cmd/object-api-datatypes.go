@@ -233,7 +233,7 @@ func (o ObjectInfo) ExpiresStr() string {
 
 // ArchiveInfo returns any saved zip archive meta information.
 // It will be decrypted if needed.
-func (o *ObjectInfo) ArchiveInfo() []byte {
+func (o *ObjectInfo) ArchiveInfo(h http.Header) []byte {
 	if len(o.UserDefined) == 0 {
 		return nil
 	}
@@ -243,7 +243,7 @@ func (o *ObjectInfo) ArchiveInfo() []byte {
 	}
 	data := []byte(z)
 	if v, ok := o.UserDefined[archiveTypeMetadataKey]; ok && v == archiveTypeEnc {
-		decrypted, err := o.metadataDecrypter()(archiveTypeEnc, data)
+		decrypted, err := o.metadataDecrypter(h)(archiveTypeEnc, data)
 		if err != nil {
 			encLogIf(GlobalContext, err)
 			return nil

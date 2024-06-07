@@ -142,7 +142,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
-	zipInfo := zipObjInfo.ArchiveInfo()
+	zipInfo := zipObjInfo.ArchiveInfo(r.Header)
 	if len(zipInfo) == 0 {
 		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
 		if err != nil {
@@ -233,7 +233,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 }
 
 // listObjectsV2InArchive generates S3 listing result ListObjectsV2Info from zip file, all parameters are already validated by the caller.
-func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, prefix, token, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
+func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, prefix, token, delimiter string, maxKeys int, startAfter string, h http.Header) (ListObjectsV2Info, error) {
 	zipPath, _, err := splitZipExtensionPath(prefix)
 	if err != nil {
 		// Return empty listing
@@ -246,7 +246,7 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 		return ListObjectsV2Info{}, nil
 	}
 
-	zipInfo := zipObjInfo.ArchiveInfo()
+	zipInfo := zipObjInfo.ArchiveInfo(h)
 	if len(zipInfo) == 0 {
 		// Always update the latest version
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, ObjectOptions{})
@@ -438,7 +438,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
-	zipInfo := zipObjInfo.ArchiveInfo()
+	zipInfo := zipObjInfo.ArchiveInfo(r.Header)
 	if len(zipInfo) == 0 {
 		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
 		if err != nil {
