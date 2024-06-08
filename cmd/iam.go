@@ -809,34 +809,55 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 	}
 }
 
-type queryPolicyOpts struct {
-	users  map[string]set.StringSet
-	groups []string
-	policy []string
+type cleanPolicyEntitiesQuery struct {
+	Users    map[string]set.StringSet
+	Groups   set.StringSet
+	Policies set.StringSet
 }
 
 // createQueryPolicyOpts - creates a query object for policy entities with users mapped to groups.
-func (sys *IAMSys) createQueryPolicyOpts(q madmin.PolicyEntitiesQuery, ldap bool) queryPolicyOpts {
-	newQ := queryPolicyOpts{
-		groups: q.Groups,
-		policy: q.Policy,
+func (sys *IAMSys) createQueryPolicyOpts(q madmin.PolicyEntitiesQuery, ldap bool) cleanPolicyEntitiesQuery {
+	cleanQ := cleanPolicyEntitiesQuery{
+		Users:    make(map[string]set.StringSet),
+		Groups:   set.CreateStringSet(q.Groups...),
+		Policies: set.CreateStringSet(q.Policy...),
 	}
+
 	if ldap {
-		var err error
-		newQ.users, err = sys.LDAPConfig.LookupGroupMemberships(q.Users, nil)
-		if err != nil {
-			newQ.users = make(map[string]set.StringSet, len(q.Users))
-			for _, user := range q.Users {
-				newQ.users[user] = nil
+		// Validate and normalize users, then fetch and normalize their groups
+		// Also include unvalidated users for backward compatibility.
+		for _, user := range q.Users {
+			lookupRes, actualGroups, _ := sys.LDAPConfig.GetValidatedDNWithGroups(user)
+			if lookupRes != nil {
+				groupSet := set.CreateStringSet(actualGroups...)
+
+				// duplicates can be overwritten, fetched groups should be identical.
+				cleanQ.Users[lookupRes.NormDN] = groupSet
+			}
+			// Search for non-normalized DN as well for backward compatibility.
+			if _, ok := cleanQ.Users[user]; !ok {
+				cleanQ.Users[user] = nil
+			}
+		}
+
+		// Validate and normalize groups.
+		for _, group := range q.Groups {
+			lookupRes, underDN, _ := sys.LDAPConfig.GetValidatedGroupDN(nil, group)
+			if lookupRes != nil && !underDN {
+				cleanQ.Groups.Add(lookupRes.NormDN)
 			}
 		}
 	} else {
-		newQ.users = make(map[string]set.StringSet, len(q.Users))
 		for _, user := range q.Users {
-			newQ.users[user] = nil
+			info, err := sys.store.GetUserInfo(user)
+			var groupSet set.StringSet
+			if err == nil {
+				groupSet = set.CreateStringSet(info.MemberOf...)
+			}
+			cleanQ.Users[user] = groupSet
 		}
 	}
-	return newQ
+	return cleanQ
 }
 
 // QueryLDAPPolicyEntities - queries policy associations for LDAP users/groups/policies.
@@ -849,10 +870,10 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 		return nil, errIAMActionNotAllowed
 	}
 
-	//opts := sys.createQueryPolicyOpts(q, true)
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
+		cleanQuery := sys.createQueryPolicyOpts(q, true)
+		pe := sys.store.ListPolicyMappings(cleanQuery, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -926,6 +947,7 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 
 	select {
 	case <-sys.configLoaded:
+		cleanQuery := sys.createQueryPolicyOpts(q, false)
 		var userPredicate, groupPredicate func(string) bool
 		if sys.LDAPConfig.Enabled() {
 			userPredicate = func(s string) bool {
@@ -935,7 +957,7 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 				return !sys.LDAPConfig.IsLDAPGroupDN(s)
 			}
 		}
-		pe := sys.store.ListPolicyMappings(q, userPredicate, groupPredicate)
+		pe := sys.store.ListPolicyMappings(cleanQuery, userPredicate, groupPredicate)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():

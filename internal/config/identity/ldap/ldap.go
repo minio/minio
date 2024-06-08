@@ -18,6 +18,7 @@
 package ldap
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -176,6 +177,54 @@ func (l *Config) GetValidatedDNUnderBaseDN(conn *ldap.Conn, dn string, baseDNLis
 
 	// Not under any configured base DN so return false.
 	return searchRes, false, nil
+}
+
+// GetValidatedDNWithGroups - Gets validated DN from given DN or short username
+// and returns the DN and the groups the user is a member of.
+//
+// If username is required in group search but a DN is passed, no groups are
+// returned.
+func (l *Config) GetValidatedDNWithGroups(username string) (*xldap.DNSearchResult, []string, error) {
+	conn, err := l.LDAP.Connect()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.LDAP.LookupBind(conn); err != nil {
+		return nil, nil, err
+	}
+
+	var lookupRes *xldap.DNSearchResult
+	shortUsername := ""
+	// Check if the passed in username is a valid DN.
+	if !l.ParsesAsDN(username) {
+		// We consider it as a login username and attempt to check it exists in
+		// the directory.
+		lookupRes, err = l.LDAP.LookupUsername(conn, username)
+		if err != nil {
+			if strings.Contains(err.Error(), "User DN not found for") {
+				return nil, nil, nil
+			}
+			return nil, nil, fmt.Errorf("Unable to find user DN: %w", err)
+		}
+		shortUsername = username
+	} else {
+		// Since the username parses as a valid DN, check that it exists and is
+		// under a configured base DN in the LDAP directory.
+		var isUnderBaseDN bool
+		lookupRes, isUnderBaseDN, err = l.GetValidatedUserDN(conn, username)
+		if err == nil && !isUnderBaseDN {
+			return nil, nil, fmt.Errorf("Unable to find user DN: %w", err)
+		}
+	}
+
+	groups, err := l.LDAP.SearchForUserGroups(conn, shortUsername, lookupRes.ActualDN)
+	if err != nil {
+		return nil, nil, err
+	}
+	return lookupRes, groups, nil
 }
 
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the
@@ -352,4 +401,102 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 	}
 
 	return res, nil
+}
+
+// QuickNormalizeDN - normalizes the given DN without checking if it is valid or
+// exists in the LDAP directory. Returns input if error
+func (l Config) QuickNormalizeDN(dn string) string {
+	if normDN, err := xldap.NormalizeDN(dn); err != nil {
+		return dn
+	} else {
+		return normDN
+	}
+}
+
+// QuickDenormalizeDN - denormalizes the given DN by unescaping any escaped characters.
+// Returns input if error
+func (l Config) DenormalizeDN(dn string) string {
+	if denormDN, err := decodeDN(dn); err != nil {
+		return dn
+	} else {
+		return denormDN
+	}
+}
+
+// Remove leading and trailing spaces from the attribute type and value
+// and unescape any escaped characters in these fields
+//
+// decodeDN is pulled from the go-ldap library
+// https://github.com/go-ldap/ldap/blob/dbdc485259442f987d83e604cd4f5859cfc1be58/dn.go
+func decodeDN(str string) (string, error) {
+	s := []rune(stripLeadingAndTrailingSpaces(str))
+
+	builder := strings.Builder{}
+	for i := 0; i < len(s); i++ {
+		char := s[i]
+
+		// If the character is not an escape character, just add it to the
+		// builder and continue
+		if char != '\\' {
+			builder.WriteRune(char)
+			continue
+		}
+
+		// If the escape character is the last character, it's a corrupted
+		// escaped character
+		if i+1 >= len(s) {
+			return "", fmt.Errorf("got corrupted escaped character: '%s'", string(s))
+		}
+
+		// If the escaped character is a special character, just add it to
+		// the builder and continue
+		switch s[i+1] {
+		case ' ', '"', '#', '+', ',', ';', '<', '=', '>', '\\':
+			builder.WriteRune(s[i+1])
+			i++
+			continue
+		}
+
+		// If the escaped character is not a special character, it should
+		// be a hex-encoded character of the form \XX if it's not at least
+		// two characters long, it's a corrupted escaped character
+		if i+2 >= len(s) {
+			return "", errors.New("failed to decode escaped character: encoding/hex: invalid byte: " + string(s[i+1]))
+		}
+
+		// Get the runes for the two characters after the escape character
+		// and convert them to a byte slice
+		xx := []byte(string(s[i+1 : i+3]))
+
+		// If the two runes are not hex characters and result in more than
+		// two bytes when converted to a byte slice, it's a corrupted
+		// escaped character
+		if len(xx) != 2 {
+			return "", errors.New("failed to decode escaped character: invalid byte: " + string(xx))
+		}
+
+		// Decode the hex-encoded character and add it to the builder
+		dst := []byte{0}
+		if n, err := hex.Decode(dst, xx); err != nil {
+			return "", errors.New("failed to decode escaped character: " + err.Error())
+		} else if n != 1 {
+			return "", fmt.Errorf("failed to decode escaped character: encoding/hex: expected 1 byte when un-escaping, got %d", n)
+		}
+
+		builder.WriteByte(dst[0])
+		i += 2
+	}
+
+	return builder.String(), nil
+}
+
+func stripLeadingAndTrailingSpaces(inVal string) string {
+	noSpaces := strings.Trim(inVal, " ")
+
+	// Re-add the trailing space if it was an escaped space
+	if len(noSpaces) > 0 && noSpaces[len(noSpaces)-1] == '\\' && inVal[len(inVal)-1] == ' ' {
+		noSpaces = noSpaces + " "
+	}
+
+	return noSpaces
 }
