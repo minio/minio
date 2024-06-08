@@ -128,10 +128,11 @@ type Connection struct {
 	outMessages   atomic.Int64
 
 	// For testing only
-	debugInConn  net.Conn
-	debugOutConn net.Conn
-	addDeadline  time.Duration
-	connMu       sync.Mutex
+	debugInConn   net.Conn
+	debugOutConn  net.Conn
+	blockMessages atomic.Pointer[<-chan struct{}]
+	addDeadline   time.Duration
+	connMu        sync.Mutex
 }
 
 // Subroute is a connection subroute that can be used to route to a specific handler with the same handler ID.
@@ -883,7 +884,7 @@ func (c *Connection) updateState(s State) {
 		return
 	}
 	if s == StateConnected {
-		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 	}
 	atomic.StoreUint32((*uint32)(&c.state), uint32(s))
 	if debugPrint {
@@ -993,6 +994,11 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				}
 				return
 			}
+			block := c.blockMessages.Load()
+			if block != nil && *block != nil {
+				<-*block
+			}
+
 			if c.incomingBytes != nil {
 				c.incomingBytes(int64(len(msg)))
 			}
@@ -1094,7 +1100,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			lastPong := atomic.LoadInt64(&c.LastPong)
 			if lastPong > 0 {
-				lastPongTime := time.Unix(lastPong, 0)
+				lastPongTime := time.Unix(0, lastPong)
 				if d := time.Since(lastPongTime); d > connPingInterval*2 {
 					gridLogIf(ctx, fmt.Errorf("host %s last pong too old (%v); disconnecting", c.Remote, d.Round(time.Millisecond)))
 					return
@@ -1105,7 +1111,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			if err != nil {
 				gridLogIf(ctx, err)
 				// Fake it...
-				atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+				atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 				continue
 			}
 		case toSend = <-c.outQueue:
@@ -1406,12 +1412,16 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 }
 
 func (c *Connection) handlePong(ctx context.Context, m message) {
+	if m.MuxID == 0 && m.Payload == nil {
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+		return
+	}
 	var pong pongMsg
 	_, err := pong.UnmarshalMsg(m.Payload)
 	PutByteBuffer(m.Payload)
 	gridLogIf(ctx, err)
 	if m.MuxID == 0 {
-		atomic.StoreInt64(&c.LastPong, time.Now().Unix())
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 		return
 	}
 	if v, ok := c.outgoing.Load(m.MuxID); ok {
@@ -1425,7 +1435,9 @@ func (c *Connection) handlePong(ctx context.Context, m message) {
 
 func (c *Connection) handlePing(ctx context.Context, m message) {
 	if m.MuxID == 0 {
-		gridLogIf(ctx, c.queueMsg(m, &pongMsg{}))
+		m.Flags.Clear(FlagPayloadIsZero)
+		m.Op = OpPong
+		gridLogIf(ctx, c.queueMsg(m, nil))
 		return
 	}
 	// Single calls do not support pinging.
@@ -1560,9 +1572,15 @@ func (c *Connection) handleMuxServerMsg(ctx context.Context, m message) {
 	}
 	if m.Flags&FlagEOF != 0 {
 		if v.cancelFn != nil && m.Flags&FlagPayloadIsErr == 0 {
+			// We must obtain the lock before calling cancelFn
+			// Otherwise others may pick up the error before close is called.
+			v.respMu.Lock()
 			v.cancelFn(errStreamEOF)
+			v.closeLocked()
+			v.respMu.Unlock()
+		} else {
+			v.close()
 		}
-		v.close()
 		if debugReqs {
 			fmt.Println(m.MuxID, c.String(), "handleMuxServerMsg: DELETING MUX")
 		}
@@ -1617,7 +1635,7 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 		IncomingMessages: c.inMessages.Load(),
 		OutgoingMessages: c.outMessages.Load(),
 		OutQueue:         len(c.outQueue),
-		LastPongTime:     time.Unix(c.LastPong, 0).UTC(),
+		LastPongTime:     time.Unix(0, c.LastPong).UTC(),
 	}
 	m.ByDestination = map[string]madmin.RPCMetrics{
 		c.Remote: m,
@@ -1659,7 +1677,12 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
 		c.connPingInterval = args[0].(time.Duration)
+		if c.connPingInterval < time.Second {
+			panic("CONN ping interval too low")
+		}
 	case debugSetClientPingDuration:
+		c.connMu.Lock()
+		defer c.connMu.Unlock()
 		c.clientPingInterval = args[0].(time.Duration)
 	case debugAddToDeadline:
 		c.addDeadline = args[0].(time.Duration)
@@ -1675,6 +1698,11 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		mid.respMu.Lock()
 		resp(mid.closed)
 		mid.respMu.Unlock()
+	case debugBlockInboundMessages:
+		c.connMu.Lock()
+		block := (<-chan struct{})(args[0].(chan struct{}))
+		c.blockMessages.Store(&block)
+		c.connMu.Unlock()
 	}
 }
 

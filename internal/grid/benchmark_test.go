@@ -200,6 +200,7 @@ func BenchmarkStream(b *testing.B) {
 	}{
 		{name: "request", fn: benchmarkGridStreamReqOnly},
 		{name: "responses", fn: benchmarkGridStreamRespOnly},
+		{name: "twoway", fn: benchmarkGridStreamTwoway},
 	}
 	for _, test := range tests {
 		b.Run(test.name, func(b *testing.B) {
@@ -425,6 +426,137 @@ func benchmarkGridStreamReqOnly(b *testing.B, n int) {
 					n += got
 				}
 				atomic.AddInt64(&ops, int64(n))
+				atomic.AddInt64(&lat, latency)
+			})
+			spent := time.Since(t)
+			if spent > 0 && n > 0 {
+				// Since we are benchmarking n parallel servers we need to multiply by n.
+				// This will give an estimate of the total ops/s.
+				latency := float64(atomic.LoadInt64(&lat)) / float64(time.Millisecond)
+				b.ReportMetric(float64(n)*float64(ops)/spent.Seconds(), "vops/s")
+				b.ReportMetric(latency/float64(ops), "ms/op")
+			}
+		})
+	}
+}
+
+func benchmarkGridStreamTwoway(b *testing.B, n int) {
+	defer testlogger.T.SetErrorTB(b)()
+
+	errFatal := func(err error) {
+		b.Helper()
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	grid, err := SetupTestGrid(n)
+	errFatal(err)
+	b.Cleanup(grid.Cleanup)
+	const messages = 10
+	// Create n managers.
+	const payloadSize = 512
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	payload := make([]byte, payloadSize)
+	_, err = rng.Read(payload)
+	errFatal(err)
+
+	for _, remote := range grid.Managers {
+		// Register a single handler which echos the payload.
+		errFatal(remote.RegisterStreamingHandler(handlerTest, StreamHandler{
+			// Send 10x requests.
+			Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
+				got := 0
+				for {
+					select {
+					case b, ok := <-in:
+						if !ok {
+							if got != messages {
+								return NewRemoteErrf("wrong number of requests. want %d, got %d", messages, got)
+							}
+							return nil
+						}
+						out <- b
+						got++
+					}
+				}
+			},
+
+			Subroute:    "some-subroute",
+			OutCapacity: 1,
+			InCapacity:  1, // Only one message buffered.
+		}))
+		errFatal(err)
+	}
+
+	// Wait for all to connect
+	// Parallel writes per server.
+	for par := 1; par <= 32; par *= 2 {
+		b.Run("par="+strconv.Itoa(par*runtime.GOMAXPROCS(0)), func(b *testing.B) {
+			defer timeout(30 * time.Second)()
+			b.ReportAllocs()
+			b.SetBytes(int64(len(payload) * (2*messages + 1)))
+			b.ResetTimer()
+			t := time.Now()
+			var ops int64
+			var lat int64
+			b.SetParallelism(par)
+			b.RunParallel(func(pb *testing.PB) {
+				rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+				n := 0
+				var latency int64
+				managers := grid.Managers
+				hosts := grid.Hosts
+				for pb.Next() {
+					// Pick a random manager.
+					src, dst := rng.Intn(len(managers)), rng.Intn(len(managers))
+					if src == dst {
+						dst = (dst + 1) % len(managers)
+					}
+					local := managers[src]
+					conn := local.Connection(hosts[dst]).Subroute("some-subroute")
+					if conn == nil {
+						b.Fatal("No connection")
+					}
+					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					// Send the payload.
+					t := time.Now()
+					st, err := conn.NewStream(ctx, handlerTest, payload)
+					if err != nil {
+						if debugReqs {
+							fmt.Println(err.Error())
+						}
+						b.Fatal(err.Error())
+					}
+					got := 0
+					sent := 0
+					go func() {
+						for i := 0; i < messages; i++ {
+							st.Requests <- append(GetByteBuffer()[:0], payload...)
+							if sent++; sent == messages {
+								close(st.Requests)
+								return
+							}
+						}
+					}()
+					err = st.Results(func(b []byte) error {
+						got++
+						PutByteBuffer(b)
+						return nil
+					})
+					if err != nil {
+						if debugReqs {
+							fmt.Println(err.Error())
+						}
+						b.Fatal(err.Error())
+					}
+					if got != messages {
+						b.Fatalf("wrong number of responses. want %d, got %d", messages, got)
+					}
+					latency += time.Since(t).Nanoseconds()
+					cancel()
+					n += got
+				}
+				atomic.AddInt64(&ops, int64(n*2))
 				atomic.AddInt64(&lat, latency)
 			})
 			spent := time.Since(t)

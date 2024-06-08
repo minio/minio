@@ -1233,7 +1233,7 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 }
 
 func applyTransitionRule(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) bool {
-	if obj.DeleteMarker {
+	if obj.DeleteMarker || obj.IsDir {
 		return false
 	}
 	globalTransitionState.queueTransitionTask(obj, event, src)
