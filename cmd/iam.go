@@ -873,7 +873,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 	select {
 	case <-sys.configLoaded:
 		cleanQuery := sys.createQueryPolicyOpts(q, true)
-		pe := sys.store.ListPolicyMappings(cleanQuery, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
+		pe := sys.store.ListPolicyMappings(cleanQuery, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN, sys.LDAPConfig.DenormalizeDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -957,7 +957,7 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 				return !sys.LDAPConfig.IsLDAPGroupDN(s)
 			}
 		}
-		pe := sys.store.ListPolicyMappings(cleanQuery, userPredicate, groupPredicate)
+		pe := sys.store.ListPolicyMappings(cleanQuery, userPredicate, groupPredicate, nil)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
