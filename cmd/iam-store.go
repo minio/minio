@@ -1986,16 +1986,16 @@ func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, userMap map[st
 	userPredicate func(string) bool,
 ) []madmin.UserPolicyEntities {
 	stsMap := xsync.NewMapOf[string, MappedPolicy]()
-	userGroupEntitiesMap := make(map[string][]madmin.GroupPolicyEntities, len(userMap))
+	resMap := make(map[string]madmin.UserPolicyEntities, len(userMap))
 
 	for user, groupSet := range userMap {
 		// Attempt to load parent user mapping for STS accounts
 		store.loadMappedPolicy(context.TODO(), user, stsUser, false, stsMap)
+		blankEntities := madmin.UserPolicyEntities{User: user}
 		if !groupSet.IsEmpty() {
-			userGroupEntitiesMap[user] = store.listGroupPolicyMappings(cache, groupSet, nil)
-		} else {
-			userGroupEntitiesMap[user] = nil
+			blankEntities.MemberOfMappings = store.listGroupPolicyMappings(cache, groupSet, nil)
 		}
+		resMap[user] = blankEntities
 	}
 
 	var r []madmin.UserPolicyEntities
@@ -2004,18 +2004,19 @@ func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, userMap map[st
 			return true
 		}
 
-		groupEntities, ok := userGroupEntitiesMap[user]
-		if len(userMap) > 0 && !ok {
-			return true
+		entitiesWithMemberOf, ok := resMap[user]
+		if !ok {
+			if len(userMap) > 0 {
+				return true
+			} else {
+				entitiesWithMemberOf = madmin.UserPolicyEntities{User: user}
+			}
 		}
 
 		ps := mappedPolicy.toSlice()
 		sort.Strings(ps)
-		r = append(r, madmin.UserPolicyEntities{
-			User:             user,
-			Policies:         ps,
-			MemberOfMappings: groupEntities,
-		})
+		entitiesWithMemberOf.Policies = ps
+		resMap[user] = entitiesWithMemberOf
 		return true
 	})
 
@@ -2024,17 +2025,20 @@ func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, userMap map[st
 			return true
 		}
 
-		groupEntities := userGroupEntitiesMap[user]
+		entitiesWithMemberOf := resMap[user]
 
 		ps := mappedPolicy.toSlice()
 		sort.Strings(ps)
-		r = append(r, madmin.UserPolicyEntities{
-			User:             user,
-			Policies:         ps,
-			MemberOfMappings: groupEntities,
-		})
+		entitiesWithMemberOf.Policies = ps
+		resMap[user] = entitiesWithMemberOf
 		return true
 	})
+
+	for _, v := range resMap {
+		if v.Policies != nil || v.MemberOfMappings != nil {
+			r = append(r, v)
+		}
+	}
 
 	sort.Slice(r, func(i, j int) bool {
 		return r[i].User < r[j].User
