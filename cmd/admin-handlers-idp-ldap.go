@@ -497,11 +497,11 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 		return
 	}
 
-	userDNs := r.Form["userDNs"]
+	dnList := r.Form["userDNs"]
 	isAll := r.Form.Get("all") == "true"
-	onlySelf := !isAll && len(userDNs) == 0
+	onlySelf := !isAll && len(dnList) == 0
 
-	if isAll && len(userDNs) > 0 {
+	if isAll && len(dnList) > 0 {
 		// This should be checked on client side, so return generic error
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
@@ -520,7 +520,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-	} else if len(userDNs) == 1 && (userDNs[0] == cred.AccessKey || userDNs[0] == cred.ParentUser) {
+	} else if len(dnList) == 1 && (dnList[0] == cred.AccessKey || dnList[0] == cred.ParentUser) {
 		onlySelf = true
 	}
 
@@ -537,12 +537,12 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 		return
 	}
 
-	if onlySelf && len(userDNs) == 0 {
+	if onlySelf && len(dnList) == 0 {
 		selfDN := cred.AccessKey
 		if cred.ParentUser != "" {
 			selfDN = cred.ParentUser
 		}
-		userDNs = append(userDNs, selfDN)
+		dnList = append(dnList, selfDN)
 	}
 
 	accessKeyMap := make(map[string]madmin.ListAccessKeysLDAPResp)
@@ -556,7 +556,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			accessKeyMap[user] = madmin.ListAccessKeysLDAPResp{}
 		}
 	} else {
-		for _, userDN := range userDNs {
+		for _, userDN := range dnList {
 			// Validate the userDN
 			foundResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
 			if err != nil {
