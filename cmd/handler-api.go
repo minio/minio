@@ -129,7 +129,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	if cfg.RequestsMax <= 0 {
 		maxSetDrives := slices.Max(setDriveCounts)
 
-		// Returns 75% of max memory allowed
+		// Returns 90% of max memory allowed
 		maxMem := globalServerCtxt.MemLimit
 
 		// max requests per node is calculated as
