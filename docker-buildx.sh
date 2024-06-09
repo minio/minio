@@ -2,6 +2,14 @@
 
 sudo sysctl net.ipv6.conf.all.disable_ipv6=0
 
+remote=$(git remote get-url upstream)
+if test "$remote" != "git@github.com:minio/minio.git"; then
+	echo "Script requires that the 'upstream' remote is set to git@github.com:minio/minio.git"
+	exit 1
+fi
+
+git remote update upstream && git checkout master && git rebase upstream/master
+
 release=$(git describe --abbrev=0 --tags)
 
 docker buildx build --push --no-cache \
