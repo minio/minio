@@ -50,7 +50,6 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 }
 
 func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
-	t.Skip("FIXME: Skipping internal IDP tests. Flaky test, needs to be fixed.")
 	baseTestCases := []TestSuiteCommon{
 		// Init and run test on ErasureSD backend with signature v4.
 		{serverType: "ErasureSD", signer: signerV4},
