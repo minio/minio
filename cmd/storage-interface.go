@@ -94,9 +94,9 @@ type StorageAPI interface {
 	CreateFile(ctx context.Context, origvolume, olume, path string, size int64, reader io.Reader) error
 	ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
-	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error
+	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error)
 	Delete(ctx context.Context, volume string, path string, opts DeleteOptions) (err error)
-	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error
+	VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (*CheckPartsResp, error)
 	StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error)
 	ReadMultiple(ctx context.Context, req ReadMultipleReq, resp chan<- ReadMultipleResp) error
 	CleanAbandonedData(ctx context.Context, volume string, path string) error

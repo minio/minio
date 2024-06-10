@@ -308,9 +308,8 @@ func TestListOnlineDisks(t *testing.T) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
 			}
-			availableDisks, newErrs, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
+			availableDisks, _, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
 				test.errs, fi, bucket, object, madmin.HealDeepScan)
-			test.errs = newErrs
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
@@ -491,9 +490,8 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					test.expectedTime, modTime)
 			}
 
-			availableDisks, newErrs, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
+			availableDisks, _, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
 				test.errs, fi, bucket, object, madmin.HealDeepScan)
-			test.errs = newErrs
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
@@ -554,7 +552,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	erasureDisks, _, _ = listOnlineDisks(erasureDisks, partsMetadata, errs, readQuorum)
 
-	filteredDisks, errs, _ := disksWithAllParts(ctx, erasureDisks, partsMetadata,
+	filteredDisks, _, dataErrsPerDisk := disksWithAllParts(ctx, erasureDisks, partsMetadata,
 		errs, fi, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
@@ -562,8 +560,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	for diskIndex, disk := range filteredDisks {
-		if errs[diskIndex] != nil {
-			t.Errorf("Unexpected error %s", errs[diskIndex])
+		if partNeedsHealing(dataErrsPerDisk[diskIndex]) {
+			t.Errorf("Unexpected error: %v", dataErrsPerDisk[diskIndex])
 		}
 
 		if disk == nil {
@@ -634,7 +632,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	errs = make([]error, len(erasureDisks))
-	filteredDisks, errs, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
+	filteredDisks, dataErrsPerDisk, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
 		errs, fi, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
@@ -646,15 +644,15 @@ func TestDisksWithAllParts(t *testing.T) {
 			if disk != nil {
 				t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
 			}
-			if errs[diskIndex] == nil {
-				t.Errorf("Expected error not received, driveIndex: %d", diskIndex)
+			if !partNeedsHealing(dataErrsPerDisk[diskIndex]) {
+				t.Errorf("Disk expected to be healed, driveIndex: %d", diskIndex)
 			}
 		} else {
 			if disk == nil {
 				t.Errorf("Drive erroneously filtered, driveIndex: %d", diskIndex)
 			}
-			if errs[diskIndex] != nil {
-				t.Errorf("Unexpected error, %s, driveIndex: %d", errs[diskIndex], diskIndex)
+			if partNeedsHealing(dataErrsPerDisk[diskIndex]) {
+				t.Errorf("Disk not expected to be healed, driveIndex: %d", diskIndex)
 			}
 
 		}

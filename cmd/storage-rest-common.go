@@ -20,7 +20,7 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v57" // Remove TotalTokens from DiskMetrics
+	storageRESTVersion       = "v58" // Change VerifyFile signature
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
