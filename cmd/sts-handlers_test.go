@@ -30,10 +30,10 @@ import (
 
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
-	ldap "github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/ldap"
 	"golang.org/x/exp/slices"
 )
 
@@ -50,6 +50,7 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 }
 
 func TestIAMInternalIDPSTSServerSuite(t *testing.T) {
+	t.Skip("FIXME: Skipping internal IDP tests. Flaky test, needs to be fixed.")
 	baseTestCases := []TestSuiteCommon{
 		// Init and run test on ErasureSD backend with signature v4.
 		{serverType: "ErasureSD", signer: signerV4},

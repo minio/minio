@@ -1896,9 +1896,9 @@ func (z *PartInfo) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *ReplicateObjectInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 25
+	// map header, size 26
 	// string "Name"
-	o = append(o, 0xde, 0x0, 0x19, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0xde, 0x0, 0x1a, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "Bucket"
 	o = append(o, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
@@ -2012,6 +2012,9 @@ func (z *ReplicateObjectInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "ReplicationTimestamp"
 	o = append(o, 0xb4, 0x52, 0x65, 0x70, 0x6c, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
 	o = msgp.AppendTime(o, z.ReplicationTimestamp)
+	// string "Checksum"
+	o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
+	o = msgp.AppendBytes(o, z.Checksum)
 	return
 }
 
@@ -2231,6 +2234,12 @@ func (z *ReplicateObjectInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ReplicationTimestamp")
 				return
 			}
+		case "Checksum":
+			z.Checksum, bts, err = msgp.ReadBytesBytes(bts, z.Checksum)
+			if err != nil {
+				err = msgp.WrapError(err, "Checksum")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -2259,7 +2268,7 @@ func (z *ReplicateObjectInfo) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0003) + za0004.Msgsize()
 		}
 	}
-	s += 21 + msgp.TimeSize
+	s += 21 + msgp.TimeSize + 9 + msgp.BytesPrefixSize + len(z.Checksum)
 	return
 }
 
