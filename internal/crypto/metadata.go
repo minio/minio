@@ -49,7 +49,7 @@ const (
 	MetaDataEncryptionKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
 
 	// MetaSsecCRC is the encrypted checksum of the SSE-C encrypted object.
-	MetaSsecCRC = "X-Minio-Internal-Ssec-Crc"
+	MetaSsecCRC = "X-Minio-Replication-Ssec-Crc"
 
 	// MetaContext is the KMS context provided by a client when encrypting an
 	// object with SSE-KMS. A client may not send a context in which case the

@@ -121,7 +121,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 		})
 	}
 	if !found {
-		return nil, fmt.Errorf("grid: local host not found")
+		return nil, fmt.Errorf("grid: local host (%s) not found in cluster setup", o.Local)
 	}
 
 	return m, nil
