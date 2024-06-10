@@ -116,11 +116,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
-			return
-		}
-
 		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
 		ssecRepHeaders := []string{
 			"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
@@ -1029,7 +1024,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		}
 	}
 
-	setPutObjHeaders(w, objInfo, false)
+	setPutObjHeaders(w, objInfo, false, r.Header)
 	if dsc := mustReplicate(ctx, bucket, object, objInfo.getMustReplicateOptions(replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 		scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 	}
@@ -1041,7 +1036,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get object location.
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
 	// Generate complete multipart response.
-	response := generateCompleteMultipartUploadResponse(bucket, object, location, objInfo)
+	response := generateCompleteMultipartUploadResponse(bucket, object, location, objInfo, r.Header)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write success response.

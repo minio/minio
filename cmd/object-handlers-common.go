@@ -335,7 +335,7 @@ func isETagEqual(left, right string) bool {
 // setPutObjHeaders sets all the necessary headers returned back
 // upon a success Put/Copy/CompleteMultipart/Delete requests
 // to activate delete only headers set delete as true
-func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
+func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool, h http.Header) {
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the ETag header key to be literally "ETag" - not "Etag" (case-sensitive).
 	// Therefore, we have to set the ETag directly as map entry.
@@ -357,7 +357,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, delete bool) {
 			lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 		}
 	}
-	hash.AddChecksumHeader(w, objInfo.decryptChecksums(0))
+	hash.AddChecksumHeader(w, objInfo.decryptChecksums(0, h))
 }
 
 func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete, lcEvent lifecycle.Event) {

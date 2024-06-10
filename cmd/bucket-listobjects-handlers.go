@@ -202,7 +202,7 @@ func (api objectAPIHandlers) listObjectsV2Handler(ctx context.Context, w http.Re
 
 	if r.Header.Get(xMinIOExtract) == "true" && strings.Contains(prefix, archivePattern) {
 		// Initiate a list objects operation inside a zip file based in the input params
-		listObjectsV2Info, err = listObjectsV2InArchive(ctx, objectAPI, bucket, prefix, token, delimiter, maxKeys, fetchOwner, startAfter)
+		listObjectsV2Info, err = listObjectsV2InArchive(ctx, objectAPI, bucket, prefix, token, delimiter, maxKeys, startAfter, r.Header)
 	} else {
 		// Initiate a list objects operation based on the input params.
 		// On success would return back ListObjectsInfo object to be

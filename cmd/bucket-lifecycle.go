@@ -741,7 +741,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		return nil, fmt.Errorf("transition storage class not configured: %w", err)
 	}
 
-	fn, off, length, err := NewGetObjectReader(rs, oi, opts)
+	fn, off, length, err := NewGetObjectReader(rs, oi, opts, h)
 	if err != nil {
 		return nil, ErrorRespToObjectError(err, bucket, object)
 	}
