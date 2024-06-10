@@ -77,7 +77,7 @@ const (
 	ObjectLockLegalHoldTimestamp = "objectlock-legalhold-timestamp"
 
 	// ReplicationSsecChecksumHeader - the encrypted checksum of the SSE-C encrypted object.
-	ReplicationSsecChecksumHeader = ReservedMetadataPrefix + "Ssec-Crc"
+	ReplicationSsecChecksumHeader = "X-Minio-Replication-Ssec-Crc"
 )
 
 // gets replication config associated to a given bucket name.
