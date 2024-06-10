@@ -708,7 +708,13 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
 		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
 	}
-
+	// SSEC can't be used with compression
+	globalCompressConfigMu.Lock()
+	globalCompressEnabled := globalCompressConfig.Enabled
+	globalCompressConfigMu.Unlock()
+	if globalCompressEnabled {
+		objectInputs = objectInputs[0:8]
+	}
 	// iterate through the above set of inputs and upload the object.
 	for _, input := range objectInputs {
 		uploadTestObject(t, apiRouter, credentials, bucketName, input.objectName, input.partLengths, input.metaData, false)
@@ -897,6 +903,14 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 		{"enc-mp-1", []int64{5*oneMiB + 1, 1}, mapCopy(metaWithSSEC)},
 		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
 		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
+	}
+
+	// SSEC can't be used with compression
+	globalCompressConfigMu.Lock()
+	globalCompressEnabled := globalCompressConfig.Enabled
+	globalCompressConfigMu.Unlock()
+	if globalCompressEnabled {
+		objectInputs = objectInputs[0:9]
 	}
 
 	// iterate through the above set of inputs and upload the object.
