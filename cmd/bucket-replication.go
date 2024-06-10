@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -780,12 +781,14 @@ func getCRCMeta(oi ObjectInfo, partNum int) map[string]string {
 
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, partNum int) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
+	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
+
 	for k, v := range objInfo.UserDefined {
 		// In case of SSE-C objects copy the allowed internal headers as well
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+		if !isSSEC || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				if strings.EqualFold(k, ReservedMetadataPrefixLower+"crc") {
-					for k, v := range getCRCMeta(objInfo, partNum) {
+					for k, v := range getCRCMeta(objInfo, partNum, nil) {
 						meta[k] = v
 					}
 				}
@@ -803,8 +806,13 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	}
 
 	if len(objInfo.Checksum) > 0 {
-		for k, v := range getCRCMeta(objInfo, 0) {
-			meta[k] = v
+		// Add encrypted CRC to metadata for SSE-C objects.
+		if isSSEC {
+			meta[ReservedMetadataPrefixLower+"crc"] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
+		} else {
+			for k, v := range getCRCMeta(objInfo, 0, nil) {
+				meta[k] = v
+			}
 		}
 	}
 
@@ -2409,7 +2417,9 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 		SSEC:                 crypto.SSEC.IsEncrypted(oi.UserDefined),
 		UserTags:             oi.UserTags,
 	}
-
+	if ri.SSEC {
+		ri.Checksum = oi.Checksum
+	}
 	if dsc.Synchronous() {
 		replicateObject(ctx, ri, o)
 	} else {

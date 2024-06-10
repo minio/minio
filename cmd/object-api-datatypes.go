@@ -326,6 +326,7 @@ func (ri ReplicateObjectInfo) ToObjectInfo() ObjectInfo {
 		VersionPurgeStatusInternal: ri.VersionPurgeStatusInternal,
 		DeleteMarker:               true,
 		UserDefined:                map[string]string{},
+		Checksum:                   ri.Checksum,
 	}
 }
 
@@ -357,6 +358,7 @@ type ReplicateObjectInfo struct {
 	TargetStatuses       map[string]replication.StatusType
 	TargetPurgeStatuses  map[string]VersionPurgeStatusType
 	ReplicationTimestamp time.Time
+	Checksum             []byte
 }
 
 // MultipartInfo captures metadata information about the uploadId
