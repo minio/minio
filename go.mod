@@ -53,7 +53,7 @@ require (
 	github.com/minio/kms-go/kes v0.3.0
 	github.com/minio/kms-go/kms v0.4.0
 	github.com/minio/madmin-go/v3 v3.0.55-0.20240603092915-420a67132c32
-	github.com/minio/minio-go/v7 v7.0.70
+	github.com/minio/minio-go/v7 v7.0.72-0.20240610154810-fa174cbf14b0
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v3 v3.0.1
 	github.com/minio/selfupdate v0.6.0
@@ -260,5 +260,3 @@ require (
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
-
-replace github.com/minio/minio-go/v7 => github.com/klauspost/minio-go/v7 v7.0.0-20240610151036-c0365cc82d05
