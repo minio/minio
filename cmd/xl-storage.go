@@ -586,7 +586,7 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 		// Remove filename which is the meta file.
 		item.transformMetaDir()
 
-		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), false)
+		fivs, err := getFileInfoVersions(buf, item.bucket, item.objectPath(), false, false)
 		metaDataPoolPut(buf)
 		if err != nil {
 			res["err"] = err.Error()
