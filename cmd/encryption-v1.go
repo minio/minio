@@ -1086,7 +1086,6 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 		if k, err := crypto.SSEC.ParseHTTP(h); err == nil {
 			key = k[:]
 		}
-		fmt.Println("GOT SSE-C KEY", key)
 		key, err := decryptObjectMeta(key, o.Bucket, o.Name, o.UserDefined)
 		if err != nil {
 			return nil, err
