@@ -865,7 +865,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Associate any service accounts to the certificate CN
-	parentUser := "tls:" + certificate.Subject.CommonName
+	parentUser := "tls" + getKeySeparator() + certificate.Subject.CommonName
 
 	claims[expClaim] = UTCNow().Add(expiry).Unix()
 	claims[subClaim] = certificate.Subject.CommonName
@@ -990,7 +990,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 		expiry = requestedDuration
 	}
 
-	parentUser := "custom:" + res.Success.User
+	parentUser := "custom" + getKeySeparator() + res.Success.User
 
 	// metadata map
 	claims[expClaim] = UTCNow().Add(time.Duration(expiry) * time.Second).Unix()
