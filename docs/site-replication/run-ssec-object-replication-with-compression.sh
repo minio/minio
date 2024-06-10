@@ -69,7 +69,7 @@ echo "done"
 
 # Enable compression for site minio1
 ./mc admin config set minio1 compression enable=on extensions=".txt" --insecure
-./mc admin config set minio1 compression allow_encryption=on --insecure
+./mc admin config set minio1 compression allow_encryption=off --insecure
 
 # Create bucket in source cluster
 echo "Create bucket in source MinIO instance"
