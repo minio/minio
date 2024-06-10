@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"os"
 	"path"
 	"sort"
@@ -301,7 +300,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 		}, nil
 	}
 	// Too small gains to reuse cache here.
-	return getFileInfoVersions(e.metadata, bucket, e.name, false)
+	return getFileInfoVersions(e.metadata, bucket, e.name, false, true)
 }
 
 // metaCacheEntries is a slice of metacache entries.
@@ -385,9 +384,6 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		// shallow decode.
 		xl, err := entry.xlmeta()
 		if err != nil {
-			if !errors.Is(err, errFileNotFound) {
-				internalLogIf(GlobalContext, err)
-			}
 			continue
 		}
 		objsValid++

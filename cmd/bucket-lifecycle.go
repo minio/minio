@@ -583,6 +583,10 @@ func enqueueTransitionImmediate(obj ObjectInfo, src lcEventSrc) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
 		switch event := lc.Eval(obj.ToLifecycleOpts()); event.Action {
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+			if obj.DeleteMarker || obj.IsDir {
+				// nothing to transition
+				return
+			}
 			globalTransitionState.queueTransitionTask(obj, event, src)
 		}
 	}
