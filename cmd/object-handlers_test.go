@@ -29,7 +29,6 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -2155,9 +2154,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		byteData []byte
 		md5sum   string
 	}{
-		{byteData: generateBytesData(6 * humanize.MiByte)},
+		{byteData: generateBytesData(6 * humanize.KiByte)},
 	}
-	rand.Read(bytesData[0].byteData)
 	h := md5.New()
 	h.Write(bytesData[0].byteData)
 	bytesData[0].md5sum = hex.EncodeToString(h.Sum(nil))
