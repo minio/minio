@@ -47,7 +47,7 @@ lint-fix: getdeps ## runs golangci-lint suite of linters with automatic fixes
 check: test
 test: verifiers build ## builds minio, runs linters, tests
 	@echo "Running unit tests"
-	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -v -tags kqueue ./...
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -v -tags kqueue,dev ./...
 
 test-root-disable: install-race
 	@echo "Running minio root lockdown tests"
@@ -84,13 +84,13 @@ test-race: verifiers build ## builds minio, runs linters, tests (race)
 	@echo "Running unit tests under -race"
 	@(env bash $(PWD)/buildscripts/race.sh)
 
-test-iam: build ## verify IAM (external IDP, etcd backends)
+test-iam: install-race ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends)"
-	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue -v -run TestIAM* ./cmd
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue,dev -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
-	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue -v -run TestIAM* ./cmd
+	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue,dev -v -run TestIAM* ./cmd
 
-test-iam-ldap-upgrade-import: build ## verify IAM (external LDAP IDP)
+test-iam-ldap-upgrade-import: install-race ## verify IAM (external LDAP IDP)
 	@echo "Running upgrade tests for IAM (LDAP backend)"
 	@env bash $(PWD)/buildscripts/minio-iam-ldap-upgrade-import-test.sh
 
@@ -196,7 +196,7 @@ docker: build ## builds minio docker container
 
 install-race: checks build-debugging ## builds minio to $(PWD)
 	@echo "Building minio binary with -race to './minio'"
-	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@GORACE=history_size=7 CGO_ENABLED=1 go build -tags kqueue,dev -race -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 	@echo "Installing minio binary with -race to '$(GOPATH)/bin/minio'"
 	@mkdir -p $(GOPATH)/bin && cp -af $(PWD)/minio $(GOPATH)/bin/minio
 
