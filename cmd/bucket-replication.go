@@ -75,8 +75,9 @@ const (
 	ObjectLockRetentionTimestamp = "objectlock-retention-timestamp"
 	// ObjectLockLegalHoldTimestamp - the last time a legal hold metadata modification happened on this cluster for this object version
 	ObjectLockLegalHoldTimestamp = "objectlock-legalhold-timestamp"
-	// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
-	ReplicationWorkerMultiplier = 1.5
+
+	// ReplicationSsecChecksumHeader - the encrypted checksum of the SSE-C encrypted object.
+	ReplicationSsecChecksumHeader = ReservedMetadataPrefix + "Ssec-Crc"
 )
 
 // gets replication config associated to a given bucket name.
@@ -808,7 +809,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	if len(objInfo.Checksum) > 0 {
 		// Add encrypted CRC to metadata for SSE-C objects.
 		if isSSEC {
-			meta[ReservedMetadataPrefixLower+"crc"] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
+			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
 		} else {
 			for k, v := range getCRCMeta(objInfo, 0, nil) {
 				meta[k] = v

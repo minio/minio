@@ -1303,7 +1303,13 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 		}
 	}
-	delete(fi.Metadata, hash.MinIOMultipartChecksum) // Not needed in final object.
+	if fi.Metadata[ReplicationSsecChecksumHeader] != "" {
+		if v, err := base64.StdEncoding.DecodeString(fi.Metadata[ReplicationSsecChecksumHeader]); err == nil {
+			fi.Checksum = v
+		}
+	}
+	delete(fi.Metadata, ReplicationSsecChecksumHeader) // Transferred above.
+	delete(fi.Metadata, hash.MinIOMultipartChecksum)   // Not needed in final object.
 
 	// Save the final object size and modtime.
 	fi.Size = objectSize
