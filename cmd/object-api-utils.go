@@ -80,6 +80,18 @@ const (
 	compMinIndexSize = 8 << 20
 )
 
+// getkeyeparator - returns the separator to be used for
+// persisting on drive.
+//
+// - ":" is used on non-windows platforms
+// - "_" is used on windows platforms
+func getKeySeparator() string {
+	if runtime.GOOS == globalWindowsOSName {
+		return "_"
+	}
+	return ":"
+}
+
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
 func isMinioMetaBucketName(bucket string) bool {
