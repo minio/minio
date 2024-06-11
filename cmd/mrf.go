@@ -63,6 +63,7 @@ type PartialOperation struct {
 type mrfState struct {
 	opCh chan PartialOperation
 
+	closed  int32
 	closing int32
 	wg      sync.WaitGroup
 }
@@ -76,6 +77,10 @@ func newMRFState() mrfState {
 // Add a partial S3 operation (put/delete) when one or more disks are offline.
 func (m *mrfState) addPartialOp(op PartialOperation) {
 	if m == nil {
+		return
+	}
+
+	if atomic.LoadInt32(&m.closed) == 1 {
 		return
 	}
 
@@ -96,10 +101,9 @@ func (m *mrfState) addPartialOp(op PartialOperation) {
 // the current heal status in one available disk
 func (m *mrfState) shutdown() {
 	atomic.StoreInt32(&m.closing, 1)
-
 	m.wg.Wait()
-
 	close(m.opCh)
+	atomic.StoreInt32(&m.closed, 1)
 
 	if len(m.opCh) > 0 {
 		healingLogEvent(context.Background(), "Saving MRF healing data (%d entries)", len(m.opCh))
