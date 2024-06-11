@@ -494,5 +494,8 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
 		opts.ReplicationRequest = true
 	}
+	if r.Header.Get(ReplicationSsecChecksumHeader) != "" {
+		opts.UserDefined[ReplicationSsecChecksumHeader] = r.Header.Get(ReplicationSsecChecksumHeader)
+	}
 	return opts, nil
 }

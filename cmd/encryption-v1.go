@@ -1168,7 +1168,9 @@ func (o *ObjectInfo) decryptChecksums(part int, h http.Header) map[string]string
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
 		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
 		if err != nil {
-			encLogIf(GlobalContext, err)
+			if err != crypto.ErrSecretKeyMismatch {
+				encLogIf(GlobalContext, err)
+			}
 			return nil
 		}
 		data = decrypted
