@@ -809,15 +809,15 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 	}
 }
 
-type cleanPolicyEntitiesQuery struct {
+type cleanEntitiesQuery struct {
 	Users    map[string]set.StringSet
 	Groups   set.StringSet
 	Policies set.StringSet
 }
 
-// createQueryPolicyOpts - creates a query object for policy entities with users mapped to groups.
-func (sys *IAMSys) createQueryPolicyOpts(q madmin.PolicyEntitiesQuery, ldap bool) cleanPolicyEntitiesQuery {
-	cleanQ := cleanPolicyEntitiesQuery{
+// createCleanEntitiesQuery - maps users to their groups and normalizes user or group DNs if ldap.
+func (sys *IAMSys) createCleanEntitiesQuery(q madmin.PolicyEntitiesQuery, ldap bool) cleanEntitiesQuery {
+	cleanQ := cleanEntitiesQuery{
 		Users:    make(map[string]set.StringSet),
 		Groups:   set.CreateStringSet(q.Groups...),
 		Policies: set.CreateStringSet(q.Policy...),
@@ -872,7 +872,7 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 
 	select {
 	case <-sys.configLoaded:
-		cleanQuery := sys.createQueryPolicyOpts(q, true)
+		cleanQuery := sys.createCleanEntitiesQuery(q, true)
 		pe := sys.store.ListPolicyMappings(cleanQuery, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN, sys.LDAPConfig.DenormalizeDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
@@ -947,7 +947,7 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 
 	select {
 	case <-sys.configLoaded:
-		cleanQuery := sys.createQueryPolicyOpts(q, false)
+		cleanQuery := sys.createCleanEntitiesQuery(q, false)
 		var userPredicate, groupPredicate func(string) bool
 		if sys.LDAPConfig.Enabled() {
 			userPredicate = func(s string) bool {

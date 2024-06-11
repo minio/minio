@@ -2239,7 +2239,7 @@ func (store *IAMStoreSys) listPolicyMappings(cache *iamCache, queryPolSet set.St
 }
 
 // ListPolicyMappings - return users/groups mapped to policies.
-func (store *IAMStoreSys) ListPolicyMappings(q cleanPolicyEntitiesQuery,
+func (store *IAMStoreSys) ListPolicyMappings(q cleanEntitiesQuery,
 	userPredicate, groupPredicate func(string) bool, decodeFunc func(string) string,
 ) madmin.PolicyEntitiesResult {
 	cache := store.rlock()
