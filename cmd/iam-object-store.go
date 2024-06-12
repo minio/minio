@@ -25,7 +25,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -34,6 +33,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
+	"github.com/minio/minio/internal/logger"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -43,8 +43,6 @@ type IAMObjectStore struct {
 	sync.RWMutex
 
 	*iamCache
-
-	cachedIAMListing atomic.Value
 
 	usersSysType UsersSysType
 
@@ -421,8 +419,8 @@ func splitPath(s string, lastIndex bool) (string, string) {
 	return s[:i+1], s[i+1:]
 }
 
-func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[string][]string, error) {
-	res := make(map[string][]string)
+func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (res map[string][]string, err error) {
+	res = make(map[string][]string)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	for item := range listIAMConfigItems(ctx, iamOS.objAPI, iamConfigPrefix+SlashSeparator) {
@@ -438,60 +436,8 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (map[str
 
 		res[listKey] = append(res[listKey], trimmedItem)
 	}
-	// Store the listing for later re-use.
-	iamOS.cachedIAMListing.Store(res)
+
 	return res, nil
-}
-
-// PurgeExpiredSTS - purge expired STS credentials from object store.
-func (iamOS *IAMObjectStore) PurgeExpiredSTS(ctx context.Context) error {
-	if iamOS.objAPI == nil {
-		return errServerNotInitialized
-	}
-
-	bootstrapTraceMsg("purging expired STS credentials")
-
-	iamListing, ok := iamOS.cachedIAMListing.Load().(map[string][]string)
-	if !ok {
-		// There has been no store yet. This should never happen!
-		iamLogIf(GlobalContext, errors.New("WARNING: no cached IAM listing found"))
-		return nil
-	}
-
-	// Scan STS users on disk and purge expired ones. We do not need to hold a
-	// lock with store.lock() here.
-	stsAccountsFromStore := map[string]UserIdentity{}
-	stsAccPoliciesFromStore := xsync.NewMapOf[string, MappedPolicy]()
-	for _, item := range iamListing[stsListKey] {
-		userName := path.Dir(item)
-		// loadUser() will delete expired user during the load.
-		err := iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore)
-		if err != nil && !errors.Is(err, errNoSuchUser) {
-			iamLogIf(GlobalContext,
-				fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item))
-		}
-
-	}
-	// Loading the STS policy mappings from disk ensures that stale entries
-	// (removed during loadUser() in the loop above) are removed from memory.
-	for _, item := range iamListing[policyDBSTSUsersListKey] {
-		stsName := strings.TrimSuffix(item, ".json")
-		err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore)
-		if err != nil && !errors.Is(err, errNoSuchPolicy) {
-			iamLogIf(GlobalContext,
-				fmt.Errorf("unable to load policies during STS purge: %w (%s)", err, item))
-		}
-
-	}
-
-	// Store the newly populated map in the iam cache. This takes care of
-	// removing stale entries from the existing map.
-	iamOS.Lock()
-	defer iamOS.Unlock()
-	iamOS.iamCache.iamSTSAccountsMap = stsAccountsFromStore
-	iamOS.iamCache.iamSTSPolicyMap = stsAccPoliciesFromStore
-
-	return nil
 }
 
 // Assumes cache is locked by caller.
@@ -594,6 +540,45 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	}
 
 	cache.buildUserGroupMemberships()
+
+	purgeStart := time.Now()
+
+	// Purge expired STS credentials.
+
+	// Scan STS users on disk and purge expired ones.
+	stsAccountsFromStore := map[string]UserIdentity{}
+	stsAccPoliciesFromStore := xsync.NewMapOf[string, MappedPolicy]()
+	for _, item := range listedConfigItems[stsListKey] {
+		userName := path.Dir(item)
+		// loadUser() will delete expired user during the load.
+		err := iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore)
+		if err != nil && !errors.Is(err, errNoSuchUser) {
+			return fmt.Errorf("unable to load user during STS purge: %w (%s)", err, item)
+		}
+
+	}
+	// Loading the STS policy mappings from disk ensures that stale entries
+	// (removed during loadUser() in the loop above) are removed from memory.
+	for _, item := range listedConfigItems[policyDBSTSUsersListKey] {
+		stsName := strings.TrimSuffix(item, ".json")
+		err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore)
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
+			return fmt.Errorf("unable to load policies during STS purge: %w (%s)", err, item)
+		}
+
+	}
+
+	took := time.Since(purgeStart).Seconds()
+	if took > maxDurationSecondsForLog {
+		// Log if we took a lot of time to load.
+		logger.Info("IAM expired STS purge took %.2fs", took)
+	}
+
+	// Store the newly populated map in the iam cache. This takes care of
+	// removing stale entries from the existing map.
+	cache.iamSTSAccountsMap = stsAccountsFromStore
+	cache.iamSTSPolicyMap = stsAccPoliciesFromStore
+
 	return nil
 }
 

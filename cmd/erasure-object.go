@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -276,7 +277,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		return gr.WithCleanupFuncs(nsUnlocker), nil
 	}
 
-	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts)
+	fn, off, length, err := NewGetObjectReader(rs, objInfo, opts, h)
 	if err != nil {
 		return nil, err
 	}
@@ -483,8 +484,8 @@ func joinErrs(errs []error) []string {
 	return s
 }
 
-func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrs []error, opts ObjectOptions) (FileInfo, error) {
-	m, ok := isObjectDangling(metaArr, errs, dataErrs)
+func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrsByPart map[int][]int, opts ObjectOptions) (FileInfo, error) {
+	m, ok := isObjectDangling(metaArr, errs, dataErrsByPart)
 	if !ok {
 		// We only come here if we cannot figure out if the object
 		// can be deleted safely, in such a scenario return ReadQuorum error.
@@ -494,7 +495,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 	tags["set"] = er.setIndex
 	tags["pool"] = er.poolIndex
 	tags["merrs"] = joinErrs(errs)
-	tags["derrs"] = joinErrs(dataErrs)
+	tags["derrs"] = dataErrsByPart
 	if m.IsValid() {
 		tags["size"] = m.Size
 		tags["mtime"] = m.ModTime.Format(http.TimeFormat)
@@ -508,8 +509,20 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 
 	// count the number of offline disks
 	offline := 0
-	for i := 0; i < max(len(errs), len(dataErrs)); i++ {
-		if i < len(errs) && errors.Is(errs[i], errDiskNotFound) || i < len(dataErrs) && errors.Is(dataErrs[i], errDiskNotFound) {
+	for i := 0; i < len(errs); i++ {
+		var found bool
+		switch {
+		case errors.Is(errs[i], errDiskNotFound):
+			found = true
+		default:
+			for p := range dataErrsByPart {
+				if dataErrsByPart[p][i] == checkPartDiskNotFound {
+					found = true
+					break
+				}
+			}
+		}
+		if found {
 			offline++
 		}
 	}
@@ -1355,6 +1368,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.EncryptFn != nil {
 		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 	}
+	if userDefined[ReplicationSsecChecksumHeader] != "" {
+		if v, err := base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader]); err == nil {
+			fi.Checksum = v
+		}
+	}
+	delete(userDefined, ReplicationSsecChecksumHeader)
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 

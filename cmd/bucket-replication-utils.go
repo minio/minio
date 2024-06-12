@@ -534,7 +534,7 @@ func getHealReplicateObjectInfo(oi ObjectInfo, rcfg replicationConfig) Replicate
 	rstate.ReplicateDecisionStr = dsc.String()
 	asz, _ := oi.GetActualSize()
 
-	return ReplicateObjectInfo{
+	r := ReplicateObjectInfo{
 		Name:                       oi.Name,
 		Size:                       oi.Size,
 		ActualSize:                 asz,
@@ -558,6 +558,10 @@ func getHealReplicateObjectInfo(oi ObjectInfo, rcfg replicationConfig) Replicate
 		SSEC:                 crypto.SSEC.IsEncrypted(oi.UserDefined),
 		UserTags:             oi.UserTags,
 	}
+	if r.SSEC {
+		r.Checksum = oi.Checksum
+	}
+	return r
 }
 
 // ReplicationState - returns replication state using other internal replication metadata in ObjectInfo

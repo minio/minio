@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -74,8 +75,9 @@ const (
 	ObjectLockRetentionTimestamp = "objectlock-retention-timestamp"
 	// ObjectLockLegalHoldTimestamp - the last time a legal hold metadata modification happened on this cluster for this object version
 	ObjectLockLegalHoldTimestamp = "objectlock-legalhold-timestamp"
-	// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
-	ReplicationWorkerMultiplier = 1.5
+
+	// ReplicationSsecChecksumHeader - the encrypted checksum of the SSE-C encrypted object.
+	ReplicationSsecChecksumHeader = "X-Minio-Replication-Ssec-Crc"
 )
 
 // gets replication config associated to a given bucket name.
@@ -763,9 +765,9 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func getCRCMeta(oi ObjectInfo, partNum int) map[string]string {
+func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) map[string]string {
 	meta := make(map[string]string)
-	cs := oi.decryptChecksums(partNum)
+	cs := oi.decryptChecksums(partNum, h)
 	for k, v := range cs {
 		cksum := hash.NewChecksumString(k, v)
 		if cksum == nil {
@@ -780,12 +782,14 @@ func getCRCMeta(oi ObjectInfo, partNum int) map[string]string {
 
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, partNum int) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
+	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
+
 	for k, v := range objInfo.UserDefined {
 		// In case of SSE-C objects copy the allowed internal headers as well
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+		if !isSSEC || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
 				if strings.EqualFold(k, ReservedMetadataPrefixLower+"crc") {
-					for k, v := range getCRCMeta(objInfo, partNum) {
+					for k, v := range getCRCMeta(objInfo, partNum, nil) {
 						meta[k] = v
 					}
 				}
@@ -803,8 +807,13 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	}
 
 	if len(objInfo.Checksum) > 0 {
-		for k, v := range getCRCMeta(objInfo, 0) {
-			meta[k] = v
+		// Add encrypted CRC to metadata for SSE-C objects.
+		if isSSEC {
+			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
+		} else {
+			for k, v := range getCRCMeta(objInfo, 0, nil) {
+				meta[k] = v
+			}
 		}
 	}
 
@@ -1646,7 +1655,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
-		crc := getCRCMeta(objInfo, partInfo.Number)
+		crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
 		for k, v := range crc {
 			cHeader.Add(k, v)
 		}
@@ -2219,12 +2228,12 @@ type proxyResult struct {
 
 // get Reader from replication target if active-active replication is in place and
 // this node returns a 404
-func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, _ http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
+func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
 	tgt, oi, proxy := proxyHeadToRepTarget(ctx, bucket, object, rs, opts, proxyTargets)
 	if !proxy.Proxy {
 		return nil, proxy, nil
 	}
-	fn, _, _, err := NewGetObjectReader(nil, oi, opts)
+	fn, _, _, err := NewGetObjectReader(nil, oi, opts, h)
 	if err != nil {
 		return nil, proxy, err
 	}
@@ -2409,7 +2418,9 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 		SSEC:                 crypto.SSEC.IsEncrypted(oi.UserDefined),
 		UserTags:             oi.UserTags,
 	}
-
+	if ri.SSEC {
+		ri.Checksum = oi.Checksum
+	}
 	if dsc.Synchronous() {
 		replicateObject(ctx, ri, o)
 	} else {

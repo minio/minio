@@ -1633,7 +1633,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	job.ID = fmt.Sprintf("%s%s%d", shortuuid.New(), getBatchJobIDSeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
+	job.ID = fmt.Sprintf("%s%s%d", shortuuid.New(), getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	job.User = user
 	job.Started = time.Now()
 

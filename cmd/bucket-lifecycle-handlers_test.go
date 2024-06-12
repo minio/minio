@@ -29,7 +29,7 @@ import (
 
 // Test S3 Bucket lifecycle APIs with wrong credentials
 func TestBucketLifecycleWrongCredentials(t *testing.T) {
-	ExecObjectLayerAPITest(t, testBucketLifecycleHandlersWrongCredentials, []string{"GetBucketLifecycle", "PutBucketLifecycle", "DeleteBucketLifecycle"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testBucketLifecycleHandlersWrongCredentials, endpoints: []string{"GetBucketLifecycle", "PutBucketLifecycle", "DeleteBucketLifecycle"}})
 }
 
 // Test for authentication
@@ -145,7 +145,7 @@ func testBucketLifecycleHandlersWrongCredentials(obj ObjectLayer, instanceType, 
 
 // Test S3 Bucket lifecycle APIs
 func TestBucketLifecycle(t *testing.T) {
-	ExecObjectLayerAPITest(t, testBucketLifecycleHandlers, []string{"GetBucketLifecycle", "PutBucketLifecycle", "DeleteBucketLifecycle"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testBucketLifecycleHandlers, endpoints: []string{"GetBucketLifecycle", "PutBucketLifecycle", "DeleteBucketLifecycle"}})
 }
 
 // Simple tests of bucket lifecycle: PUT, GET, DELETE.

@@ -30,10 +30,10 @@ import (
 
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
-	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7"
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
-	ldap "github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/ldap"
 	"golang.org/x/exp/slices"
 )
 

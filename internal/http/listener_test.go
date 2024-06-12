@@ -148,8 +148,8 @@ func TestNewHTTPListener(t *testing.T) {
 		{[]string{"[::1:65432", "unknown-host:-1"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{true, true}},           // 7
 		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                                  // 8
 		{[]string{"localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                                  // 9
-		{[]string{"[::1]:9090", "127.0.0.1:90900"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                // 10
-		{[]string{"[::1]:9090", "localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false}},                    // 10
+		{[]string{"[::1]:3737", "127.0.0.1:90900"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false, true}},          // 10
+		{[]string{"[::1]:3737", "localhost:0"}, time.Duration(0), time.Duration(0), time.Duration(0), []bool{false, false}},             // 10
 	}
 
 	for testIdx, testCase := range testCases {
