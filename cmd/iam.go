@@ -52,6 +52,7 @@ import (
 	"github.com/minio/pkg/v3/ldap"
 	"github.com/minio/pkg/v3/policy"
 	etcd "go.etcd.io/etcd/client/v3"
+	"golang.org/x/sync/singleflight"
 )
 
 // UsersSysType - defines the type of users and groups system that is
@@ -177,9 +178,9 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	}
 
 	if etcdClient == nil {
-		sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType)}
+		sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType), &singleflight.Group{}}
 	} else {
-		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType)}
+		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType), &singleflight.Group{}}
 	}
 }
 
