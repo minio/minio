@@ -116,9 +116,12 @@ func (s *TestSuiteIAM) TestSTSServiceAccountsWithUsername(c *check) {
 		c.Fatalf("policy add error: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, "dillon", false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     "dillon",
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	assumeRole := cr.STSAssumeRole{
