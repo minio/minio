@@ -1194,14 +1194,20 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 
 	// Attempting to set a non-existent policy should fail.
 	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-	err = s.adm.SetPolicy(ctx, policy+"x", userDN, false)
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy + "x"},
+		User:     userDN,
+	})
 	if err == nil {
-		c.Fatalf("should not be able to set non-existent policy")
+		c.Fatalf("should not be able to attach non-existent policy")
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, userDN, false)
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDN,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	value, err := ldapID.Retrieve()
@@ -1240,10 +1246,12 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 		c.Fatalf("unexpected non-access-denied err: %v", err)
 	}
 
-	// Remove the policy assignment on the user DN:
-	err = s.adm.SetPolicy(ctx, "", userDN, false)
+	_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDN,
+	})
 	if err != nil {
-		c.Fatalf("Unable to remove policy setting: %v", err)
+		c.Fatalf("Unable to detach policy: %v", err)
 	}
 
 	_, err = ldapID.Retrieve()
@@ -1253,9 +1261,12 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 
 	// Set policy via group and validate policy assignment.
 	groupDN := "cn=projectb,ou=groups,ou=swengg,dc=min,dc=io"
-	err = s.adm.SetPolicy(ctx, policy, groupDN, true)
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		Group:    groupDN,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set group policy: %v", err)
+		c.Fatalf("Unable to attach group policy: %v", err)
 	}
 
 	value, err = ldapID.Retrieve()
@@ -1278,6 +1289,14 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	// Validate that the client cannot remove any objects
 	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
 	c.Assert(err.Error(), "Access Denied.")
+
+	_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     groupDN,
+	})
+	if err != nil {
+		c.Fatalf("Unable to detach group policy: %v", err)
+	}
 }
 
 func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
@@ -1630,9 +1649,12 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 	}
 
 	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-	err = s.adm.SetPolicy(ctx, policy, userDN, false)
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDN,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	ldapID := cr.LDAPIdentity{
@@ -1723,9 +1745,12 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithUsername(c *check) {
 	}
 
 	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-	err = s.adm.SetPolicy(ctx, policy, userDN, false)
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDN,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	ldapID := cr.LDAPIdentity{
@@ -1814,9 +1839,12 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 	}
 
 	groupDN := "cn=projecta,ou=groups,ou=swengg,dc=min,dc=io"
-	err = s.adm.SetPolicy(ctx, policy, groupDN, true)
+	_, err = s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		Group:    groupDN,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	ldapID := cr.LDAPIdentity{
