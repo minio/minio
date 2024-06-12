@@ -352,6 +352,8 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	bootstrapTraceMsg("finishing IAM loading")
 }
 
+const maxDurationSecondsForLog = 5
+
 func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Duration) {
 	// Watch for IAM config changes for iamStorageWatcher.
 	watcher, isWatcher := sys.store.IAMStorageAPI.(iamStorageWatcher)
@@ -384,7 +386,6 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 		return baseInterval/2 + randAmt
 	}
 
-	var maxDurationSecondsForLog float64 = 5
 	timer := time.NewTimer(waitInterval())
 	defer timer.Stop()
 
@@ -400,18 +401,6 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 				if took > maxDurationSecondsForLog {
 					// Log if we took a lot of time to load.
 					logger.Info("IAM refresh took %.2fs", took)
-				}
-			}
-
-			// Purge expired STS credentials.
-			purgeStart := time.Now()
-			if err := sys.store.PurgeExpiredSTS(ctx); err != nil {
-				iamLogIf(ctx, fmt.Errorf("Failure in periodic STS purge for IAM (took %.2fs): %v", time.Since(purgeStart).Seconds(), err))
-			} else {
-				took := time.Since(purgeStart).Seconds()
-				if took > maxDurationSecondsForLog {
-					// Log if we took a lot of time to load.
-					logger.Info("IAM expired STS purge took %.2fs", took)
 				}
 			}
 
@@ -1631,31 +1620,16 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 
 func (sys *IAMSys) getStoredLDAPPolicyMappingKeys(ctx context.Context, isGroup bool) set.StringSet {
 	entityKeysInStorage := set.NewStringSet()
-	if iamOS, ok := sys.store.IAMStorageAPI.(*IAMObjectStore); ok {
-		// Load existing mapping keys from the cached listing for
-		// `IAMObjectStore`.
-		iamFilesListing := iamOS.cachedIAMListing.Load().(map[string][]string)
-		listKey := policyDBSTSUsersListKey
-		if isGroup {
-			listKey = policyDBGroupsListKey
-		}
-		for _, item := range iamFilesListing[listKey] {
-			stsUserName := strings.TrimSuffix(item, ".json")
-			entityKeysInStorage.Add(stsUserName)
-		}
-	} else {
-		// For non-iam object store, we copy the mapping keys from the cache.
-		cache := sys.store.rlock()
-		defer sys.store.runlock()
-		cachedPolicyMap := cache.iamSTSPolicyMap
-		if isGroup {
-			cachedPolicyMap = cache.iamGroupPolicyMap
-		}
-		cachedPolicyMap.Range(func(k string, v MappedPolicy) bool {
-			entityKeysInStorage.Add(k)
-			return true
-		})
+	cache := sys.store.rlock()
+	defer sys.store.runlock()
+	cachedPolicyMap := cache.iamSTSPolicyMap
+	if isGroup {
+		cachedPolicyMap = cache.iamGroupPolicyMap
 	}
+	cachedPolicyMap.Range(func(k string, v MappedPolicy) bool {
+		entityKeysInStorage.Add(k)
+		return true
+	})
 
 	return entityKeysInStorage
 }
@@ -2039,20 +2013,22 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 		isGroup = false
 	} else {
-		if isAttach {
-			var underBaseDN bool
-			if dnResult, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
-				iamLogIf(ctx, err)
-				return
-			} else if dnResult == nil || !underBaseDN {
+		var underBaseDN bool
+		if dnResult, underBaseDN, err = sys.LDAPConfig.GetValidatedGroupDN(nil, r.Group); err != nil {
+			iamLogIf(ctx, err)
+			return
+		}
+		if dnResult == nil || !underBaseDN {
+			if !isAttach {
+				dn = r.Group
+			} else {
 				err = errNoSuchGroup
 				return
 			}
+		} else {
 			// We use the group DN returned by the LDAP server (this may not
 			// equal the input group name, but we assume it is canonical).
 			dn = dnResult.NormDN
-		} else {
-			dn = r.Group
 		}
 		isGroup = true
 	}

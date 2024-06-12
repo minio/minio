@@ -487,15 +487,16 @@ func (p *xlStorageDiskIDCheck) RenameData(ctx context.Context, srcVolume, srcPat
 	})
 }
 
-func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricCheckParts, volume, path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer done(0, &err)
 
-	w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
-	return w.Run(func() error { return p.storage.CheckParts(ctx, volume, path, fi) })
+	return xioutil.WithDeadline[*CheckPartsResp](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (res *CheckPartsResp, err error) {
+		return p.storage.CheckParts(ctx, volume, path, fi)
+	})
 }
 
 func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
@@ -564,10 +565,10 @@ func (p *xlStorageDiskIDCheck) DeleteVersions(ctx context.Context, volume string
 	return errs
 }
 
-func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (err error) {
+func (p *xlStorageDiskIDCheck) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (*CheckPartsResp, error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricVerifyFile, volume, path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer done(0, &err)
 

@@ -116,11 +116,6 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
-			return
-		}
-
 		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
 		ssecRepHeaders := []string{
 			"X-Minio-Replication-Server-Side-Encryption-Seal-Algorithm",
@@ -773,6 +768,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	_, isEncrypted := crypto.IsEncrypted(mi.UserDefined)
 	_, replicationStatus := mi.UserDefined[xhttp.AmzBucketReplicationStatus]
+	_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
 	var objectEncryptionKey crypto.ObjectKey
 	if isEncrypted {
 		if !crypto.SSEC.IsRequested(r.Header) && crypto.SSEC.IsEncrypted(mi.UserDefined) && !replicationStatus {
@@ -795,7 +791,6 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 		}
 
-		_, sourceReplReq := r.Header[xhttp.MinIOSourceReplicationRequest]
 		if !(sourceReplReq && crypto.SSEC.IsEncrypted(mi.UserDefined)) {
 			// Calculating object encryption key
 			key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
@@ -847,6 +842,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 	opts.IndexCB = idxCb
 
+	opts.ReplicationRequest = sourceReplReq
 	putObjectPart := objectAPI.PutObjectPart
 
 	partInfo, err := putObjectPart(ctx, bucket, object, uploadID, partID, pReader, opts)
@@ -1028,7 +1024,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		}
 	}
 
-	setPutObjHeaders(w, objInfo, false)
+	setPutObjHeaders(w, objInfo, false, r.Header)
 	if dsc := mustReplicate(ctx, bucket, object, objInfo.getMustReplicateOptions(replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 		scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 	}
@@ -1040,7 +1036,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get object location.
 	location := getObjectLocation(r, globalDomainNames, bucket, object)
 	// Generate complete multipart response.
-	response := generateCompleteMultipartUploadResponse(bucket, object, location, objInfo)
+	response := generateCompleteMultipartUploadResponse(bucket, object, location, objInfo, r.Header)
 	encodedSuccessResponse := encodeResponse(response)
 
 	// Write success response.

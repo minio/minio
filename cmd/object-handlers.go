@@ -384,6 +384,10 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	cachedResult := globalCacheConfig.Enabled() && opts.VersionID == ""
+	if _, ok := crypto.IsRequested(r.Header); ok {
+		// No need to check cache for encrypted objects.
+		cachedResult = false
+	}
 
 	var update bool
 	if cachedResult {
@@ -606,12 +610,14 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
+		// Never store encrypted objects in cache.
+		update = false
 		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	}
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
 		// AWS S3 silently drops checksums on range requests.
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber, r.Header))
 	}
 
 	var buf *bytebufferpool.ByteBuffer
@@ -758,7 +764,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	w.Header().Del(xhttp.ContentType)
 
 	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
-		chkSums := objInfo.decryptChecksums(0)
+		chkSums := objInfo.decryptChecksums(0, r.Header)
 		// AWS does not appear to append part number on this API call.
 		switch {
 		case chkSums["CRC32"] != "":
@@ -789,7 +795,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		OA.StorageClass = filterStorageClass(ctx, objInfo.StorageClass)
 	}
 
-	objInfo.decryptPartsChecksums()
+	objInfo.decryptPartsChecksums(r.Header)
 
 	if _, ok := opts.ObjectAttributes[xhttp.ObjectParts]; ok {
 		OA.ObjectParts = new(objectAttributesParts)
@@ -949,7 +955,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	}
 
 	cachedResult := globalCacheConfig.Enabled() && opts.VersionID == ""
-
+	if _, ok := crypto.IsRequested(r.Header); ok {
+		// No need to check cache for encrypted objects.
+		cachedResult = false
+	}
 	var update bool
 	if cachedResult {
 		rc := &cache.CondCheck{}
@@ -1043,6 +1052,10 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				return
 			}
 		}
+	}
+	if _, ok := crypto.IsEncrypted(objInfo.UserDefined); ok {
+		// Never store encrypted objects in cache.
+		update = false
 	}
 
 	if objInfo.UserTags != "" {
@@ -1169,7 +1182,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
 		// AWS S3 silently drops checksums on range requests.
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber))
+		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber, r.Header))
 	}
 
 	// Set standard object headers.
@@ -1567,7 +1580,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Pass the decompressed stream to such calls.
 	isDstCompressed := isCompressible(r.Header, dstObject) &&
 		length > minCompressibleSize &&
-		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !cpSrcDstSame && !objectEncryption
+		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !objectEncryption
 	if isDstCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
@@ -1929,7 +1942,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 	}
 
-	setPutObjHeaders(w, objInfo, false)
+	setPutObjHeaders(w, objInfo, false, r.Header)
 	// We must not use the http.Header().Set method here because some (broken)
 	// clients expect the x-amz-copy-source-version-id header key to be literally
 	// "x-amz-copy-source-version-id"- not in canonicalized form, preserve it.
@@ -2139,7 +2152,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	var buf *bytebufferpool.ByteBuffer
-	if globalCacheConfig.MatchesSize(size) {
+	// Disable cache for encrypted objects - headers are applied with sseConfig.Apply if auto encrypted.
+	if globalCacheConfig.MatchesSize(size) && !crypto.Requested(r.Header) {
 		buf = bytebufferpool.Get()
 		defer bytebufferpool.Put(buf)
 	}
@@ -2262,11 +2276,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if crypto.SSEC.IsRequested(r.Header) && isCompressible(r.Header, object) {
-			writeErrorResponse(ctx, w, toAPIError(ctx, crypto.ErrIncompatibleEncryptionWithCompression), r.URL)
-			return
-		}
-
 		reader, objectEncryptionKey, err = EncryptRequest(hashReader, r, bucket, object, metadata)
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -2351,7 +2360,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 	}
 
-	setPutObjHeaders(w, objInfo, false)
+	setPutObjHeaders(w, objInfo, false, r.Header)
 
 	defer func() {
 		var data []byte
@@ -2943,7 +2952,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 
 	defer globalCacheConfig.Delete(bucket, object)
 
-	setPutObjHeaders(w, objInfo, true)
+	setPutObjHeaders(w, objInfo, true, r.Header)
 	writeSuccessNoContent(w)
 
 	eventName := event.ObjectRemovedDelete

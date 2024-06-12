@@ -33,8 +33,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
 	xnet "github.com/minio/pkg/v3/net"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 const (
@@ -90,6 +88,7 @@ var supportedHeaders = []string{
 	"X-Minio-Replication-Server-Side-Encryption-Iv",
 	"X-Minio-Replication-Encrypted-Multipart",
 	"X-Minio-Replication-Actual-Object-Size",
+	ReplicationSsecChecksumHeader,
 	// Add more supported headers here.
 }
 
@@ -110,6 +109,7 @@ var replicationToInternalHeaders = map[string]string{
 	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
 	"X-Minio-Replication-Encrypted-Multipart":                   "X-Minio-Internal-Encrypted-Multipart",
 	"X-Minio-Replication-Actual-Object-Size":                    "X-Minio-Internal-Actual-Object-Size",
+	ReplicationSsecChecksumHeader:                               ReplicationSsecChecksumHeader,
 	// Add more supported headers here.
 }
 
@@ -206,8 +206,8 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 	for _, supportedHeader := range supportedHeaders {
 		value, ok := nv[http.CanonicalHeaderKey(supportedHeader)]
 		if ok {
-			if slices.Contains(maps.Keys(replicationToInternalHeaders), supportedHeader) {
-				m[replicationToInternalHeaders[supportedHeader]] = strings.Join(value, ",")
+			if v, ok := replicationToInternalHeaders[supportedHeader]; ok {
+				m[v] = strings.Join(value, ",")
 			} else {
 				m[supportedHeader] = strings.Join(value, ",")
 			}

@@ -80,6 +80,18 @@ const (
 	compMinIndexSize = 8 << 20
 )
 
+// getkeyeparator - returns the separator to be used for
+// persisting on drive.
+//
+// - ":" is used on non-windows platforms
+// - "_" is used on windows platforms
+func getKeySeparator() string {
+	if runtime.GOOS == globalWindowsOSName {
+		return "_"
+	}
+	return ":"
+}
+
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
 func isMinioMetaBucketName(bucket string) bool {
@@ -755,7 +767,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()
 // are called on Close() in FIFO order as passed in ObjReadFn(). NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, h http.Header) (
 	fn ObjReaderFn, off, length int64, err error,
 ) {
 	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
@@ -810,7 +822,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return b, nil
 			}
 			if isEncrypted {
-				decrypt = oi.compressionIndexDecrypt
+				decrypt = func(b []byte) ([]byte, error) {
+					return oi.compressionIndexDecrypt(b, h)
+				}
 			}
 			// In case of range based queries on multiparts, the offset and length are reduced.
 			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(oi, off, decrypt)
@@ -982,8 +996,8 @@ func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func()
 }
 
 // compressionIndexDecrypt reverses compressionIndexEncrypter.
-func (o *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
-	return o.metadataDecrypter()("compression-index", input)
+func (o *ObjectInfo) compressionIndexDecrypt(input []byte, h http.Header) ([]byte, error) {
+	return o.metadataDecrypter(h)("compression-index", input)
 }
 
 // SealMD5CurrFn seals md5sum with object encryption key and returns sealed

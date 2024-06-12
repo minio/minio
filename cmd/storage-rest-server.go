@@ -58,7 +58,7 @@ type storageRESTServer struct {
 }
 
 var (
-	storageCheckPartsRPC       = grid.NewSingleHandler[*CheckPartsHandlerParams, grid.NoPayload](grid.HandlerCheckParts, func() *CheckPartsHandlerParams { return &CheckPartsHandlerParams{} }, grid.NewNoPayload)
+	storageCheckPartsRPC       = grid.NewSingleHandler[*CheckPartsHandlerParams, *CheckPartsResp](grid.HandlerCheckParts2, func() *CheckPartsHandlerParams { return &CheckPartsHandlerParams{} }, func() *CheckPartsResp { return &CheckPartsResp{} })
 	storageDeleteFileRPC       = grid.NewSingleHandler[*DeleteFileHandlerParams, grid.NoPayload](grid.HandlerDeleteFile, func() *DeleteFileHandlerParams { return &DeleteFileHandlerParams{} }, grid.NewNoPayload).AllowCallRequestPool(true)
 	storageDeleteVersionRPC    = grid.NewSingleHandler[*DeleteVersionHandlerParams, grid.NoPayload](grid.HandlerDeleteVersion, func() *DeleteVersionHandlerParams { return &DeleteVersionHandlerParams{} }, grid.NewNoPayload)
 	storageDiskInfoRPC         = grid.NewSingleHandler[*DiskInfoOptions, *DiskInfo](grid.HandlerDiskInfo, func() *DiskInfoOptions { return &DiskInfoOptions{} }, func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse().AllowCallRequestPool(true)
@@ -439,13 +439,15 @@ func (s *storageRESTServer) UpdateMetadataHandler(p *MetadataHandlerParams) (gri
 }
 
 // CheckPartsHandler - check if a file metadata exists.
-func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
+func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (*CheckPartsResp, *grid.RemoteErr) {
 	if !s.checkID(p.DiskID) {
-		return grid.NewNPErr(errDiskNotFound)
+		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
 	volume := p.Volume
 	filePath := p.FilePath
-	return grid.NewNPErr(s.getStorage().CheckParts(context.Background(), volume, filePath, p.FI))
+
+	resp, err := s.getStorage().CheckParts(context.Background(), volume, filePath, p.FI)
+	return resp, grid.NewRemoteErr(err)
 }
 
 func (s *storageRESTServer) WriteAllHandler(p *WriteAllHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
@@ -1097,11 +1099,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 	}
 }
 
-// VerifyFileResp - VerifyFile()'s response.
-type VerifyFileResp struct {
-	Err error
-}
-
 // VerifyFileHandler - Verify all part of file for bitrot errors.
 func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1124,13 +1121,15 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
-	err := s.getStorage().VerifyFile(r.Context(), volume, filePath, fi)
+	resp, err := s.getStorage().VerifyFile(r.Context(), volume, filePath, fi)
 	done(nil)
-	vresp := &VerifyFileResp{}
+
 	if err != nil {
-		vresp.Err = StorageErr(err.Error())
+		s.writeErrorResponse(w, err)
+		return
 	}
-	encoder.Encode(vresp)
+
+	encoder.Encode(resp)
 }
 
 func checkDiskFatalErrs(errs []error) error {

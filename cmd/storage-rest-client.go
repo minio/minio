@@ -449,14 +449,18 @@ func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, pa
 }
 
 // CheckParts - stat all file parts.
-func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error {
-	_, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
+func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
+	var resp *CheckPartsResp
+	resp, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
 		FilePath: path,
 		FI:       fi,
 	})
-	return toStorageErr(err)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
@@ -748,33 +752,33 @@ func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcP
 	return toStorageErr(err)
 }
 
-func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (*CheckPartsResp, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 
 	var reader bytes.Buffer
 	if err := msgp.Encode(&reader, &fi); err != nil {
-		return err
+		return nil, err
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodVerifyFile, values, &reader, -1)
 	defer xhttp.DrainBody(respBody)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	respReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return toStorageErr(err)
+		return nil, toStorageErr(err)
 	}
 
-	verifyResp := &VerifyFileResp{}
+	verifyResp := &CheckPartsResp{}
 	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
-		return toStorageErr(err)
+		return nil, toStorageErr(err)
 	}
 
-	return toStorageErr(verifyResp.Err)
+	return verifyResp, nil
 }
 
 func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {

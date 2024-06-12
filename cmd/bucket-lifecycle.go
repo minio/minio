@@ -583,6 +583,10 @@ func enqueueTransitionImmediate(obj ObjectInfo, src lcEventSrc) {
 	if lc, err := globalLifecycleSys.Get(obj.Bucket); err == nil {
 		switch event := lc.Eval(obj.ToLifecycleOpts()); event.Action {
 		case lifecycle.TransitionAction, lifecycle.TransitionVersionAction:
+			if obj.DeleteMarker || obj.IsDir {
+				// nothing to transition
+				return
+			}
 			globalTransitionState.queueTransitionTask(obj, event, src)
 		}
 	}
@@ -737,7 +741,7 @@ func getTransitionedObjectReader(ctx context.Context, bucket, object string, rs 
 		return nil, fmt.Errorf("transition storage class not configured: %w", err)
 	}
 
-	fn, off, length, err := NewGetObjectReader(rs, oi, opts)
+	fn, off, length, err := NewGetObjectReader(rs, oi, opts, h)
 	if err != nil {
 		return nil, ErrorRespToObjectError(err, bucket, object)
 	}

@@ -967,7 +967,7 @@ var errorCodes = errorCodeMap{
 	ErrReplicationRemoteConnectionError: {
 		Code:           "XMinioAdminReplicationRemoteConnectionError",
 		Description:    "Remote service connection error",
-		HTTPStatusCode: http.StatusNotFound,
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrReplicationBandwidthLimitError: {
 		Code:           "XMinioAdminReplicationBandwidthLimitError",
