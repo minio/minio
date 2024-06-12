@@ -718,6 +718,7 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpLDAP(c, ldapServer)
 				suite.TestLDAPSTS(c)
+				suite.TestLDAPPolicyEntitiesLookup(c)
 				suite.TestLDAPUnicodeVariations(c)
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
@@ -749,6 +750,7 @@ func TestIAMWithLDAPNonNormalizedBaseDNConfigServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpLDAPWithNonNormalizedBaseDN(c, ldapServer)
 				suite.TestLDAPSTS(c)
+				suite.TestLDAPPolicyEntitiesLookup(c)
 				suite.TestLDAPUnicodeVariations(c)
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
@@ -1278,6 +1280,15 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 	// Validate that the client cannot remove any objects
 	err = minioClient.RemoveObject(ctx, bucket, "someobject", minio.RemoveObjectOptions{})
 	c.Assert(err.Error(), "Access Denied.")
+
+	// Detach policy from group
+	_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		Group:    groupDN,
+	})
+	if err != nil {
+		c.Fatalf("Unable to detach policy from group: %v", err)
+	}
 }
 
 func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
@@ -2023,6 +2034,158 @@ func (s *TestSuiteIAM) TestLDAPAttributesLookup(c *check) {
 		parts := strings.Split(sshPublicKeyClaim, " ")
 		if parts[0] != testCase.expectedSSHKeyType {
 			c.Fatalf("Test %d: unexpected sshPublicKey type: %s", i+1, parts[0])
+		}
+	}
+}
+
+func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	groupDN := "cn=projecta,ou=groups,ou=swengg,dc=min,dc=io"
+	groupPolicy := "readwrite"
+	_, err := s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{groupPolicy},
+		Group:    groupDN,
+	})
+	if err != nil {
+		c.Fatalf("Unable to set policy: %v", err)
+	}
+	type caseTemplate struct {
+		username              string
+		inDN                  string
+		expectedOutDN         string
+		expectedGroupDN       string
+		expectedGroupPolicies string
+	}
+	cases := []caseTemplate{
+		{
+			username:      "liza",
+			inDN:          "uid=liza,ou=people,ou=swengg,dc=min,dc=io",
+			expectedOutDN: "uid=liza,ou=people,ou=swengg,dc=min,dc=io",
+		},
+		{
+			username:              "dillon",
+			inDN:                  "UID=dillon,ou=people,ou=swengg,DC=min,dc=io",
+			expectedOutDN:         "uid=dillon,ou=people,ou=swengg,dc=min,dc=io",
+			expectedGroupDN:       groupDN,
+			expectedGroupPolicies: groupPolicy,
+		},
+		{
+			username:      "Пользователь",
+			inDN:          "uid=Пользователь,OU=people,OU=swengg,DC=min,DC=io",
+			expectedOutDN: "uid=Пользователь,ou=people,ou=swengg,dc=min,dc=io",
+		},
+	}
+
+	// assumes user is the only one with any policies attached
+	entitiesChecker := func(testCase caseTemplate, policy string, useLoginName bool) error {
+		queryName := testCase.inDN
+		if useLoginName {
+			queryName = testCase.username
+		}
+		entities, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{Users: []string{queryName}})
+		if err != nil {
+			return err
+		}
+		var userMapping madmin.UserPolicyEntities
+		if len(entities.UserMappings) != 0 {
+			userMapping = entities.UserMappings[0]
+		}
+		if policy != "" || testCase.expectedGroupDN != "" {
+			if userMapping.User != testCase.expectedOutDN {
+				return fmt.Errorf("expected user DN `%s`, found `%s`", testCase.expectedOutDN, userMapping.User)
+			}
+		} else {
+			if userMapping.User != "" {
+				return fmt.Errorf("did not expect to find user, found %s", userMapping.User)
+			}
+		}
+
+		var retrievedPolicy string
+		if len(userMapping.Policies) != 0 {
+			retrievedPolicy = userMapping.Policies[0]
+		}
+		if policy != "" {
+			if retrievedPolicy != policy {
+				return fmt.Errorf("expected attached policy `%s`, found `%s`", policy, retrievedPolicy)
+			}
+		} else {
+			if retrievedPolicy != "" {
+				return fmt.Errorf("did not expect attached policy, found %s", policy)
+			}
+		}
+
+		var memberOfMapping madmin.GroupPolicyEntities
+		if len(userMapping.MemberOfMappings) != 0 {
+			memberOfMapping = userMapping.MemberOfMappings[0]
+		}
+		if testCase.expectedGroupDN != "" {
+			if memberOfMapping.Group != testCase.expectedGroupDN {
+				return fmt.Errorf("expected attached policy `%s`, found `%s`", policy, retrievedPolicy)
+			}
+			if memberOfMapping.Policies[0] != testCase.expectedGroupPolicies {
+				return fmt.Errorf("expected memberOf attached policy `%s`, found `%s`", testCase.expectedOutDN, memberOfMapping.Policies[0])
+			}
+		} else {
+			if memberOfMapping.Group != "" {
+				return fmt.Errorf("did not expect attached group, found %s", memberOfMapping.Group)
+			}
+		}
+
+		allEntities, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{})
+		if err != nil {
+			return err
+		}
+		var policyUserSet set.StringSet
+		for _, mapping := range allEntities.PolicyMappings {
+			if mapping.Policy == policy {
+				policyUserSet = set.CreateStringSet(mapping.Users...)
+				break
+			}
+		}
+		if policy != "" {
+			if !policyUserSet.Contains(testCase.expectedOutDN) {
+				return fmt.Errorf("expected user DN `%s` in policy mapping`", testCase.expectedOutDN)
+			}
+		} else {
+			if policyUserSet.Contains(testCase.expectedOutDN) {
+				return fmt.Errorf("did not expect user DN `%s` in policy mapping", testCase.expectedOutDN)
+			}
+		}
+		return nil
+	}
+
+	for i, testCase := range cases {
+		if err := entitiesChecker(testCase, "", false); err != nil {
+			c.Fatalf("Test case %d failed before attaching policy: %v", i+1, err)
+		}
+
+		policy := "readonly"
+		_, err := s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+			Policies: []string{policy},
+			User:     testCase.inDN,
+		})
+		if err != nil {
+			c.Fatalf("Unable to set policy for test case %d: %v", i+1, err)
+		}
+
+		if err := entitiesChecker(testCase, policy, false); err != nil {
+			c.Fatalf("Test case %d failed with DN: %v", i+1, err)
+		}
+		if err := entitiesChecker(testCase, policy, true); err != nil {
+			c.Fatalf("Test case %d failed with login name: %v", i+1, err)
+		}
+
+		_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+			Policies: []string{policy},
+			User:     testCase.inDN,
+		})
+		if err != nil {
+			c.Fatalf("Unable to detach policy for test case %d: %v", i+1, err)
+		}
+		if err := entitiesChecker(testCase, "", false); err != nil {
+			c.Fatalf("Test case %d failed after detaching policy: %v", i+1, err)
 		}
 	}
 }
