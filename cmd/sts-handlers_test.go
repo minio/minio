@@ -2127,10 +2127,8 @@ func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
 			if memberOfMapping.Policies[0] != testCase.expectedGroupPolicies {
 				return fmt.Errorf("expected memberOf attached policy `%s`, found `%s`", testCase.expectedOutDN, memberOfMapping.Policies[0])
 			}
-		} else {
-			if memberOfMapping.Group != "" {
-				return fmt.Errorf("did not expect attached group, found %s", memberOfMapping.Group)
-			}
+		} else if memberOfMapping.Group != "" {
+			return fmt.Errorf("did not expect attached group, found %s", memberOfMapping.Group)
 		}
 
 		allEntities, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{})

@@ -406,21 +406,19 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 // QuickNormalizeDN - normalizes the given DN without checking if it is valid or
 // exists in the LDAP directory. Returns input if error
 func (l Config) QuickNormalizeDN(dn string) string {
-	if normDN, err := xldap.NormalizeDN(dn); err != nil {
-		return dn
-	} else {
+	if normDN, err := xldap.NormalizeDN(dn); err == nil {
 		return normDN
 	}
+	return dn
 }
 
-// QuickDenormalizeDN - denormalizes the given DN by unescaping any escaped characters.
+// DecodeDN - denormalizes the given DN by unescaping any escaped characters.
 // Returns input if error
-func (l Config) DenormalizeDN(dn string) string {
-	if denormDN, err := decodeDN(dn); err != nil {
-		return dn
-	} else {
+func (l Config) DecodeDN(dn string) string {
+	if denormDN, err := decodeDN(dn); err == nil {
 		return denormDN
 	}
+	return dn
 }
 
 // Remove leading and trailing spaces from the attribute type and value
@@ -495,7 +493,7 @@ func stripLeadingAndTrailingSpaces(inVal string) string {
 
 	// Re-add the trailing space if it was an escaped space
 	if len(noSpaces) > 0 && noSpaces[len(noSpaces)-1] == '\\' && inVal[len(inVal)-1] == ' ' {
-		noSpaces = noSpaces + " "
+		noSpaces += " "
 	}
 
 	return noSpaces

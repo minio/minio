@@ -2002,13 +2002,12 @@ func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, userMap map[st
 		if !ok {
 			if len(userMap) > 0 {
 				return true
-			} else {
-				decodeUser := user
-				if decodeFunc != nil {
-					decodeUser = decodeFunc(user)
-				}
-				entitiesWithMemberOf = madmin.UserPolicyEntities{User: decodeUser}
 			}
+			decodeUser := user
+			if decodeFunc != nil {
+				decodeUser = decodeFunc(user)
+			}
+			entitiesWithMemberOf = madmin.UserPolicyEntities{User: decodeUser}
 		}
 
 		ps := mappedPolicy.toSlice()
