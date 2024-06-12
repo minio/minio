@@ -57,10 +57,7 @@ func (ps *PubSub[T, M]) Publish(item T) {
 	defer ps.RUnlock()
 	for _, sub := range ps.subs {
 		if sub.types.Contains(Mask(item.Mask())) && (sub.filter == nil || sub.filter(item)) {
-			select {
-			case sub.ch <- item:
-			default:
-			}
+			go func() { sub.ch <- item }()
 		}
 	}
 }
