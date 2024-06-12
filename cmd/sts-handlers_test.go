@@ -234,9 +234,12 @@ func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	// confirm that the user is able to access the bucket
@@ -335,9 +338,12 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	// confirm that the user is able to access the bucket
@@ -423,9 +429,12 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	// confirm that the user is able to access the bucket
@@ -518,9 +527,12 @@ func (s *TestSuiteIAM) TestSTSWithGroupPolicy(c *check) {
 		c.Fatalf("unable to add user to group: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, "test-group", true)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		Group:    "test-group",
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	// confirm that the user is able to access the bucket - permission comes
