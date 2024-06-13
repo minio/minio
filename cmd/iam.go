@@ -1703,31 +1703,46 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 	return nil
 }
 
-// GetUser - get user credentials
-func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentity, ok bool) {
+// CheckKey validates the incoming accessKey
+func (sys *IAMSys) CheckKey(ctx context.Context, accessKey string) (u UserIdentity, ok bool, err error) {
 	if !sys.Initialized() {
-		return u, false
+		return u, false, nil
 	}
 
 	if accessKey == globalActiveCred.AccessKey {
-		return newUserIdentity(globalActiveCred), true
+		return newUserIdentity(globalActiveCred), true, nil
 	}
 
 	loadUserCalled := false
 	select {
 	case <-sys.configLoaded:
 	default:
-		sys.store.LoadUser(ctx, accessKey)
+		err = sys.store.LoadUser(ctx, accessKey)
 		loadUserCalled = true
 	}
 
 	u, ok = sys.store.GetUser(accessKey)
 	if !ok && !loadUserCalled {
-		sys.store.LoadUser(ctx, accessKey)
+		err = sys.store.LoadUser(ctx, accessKey)
+		loadUserCalled = true
+
 		u, ok = sys.store.GetUser(accessKey)
 	}
 
-	return u, ok && u.Credentials.IsValid()
+	if !ok && loadUserCalled && err != nil {
+		iamLogOnceIf(ctx, err, accessKey)
+
+		// return 503 to application
+		return u, false, errIAMNotInitialized
+	}
+
+	return u, ok && u.Credentials.IsValid(), nil
+}
+
+// GetUser - get user credentials
+func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentity, ok bool) {
+	u, ok, _ = sys.CheckKey(ctx, accessKey)
+	return u, ok
 }
 
 // Notify all other MinIO peers to load group.
