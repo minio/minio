@@ -1456,9 +1456,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// convert copy src encryption options for GET calls
 	getOpts := ObjectOptions{
-		VersionID:        srcOpts.VersionID,
-		Versioned:        srcOpts.Versioned,
-		VersionSuspended: srcOpts.VersionSuspended,
+		VersionID:          srcOpts.VersionID,
+		Versioned:          srcOpts.Versioned,
+		VersionSuspended:   srcOpts.VersionSuspended,
+		ReplicationRequest: r.Header.Get(xhttp.MinIOSourceReplicationRequest) == "true",
 	}
 	getSSE := encrypt.SSE(srcOpts.ServerSideEncryption)
 	if getSSE != srcOpts.ServerSideEncryption {
@@ -1590,7 +1591,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	// Encryption parameters not present for this object.
-	if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) {
+	if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) && r.Header.Get(xhttp.MinIOSourceReplicationRequest) != "true" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidSSECustomerAlgorithm), r.URL)
 		return
 	}
