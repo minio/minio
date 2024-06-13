@@ -959,7 +959,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// No need to check cache for encrypted objects.
 		cachedResult = false
 	}
-	var update bool
 	if cachedResult {
 		rc := &cache.CondCheck{}
 		h := r.Header.Clone()
@@ -968,7 +967,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		}
 		rc.Init(bucket, object, h)
 
-		ci, err := globalCacheConfig.Get(rc)
+		ci, _ := globalCacheConfig.Get(rc)
 		if ci != nil {
 			tgs, ok := ci.Metadata[xhttp.AmzObjectTagging]
 			if ok {
@@ -1027,9 +1026,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				return
 			}
 		}
-		if errors.Is(err, cache.ErrKeyMissing) {
-			update = true
-		}
 	}
 
 	opts.FastGetObjInfo = true
@@ -1052,10 +1048,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				return
 			}
 		}
-	}
-	if _, ok := crypto.IsEncrypted(objInfo.UserDefined); ok {
-		// Never store encrypted objects in cache.
-		update = false
 	}
 
 	if objInfo.UserTags != "" {
@@ -1135,24 +1127,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
-	}
-
-	if update {
-		asize, err := objInfo.GetActualSize()
-		if err != nil {
-			asize = objInfo.Size
-		}
-
-		defer globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
-			Size:         asize,
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
-		})
 	}
 
 	// Validate pre-conditions if any.
