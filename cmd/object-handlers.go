@@ -2128,7 +2128,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	var buf *bytebufferpool.ByteBuffer
 	// Disable cache for encrypted objects - headers are applied with sseConfig.Apply if auto encrypted.
-	if globalCacheConfig.MatchesSize(size) && !crypto.Requested(r.Header) {
+	if globalCacheConfig.MatchesSize(size) {
 		buf = bytebufferpool.Get()
 		defer bytebufferpool.Put(buf)
 	}
@@ -2141,6 +2141,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	actualSize := size
 	var idxCb func() []byte
+	if crypto.Requested(r.Header) {
+		setEncryptionMetadata(r, bucket, object, metadata)
+	}
 	if isCompressible(r.Header, object) && size > minCompressibleSize {
 		// Storing the compression metadata.
 		metadata[ReservedMetadataPrefix+"compression"] = compressionAlgorithmV2
@@ -2336,27 +2339,28 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false, r.Header)
-
+	// sendEvent will clean the objInfoClone.UserDefined
+	// so we need to clone it
+	objInfoClone := objInfo.Clone()
 	defer func() {
 		var data []byte
 		if buf != nil {
 			data = buf.Bytes()
 		}
-
-		asize, err := objInfo.GetActualSize()
+		asize, err := objInfoClone.GetActualSize()
 		if err != nil {
-			asize = objInfo.Size
+			asize = objInfoClone.Size
 		}
 
 		globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
+			Key:          objInfoClone.Name,
+			Bucket:       objInfoClone.Bucket,
+			ETag:         objInfoClone.ETag,
+			ModTime:      objInfoClone.ModTime,
+			Expires:      objInfoClone.ExpiresStr(),
+			CacheControl: objInfoClone.CacheControl,
 			Size:         asize,
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
+			Metadata:     cleanReservedKeys(objInfoClone.UserDefined),
 			Data:         data,
 		})
 	}()
