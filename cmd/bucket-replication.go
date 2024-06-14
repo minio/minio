@@ -1418,7 +1418,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	}
 
 	// Set the encrypted size for SSE-C objects
-	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
+	if isSSEC {
 		size = objInfo.Size
 	}
 
@@ -1478,6 +1479,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			return
 		}
 	} else {
+		// SSEC objects will refuse HeadObject without the decryption key.
+		// Ignore the error, since we know the object exists and versioning prevents overwriting existing versions.
+		if isSSEC && strings.Contains(cerr.Error(), errorCodes[ErrSSEEncryptedObject].Description) {
+			rinfo.ReplicationStatus = replication.Completed
+			rinfo.ReplicationAction = replicateNone
+			goto applyAction
+		}
 		// if target returns error other than NoSuchKey, defer replication attempt
 		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
@@ -1505,6 +1513,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			return
 		}
 	}
+applyAction:
 	rinfo.ReplicationStatus = replication.Completed
 	rinfo.Size = size
 	rinfo.ReplicationAction = rAction
@@ -1638,13 +1647,14 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	}()
 
 	var (
-		hr    *hash.Reader
-		pInfo minio.ObjectPart
+		hr     *hash.Reader
+		pInfo  minio.ObjectPart
+		isSSEC = crypto.SSEC.IsEncrypted(objInfo.UserDefined)
 	)
 
 	var objectSize int64
 	for _, partInfo := range objInfo.Parts {
-		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		if isSSEC {
 			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.Size), partInfo.Size, "", "", partInfo.ActualSize)
 		} else {
 			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
@@ -1655,16 +1665,18 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
-		crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
-		for k, v := range crc {
-			cHeader.Add(k, v)
+		if !isSSEC {
+			crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
+			for k, v := range crc {
+				cHeader.Add(k, v)
+			}
 		}
 		popts := minio.PutObjectPartOptions{
 			SSE:          opts.ServerSideEncryption,
 			CustomHeader: cHeader,
 		}
 
-		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		if isSSEC {
 			objectSize += partInfo.Size
 			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, popts)
 		} else {
@@ -1674,7 +1686,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		if err != nil {
 			return err
 		}
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) && pInfo.Size != partInfo.ActualSize {
+		if !isSSEC && pInfo.Size != partInfo.ActualSize {
 			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
@@ -1686,12 +1698,18 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			ChecksumSHA256: pInfo.ChecksumSHA256,
 		})
 	}
+	userMeta := map[string]string{
+		validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"],
+	}
+	if isSSEC && objInfo.UserDefined[ReplicationSsecChecksumHeader] != "" {
+		userMeta[ReplicationSsecChecksumHeader] = objInfo.UserDefined[ReplicationSsecChecksumHeader]
+	}
 
 	// really big value but its okay on heavily loaded systems. This is just tail end timeout.
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
-		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
+		UserMetadata: userMeta,
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
 			SourceETag:  objInfo.ETag,
