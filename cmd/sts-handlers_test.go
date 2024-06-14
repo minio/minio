@@ -2078,7 +2078,8 @@ func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
 
 		entities, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{
 			Users:  []string{testCase.inDN},
-			Policy: []string{policy}})
+			Policy: []string{policy},
+		})
 		if err != nil {
 			c.Fatalf("Unable to fetch policy entities: %v", err)
 		}
