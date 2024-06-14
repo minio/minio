@@ -620,39 +620,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber, r.Header))
 	}
 
-	var buf *bytebufferpool.ByteBuffer
-	if update {
-		if globalCacheConfig.MatchesSize(objInfo.Size) {
-			buf = bytebufferpool.Get()
-			defer bytebufferpool.Put(buf)
-		}
-		defer func() {
-			var data []byte
-			if buf != nil {
-				data = buf.Bytes()
-			}
-
-			asize, err := objInfo.GetActualSize()
-			if err != nil {
-				asize = objInfo.Size
-			}
-
-			globalCacheConfig.Set(&cache.ObjectInfo{
-				Key:          objInfo.Name,
-				Bucket:       objInfo.Bucket,
-				ETag:         objInfo.ETag,
-				ModTime:      objInfo.ModTime,
-				Expires:      objInfo.ExpiresStr(),
-				CacheControl: objInfo.CacheControl,
-				Metadata:     cleanReservedKeys(objInfo.UserDefined),
-				Range:        rangeHeader,
-				PartNumber:   opts.PartNumber,
-				Size:         asize,
-				Data:         data,
-			})
-		}()
-	}
-
 	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -664,6 +631,12 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	setHeadGetRespHeaders(w, r.Form)
+
+	var buf *bytebufferpool.ByteBuffer
+	if update && globalCacheConfig.MatchesSize(objInfo.Size) {
+		buf = bytebufferpool.Get()
+		defer bytebufferpool.Put(buf)
+	}
 
 	var iw io.Writer
 	iw = w
@@ -695,6 +668,31 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 		return
 	}
+
+	defer func() {
+		var data []byte
+		if buf != nil {
+			data = buf.Bytes()
+		}
+
+		if len(data) == 0 {
+			return
+		}
+
+		globalCacheConfig.Set(&cache.ObjectInfo{
+			Key:          objInfo.Name,
+			Bucket:       objInfo.Bucket,
+			ETag:         objInfo.ETag,
+			ModTime:      objInfo.ModTime,
+			Expires:      objInfo.ExpiresStr(),
+			CacheControl: objInfo.CacheControl,
+			Metadata:     cleanReservedKeys(objInfo.UserDefined),
+			Range:        rangeHeader,
+			PartNumber:   opts.PartNumber,
+			Size:         int64(len(data)),
+			Data:         data,
+		})
+	}()
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
@@ -1939,22 +1937,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		Host:         handlers.GetSourceIP(r),
 	})
 
-	asize, err := objInfo.GetActualSize()
-	if err != nil {
-		asize = objInfo.Size
-	}
-
-	defer globalCacheConfig.Set(&cache.ObjectInfo{
-		Key:          objInfo.Name,
-		Bucket:       objInfo.Bucket,
-		ETag:         objInfo.ETag,
-		ModTime:      objInfo.ModTime,
-		Expires:      objInfo.ExpiresStr(),
-		CacheControl: objInfo.CacheControl,
-		Size:         asize,
-		Metadata:     cleanReservedKeys(objInfo.UserDefined),
-	})
-
 	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
 		// Schedule object for immediate transition if eligible.
 		objInfo.ETag = origETag
@@ -2343,9 +2325,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			data = buf.Bytes()
 		}
 
-		asize, err := objInfo.GetActualSize()
-		if err != nil {
-			asize = objInfo.Size
+		if len(data) == 0 {
+			return
 		}
 
 		globalCacheConfig.Set(&cache.ObjectInfo{
@@ -2355,7 +2336,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			ModTime:      objInfo.ModTime,
 			Expires:      objInfo.ExpiresStr(),
 			CacheControl: objInfo.CacheControl,
-			Size:         asize,
+			Size:         int64(len(data)),
 			Metadata:     cleanReservedKeys(objInfo.UserDefined),
 			Data:         data,
 		})
@@ -2711,22 +2692,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(metadata, "", "", replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 			scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 		}
-
-		asize, err := objInfo.GetActualSize()
-		if err != nil {
-			asize = objInfo.Size
-		}
-
-		defer globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
-			Size:         asize,
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
-		})
 
 		// Notify object created event.
 		evt := eventArgs{
