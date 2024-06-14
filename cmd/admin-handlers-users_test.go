@@ -239,9 +239,12 @@ func (s *TestSuiteIAM) TestUserCreate(c *check) {
 	c.Assert(v.Status, madmin.AccountEnabled)
 
 	// 3. Associate policy and check that user can access
-	err = s.adm.SetPolicy(ctx, "readwrite", accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{"readwrite"},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 
 	client := s.getUserClient(c, accessKey, secretKey, "")
@@ -348,9 +351,12 @@ func (s *TestSuiteIAM) TestUserPolicyEscalationBug(c *check) {
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
 	}
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 	// 2.3 check user has access to bucket
 	c.mustListObjects(ctx, uClient, bucket)
@@ -470,9 +476,12 @@ func (s *TestSuiteIAM) TestAddServiceAccountPerms(c *check) {
 	c.mustNotListObjects(ctx, uClient, "testbucket")
 
 	// 3.2 associate policy to user
-	err = s.adm.SetPolicy(ctx, policy1, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy1},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 
 	admClnt := s.getAdminClient(c, accessKey, secretKey, "")
@@ -490,10 +499,22 @@ func (s *TestSuiteIAM) TestAddServiceAccountPerms(c *check) {
 		c.Fatalf("policy was missing!")
 	}
 
-	// 3.2 associate policy to user
-	err = s.adm.SetPolicy(ctx, policy2, accessKey, false)
+	// Detach policy1 to set up for policy2
+	_, err = s.adm.DetachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy1},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to detach policy: %v", err)
+	}
+
+	// 3.2 associate policy to user
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy2},
+		User:     accessKey,
+	})
+	if err != nil {
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 
 	// 3.3 check user can create service account implicitly.
@@ -571,9 +592,12 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
 	c.mustNotListObjects(ctx, uClient, bucket)
 
 	// 3.2 associate policy to user
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 	// 3.3 check user has access to bucket
 	c.mustListObjects(ctx, uClient, bucket)
@@ -726,9 +750,12 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	c.mustNotListObjects(ctx, uClient, bucket)
 
 	// 3. Associate policy to group and check user got access.
-	err = s.adm.SetPolicy(ctx, policy, group, true)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		Group:    group,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 	// 3.1 check user has access to bucket
 	c.mustListObjects(ctx, uClient, bucket)
@@ -871,9 +898,12 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 
 	// Create an madmin client with user creds
@@ -952,9 +982,12 @@ func (s *TestSuiteIAM) TestServiceAccountDurationSecondsCondition(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 
 	// Create an madmin client with user creds
@@ -1031,9 +1064,12 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, policy, accessKey, false)
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
 	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+		c.Fatalf("unable to attach policy: %v", err)
 	}
 
 	// 1. Create a service account for the user
