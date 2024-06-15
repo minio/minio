@@ -1612,8 +1612,9 @@ func (s *xlStorage) ReadXL(ctx context.Context, volume, path string, readData bo
 
 // ReadOptions optional inputs for ReadVersion
 type ReadOptions struct {
-	ReadData bool
-	Healing  bool
+	InclFreeVersions bool
+	ReadData         bool
+	Healing          bool
 }
 
 // ReadVersion - reads metadata and returns FileInfo at path `xl.meta`
@@ -1657,7 +1658,11 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 		return fi, err
 	}
 
-	fi, err = getFileInfo(buf, volume, path, versionID, readData, true)
+	fi, err = getFileInfo(buf, volume, path, versionID, fileInfoOpts{
+		Data:             opts.ReadData,
+		InclFreeVersions: opts.InclFreeVersions,
+		AllParts:         true,
+	})
 	if err != nil {
 		return fi, err
 	}
@@ -1707,22 +1712,6 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 			if err != nil {
 				return FileInfo{}, err
 			}
-		}
-	}
-
-	if !skipAccessChecks(volume) && !opts.Healing && fi.TransitionStatus == "" && !fi.InlineData() && len(fi.Data) == 0 && fi.DataDir != "" && fi.DataDir != emptyUUID && fi.VersionPurgeStatus().Empty() {
-		// Verify if the dataDir is present or not when the data
-		// is not inlined to make sure we return correct errors
-		// during HeadObject().
-
-		// Healing must not come here and return error, since healing
-		// deals with dataDirs directly, let healing fix things automatically.
-		if lerr := Access(pathJoin(volumeDir, path, fi.DataDir)); lerr != nil {
-			if os.IsNotExist(lerr) {
-				// Data dir is missing we must return errFileCorrupted
-				return FileInfo{}, errFileCorrupt
-			}
-			return FileInfo{}, osErrToFileErr(lerr)
 		}
 	}
 
