@@ -236,9 +236,8 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 				// for the expiring credentials.
 				deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
 				deleteKeyEtcd(ctx, ies.client, getMappedPolicyPath(user, userType, false))
-				return nil
 			}
-			return err
+			return nil
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 	}

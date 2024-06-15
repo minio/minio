@@ -323,10 +323,9 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		}
 
 		globalHTTPStats.addRequestsInQueue(1)
-		defer globalHTTPStats.addRequestsInQueue(-1)
-
 		pool, deadline := globalAPIConfig.getRequestsPool()
 		if pool == nil {
+			globalHTTPStats.addRequestsInQueue(-1)
 			f.ServeHTTP(w, r)
 			return
 		}
@@ -334,6 +333,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		// No deadline to wait, there is nothing to queue
 		// perform the API call immediately.
 		if deadline <= 0 {
+			globalHTTPStats.addRequestsInQueue(-1)
 			f.ServeHTTP(w, r)
 			return
 		}
@@ -349,12 +349,14 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		select {
 		case pool <- struct{}{}:
 			defer func() { <-pool }()
+			globalHTTPStats.addRequestsInQueue(-1)
 			if contextCanceled(ctx) {
 				w.WriteHeader(499)
 				return
 			}
 			f.ServeHTTP(w, r)
 		case <-deadlineTimer.C:
+			globalHTTPStats.addRequestsInQueue(-1)
 			if contextCanceled(ctx) {
 				w.WriteHeader(499)
 				return
@@ -364,6 +366,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 				errorCodes.ToAPIErr(ErrTooManyRequests),
 				r.URL)
 		case <-r.Context().Done():
+			globalHTTPStats.addRequestsInQueue(-1)
 			// When the client disconnects before getting the S3 handler
 			// status code response, set the status code to 499 so this request
 			// will be properly audited and traced.

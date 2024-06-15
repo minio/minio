@@ -445,6 +445,8 @@ const (
 	ErrAdminNoAccessKey
 	ErrAdminNoSecretKey
 
+	ErrIAMNotInitialized
+
 	apiErrCodeEnd // This is used only for the testing code
 )
 
@@ -1303,6 +1305,11 @@ var errorCodes = errorCodeMap{
 	ErrServerNotInitialized: {
 		Code:           "XMinioServerNotInitialized",
 		Description:    "Server not initialized yet, please try again.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrIAMNotInitialized: {
+		Code:           "XMinioIAMNotInitialized",
+		Description:    "IAM sub-system not initialized yet, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrBucketMetadataNotInitialized: {

@@ -4,10 +4,22 @@ trap 'cleanup $LINENO' ERR
 
 # shellcheck disable=SC2120
 cleanup() {
-	MINIO_VERSION=dev docker-compose \
+	MINIO_VERSION=dev /tmp/gopath/bin/docker-compose \
 		-f "buildscripts/upgrade-tests/compose.yml" \
-		rm -s -f
+		down || true
+
+	MINIO_VERSION=dev /tmp/gopath/bin/docker-compose \
+		-f "buildscripts/upgrade-tests/compose.yml" \
+		rm || true
+
+	for volume in $(docker volume ls -q | grep upgrade); do
+		docker volume rm ${volume} || true
+	done
+
 	docker volume prune -f
+	docker system prune -f || true
+	docker volume prune -f || true
+	docker volume rm $(docker volume ls -q -f dangling=true) || true
 }
 
 verify_checksum_after_heal() {
@@ -60,6 +72,8 @@ __init__() {
 	go install github.com/docker/compose/v2/cmd@latest
 	mv -v /tmp/gopath/bin/cmd /tmp/gopath/bin/docker-compose
 
+	cleanup
+
 	TAG=minio/minio:dev make docker
 
 	MINIO_VERSION=RELEASE.2019-12-19T22-52-26Z docker-compose \
@@ -77,11 +91,11 @@ __init__() {
 
 	curl -s http://127.0.0.1:9000/minio-test/to-read/hosts | sha256sum
 
-	MINIO_VERSION=dev docker-compose -f "buildscripts/upgrade-tests/compose.yml" stop
+	MINIO_VERSION=dev /tmp/gopath/bin/docker-compose -f "buildscripts/upgrade-tests/compose.yml" stop
 }
 
 main() {
-	MINIO_VERSION=dev docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
+	MINIO_VERSION=dev /tmp/gopath/bin/docker-compose -f "buildscripts/upgrade-tests/compose.yml" up -d --build
 
 	add_alias
 

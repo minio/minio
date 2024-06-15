@@ -51,7 +51,6 @@ import (
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
@@ -1342,22 +1341,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					continue
 				}
 
-				asize, err := objInfo.GetActualSize()
-				if err != nil {
-					asize = objInfo.Size
-				}
-
-				globalCacheConfig.Set(&cache.ObjectInfo{
-					Key:          objInfo.Name,
-					Bucket:       objInfo.Bucket,
-					ETag:         getDecryptedETag(formValues, objInfo, false),
-					ModTime:      objInfo.ModTime,
-					Expires:      objInfo.Expires.UTC().Format(http.TimeFormat),
-					CacheControl: objInfo.CacheControl,
-					Metadata:     cleanReservedKeys(objInfo.UserDefined),
-					Size:         asize,
-				})
-
 				fanOutResp = append(fanOutResp, minio.PutObjectFanOutResponse{
 					Key:          objInfo.Name,
 					ETag:         getDecryptedETag(formValues, objInfo, false),
@@ -1451,22 +1434,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if obj := getObjectLocation(r, globalDomainNames, bucket, object); obj != "" {
 		w.Header().Set(xhttp.Location, obj)
 	}
-
-	asize, err := objInfo.GetActualSize()
-	if err != nil {
-		asize = objInfo.Size
-	}
-
-	defer globalCacheConfig.Set(&cache.ObjectInfo{
-		Key:          objInfo.Name,
-		Bucket:       objInfo.Bucket,
-		ETag:         etag,
-		ModTime:      objInfo.ModTime,
-		Expires:      objInfo.ExpiresStr(),
-		CacheControl: objInfo.CacheControl,
-		Metadata:     cleanReservedKeys(objInfo.UserDefined),
-		Size:         asize,
-	})
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{

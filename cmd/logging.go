@@ -20,6 +20,10 @@ func replLogOnceIf(ctx context.Context, err error, id string, errKind ...interfa
 	logger.LogOnceIf(ctx, "replication", err, id, errKind...)
 }
 
+func iamLogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, "iam", err, id, errKind...)
+}
+
 func iamLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	if !errors.Is(err, grid.ErrDisconnected) {
 		logger.LogIf(ctx, "iam", err, errKind...)

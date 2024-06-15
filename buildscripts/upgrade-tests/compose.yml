@@ -1,5 +1,3 @@
-version: '3.7'
-
 # Settings and configurations that are common for all containers
 x-minio-common: &minio-common
   image: minio/minio:${MINIO_VERSION}

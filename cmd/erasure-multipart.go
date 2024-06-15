@@ -483,6 +483,11 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 	fi.DataDir = mustGetUUID()
 
+	if userDefined[ReplicationSsecChecksumHeader] != "" {
+		fi.Checksum, _ = base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader])
+		delete(userDefined, ReplicationSsecChecksumHeader)
+	}
+
 	// Initialize erasure metadata.
 	for index := range partsMetadata {
 		partsMetadata[index] = fi
@@ -1294,6 +1299,14 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		defer lk.Unlock(lkctx)
 	}
 
+	// Accept encrypted checksum from incoming request.
+	if opts.UserDefined[ReplicationSsecChecksumHeader] != "" {
+		if v, err := base64.StdEncoding.DecodeString(opts.UserDefined[ReplicationSsecChecksumHeader]); err == nil {
+			fi.Checksum = v
+		}
+		delete(opts.UserDefined, ReplicationSsecChecksumHeader)
+	}
+
 	if checksumType.IsSet() {
 		checksumType |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart
 		var cs *hash.Checksum
@@ -1303,13 +1316,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 		}
 	}
-	if fi.Metadata[ReplicationSsecChecksumHeader] != "" {
-		if v, err := base64.StdEncoding.DecodeString(fi.Metadata[ReplicationSsecChecksumHeader]); err == nil {
-			fi.Checksum = v
-		}
-	}
-	delete(fi.Metadata, ReplicationSsecChecksumHeader) // Transferred above.
-	delete(fi.Metadata, hash.MinIOMultipartChecksum)   // Not needed in final object.
+	delete(fi.Metadata, hash.MinIOMultipartChecksum) // Not needed in final object.
 
 	// Save the final object size and modtime.
 	fi.Size = objectSize

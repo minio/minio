@@ -817,7 +817,7 @@ func getClusterObjectVersionsMD() MetricDescription {
 
 func getClusterRepLinkLatencyCurrMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      currLinkLatency,
 		Help:      "Replication current link latency in milliseconds",
@@ -827,7 +827,7 @@ func getClusterRepLinkLatencyCurrMD() MetricDescription {
 
 func getClusterRepLinkOnlineMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      linkOnline,
 		Help:      "Reports whether replication link is online (1) or offline(0)",
@@ -837,7 +837,7 @@ func getClusterRepLinkOnlineMD() MetricDescription {
 
 func getClusterRepLinkCurrOfflineDurationMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      linkOfflineDuration,
 		Help:      "Duration of replication link being offline in seconds since last offline event",
@@ -847,7 +847,7 @@ func getClusterRepLinkCurrOfflineDurationMD() MetricDescription {
 
 func getClusterRepLinkTotalOfflineDurationMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      linkDowntimeTotalDuration,
 		Help:      "Total downtime of replication link in seconds since server uptime",
@@ -975,7 +975,7 @@ func getRepReceivedOperationsMD(namespace MetricNamespace) MetricDescription {
 
 func getClusterReplMRFFailedOperationsMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      recentBacklogCount,
 		Help:      "Total number of objects seen in replication backlog in the last 5 minutes",
@@ -995,7 +995,7 @@ func getClusterRepCredentialErrorsMD(namespace MetricNamespace) MetricDescriptio
 
 func getClusterReplCurrQueuedOperationsMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      currInQueueCount,
 		Help:      "Total number of objects queued for replication in the last full minute",
@@ -1005,7 +1005,7 @@ func getClusterReplCurrQueuedOperationsMD() MetricDescription {
 
 func getClusterReplCurrQueuedBytesMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      currInQueueBytes,
 		Help:      "Total number of bytes queued for replication in the last full minute",
@@ -1015,7 +1015,7 @@ func getClusterReplCurrQueuedBytesMD() MetricDescription {
 
 func getClusterReplActiveWorkersCountMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      currActiveWorkers,
 		Help:      "Total number of active replication workers",
@@ -1025,7 +1025,7 @@ func getClusterReplActiveWorkersCountMD() MetricDescription {
 
 func getClusterReplAvgActiveWorkersCountMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgActiveWorkers,
 		Help:      "Average number of active replication workers",
@@ -1035,7 +1035,7 @@ func getClusterReplAvgActiveWorkersCountMD() MetricDescription {
 
 func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxActiveWorkers,
 		Help:      "Maximum number of active replication workers seen since server uptime",
@@ -1045,7 +1045,7 @@ func getClusterReplMaxActiveWorkersCountMD() MetricDescription {
 
 func getClusterReplCurrentTransferRateMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      currTransferRate,
 		Help:      "Current replication transfer rate in bytes/sec",
@@ -1055,7 +1055,7 @@ func getClusterReplCurrentTransferRateMD() MetricDescription {
 
 func getClusterRepLinkLatencyMaxMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxLinkLatency,
 		Help:      "Maximum replication link latency in milliseconds seen since server uptime",
@@ -1065,7 +1065,7 @@ func getClusterRepLinkLatencyMaxMD() MetricDescription {
 
 func getClusterRepLinkLatencyAvgMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgLinkLatency,
 		Help:      "Average replication link latency in milliseconds",
@@ -1075,7 +1075,7 @@ func getClusterRepLinkLatencyAvgMD() MetricDescription {
 
 func getClusterReplAvgQueuedOperationsMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgInQueueCount,
 		Help:      "Average number of objects queued for replication since server uptime",
@@ -1085,7 +1085,7 @@ func getClusterReplAvgQueuedOperationsMD() MetricDescription {
 
 func getClusterReplAvgQueuedBytesMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgInQueueBytes,
 		Help:      "Average number of bytes queued for replication since server uptime",
@@ -1095,7 +1095,7 @@ func getClusterReplAvgQueuedBytesMD() MetricDescription {
 
 func getClusterReplMaxQueuedOperationsMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxInQueueCount,
 		Help:      "Maximum number of objects queued for replication since server uptime",
@@ -1105,7 +1105,7 @@ func getClusterReplMaxQueuedOperationsMD() MetricDescription {
 
 func getClusterReplMaxQueuedBytesMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxInQueueBytes,
 		Help:      "Maximum number of bytes queued for replication since server uptime",
@@ -1115,7 +1115,7 @@ func getClusterReplMaxQueuedBytesMD() MetricDescription {
 
 func getClusterReplAvgTransferRateMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      avgTransferRate,
 		Help:      "Average replication transfer rate in bytes/sec",
@@ -1125,7 +1125,7 @@ func getClusterReplAvgTransferRateMD() MetricDescription {
 
 func getClusterReplMaxTransferRateMD() MetricDescription {
 	return MetricDescription{
-		Namespace: clusterMetricNamespace,
+		Namespace: nodeMetricNamespace,
 		Subsystem: replicationSubsystem,
 		Name:      maxTransferRate,
 		Help:      "Maximum replication transfer rate in bytes/sec seen since server uptime",

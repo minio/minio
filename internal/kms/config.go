@@ -168,7 +168,7 @@ func Connect(ctx context.Context, opts *ConnectionOptions) (*KMS, error) {
 			if err != nil {
 				return nil, err
 			}
-			conf.Certificates = append(conf.Certificates, cert)
+			conf.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &cert, nil }
 		} else {
 			loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
 				// Manually load the certificate and private key into memory.
