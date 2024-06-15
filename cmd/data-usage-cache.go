@@ -352,9 +352,6 @@ type dataUsageCacheInfo struct {
 	Name       string
 	NextCycle  uint32
 	LastUpdate time.Time
-	// indicates if the disk is being healed and scanner
-	// should skip healing the disk
-	SkipHealing bool
 
 	// Active lifecycle, if any on the bucket
 	lifeCycle *lifecycle.Lifecycle `msg:"-"`

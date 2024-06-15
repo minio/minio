@@ -400,27 +400,62 @@ func (z *dataUsageCache) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntry, zb0002)
+				z.Cache = make(map[string]dataUsageEntry, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntry
 				za0001, err = dc.ReadString()
@@ -454,9 +489,35 @@ func (z *dataUsageCache) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = z.Info.EncodeMsg(en)
+	// map header, size 3
+	// write "Name"
+	err = en.Append(0x83, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
-		err = msgp.WrapError(err, "Info")
+		return
+	}
+	err = en.WriteString(z.Info.Name)
+	if err != nil {
+		err = msgp.WrapError(err, "Info", "Name")
+		return
+	}
+	// write "NextCycle"
+	err = en.Append(0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteUint32(z.Info.NextCycle)
+	if err != nil {
+		err = msgp.WrapError(err, "Info", "NextCycle")
+		return
+	}
+	// write "LastUpdate"
+	err = en.Append(0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteTime(z.Info.LastUpdate)
+	if err != nil {
+		err = msgp.WrapError(err, "Info", "LastUpdate")
 		return
 	}
 	// write "Cache"
@@ -490,11 +551,16 @@ func (z *dataUsageCache) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 2
 	// string "Info"
 	o = append(o, 0x82, 0xa4, 0x49, 0x6e, 0x66, 0x6f)
-	o, err = z.Info.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Info")
-		return
-	}
+	// map header, size 3
+	// string "Name"
+	o = append(o, 0x83, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = msgp.AppendString(o, z.Info.Name)
+	// string "NextCycle"
+	o = append(o, 0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
+	o = msgp.AppendUint32(o, z.Info.NextCycle)
+	// string "LastUpdate"
+	o = append(o, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
+	o = msgp.AppendTime(o, z.Info.LastUpdate)
 	// string "Cache"
 	o = append(o, 0xa5, 0x43, 0x61, 0x63, 0x68, 0x65)
 	o = msgp.AppendMapHeader(o, uint32(len(z.Cache)))
@@ -528,29 +594,64 @@ func (z *dataUsageCache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntry, zb0002)
+				z.Cache = make(map[string]dataUsageEntry, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntry
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -577,7 +678,7 @@ func (z *dataUsageCache) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCache) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
@@ -623,12 +724,6 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "LastUpdate")
 				return
 			}
-		case "SkipHealing":
-			z.SkipHealing, err = dc.ReadBool()
-			if err != nil {
-				err = msgp.WrapError(err, "SkipHealing")
-				return
-			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -641,10 +736,10 @@ func (z *dataUsageCacheInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 4
+func (z dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 3
 	// write "Name"
-	err = en.Append(0x84, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	err = en.Append(0x83, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	if err != nil {
 		return
 	}
@@ -673,25 +768,15 @@ func (z *dataUsageCacheInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "LastUpdate")
 		return
 	}
-	// write "SkipHealing"
-	err = en.Append(0xab, 0x53, 0x6b, 0x69, 0x70, 0x48, 0x65, 0x61, 0x6c, 0x69, 0x6e, 0x67)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.SkipHealing)
-	if err != nil {
-		err = msgp.WrapError(err, "SkipHealing")
-		return
-	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
+func (z dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 4
+	// map header, size 3
 	// string "Name"
-	o = append(o, 0x84, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
+	o = append(o, 0x83, 0xa4, 0x4e, 0x61, 0x6d, 0x65)
 	o = msgp.AppendString(o, z.Name)
 	// string "NextCycle"
 	o = append(o, 0xa9, 0x4e, 0x65, 0x78, 0x74, 0x43, 0x79, 0x63, 0x6c, 0x65)
@@ -699,9 +784,6 @@ func (z *dataUsageCacheInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "LastUpdate"
 	o = append(o, 0xaa, 0x4c, 0x61, 0x73, 0x74, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65)
 	o = msgp.AppendTime(o, z.LastUpdate)
-	// string "SkipHealing"
-	o = append(o, 0xab, 0x53, 0x6b, 0x69, 0x70, 0x48, 0x65, 0x61, 0x6c, 0x69, 0x6e, 0x67)
-	o = msgp.AppendBool(o, z.SkipHealing)
 	return
 }
 
@@ -741,12 +823,6 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "LastUpdate")
 				return
 			}
-		case "SkipHealing":
-			z.SkipHealing, bts, err = msgp.ReadBoolBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "SkipHealing")
-				return
-			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -760,8 +836,8 @@ func (z *dataUsageCacheInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *dataUsageCacheInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 12 + msgp.BoolSize
+func (z dataUsageCacheInfo) Msgsize() (s int) {
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize
 	return
 }
 
@@ -784,27 +860,62 @@ func (z *dataUsageCacheV2) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV2, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV2, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntryV2
 				za0001, err = dc.ReadString()
@@ -849,29 +960,64 @@ func (z *dataUsageCacheV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV2, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV2, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntryV2
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -898,7 +1044,7 @@ func (z *dataUsageCacheV2) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV2) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
@@ -927,27 +1073,62 @@ func (z *dataUsageCacheV3) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV3, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV3, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntryV3
 				za0001, err = dc.ReadString()
@@ -992,29 +1173,64 @@ func (z *dataUsageCacheV3) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV3, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV3, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntryV3
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -1041,7 +1257,7 @@ func (z *dataUsageCacheV3) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV3) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
@@ -1070,27 +1286,62 @@ func (z *dataUsageCacheV4) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV4, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV4, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntryV4
 				za0001, err = dc.ReadString()
@@ -1135,29 +1386,64 @@ func (z *dataUsageCacheV4) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV4, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV4, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntryV4
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -1184,7 +1470,7 @@ func (z *dataUsageCacheV4) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV4) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
@@ -1213,27 +1499,62 @@ func (z *dataUsageCacheV5) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV5, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV5, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntryV5
 				za0001, err = dc.ReadString()
@@ -1278,29 +1599,64 @@ func (z *dataUsageCacheV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV5, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV5, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntryV5
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -1327,7 +1683,7 @@ func (z *dataUsageCacheV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV5) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
@@ -1356,27 +1712,62 @@ func (z *dataUsageCacheV6) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV6, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV6, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntryV6
 				za0001, err = dc.ReadString()
@@ -1421,29 +1812,64 @@ func (z *dataUsageCacheV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV6, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV6, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntryV6
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -1470,7 +1896,7 @@ func (z *dataUsageCacheV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV6) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
@@ -1499,27 +1925,62 @@ func (z *dataUsageCacheV7) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			err = z.Info.DecodeMsg(dc)
+			var zb0002 uint32
+			zb0002, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, err = dc.ReadMapKeyPtr()
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, err = dc.ReadString()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, err = dc.ReadUint32()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, err = dc.ReadTime()
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					err = dc.Skip()
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, err = dc.ReadMapHeader()
+			var zb0003 uint32
+			zb0003, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV7, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV7, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
-				zb0002--
+			for zb0003 > 0 {
+				zb0003--
 				var za0001 string
 				var za0002 dataUsageEntryV7
 				za0001, err = dc.ReadString()
@@ -1564,29 +2025,64 @@ func (z *dataUsageCacheV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "Info":
-			bts, err = z.Info.UnmarshalMsg(bts)
+			var zb0002 uint32
+			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Info")
 				return
 			}
+			for zb0002 > 0 {
+				zb0002--
+				field, bts, err = msgp.ReadMapKeyZC(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Info")
+					return
+				}
+				switch msgp.UnsafeString(field) {
+				case "Name":
+					z.Info.Name, bts, err = msgp.ReadStringBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "Name")
+						return
+					}
+				case "NextCycle":
+					z.Info.NextCycle, bts, err = msgp.ReadUint32Bytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "NextCycle")
+						return
+					}
+				case "LastUpdate":
+					z.Info.LastUpdate, bts, err = msgp.ReadTimeBytes(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info", "LastUpdate")
+						return
+					}
+				default:
+					bts, err = msgp.Skip(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "Info")
+						return
+					}
+				}
+			}
 		case "Cache":
-			var zb0002 uint32
-			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0003 uint32
+			zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Cache")
 				return
 			}
 			if z.Cache == nil {
-				z.Cache = make(map[string]dataUsageEntryV7, zb0002)
+				z.Cache = make(map[string]dataUsageEntryV7, zb0003)
 			} else if len(z.Cache) > 0 {
 				for key := range z.Cache {
 					delete(z.Cache, key)
 				}
 			}
-			for zb0002 > 0 {
+			for zb0003 > 0 {
 				var za0001 string
 				var za0002 dataUsageEntryV7
-				zb0002--
+				zb0003--
 				za0001, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Cache")
@@ -1613,7 +2109,7 @@ func (z *dataUsageCacheV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *dataUsageCacheV7) Msgsize() (s int) {
-	s = 1 + 5 + z.Info.Msgsize() + 6 + msgp.MapHeaderSize
+	s = 1 + 5 + 1 + 5 + msgp.StringPrefixSize + len(z.Info.Name) + 10 + msgp.Uint32Size + 11 + msgp.TimeSize + 6 + msgp.MapHeaderSize
 	if z.Cache != nil {
 		for za0001, za0002 := range z.Cache {
 			_ = za0002
