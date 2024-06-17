@@ -302,11 +302,12 @@ func (z *erasureServerPools) GetRawData(ctx context.Context, volume, file string
 }
 
 // Return the disks belonging to the poolIdx, and setIdx.
-func (z *erasureServerPools) GetDisks(poolIdx, setIdx int) ([]StorageAPI, error) {
+func (z *erasureServerPools) GetDisks(poolIdx, setIdx int) ([]StorageAPI, bool, error) {
 	if poolIdx < len(z.serverPools) && setIdx < len(z.serverPools[poolIdx].sets) {
-		return z.serverPools[poolIdx].sets[setIdx].getDisks(), nil
+		disks, healing := z.serverPools[poolIdx].sets[setIdx].getOnlineDisksWithHealing(true)
+		return disks, healing, nil
 	}
-	return nil, fmt.Errorf("Matching pool %s, set %s not found", humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1))
+	return nil, false, fmt.Errorf("Matching pool %s, set %s not found", humanize.Ordinal(poolIdx+1), humanize.Ordinal(setIdx+1))
 }
 
 // Return the count of disks in each pool

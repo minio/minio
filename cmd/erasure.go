@@ -381,7 +381,7 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 	}
 
 	// Collect disks we can use.
-	disks, healing := er.getOnlineDisksWithHealing(false)
+	disks, _ := er.getOnlineDisksWithHealing(false)
 	if len(disks) == 0 {
 		scannerLogIf(ctx, errors.New("data-scanner: all drives are offline or being healed, skipping scanner cycle"))
 		return nil
@@ -497,7 +497,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				if cache.Info.Name == "" {
 					cache.Info.Name = bucket.Name
 				}
-				cache.Info.SkipHealing = healing
 				cache.Info.NextCycle = wantCycle
 				if cache.Info.Name != bucket.Name {
 					cache.Info = dataUsageCacheInfo{

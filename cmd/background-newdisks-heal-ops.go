@@ -464,10 +464,7 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	// Remove .healing.bin from all disks with similar heal-id
-	disks, err := z.GetDisks(poolIdx, setIdx)
-	if err != nil {
-		return err
-	}
+	disks := z.serverPools[poolIdx].sets[setIdx].getDisks()
 
 	for _, disk := range disks {
 		if disk == nil {
