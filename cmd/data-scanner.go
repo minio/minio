@@ -741,6 +741,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				},
 				// Some disks have data for this.
 				partial: func(entries metaCacheEntries, errs []error) {
+					if !f.shouldHeal() {
+						cancel()
+						return
+					}
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						// check if we can get one entry at least
