@@ -233,7 +233,7 @@ func TestListOnlineDisks(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), smallFileThreshold*16)
 	z := obj.(*erasureServerPools)
 
-	erasureDisks, _, err := z.GetDisks(0, 0)
+	erasureDisks, err := z.GetDisks(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +409,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	data := bytes.Repeat([]byte("a"), smallFileThreshold/2)
 	z := obj.(*erasureServerPools)
 
-	erasureDisks, _, err := z.GetDisks(0, 0)
+	erasureDisks, err := z.GetDisks(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

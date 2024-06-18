@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -249,7 +250,8 @@ type folderScanner struct {
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
 
-	weSleep func() bool
+	weSleep    func() bool
+	shouldHeal func() bool
 
 	disks       []StorageAPI
 	disksQuorum int
@@ -304,11 +306,12 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, healing bool, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, disks []StorageAPI, drive *xlStorage, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
 	}
+	basePath := drive.drivePath
 	updatePath, closeDisk := globalScannerMetrics.currentPathUpdater(basePath, cache.Info.Name)
 	defer closeDisk()
 
@@ -319,13 +322,39 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, he
 		newCache:              dataUsageCache{Info: cache.Info},
 		updateCache:           dataUsageCache{Info: cache.Info},
 		dataUsageScannerDebug: false,
-		healObjectSelect:      healObjectSelectProb,
+		healObjectSelect:      0,
 		scanMode:              scanMode,
 		weSleep:               weSleep,
 		updates:               cache.Info.updates,
 		updateCurrentPath:     updatePath,
 		disks:                 disks,
 		disksQuorum:           len(disks) / 2,
+	}
+
+	var skipHeal atomic.Bool
+	if globalIsErasure || cache.Info.SkipHealing {
+		skipHeal.Store(true)
+	}
+
+	// Check if we should do healing at all.
+	s.shouldHeal = func() bool {
+		if skipHeal.Load() {
+			return false
+		}
+		if s.healObjectSelect == 0 {
+			return false
+		}
+		if di, _ := drive.DiskInfo(ctx, DiskInfoOptions{}); di.Healing {
+			skipHeal.Store(true)
+			return false
+		}
+		return true
+	}
+
+	// Enable healing in XL mode.
+	if globalIsErasure && !cache.Info.SkipHealing {
+		// Do a heal check on an object once every n cycles. Must divide into healFolderInclude
+		s.healObjectSelect = healObjectSelectProb
 	}
 
 	done := ctx.Done()
@@ -338,7 +367,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, he
 	}
 	root := dataUsageEntry{}
 	folder := cachedFolder{name: cache.Info.Name, objectHealProbDiv: 1}
-	err := s.scanFolder(ctx, folder, healing, &root)
+	err := s.scanFolder(ctx, folder, &root)
 	if err != nil {
 		// No useful information...
 		return cache, err
@@ -369,7 +398,7 @@ func (f *folderScanner) sendUpdate() {
 // Files found in the folders will be added to f.newCache.
 // If final is provided folders will be put into f.newFolders or f.existingFolders.
 // If final is not provided the folders found are returned from the function.
-func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, healing bool, into *dataUsageEntry) error {
+func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, into *dataUsageEntry) error {
 	done := ctx.Done()
 	scannerLogPrefix := color.Green("folder-scanner:")
 
@@ -476,13 +505,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, hea
 				replication: replicationCfg,
 			}
 
-			item.heal.enabled = thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure
+			item.heal.enabled = thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && f.shouldHeal()
 			item.heal.bitrot = f.scanMode == madmin.HealDeepScan
-
-			// if the drive belongs to an erasure set
-			// that is already being healed, skip the
-			// healing attempt on this drive.
-			item.heal.enabled = item.heal.enabled && !healing
 
 			sz, err := f.getSize(item)
 			if err != nil && err != errIgnoreFileContrib {
@@ -565,7 +589,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, hea
 			if !into.Compacted {
 				dst = &dataUsageEntry{Compacted: false}
 			}
-			if err := f.scanFolder(ctx, folder, healing, dst); err != nil {
+			if err := f.scanFolder(ctx, folder, dst); err != nil {
 				return
 			}
 			if !into.Compacted {
@@ -646,8 +670,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, hea
 		}
 
 		// Scan for healing
-		if healing || len(abandonedChildren) == 0 {
-			// if disks are already healing or we have no abandoned childrens do not need to heal
+		if len(abandonedChildren) == 0 || !f.shouldHeal() {
+			// If we are not heal scanning, return now.
 			break
 		}
 
@@ -681,6 +705,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, hea
 
 		healObjectsPrefix := color.Green("healObjects:")
 		for k := range abandonedChildren {
+			if !f.shouldHeal() {
+				break
+			}
 			bucket, prefix := path2BucketObject(k)
 			stopFn := globalScannerMetrics.time(scannerMetricCheckMissing)
 			f.updateCurrentPath(k)
@@ -714,6 +741,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, hea
 				},
 				// Some disks have data for this.
 				partial: func(entries metaCacheEntries, errs []error) {
+					if !f.shouldHeal() {
+						cancel()
+						return
+					}
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						// check if we can get one entry at least

@@ -287,8 +287,8 @@ type ObjectLayer interface {
 	AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error
 	CompleteMultipartUpload(ctx context.Context, bucket, object, uploadID string, uploadedParts []CompletePart, opts ObjectOptions) (objInfo ObjectInfo, err error)
 
-	GetDisks(poolIdx, setIdx int) ([]StorageAPI, bool, error) // return the disks belonging to pool and set.
-	SetDriveCounts() []int                                    // list of erasure stripe size for each pool in order.
+	GetDisks(poolIdx, setIdx int) ([]StorageAPI, error) // return the disks belonging to pool and set.
+	SetDriveCounts() []int                              // list of erasure stripe size for each pool in order.
 
 	// Healing operations.
 	HealFormat(ctx context.Context, dryRun bool) (madmin.HealResultItem, error)
