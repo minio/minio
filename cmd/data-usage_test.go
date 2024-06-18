@@ -64,7 +64,7 @@ func TestDataUsageUpdate(t *testing.T) {
 
 	weSleep := func() bool { return false }
 
-	got, err := scanDataFolder(context.Background(), nil, base, false, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize, 0, weSleep)
+	got, err := scanDataFolder(context.Background(), nil, base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize, 0, weSleep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestDataUsageUpdate(t *testing.T) {
 	}
 	// Changed dir must be picked up in this many cycles.
 	for i := 0; i < dataUsageUpdateDirCycles; i++ {
-		got, err = scanDataFolder(context.Background(), nil, base, false, got, getSize, 0, weSleep)
+		got, err = scanDataFolder(context.Background(), nil, base, got, getSize, 0, weSleep)
 		got.Info.NextCycle++
 		if err != nil {
 			t.Fatal(err)
@@ -284,7 +284,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 
 	weSleep := func() bool { return false }
 
-	got, err := scanDataFolder(context.Background(), nil, base, false, dataUsageCache{Info: dataUsageCacheInfo{Name: "bucket"}}, getSize, 0, weSleep)
+	got, err := scanDataFolder(context.Background(), nil, base, dataUsageCache{Info: dataUsageCacheInfo{Name: "bucket"}}, getSize, 0, weSleep)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +419,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 	}
 	// Changed dir must be picked up in this many cycles.
 	for i := 0; i < dataUsageUpdateDirCycles; i++ {
-		got, err = scanDataFolder(context.Background(), nil, base, false, got, getSize, 0, weSleep)
+		got, err = scanDataFolder(context.Background(), nil, base, got, getSize, 0, weSleep)
 		got.Info.NextCycle++
 		if err != nil {
 			t.Fatal(err)
@@ -568,7 +568,7 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 		return
 	}
 	weSleep := func() bool { return false }
-	want, err := scanDataFolder(context.Background(), nil, base, false, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize, 0, weSleep)
+	want, err := scanDataFolder(context.Background(), nil, base, dataUsageCache{Info: dataUsageCacheInfo{Name: bucket}}, getSize, 0, weSleep)
 	if err != nil {
 		t.Fatal(err)
 	}

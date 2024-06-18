@@ -554,14 +554,14 @@ func (s *xlStorage) NSScanner(ctx context.Context, cache dataUsageCache, updates
 
 	poolIdx, setIdx, _ := s.GetDiskLoc()
 
-	disks, healing, err := objAPI.GetDisks(poolIdx, setIdx)
+	disks, err := objAPI.GetDisks(poolIdx, setIdx)
 	if err != nil {
 		return cache, err
 	}
 
 	cache.Info.updates = updates
 
-	dataUsageInfo, err := scanDataFolder(ctx, disks, s.drivePath, healing, cache, func(item scannerItem) (sizeSummary, error) {
+	dataUsageInfo, err := scanDataFolder(ctx, disks, s.drivePath, cache, func(item scannerItem) (sizeSummary, error) {
 		// Look for `xl.meta/xl.json' at the leaf.
 		if !strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFile) &&
 			!strings.HasSuffix(item.Path, SlashSeparator+xlStorageFormatFileV1) {
