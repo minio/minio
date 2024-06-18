@@ -111,11 +111,15 @@ func GetFiles() (files *[]sdsFile, err error) {
 func Recovery(root string) {
 	fmt.Println("Starting mantle recovery")
 	fmt.Println("root is at : ", root)
-	files, _ := GetFiles()
+	files, err := GetFiles()
+	if err != nil {
+		fmt.Println("recovery error: ", err)
+		return
+	}
 
 	timestamp := time.Now().Format("20060102_150405")
 	recoveryDir := filepath.Join(root, timestamp+"_recovery")
-	err := os.MkdirAll(recoveryDir, os.ModePerm)
+	err = os.MkdirAll(recoveryDir, os.ModePerm)
 	if err != nil {
 		fmt.Println("Error creating recovery directory:", err)
 		return
