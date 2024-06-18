@@ -2,8 +2,8 @@
 
 # shellcheck disable=SC2120
 exit_1() {
-        cleanup_and_prune
-        exit 1
+	cleanup_and_prune
+	exit 1
 }
 
 cleanup() {
@@ -12,9 +12,9 @@ cleanup() {
 	bkts=$(mc ls myminio --json | jq '.key')
 	if [ "$bkts" != null ] && [ "${bkts}" != "" ]; then
 		for entry in $bkts; do
-			bkt=$(echo $entry | sed 's/"//g')
+			bkt=${entry//\"/}
 			echo "Removing bucket: $bkt"
-			mc rb myminio/$bkt1 --force --dangerous
+			mc rb "myminio/$bkt" --force --dangerous
 		done
 	fi
 	docker compose -f "${DOCKER_COMPOSE_FILE}" stop
@@ -41,8 +41,8 @@ while true; do
 		break
 	fi
 	time docker compose -f "${DOCKER_COMPOSE_FILE}" up -d
-	time docker run --net=docker-compose_default -e SERVER_ENDPOINT=nginx:9000 -e ACCESS_KEY=minioadmin -e SECRET_KEY=minioadmin -e ENABLE_HTTPS=0 -e MINT_MODE=full minio/mint:edge 2>&1 >/tmp/mint-tests.log
-	out=$(cat /tmp/mint-tests.log | grep "nginx_1.*503")
+	{ docker run --net=docker-compose_default -e SERVER_ENDPOINT=nginx:9000 -e ACCESS_KEY=minioadmin -e SECRET_KEY=minioadmin -e ENABLE_HTTPS=0 -e MINT_MODE=full minio/mint:edge >/tmp/mint-tests.log; } 2>&1
+	out=$(grep "nginx_1.*503" </tmp/mint-tests.log)
 	if [ "${out}" != "" ]; then
 		echo "Error: $out"
 		echo "BUG: Found a 503 error in MinIO logs"
