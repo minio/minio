@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/minio/cmd/mantle/gateway"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
@@ -72,6 +73,12 @@ var ServerFlags = []cli.Flag{
 		Usage:  "shutdown timeout to gracefully shutdown server",
 		EnvVar: "MINIO_SHUTDOWN_TIMEOUT",
 		Hidden: true,
+	},
+	cli.BoolFlag{
+		Name:   "recovery",
+		Usage:  "recreate file system with mantle sds",
+		EnvVar: "MANTLE_RECOVERY",
+		Hidden: false,
 	},
 }
 
@@ -142,6 +149,11 @@ func serverCmdArgs(ctx *cli.Context) []string {
 }
 
 func serverHandleCmdArgs(ctx *cli.Context) {
+	if ctx.IsSet("recovery") {
+		args := ctx.Args()
+		go gateway.Recovery(args[0])
+	}
+
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
