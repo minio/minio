@@ -101,7 +101,6 @@ func GetFiles() (files *[]sdsFile, err error) {
 		return nil, err
 	}
 
-	// Parse the JSON response
 	err = json.Unmarshal(body, &files)
 	if err != nil {
 		fmt.Println("Error parsing JSON:", err)
@@ -138,14 +137,12 @@ func Recovery(root string) {
 			continue
 		}
 
-		// Write the ID to the file
 		err = os.WriteFile(fullPath, []byte(file.ID), 0644)
 		if err != nil {
 			fmt.Println("Error writing file:", err)
 			continue
 		}
 
-		//fmt.Printf("Created file %s with content %s\n", fullPath, file.ID)
 		fmt.Printf("Done file %d out of %d\n", idx+1, fileCount)
 	}
 }
