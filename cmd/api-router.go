@@ -436,7 +436,7 @@ func registerAPIRouter(router *mux.Router) {
 			Queries("notification", "")
 		// ListenNotification
 		router.Methods(http.MethodGet).
-			HandlerFunc(s3APIMiddleware(api.ListenNotificationHandler, noThrottleS3HFlag)).
+			HandlerFunc(s3APIMiddleware(api.ListenNotificationHandler, noThrottleS3HFlag, traceHdrsS3HFlag)).
 			Queries("events", "{events:.*}")
 		// ResetBucketReplicationStatus - MinIO extension API
 		router.Methods(http.MethodGet).
@@ -615,7 +615,7 @@ func registerAPIRouter(router *mux.Router) {
 
 	// ListenNotification
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator).
-		HandlerFunc(s3APIMiddleware(api.ListenNotificationHandler, noThrottleS3HFlag)).
+		HandlerFunc(s3APIMiddleware(api.ListenNotificationHandler, noThrottleS3HFlag, traceHdrsS3HFlag)).
 		Queries("events", "{events:.*}")
 
 	// ListBuckets
