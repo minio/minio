@@ -740,6 +740,8 @@ func initializeLogRotate(ctx *cli.Context) (io.WriteCloser, error) {
 
 // serverMain handler called for 'minio server' command.
 func serverMain(ctx *cli.Context) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	var warnings []string
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
@@ -920,6 +922,16 @@ func serverMain(ctx *cli.Context) {
 		globalNodeNamesHex[hex.EncodeToString(nodeNameSum[:])] = struct{}{}
 	}
 
+	bootstrapTrace("waitForQuorum", func() {
+		result := newObject.Health(context.Background(), HealthOptions{Startup: true})
+		for !result.Healthy {
+			d := time.Duration(r.Float64() * float64(time.Second))
+			logger.Info("Waiting for quorum healthcheck to succeed.. possible cause unhealthy sets (%s), retrying in %s", result, d)
+			time.Sleep(d)
+			result = newObject.Health(context.Background(), HealthOptions{})
+		}
+	})
+
 	var err error
 	bootstrapTrace("initServerConfig", func() {
 		if err = initServerConfig(GlobalContext, newObject); err != nil {
@@ -986,8 +998,6 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	go func() {
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 		if !globalDisableFreezeOnBoot {
 			defer bootstrapTrace("unfreezeServices", unfreezeServices)
 			t := time.AfterFunc(5*time.Minute, func() {
