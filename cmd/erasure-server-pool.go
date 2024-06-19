@@ -2425,6 +2425,7 @@ const (
 type HealthOptions struct {
 	Maintenance    bool
 	DeploymentType string
+	Startup        bool
 }
 
 // HealthResult returns the current state of the system, also
@@ -2447,6 +2448,24 @@ type HealthResult struct {
 	WriteQuorum   int
 	ReadQuorum    int
 	UsingDefaults bool
+}
+
+func (hr HealthResult) String() string {
+	var str strings.Builder
+	for i, es := range hr.ESHealth {
+		str.WriteString("(Pool: ")
+		str.WriteString(strconv.Itoa(es.PoolID))
+		str.WriteString(" Set: ")
+		str.WriteString(strconv.Itoa(es.SetID))
+		str.WriteString(" Healthy: ")
+		str.WriteString(strconv.FormatBool(es.Healthy))
+		if i == 0 {
+			str.WriteString(")")
+		} else {
+			str.WriteString("), ")
+		}
+	}
+	return str.String()
 }
 
 // Health - returns current status of the object layer health,
@@ -2567,17 +2586,29 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
 			if !healthy {
-				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
+				if opts.Startup {
+					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
+						fmt.Errorf("Write quorum was not established on pool: %d, set: %d, expected write quorum: %d",
+							poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
+				} else {
+					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
+						fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
+							poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
+				}
 			}
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !healthyRead {
-				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
-						poolIdx, setIdx, poolReadQuorums[poolIdx]))
+				if opts.Startup {
+					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
+						fmt.Errorf("Read quorum was not established on pool: %d, set: %d, expected read quorum: %d",
+							poolIdx, setIdx, poolReadQuorums[poolIdx]))
+				} else {
+					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
+						fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
+							poolIdx, setIdx, poolReadQuorums[poolIdx]))
+				}
 			}
 			result.HealthyRead = result.HealthyRead && healthyRead
 		}
