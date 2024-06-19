@@ -2586,29 +2586,17 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
 			if !healthy {
-				if opts.Startup {
-					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-						fmt.Errorf("Write quorum was not established on pool: %d, set: %d, expected write quorum: %d",
-							poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
-				} else {
-					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-						fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-							poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
-				}
+				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
+					fmt.Errorf("Write quorum could not be established on pool: %d, set: %d, expected write quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolWriteQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online), logger.FatalKind)
 			}
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !healthyRead {
-				if opts.Startup {
-					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-						fmt.Errorf("Read quorum was not established on pool: %d, set: %d, expected read quorum: %d",
-							poolIdx, setIdx, poolReadQuorums[poolIdx]))
-				} else {
-					storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-						fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
-							poolIdx, setIdx, poolReadQuorums[poolIdx]))
-				}
+				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
+					fmt.Errorf("Read quorum could not be established on pool: %d, set: %d, expected read quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolReadQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online))
 			}
 			result.HealthyRead = result.HealthyRead && healthyRead
 		}
