@@ -114,25 +114,25 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 | Name                                                       | Description
 |:-----------------------------------------------------------|:---------------------------------------------------------------------------------------------------------|
-| `minio_cluster_replication_current_active_workers`         | Total number of active replication workers                                                               |
-| `minio_cluster_replication_average_active_workers`         | Average number of active replication workers                                                             |
-| `minio_cluster_replication_max_active_workers`             | Maximum number of active replication workers seen since server start                                     |
-| `minio_cluster_replication_link_online`                    | Reports whether the replication link is online (1) or offline (0).                                       |
-| `minio_cluster_replication_link_offline_duration_seconds`  | Total duration of replication link being offline in seconds since last offline event                     |
-| `minio_cluster_replication_link_downtime_duration_seconds` | Total downtime of replication link in seconds since server start                                         |
-| `minio_cluster_replication_average_link_latency_ms`        | Average replication link latency in milliseconds                                                         |
-| `minio_cluster_replication_max_link_latency_ms`            | Maximum replication link latency in milliseconds seen since server start                                 |
-| `minio_cluster_replication_current_link_latency_ms`        | Current replication link latency in milliseconds                                                         |
-| `minio_cluster_replication_current_transfer_rate`          | Current replication transfer rate in bytes/sec                                                           |
-| `minio_cluster_replication_average_transfer_rate`          | Average replication transfer rate in bytes/sec                                                           |
-| `minio_cluster_replication_max_transfer_rate`              | Maximum replication transfer rate in bytes/sec seen since server start                                   |
-| `minio_cluster_replication_last_minute_queued_count`       | Total number of objects queued for replication in the last full minute                                   |
-| `minio_cluster_replication_last_minute_queued_bytes`       | Total number of bytes queued for replication in the last full minute                                     |
-| `minio_cluster_replication_average_queued_count`           | Average number of objects queued for replication since server start                                      |
-| `minio_cluster_replication_average_queued_bytes`           | Average number of bytes queued for replication since server start                                        |
-| `minio_cluster_replication_max_queued_bytes`               | Maximum number of bytes queued for replication seen since server start                                   |
-| `minio_cluster_replication_max_queued_count`               | Maximum number of objects queued for replication seen since server start                                 |
-| `minio_cluster_replication_recent_backlog_count`           | Total number of objects seen in replication backlog in the last 5 minutes                                |
+| `minio_node_replication_current_active_workers`         | Total number of active replication workers                                                               |
+| `minio_node_replication_average_active_workers`         | Average number of active replication workers                                                             |
+| `minio_node_replication_max_active_workers`             | Maximum number of active replication workers seen since server start                                     |
+| `minio_node_replication_link_online`                    | Reports whether the replication link is online (1) or offline (0).                                       |
+| `minio_node_replication_link_offline_duration_seconds`  | Total duration of replication link being offline in seconds since last offline event                     |
+| `minio_node_replication_link_downtime_duration_seconds` | Total downtime of replication link in seconds since server start                                         |
+| `minio_node_replication_average_link_latency_ms`        | Average replication link latency in milliseconds                                                         |
+| `minio_node_replication_max_link_latency_ms`            | Maximum replication link latency in milliseconds seen since server start                                 |
+| `minio_node_replication_current_link_latency_ms`        | Current replication link latency in milliseconds                                                         |
+| `minio_node_replication_current_transfer_rate`          | Current replication transfer rate in bytes/sec                                                           |
+| `minio_node_replication_average_transfer_rate`          | Average replication transfer rate in bytes/sec                                                           |
+| `minio_node_replication_max_transfer_rate`              | Maximum replication transfer rate in bytes/sec seen since server start                                   |
+| `minio_node_replication_last_minute_queued_count`       | Total number of objects queued for replication in the last full minute                                   |
+| `minio_node_replication_last_minute_queued_bytes`       | Total number of bytes queued for replication in the last full minute                                     |
+| `minio_node_replication_average_queued_count`           | Average number of objects queued for replication since server start                                      |
+| `minio_node_replication_average_queued_bytes`           | Average number of bytes queued for replication since server start                                        |
+| `minio_node_replication_max_queued_bytes`               | Maximum number of bytes queued for replication seen since server start                                   |
+| `minio_node_replication_max_queued_count`               | Maximum number of objects queued for replication seen since server start                                 |
+| `minio_node_replication_recent_backlog_count`           | Total number of objects seen in replication backlog in the last 5 minutes                                |
 
 ## Healing Metrics
 

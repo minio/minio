@@ -2568,10 +2568,10 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 }
 
 // LoadUser - attempts to load user info from storage and updates cache.
-func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
+func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error {
 	// We use singleflight to de-duplicate requests when server
 	// is coming up and loading accessKey and its associated assets
-	val, err, shared := store.group.Do(accessKey, func() (interface{}, error) {
+	val, err, shared := store.group.Do(accessKey, func() (val interface{}, err error) {
 		cache := store.lock()
 		defer func() {
 			cache.updatedAt = time.Now()
@@ -2582,27 +2582,29 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 
 		// Check for regular user access key
 		if !found {
-			store.loadUser(ctx, accessKey, regUser, cache.iamUsersMap)
+			err = store.loadUser(ctx, accessKey, regUser, cache.iamUsersMap)
 			if _, found = cache.iamUsersMap[accessKey]; found {
 				// load mapped policies
-				store.loadMappedPolicyWithRetry(ctx, accessKey, regUser, false, cache.iamUserPolicyMap, 3)
+				err = store.loadMappedPolicyWithRetry(ctx, accessKey, regUser, false, cache.iamUserPolicyMap, 3)
 			}
 		}
 
 		// Check for service account
 		if !found {
-			store.loadUser(ctx, accessKey, svcUser, cache.iamUsersMap)
+			err = store.loadUser(ctx, accessKey, svcUser, cache.iamUsersMap)
 			var svc UserIdentity
 			svc, found = cache.iamUsersMap[accessKey]
 			if found {
 				// Load parent user and mapped policies.
 				if store.getUsersSysType() == MinIOUsersSysType {
-					store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
-					store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap, 3)
+					err = store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
+					if err == nil {
+						err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap, 3)
+					}
 				} else {
 					// In case of LDAP the parent user's policy mapping needs to be
 					// loaded into sts map
-					store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
+					err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
 				}
 			}
 		}
@@ -2611,10 +2613,10 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 		stsAccountFound := false
 		var stsUserCred UserIdentity
 		if !found {
-			store.loadUser(ctx, accessKey, stsUser, cache.iamSTSAccountsMap)
+			err = store.loadUser(ctx, accessKey, stsUser, cache.iamSTSAccountsMap)
 			if stsUserCred, found = cache.iamSTSAccountsMap[accessKey]; found {
 				// Load mapped policy
-				store.loadMappedPolicyWithRetry(ctx, stsUserCred.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
+				err = store.loadMappedPolicyWithRetry(ctx, stsUserCred.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
 				stsAccountFound = true
 			}
 		}
@@ -2624,24 +2626,30 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
 			pols, _ := cache.iamUserPolicyMap.Load(accessKey)
 			for _, policy := range pols.toSlice() {
 				if _, found = cache.iamPolicyDocsMap[policy]; !found {
-					store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
+					err = store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
 				}
 			}
 		} else {
 			pols, _ := cache.iamSTSPolicyMap.Load(stsUserCred.Credentials.AccessKey)
 			for _, policy := range pols.toSlice() {
 				if _, found = cache.iamPolicyDocsMap[policy]; !found {
-					store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
+					err = store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
 				}
 			}
 		}
 
-		return "done", nil
+		return "done", err
 	})
 
 	if serverDebugLog {
 		console.Debugln("loadUser: loading shared", val, err, shared)
 	}
+
+	if IsErr(err, errNoSuchUser, errNoSuchPolicy, errNoSuchGroup) {
+		return nil
+	}
+
+	return err
 }
 
 func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {

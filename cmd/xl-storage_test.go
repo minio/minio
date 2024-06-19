@@ -271,7 +271,7 @@ func TestXLStorageReadVersion(t *testing.T) {
 	}
 
 	xlMeta, _ := os.ReadFile("testdata/xl.meta")
-	fi, _ := getFileInfo(xlMeta, "exists", "as-file", "", false, true)
+	fi, _ := getFileInfo(xlMeta, "exists", "as-file", "", fileInfoOpts{Data: false, AllParts: true})
 
 	// Create files for the test cases.
 	if err = xlStorage.MakeVol(context.Background(), "exists"); err != nil {
