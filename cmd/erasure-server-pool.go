@@ -2425,7 +2425,6 @@ const (
 type HealthOptions struct {
 	Maintenance    bool
 	DeploymentType string
-	Startup        bool
 }
 
 // HealthResult returns the current state of the system, also

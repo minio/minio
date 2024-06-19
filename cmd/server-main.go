@@ -921,14 +921,14 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	bootstrapTrace("waitForQuorum", func() {
-		result := newObject.Health(context.Background(), HealthOptions{Startup: true})
-		for !result.Healthy {
+		result := newObject.Health(context.Background(), HealthOptions{})
+		for !result.HealthyRead {
 			if debugNoExit {
 				logger.Info("Not waiting for quorum since we are debugging.. possible cause unhealthy sets (%s)", result)
 				break
 			}
 			d := time.Duration(r.Float64() * float64(time.Second))
-			logger.Info("Waiting for quorum healthcheck to succeed.. possible cause unhealthy sets (%s), retrying in %s", result, d)
+			logger.Info("Waiting for quorum READ healthcheck to succeed.. possible cause unhealthy sets (%s), retrying in %s", result, d)
 			time.Sleep(d)
 			result = newObject.Health(context.Background(), HealthOptions{})
 		}
