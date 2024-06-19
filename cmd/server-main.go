@@ -680,10 +680,8 @@ func getServerListenAddrs() []string {
 	// Use a string set to avoid duplication
 	addrs := set.NewStringSet()
 	// Listen on local interface to receive requests from Console
-	for _, ip := range mustGetLocalIPs() {
-		if ip != nil && ip.IsLoopback() {
-			addrs.Add(net.JoinHostPort(ip.String(), globalMinioPort))
-		}
+	for _, ip := range localLoopbacks.ToSlice() {
+		addrs.Add(net.JoinHostPort(ip, globalMinioPort))
 	}
 	host, _ := mustSplitHostPort(globalMinioAddr)
 	if host != "" {
