@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/url"
@@ -46,18 +47,18 @@ func init() {
 	log.Println("Mantle config file loaded !")
 }
 
-func GetId(r io.Reader) string {
+func GetId(r io.Reader) (string, error) {
 	buf := make([]byte, GATEWAY_ID_LEN)
 	c, err := r.Read(buf)
 	if c != GATEWAY_ID_LEN {
-		return "wrongid"
+		return "", errors.New("bad gateway len")
 	}
 
 	if err != nil {
-		return "wrongid"
+		return "", err
 	}
 
-	return string(buf[:c])
+	return string(buf[:c]), nil
 }
 
 func urlJoin(params ...string) string {

@@ -47,7 +47,10 @@ func Put(f *hash.Reader, fn string, configId string) (string, error) {
 }
 
 func Get(r io.Reader, configId string) (readCloser io.ReadCloser, bodyLength int64, err error) {
-	fileId := GetId(r)
+	fileId, err := GetId(r)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	client := &http.Client{}
 	resp, err := network.Get(client, urlJoin("files", fileId), setMantleHeaders(configId))
