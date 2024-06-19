@@ -83,6 +83,14 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_CONSOLE_ADDRESS",
 	},
 	cli.DurationFlag{
+		Name:   "shutdown-timeout",
+		Value:  time.Second * 30,
+		Usage:  "shutdown timeout to gracefully shutdown server (DEPRECATED)",
+		EnvVar: "MINIO_SHUTDOWN_TIMEOUT",
+		Hidden: true,
+	},
+
+	cli.DurationFlag{
 		Name:   "idle-timeout",
 		Value:  xhttp.DefaultIdleTimeout,
 		Usage:  "idle timeout is the maximum amount of time to wait for the next request when keep-alive are enabled",

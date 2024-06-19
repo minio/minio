@@ -42,9 +42,6 @@ var (
 const (
 	shutdownPollIntervalMax = 500 * time.Millisecond
 
-	// DefaultShutdownTimeout - default shutdown timeout to gracefully shutdown server.
-	DefaultShutdownTimeout = 5 * time.Second
-
 	// DefaultIdleTimeout for idle inactive connections
 	DefaultIdleTimeout = 30 * time.Second
 
