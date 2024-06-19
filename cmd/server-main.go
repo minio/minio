@@ -83,13 +83,6 @@ var ServerFlags = []cli.Flag{
 		EnvVar: "MINIO_CONSOLE_ADDRESS",
 	},
 	cli.DurationFlag{
-		Name:   "shutdown-timeout",
-		Value:  xhttp.DefaultShutdownTimeout,
-		Usage:  "shutdown timeout to gracefully shutdown server",
-		EnvVar: "MINIO_SHUTDOWN_TIMEOUT",
-		Hidden: true,
-	},
-	cli.DurationFlag{
 		Name:   "idle-timeout",
 		Value:  xhttp.DefaultIdleTimeout,
 		Usage:  "idle timeout is the maximum amount of time to wait for the next request when keep-alive are enabled",
@@ -866,7 +859,6 @@ func serverMain(ctx *cli.Context) {
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 			UseTLSConfig(newTLSConfig(getCert)).
-			UseShutdownTimeout(globalServerCtxt.ShutdownTimeout).
 			UseIdleTimeout(globalServerCtxt.IdleTimeout).
 			UseReadHeaderTimeout(globalServerCtxt.ReadHeaderTimeout).
 			UseBaseContext(GlobalContext).
