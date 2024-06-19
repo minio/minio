@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -166,24 +165,12 @@ func (srv *Server) Shutdown() error {
 		return err
 	}
 
-	pollIntervalBase := time.Millisecond
-	nextPollInterval := func() time.Duration {
-		// Add 10% jitter.
-		interval := pollIntervalBase + time.Duration(rand.Intn(int(pollIntervalBase/10)))
-		// Double and clamp for next time.
-		pollIntervalBase *= 2
-		if pollIntervalBase > shutdownPollIntervalMax {
-			pollIntervalBase = shutdownPollIntervalMax
-		}
-		return interval
-	}
-
 	// Wait for opened connection to be closed up to Shutdown timeout.
 	shutdownTimeout := srv.ShutdownTimeout
 	shutdownTimer := time.NewTimer(shutdownTimeout)
 	defer shutdownTimer.Stop()
 
-	timer := time.NewTimer(nextPollInterval())
+	timer := time.NewTicker(5 * time.Millisecond)
 	defer timer.Stop()
 	for {
 		select {
@@ -204,7 +191,6 @@ func (srv *Server) Shutdown() error {
 			if atomic.LoadInt32(&srv.requestCount) <= 0 {
 				return nil
 			}
-			timer.Reset(nextPollInterval())
 		}
 	}
 }
