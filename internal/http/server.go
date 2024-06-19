@@ -40,8 +40,6 @@ var (
 )
 
 const (
-	shutdownPollIntervalMax = 500 * time.Millisecond
-
 	// DefaultIdleTimeout for idle inactive connections
 	DefaultIdleTimeout = 30 * time.Second
 
