@@ -39,7 +39,7 @@ function start_minio_3_node() {
 
 	export MC_HOST_myminio="http://minio:minio123@127.0.0.1:$((start_port + 1))"
 
-	/tmp/mc ready myminio
+	timeout 15m /tmp/mc ready myminio || fail
 
 	# Wait for all drives to be online and formatted
 	while [ $(/tmp/mc admin info --json myminio | jq '.info.servers[].drives[].state | select(. != "ok")' | wc -l) -gt 0 ]; do sleep 1; done
@@ -62,48 +62,23 @@ function start_minio_3_node() {
 		fi
 
 		# Failure
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		pkill -9 minio
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		fail
 	done
 
 	if ! ps -p $pid1 1>&2 >/dev/null; then
-		echo "server1 log:"
-		cat "${WORK_DIR}/dist-minio-server1.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio-server-1 is not running." && fail
 	fi
 
 	if ! ps -p $pid2 1>&2 >/dev/null; then
-		echo "server2 log:"
-		cat "${WORK_DIR}/dist-minio-server2.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio-server-2 is not running." && fail
 	fi
 
 	if ! ps -p $pid3 1>&2 >/dev/null; then
-		echo "server3 log:"
-		cat "${WORK_DIR}/dist-minio-server3.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio-server-3 is not running." && fail
 	fi
 
 	if ! pkill minio; then
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		fail
 	fi
 
 	sleep 1
@@ -113,6 +88,16 @@ function start_minio_3_node() {
 			echo "no minio process running anymore, proceed."
 		fi
 	fi
+}
+
+function fail() {
+	for i in $(seq 1 3); do
+		echo "server$i log:"
+		cat "${WORK_DIR}/dist-minio-server$i.log"
+	done
+	echo "FAILED"
+	purge "$WORK_DIR"
+	exit 1
 }
 
 function check_online() {

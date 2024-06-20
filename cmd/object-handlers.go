@@ -610,47 +610,12 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerAlgorithm))
 			w.Header().Set(xhttp.AmzServerSideEncryptionCustomerKeyMD5, r.Header.Get(xhttp.AmzServerSideEncryptionCustomerKeyMD5))
 		}
-		// Never store encrypted objects in cache.
-		update = false
 		objInfo.ETag = getDecryptedETag(r.Header, objInfo, false)
 	}
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
 		// AWS S3 silently drops checksums on range requests.
 		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber, r.Header))
-	}
-
-	var buf *bytebufferpool.ByteBuffer
-	if update {
-		if globalCacheConfig.MatchesSize(objInfo.Size) {
-			buf = bytebufferpool.Get()
-			defer bytebufferpool.Put(buf)
-		}
-		defer func() {
-			var data []byte
-			if buf != nil {
-				data = buf.Bytes()
-			}
-
-			asize, err := objInfo.GetActualSize()
-			if err != nil {
-				asize = objInfo.Size
-			}
-
-			globalCacheConfig.Set(&cache.ObjectInfo{
-				Key:          objInfo.Name,
-				Bucket:       objInfo.Bucket,
-				ETag:         objInfo.ETag,
-				ModTime:      objInfo.ModTime,
-				Expires:      objInfo.ExpiresStr(),
-				CacheControl: objInfo.CacheControl,
-				Metadata:     cleanReservedKeys(objInfo.UserDefined),
-				Range:        rangeHeader,
-				PartNumber:   opts.PartNumber,
-				Size:         asize,
-				Data:         data,
-			})
-		}()
 	}
 
 	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
@@ -664,6 +629,12 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	setHeadGetRespHeaders(w, r.Form)
+
+	var buf *bytebufferpool.ByteBuffer
+	if update && globalCacheConfig.MatchesSize(objInfo.Size) {
+		buf = bytebufferpool.Get()
+		defer bytebufferpool.Put(buf)
+	}
 
 	var iw io.Writer
 	iw = w
@@ -695,6 +666,31 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 		return
 	}
+
+	defer func() {
+		var data []byte
+		if buf != nil {
+			data = buf.Bytes()
+		}
+
+		if len(data) == 0 {
+			return
+		}
+
+		globalCacheConfig.Set(&cache.ObjectInfo{
+			Key:          objInfo.Name,
+			Bucket:       objInfo.Bucket,
+			ETag:         objInfo.ETag,
+			ModTime:      objInfo.ModTime,
+			Expires:      objInfo.ExpiresStr(),
+			CacheControl: objInfo.CacheControl,
+			Metadata:     cleanReservedKeys(objInfo.UserDefined),
+			Range:        rangeHeader,
+			PartNumber:   opts.PartNumber,
+			Size:         int64(len(data)),
+			Data:         data,
+		})
+	}()
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
@@ -959,7 +955,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// No need to check cache for encrypted objects.
 		cachedResult = false
 	}
-	var update bool
 	if cachedResult {
 		rc := &cache.CondCheck{}
 		h := r.Header.Clone()
@@ -968,7 +963,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		}
 		rc.Init(bucket, object, h)
 
-		ci, err := globalCacheConfig.Get(rc)
+		ci, _ := globalCacheConfig.Get(rc)
 		if ci != nil {
 			tgs, ok := ci.Metadata[xhttp.AmzObjectTagging]
 			if ok {
@@ -1027,9 +1022,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				return
 			}
 		}
-		if errors.Is(err, cache.ErrKeyMissing) {
-			update = true
-		}
 	}
 
 	opts.FastGetObjInfo = true
@@ -1052,10 +1044,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 				return
 			}
 		}
-	}
-	if _, ok := crypto.IsEncrypted(objInfo.UserDefined); ok {
-		// Never store encrypted objects in cache.
-		update = false
 	}
 
 	if objInfo.UserTags != "" {
@@ -1135,24 +1123,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 	if _, err = DecryptObjectInfo(&objInfo, r); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
-	}
-
-	if update {
-		asize, err := objInfo.GetActualSize()
-		if err != nil {
-			asize = objInfo.Size
-		}
-
-		defer globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
-			Size:         asize,
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
-		})
 	}
 
 	// Validate pre-conditions if any.
@@ -1482,9 +1452,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// convert copy src encryption options for GET calls
 	getOpts := ObjectOptions{
-		VersionID:        srcOpts.VersionID,
-		Versioned:        srcOpts.Versioned,
-		VersionSuspended: srcOpts.VersionSuspended,
+		VersionID:          srcOpts.VersionID,
+		Versioned:          srcOpts.Versioned,
+		VersionSuspended:   srcOpts.VersionSuspended,
+		ReplicationRequest: r.Header.Get(xhttp.MinIOSourceReplicationRequest) == "true",
 	}
 	getSSE := encrypt.SSE(srcOpts.ServerSideEncryption)
 	if getSSE != srcOpts.ServerSideEncryption {
@@ -1616,7 +1587,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 	// Encryption parameters not present for this object.
-	if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) {
+	if crypto.SSEC.IsEncrypted(srcInfo.UserDefined) && !crypto.SSECopy.IsRequested(r.Header) && r.Header.Get(xhttp.MinIOSourceReplicationRequest) != "true" {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidSSECustomerAlgorithm), r.URL)
 		return
 	}
@@ -1962,22 +1933,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		RespElements: extractRespElements(w),
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
-	})
-
-	asize, err := objInfo.GetActualSize()
-	if err != nil {
-		asize = objInfo.Size
-	}
-
-	defer globalCacheConfig.Set(&cache.ObjectInfo{
-		Key:          objInfo.Name,
-		Bucket:       objInfo.Bucket,
-		ETag:         objInfo.ETag,
-		ModTime:      objInfo.ModTime,
-		Expires:      objInfo.ExpiresStr(),
-		CacheControl: objInfo.CacheControl,
-		Size:         asize,
-		Metadata:     cleanReservedKeys(objInfo.UserDefined),
 	})
 
 	if !remoteCallRequired && !globalTierConfigMgr.Empty() {
@@ -2368,9 +2323,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			data = buf.Bytes()
 		}
 
-		asize, err := objInfo.GetActualSize()
-		if err != nil {
-			asize = objInfo.Size
+		if len(data) == 0 {
+			return
 		}
 
 		globalCacheConfig.Set(&cache.ObjectInfo{
@@ -2380,7 +2334,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			ModTime:      objInfo.ModTime,
 			Expires:      objInfo.ExpiresStr(),
 			CacheControl: objInfo.CacheControl,
-			Size:         asize,
+			Size:         int64(len(data)),
 			Metadata:     cleanReservedKeys(objInfo.UserDefined),
 			Data:         data,
 		})
@@ -2736,22 +2690,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 		if dsc := mustReplicate(ctx, bucket, object, getMustReplicateOptions(metadata, "", "", replication.ObjectReplicationType, opts)); dsc.ReplicateAny() {
 			scheduleReplication(ctx, objInfo, objectAPI, dsc, replication.ObjectReplicationType)
 		}
-
-		asize, err := objInfo.GetActualSize()
-		if err != nil {
-			asize = objInfo.Size
-		}
-
-		defer globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
-			Size:         asize,
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
-		})
 
 		// Notify object created event.
 		evt := eventArgs{

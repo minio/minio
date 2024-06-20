@@ -520,13 +520,14 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, vo
 	// Use websocket when not reading data.
 	if !opts.ReadData {
 		resp, err := storageReadVersionRPC.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
-			storageRESTDiskID:     *client.diskID.Load(),
-			storageRESTOrigVolume: origvolume,
-			storageRESTVolume:     volume,
-			storageRESTFilePath:   path,
-			storageRESTVersionID:  versionID,
-			storageRESTReadData:   strconv.FormatBool(opts.ReadData),
-			storageRESTHealing:    strconv.FormatBool(opts.Healing),
+			storageRESTDiskID:           *client.diskID.Load(),
+			storageRESTOrigVolume:       origvolume,
+			storageRESTVolume:           volume,
+			storageRESTFilePath:         path,
+			storageRESTVersionID:        versionID,
+			storageRESTInclFreeVersions: strconv.FormatBool(opts.InclFreeVersions),
+			storageRESTReadData:         strconv.FormatBool(opts.ReadData),
+			storageRESTHealing:          strconv.FormatBool(opts.Healing),
 		}))
 		if err != nil {
 			return fi, toStorageErr(err)
@@ -539,6 +540,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, vo
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
+	values.Set(storageRESTInclFreeVersions, strconv.FormatBool(opts.InclFreeVersions))
 	values.Set(storageRESTReadData, strconv.FormatBool(opts.ReadData))
 	values.Set(storageRESTHealing, strconv.FormatBool(opts.Healing))
 
