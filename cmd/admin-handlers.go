@@ -543,9 +543,12 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	var objectAPI ObjectLayer
+	var execAt *time.Time
 	switch serviceSig {
 	case serviceRestart:
 		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceRestartAdminAction)
+		t := time.Now().Add(restartUpdateDelay)
+		execAt = &t
 	case serviceStop:
 		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceStopAdminAction)
 	case serviceFreeze, serviceUnFreeze:
@@ -572,7 +575,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	if globalIsDistErasure {
-		for _, nerr := range globalNotificationSys.SignalServiceV2(serviceSig, dryRun) {
+		for _, nerr := range globalNotificationSys.SignalServiceV2(serviceSig, dryRun, execAt) {
 			if nerr.Err != nil && process {
 				waitingDrives := map[string]madmin.DiskMetrics{}
 				jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)

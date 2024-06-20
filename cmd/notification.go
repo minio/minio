@@ -447,7 +447,7 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 }
 
 // SignalServiceV2 - calls signal service RPC call on all peers with v2 API
-func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool) []NotificationPeerErr {
+func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool, execAt *time.Time) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -455,7 +455,7 @@ func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool) []No
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(sig, "", dryRun, nil)
+			return client.SignalService(sig, "", dryRun, execAt)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
