@@ -1688,7 +1688,7 @@ func getMinioProcMetrics() *MetricsGroupV2 {
 		cacheInterval: 10 * time.Second,
 	}
 	mg.RegisterRead(func(ctx context.Context) (metrics []MetricV2) {
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == globalWindowsOSName || runtime.GOOS == globalMacOSName {
 			return nil
 		}
 

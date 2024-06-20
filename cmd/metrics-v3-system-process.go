@@ -156,11 +156,13 @@ func loadProcessMetrics(ctx context.Context, m MetricValues, c *metricsCache) er
 		m.Set(processUptimeSeconds, time.Since(globalBootTime).Seconds())
 	}
 
-	p, err := procfs.Self()
-	if err != nil {
-		metricsLogIf(ctx, err)
-	} else {
-		loadProcFSMetrics(ctx, p, m)
+	if runtime.GOOS != globalWindowsOSName && runtime.GOOS != globalMacOSName {
+		p, err := procfs.Self()
+		if err != nil {
+			metricsLogIf(ctx, err)
+		} else {
+			loadProcFSMetrics(ctx, p, m)
+		}
 	}
 
 	if globalIsDistErasure && globalLockServer != nil {
