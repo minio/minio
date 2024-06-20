@@ -2417,7 +2417,7 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 		Mode:          string(mode),
 		Domain:        domain,
 		Region:        globalSite.Region(),
-		SQSARN:        globalEventNotifier.GetARNList(false),
+		SQSARN:        globalEventNotifier.GetARNList(),
 		DeploymentID:  globalDeploymentID(),
 		Buckets:       buckets,
 		Objects:       objects,
