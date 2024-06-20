@@ -237,6 +237,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 
 	if globalIsDistErasure {
 		// Notify all other MinIO peers signal service.
+		startTime := time.Now().Add(restartUpdateDelay)
 		ng := WithNPeers(len(globalNotificationSys.peerClients))
 		for idx, client := range globalNotificationSys.peerClients {
 			_, ok := failedClients[idx]
@@ -247,7 +248,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 			ng.Go(ctx, func() error {
 				prs, ok := peerResults[client.String()]
 				if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
-					return client.SignalService(serviceRestart, "", dryRun)
+					return client.SignalService(serviceRestart, "", dryRun, &startTime)
 				}
 				return nil
 			}, idx, *client.host)
