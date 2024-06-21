@@ -576,35 +576,11 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 }
 
 func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVers, allParts bool) (FileInfo, error) {
-	var xl xlMetaV2
-	if err := xl.LoadOrConvert(ri.Buf); err != nil {
-		return FileInfo{}, errFileCorrupt
-	}
-
-	fi, err := xl.ToFileInfo(bucket, object, "", inclFreeVers, allParts)
-	if err != nil {
-		return FileInfo{}, err
-	}
-
-	if !fi.IsValid() {
-		return FileInfo{}, errFileCorrupt
-	}
-
-	versionID := fi.VersionID
-	if versionID == "" {
-		versionID = nullVersionID
-	}
-
-	fileInfo, err := xl.ToFileInfo(bucket, object, versionID, inclFreeVers, allParts)
-	if err != nil {
-		return FileInfo{}, err
-	}
-
-	if readData {
-		fileInfo.Data = xl.data.find(versionID)
-	}
-
-	return fileInfo, nil
+	return getFileInfo(ri.Buf, bucket, object, "", fileInfoOpts{
+		Data:             readData,
+		InclFreeVersions: inclFreeVers,
+		AllParts:         allParts,
+	})
 }
 
 func readAllRawFileInfo(ctx context.Context, disks []StorageAPI, bucket, object string, readData bool) ([]RawFileInfo, []error) {
@@ -756,8 +732,9 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 	disks := er.getDisks()
 
 	ropts := ReadOptions{
-		ReadData: readData,
-		Healing:  false,
+		ReadData:         readData,
+		InclFreeVersions: opts.InclFreeVersions,
+		Healing:          false,
 	}
 
 	mrfCheck := make(chan FileInfo)

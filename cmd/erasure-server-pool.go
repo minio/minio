@@ -2449,6 +2449,24 @@ type HealthResult struct {
 	UsingDefaults bool
 }
 
+func (hr HealthResult) String() string {
+	var str strings.Builder
+	for i, es := range hr.ESHealth {
+		str.WriteString("(Pool: ")
+		str.WriteString(strconv.Itoa(es.PoolID))
+		str.WriteString(" Set: ")
+		str.WriteString(strconv.Itoa(es.SetID))
+		str.WriteString(" Healthy: ")
+		str.WriteString(strconv.FormatBool(es.Healthy))
+		if i == 0 {
+			str.WriteString(")")
+		} else {
+			str.WriteString("), ")
+		}
+	}
+	return str.String()
+}
+
 // Health - returns current status of the object layer health,
 // provides if write access exists across sets, additionally
 // can be used to query scenarios if health may be lost
@@ -2568,16 +2586,16 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
 			if !healthy {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
+					fmt.Errorf("Write quorum could not be established on pool: %d, set: %d, expected write quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolWriteQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online), logger.FatalKind)
 			}
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !healthyRead {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
-						poolIdx, setIdx, poolReadQuorums[poolIdx]))
+					fmt.Errorf("Read quorum could not be established on pool: %d, set: %d, expected read quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolReadQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online))
 			}
 			result.HealthyRead = result.HealthyRead && healthyRead
 		}

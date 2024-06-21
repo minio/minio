@@ -49,23 +49,18 @@ func NewEventNotifier(ctx context.Context) *EventNotifier {
 }
 
 // GetARNList - returns available ARNs.
-func (evnot *EventNotifier) GetARNList(onlyActive bool) []string {
+func (evnot *EventNotifier) GetARNList() []string {
 	arns := []string{}
 	if evnot == nil {
 		return arns
 	}
 	region := globalSite.Region()
-	for targetID, target := range evnot.targetList.TargetMap() {
+	for targetID := range evnot.targetList.TargetMap() {
 		// httpclient target is part of ListenNotification
 		// which doesn't need to be listed as part of the ARN list
 		// This list is only meant for external targets, filter
 		// this out pro-actively.
 		if !strings.HasPrefix(targetID.ID, "httpclient+") {
-			if onlyActive {
-				if _, err := target.IsActive(); err != nil {
-					continue
-				}
-			}
 			arns = append(arns, targetID.ToARN(region).String())
 		}
 	}
