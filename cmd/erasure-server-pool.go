@@ -2082,7 +2082,6 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 
 // Walk a bucket, optionally prefix recursively, until we have returned
 // all the contents of the provided bucket+prefix.
-// TODO: Note that most errors will result in a truncated listing.
 func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- itemOrErr[ObjectInfo], opts WalkOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, ""); err != nil {
 		xioutil.SafeClose(results)
@@ -2199,6 +2198,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	// Convert and filter merged entries.
 	merged := make(chan metaCacheEntry, 100)
 	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+	errCh := make(chan error, 1)
 	go func() {
 		defer cancelCause(nil)
 		defer xioutil.SafeClose(results)
@@ -2266,12 +2266,16 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 			}
 		}
+		if err := <-errCh; err != nil {
+			sendErr(err)
+		}
 	}()
 	go func() {
+		defer close(errCh)
 		// Merge all entries from all disks.
 		// We leave quorum at 1, since entries are already resolved to have the desired quorum.
 		// mergeEntryChannels will close 'merged' channel upon completion or cancellation.
-		storageLogIf(ctx, mergeEntryChannels(ctx, entries, merged, 1))
+		errCh <- mergeEntryChannels(ctx, entries, merged, 1)
 	}()
 
 	return nil
