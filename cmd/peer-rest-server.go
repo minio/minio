@@ -693,6 +693,18 @@ func (s *peerRESTServer) SignalServiceHandler(vars *grid.MSS) (np grid.NoPayload
 	if err != nil {
 		return np, grid.NewRemoteErr(err)
 	}
+
+	// Wait until the specified time before executing the signal.
+	if t := vars.Get(peerRESTExecAt); t != "" {
+		execAt, err := time.Parse(time.RFC3339Nano, vars.Get(peerRESTExecAt))
+		if err != nil {
+			logger.LogIf(GlobalContext, "signalservice", err)
+			execAt = time.Now().Add(restartUpdateDelay)
+		}
+		if d := time.Until(execAt); d > 0 {
+			time.Sleep(d)
+		}
+	}
 	signal := serviceSignal(si)
 	switch signal {
 	case serviceRestart, serviceStop:
