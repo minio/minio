@@ -2200,8 +2200,6 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	vcfg, _ := globalBucketVersioningSys.Get(bucket)
 	errCh := make(chan error, 1)
 	go func() {
-		defer cancelCause(nil)
-		defer xioutil.SafeClose(results)
 		sentErr := false
 		sendErr := func(err error) {
 			if !sentErr {
@@ -2212,6 +2210,15 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 			}
 		}
+		defer func() {
+			select {
+			case <-ctx.Done():
+				sendErr(ctx.Err())
+			default:
+			}
+			xioutil.SafeClose(results)
+			cancelCause(nil)
+		}()
 		send := func(oi ObjectInfo) bool {
 			select {
 			case results <- itemOrErr[ObjectInfo]{Item: oi}:
