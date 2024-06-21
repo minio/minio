@@ -2,8 +2,6 @@ module github.com/minio/minio
 
 go 1.21
 
-replace github.com/minio/madmin-go/v3 => github.com/taran-p/madmin-go/v3 v3.10.1-0.20240606204813-55a2c38ac0b1
-
 require (
 	cloud.google.com/go/storage v1.42.0
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -54,7 +52,7 @@ require (
 	github.com/minio/highwayhash v1.0.2
 	github.com/minio/kms-go/kes v0.3.0
 	github.com/minio/kms-go/kms v0.4.0
-	github.com/minio/madmin-go/v3 v3.0.55
+	github.com/minio/madmin-go/v3 v3.0.57
 	github.com/minio/minio-go/v7 v7.0.72-0.20240610154810-fa174cbf14b0
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v3 v3.0.2
