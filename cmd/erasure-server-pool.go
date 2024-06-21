@@ -2008,10 +2008,12 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 				if err != nil {
 					return nil, err
 				}
-				for i := range buckets {
-					createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
-					if err == nil {
-						buckets[i].Created = createdAt
+				if !opts.NoMetadata {
+					for i := range buckets {
+						createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+						if err == nil {
+							buckets[i].Created = createdAt
+						}
 					}
 				}
 				return buckets, nil
@@ -2025,10 +2027,13 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 	if err != nil {
 		return nil, err
 	}
-	for i := range buckets {
-		createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
-		if err == nil {
-			buckets[i].Created = createdAt
+
+	if !opts.NoMetadata {
+		for i := range buckets {
+			createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+			if err == nil {
+				buckets[i].Created = createdAt
+			}
 		}
 	}
 	return buckets, nil
