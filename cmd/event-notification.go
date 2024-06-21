@@ -69,7 +69,7 @@ func (evnot *EventNotifier) GetARNList() []string {
 }
 
 // Loads notification policies for all buckets into EventNotifier.
-func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
+func (evnot *EventNotifier) set(bucket string, meta BucketMetadata) {
 	config := meta.notificationConfig
 	if config == nil {
 		return
@@ -81,7 +81,7 @@ func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
 			internalLogIf(GlobalContext, err)
 		}
 	}
-	evnot.AddRulesMap(bucket.Name, config.ToRulesMap())
+	evnot.AddRulesMap(bucket, config.ToRulesMap())
 }
 
 // Targets returns all the registered targets

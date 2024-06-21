@@ -392,9 +392,7 @@ func (sys *BucketMetadataSys) GetReplicationConfig(ctx context.Context, bucket s
 		return nil, time.Time{}, BucketReplicationConfigNotFound{Bucket: bucket}
 	}
 	if reloaded {
-		globalBucketTargetSys.set(BucketInfo{
-			Name: bucket,
-		}, meta)
+		globalBucketTargetSys.set(bucket, meta)
 	}
 	return meta.replicationConfig, meta.ReplicationConfigUpdatedAt, nil
 }
@@ -413,9 +411,7 @@ func (sys *BucketMetadataSys) GetBucketTargetsConfig(bucket string) (*madmin.Buc
 		return nil, BucketRemoteTargetNotFound{Bucket: bucket}
 	}
 	if reloaded {
-		globalBucketTargetSys.set(BucketInfo{
-			Name: bucket,
-		}, meta)
+		globalBucketTargetSys.set(bucket, meta)
 	}
 	return meta.bucketTargetConfig, nil
 }
@@ -471,7 +467,7 @@ func (sys *BucketMetadataSys) GetConfig(ctx context.Context, bucket string) (met
 }
 
 // Init - initializes bucket metadata system for all buckets.
-func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []string, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
@@ -484,7 +480,7 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []BucketInfo, ob
 }
 
 // concurrently load bucket metadata to speed up loading bucket metadata.
-func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []BucketInfo, failedBuckets map[string]struct{}) {
+func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []string, failedBuckets map[string]struct{}) {
 	g := errgroup.WithNErrs(len(buckets))
 	bucketMetas := make([]BucketMetadata, len(buckets))
 	for index := range buckets {
@@ -494,8 +490,8 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 			// herd upon start up sequence.
 			time.Sleep(25*time.Millisecond + time.Duration(rand.Int63n(int64(100*time.Millisecond))))
 
-			_, _ = sys.objAPI.HealBucket(ctx, buckets[index].Name, madmin.HealOpts{Recreate: true})
-			meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[index].Name)
+			_, _ = sys.objAPI.HealBucket(ctx, buckets[index], madmin.HealOpts{Recreate: true})
+			meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[index])
 			if err != nil {
 				return err
 			}
@@ -508,7 +504,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 	for index, err := range errs {
 		if err != nil {
 			internalLogOnceIf(ctx, fmt.Errorf("Unable to load bucket metadata, will be retried: %w", err),
-				"load-bucket-metadata-"+buckets[index].Name, logger.WarningKind)
+				"load-bucket-metadata-"+buckets[index], logger.WarningKind)
 		}
 	}
 
@@ -519,7 +515,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 		if errs[i] != nil {
 			continue
 		}
-		sys.metadataMap[buckets[i].Name] = meta
+		sys.metadataMap[buckets[i]] = meta
 	}
 	sys.Unlock()
 
@@ -528,7 +524,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []Buck
 			if failedBuckets == nil {
 				failedBuckets = make(map[string]struct{})
 			}
-			failedBuckets[buckets[i].Name] = struct{}{}
+			failedBuckets[buckets[i]] = struct{}{}
 			continue
 		}
 		globalEventNotifier.set(buckets[i], meta)   // set notification targets
@@ -548,7 +544,7 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			buckets, err := sys.objAPI.ListBuckets(ctx, BucketOptions{})
+			buckets, err := sys.objAPI.ListBuckets(ctx, BucketOptions{NoMetadata: true})
 			if err != nil {
 				internalLogIf(ctx, err, logger.WarningKind)
 				break
@@ -579,8 +575,8 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 
 				// Initialize the failed buckets
 				if _, ok := failedBuckets[buckets[i].Name]; ok {
-					globalEventNotifier.set(buckets[i], meta)
-					globalBucketTargetSys.set(buckets[i], meta)
+					globalEventNotifier.set(buckets[i].Name, meta)
+					globalBucketTargetSys.set(buckets[i].Name, meta)
 					delete(failedBuckets, buckets[i].Name)
 				}
 
@@ -600,8 +596,8 @@ func (sys *BucketMetadataSys) Initialized() bool {
 }
 
 // Loads bucket metadata for all buckets into BucketMetadataSys.
-func (sys *BucketMetadataSys) init(ctx context.Context, buckets []BucketInfo) {
-	count := 100 // load 100 bucket metadata at a time.
+func (sys *BucketMetadataSys) init(ctx context.Context, buckets []string) {
+	count := globalEndpoints.ESCount() * 10
 	failedBuckets := make(map[string]struct{})
 	for {
 		if len(buckets) < count {
