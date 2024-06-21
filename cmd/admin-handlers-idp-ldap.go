@@ -520,8 +520,15 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-	} else if len(dnList) == 1 && (dnList[0] == cred.AccessKey || dnList[0] == cred.ParentUser) {
-		onlySelf = true
+	} else if len(dnList) == 1 {
+		var dn string
+		foundResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(dnList[0])
+		if err == nil {
+			dn = foundResult.NormDN
+		}
+		if dn == cred.ParentUser || dnList[0] == cred.ParentUser {
+			onlySelf = true
+		}
 	}
 
 	if !globalIAMSys.IsAllowed(policy.Args{
