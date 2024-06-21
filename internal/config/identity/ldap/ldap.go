@@ -98,6 +98,7 @@ func (l *Config) GetValidatedDNForUsername(username string) (*xldap.DNSearchResu
 	// under a configured base DN in the LDAP directory.
 	validDN, isUnderBaseDN, err := l.GetValidatedUserDN(conn, username)
 	if err == nil && !isUnderBaseDN {
+		// Not under any configured base DN, so treat as not found.
 		return nil, nil
 	}
 	return validDN, err
