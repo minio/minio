@@ -1,8 +1,11 @@
 name: Build
+
 on:
   push:
     branches:
-      - master # or the name of your main branch
+      - main
+
+
 jobs:
   build:
     name: Build
@@ -10,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
       - uses: sonarsource/sonarqube-scan-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
