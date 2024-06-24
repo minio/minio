@@ -476,6 +476,16 @@ customCommandJob:
   resources:
     requests:
       memory: 128Mi
+  ## Additional volumes to add to the post-job.
+  extraVolumes: []
+    # - name: extra-policies
+    #   configMap:
+    #     name: my-extra-policies-cm
+  ## Additional volumeMounts to add to the custom commands container when
+  ## running the post-job.
+  extraVolumeMounts: []
+    # - name: extra-policies
+    #   mountPath: /mnt/extras/
   # Command to run after the main command on exit
   exitCommand: ""
 
