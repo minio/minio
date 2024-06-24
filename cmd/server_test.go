@@ -37,7 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // API suite container common to both ErasureSD and Erasure.
@@ -107,6 +107,7 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.TestListObjectsHandler(c)
 	suite.TestListObjectVersionsOutputOrderHandler(c)
 	suite.TestListObjectsHandlerErrors(c)
+	suite.TestListObjectsV2HadoopUAHandler(c)
 	suite.TestPutBucketErrors(c)
 	suite.TestGetObjectLarge10MiB(c)
 	suite.TestGetObjectLarge11MiB(c)
@@ -1586,7 +1587,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusOK)
 
-	for _, objectName := range []string{"foo bar 1", "foo bar 2"} {
+	for _, objectName := range []string{"foo bar 1", "foo bar 2", "obj2", "obj2/"} {
 		buffer := bytes.NewReader([]byte("Hello World"))
 		request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, objectName),
 			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
@@ -1604,26 +1605,189 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *check) {
 		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", ""), []string{"<Key>foo bar 1</Key>", "<Key>foo bar 2</Key>"}},
 		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
 		{
-			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
 			},
 		},
 		{
-			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", "", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
 				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
-		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
+		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url", ""), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>"}},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "", ""),
+			[]string{
+				"<Key>obj2</Key>",
+				"<Key>obj2/</Key>",
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
 		// create listObjectsV1 request with valid parameters
 		request, err = newTestSignedRequest(http.MethodGet, testCase.getURL, 0, nil, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		// execute the HTTP request.
+		response, err = s.client.Do(request)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
+
+		getContent, err := io.ReadAll(response.Body)
+		c.Assert(err, nil)
+
+		for _, expectedStr := range testCase.expectedStrings {
+			c.Assert(strings.Contains(string(getContent), expectedStr), true)
+		}
+	}
+}
+
+// TestListObjectsV2HadoopUAHandler - Test ListObjectsV2 call with max-keys=2 and Hadoop User-Agent
+func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest(http.MethodPut, getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+
+	// execute the HTTP request to create bucket.
+	response, err := s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	// enable versioning on the bucket.
+	enableVersioningBody := []byte("<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
+	enableVersioningBucketRequest, err := newTestSignedRequest(http.MethodPut, getBucketVersioningConfigURL(s.endPoint, bucketName),
+		int64(len(enableVersioningBody)), bytes.NewReader(enableVersioningBody), s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	// execute the HTTP request to create bucket.
+	response, err = s.client.Do(enableVersioningBucketRequest)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	for _, objectName := range []string{"pfx/a/1.txt", "pfx/b/2.txt", "pfx/", "pfx2/c/3.txt", "pfx2/d/3.txt", "pfx1/1.txt", "pfx2/", "pfx3/", "pfx4/"} {
+		buffer := bytes.NewReader([]byte(""))
+		request, err = newTestSignedRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, objectName),
+			int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		response, err = s.client.Do(request)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusOK)
+	}
+	for _, objectName := range []string{"pfx2/c/3.txt", "pfx2/d/3.txt", "pfx2/", "pfx3/"} {
+		delRequest, err := newTestSignedRequest(http.MethodDelete, getDeleteObjectURL(s.endPoint, bucketName, objectName),
+			0, nil, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+		response, err = s.client.Do(delRequest)
+		c.Assert(err, nil)
+		c.Assert(response.StatusCode, http.StatusNoContent)
+	}
+	testCases := []struct {
+		getURL          string
+		expectedStrings []string
+		userAgent       string
+	}{
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx/a/", "2", "", "", "/"),
+			[]string{
+				"<Contents><Key>pfx/a/1.txt</Key>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx/a/", "2", "", "", "/"),
+			[]string{
+				"<Prefix>pfx/a/</Prefix>",
+				"<Contents><Key>pfx/a/1.txt</Key>",
+			},
+			"",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/c", "2", "true", "", "/"),
+			[]string{
+				"<Prefix>pfx2/c</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated><CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes>",
+			},
+			"",
+		},
+
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/c", "2", "true", "", "/"),
+			[]string{
+				"<Prefix>pfx2/c</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/c", "2", "true", "", "/"),
+			[]string{
+				"<Prefix>pfx2/c</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx2/</Prefix><KeyCount>2</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes><CommonPrefixes><Prefix>pfx2/d/</Prefix></CommonPrefixes>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/", "2", "false", "", "/"),
+			[]string{
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes>",
+			},
+			"",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx2/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx2/</Prefix><KeyCount>2</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+				"<CommonPrefixes><Prefix>pfx2/c/</Prefix></CommonPrefixes><CommonPrefixes><Prefix>pfx2/d/</Prefix></CommonPrefixes>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx3/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx3/</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx4/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx4/</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated><Contents><Key>pfx4/</Key>",
+			},
+			"Hadoop 3.3.2, aws-sdk-java/1.12.262 Linux/5.14.0-362.24.1.el9_3.x86_64 OpenJDK_64-Bit_Server_VM/11.0.22+7 java/11.0.22 scala/2.12.15 vendor/Eclipse_Adoptium cfg/retry-mode/legacy",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx3/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx3/</Prefix><KeyCount>0</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated>",
+			},
+			"",
+		},
+		{
+			getListObjectsV2URL(s.endPoint, bucketName, "pfx4/", "2", "false", "", "/"),
+			[]string{
+				"<Prefix>pfx4/</Prefix><KeyCount>1</KeyCount><MaxKeys>2</MaxKeys><Delimiter>/</Delimiter><IsTruncated>false</IsTruncated><Contents><Key>pfx4/</Key>",
+			},
+			"",
+		},
+	}
+	for _, testCase := range testCases {
+		// create listObjectsV1 request with valid parameters
+		request, err = newTestSignedRequest(http.MethodGet, testCase.getURL, 0, nil, s.accessKey, s.secretKey, s.signer)
+		request.Header.Set("User-Agent", testCase.userAgent)
 		c.Assert(err, nil)
 		// execute the HTTP request.
 		response, err = s.client.Do(request)
@@ -1740,7 +1904,7 @@ func (s *TestSuiteCommon) TestListObjectsSpecialCharactersHandler(c *check) {
 		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", ""), []string{"<Key>foo bar 1</Key>", "<Key>foo bar 2</Key>", "<Key>foo &#x1; bar</Key>"}},
 		{getListObjectsV1URL(s.endPoint, bucketName, "", "1000", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>", "<Key>foo+%01+bar</Key>"}},
 		{
-			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", ""),
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
@@ -1749,7 +1913,7 @@ func (s *TestSuiteCommon) TestListObjectsSpecialCharactersHandler(c *check) {
 			},
 		},
 		{
-			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", ""),
+			getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "true", "", ""),
 			[]string{
 				"<Key>foo bar 1</Key>",
 				"<Key>foo bar 2</Key>",
@@ -1757,7 +1921,7 @@ func (s *TestSuiteCommon) TestListObjectsSpecialCharactersHandler(c *check) {
 				fmt.Sprintf("<Owner><ID>%s</ID><DisplayName>minio</DisplayName></Owner>", globalMinioDefaultOwnerID),
 			},
 		},
-		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url"), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>", "<Key>foo+%01+bar</Key>"}},
+		{getListObjectsV2URL(s.endPoint, bucketName, "", "1000", "", "url", ""), []string{"<Key>foo+bar+1</Key>", "<Key>foo+bar+2</Key>", "<Key>foo+%01+bar</Key>"}},
 	}
 
 	for _, testCase := range testCases {
@@ -1804,7 +1968,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *check) {
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
 
 	// create listObjectsV2 request with invalid value of max-keys parameter. max-keys is set to -2.
-	request, err = newTestSignedRequest(http.MethodGet, getListObjectsV2URL(s.endPoint, bucketName, "", "-2", "", ""),
+	request, err = newTestSignedRequest(http.MethodGet, getListObjectsV2URL(s.endPoint, bucketName, "", "-2", "", "", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 	// execute the HTTP request.

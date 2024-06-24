@@ -32,8 +32,8 @@ import (
 	"github.com/minio/minio/internal/config/lambda/event"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/certs"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 // Webhook constants

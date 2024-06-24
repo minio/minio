@@ -23,22 +23,40 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
-func getFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts bool) (FileInfoVersions, error) {
+// getFileInfoVersions partitions this object's versions such that,
+//   - fivs.Versions has all the non-free versions
+//   - fivs.FreeVersions has all the free versions
+//
+// if inclFreeVersions is true all the versions are in fivs.Versions, free and non-free versions alike.
+//
+// Note: Only the scanner requires fivs.Versions to have exclusively non-free versions. This is used while enforcing NewerNoncurrentVersions lifecycle element.
+func getFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts, inclFreeVersions bool) (FileInfoVersions, error) {
 	fivs, err := getAllFileInfoVersions(xlMetaBuf, volume, path, allParts)
 	if err != nil {
 		return fivs, err
 	}
+
+	// If inclFreeVersions is false, partition the versions in fivs.Versions
+	// such that finally fivs.Versions has
+	// all the non-free versions and fivs.FreeVersions has all the free
+	// versions.
 	n := 0
 	for _, fi := range fivs.Versions {
-		// Filter our tier object delete marker
-		if !fi.TierFreeVersion() {
-			fivs.Versions[n] = fi
-			n++
+		// filter our tier object delete marker
+		if fi.TierFreeVersion() {
+			if !inclFreeVersions {
+				fivs.FreeVersions = append(fivs.FreeVersions, fi)
+			}
 		} else {
-			fivs.FreeVersions = append(fivs.FreeVersions, fi)
+			if !inclFreeVersions {
+				fivs.Versions[n] = fi
+			}
+			n++
 		}
 	}
-	fivs.Versions = fivs.Versions[:n]
+	if !inclFreeVersions {
+		fivs.Versions = fivs.Versions[:n]
+	}
 	// Update numversions
 	for i := range fivs.Versions {
 		fivs.Versions[i].NumVersions = n
@@ -85,7 +103,13 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts bool
 	}, nil
 }
 
-func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allParts bool) (FileInfo, error) {
+type fileInfoOpts struct {
+	InclFreeVersions bool
+	Data             bool
+	AllParts         bool
+}
+
+func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, opts fileInfoOpts) (FileInfo, error) {
 	var fi FileInfo
 	var err error
 	var inData xlMetaInlineData
@@ -93,7 +117,7 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allPart
 		return FileInfo{}, e
 	} else if buf != nil {
 		inData = data
-		fi, err = buf.ToFileInfo(volume, path, versionID, allParts)
+		fi, err = buf.ToFileInfo(volume, path, versionID, opts.AllParts)
 		if len(buf) != 0 && errors.Is(err, errFileNotFound) {
 			// This special case is needed to handle len(xlMeta.versions) == 0
 			return FileInfo{
@@ -122,15 +146,16 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allPart
 			}, nil
 		}
 		inData = xlMeta.data
-		fi, err = xlMeta.ToFileInfo(volume, path, versionID, false, allParts)
+		fi, err = xlMeta.ToFileInfo(volume, path, versionID, opts.InclFreeVersions, opts.AllParts)
 	}
-	if !data || err != nil {
+	if !opts.Data || err != nil {
 		return fi, err
 	}
 	versionID = fi.VersionID
 	if versionID == "" {
 		versionID = nullVersionID
 	}
+
 	fi.Data = inData.find(versionID)
 	if len(fi.Data) == 0 {
 		// PR #11758 used DataDir, preserve it

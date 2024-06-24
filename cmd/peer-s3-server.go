@@ -22,7 +22,7 @@ import (
 	"errors"
 
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 const (
@@ -123,7 +123,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 		g.Wait()
 	}
 
-	// Create the quorum lost volume only if its nor makred for delete
+	// Create the lost volume only if its not marked for delete
 	if !opts.Remove {
 		// Initialize sync waitgroup.
 		g = errgroup.WithNErrs(len(localDrives))

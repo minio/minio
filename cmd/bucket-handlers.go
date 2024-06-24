@@ -51,7 +51,6 @@ import (
 	sse "github.com/minio/minio/internal/bucket/encryption"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
@@ -61,8 +60,8 @@ import (
 	"github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/policy"
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
 
 const (
@@ -72,6 +71,8 @@ const (
 
 	xMinIOErrCodeHeader = "x-minio-error-code"
 	xMinIOErrDescHeader = "x-minio-error-desc"
+
+	postPolicyBucketTagging = "tagging"
 )
 
 // Check if there are buckets on server without corresponding entry in etcd backend and
@@ -90,7 +91,7 @@ const (
 // -- If IP of the entry doesn't match, this means entry is
 //
 //	for another instance. Log an error to console.
-func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
+func initFederatorBackend(buckets []string, objLayer ObjectLayer) {
 	if len(buckets) == 0 {
 		return
 	}
@@ -111,10 +112,10 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 	domainMissing := err == dns.ErrDomainMissing
 	if dnsBuckets != nil {
 		for _, bucket := range buckets {
-			bucketsSet.Add(bucket.Name)
-			r, ok := dnsBuckets[bucket.Name]
+			bucketsSet.Add(bucket)
+			r, ok := dnsBuckets[bucket]
 			if !ok {
-				bucketsToBeUpdated.Add(bucket.Name)
+				bucketsToBeUpdated.Add(bucket)
 				continue
 			}
 			if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(r)...)).IsEmpty() {
@@ -133,7 +134,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 				// but if we do see a difference with local domain IPs with
 				// hostSlice from etcd then we should update with newer
 				// domainIPs, we proceed to do that here.
-				bucketsToBeUpdated.Add(bucket.Name)
+				bucketsToBeUpdated.Add(bucket)
 				continue
 			}
 
@@ -142,7 +143,7 @@ func initFederatorBackend(buckets []BucketInfo, objLayer ObjectLayer) {
 			// bucket names are globally unique in federation at a given
 			// path prefix, name collision is not allowed. We simply log
 			// an error and continue.
-			bucketsInConflict.Add(bucket.Name)
+			bucketsInConflict.Add(bucket)
 		}
 	}
 
@@ -227,7 +228,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	// Generate response.
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	// Get current region.
-	region := globalSite.Region
+	region := globalSite.Region()
 	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,
@@ -1340,22 +1341,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					continue
 				}
 
-				asize, err := objInfo.GetActualSize()
-				if err != nil {
-					asize = objInfo.Size
-				}
-
-				globalCacheConfig.Set(&cache.ObjectInfo{
-					Key:          objInfo.Name,
-					Bucket:       objInfo.Bucket,
-					ETag:         getDecryptedETag(formValues, objInfo, false),
-					ModTime:      objInfo.ModTime,
-					Expires:      objInfo.Expires.UTC().Format(http.TimeFormat),
-					CacheControl: objInfo.CacheControl,
-					Metadata:     cleanReservedKeys(objInfo.UserDefined),
-					Size:         asize,
-				})
-
 				fanOutResp = append(fanOutResp, minio.PutObjectFanOutResponse{
 					Key:          objInfo.Name,
 					ETag:         getDecryptedETag(formValues, objInfo, false),
@@ -1415,6 +1400,19 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	if formValues.Get(postPolicyBucketTagging) != "" {
+		tags, err := tags.ParseObjectXML(strings.NewReader(formValues.Get(postPolicyBucketTagging)))
+		if err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMalformedPOSTRequest), r.URL)
+			return
+		}
+		tagsStr := tags.String()
+		opts.UserDefined[xhttp.AmzObjectTagging] = tagsStr
+	} else {
+		// avoid user set an invalid tag using `X-Amz-Tagging`
+		delete(opts.UserDefined, xhttp.AmzObjectTagging)
+	}
+
 	objInfo, err := objectAPI.PutObject(ctx, bucket, object, pReader, opts)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1436,22 +1434,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	if obj := getObjectLocation(r, globalDomainNames, bucket, object); obj != "" {
 		w.Header().Set(xhttp.Location, obj)
 	}
-
-	asize, err := objInfo.GetActualSize()
-	if err != nil {
-		asize = objInfo.Size
-	}
-
-	defer globalCacheConfig.Set(&cache.ObjectInfo{
-		Key:          objInfo.Name,
-		Bucket:       objInfo.Bucket,
-		ETag:         etag,
-		ModTime:      objInfo.ModTime,
-		Expires:      objInfo.ExpiresStr(),
-		CacheControl: objInfo.CacheControl,
-		Metadata:     cleanReservedKeys(objInfo.UserDefined),
-		Size:         asize,
-	})
 
 	// Notify object created event.
 	defer sendEvent(eventArgs{

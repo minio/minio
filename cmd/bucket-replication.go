@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -74,8 +75,9 @@ const (
 	ObjectLockRetentionTimestamp = "objectlock-retention-timestamp"
 	// ObjectLockLegalHoldTimestamp - the last time a legal hold metadata modification happened on this cluster for this object version
 	ObjectLockLegalHoldTimestamp = "objectlock-legalhold-timestamp"
-	// ReplicationWorkerMultiplier is suggested worker multiplier if traffic exceeds replication worker capacity
-	ReplicationWorkerMultiplier = 1.5
+
+	// ReplicationSsecChecksumHeader - the encrypted checksum of the SSE-C encrypted object.
+	ReplicationSsecChecksumHeader = "X-Minio-Replication-Ssec-Crc"
 )
 
 // gets replication config associated to a given bucket name.
@@ -763,12 +765,34 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, err error) {
+func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) map[string]string {
 	meta := make(map[string]string)
+	cs := oi.decryptChecksums(partNum, h)
+	for k, v := range cs {
+		cksum := hash.NewChecksumString(k, v)
+		if cksum == nil {
+			continue
+		}
+		if cksum.Valid() {
+			meta[cksum.Type.Key()] = v
+		}
+	}
+	return meta
+}
+
+func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, partNum int) (putOpts minio.PutObjectOptions, err error) {
+	meta := make(map[string]string)
+	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
+
 	for k, v := range objInfo.UserDefined {
 		// In case of SSE-C objects copy the allowed internal headers as well
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
+		if !isSSEC || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
+				if strings.EqualFold(k, ReservedMetadataPrefixLower+"crc") {
+					for k, v := range getCRCMeta(objInfo, partNum, nil) {
+						meta[k] = v
+					}
+				}
 				continue
 			}
 			if isStandardHeader(k) {
@@ -779,6 +803,17 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 			meta[validSSEReplicationHeaders[k]] = v
 		} else {
 			meta[k] = v
+		}
+	}
+
+	if len(objInfo.Checksum) > 0 {
+		// Add encrypted CRC to metadata for SSE-C objects.
+		if isSSEC {
+			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
+		} else {
+			for k, v := range getCRCMeta(objInfo, 0, nil) {
+				meta[k] = v
+			}
 		}
 	}
 
@@ -1201,17 +1236,23 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	// make sure we have the latest metadata for metrics calculation
 	rinfo.PrevReplicationStatus = objInfo.TargetReplicationStatus(tgt.ARN)
 
-	size, err := objInfo.GetActualSize()
-	if err != nil {
-		replLogIf(ctx, err)
-		sendEvent(eventArgs{
-			EventName:  event.ObjectReplicationNotTracked,
-			BucketName: bucket,
-			Object:     objInfo,
-			UserAgent:  "Internal: [Replication]",
-			Host:       globalLocalNodeName,
-		})
-		return
+	// Set the encrypted size for SSE-C objects
+	var size int64
+	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		size = objInfo.Size
+	} else {
+		size, err = objInfo.GetActualSize()
+		if err != nil {
+			replLogIf(ctx, err)
+			sendEvent(eventArgs{
+				EventName:  event.ObjectReplicationNotTracked,
+				BucketName: bucket,
+				Object:     objInfo,
+				UserAgent:  "Internal: [Replication]",
+				Host:       globalLocalNodeName,
+			})
+			return
+		}
 	}
 
 	if tgt.Bucket == "" {
@@ -1239,7 +1280,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	// use core client to avoid doing multipart on PUT
 	c := &minio.Core{Client: tgt.Client}
 
-	putOpts, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo)
+	putOpts, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo, 0)
 	if err != nil {
 		replLogIf(ctx, fmt.Errorf("failure setting options for replication bucket:%s err:%w", bucket, err))
 		sendEvent(eventArgs{
@@ -1377,7 +1418,8 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 	}
 
 	// Set the encrypted size for SSE-C objects
-	if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
+	if isSSEC {
 		size = objInfo.Size
 	}
 
@@ -1437,6 +1479,13 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			return
 		}
 	} else {
+		// SSEC objects will refuse HeadObject without the decryption key.
+		// Ignore the error, since we know the object exists and versioning prevents overwriting existing versions.
+		if isSSEC && strings.Contains(cerr.Error(), errorCodes[ErrSSEEncryptedObject].Description) {
+			rinfo.ReplicationStatus = replication.Completed
+			rinfo.ReplicationAction = replicateNone
+			goto applyAction
+		}
 		// if target returns error other than NoSuchKey, defer replication attempt
 		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
@@ -1464,6 +1513,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			return
 		}
 	}
+applyAction:
 	rinfo.ReplicationStatus = replication.Completed
 	rinfo.Size = size
 	rinfo.ReplicationAction = rAction
@@ -1506,7 +1556,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 	} else {
 		var putOpts minio.PutObjectOptions
-		putOpts, err = putReplicationOpts(ctx, tgt.StorageClass, objInfo)
+		putOpts, err = putReplicationOpts(ctx, tgt.StorageClass, objInfo, 0)
 		if err != nil {
 			replLogIf(ctx, fmt.Errorf("failed to set replicate options for object %s/%s(%s) (target %s) err:%w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), err))
 			sendEvent(eventArgs{
@@ -1542,13 +1592,15 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		} else {
 			_, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts)
 		}
-		if rinfo.Err != nil && minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
-			rinfo.ReplicationStatus = replication.Failed
-			replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
-				bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
-		}
-		if rinfo.Err != nil && minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
-			globalBucketTargetSys.markOffline(tgt.EndpointURL())
+		if rinfo.Err != nil {
+			if minio.ToErrorResponse(rinfo.Err).Code != "PreconditionFailed" {
+				rinfo.ReplicationStatus = replication.Failed
+				replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
+					bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
+			}
+			if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+				globalBucketTargetSys.markOffline(tgt.EndpointURL())
+			}
 		}
 	}
 	return
@@ -1568,7 +1620,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			break
 		}
 		if minio.ToErrorResponse(err).Code == "PreconditionFailed" {
-			return err
+			return nil
 		}
 		attempts++
 		time.Sleep(time.Duration(rand.Int63n(int64(time.Second))))
@@ -1595,13 +1647,14 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	}()
 
 	var (
-		hr    *hash.Reader
-		pInfo minio.ObjectPart
+		hr     *hash.Reader
+		pInfo  minio.ObjectPart
+		isSSEC = crypto.SSEC.IsEncrypted(objInfo.UserDefined)
 	)
 
 	var objectSize int64
 	for _, partInfo := range objInfo.Parts {
-		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		if isSSEC {
 			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.Size), partInfo.Size, "", "", partInfo.ActualSize)
 		} else {
 			hr, err = hash.NewReader(ctx, io.LimitReader(r, partInfo.ActualSize), partInfo.ActualSize, "", "", partInfo.ActualSize)
@@ -1612,12 +1665,18 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
+		if !isSSEC {
+			crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
+			for k, v := range crc {
+				cHeader.Add(k, v)
+			}
+		}
 		popts := minio.PutObjectPartOptions{
 			SSE:          opts.ServerSideEncryption,
 			CustomHeader: cHeader,
 		}
 
-		if crypto.SSEC.IsEncrypted(objInfo.UserDefined) {
+		if isSSEC {
 			objectSize += partInfo.Size
 			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, popts)
 		} else {
@@ -1627,22 +1686,33 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		if err != nil {
 			return err
 		}
-		if !crypto.SSEC.IsEncrypted(objInfo.UserDefined) && pInfo.Size != partInfo.ActualSize {
+		if !isSSEC && pInfo.Size != partInfo.ActualSize {
 			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
-			PartNumber: pInfo.PartNumber,
-			ETag:       pInfo.ETag,
+			PartNumber:     pInfo.PartNumber,
+			ETag:           pInfo.ETag,
+			ChecksumCRC32:  pInfo.ChecksumCRC32,
+			ChecksumCRC32C: pInfo.ChecksumCRC32C,
+			ChecksumSHA1:   pInfo.ChecksumSHA1,
+			ChecksumSHA256: pInfo.ChecksumSHA256,
 		})
+	}
+	userMeta := map[string]string{
+		validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"],
+	}
+	if isSSEC && objInfo.UserDefined[ReplicationSsecChecksumHeader] != "" {
+		userMeta[ReplicationSsecChecksumHeader] = objInfo.UserDefined[ReplicationSsecChecksumHeader]
 	}
 
 	// really big value but its okay on heavily loaded systems. This is just tail end timeout.
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
-		UserMetadata: map[string]string{validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"]},
+		UserMetadata: userMeta,
 		Internal: minio.AdvancedPutOptions{
 			SourceMTime: objInfo.ModTime,
+			SourceETag:  objInfo.ETag,
 			// always set this to distinguish between `mc mirror` replication and serverside
 			ReplicationRequest: true,
 		},
@@ -2176,12 +2246,12 @@ type proxyResult struct {
 
 // get Reader from replication target if active-active replication is in place and
 // this node returns a 404
-func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, _ http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
+func proxyGetToReplicationTarget(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions, proxyTargets *madmin.BucketTargets) (gr *GetObjectReader, proxy proxyResult, err error) {
 	tgt, oi, proxy := proxyHeadToRepTarget(ctx, bucket, object, rs, opts, proxyTargets)
 	if !proxy.Proxy {
 		return nil, proxy, nil
 	}
-	fn, _, _, err := NewGetObjectReader(nil, oi, opts)
+	fn, _, _, err := NewGetObjectReader(nil, oi, opts, h)
 	if err != nil {
 		return nil, proxy, err
 	}
@@ -2366,7 +2436,9 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 		SSEC:                 crypto.SSEC.IsEncrypted(oi.UserDefined),
 		UserTags:             oi.UserTags,
 	}
-
+	if ri.SSEC {
+		ri.Checksum = oi.Checksum
+	}
 	if dsc.Synchronous() {
 		replicateObject(ctx, ri, o)
 	} else {
@@ -2846,17 +2918,19 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 						ReplicationProxyRequest: "false",
 					},
 				})
+				sz := roi.Size
 				if err != nil {
 					if roi.DeleteMarker && isErrMethodNotAllowed(ErrorRespToObjectError(err, opts.bucket, roi.Name)) {
 						st.ReplicatedCount++
 					} else {
 						st.FailedCount++
 					}
+					sz = 0
 				} else {
 					st.ReplicatedCount++
 					st.ReplicatedSize += roi.Size
 				}
-				traceFn(err)
+				traceFn(sz, err)
 				select {
 				case <-ctx.Done():
 					return
@@ -2971,17 +3045,17 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 	return nil
 }
 
-func (s *replicationResyncer) trace(resyncID string, path string) func(err error) {
+func (s *replicationResyncer) trace(resyncID string, path string) func(sz int64, err error) {
 	startTime := time.Now()
-	return func(err error) {
+	return func(sz int64, err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceReplicationResync) > 0 {
-			globalTrace.Publish(replicationResyncTrace(resyncID, startTime, duration, path, err))
+			globalTrace.Publish(replicationResyncTrace(resyncID, startTime, duration, path, err, sz))
 		}
 	}
 }
 
-func replicationResyncTrace(resyncID string, startTime time.Time, duration time.Duration, path string, err error) madmin.TraceInfo {
+func replicationResyncTrace(resyncID string, startTime time.Time, duration time.Duration, path string, err error, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -2995,6 +3069,7 @@ func replicationResyncTrace(resyncID string, startTime time.Time, duration time.
 		Duration:  duration,
 		Path:      path,
 		Error:     errStr,
+		Bytes:     sz,
 	}
 }
 
@@ -3011,7 +3086,7 @@ func (p *ReplicationPool) deleteResyncMetadata(ctx context.Context, bucket strin
 }
 
 // initResync - initializes bucket replication resync for all buckets.
-func (p *ReplicationPool) initResync(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (p *ReplicationPool) initResync(ctx context.Context, buckets []string, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
@@ -3020,7 +3095,7 @@ func (p *ReplicationPool) initResync(ctx context.Context, buckets []BucketInfo, 
 	return nil
 }
 
-func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) {
+func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []string, objAPI ObjectLayer) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Run the replication resync in a loop
 	for {
@@ -3038,13 +3113,13 @@ func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []Buck
 }
 
 // Loads bucket replication resync statuses into memory.
-func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (p *ReplicationPool) loadResync(ctx context.Context, buckets []string, objAPI ObjectLayer) error {
 	// Make sure only one node running resync on the cluster.
 	ctx, cancel := globalLeaderLock.GetLock(ctx)
 	defer cancel()
 
 	for index := range buckets {
-		bucket := buckets[index].Name
+		bucket := buckets[index]
 
 		meta, err := loadBucketResyncMetadata(ctx, bucket, objAPI)
 		if err != nil {

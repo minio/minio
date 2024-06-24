@@ -39,8 +39,8 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/workers"
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -427,7 +427,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 
 			stopFn := globalRebalanceMetrics.log(rebalanceMetricSaveMetadata, poolIdx, traceMsg)
 			err := z.saveRebalanceStats(GlobalContext, poolIdx, rebalSaveStats)
-			stopFn(err)
+			stopFn(0, err)
 			rebalanceLogIf(GlobalContext, err)
 
 			if quit {
@@ -456,7 +456,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 
 		stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBucket, poolIdx, bucket)
 		if err = z.rebalanceBucket(ctx, bucket, poolIdx); err != nil {
-			stopFn(err)
+			stopFn(0, err)
 			if errors.Is(err, errServerNotInitialized) || errors.Is(err, errBucketMetadataNotInitialized) {
 				continue
 			}
@@ -464,7 +464,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			doneCh <- err
 			return
 		}
-		stopFn(nil)
+		stopFn(0, nil)
 		z.bucketRebalanceDone(bucket, poolIdx)
 	}
 
@@ -692,24 +692,24 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.
 						ignore = true
-						stopFn(nil)
+						stopFn(0, nil)
 						break
 					}
 					if err != nil {
 						failure = true
 						rebalanceLogIf(ctx, err)
-						stopFn(err)
+						stopFn(0, err)
 						continue
 					}
 
 					if err = z.rebalanceObject(ctx, bucket, gr); err != nil {
 						failure = true
 						rebalanceLogIf(ctx, err)
-						stopFn(err)
+						stopFn(version.Size, err)
 						continue
 					}
 
-					stopFn(nil)
+					stopFn(version.Size, nil)
 					failure = false
 					break
 				}
@@ -735,7 +735,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						NoAuditLog:         true,
 					},
 				)
-				stopFn(err)
+				stopFn(0, err)
 				auditLogRebalance(ctx, "Rebalance:DeleteObject", bucket, entry.name, "", err)
 				if err != nil {
 					rebalanceLogIf(ctx, err)
@@ -935,7 +935,7 @@ func (z *erasureServerPools) StartRebalance() {
 		go func(idx int) {
 			stopfn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBuckets, idx)
 			err := z.rebalanceBuckets(ctx, idx)
-			stopfn(err)
+			stopfn(0, err)
 		}(poolIdx)
 	}
 }
@@ -975,7 +975,7 @@ const (
 	rebalanceMetricSaveMetadata
 )
 
-func rebalanceTrace(r rebalanceMetric, poolIdx int, startTime time.Time, duration time.Duration, err error, path string) madmin.TraceInfo {
+func rebalanceTrace(r rebalanceMetric, poolIdx int, startTime time.Time, duration time.Duration, err error, path string, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -988,15 +988,16 @@ func rebalanceTrace(r rebalanceMetric, poolIdx int, startTime time.Time, duratio
 		Duration:  duration,
 		Path:      path,
 		Error:     errStr,
+		Bytes:     sz,
 	}
 }
 
-func (p *rebalanceMetrics) log(r rebalanceMetric, poolIdx int, paths ...string) func(err error) {
+func (p *rebalanceMetrics) log(r rebalanceMetric, poolIdx int, paths ...string) func(sz int64, err error) {
 	startTime := time.Now()
-	return func(err error) {
+	return func(sz int64, err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceRebalance) > 0 {
-			globalTrace.Publish(rebalanceTrace(r, poolIdx, startTime, duration, err, strings.Join(paths, " ")))
+			globalTrace.Publish(rebalanceTrace(r, poolIdx, startTime, duration, err, strings.Join(paths, " "), sz))
 		}
 	}
 }

@@ -48,10 +48,10 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/policy"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/workers"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1476,7 +1476,7 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 
 func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
 	// TODO: support custom storage class for remote replication
-	putOpts, err = putReplicationOpts(ctx, "", objInfo)
+	putOpts, err = putReplicationOpts(ctx, "", objInfo, 0)
 	if err != nil {
 		return putOpts, err
 	}
@@ -1633,7 +1633,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	job.ID = fmt.Sprintf("%s:%d", shortuuid.New(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
+	job.ID = fmt.Sprintf("%s%s%d", shortuuid.New(), getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	job.User = user
 	job.Started = time.Now()
 

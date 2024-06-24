@@ -175,7 +175,7 @@ func compareSignatureV4(sig1, sig2 string) bool {
 // returns ErrNone if the signature matches.
 func doesPolicySignatureV4Match(formValues http.Header) (auth.Credentials, APIErrorCode) {
 	// Server region.
-	region := globalSite.Region
+	region := globalSite.Region()
 
 	// Parse credential tag.
 	credHeader, s3Err := parseCredentialHeader("Credential="+formValues.Get(xhttp.AmzCredential), region, serviceS3)

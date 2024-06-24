@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -43,7 +44,7 @@ import (
 	"github.com/minio/minio/internal/config/heal"
 	"github.com/minio/minio/internal/event"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v3/console"
 	uatomic "go.uber.org/atomic"
 )
 
@@ -53,7 +54,7 @@ const (
 	dataScannerCompactLeastObject    = 500                              // Compact when there is less than this many objects in a branch.
 	dataScannerCompactAtChildren     = 10000                            // Compact when there are this many children in a branch.
 	dataScannerCompactAtFolders      = dataScannerCompactAtChildren / 4 // Compact when this many subfolders in a single folder.
-	dataScannerForceCompactAtFolders = 1_000_000                        // Compact when this many subfolders in a single folder (even top level).
+	dataScannerForceCompactAtFolders = 250_000                          // Compact when this many subfolders in a single folder (even top level).
 	dataScannerStartDelay            = 1 * time.Minute                  // Time to wait on startup and between cycles.
 
 	healDeleteDangling   = true
@@ -249,7 +250,8 @@ type folderScanner struct {
 	healObjectSelect      uint32 // Do a heal check on an object once every n cycles. Must divide into healFolderInclude
 	scanMode              madmin.HealScanMode
 
-	weSleep func() bool
+	weSleep    func() bool
+	shouldHeal func() bool
 
 	disks       []StorageAPI
 	disksQuorum int
@@ -304,11 +306,12 @@ type folderScanner struct {
 // The returned cache will always be valid, but may not be updated from the existing.
 // Before each operation sleepDuration is called which can be used to temporarily halt the scanner.
 // If the supplied context is canceled the function will return at the first chance.
-func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
+func scanDataFolder(ctx context.Context, disks []StorageAPI, drive *xlStorage, cache dataUsageCache, getSize getSizeFn, scanMode madmin.HealScanMode, weSleep func() bool) (dataUsageCache, error) {
 	switch cache.Info.Name {
 	case "", dataUsageRoot:
 		return cache, errors.New("internal error: root scan attempted")
 	}
+	basePath := drive.drivePath
 	updatePath, closeDisk := globalScannerMetrics.currentPathUpdater(basePath, cache.Info.Name)
 	defer closeDisk()
 
@@ -326,6 +329,26 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		updateCurrentPath:     updatePath,
 		disks:                 disks,
 		disksQuorum:           len(disks) / 2,
+	}
+
+	var skipHeal atomic.Bool
+	if globalIsErasure || cache.Info.SkipHealing {
+		skipHeal.Store(true)
+	}
+
+	// Check if we should do healing at all.
+	s.shouldHeal = func() bool {
+		if skipHeal.Load() {
+			return false
+		}
+		if s.healObjectSelect == 0 {
+			return false
+		}
+		if di, _ := drive.DiskInfo(ctx, DiskInfoOptions{}); di.Healing {
+			skipHeal.Store(true)
+			return false
+		}
+		return true
 	}
 
 	// Enable healing in XL mode.
@@ -349,6 +372,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, basePath string, ca
 		// No useful information...
 		return cache, err
 	}
+	s.newCache.forceCompact(dataScannerCompactAtChildren)
 	s.newCache.Info.LastUpdate = UTCNow()
 	s.newCache.Info.NextCycle = cache.Info.NextCycle
 	return s.newCache, nil
@@ -481,13 +505,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				replication: replicationCfg,
 			}
 
-			item.heal.enabled = thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && globalIsErasure
+			item.heal.enabled = thisHash.modAlt(f.oldCache.Info.NextCycle/folder.objectHealProbDiv, f.healObjectSelect/folder.objectHealProbDiv) && f.shouldHeal()
 			item.heal.bitrot = f.scanMode == madmin.HealDeepScan
-
-			// if the drive belongs to an erasure set
-			// that is already being healed, skip the
-			// healing attempt on this drive.
-			item.heal.enabled = item.heal.enabled && f.healObjectSelect > 0
 
 			sz, err := f.getSize(item)
 			if err != nil && err != errIgnoreFileContrib {
@@ -651,7 +670,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 		}
 
 		// Scan for healing
-		if f.healObjectSelect == 0 || len(abandonedChildren) == 0 {
+		if len(abandonedChildren) == 0 || !f.shouldHeal() {
 			// If we are not heal scanning, return now.
 			break
 		}
@@ -686,6 +705,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 
 		healObjectsPrefix := color.Green("healObjects:")
 		for k := range abandonedChildren {
+			if !f.shouldHeal() {
+				break
+			}
 			bucket, prefix := path2BucketObject(k)
 			stopFn := globalScannerMetrics.time(scannerMetricCheckMissing)
 			f.updateCurrentPath(k)
@@ -719,6 +741,10 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				},
 				// Some disks have data for this.
 				partial: func(entries metaCacheEntries, errs []error) {
+					if !f.shouldHeal() {
+						cancel()
+						return
+					}
 					entry, ok := entries.resolve(&resolver)
 					if !ok {
 						// check if we can get one entry at least
@@ -1232,36 +1258,29 @@ func evalActionFromLifecycle(ctx context.Context, lc lifecycle.Lifecycle, lr loc
 }
 
 func applyTransitionRule(event lifecycle.Event, src lcEventSrc, obj ObjectInfo) bool {
-	if obj.DeleteMarker {
+	if obj.DeleteMarker || obj.IsDir {
 		return false
 	}
 	globalTransitionState.queueTransitionTask(obj, event, src)
 	return true
 }
 
-func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) bool {
-	var err error
-	defer func() {
-		if err != nil {
-			return
-		}
-		// Note: DeleteAllVersions action is not supported for
-		// transitioned objects
-		globalScannerMetrics.timeILM(lcEvent.Action)(1)
-	}()
-
-	if err = expireTransitionedObject(ctx, objLayer, &obj, lcEvent, src); err != nil {
+func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) (ok bool) {
+	timeILM := globalScannerMetrics.timeILM(lcEvent.Action)
+	if err := expireTransitionedObject(ctx, objLayer, &obj, lcEvent, src); err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
 		ilmLogIf(ctx, err)
 		return false
 	}
+	timeILM(1)
+
 	// Notification already sent in *expireTransitionedObject*, just return 'true' here.
 	return true
 }
 
-func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) bool {
+func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLayer, obj ObjectInfo, lcEvent lifecycle.Event, src lcEventSrc) (ok bool) {
 	traceFn := globalLifecycleSys.trace(obj)
 	opts := ObjectOptions{
 		Expiration: ExpirationOptions{Expire: true},
@@ -1283,8 +1302,10 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 		dobj ObjectInfo
 		err  error
 	)
+
+	timeILM := globalScannerMetrics.timeILM(lcEvent.Action)
 	defer func() {
-		if err != nil {
+		if !ok {
 			return
 		}
 
@@ -1293,7 +1314,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			if lcEvent.Action.DeleteAll() {
 				numVersions = uint64(obj.NumVersions)
 			}
-			globalScannerMetrics.timeILM(lcEvent.Action)(numVersions)
+			timeILM(numVersions)
 		}
 	}()
 

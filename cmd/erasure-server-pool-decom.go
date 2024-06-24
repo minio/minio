@@ -37,9 +37,9 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/workers"
 )
 
 // PoolDecommissionInfo currently decommissioning information
@@ -836,7 +836,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				if filterLifecycle(bi.Name, version.Name, version) {
 					expired++
 					decommissioned++
-					stopFn(errors.New("ILM expired object/version will be skipped"))
+					stopFn(version.Size, errors.New("ILM expired object/version will be skipped"))
 					continue
 				}
 
@@ -846,7 +846,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				remainingVersions := len(fivs.Versions) - expired
 				if version.Deleted && remainingVersions == 1 {
 					decommissioned++
-					stopFn(errors.New("DELETE marked object with no other non-current versions will be skipped"))
+					stopFn(version.Size, errors.New("DELETE marked object with no other non-current versions will be skipped"))
 					continue
 				}
 
@@ -877,7 +877,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							err = nil
 						}
 					}
-					stopFn(err)
+					stopFn(version.Size, err)
 					if err != nil {
 						decomLogIf(ctx, err)
 						failure = true
@@ -902,12 +902,12 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 							MTime:       version.ModTime,
 							UserDefined: version.Metadata,
 						}); err != nil {
-							stopFn(err)
+							stopFn(version.Size, err)
 							failure = true
 							decomLogIf(ctx, err)
 							continue
 						}
-						stopFn(nil)
+						stopFn(version.Size, nil)
 						failure = false
 						break
 					}
@@ -925,14 +925,14 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 						// object deleted by the application, nothing to do here we move on.
 						ignore = true
-						stopFn(nil)
+						stopFn(version.Size, nil)
 						break
 					}
 					if err != nil && !ignore {
 						// if usage-cache.bin is not readable log and ignore it.
 						if bi.Name == minioMetaBucket && strings.Contains(version.Name, dataUsageCacheName) {
 							ignore = true
-							stopFn(err)
+							stopFn(version.Size, err)
 							decomLogIf(ctx, err)
 							break
 						}
@@ -940,16 +940,16 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 					if err != nil {
 						failure = true
 						decomLogIf(ctx, err)
-						stopFn(err)
+						stopFn(version.Size, err)
 						continue
 					}
 					if err = z.decommissionObject(ctx, bi.Name, gr); err != nil {
-						stopFn(err)
+						stopFn(version.Size, err)
 						failure = true
 						decomLogIf(ctx, err)
 						continue
 					}
-					stopFn(nil)
+					stopFn(version.Size, nil)
 					failure = false
 					break
 				}
@@ -977,7 +977,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						NoAuditLog:         true,
 					},
 				)
-				stopFn(err)
+				stopFn(0, err)
 				auditLogDecom(ctx, "DecomDeleteObject", bi.Name, entry.name, "", err)
 				if err != nil {
 					decomLogIf(ctx, err)
@@ -1038,7 +1038,7 @@ const (
 	decomMetricDecommissionRemoveObject
 )
 
-func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.Duration, path string, err error) madmin.TraceInfo {
+func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.Duration, path string, err error, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -1051,15 +1051,16 @@ func decomTrace(d decomMetric, poolIdx int, startTime time.Time, duration time.D
 		Duration:  duration,
 		Path:      path,
 		Error:     errStr,
+		Bytes:     sz,
 	}
 }
 
-func (m *decomMetrics) log(d decomMetric, poolIdx int, paths ...string) func(err error) {
+func (m *decomMetrics) log(d decomMetric, poolIdx int, paths ...string) func(z int64, err error) {
 	startTime := time.Now()
-	return func(err error) {
+	return func(sz int64, err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceDecommission) > 0 {
-			globalTrace.Publish(decomTrace(d, poolIdx, startTime, duration, strings.Join(paths, " "), err))
+			globalTrace.Publish(decomTrace(d, poolIdx, startTime, duration, strings.Join(paths, " "), err, sz))
 		}
 	}
 }
@@ -1092,10 +1093,10 @@ func (z *erasureServerPools) decommissionInBackground(ctx context.Context, idx i
 		}
 		stopFn := globalDecommissionMetrics.log(decomMetricDecommissionBucket, idx, bucket.Name)
 		if err := z.decommissionPool(ctx, idx, pool, bucket); err != nil {
-			stopFn(err)
+			stopFn(0, err)
 			return err
 		}
-		stopFn(nil)
+		stopFn(0, nil)
 
 		z.poolMetaMutex.Lock()
 		if z.poolMeta.BucketDone(idx, bucket) {
@@ -1326,11 +1327,7 @@ func (z *erasureServerPools) Status(ctx context.Context, idx int) (PoolStatus, e
 	poolInfo := z.poolMeta.Pools[idx].Clone()
 	if poolInfo.Decommission != nil {
 		poolInfo.Decommission.TotalSize = pi.Total
-		if poolInfo.Decommission.Failed || poolInfo.Decommission.Canceled {
-			poolInfo.Decommission.CurrentSize = pi.Free
-		} else {
-			poolInfo.Decommission.CurrentSize = poolInfo.Decommission.StartSize + poolInfo.Decommission.BytesDone
-		}
+		poolInfo.Decommission.CurrentSize = pi.Free
 	} else {
 		poolInfo.Decommission = &PoolDecommissionInfo{
 			TotalSize:   pi.Total,

@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 type nullReader struct{}
@@ -403,7 +403,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 
 	// Validates all testcases.
 	for i, testCase := range testCases {
-		s3Error := isReqAuthenticated(ctx, testCase.req, globalSite.Region, serviceS3)
+		s3Error := isReqAuthenticated(ctx, testCase.req, globalSite.Region(), serviceS3)
 		if s3Error != testCase.s3Error {
 			if _, err := io.ReadAll(testCase.req.Body); toAPIErrorCode(ctx, err) != testCase.s3Error {
 				t.Fatalf("Test %d: Unexpected S3 error: want %d - got %d (got after reading request %s)", i, testCase.s3Error, s3Error, toAPIError(ctx, err).Code)
@@ -443,7 +443,7 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 		{Request: mustNewPresignedRequest(http.MethodGet, "http://127.0.0.1:9000", 0, nil, t), ErrCode: ErrAccessDenied},
 	}
 	for i, testCase := range testCases {
-		if _, s3Error := checkAdminRequestAuth(ctx, testCase.Request, policy.AllAdminActions, globalSite.Region); s3Error != testCase.ErrCode {
+		if _, s3Error := checkAdminRequestAuth(ctx, testCase.Request, policy.AllAdminActions, globalSite.Region()); s3Error != testCase.ErrCode {
 			t.Errorf("Test %d: Unexpected s3error returned wanted %d, got %d", i, testCase.ErrCode, s3Error)
 		}
 	}

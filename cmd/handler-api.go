@@ -91,11 +91,11 @@ func availableMemory() (available uint64) {
 	available = 2048 * blockSizeV2 * 2 // Default to 4 GiB when we can't find the limits.
 
 	if runtime.GOOS == "linux" {
-		// Useful in container mode
+		// Honor cgroup limits if set.
 		limit := cgroupMemLimit()
 		if limit > 0 {
-			// A valid value is found, return its 75%
-			available = (limit * 3) / 4
+			// A valid value is found, return its 90%
+			available = (limit * 9) / 10
 			return
 		}
 	} // for all other platforms limits are based on virtual memory.
@@ -104,8 +104,9 @@ func availableMemory() (available uint64) {
 	if err != nil {
 		return
 	}
-	// A valid value is available return its 75%
-	available = (memStats.Available * 3) / 4
+
+	// A valid value is available return its 90%
+	available = (memStats.Available * 9) / 10
 	return
 }
 
@@ -129,7 +130,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 		maxSetDrives := slices.Max(setDriveCounts)
 
 		// Returns 75% of max memory allowed
-		maxMem := availableMemory()
+		maxMem := globalServerCtxt.MemLimit
 
 		// max requests per node is calculated as
 		// total_ram / ram_per_request
@@ -322,10 +323,9 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		}
 
 		globalHTTPStats.addRequestsInQueue(1)
-		defer globalHTTPStats.addRequestsInQueue(-1)
-
 		pool, deadline := globalAPIConfig.getRequestsPool()
 		if pool == nil {
+			globalHTTPStats.addRequestsInQueue(-1)
 			f.ServeHTTP(w, r)
 			return
 		}
@@ -333,6 +333,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		// No deadline to wait, there is nothing to queue
 		// perform the API call immediately.
 		if deadline <= 0 {
+			globalHTTPStats.addRequestsInQueue(-1)
 			f.ServeHTTP(w, r)
 			return
 		}
@@ -348,12 +349,14 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		select {
 		case pool <- struct{}{}:
 			defer func() { <-pool }()
+			globalHTTPStats.addRequestsInQueue(-1)
 			if contextCanceled(ctx) {
 				w.WriteHeader(499)
 				return
 			}
 			f.ServeHTTP(w, r)
 		case <-deadlineTimer.C:
+			globalHTTPStats.addRequestsInQueue(-1)
 			if contextCanceled(ctx) {
 				w.WriteHeader(499)
 				return
@@ -363,6 +366,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 				errorCodes.ToAPIErr(ErrTooManyRequests),
 				r.URL)
 		case <-r.Context().Done():
+			globalHTTPStats.addRequestsInQueue(-1)
 			// When the client disconnects before getting the S3 handler
 			// status code response, set the status code to 499 so this request
 			// will be properly audited and traced.

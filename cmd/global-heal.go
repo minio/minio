@@ -35,9 +35,9 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/wildcard"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/wildcard"
+	"github.com/minio/pkg/v3/workers"
 )
 
 const (
@@ -163,7 +163,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	}
 
 	for _, bucket := range healBuckets {
-		_, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{ScanMode: scanMode})
+		_, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
+			Recreate: true,
+			ScanMode: scanMode,
+		})
 		if err != nil {
 			// Log bucket healing error if any, we shall retry again.
 			healingLogIf(ctx, err)
@@ -262,6 +265,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		// Heal current bucket again in case if it is failed
 		// in the beginning of erasure set healing
 		if _, err := objAPI.HealBucket(ctx, bucket, madmin.HealOpts{
+			Recreate: true,
 			ScanMode: scanMode,
 		}); err != nil {
 			// Set this such that when we return this function
@@ -513,7 +517,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			// we let the caller retry this disk again for the
 			// buckets it failed to list.
 			retErr = err
-			healingLogIf(ctx, err)
+			healingLogIf(ctx, fmt.Errorf("listing failed with: %v on bucket: %v", err, bucket))
 			continue
 		}
 
@@ -530,7 +534,16 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 	tracker.setObject("")
 	tracker.setBucket("")
 
-	return retErr
+	if retErr != nil {
+		return retErr
+	}
+
+	// Last sanity check
+	if len(tracker.QueuedBuckets) > 0 {
+		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)
+	}
+
+	return nil
 }
 
 func healBucket(bucket string, scan madmin.HealScanMode) error {

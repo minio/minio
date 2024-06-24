@@ -36,7 +36,7 @@ import (
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 	"github.com/valyala/bytebufferpool"
 )
 
@@ -193,7 +193,20 @@ func (h *Target) initDiskStore(ctx context.Context) (err error) {
 	h.storeCtxCancel = cancel
 	h.lastStarted = time.Now()
 	go h.startQueueProcessor(ctx, true)
+
+	queueStore := store.NewQueueStore[interface{}](
+		filepath.Join(h.config.QueueDir, h.Name()),
+		uint64(h.config.QueueSize),
+		httpLoggerExtension,
+	)
+
+	if err := queueStore.Open(); err != nil {
+		return fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
+	}
+
+	h.store = queueStore
 	store.StreamItems(h.store, h, ctx.Done(), h.config.LogOnceIf)
+
 	return nil
 }
 
@@ -314,10 +327,7 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 	enc := jsoniter.ConfigCompatibleWithStandardLibrary.NewEncoder(buf)
 	defer bytebufferpool.Put(buf)
 
-	isDirQueue := false
-	if h.config.QueueDir != "" {
-		isDirQueue = true
-	}
+	isDirQueue := h.config.QueueDir != ""
 
 	// globalBuffer is always created or adjusted
 	// before this method is launched.
@@ -504,23 +514,6 @@ func New(config Config) (*Target, error) {
 	}
 
 	h.client = &http.Client{Transport: h.config.Transport}
-
-	if h.config.QueueDir != "" {
-
-		queueStore := store.NewQueueStore[interface{}](
-			filepath.Join(h.config.QueueDir, h.Name()),
-			uint64(h.config.QueueSize),
-			httpLoggerExtension,
-		)
-
-		if err := queueStore.Open(); err != nil {
-			return h, fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
-		}
-
-		h.store = queueStore
-
-	}
-
 	return h, nil
 }
 

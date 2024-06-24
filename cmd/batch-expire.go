@@ -33,9 +33,9 @@ import (
 	"github.com/minio/minio/internal/bucket/versioning"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/wildcard"
-	"github.com/minio/pkg/v2/workers"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/wildcard"
+	"github.com/minio/pkg/v3/workers"
 	"gopkg.in/yaml.v3"
 )
 
@@ -432,7 +432,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 					})
 					if err != nil {
 						stopFn(exp, err)
-						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", toExpire[i].Bucket, toExpire[i].Name, toExpire[i].VersionID, err, attempts))
+						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s due to %v (attempts=%d)", exp.Bucket, exp.Name, err, attempts))
 					} else {
 						stopFn(exp, err)
 						success = true
@@ -464,13 +464,13 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 				copy(toDelCopy, toDel)
 				var failed int
 				errs := r.Expire(ctx, api, vc, toDel)
-				// reslice toDel in preparation for next retry
-				// attempt
+				// reslice toDel in preparation for next retry attempt
 				toDel = toDel[:0]
 				for i, err := range errs {
 					if err != nil {
 						stopFn(toDelCopy[i], err)
-						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID, err, attempts))
+						batchLogIf(ctx, fmt.Errorf("Failed to expire %s/%s versionID=%s due to %v (attempts=%d)", ri.Bucket, toDelCopy[i].ObjectName, toDelCopy[i].VersionID,
+							err, attempts))
 						failed++
 						if oi, ok := oiCache.Get(toDelCopy[i]); ok {
 							ri.trackCurrentBucketObject(r.Bucket, *oi, false, attempts)

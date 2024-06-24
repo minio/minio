@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -34,7 +35,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 
 	"github.com/IBM/sarama"
 	saramatls "github.com/IBM/sarama/tools/tls"
@@ -331,6 +332,10 @@ func (target *KafkaTarget) init() error {
 }
 
 func (target *KafkaTarget) initKafka() error {
+	if os.Getenv("_MINIO_KAFKA_DEBUG") != "" {
+		sarama.DebugLogger = log.Default()
+	}
+
 	args := target.args
 
 	config := sarama.NewConfig()

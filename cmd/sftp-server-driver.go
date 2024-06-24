@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -32,12 +32,15 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/mimedb"
+	"github.com/minio/pkg/v3/mimedb"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
+
+// Maximum write offset for incoming SFTP blocks.
+// Set to 100MiB to prevent hostile DOS attacks.
+const ftpMaxWriteOffset = 100 << 20
 
 type sftpDriver struct {
 	permissions *ssh.Permissions
@@ -49,7 +52,7 @@ type sftpMetrics struct{}
 
 var globalSftpMetrics sftpMetrics
 
-func sftpTrace(s *sftp.Request, startTime time.Time, source string, user string, err error) madmin.TraceInfo {
+func sftpTrace(s *sftp.Request, startTime time.Time, source string, user string, err error, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -58,18 +61,25 @@ func sftpTrace(s *sftp.Request, startTime time.Time, source string, user string,
 		TraceType: madmin.TraceFTP,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  fmt.Sprintf("sftp USER=%s COMMAND=%s PARAM=%s, Source=%s", user, s.Method, s.Filepath, source),
+		FuncName:  s.Method,
 		Duration:  time.Since(startTime),
 		Path:      s.Filepath,
 		Error:     errStr,
+		Bytes:     sz,
+		Custom: map[string]string{
+			"user":   user,
+			"cmd":    s.Method,
+			"param":  s.Filepath,
+			"source": source,
+		},
 	}
 }
 
-func (m *sftpMetrics) log(s *sftp.Request, user string) func(err error) {
+func (m *sftpMetrics) log(s *sftp.Request, user string) func(sz int64, err error) {
 	startTime := time.Now()
 	source := getSource(2)
-	return func(err error) {
-		globalTrace.Publish(sftpTrace(s, startTime, source, user, err))
+	return func(sz int64, err error) {
+		globalTrace.Publish(sftpTrace(s, startTime, source, user, err, sz))
 	}
 }
 
@@ -90,100 +100,26 @@ func NewSFTPDriver(perms *ssh.Permissions) sftp.Handlers {
 }
 
 func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
-	ui, ok := globalIAMSys.GetUser(context.Background(), f.AccessKey())
-	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
-		return nil, errNoSuchUser
-	}
-	if !ok && globalIAMSys.LDAPConfig.Enabled() {
-		sa, _, err := globalIAMSys.getServiceAccount(context.Background(), f.AccessKey())
-		if err != nil && !errors.Is(err, errNoSuchServiceAccount) {
-			return nil, err
-		}
-		var mcreds *credentials.Credentials
-		if errors.Is(err, errNoSuchServiceAccount) {
-			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(f.AccessKey())
-			if err != nil {
-				return nil, err
-			}
-			expiryDur, err := globalIAMSys.LDAPConfig.GetExpiryDuration("")
-			if err != nil {
-				return nil, err
-			}
-			claims := make(map[string]interface{})
-			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-			for k, v := range f.permissions.CriticalOptions {
-				claims[k] = v
-			}
-
-			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
-			if err != nil {
-				return nil, err
-			}
-
-			// Set the parent of the temporary access key, this is useful
-			// in obtaining service accounts by this cred.
-			cred.ParentUser = targetUser
-
-			// Set this value to LDAP groups, LDAP user can be part
-			// of large number of groups
-			cred.Groups = targetGroups
-
-			// Set the newly generated credentials, policyName is empty on purpose
-			// LDAP policies are applied automatically using their ldapUser, ldapGroups
-			// mapping.
-			updatedAt, err := globalIAMSys.SetTempUser(context.Background(), cred.AccessKey, cred, "")
-			if err != nil {
-				return nil, err
-			}
-
-			// Call hook for site replication.
-			replLogIf(context.Background(), globalSiteReplicationSys.IAMChangeHook(context.Background(), madmin.SRIAMItem{
-				Type: madmin.SRIAMItemSTSAcc,
-				STSCredential: &madmin.SRSTSCredential{
-					AccessKey:    cred.AccessKey,
-					SecretKey:    cred.SecretKey,
-					SessionToken: cred.SessionToken,
-					ParentUser:   cred.ParentUser,
-				},
-				UpdatedAt: updatedAt,
-			}))
-
-			mcreds = credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken)
-		} else {
-			mcreds = credentials.NewStaticV4(sa.Credentials.AccessKey, sa.Credentials.SecretKey, "")
-		}
-
-		return minio.New(f.endpoint, &minio.Options{
-			Creds:     mcreds,
-			Secure:    globalIsTLS,
-			Transport: globalRemoteFTPClientTransport,
-		})
-	}
-
-	// ok == true - at this point
-
-	if ui.Credentials.IsTemp() {
-		// Temporary credentials are not allowed.
-		return nil, errAuthentication
-	}
-
+	mcreds := credentials.NewStaticV4(
+		f.permissions.CriticalOptions["AccessKey"],
+		f.permissions.CriticalOptions["SecretKey"],
+		f.permissions.CriticalOptions["SessionToken"],
+	)
 	return minio.New(f.endpoint, &minio.Options{
-		Creds:     credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
+		Creds:     mcreds,
 		Secure:    globalIsTLS,
 		Transport: globalRemoteFTPClientTransport,
 	})
 }
 
 func (f *sftpDriver) AccessKey() string {
-	if _, ok := f.permissions.CriticalOptions["accessKey"]; !ok {
-		return f.permissions.CriticalOptions[ldapUserN]
-	}
-	return f.permissions.CriticalOptions["accessKey"]
+	return f.permissions.CriticalOptions["AccessKey"]
 }
 
 func (f *sftpDriver) Fileread(r *sftp.Request) (ra io.ReaderAt, err error) {
+	// This is not timing the actual read operation, but the time it takes to prepare the reader.
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	flags := r.Pflags()
 	if !flags.Read {
@@ -261,6 +197,9 @@ func (w *writerAt) WriteAt(b []byte, offset int64) (n int, err error) {
 		n, err = w.w.Write(b)
 		w.nextOffset += int64(n)
 	} else {
+		if offset > w.nextOffset+ftpMaxWriteOffset {
+			return 0, fmt.Errorf("write offset %d is too far ahead of next offset %d", offset, w.nextOffset)
+		}
 		w.buffer[offset] = make([]byte, len(b))
 		copy(w.buffer[offset], b)
 		n = len(b)
@@ -286,7 +225,12 @@ again:
 
 func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer func() {
+		if err != nil {
+			// If there is an error, we never started the goroutine.
+			stopFn(0, err)
+		}
+	}()
 
 	flags := r.Pflags()
 	if !flags.Write {
@@ -321,10 +265,11 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 	}
 	wa.wg.Add(1)
 	go func() {
-		_, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
+		oi, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
 			ContentType:          mimedb.TypeByExtension(path.Ext(object)),
 			DisableContentSha256: true,
 		})
+		stopFn(oi.Size, err)
 		pr.CloseWithError(err)
 		wa.wg.Done()
 	}()
@@ -333,7 +278,7 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 
 func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	clnt, err := f.getMinIOClient()
 	if err != nil {
@@ -342,7 +287,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 
 	switch r.Method {
 	case "Setstat", "Rename", "Link", "Symlink":
-		return NotImplemented{}
+		return sftp.ErrSSHFxOpUnsupported
 
 	case "Rmdir":
 		bucket, prefix := path2BucketObject(r.Filepath)
@@ -398,7 +343,7 @@ func (f *sftpDriver) Filecmd(r *sftp.Request) (err error) {
 		}
 
 		if prefix == "" {
-			return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region})
+			return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region()})
 		}
 
 		dirPath := buildMinioDir(prefix)
@@ -429,7 +374,7 @@ func (f listerAt) ListAt(ls []os.FileInfo, offset int64) (int, error) {
 
 func (f *sftpDriver) Filelist(r *sftp.Request) (la sftp.ListerAt, err error) {
 	stopFn := globalSftpMetrics.log(r, f.AccessKey())
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	clnt, err := f.getMinIOClient()
 	if err != nil {

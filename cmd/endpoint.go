@@ -36,8 +36,8 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mountinfo"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/exp/slices"
 )
 
@@ -252,6 +252,14 @@ type PoolEndpoints struct {
 
 // EndpointServerPools - list of list of endpoints
 type EndpointServerPools []PoolEndpoints
+
+// ESCount returns the total number of erasure sets in this cluster
+func (l EndpointServerPools) ESCount() (count int) {
+	for _, p := range l {
+		count += p.SetCount
+	}
+	return
+}
 
 // GetNodes returns a sorted list of nodes in this cluster
 func (l EndpointServerPools) GetNodes() (nodes []Node) {

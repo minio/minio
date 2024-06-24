@@ -33,7 +33,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/env"
 )
 
 const (
@@ -141,14 +141,14 @@ func initHealingTracker(disk StorageAPI, healID string) *healingTracker {
 	return h
 }
 
-func (h healingTracker) getLastUpdate() time.Time {
+func (h *healingTracker) getLastUpdate() time.Time {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	return h.LastUpdate
 }
 
-func (h healingTracker) getBucket() string {
+func (h *healingTracker) getBucket() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -162,7 +162,7 @@ func (h *healingTracker) setBucket(bucket string) {
 	h.Bucket = bucket
 }
 
-func (h healingTracker) getObject() string {
+func (h *healingTracker) getObject() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -452,10 +452,6 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	}
 
 	healingLogEvent(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
-
-	if len(tracker.QueuedBuckets) > 0 {
-		return fmt.Errorf("not all buckets were healed: %v", tracker.QueuedBuckets)
-	}
 
 	if serverDebugLog {
 		tracker.printTo(os.Stdout)

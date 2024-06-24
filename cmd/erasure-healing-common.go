@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"slices"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -253,6 +254,33 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error,
 	return onlineDisks, modTime, ""
 }
 
+// Convert verify or check parts returned error to integer representation
+func convPartErrToInt(err error) int {
+	err = unwrapAll(err)
+	switch err {
+	case nil:
+		return checkPartSuccess
+	case errFileNotFound, errFileVersionNotFound:
+		return checkPartFileNotFound
+	case errFileCorrupt:
+		return checkPartFileCorrupt
+	case errVolumeNotFound:
+		return checkPartVolumeNotFound
+	case errDiskNotFound:
+		return checkPartDiskNotFound
+	default:
+		return checkPartUnknown
+	}
+}
+
+func partNeedsHealing(partErrs []int) bool {
+	return slices.IndexFunc(partErrs, func(i int) bool { return i != checkPartSuccess && i != checkPartUnknown }) > -1
+}
+
+func hasPartErr(partErrs []int) bool {
+	return slices.IndexFunc(partErrs, func(i int) bool { return i != checkPartSuccess }) > -1
+}
+
 // disksWithAllParts - This function needs to be called with
 // []StorageAPI returned by listOnlineDisks. Returns,
 //
@@ -262,10 +290,19 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []FileInfo, errs []error,
 //     a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
 	errs []error, latestMeta FileInfo, bucket, object string,
-	scanMode madmin.HealScanMode) ([]StorageAPI, []error, time.Time,
-) {
-	availableDisks := make([]StorageAPI, len(onlineDisks))
-	dataErrs := make([]error, len(onlineDisks))
+	scanMode madmin.HealScanMode,
+) (availableDisks []StorageAPI, dataErrsByDisk map[int][]int, dataErrsByPart map[int][]int) {
+	availableDisks = make([]StorageAPI, len(onlineDisks))
+
+	dataErrsByDisk = make(map[int][]int, len(onlineDisks))
+	for i := range onlineDisks {
+		dataErrsByDisk[i] = make([]int, len(latestMeta.Parts))
+	}
+
+	dataErrsByPart = make(map[int][]int, len(latestMeta.Parts))
+	for i := range latestMeta.Parts {
+		dataErrsByPart[i] = make([]int, len(onlineDisks))
+	}
 
 	inconsistent := 0
 	for i, meta := range partsMetadata {
@@ -295,19 +332,21 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		erasureDistributionReliable = false
 	}
 
+	metaErrs := make([]error, len(errs))
+
 	for i, onlineDisk := range onlineDisks {
 		if errs[i] != nil {
-			dataErrs[i] = errs[i]
+			metaErrs[i] = errs[i]
 			continue
 		}
 		if onlineDisk == OfflineDisk {
-			dataErrs[i] = errDiskNotFound
+			metaErrs[i] = errDiskNotFound
 			continue
 		}
 
 		meta := partsMetadata[i]
 		if !meta.ModTime.Equal(latestMeta.ModTime) || meta.DataDir != latestMeta.DataDir {
-			dataErrs[i] = errFileCorrupt
+			metaErrs[i] = errFileCorrupt
 			partsMetadata[i] = FileInfo{}
 			continue
 		}
@@ -315,7 +354,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		if erasureDistributionReliable {
 			if !meta.IsValid() {
 				partsMetadata[i] = FileInfo{}
-				dataErrs[i] = errFileCorrupt
+				metaErrs[i] = errFileCorrupt
 				continue
 			}
 
@@ -325,29 +364,49 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 					// attempt a fix if possible, assuming other entries
 					// might have the right erasure distribution.
 					partsMetadata[i] = FileInfo{}
-					dataErrs[i] = errFileCorrupt
+					metaErrs[i] = errFileCorrupt
 					continue
 				}
 			}
+		}
+	}
+
+	// Copy meta errors to part errors
+	for i, err := range metaErrs {
+		if err != nil {
+			partErr := convPartErrToInt(err)
+			for p := range latestMeta.Parts {
+				dataErrsByPart[p][i] = partErr
+			}
+		}
+	}
+
+	for i, onlineDisk := range onlineDisks {
+		if metaErrs[i] != nil {
+			continue
+		}
+		meta := partsMetadata[i]
+
+		if meta.Deleted || meta.IsRemote() {
+			continue
 		}
 
 		// Always check data, if we got it.
 		if (len(meta.Data) > 0 || meta.Size == 0) && len(meta.Parts) > 0 {
 			checksumInfo := meta.Erasure.GetChecksumInfo(meta.Parts[0].Number)
-			dataErrs[i] = bitrotVerify(bytes.NewReader(meta.Data),
+			verifyErr := bitrotVerify(bytes.NewReader(meta.Data),
 				int64(len(meta.Data)),
 				meta.Erasure.ShardFileSize(meta.Size),
 				checksumInfo.Algorithm,
 				checksumInfo.Hash, meta.Erasure.ShardSize())
-			if dataErrs[i] == nil {
-				// All parts verified, mark it as all data available.
-				availableDisks[i] = onlineDisk
-			} else {
-				// upon errors just make that disk's fileinfo invalid
-				partsMetadata[i] = FileInfo{}
-			}
+			dataErrsByPart[0][i] = convPartErrToInt(verifyErr)
 			continue
 		}
+
+		var (
+			verifyErr  error
+			verifyResp *CheckPartsResp
+		)
 
 		meta.DataDir = latestMeta.DataDir
 		switch scanMode {
@@ -355,16 +414,29 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			// disk has a valid xl.meta but may not have all the
 			// parts. This is considered an outdated disk, since
 			// it needs healing too.
-			if !meta.Deleted && !meta.IsRemote() {
-				dataErrs[i] = onlineDisk.VerifyFile(ctx, bucket, object, meta)
-			}
-		case madmin.HealNormalScan:
-			if !meta.Deleted && !meta.IsRemote() {
-				dataErrs[i] = onlineDisk.CheckParts(ctx, bucket, object, meta)
-			}
+			verifyResp, verifyErr = onlineDisk.VerifyFile(ctx, bucket, object, meta)
+		default:
+			verifyResp, verifyErr = onlineDisk.CheckParts(ctx, bucket, object, meta)
 		}
 
-		if dataErrs[i] == nil {
+		for p := range latestMeta.Parts {
+			if verifyErr != nil {
+				dataErrsByPart[p][i] = convPartErrToInt(verifyErr)
+			} else {
+				dataErrsByPart[p][i] = verifyResp.Results[p]
+			}
+		}
+	}
+
+	// Build dataErrs by disk from dataErrs by part
+	for part, disks := range dataErrsByPart {
+		for disk := range disks {
+			dataErrsByDisk[disk][part] = dataErrsByPart[part][disk]
+		}
+	}
+
+	for i, onlineDisk := range onlineDisks {
+		if metaErrs[i] == nil && !hasPartErr(dataErrsByDisk[i]) {
 			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
 		} else {
@@ -373,5 +445,5 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		}
 	}
 
-	return availableDisks, dataErrs, timeSentinel
+	return
 }

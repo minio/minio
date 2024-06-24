@@ -3,8 +3,7 @@ name: MinIO advanced tests
 on:
   pull_request:
     branches:
-    - master
-    - next
+      - master
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -41,6 +40,12 @@ jobs:
           sudo sysctl net.ipv6.conf.all.disable_ipv6=0
           sudo sysctl net.ipv6.conf.default.disable_ipv6=0
           make test-ilm
+
+      - name: Test PBAC
+        run: |
+          sudo sysctl net.ipv6.conf.all.disable_ipv6=0
+          sudo sysctl net.ipv6.conf.default.disable_ipv6=0
+          make test-pbac
 
       - name: Test Config File
         run: |

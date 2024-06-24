@@ -61,7 +61,7 @@ const (
 
 // Wrapper for calling HeadObject API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIHeadObjectHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIHeadObjectHandler, []string{"HeadObject"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPIHeadObjectHandler, endpoints: []string{"HeadObject"}})
 }
 
 func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -207,7 +207,7 @@ func TestAPIHeadObjectHandlerWithEncryption(t *testing.T) {
 	defer func() { globalPolicySys = nil }()
 
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPIHeadObjectHandlerWithEncryption, []string{"NewMultipart", "PutObjectPart", "CompleteMultipart", "GetObject", "PutObject", "HeadObject"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPIHeadObjectHandlerWithEncryption, endpoints: []string{"NewMultipart", "PutObjectPart", "CompleteMultipart", "GetObject", "PutObject", "HeadObject"}})
 }
 
 func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -707,7 +707,13 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
 		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
 	}
-
+	// SSEC can't be used with compression
+	globalCompressConfigMu.Lock()
+	globalCompressEnabled := globalCompressConfig.Enabled
+	globalCompressConfigMu.Unlock()
+	if globalCompressEnabled {
+		objectInputs = objectInputs[0:8]
+	}
 	// iterate through the above set of inputs and upload the object.
 	for _, input := range objectInputs {
 		uploadTestObject(t, apiRouter, credentials, bucketName, input.objectName, input.partLengths, input.metaData, false)
@@ -896,6 +902,14 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 		{"enc-mp-1", []int64{5*oneMiB + 1, 1}, mapCopy(metaWithSSEC)},
 		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
 		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
+	}
+
+	// SSEC can't be used with compression
+	globalCompressConfigMu.Lock()
+	globalCompressEnabled := globalCompressConfig.Enabled
+	globalCompressConfigMu.Unlock()
+	if globalCompressEnabled {
+		objectInputs = objectInputs[0:9]
 	}
 
 	// iterate through the above set of inputs and upload the object.
@@ -2119,7 +2133,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 // Wrapper for calling Copy Object API handler tests for both Erasure multiple disks and single node setup.
 func TestAPICopyObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecExtendedObjectLayerAPITest(t, testAPICopyObjectHandler, []string{"CopyObject"})
+	ExecExtendedObjectLayerAPITest(t, testAPICopyObjectHandler, []string{"CopyObject", "PutObject"})
 }
 
 func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -2150,7 +2164,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		new(bytes.Buffer),
 		new(bytes.Buffer),
 	}
-
+	bucketInfo, err := obj.GetBucketInfo(context.Background(), bucketName, BucketOptions{})
+	if err != nil {
+		t.Fatalf("Test -1: %s: Failed to get bucket info: <ERROR> %s", instanceType, err)
+	}
 	// set of inputs for uploading the objects before tests for downloading is done.
 	putObjectInputs := []struct {
 		bucketName    string
@@ -2167,21 +2184,29 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// used for anonymous HTTP request test.
 		{bucketName, anonObject, int64(len(bytesData[0].byteData)), bytesData[0].byteData, bytesData[0].md5sum, make(map[string]string)},
 	}
-
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
-		// uploading the object.
-		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(context.Background(), input.bucketName, input.objectName, mustGetPutObjReader(t, bytes.NewReader(input.textData), input.contentLength, input.md5sum, ""), ObjectOptions{UserDefined: input.metaData})
-		// if object upload fails stop the test.
+		rec := httptest.NewRecorder()
+		req, err := newTestSignedRequestV4(http.MethodPut, getPutObjectURL("", input.bucketName, input.objectName),
+			input.contentLength, bytes.NewReader(input.textData), credentials.AccessKey, credentials.SecretKey, nil)
 		if err != nil {
-			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i, err)
 		}
-		if objInfo.ETag != input.md5sum {
-			t.Fatalf("Put Object case %d:  Checksum mismatched: <ERROR> got %s, expected %s", i+1, input.md5sum, objInfo.ETag)
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			b, err := io.ReadAll(rec.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var apiErr APIErrorResponse
+			err = xml.Unmarshal(b, &apiErr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotErr := apiErr.Code
+			t.Errorf("test %d: want api got %q", i, gotErr)
 		}
 	}
-
 	// test cases with inputs and expected result for Copy Object.
 	testCases := []struct {
 		bucketName           string
@@ -2434,6 +2459,22 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	}
 
 	for i, testCase := range testCases {
+		if bucketInfo.Versioning {
+			if strings.Contains(testCase.copySourceHeader, "versionId=null") {
+				testCase.expectedRespStatus = http.StatusNotFound
+			}
+		}
+		values := url.Values{}
+		if testCase.expectedRespStatus == http.StatusOK {
+			r, err := obj.GetObjectNInfo(context.Background(), testCase.bucketName, objectName, nil, nil, opts)
+			if err != nil {
+				t.Fatalf("Test %d: %s reading completed file failed: <ERROR> %v", i, instanceType, err)
+			}
+			r.Close()
+			if r.ObjInfo.VersionID != "" {
+				values.Set(xhttp.VersionID, r.ObjInfo.VersionID)
+			}
+		}
 		var req *http.Request
 		var reqV2 *http.Request
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
@@ -2446,7 +2487,11 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		}
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
-			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+			if values.Encode() != "" && !strings.Contains(testCase.copySourceHeader, "?") {
+				req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader+"?"+values.Encode())
+			} else {
+				req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+			}
 		}
 		if testCase.copyModifiedHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)
@@ -2552,10 +2597,10 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			if testCase.copySourceSame {
 				// encryption will rotate creds, so fail only for non-encryption scenario.
 				if GlobalKMS == nil {
-					t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, rec.Code)
+					t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i, instanceType, testCase.expectedRespStatus, recV2.Code)
 				}
 			} else {
-				t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+				t.Errorf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 			}
 		}
 	}
@@ -2588,7 +2633,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"NewMultipart"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPINewMultipartHandler, endpoints: []string{"NewMultipart"}})
 }
 
 func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -2727,7 +2772,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandlerParallel(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"NewMultipart"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPINewMultipartHandlerParallel, endpoints: []string{"NewMultipart"}})
 }
 
 func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -2790,7 +2835,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPICompleteMultipartHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPICompleteMultipartHandler, []string{"CompleteMultipart"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPICompleteMultipartHandler, endpoints: []string{"CompleteMultipart"}})
 }
 
 func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -2914,7 +2959,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	s3MD5 := getCompleteMultipartMD5(inputParts[3].parts)
 
 	// generating the response body content for the success case.
-	successResponse := generateCompleteMultpartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), ObjectInfo{ETag: s3MD5})
+	successResponse := generateCompleteMultipartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), ObjectInfo{ETag: s3MD5}, nil)
 	encodedSuccessResponse := encodeResponse(successResponse)
 
 	ctx := context.Background()
@@ -3159,7 +3204,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPIAbortMultipartHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPIAbortMultipartHandler, []string{"AbortMultipart"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPIAbortMultipartHandler, endpoints: []string{"AbortMultipart"}})
 }
 
 func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -3319,7 +3364,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 // Wrapper for calling Delete Object API handler tests for both Erasure multiple disks and FS single drive setup.
 func TestAPIDeleteObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPIDeleteObjectHandler, []string{"DeleteObject"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPIDeleteObjectHandler, endpoints: []string{"DeleteObject"}})
 }
 
 func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -3881,8 +3926,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 //	when signature type of the HTTP request is `Presigned`.
 func TestAPIListObjectPartsHandlerPreSign(t *testing.T) {
 	defer DetectTestLeak(t)()
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerPreSign,
-		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testAPIListObjectPartsHandlerPreSign, endpoints: []string{"PutObjectPart", "NewMultipart", "ListObjectParts"}})
 }
 
 func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,

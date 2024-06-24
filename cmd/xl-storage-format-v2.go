@@ -250,7 +250,7 @@ type xlMetaV2VersionHeader struct {
 	Signature [4]byte
 	Type      VersionType
 	Flags     xlFlags
-	EcM, EcN  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
+	EcN, EcM  uint8 // Note that these will be 0/0 for non-v2 objects and older xl.meta
 }
 
 func (x xlMetaV2VersionHeader) String() string {
@@ -368,8 +368,8 @@ func (j *xlMetaV2Version) header() xlMetaV2VersionHeader {
 		Signature: j.getSignature(),
 		Type:      j.Type,
 		Flags:     flags,
-		EcN:       ecM,
-		EcM:       ecN,
+		EcN:       ecN,
+		EcM:       ecM,
 	}
 }
 

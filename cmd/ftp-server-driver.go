@@ -34,7 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio/internal/auth"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/mimedb"
+	"github.com/minio/pkg/v3/mimedb"
 	ftp "goftp.io/server/v2"
 )
 
@@ -105,7 +105,7 @@ type ftpMetrics struct{}
 
 var globalFtpMetrics ftpMetrics
 
-func ftpTrace(s *ftp.Context, startTime time.Time, source, objPath string, err error) madmin.TraceInfo {
+func ftpTrace(s *ftp.Context, startTime time.Time, source, objPath string, err error, sz int64) madmin.TraceInfo {
 	var errStr string
 	if err != nil {
 		errStr = err.Error()
@@ -114,25 +114,33 @@ func ftpTrace(s *ftp.Context, startTime time.Time, source, objPath string, err e
 		TraceType: madmin.TraceFTP,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  fmt.Sprintf("ftp USER=%s COMMAND=%s PARAM=%s ISLOGIN=%t, Source=%s", s.Sess.LoginUser(), s.Cmd, s.Param, s.Sess.IsLogin(), source),
+		FuncName:  fmt.Sprintf(s.Cmd),
 		Duration:  time.Since(startTime),
 		Path:      objPath,
 		Error:     errStr,
+		Bytes:     sz,
+		Custom: map[string]string{
+			"user":   s.Sess.LoginUser(),
+			"cmd":    s.Cmd,
+			"param":  s.Param,
+			"login":  fmt.Sprintf("%t", s.Sess.IsLogin()),
+			"source": source,
+		},
 	}
 }
 
-func (m *ftpMetrics) log(s *ftp.Context, paths ...string) func(err error) {
+func (m *ftpMetrics) log(s *ftp.Context, paths ...string) func(sz int64, err error) {
 	startTime := time.Now()
 	source := getSource(2)
-	return func(err error) {
-		globalTrace.Publish(ftpTrace(s, startTime, source, strings.Join(paths, " "), err))
+	return func(sz int64, err error) {
+		globalTrace.Publish(ftpTrace(s, startTime, source, strings.Join(paths, " "), err, sz))
 	}
 }
 
 // Stat implements ftpDriver
 func (driver *ftpDriver) Stat(ctx *ftp.Context, objPath string) (fi os.FileInfo, err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	if objPath == SlashSeparator {
 		return &minioFileInfo{
@@ -190,7 +198,7 @@ func (driver *ftpDriver) Stat(ctx *ftp.Context, objPath string) (fi os.FileInfo,
 // ListDir implements ftpDriver
 func (driver *ftpDriver) ListDir(ctx *ftp.Context, objPath string, callback func(os.FileInfo) error) (err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	clnt, err := driver.getMinIOClient(ctx)
 	if err != nil {
@@ -252,7 +260,7 @@ func (driver *ftpDriver) ListDir(ctx *ftp.Context, objPath string, callback func
 
 func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) (ok bool, err error) {
 	stopFn := globalFtpMetrics.log(c, username)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	ui, ok := globalIAMSys.GetUser(context.Background(), username)
 	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
@@ -263,11 +271,11 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 			return false, err
 		}
 		if errors.Is(err, errNoSuchServiceAccount) {
-			ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(username, password)
+			lookupRes, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(username, password)
 			if err != nil {
 				return false, err
 			}
-			ldapPolicies, _ := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
+			ldapPolicies, _ := globalIAMSys.PolicyDBGet(lookupRes.NormDN, groupDistNames...)
 			return len(ldapPolicies) > 0, nil
 		}
 	}
@@ -288,11 +296,11 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 
 		var mcreds *credentials.Credentials
 		if errors.Is(err, errNoSuchServiceAccount) {
-			targetUser, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
+			lookupResult, targetGroups, err := globalIAMSys.LDAPConfig.LookupUserDN(ctx.Sess.LoginUser())
 			if err != nil {
 				return nil, err
 			}
-			ldapPolicies, _ := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
+			ldapPolicies, _ := globalIAMSys.PolicyDBGet(lookupResult.NormDN, targetGroups...)
 			if len(ldapPolicies) == 0 {
 				return nil, errAuthentication
 			}
@@ -302,8 +310,15 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 			}
 			claims := make(map[string]interface{})
 			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
-			claims[ldapUser] = targetUser
+
+			claims[ldapUser] = lookupResult.NormDN
+			claims[ldapActualUser] = lookupResult.ActualDN
 			claims[ldapUserN] = ctx.Sess.LoginUser()
+
+			// Add LDAP attributes that were looked up into the claims.
+			for attribKey, attribValue := range lookupResult.Attributes {
+				claims[ldapAttribPrefix+attribKey] = attribValue
+			}
 
 			cred, err := auth.GetNewCredentialsWithMetadata(claims, globalActiveCred.SecretKey)
 			if err != nil {
@@ -312,7 +327,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 
 			// Set the parent of the temporary access key, this is useful
 			// in obtaining service accounts by this cred.
-			cred.ParentUser = targetUser
+			cred.ParentUser = lookupResult.NormDN
 
 			// Set this value to LDAP groups, LDAP user can be part
 			// of large number of groups
@@ -367,7 +382,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 // DeleteDir implements ftpDriver
 func (driver *ftpDriver) DeleteDir(ctx *ftp.Context, objPath string) (err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	bucket, prefix := path2BucketObject(objPath)
 	if bucket == "" {
@@ -417,7 +432,7 @@ func (driver *ftpDriver) DeleteDir(ctx *ftp.Context, objPath string) (err error)
 // DeleteFile implements ftpDriver
 func (driver *ftpDriver) DeleteFile(ctx *ftp.Context, objPath string) (err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	bucket, object := path2BucketObject(objPath)
 	if bucket == "" {
@@ -435,7 +450,7 @@ func (driver *ftpDriver) DeleteFile(ctx *ftp.Context, objPath string) (err error
 // Rename implements ftpDriver
 func (driver *ftpDriver) Rename(ctx *ftp.Context, fromObjPath string, toObjPath string) (err error) {
 	stopFn := globalFtpMetrics.log(ctx, fromObjPath, toObjPath)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	return NotImplemented{}
 }
@@ -443,7 +458,7 @@ func (driver *ftpDriver) Rename(ctx *ftp.Context, fromObjPath string, toObjPath 
 // MakeDir implements ftpDriver
 func (driver *ftpDriver) MakeDir(ctx *ftp.Context, objPath string) (err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(0, err)
 
 	bucket, prefix := path2BucketObject(objPath)
 	if bucket == "" {
@@ -456,7 +471,7 @@ func (driver *ftpDriver) MakeDir(ctx *ftp.Context, objPath string) (err error) {
 	}
 
 	if prefix == "" {
-		return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region})
+		return clnt.MakeBucket(context.Background(), bucket, minio.MakeBucketOptions{Region: globalSite.Region()})
 	}
 
 	dirPath := buildMinioDir(prefix)
@@ -470,7 +485,7 @@ func (driver *ftpDriver) MakeDir(ctx *ftp.Context, objPath string) (err error) {
 // GetFile implements ftpDriver
 func (driver *ftpDriver) GetFile(ctx *ftp.Context, objPath string, offset int64) (n int64, rc io.ReadCloser, err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(n, err)
 
 	bucket, object := path2BucketObject(objPath)
 	if bucket == "" {
@@ -502,14 +517,14 @@ func (driver *ftpDriver) GetFile(ctx *ftp.Context, objPath string, offset int64)
 	if err != nil {
 		return 0, nil, err
 	}
-
-	return info.Size - offset, obj, nil
+	n = info.Size - offset
+	return n, obj, nil
 }
 
 // PutFile implements ftpDriver
 func (driver *ftpDriver) PutFile(ctx *ftp.Context, objPath string, data io.Reader, offset int64) (n int64, err error) {
 	stopFn := globalFtpMetrics.log(ctx, objPath)
-	defer stopFn(err)
+	defer stopFn(n, err)
 
 	bucket, object := path2BucketObject(objPath)
 	if bucket == "" {
@@ -530,5 +545,6 @@ func (driver *ftpDriver) PutFile(ctx *ftp.Context, objPath string, data io.Reade
 		ContentType:          mimedb.TypeByExtension(path.Ext(object)),
 		DisableContentSha256: true,
 	})
-	return info.Size, err
+	n = info.Size
+	return n, err
 }

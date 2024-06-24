@@ -46,8 +46,6 @@ minio server -S /tmp/no-certs --address ":9001" "http://localhost:9001/tmp/multi
 minio server -S /tmp/no-certs --address ":9002" "http://localhost:9001/tmp/multisitea/data/disterasure/xl{1...4}" \
 	"http://localhost:9002/tmp/multisitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
 
-sleep 5
-
 export MC_HOST_sitea=http://minioadmin:minioadmin@localhost:9002
 
 ./mc ready sitea

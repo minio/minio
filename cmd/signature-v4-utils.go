@@ -30,7 +30,7 @@ import (
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 	"golang.org/x/exp/slices"
 )
 
@@ -152,11 +152,14 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 			// Check if server has initialized, then only proceed
 			// to check for IAM users otherwise its okay for clients
 			// to retry with 503 errors when server is coming up.
-			return auth.Credentials{}, false, ErrServerNotInitialized
+			return auth.Credentials{}, false, ErrIAMNotInitialized
 		}
 
 		// Check if the access key is part of users credentials.
-		u, ok := globalIAMSys.GetUser(r.Context(), accessKey)
+		u, ok, err := globalIAMSys.CheckKey(r.Context(), accessKey)
+		if err != nil {
+			return auth.Credentials{}, false, ErrIAMNotInitialized
+		}
 		if !ok {
 			// Credentials could be valid but disabled - return a different
 			// error in such a scenario.

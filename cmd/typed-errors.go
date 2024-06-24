@@ -129,3 +129,6 @@ var errSftpPublicKeyWithoutCert = errors.New("public key authentication without 
 
 // error returned in SFTP when user used certificate which does not contain principal(s)
 var errSftpCertWithoutPrincipals = errors.New("certificates without principal(s) are not accepted")
+
+// error returned when group name contains reserved characters
+var errGroupNameContainsReservedChars = errors.New("Group name contains reserved characters '=' or ','")

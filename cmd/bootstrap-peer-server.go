@@ -19,9 +19,13 @@ package cmd
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -30,7 +34,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/env"
 )
 
 // To abstract a node over network.
@@ -43,10 +47,15 @@ type ServerSystemConfig struct {
 	NEndpoints int
 	CmdLines   []string
 	MinioEnv   map[string]string
+	Checksum   string
 }
 
 // Diff - returns error on first difference found in two configs.
 func (s1 *ServerSystemConfig) Diff(s2 *ServerSystemConfig) error {
+	if s1.Checksum != s2.Checksum {
+		return fmt.Errorf("Expected MinIO binary checksum: %s, seen: %s", s1.Checksum, s2.Checksum)
+	}
+
 	ns1 := s1.NEndpoints
 	ns2 := s2.NEndpoints
 	if ns1 != ns2 {
@@ -82,7 +91,7 @@ func (s1 *ServerSystemConfig) Diff(s2 *ServerSystemConfig) error {
 			extra = append(extra, k)
 		}
 	}
-	msg := "Expected same MINIO_ environment variables and values across all servers: "
+	msg := "Expected MINIO_* environment name and values across all servers to be same: "
 	if len(missing) > 0 {
 		msg += fmt.Sprintf(`Missing environment values: %v. `, missing)
 	}
@@ -120,7 +129,7 @@ func getServerSystemCfg() *ServerSystemConfig {
 		}
 		envValues[envK] = logger.HashString(env.Get(envK, ""))
 	}
-	scfg := &ServerSystemConfig{NEndpoints: globalEndpoints.NEndpoints(), MinioEnv: envValues}
+	scfg := &ServerSystemConfig{NEndpoints: globalEndpoints.NEndpoints(), MinioEnv: envValues, Checksum: binaryChecksum}
 	var cmdLines []string
 	for _, ep := range globalEndpoints {
 		cmdLines = append(cmdLines, ep.CmdLine)
@@ -167,6 +176,18 @@ func (client *bootstrapRESTClient) String() string {
 	return client.gridConn.String()
 }
 
+var binaryChecksum = getBinaryChecksum()
+
+func getBinaryChecksum() string {
+	mw := md5.New()
+	b, err := os.Open(os.Args[0])
+	if err == nil {
+		defer b.Close()
+		io.Copy(mw, b)
+	}
+	return hex.EncodeToString(mw.Sum(nil))
+}
+
 func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointServerPools, gm *grid.Manager) error {
 	srcCfg := getServerSystemCfg()
 	clnts := newBootstrapRESTClients(endpointServerPools, gm)
@@ -196,7 +217,7 @@ func verifyServerSystemConfig(ctx context.Context, endpointServerPools EndpointS
 				err := clnt.Verify(ctx, srcCfg)
 				mu.Lock()
 				if err != nil {
-					bootstrapTraceMsg(fmt.Sprintf("clnt.Verify: %v, endpoint: %s", err, clnt))
+					bootstrapTraceMsg(fmt.Sprintf("bootstrapVerify: %v, endpoint: %s", err, clnt))
 					if !isNetworkError(err) {
 						bootLogOnceIf(context.Background(), fmt.Errorf("%s has incorrect configuration: %w", clnt, err), "incorrect_"+clnt.String())
 						incorrectConfigs = append(incorrectConfigs, fmt.Errorf("%s has incorrect configuration: %w", clnt, err))

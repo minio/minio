@@ -20,6 +20,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -27,7 +28,8 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
+	xldap "github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/policy"
 )
 
 // ListLDAPPolicyMappingEntities lists users/groups mapped to given/all policies.
@@ -236,12 +238,12 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 		targetGroups = requestorGroups
 
 		// Deny if the target user is not LDAP
-		foundLDAPDN, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(targetUser)
+		foundResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(targetUser)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
-		if foundLDAPDN == "" {
+		if foundResult == nil {
 			err := errors.New("Specified user does not exist on LDAP server")
 			APIErr := errorCodes.ToAPIErrWithErr(ErrAdminNoSuchUser, err)
 			writeErrorResponseJSON(ctx, w, APIErr, r.URL)
@@ -264,7 +266,8 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 
 		isDN := globalIAMSys.LDAPConfig.ParsesAsDN(targetUser)
 		opts.claims[ldapUserN] = targetUser // simple username
-		targetUser, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
+		var lookupResult *xldap.DNSearchResult
+		lookupResult, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(targetUser)
 		if err != nil {
 			// if not found, check if DN
 			if strings.Contains(err.Error(), "User DN not found for:") {
@@ -278,7 +281,26 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
 		}
+		targetUser = lookupResult.NormDN
 		opts.claims[ldapUser] = targetUser // DN
+		opts.claims[ldapActualUser] = lookupResult.ActualDN
+
+		// Check if this user or their groups have a policy applied.
+		ldapPolicies, err := globalIAMSys.PolicyDBGet(targetUser, targetGroups...)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		if len(ldapPolicies) == 0 {
+			err = fmt.Errorf("No policy set for user `%s` or any of their groups: `%s`", opts.claims[ldapActualUser], strings.Join(targetGroups, "`,`"))
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrAdminNoSuchUser, err), r.URL)
+			return
+		}
+
+		// Add LDAP attributes that were looked up into the claims.
+		for attribKey, attribValue := range lookupResult.Attributes {
+			opts.claims[ldapAttribPrefix+attribKey] = attribValue
+		}
 	}
 
 	newCred, updatedAt, err := globalIAMSys.NewServiceAccount(ctx, targetUser, targetGroups, opts)
@@ -385,15 +407,16 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	targetAccount, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
+	dnResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	if targetAccount == "" {
+	if dnResult == nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errNoSuchUser), r.URL)
 		return
 	}
+	targetAccount := dnResult.NormDN
 
 	listType := r.Form.Get("listType")
 	if listType != "sts-only" && listType != "svcacc-only" && listType != "" {

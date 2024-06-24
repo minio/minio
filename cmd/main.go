@@ -32,10 +32,10 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	"github.com/minio/pkg/v2/trie"
-	"github.com/minio/pkg/v2/words"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	"github.com/minio/pkg/v3/trie"
+	"github.com/minio/pkg/v3/words"
 )
 
 // GlobalFlags - global flags for minio.
@@ -189,12 +189,14 @@ func printMinIOVersion(c *cli.Context) {
 	io.Copy(c.App.Writer, versionBanner(c))
 }
 
+var debugNoExit = env.Get("_MINIO_DEBUG_NO_EXIT", "") != ""
+
 // Main main for minio server.
 func Main(args []string) {
 	// Set the minio app name.
 	appName := filepath.Base(args[0])
 
-	if env.Get("_MINIO_DEBUG_NO_EXIT", "") != "" {
+	if debugNoExit {
 		freeze := func(_ int) {
 			// Infinite blocking op
 			<-make(chan struct{})

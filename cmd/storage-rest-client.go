@@ -38,9 +38,10 @@ import (
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/rest"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 	xbufio "github.com/philhofer/fwd"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -391,6 +392,9 @@ func (client *storageRESTClient) CreateFile(ctx context.Context, origvolume, vol
 }
 
 func (client *storageRESTClient) WriteMetadata(ctx context.Context, origvolume, volume, path string, fi FileInfo) error {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err := storageWriteMetadataRPC.Call(ctx, client.gridConn, &MetadataHandlerParams{
 		DiskID:     *client.diskID.Load(),
 		OrigVolume: origvolume,
@@ -402,6 +406,9 @@ func (client *storageRESTClient) WriteMetadata(ctx context.Context, origvolume, 
 }
 
 func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, path string, fi FileInfo, opts UpdateMetadataOpts) error {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err := storageUpdateMetadataRPC.Call(ctx, client.gridConn, &MetadataHandlerParams{
 		DiskID:     *client.diskID.Load(),
 		Volume:     volume,
@@ -413,6 +420,9 @@ func (client *storageRESTClient) UpdateMetadata(ctx context.Context, volume, pat
 }
 
 func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path string, fi FileInfo, forceDelMarker bool, opts DeleteOptions) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err = storageDeleteVersionRPC.Call(ctx, client.gridConn, &DeleteVersionHandlerParams{
 		DiskID:         *client.diskID.Load(),
 		Volume:         volume,
@@ -426,6 +436,9 @@ func (client *storageRESTClient) DeleteVersion(ctx context.Context, volume, path
 
 // WriteAll - write all data to a file.
 func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, path string, b []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err := storageWriteAllRPC.Call(ctx, client.gridConn, &WriteAllHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
@@ -436,14 +449,18 @@ func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, pa
 }
 
 // CheckParts - stat all file parts.
-func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) error {
-	_, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
+func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
+	var resp *CheckPartsResp
+	resp, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
 		FilePath: path,
 		FI:       fi,
 	})
-	return toStorageErr(err)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
@@ -497,16 +514,20 @@ func readMsgpReaderPoolPut(r *msgp.Reader) {
 }
 
 func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, volume, path, versionID string, opts ReadOptions) (fi FileInfo, err error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	// Use websocket when not reading data.
 	if !opts.ReadData {
 		resp, err := storageReadVersionRPC.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
-			storageRESTDiskID:     *client.diskID.Load(),
-			storageRESTOrigVolume: origvolume,
-			storageRESTVolume:     volume,
-			storageRESTFilePath:   path,
-			storageRESTVersionID:  versionID,
-			storageRESTReadData:   strconv.FormatBool(opts.ReadData),
-			storageRESTHealing:    strconv.FormatBool(opts.Healing),
+			storageRESTDiskID:           *client.diskID.Load(),
+			storageRESTOrigVolume:       origvolume,
+			storageRESTVolume:           volume,
+			storageRESTFilePath:         path,
+			storageRESTVersionID:        versionID,
+			storageRESTInclFreeVersions: strconv.FormatBool(opts.InclFreeVersions),
+			storageRESTReadData:         strconv.FormatBool(opts.ReadData),
+			storageRESTHealing:          strconv.FormatBool(opts.Healing),
 		}))
 		if err != nil {
 			return fi, toStorageErr(err)
@@ -519,6 +540,7 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, vo
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
+	values.Set(storageRESTInclFreeVersions, strconv.FormatBool(opts.InclFreeVersions))
 	values.Set(storageRESTReadData, strconv.FormatBool(opts.ReadData))
 	values.Set(storageRESTHealing, strconv.FormatBool(opts.Healing))
 
@@ -537,6 +559,9 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, vo
 
 // ReadXL - reads all contents of xl.meta of a file.
 func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path string, readData bool) (rf RawFileInfo, err error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	// Use websocket when not reading data.
 	if !readData {
 		resp, err := storageReadXLRPC.Call(ctx, client.gridConn, grid.NewMSSWith(map[string]string{
@@ -570,6 +595,9 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 
 // ReadAll - reads all contents of a file.
 func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, path string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	gridBytes, err := storageReadAllRPC.Call(ctx, client.gridConn, &ReadAllHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
@@ -641,6 +669,13 @@ func (client *storageRESTClient) ListDir(ctx context.Context, origvolume, volume
 
 // DeleteFile - deletes a file.
 func (client *storageRESTClient) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) error {
+	if !deleteOpts.Immediate {
+		// add deadlines for all non-immediate purges
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+		defer cancel()
+	}
+
 	_, err := storageDeleteFileRPC.Call(ctx, client.gridConn, &DeleteFileHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
@@ -706,6 +741,9 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 
 // RenameFile - renames a file.
 func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
 	_, err = storageRenameFileRPC.Call(ctx, client.gridConn, &RenameFileHandlerParams{
 		DiskID:      *client.diskID.Load(),
 		SrcVolume:   srcVolume,
@@ -716,33 +754,33 @@ func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcP
 	return toStorageErr(err)
 }
 
-func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
+func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (*CheckPartsResp, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
 
 	var reader bytes.Buffer
 	if err := msgp.Encode(&reader, &fi); err != nil {
-		return err
+		return nil, err
 	}
 
 	respBody, err := client.call(ctx, storageRESTMethodVerifyFile, values, &reader, -1)
 	defer xhttp.DrainBody(respBody)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	respReader, err := waitForHTTPResponse(respBody)
 	if err != nil {
-		return toStorageErr(err)
+		return nil, toStorageErr(err)
 	}
 
-	verifyResp := &VerifyFileResp{}
+	verifyResp := &CheckPartsResp{}
 	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
-		return toStorageErr(err)
+		return nil, toStorageErr(err)
 	}
 
-	return toStorageErr(verifyResp.Err)
+	return verifyResp, nil
 }
 
 func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
@@ -761,6 +799,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 	}
 	rd := msgpNewReader(respReader)
 	defer readMsgpReaderPoolPut(rd)
+
 	for {
 		var st StatInfo
 		err = st.DecodeMsg(rd)
@@ -770,6 +809,7 @@ func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path 
 			}
 			break
 		}
+
 		stat = append(stat, st)
 	}
 
@@ -794,7 +834,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 
 	pr, pw := io.Pipe()
 	go func() {
-		pw.CloseWithError(waitForHTTPStream(respBody, pw))
+		pw.CloseWithError(waitForHTTPStream(respBody, ioutil.NewDeadlineWriter(pw, globalDriveConfig.GetMaxTimeout())))
 	}()
 	mr := msgp.NewReader(pr)
 	defer readMsgpReaderPoolPut(mr)
@@ -847,7 +887,6 @@ func newStorageRESTClient(endpoint Endpoint, healthCheck bool, gm *grid.Manager)
 	}
 
 	restClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())
-
 	if healthCheck {
 		// Use a separate client to avoid recursive calls.
 		healthClient := rest.NewClient(serverURL, globalInternodeTransport, newCachedAuthToken())

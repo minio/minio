@@ -37,6 +37,12 @@ func niceError(code APIErrorCode) string {
 }
 
 func TestDoesPolicySignatureMatch(t *testing.T) {
+	_, fsDir, err := prepareFS(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeRoots([]string{fsDir})
+
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 	now := UTCNow()
 	accessKey := globalActiveCred.AccessKey
@@ -111,7 +117,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 	now := UTCNow()
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 
-	region := globalSite.Region
+	region := globalSite.Region()
 	accessKeyID := globalActiveCred.AccessKey
 	testCases := []struct {
 		queryParams map[string]string

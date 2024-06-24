@@ -50,10 +50,11 @@ if [ ! -f ./mc ]; then
 	echo "done"
 fi
 
-sleep 10
-
 export MC_HOST_minio1=https://minio:minio123@localhost:9001
 export MC_HOST_minio2=https://minio:minio123@localhost:9002
+
+./mc ready minio1 --insecure
+./mc ready minio2 --insecure
 
 # Prepare data for tests
 echo -n "Preparing test data ..."
@@ -68,7 +69,7 @@ echo "done"
 
 # Enable compression for site minio1
 ./mc admin config set minio1 compression enable=on extensions=".txt" --insecure
-./mc admin config set minio1 compression allow_encryption=on --insecure
+./mc admin config set minio1 compression allow_encryption=off --insecure
 
 # Create bucket in source cluster
 echo "Create bucket in source MinIO instance"
@@ -81,11 +82,12 @@ echo "Loading objects to source MinIO instance"
 ./mc cp /tmp/data/defpartsize minio1/test-bucket/defpartsize --enc-c "minio1/test-bucket/defpartsize=${TEST_MINIO_ENC_KEY}" --insecure
 
 # Below should fail as compression and SSEC used at the same time
-RESULT=$({ ./mc put /tmp/data/mpartobj.txt minio1/test-bucket/mpartobj.txt --enc-c "minio1/test-bucket/mpartobj.txt=${TEST_MINIO_ENC_KEY}" --insecure; } 2>&1)
-if [[ ${RESULT} != *"Server side encryption specified with SSE-C with compression not allowed"* ]]; then
-	echo "BUG: Loading an SSE-C object to site with compression should fail. Succeeded though."
-	exit_1
-fi
+# DISABLED: We must check the response header to see if compression was actually applied
+#RESULT=$({ ./mc put /tmp/data/mpartobj.txt minio1/test-bucket/mpartobj.txt --enc-c "minio1/test-bucket/mpartobj.txt=${TEST_MINIO_ENC_KEY}" --insecure; } 2>&1)
+#if [[ ${RESULT} != *"Server side encryption specified with SSE-C with compression not allowed"* ]]; then
+#	echo "BUG: Loading an SSE-C object to site with compression should fail. Succeeded though."
+#	exit_1
+#fi
 
 # Add replication site
 ./mc admin replicate add minio1 minio2 --insecure

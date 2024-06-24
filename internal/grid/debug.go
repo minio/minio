@@ -50,6 +50,7 @@ const (
 	debugSetClientPingDuration
 	debugAddToDeadline
 	debugIsOutgoingClosed
+	debugBlockInboundMessages
 )
 
 // TestGrid contains a grid of servers for testing purposes.

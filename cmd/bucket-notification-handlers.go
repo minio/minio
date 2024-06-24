@@ -26,7 +26,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 const (
@@ -66,8 +66,9 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	config.SetRegion(globalSite.Region)
-	if err = config.Validate(globalSite.Region, globalEventNotifier.targetList); err != nil {
+	region := globalSite.Region()
+	config.SetRegion(region)
+	if err = config.Validate(region, globalEventNotifier.targetList); err != nil {
 		arnErr, ok := err.(*event.ErrARNNotFound)
 		if ok {
 			for i, queue := range config.QueueList {
@@ -134,7 +135,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	config, err := event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalSite.Region, globalEventNotifier.targetList)
+	config, err := event.ParseConfig(io.LimitReader(r.Body, r.ContentLength), globalSite.Region(), globalEventNotifier.targetList)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		if event.IsEventError(err) {

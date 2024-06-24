@@ -32,6 +32,7 @@ fi
 set +e
 
 export MC_HOST_minioadm=http://minioadmin:minioadmin@localhost:9100/
+./mc ready minioadm
 
 ./mc ls minioadm/
 
@@ -56,7 +57,7 @@ done
 
 set +e
 
-sleep 10
+./mc ready minioadm/
 
 ./mc ls minioadm/
 if [ $? -ne 0 ]; then
@@ -81,10 +82,11 @@ minio server --address 127.0.0.1:9003 "http://127.0.0.1:9003/tmp/multisiteb/data
 minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
 	"http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
 
-sleep 20s
-
 export MC_HOST_sitea=http://minioadmin:minioadmin@127.0.0.1:9001
 export MC_HOST_siteb=http://minioadmin:minioadmin@127.0.0.1:9004
+
+./mc ready sitea
+./mc ready siteb
 
 ./mc admin replicate add sitea siteb
 
@@ -109,10 +111,11 @@ minio server --address 127.0.0.1:9003 "http://127.0.0.1:9003/tmp/multisiteb/data
 minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/multisiteb/data/disterasure/xl{1...4}" \
 	"http://127.0.0.1:9004/tmp/multisiteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
 
-sleep 20s
-
 export MC_HOST_sitea=http://foobar:foo12345@127.0.0.1:9001
 export MC_HOST_siteb=http://foobar:foo12345@127.0.0.1:9004
+
+./mc ready sitea
+./mc ready siteb
 
 ./mc admin user add sitea foobar-admin foo12345
 

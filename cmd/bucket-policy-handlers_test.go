@@ -29,8 +29,8 @@ import (
 	"testing"
 
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/pkg/v2/policy"
-	"github.com/minio/pkg/v2/policy/condition"
+	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/policy/condition"
 )
 
 func getAnonReadOnlyBucketPolicy(bucketName string) *policy.BucketPolicy {
@@ -107,7 +107,7 @@ func getAnonWriteOnlyObjectPolicy(bucketName, prefix string) *policy.BucketPolic
 
 // Wrapper for calling Create Bucket and ensure we get one and only one success.
 func TestCreateBucket(t *testing.T) {
-	ExecObjectLayerAPITest(t, testCreateBucket, []string{"MakeBucket"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testCreateBucket, endpoints: []string{"MakeBucket"}})
 }
 
 // testCreateBucket - Test for calling Create Bucket and ensure we get one and only one success.
@@ -154,7 +154,7 @@ func testCreateBucket(obj ObjectLayer, instanceType, bucketName string, apiRoute
 
 // Wrapper for calling Put Bucket Policy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestPutBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testPutBucketPolicyHandler, []string{"PutBucketPolicy"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testPutBucketPolicyHandler, endpoints: []string{"PutBucketPolicy"}})
 }
 
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
@@ -373,7 +373,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 
 // Wrapper for calling Get Bucket Policy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestGetBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testGetBucketPolicyHandler, []string{"PutBucketPolicy", "GetBucketPolicy"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testGetBucketPolicyHandler, endpoints: []string{"PutBucketPolicy", "GetBucketPolicy"}})
 }
 
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
@@ -577,7 +577,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 
 // Wrapper for calling Delete Bucket Policy HTTP handler tests for both Erasure multiple disks and single node setup.
 func TestDeleteBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testDeleteBucketPolicyHandler, []string{"PutBucketPolicy", "DeleteBucketPolicy"})
+	ExecObjectLayerAPITest(ExecObjectLayerAPITestArgs{t: t, objAPITest: testDeleteBucketPolicyHandler, endpoints: []string{"PutBucketPolicy", "DeleteBucketPolicy"}})
 }
 
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.

@@ -215,9 +215,9 @@ func (d *naughtyDisk) RenameFile(ctx context.Context, srcVolume, srcPath, dstVol
 	return d.disk.RenameFile(ctx, srcVolume, srcPath, dstVolume, dstPath)
 }
 
-func (d *naughtyDisk) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (err error) {
+func (d *naughtyDisk) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
 	if err := d.calcError(); err != nil {
-		return err
+		return nil, err
 	}
 	return d.disk.CheckParts(ctx, volume, path, fi)
 }
@@ -289,9 +289,9 @@ func (d *naughtyDisk) ReadXL(ctx context.Context, volume string, path string, re
 	return d.disk.ReadXL(ctx, volume, path, readData)
 }
 
-func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) error {
+func (d *naughtyDisk) VerifyFile(ctx context.Context, volume, path string, fi FileInfo) (*CheckPartsResp, error) {
 	if err := d.calcError(); err != nil {
-		return err
+		return nil, err
 	}
 	return d.disk.VerifyFile(ctx, volume, path, fi)
 }

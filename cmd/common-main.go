@@ -55,10 +55,10 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/console"
-	"github.com/minio/pkg/v2/env"
-	xnet "github.com/minio/pkg/v2/net"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/term"
 )
 
@@ -176,7 +176,10 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_STS_DURATION", valueSession)
 	}
 
-	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region)
+	os.Setenv("CONSOLE_MINIO_SITE_NAME", globalSite.Name())
+	os.Setenv("CONSOLE_MINIO_SITE_REGION", globalSite.Region())
+	os.Setenv("CONSOLE_MINIO_REGION", globalSite.Region())
+
 	os.Setenv("CONSOLE_CERT_PASSWD", env.Get("MINIO_CERT_PASSWD", ""))
 
 	// This section sets Browser (console) stored config
@@ -399,22 +402,37 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 		ctxt.certsDirSet = true
 	}
 
+	memAvailable := availableMemory()
+	if ctx.IsSet("memlimit") || ctx.GlobalIsSet("memlimit") {
+		memlimit := ctx.String("memlimit")
+		if memlimit == "" {
+			memlimit = ctx.GlobalString("memlimit")
+		}
+		mlimit, err := humanize.ParseBytes(memlimit)
+		if err != nil {
+			return err
+		}
+		if mlimit > memAvailable {
+			logger.Info("WARNING: maximum memory available (%s) smaller than specified --memlimit=%s, ignoring --memlimit value",
+				humanize.IBytes(memAvailable), memlimit)
+		}
+		ctxt.MemLimit = mlimit
+	} else {
+		ctxt.MemLimit = memAvailable
+	}
+
+	if memAvailable < ctxt.MemLimit {
+		ctxt.MemLimit = memAvailable
+	}
+
 	ctxt.FTP = ctx.StringSlice("ftp")
 	ctxt.SFTP = ctx.StringSlice("sftp")
-
 	ctxt.Interface = ctx.String("interface")
 	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
-	ctxt.ConnReadDeadline = ctx.Duration("conn-read-deadline")
-	ctxt.ConnWriteDeadline = ctx.Duration("conn-write-deadline")
-	ctxt.ConnClientReadDeadline = ctx.Duration("conn-client-read-deadline")
-	ctxt.ConnClientWriteDeadline = ctx.Duration("conn-client-write-deadline")
 	ctxt.SendBufSize = ctx.Int("send-buf-size")
 	ctxt.RecvBufSize = ctx.Int("recv-buf-size")
-
-	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
-	ctxt.ReadHeaderTimeout = ctx.Duration("read-header-timeout")
-	ctxt.MaxIdleConnsPerHost = ctx.Int("max-idle-conns-per-host")
+	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)

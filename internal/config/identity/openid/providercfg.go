@@ -28,7 +28,7 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid/provider"
 	xhttp "github.com/minio/minio/internal/http"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 type providerCfg struct {

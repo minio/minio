@@ -23,8 +23,22 @@ import (
 	"errors"
 	"hash/crc32"
 
-	"github.com/minio/pkg/v2/sync/errgroup"
+	"github.com/minio/pkg/v3/sync/errgroup"
 )
+
+// counterMap type adds GetValueWithQuorum method to a map[T]int used to count occurrences of values of type T.
+type counterMap[T comparable] map[T]int
+
+// GetValueWithQuorum returns the first key which occurs >= quorum number of times.
+func (c counterMap[T]) GetValueWithQuorum(quorum int) (T, bool) {
+	var zero T
+	for x, count := range c {
+		if count >= quorum {
+			return x, true
+		}
+	}
+	return zero, false
+}
 
 // figure out the most commonVersions across disk that satisfies
 // the 'writeQuorum' this function returns "" if quorum cannot

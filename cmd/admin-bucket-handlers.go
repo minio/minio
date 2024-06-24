@@ -40,7 +40,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 const (
@@ -783,7 +783,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		}
 		switch fileName {
 		case bucketNotificationConfig:
-			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region, globalEventNotifier.targetList)
+			config, err := event.ParseConfig(io.LimitReader(reader, sz), globalSite.Region(), globalEventNotifier.targetList)
 			if err != nil {
 				rpt.SetStatus(bucket, fileName, fmt.Errorf("%s (%s)", errorCodes[ErrMalformedXML].Description, err))
 				continue
@@ -837,9 +837,13 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 				rpt.SetStatus(bucket, fileName, err)
 				continue
 			}
-
+			rcfg, err := globalBucketObjectLockSys.Get(bucket)
+			if err != nil {
+				rpt.SetStatus(bucket, fileName, err)
+				continue
+			}
 			// Validate the received bucket policy document
-			if err = bucketLifecycle.Validate(); err != nil {
+			if err = bucketLifecycle.Validate(rcfg); err != nil {
 				rpt.SetStatus(bucket, fileName, err)
 				continue
 			}

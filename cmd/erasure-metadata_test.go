@@ -158,7 +158,7 @@ func TestObjectToPartOffset(t *testing.T) {
 }
 
 func TestFindFileInfoInQuorum(t *testing.T) {
-	getNFInfo := func(n int, quorum int, t int64, dataDir string, succModTimes []time.Time) []FileInfo {
+	getNFInfo := func(n int, quorum int, t int64, dataDir string, succModTimes []time.Time, numVersions []int) []FileInfo {
 		fi := newFileInfo("test", 8, 8)
 		fi.AddObjectPart(1, "etag", 100, 100, UTCNow(), nil, nil)
 		fi.ModTime = time.Unix(t, 0)
@@ -171,6 +171,9 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 				fis[i].SuccessorModTime = succModTimes[i]
 				fis[i].IsLatest = succModTimes[i].IsZero()
 			}
+			if numVersions != nil {
+				fis[i].NumVersions = numVersions[i]
+			}
 			quorum--
 			if quorum == 0 {
 				break
@@ -182,58 +185,85 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	commonSuccModTime := time.Date(2023, time.August, 25, 0, 0, 0, 0, time.UTC)
 	succModTimesInQuorum := make([]time.Time, 16)
 	succModTimesNoQuorum := make([]time.Time, 16)
+	commonNumVersions := 2
+	numVersionsInQuorum := make([]int, 16)
+	numVersionsNoQuorum := make([]int, 16)
 	for i := 0; i < 16; i++ {
 		if i < 4 {
 			continue
 		}
 		succModTimesInQuorum[i] = commonSuccModTime
+		numVersionsInQuorum[i] = commonNumVersions
 		if i < 9 {
 			continue
 		}
 		succModTimesNoQuorum[i] = commonSuccModTime
+		numVersionsNoQuorum[i] = commonNumVersions
 	}
 	tests := []struct {
 		fis                 []FileInfo
 		modTime             time.Time
 		succmodTimes        []time.Time
+		numVersions         []int
 		expectedErr         error
 		expectedQuorum      int
 		expectedSuccModTime time.Time
+		expectedNumVersions int
 		expectedIsLatest    bool
 	}{
 		{
-			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
+			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil, nil),
 			modTime:        time.Unix(1603863445, 0),
 			expectedErr:    nil,
 			expectedQuorum: 8,
 		},
 		{
-			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
+			fis:            getNFInfo(16, 7, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil, nil),
 			modTime:        time.Unix(1603863445, 0),
 			expectedErr:    InsufficientReadQuorum{},
 			expectedQuorum: 8,
 		},
 		{
-			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil),
+			fis:            getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil, nil),
 			modTime:        time.Unix(1603863445, 0),
 			expectedErr:    InsufficientReadQuorum{},
 			expectedQuorum: 0,
 		},
 		{
-			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", succModTimesInQuorum),
+			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", succModTimesInQuorum, nil),
 			modTime:             time.Unix(1603863445, 0),
+			succmodTimes:        succModTimesInQuorum,
 			expectedErr:         nil,
 			expectedQuorum:      12,
 			expectedSuccModTime: commonSuccModTime,
 			expectedIsLatest:    false,
 		},
 		{
-			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", succModTimesNoQuorum),
+			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", succModTimesNoQuorum, nil),
 			modTime:             time.Unix(1603863445, 0),
+			succmodTimes:        succModTimesNoQuorum,
 			expectedErr:         nil,
 			expectedQuorum:      12,
 			expectedSuccModTime: time.Time{},
 			expectedIsLatest:    true,
+		},
+		{
+			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil, numVersionsInQuorum),
+			modTime:             time.Unix(1603863445, 0),
+			numVersions:         numVersionsInQuorum,
+			expectedErr:         nil,
+			expectedQuorum:      12,
+			expectedIsLatest:    true,
+			expectedNumVersions: 2,
+		},
+		{
+			fis:                 getNFInfo(16, 16, 1603863445, "36a21454-a2ca-11eb-bbaa-93a81c686f21", nil, numVersionsNoQuorum),
+			modTime:             time.Unix(1603863445, 0),
+			numVersions:         numVersionsNoQuorum,
+			expectedErr:         nil,
+			expectedQuorum:      12,
+			expectedIsLatest:    true,
+			expectedNumVersions: 0,
 		},
 	}
 
@@ -252,6 +282,11 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 				}
 				if test.expectedIsLatest != fi.IsLatest {
 					t.Errorf("Expected IsLatest to be %v but got %v", test.expectedIsLatest, fi.IsLatest)
+				}
+			}
+			if test.numVersions != nil && test.expectedNumVersions > 0 {
+				if test.expectedNumVersions != fi.NumVersions {
+					t.Errorf("Expected Numversions to be %d but got %d", test.expectedNumVersions, fi.NumVersions)
 				}
 			}
 		})

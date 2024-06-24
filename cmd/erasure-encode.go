@@ -21,44 +21,36 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sync"
 )
 
-// Writes in parallel to writers
-type parallelWriter struct {
+// Writes to multiple writers
+type multiWriter struct {
 	writers     []io.Writer
 	writeQuorum int
 	errs        []error
 }
 
-// Write writes data to writers in parallel.
-func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
-	var wg sync.WaitGroup
-
+// Write writes data to writers.
+func (p *multiWriter) Write(ctx context.Context, blocks [][]byte) error {
 	for i := range p.writers {
+		if p.errs[i] != nil {
+			continue
+		}
 		if p.writers[i] == nil {
 			p.errs[i] = errDiskNotFound
 			continue
 		}
-		if p.errs[i] != nil {
-			continue
-		}
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			var n int
-			n, p.errs[i] = p.writers[i].Write(blocks[i])
-			if p.errs[i] == nil {
-				if n != len(blocks[i]) {
-					p.errs[i] = io.ErrShortWrite
-					p.writers[i] = nil
-				}
-			} else {
+		var n int
+		n, p.errs[i] = p.writers[i].Write(blocks[i])
+		if p.errs[i] == nil {
+			if n != len(blocks[i]) {
+				p.errs[i] = io.ErrShortWrite
 				p.writers[i] = nil
 			}
-		}(i)
+		} else {
+			p.writers[i] = nil
+		}
 	}
-	wg.Wait()
 
 	// If nilCount >= p.writeQuorum, we return nil. This is because HealFile() uses
 	// CreateFile with p.writeQuorum=1 to accommodate healing of single disk.
@@ -75,7 +67,7 @@ func (p *parallelWriter) Write(ctx context.Context, blocks [][]byte) error {
 
 // Encode reads from the reader, erasure-encodes the data and writes to the writers.
 func (e *Erasure) Encode(ctx context.Context, src io.Reader, writers []io.Writer, buf []byte, quorum int) (total int64, err error) {
-	writer := &parallelWriter{
+	writer := &multiWriter{
 		writers:     writers,
 		writeQuorum: quorum,
 		errs:        make([]error, len(writers)),

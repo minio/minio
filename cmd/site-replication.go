@@ -45,7 +45,8 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	sreplication "github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/policy"
+	xldap "github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -677,7 +678,7 @@ func (c *SiteReplicationSys) GetIDPSettings(ctx context.Context) madmin.IDPSetti
 	}
 	s.OpenID = globalIAMSys.OpenIDConfig.GetSettings()
 	if s.OpenID.Enabled {
-		s.OpenID.Region = globalSite.Region
+		s.OpenID.Region = globalSite.Region()
 	}
 	return s
 }
@@ -1423,22 +1424,22 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 		// form of the entityName (which will be an LDAP DN).
 		var err error
 		if isGroup {
-			var foundGroupDN string
+			var foundGroupDN *xldap.DNSearchResult
 			var underBaseDN bool
 			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
 				iamLogIf(ctx, err)
-			} else if foundGroupDN == "" || !underBaseDN {
+			} else if foundGroupDN == nil || !underBaseDN {
 				err = errNoSuchGroup
 			}
-			entityName = foundGroupDN
+			entityName = foundGroupDN.NormDN
 		} else {
-			var foundUserDN string
+			var foundUserDN *xldap.DNSearchResult
 			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
 				iamLogIf(ctx, err)
-			} else if foundUserDN == "" {
+			} else if foundUserDN == nil {
 				err = errNoSuchUser
 			}
-			entityName = foundUserDN
+			entityName = foundUserDN.NormDN
 		}
 		if err != nil {
 			return wrapSRErr(err)
@@ -6199,7 +6200,13 @@ func mergeWithCurrentLCConfig(ctx context.Context, bucket string, expLCCfg *stri
 		Rules:           rules,
 		ExpiryUpdatedAt: &updatedAt,
 	}
-	if err := finalLcCfg.Validate(); err != nil {
+
+	rcfg, err := globalBucketObjectLockSys.Get(bucket)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := finalLcCfg.Validate(rcfg); err != nil {
 		return []byte{}, err
 	}
 	finalConfigData, err := xml.Marshal(finalLcCfg)

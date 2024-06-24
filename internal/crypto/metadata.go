@@ -48,6 +48,9 @@ const (
 	// the KMS.
 	MetaDataEncryptionKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
 
+	// MetaSsecCRC is the encrypted checksum of the SSE-C encrypted object.
+	MetaSsecCRC = "X-Minio-Replication-Ssec-Crc"
+
 	// MetaContext is the KMS context provided by a client when encrypting an
 	// object with SSE-KMS. A client may not send a context in which case the
 	// MetaContext will not be present.
@@ -106,6 +109,7 @@ func RemoveInternalEntries(metadata map[string]string) {
 	delete(metadata, MetaSealedKeyKMS)
 	delete(metadata, MetaKeyID)
 	delete(metadata, MetaDataEncryptionKey)
+	delete(metadata, MetaSsecCRC)
 }
 
 // IsSourceEncrypted returns true if the source is encrypted

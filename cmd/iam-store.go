@@ -33,8 +33,10 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/puzpuzpuz/xsync/v3"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -532,16 +534,6 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 	}
 }
 
-// PurgeExpiredSTS - purges expired STS credentials.
-func (store *IAMStoreSys) PurgeExpiredSTS(ctx context.Context) error {
-	iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore)
-	if !ok {
-		// No purging is done for non-object storage.
-		return nil
-	}
-	return iamOS.PurgeExpiredSTS(ctx)
-}
-
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) error {
@@ -641,6 +633,8 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 // layer.
 type IAMStoreSys struct {
 	IAMStorageAPI
+
+	group *singleflight.Group
 }
 
 // HasWatcher - returns if the storage system has a watcher.
@@ -1805,6 +1799,7 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 		err = nil
 	}
 	delete(cache.iamUsersMap, accessKey)
+	store.group.Forget(accessKey)
 
 	cache.updatedAt = time.Now()
 
@@ -1880,6 +1875,7 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 			err := store.deleteUserIdentity(ctx, user, userType)
 			iamLogIf(GlobalContext, err)
 			delete(cache.iamUsersMap, user)
+			store.group.Forget(user)
 
 			deleted = true
 		}
@@ -1941,6 +1937,12 @@ func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 
 		subClaimValue := cred.ParentUser
 		if v, ok := claims[subClaim]; ok {
+			subFromToken, ok := v.(string)
+			if ok {
+				subClaimValue = subFromToken
+			}
+		}
+		if v, ok := claims[ldapActualUser]; ok {
 			subFromToken, ok := v.(string)
 			if ok {
 				subClaimValue = subFromToken
@@ -2360,7 +2362,7 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 			return updatedAt, err
 		}
 
-		if len(policyBuf) > 2048 {
+		if len(policyBuf) > maxSVCSessionPolicySize {
 			return updatedAt, errSessionPolicyTooLarge
 		}
 
@@ -2561,69 +2563,88 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 }
 
 // LoadUser - attempts to load user info from storage and updates cache.
-func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) {
-	cache := store.lock()
-	defer store.unlock()
+func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error {
+	// We use singleflight to de-duplicate requests when server
+	// is coming up and loading accessKey and its associated assets
+	val, err, shared := store.group.Do(accessKey, func() (val interface{}, err error) {
+		cache := store.lock()
+		defer func() {
+			cache.updatedAt = time.Now()
+			store.unlock()
+		}()
 
-	cache.updatedAt = time.Now()
+		_, found := cache.iamUsersMap[accessKey]
 
-	_, found := cache.iamUsersMap[accessKey]
-
-	// Check for regular user access key
-	if !found {
-		store.loadUser(ctx, accessKey, regUser, cache.iamUsersMap)
-		if _, found = cache.iamUsersMap[accessKey]; found {
-			// load mapped policies
-			store.loadMappedPolicyWithRetry(ctx, accessKey, regUser, false, cache.iamUserPolicyMap, 3)
-		}
-	}
-
-	// Check for service account
-	if !found {
-		store.loadUser(ctx, accessKey, svcUser, cache.iamUsersMap)
-		var svc UserIdentity
-		svc, found = cache.iamUsersMap[accessKey]
-		if found {
-			// Load parent user and mapped policies.
-			if store.getUsersSysType() == MinIOUsersSysType {
-				store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
-				store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap, 3)
-			} else {
-				// In case of LDAP the parent user's policy mapping needs to be
-				// loaded into sts map
-				store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
+		// Check for regular user access key
+		if !found {
+			err = store.loadUser(ctx, accessKey, regUser, cache.iamUsersMap)
+			if _, found = cache.iamUsersMap[accessKey]; found {
+				// load mapped policies
+				err = store.loadMappedPolicyWithRetry(ctx, accessKey, regUser, false, cache.iamUserPolicyMap, 3)
 			}
 		}
-	}
 
-	// Check for STS account
-	stsAccountFound := false
-	var stsUserCred UserIdentity
-	if !found {
-		store.loadUser(ctx, accessKey, stsUser, cache.iamSTSAccountsMap)
-		if stsUserCred, found = cache.iamSTSAccountsMap[accessKey]; found {
-			// Load mapped policy
-			store.loadMappedPolicyWithRetry(ctx, stsUserCred.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
-			stsAccountFound = true
-		}
-	}
-
-	// Load any associated policy definitions
-	if !stsAccountFound {
-		pols, _ := cache.iamUserPolicyMap.Load(accessKey)
-		for _, policy := range pols.toSlice() {
-			if _, found = cache.iamPolicyDocsMap[policy]; !found {
-				store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
+		// Check for service account
+		if !found {
+			err = store.loadUser(ctx, accessKey, svcUser, cache.iamUsersMap)
+			var svc UserIdentity
+			svc, found = cache.iamUsersMap[accessKey]
+			if found {
+				// Load parent user and mapped policies.
+				if store.getUsersSysType() == MinIOUsersSysType {
+					err = store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
+					if err == nil {
+						err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap, 3)
+					}
+				} else {
+					// In case of LDAP the parent user's policy mapping needs to be
+					// loaded into sts map
+					err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
+				}
 			}
 		}
-	} else {
-		pols, _ := cache.iamSTSPolicyMap.Load(stsUserCred.Credentials.AccessKey)
-		for _, policy := range pols.toSlice() {
-			if _, found = cache.iamPolicyDocsMap[policy]; !found {
-				store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
+
+		// Check for STS account
+		stsAccountFound := false
+		var stsUserCred UserIdentity
+		if !found {
+			err = store.loadUser(ctx, accessKey, stsUser, cache.iamSTSAccountsMap)
+			if stsUserCred, found = cache.iamSTSAccountsMap[accessKey]; found {
+				// Load mapped policy
+				err = store.loadMappedPolicyWithRetry(ctx, stsUserCred.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
+				stsAccountFound = true
 			}
 		}
+
+		// Load any associated policy definitions
+		if !stsAccountFound {
+			pols, _ := cache.iamUserPolicyMap.Load(accessKey)
+			for _, policy := range pols.toSlice() {
+				if _, found = cache.iamPolicyDocsMap[policy]; !found {
+					err = store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
+				}
+			}
+		} else {
+			pols, _ := cache.iamSTSPolicyMap.Load(stsUserCred.Credentials.AccessKey)
+			for _, policy := range pols.toSlice() {
+				if _, found = cache.iamPolicyDocsMap[policy]; !found {
+					err = store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
+				}
+			}
+		}
+
+		return "done", err
+	})
+
+	if serverDebugLog {
+		console.Debugln("loadUser: loading shared", val, err, shared)
 	}
+
+	if IsErr(err, errNoSuchUser, errNoSuchPolicy, errNoSuchGroup) {
+		return nil
+	}
+
+	return err
 }
 
 func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {

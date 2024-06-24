@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/minio/zipindex"
 )
 
@@ -142,7 +142,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 		return
 	}
 
-	zipInfo := zipObjInfo.ArchiveInfo()
+	zipInfo := zipObjInfo.ArchiveInfo(r.Header)
 	if len(zipInfo) == 0 {
 		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
 		if err != nil {
@@ -202,7 +202,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 
 	defer rc.Close()
 
-	if err = setObjectHeaders(w, fileObjInfo, nil, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, fileObjInfo, nil, opts); err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
@@ -233,7 +233,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 }
 
 // listObjectsV2InArchive generates S3 listing result ListObjectsV2Info from zip file, all parameters are already validated by the caller.
-func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, prefix, token, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
+func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, prefix, token, delimiter string, maxKeys int, startAfter string, h http.Header) (ListObjectsV2Info, error) {
 	zipPath, _, err := splitZipExtensionPath(prefix)
 	if err != nil {
 		// Return empty listing
@@ -246,7 +246,7 @@ func listObjectsV2InArchive(ctx context.Context, objectAPI ObjectLayer, bucket, 
 		return ListObjectsV2Info{}, nil
 	}
 
-	zipInfo := zipObjInfo.ArchiveInfo()
+	zipInfo := zipObjInfo.ArchiveInfo(h)
 	if len(zipInfo) == 0 {
 		// Always update the latest version
 		zipInfo, err = updateObjectMetadataWithZipInfo(ctx, objectAPI, bucket, zipPath, ObjectOptions{})
@@ -438,7 +438,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 		return
 	}
 
-	zipInfo := zipObjInfo.ArchiveInfo()
+	zipInfo := zipObjInfo.ArchiveInfo(r.Header)
 	if len(zipInfo) == 0 {
 		opts.EncryptFn, err = zipObjInfo.metadataEncryptFn(r.Header)
 		if err != nil {
@@ -470,7 +470,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	}
 
 	// Set standard object headers.
-	if err = setObjectHeaders(w, objInfo, nil, opts); err != nil {
+	if err = setObjectHeaders(ctx, w, objInfo, nil, opts); err != nil {
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}

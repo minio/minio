@@ -32,8 +32,8 @@ import (
 	cfgldap "github.com/minio/minio/internal/config/identity/ldap"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/ldap"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/ldap"
+	"github.com/minio/pkg/v3/policy"
 )
 
 func addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.Request, isUpdate bool) {

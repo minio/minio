@@ -20,14 +20,13 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"errors"
 	"os"
 	"path"
 	"sort"
 	"strings"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v3/console"
 )
 
 // metaCacheEntry is an object or a directory within an unknown bucket.
@@ -260,7 +259,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 		}
 		return e.cached.ToFileInfo(bucket, e.name, "", false, false)
 	}
-	return getFileInfo(e.metadata, bucket, e.name, "", false, false)
+	return getFileInfo(e.metadata, bucket, e.name, "", fileInfoOpts{})
 }
 
 // xlmeta returns the decoded metadata.
@@ -301,7 +300,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 		}, nil
 	}
 	// Too small gains to reuse cache here.
-	return getFileInfoVersions(e.metadata, bucket, e.name, false)
+	return getFileInfoVersions(e.metadata, bucket, e.name, false, true)
 }
 
 // metaCacheEntries is a slice of metacache entries.
@@ -385,9 +384,6 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 		// shallow decode.
 		xl, err := entry.xlmeta()
 		if err != nil {
-			if !errors.Is(err, errFileNotFound) {
-				internalLogIf(GlobalContext, err)
-			}
 			continue
 		}
 		objsValid++
@@ -736,16 +732,41 @@ func mergeEntryChannels(ctx context.Context, in []chan metaCacheEntry, out chan<
 				bestIdx = otherIdx
 				continue
 			}
-			// We should make sure to avoid objects and directories
-			// of this fashion such as
-			//  - foo-1
-			//  - foo-1/
-			// we should avoid this situation by making sure that
-			// we compare the `foo-1/` after path.Clean() to
-			// de-dup the entries.
 			if path.Clean(best.name) == path.Clean(other.name) {
-				toMerge = append(toMerge, otherIdx)
-				continue
+				// We may be in a situation where we have a directory and an object with the same name.
+				// In that case we will drop the directory entry.
+				// This should however not be confused with an object with a trailing slash.
+				dirMatches := best.isDir() == other.isDir()
+				suffixMatches := strings.HasSuffix(best.name, slashSeparator) == strings.HasSuffix(other.name, slashSeparator)
+
+				// Simple case. Both are same type with same suffix.
+				if dirMatches && suffixMatches {
+					toMerge = append(toMerge, otherIdx)
+					continue
+				}
+
+				if !dirMatches {
+					// We have an object `name` or 'name/' and a directory `name/`.
+					if other.isDir() {
+						if serverDebugLog {
+							console.Debugln("mergeEntryChannels: discarding directory", other.name, "for object", best.name)
+						}
+						// Discard the directory.
+						if err := selectFrom(otherIdx); err != nil {
+							return err
+						}
+						continue
+					}
+					// Replace directory with object.
+					if serverDebugLog {
+						console.Debugln("mergeEntryChannels: discarding directory", best.name, "for object", other.name)
+					}
+					toMerge = toMerge[:0]
+					best = other
+					bestIdx = otherIdx
+					continue
+				}
+				// Leave it to be resolved. Names are different.
 			}
 			if best.name > other.name {
 				toMerge = toMerge[:0]

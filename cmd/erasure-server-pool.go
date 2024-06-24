@@ -43,8 +43,8 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/sync/errgroup"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/pkg/v3/wildcard"
 )
 
 type erasureServerPools struct {
@@ -104,7 +104,11 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	// Initialize byte pool once for all sets, bpool size is set to
 	// setCount * setDriveCount with each memory upto blockSizeV2.
 	buffers := bpool.NewBytePoolCap(n, blockSizeV2, blockSizeV2*2)
-	buffers.Populate()
+	if n >= 16384 {
+		// pre-populate buffers only n >= 16384 which is (32Gi/2Mi)
+		// for all setups smaller than this avoid pre-alloc.
+		buffers.Populate()
+	}
 	globalBytePoolCap.Store(buffers)
 
 	var localDrives []StorageAPI
@@ -165,6 +169,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	if !globalIsDistErasure {
 		globalLocalDrivesMu.Lock()
 		globalLocalDrives = localDrives
+		for _, drive := range localDrives {
+			globalLocalDrivesMap[drive.Endpoint().String()] = drive
+		}
 		globalLocalDrivesMu.Unlock()
 	}
 
@@ -700,7 +707,7 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool)
 }
 
 func (z *erasureServerPools) StorageInfo(ctx context.Context, metrics bool) StorageInfo {
-	return globalNotificationSys.StorageInfo(z, metrics)
+	return globalNotificationSys.StorageInfo(ctx, z, metrics)
 }
 
 func (z *erasureServerPools) NSScanner(ctx context.Context, updates chan<- DataUsageInfo, wantCycle uint32, healScanMode madmin.HealScanMode) error {
@@ -1387,8 +1394,7 @@ func (z *erasureServerPools) ListObjectVersions(ctx context.Context, bucket, pre
 	// It requests unique blocks with a specific prefix.
 	// We skip scanning the parent directory for
 	// more objects matching the prefix.
-	ri := logger.GetReqInfo(ctx)
-	if ri != nil && strings.Contains(ri.UserAgent, `1.0 Veeam/1.0 Backup`) && strings.HasSuffix(prefix, ".blk") {
+	if isVeeamClient(ctx) && strings.HasSuffix(prefix, ".blk") {
 		opts.BaseDir = prefix
 		opts.Transient = true
 	}
@@ -1460,8 +1466,7 @@ func maxKeysPlusOne(maxKeys int, addOne bool) int {
 	return maxKeys
 }
 
-func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, v1 bool) (ListObjectsInfo, error) {
-	var loi ListObjectsInfo
+func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, prefix, marker, delimiter string, maxKeys int, v1 bool) (loi ListObjectsInfo, err error) {
 	opts := listPathOptions{
 		V1:          v1,
 		Bucket:      bucket,
@@ -1473,9 +1478,71 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		AskDisks:    globalAPIConfig.getListQuorum(),
 	}
 	opts.setBucketMeta(ctx)
+	listFn := func(ctx context.Context, opts listPathOptions, limitTo int) (ListObjectsInfo, error) {
+		var loi ListObjectsInfo
+		merged, err := z.listPath(ctx, &opts)
+		if err != nil && err != io.EOF {
+			if !isErrBucketNotFound(err) {
+				storageLogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
+			}
+			return loi, toObjectErr(err, bucket)
+		}
+		merged.forwardPast(opts.Marker)
+		defer merged.truncate(0) // Release when returning
 
+		if contextCanceled(ctx) {
+			return ListObjectsInfo{}, ctx.Err()
+		}
+
+		// Default is recursive, if delimiter is set then list non recursive.
+		objects := merged.fileInfos(bucket, prefix, delimiter)
+		loi.IsTruncated = err == nil && len(objects) > 0
+		if limitTo > 0 && len(objects) > limitTo {
+			objects = objects[:limitTo]
+			loi.IsTruncated = true
+		}
+		for _, obj := range objects {
+			if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
+				// Only add each once.
+				// With slash delimiter we only get the directory once.
+				found := false
+				if delimiter != slashSeparator {
+					for _, p := range loi.Prefixes {
+						if found {
+							break
+						}
+						found = p == obj.Name
+					}
+				}
+				if !found {
+					loi.Prefixes = append(loi.Prefixes, obj.Name)
+				}
+			} else {
+				loi.Objects = append(loi.Objects, obj)
+			}
+		}
+		if loi.IsTruncated {
+			last := objects[len(objects)-1]
+			loi.NextMarker = last.Name
+		}
+
+		if merged.lastSkippedEntry != "" {
+			if merged.lastSkippedEntry > loi.NextMarker {
+				// An object hidden by ILM was found during listing. Since the number of entries
+				// fetched from drives is limited, set IsTruncated to true to ask the s3 client
+				// to continue listing if it wishes in order to find if there is more objects.
+				loi.IsTruncated = true
+				loi.NextMarker = merged.lastSkippedEntry
+			}
+		}
+
+		if loi.NextMarker != "" {
+			loi.NextMarker = opts.encodeMarker(loi.NextMarker)
+		}
+		return loi, nil
+	}
 	ri := logger.GetReqInfo(ctx)
-	hadoop := ri != nil && strings.Contains(ri.UserAgent, `Hadoop `) && strings.Contains(ri.UserAgent, "scala/")
+	hadoop := ri != nil && strings.Contains(ri.UserAgent, "Hadoop ") && strings.Contains(ri.UserAgent, "scala/")
 	matches := func() bool {
 		if prefix == "" {
 			return false
@@ -1500,7 +1567,8 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		}
 		return false
 	}
-	if hadoop && matches() && delimiter == SlashSeparator && maxKeys == 2 && marker == "" {
+
+	if hadoop && delimiter == SlashSeparator && maxKeys == 2 && marker == "" {
 		// Optimization for Spark/Hadoop workload where spark sends a garbage
 		// request of this kind
 		//
@@ -1537,25 +1605,57 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		//     df.write.parquet("s3a://testbucket/parquet/")
 		//   }
 		// }
-		objInfo, err := z.GetObjectInfo(ctx, bucket, path.Dir(prefix), ObjectOptions{NoLock: true})
-		if err == nil {
-			if opts.Lifecycle != nil {
-				evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, opts.Replication.Config, objInfo)
-				if evt.Action.Delete() {
-					globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
-					if !evt.Action.DeleteRestored() {
-						// Skip entry if ILM action was DeleteVersionAction or DeleteAction
+		if matches() {
+			objInfo, err := z.GetObjectInfo(ctx, bucket, path.Dir(prefix), ObjectOptions{NoLock: true})
+			if err == nil || objInfo.IsLatest && objInfo.DeleteMarker {
+				if opts.Lifecycle != nil {
+					evt := evalActionFromLifecycle(ctx, *opts.Lifecycle, opts.Retention, opts.Replication.Config, objInfo)
+					if evt.Action.Delete() {
+						globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_s3ListObjects)
+						if !evt.Action.DeleteRestored() {
+							// Skip entry if ILM action was DeleteVersionAction or DeleteAction
+							return loi, nil
+						}
+					}
+				}
+				return loi, nil
+			}
+			if isErrBucketNotFound(err) {
+				return loi, err
+			}
+			if contextCanceled(ctx) {
+				return ListObjectsInfo{}, ctx.Err()
+			}
+		}
+		// Hadoop makes the max-keys=2 listing call just to find if the directory is empty or not, or in the case
+		// of an object to check for object existence. For versioned buckets, MinIO's non-recursive
+		// call will report top level prefixes in deleted state, whereas spark/hadoop interpret this as non-empty
+		// and throw a 404 exception. This is especially a problem for spark jobs overwriting the same partition
+		// repeatedly. This workaround recursively lists the top 3 entries including delete markers to reflect the
+		// correct state of the directory in the list results.
+		if strings.HasSuffix(opts.Prefix, SlashSeparator) {
+			li, err := listFn(ctx, opts, maxKeys)
+			if err != nil {
+				return loi, err
+			}
+			if len(li.Objects) == 0 {
+				prefixes := li.Prefixes[:0]
+				for _, prefix := range li.Prefixes {
+					objInfo, _ := z.GetObjectInfo(ctx, bucket, pathJoin(prefix, "_SUCCESS"), ObjectOptions{NoLock: true})
+					if objInfo.IsLatest && objInfo.DeleteMarker {
+						continue
+					}
+					prefixes = append(prefixes, prefix)
+				}
+				if len(prefixes) > 0 {
+					objInfo, _ := z.GetObjectInfo(ctx, bucket, pathJoin(opts.Prefix, "_SUCCESS"), ObjectOptions{NoLock: true})
+					if objInfo.IsLatest && objInfo.DeleteMarker {
 						return loi, nil
 					}
 				}
+				li.Prefixes = prefixes
 			}
-			return loi, nil
-		}
-		if isErrBucketNotFound(err) {
-			return loi, err
-		}
-		if contextCanceled(ctx) {
-			return ListObjectsInfo{}, ctx.Err()
+			return li, nil
 		}
 	}
 
@@ -1589,69 +1689,7 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 			return ListObjectsInfo{}, ctx.Err()
 		}
 	}
-
-	merged, err := z.listPath(ctx, &opts)
-	if err != nil && err != io.EOF {
-		if !isErrBucketNotFound(err) {
-			storageLogOnceIf(ctx, err, "erasure-list-objects-path-"+bucket)
-		}
-		return loi, toObjectErr(err, bucket)
-	}
-
-	merged.forwardPast(opts.Marker)
-	defer merged.truncate(0) // Release when returning
-
-	if contextCanceled(ctx) {
-		return ListObjectsInfo{}, ctx.Err()
-	}
-
-	// Default is recursive, if delimiter is set then list non recursive.
-	objects := merged.fileInfos(bucket, prefix, delimiter)
-	loi.IsTruncated = err == nil && len(objects) > 0
-	if maxKeys > 0 && len(objects) > maxKeys {
-		objects = objects[:maxKeys]
-		loi.IsTruncated = true
-	}
-	for _, obj := range objects {
-		if obj.IsDir && obj.ModTime.IsZero() && delimiter != "" {
-			// Only add each once.
-			// With slash delimiter we only get the directory once.
-			found := false
-			if delimiter != slashSeparator {
-				for _, p := range loi.Prefixes {
-					if found {
-						break
-					}
-					found = p == obj.Name
-				}
-			}
-			if !found {
-				loi.Prefixes = append(loi.Prefixes, obj.Name)
-			}
-		} else {
-			loi.Objects = append(loi.Objects, obj)
-		}
-	}
-	if loi.IsTruncated {
-		last := objects[len(objects)-1]
-		loi.NextMarker = last.Name
-	}
-
-	if merged.lastSkippedEntry != "" {
-		if merged.lastSkippedEntry > loi.NextMarker {
-			// An object hidden by ILM was found during listing. Since the number of entries
-			// fetched from drives is limited, set IsTruncated to true to ask the s3 client
-			// to continue listing if it wishes in order to find if there is more objects.
-			loi.IsTruncated = true
-			loi.NextMarker = merged.lastSkippedEntry
-		}
-	}
-
-	if loi.NextMarker != "" {
-		loi.NextMarker = opts.encodeMarker(loi.NextMarker)
-	}
-
-	return loi, nil
+	return listFn(ctx, opts, maxKeys)
 }
 
 func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
@@ -1970,10 +2008,12 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 				if err != nil {
 					return nil, err
 				}
-				for i := range buckets {
-					createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
-					if err == nil {
-						buckets[i].Created = createdAt
+				if !opts.NoMetadata {
+					for i := range buckets {
+						createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+						if err == nil {
+							buckets[i].Created = createdAt
+						}
 					}
 				}
 				return buckets, nil
@@ -1987,10 +2027,13 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 	if err != nil {
 		return nil, err
 	}
-	for i := range buckets {
-		createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
-		if err == nil {
-			buckets[i].Created = createdAt
+
+	if !opts.NoMetadata {
+		for i := range buckets {
+			createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+			if err == nil {
+				buckets[i].Created = createdAt
+			}
 		}
 	}
 	return buckets, nil
@@ -2044,7 +2087,6 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 
 // Walk a bucket, optionally prefix recursively, until we have returned
 // all the contents of the provided bucket+prefix.
-// TODO: Note that most errors will result in a truncated listing.
 func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- itemOrErr[ObjectInfo], opts WalkOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, ""); err != nil {
 		xioutil.SafeClose(results)
@@ -2161,9 +2203,8 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	// Convert and filter merged entries.
 	merged := make(chan metaCacheEntry, 100)
 	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+	errCh := make(chan error, 1)
 	go func() {
-		defer cancelCause(nil)
-		defer xioutil.SafeClose(results)
 		sentErr := false
 		sendErr := func(err error) {
 			if !sentErr {
@@ -2174,6 +2215,15 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 			}
 		}
+		defer func() {
+			select {
+			case <-ctx.Done():
+				sendErr(ctx.Err())
+			default:
+			}
+			xioutil.SafeClose(results)
+			cancelCause(nil)
+		}()
 		send := func(oi ObjectInfo) bool {
 			select {
 			case results <- itemOrErr[ObjectInfo]{Item: oi}:
@@ -2228,12 +2278,16 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 			}
 		}
+		if err := <-errCh; err != nil {
+			sendErr(err)
+		}
 	}()
 	go func() {
+		defer close(errCh)
 		// Merge all entries from all disks.
 		// We leave quorum at 1, since entries are already resolved to have the desired quorum.
 		// mergeEntryChannels will close 'merged' channel upon completion or cancellation.
-		storageLogIf(ctx, mergeEntryChannels(ctx, entries, merged, 1))
+		errCh <- mergeEntryChannels(ctx, entries, merged, 1)
 	}()
 
 	return nil
@@ -2411,6 +2465,24 @@ type HealthResult struct {
 	UsingDefaults bool
 }
 
+func (hr HealthResult) String() string {
+	var str strings.Builder
+	for i, es := range hr.ESHealth {
+		str.WriteString("(Pool: ")
+		str.WriteString(strconv.Itoa(es.PoolID))
+		str.WriteString(" Set: ")
+		str.WriteString(strconv.Itoa(es.SetID))
+		str.WriteString(" Healthy: ")
+		str.WriteString(strconv.FormatBool(es.Healthy))
+		if i == 0 {
+			str.WriteString(")")
+		} else {
+			str.WriteString("), ")
+		}
+	}
+	return str.String()
+}
+
 // Health - returns current status of the object layer health,
 // provides if write access exists across sets, additionally
 // can be used to query scenarios if health may be lost
@@ -2434,16 +2506,10 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 
 	for _, disk := range storageInfo.Disks {
 		if opts.Maintenance {
-			var skip bool
 			globalLocalDrivesMu.RLock()
-			for _, drive := range globalLocalDrives {
-				if drive != nil && drive.Endpoint().String() == disk.Endpoint {
-					skip = true
-					break
-				}
-			}
+			_, ok := globalLocalDrivesMap[disk.Endpoint]
 			globalLocalDrivesMu.RUnlock()
-			if skip {
+			if ok {
 				continue
 			}
 		}
@@ -2536,16 +2602,16 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
 			if !healthy {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
+					fmt.Errorf("Write quorum could not be established on pool: %d, set: %d, expected write quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolWriteQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online), logger.FatalKind)
 			}
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !healthyRead {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
-						poolIdx, setIdx, poolReadQuorums[poolIdx]))
+					fmt.Errorf("Read quorum could not be established on pool: %d, set: %d, expected read quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolReadQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online))
 			}
 			result.HealthyRead = result.HealthyRead && healthyRead
 		}

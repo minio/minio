@@ -33,9 +33,9 @@ import (
 
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/kms-go/kms"
-	"github.com/minio/pkg/v2/certs"
-	"github.com/minio/pkg/v2/ellipses"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/certs"
+	"github.com/minio/pkg/v3/ellipses"
+	"github.com/minio/pkg/v3/env"
 )
 
 // Environment variables for MinIO KMS.
@@ -168,7 +168,7 @@ func Connect(ctx context.Context, opts *ConnectionOptions) (*KMS, error) {
 			if err != nil {
 				return nil, err
 			}
-			conf.Certificates = append(conf.Certificates, cert)
+			conf.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return &cert, nil }
 		} else {
 			loadX509KeyPair := func(certFile, keyFile string) (tls.Certificate, error) {
 				// Manually load the certificate and private key into memory.

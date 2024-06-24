@@ -32,9 +32,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
-	xnet "github.com/minio/pkg/v2/net"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 const (
@@ -57,7 +55,7 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 	} // else for both err as nil or io.EOF
 	location = locationConstraint.Location
 	if location == "" {
-		location = globalSite.Region
+		location = globalSite.Region()
 	}
 	if !isValidLocation(location) {
 		return location, ErrInvalidRegion
@@ -69,7 +67,8 @@ func parseLocationConstraint(r *http.Request) (location string, s3Error APIError
 // Validates input location is same as configured region
 // of MinIO server.
 func isValidLocation(location string) bool {
-	return globalSite.Region == "" || globalSite.Region == location
+	region := globalSite.Region()
+	return region == "" || region == location
 }
 
 // Supported headers that needs to be extracted.
@@ -89,6 +88,7 @@ var supportedHeaders = []string{
 	"X-Minio-Replication-Server-Side-Encryption-Iv",
 	"X-Minio-Replication-Encrypted-Multipart",
 	"X-Minio-Replication-Actual-Object-Size",
+	ReplicationSsecChecksumHeader,
 	// Add more supported headers here.
 }
 
@@ -109,6 +109,7 @@ var replicationToInternalHeaders = map[string]string{
 	"X-Minio-Replication-Server-Side-Encryption-Iv":             "X-Minio-Internal-Server-Side-Encryption-Iv",
 	"X-Minio-Replication-Encrypted-Multipart":                   "X-Minio-Internal-Encrypted-Multipart",
 	"X-Minio-Replication-Actual-Object-Size":                    "X-Minio-Internal-Actual-Object-Size",
+	ReplicationSsecChecksumHeader:                               ReplicationSsecChecksumHeader,
 	// Add more supported headers here.
 }
 
@@ -205,8 +206,8 @@ func extractMetadataFromMime(ctx context.Context, v textproto.MIMEHeader, m map[
 	for _, supportedHeader := range supportedHeaders {
 		value, ok := nv[http.CanonicalHeaderKey(supportedHeader)]
 		if ok {
-			if slices.Contains(maps.Keys(replicationToInternalHeaders), supportedHeader) {
-				m[replicationToInternalHeaders[supportedHeader]] = strings.Join(value, ",")
+			if v, ok := replicationToInternalHeaders[supportedHeader]; ok {
+				m[v] = strings.Join(value, ",")
 			} else {
 				m[supportedHeader] = strings.Join(value, ",")
 			}
@@ -243,7 +244,7 @@ func extractReqParams(r *http.Request) map[string]string {
 		return nil
 	}
 
-	region := globalSite.Region
+	region := globalSite.Region()
 	cred := getReqAccessCred(r, region)
 
 	principalID := cred.AccessKey

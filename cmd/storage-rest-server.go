@@ -47,7 +47,7 @@ import (
 	xjwt "github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 var errDiskStale = errors.New("drive stale")
@@ -58,7 +58,7 @@ type storageRESTServer struct {
 }
 
 var (
-	storageCheckPartsRPC       = grid.NewSingleHandler[*CheckPartsHandlerParams, grid.NoPayload](grid.HandlerCheckParts, func() *CheckPartsHandlerParams { return &CheckPartsHandlerParams{} }, grid.NewNoPayload)
+	storageCheckPartsRPC       = grid.NewSingleHandler[*CheckPartsHandlerParams, *CheckPartsResp](grid.HandlerCheckParts2, func() *CheckPartsHandlerParams { return &CheckPartsHandlerParams{} }, func() *CheckPartsResp { return &CheckPartsResp{} })
 	storageDeleteFileRPC       = grid.NewSingleHandler[*DeleteFileHandlerParams, grid.NoPayload](grid.HandlerDeleteFile, func() *DeleteFileHandlerParams { return &DeleteFileHandlerParams{} }, grid.NewNoPayload).AllowCallRequestPool(true)
 	storageDeleteVersionRPC    = grid.NewSingleHandler[*DeleteVersionHandlerParams, grid.NoPayload](grid.HandlerDeleteVersion, func() *DeleteVersionHandlerParams { return &DeleteVersionHandlerParams{} }, grid.NewNoPayload)
 	storageDiskInfoRPC         = grid.NewSingleHandler[*DiskInfoOptions, *DiskInfo](grid.HandlerDiskInfo, func() *DiskInfoOptions { return &DiskInfoOptions{} }, func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse().AllowCallRequestPool(true)
@@ -80,11 +80,7 @@ func getStorageViaEndpoint(endpoint Endpoint) StorageAPI {
 	globalLocalDrivesMu.RLock()
 	defer globalLocalDrivesMu.RUnlock()
 	if len(globalLocalSetDrives) == 0 {
-		for _, drive := range globalLocalDrives {
-			if drive != nil && drive.Endpoint().Equal(endpoint) {
-				return drive
-			}
-		}
+		return globalLocalDrivesMap[endpoint.String()]
 	}
 	return globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx]
 }
@@ -382,7 +378,16 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 		return nil, grid.NewRemoteErr(err)
 	}
 
-	fi, err := s.getStorage().ReadVersion(context.Background(), origvolume, volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
+	inclFreeVersions, err := strconv.ParseBool(params.Get(storageRESTInclFreeVersions))
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+
+	fi, err := s.getStorage().ReadVersion(context.Background(), origvolume, volume, filePath, versionID, ReadOptions{
+		InclFreeVersions: inclFreeVersions,
+		ReadData:         readData,
+		Healing:          healing,
+	})
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
@@ -408,7 +413,18 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
-	fi, err := s.getStorage().ReadVersion(r.Context(), origvolume, volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
+
+	inclFreeVersions, err := strconv.ParseBool(r.Form.Get(storageRESTInclFreeVersions))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	fi, err := s.getStorage().ReadVersion(r.Context(), origvolume, volume, filePath, versionID, ReadOptions{
+		InclFreeVersions: inclFreeVersions,
+		ReadData:         readData,
+		Healing:          healing,
+	})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -443,13 +459,15 @@ func (s *storageRESTServer) UpdateMetadataHandler(p *MetadataHandlerParams) (gri
 }
 
 // CheckPartsHandler - check if a file metadata exists.
-func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
+func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (*CheckPartsResp, *grid.RemoteErr) {
 	if !s.checkID(p.DiskID) {
-		return grid.NewNPErr(errDiskNotFound)
+		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
 	volume := p.Volume
 	filePath := p.FilePath
-	return grid.NewNPErr(s.getStorage().CheckParts(context.Background(), volume, filePath, p.FI))
+
+	resp, err := s.getStorage().CheckParts(context.Background(), volume, filePath, p.FI)
+	return resp, grid.NewRemoteErr(err)
 }
 
 func (s *storageRESTServer) WriteAllHandler(p *WriteAllHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
@@ -1101,11 +1119,6 @@ func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 	}
 }
 
-// VerifyFileResp - VerifyFile()'s response.
-type VerifyFileResp struct {
-	Err error
-}
-
 // VerifyFileHandler - Verify all part of file for bitrot errors.
 func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1128,13 +1141,15 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 	setEventStreamHeaders(w)
 	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
-	err := s.getStorage().VerifyFile(r.Context(), volume, filePath, fi)
+	resp, err := s.getStorage().VerifyFile(r.Context(), volume, filePath, fi)
 	done(nil)
-	vresp := &VerifyFileResp{}
+
 	if err != nil {
-		vresp.Err = StorageErr(err.Error())
+		s.writeErrorResponse(w, err)
+		return
 	}
-	encoder.Encode(vresp)
+
+	encoder.Encode(resp)
 }
 
 func checkDiskFatalErrs(errs []error) error {
@@ -1387,6 +1402,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				defer globalLocalDrivesMu.Unlock()
 
 				globalLocalDrives = append(globalLocalDrives, storage)
+				globalLocalDrivesMap[endpoint.String()] = storage
 				globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
 				return true
 			}

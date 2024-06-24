@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/pkg/v2/env"
+	"github.com/minio/pkg/v3/env"
 )
 
 // Browser sub-system constants
@@ -51,7 +51,7 @@ var (
 	DefaultKVS = config.KVS{
 		config.KV{
 			Key:   browserCSPPolicy,
-			Value: "default-src 'self' 'unsafe-eval' 'unsafe-inline';",
+			Value: "default-src 'self' 'unsafe-eval' 'unsafe-inline'; script-src 'self' https://unpkg.com;  connect-src 'self' https://unpkg.com;",
 		},
 		config.KV{
 			Key:   browserHSTSSeconds,

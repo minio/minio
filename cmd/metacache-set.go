@@ -38,7 +38,7 @@ import (
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/hash"
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/pkg/v2/console"
+	"github.com/minio/pkg/v3/console"
 )
 
 //go:generate msgp -file $GOFILE -unexported
@@ -391,7 +391,7 @@ func (r *metacacheReader) filter(o listPathOptions) (entries metaCacheEntriesSor
 			if !o.InclDeleted && entry.isObject() && entry.isLatestDeletemarker() && !entry.isObjectDir() {
 				return true
 			}
-			if entry.isAllFreeVersions() {
+			if !o.InclDeleted && entry.isAllFreeVersions() {
 				return true
 			}
 			entries.o = append(entries.o, entry)

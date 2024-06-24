@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - master
-      - next
 
 # This ensures that previous jobs for the PR are canceled when the PR is
 # updated.
@@ -55,6 +54,11 @@ jobs:
       - name: standalone erasure
         run: |
           ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "erasure" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
+
+      # FIXME: renable this back when we have a valid way to add deadlines for PUT()s (internode CreateFile)
+      # - name: resiliency
+      #   run: |
+      #     ${GITHUB_WORKSPACE}/.github/workflows/run-mint.sh "resiliency" "minio" "minio123" "${{ steps.vars.outputs.sha_short }}"
 
       - name: The job must cleanup
         if: ${{ always() }}

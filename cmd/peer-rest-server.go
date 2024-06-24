@@ -45,7 +45,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/logger/message/log"
+	"github.com/minio/pkg/v3/logger/message/log"
 )
 
 // To abstract a node over network.
@@ -692,6 +692,18 @@ func (s *peerRESTServer) SignalServiceHandler(vars *grid.MSS) (np grid.NoPayload
 	si, err := strconv.Atoi(signalString)
 	if err != nil {
 		return np, grid.NewRemoteErr(err)
+	}
+
+	// Wait until the specified time before executing the signal.
+	if t := vars.Get(peerRESTExecAt); t != "" {
+		execAt, err := time.Parse(time.RFC3339Nano, vars.Get(peerRESTExecAt))
+		if err != nil {
+			logger.LogIf(GlobalContext, "signalservice", err)
+			execAt = time.Now().Add(restartUpdateDelay)
+		}
+		if d := time.Until(execAt); d > 0 {
+			time.Sleep(d)
+		}
 	}
 	signal := serviceSignal(si)
 	switch signal {

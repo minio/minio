@@ -32,7 +32,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/grid"
-	xnet "github.com/minio/pkg/v2/net"
+	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -601,13 +601,6 @@ func setUploadForwardingMiddleware(h http.Handler) http.Handler {
 				h.ServeHTTP(w, r)
 				return
 			}
-			// forward request to peer handling this upload
-			if globalBucketTargetSys.isOffline(remote.EndpointURL) {
-				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
-				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrReplicationRemoteConnectionError), r.URL)
-				return
-			}
-
 			r.URL.Scheme = remote.EndpointURL.Scheme
 			r.URL.Host = remote.EndpointURL.Host
 			// Make sure we remove any existing headers before

@@ -48,8 +48,8 @@ import (
 	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/trie"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/trie"
+	"github.com/minio/pkg/v3/wildcard"
 	"github.com/valyala/bytebufferpool"
 	"golang.org/x/exp/slices"
 )
@@ -79,6 +79,18 @@ const (
 	// Disable compressed file indices below this size
 	compMinIndexSize = 8 << 20
 )
+
+// getkeyeparator - returns the separator to be used for
+// persisting on drive.
+//
+// - ":" is used on non-windows platforms
+// - "_" is used on windows platforms
+func getKeySeparator() string {
+	if runtime.GOOS == globalWindowsOSName {
+		return "_"
+	}
+	return ":"
+}
 
 // isMinioBucket returns true if given bucket is a MinIO internal
 // bucket and false otherwise.
@@ -755,7 +767,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()
 // are called on Close() in FIFO order as passed in ObjReadFn(). NOTE: It is
 // assumed that clean up functions do not panic (otherwise, they may
 // not all run!).
-func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
+func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, h http.Header) (
 	fn ObjReaderFn, off, length int64, err error,
 ) {
 	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
@@ -810,7 +822,9 @@ func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions) (
 				return b, nil
 			}
 			if isEncrypted {
-				decrypt = oi.compressionIndexDecrypt
+				decrypt = func(b []byte) ([]byte, error) {
+					return oi.compressionIndexDecrypt(b, h)
+				}
 			}
 			// In case of range based queries on multiparts, the offset and length are reduced.
 			off, decOff, firstPart, decryptSkip, seqNum = getCompressedOffsets(oi, off, decrypt)
@@ -982,8 +996,8 @@ func compressionIndexEncrypter(key crypto.ObjectKey, input func() []byte) func()
 }
 
 // compressionIndexDecrypt reverses compressionIndexEncrypter.
-func (o *ObjectInfo) compressionIndexDecrypt(input []byte) ([]byte, error) {
-	return o.metadataDecrypter()("compression-index", input)
+func (o *ObjectInfo) compressionIndexDecrypt(input []byte, h http.Header) ([]byte, error) {
+	return o.metadataDecrypter(h)("compression-index", input)
 }
 
 // SealMD5CurrFn seals md5sum with object encryption key and returns sealed
@@ -1206,7 +1220,20 @@ func hasSpaceFor(di []*DiskInfo, size int64) (bool, error) {
 	}
 
 	if nDisks < len(di)/2 || nDisks <= 0 {
-		return false, fmt.Errorf("not enough online disks to calculate the available space, expected (%d)/(%d)", (len(di)/2)+1, nDisks)
+		var errs []error
+		for index, disk := range di {
+			switch {
+			case disk == nil:
+				errs = append(errs, fmt.Errorf("disk[%d]: offline", index))
+			case disk.Error != "":
+				errs = append(errs, fmt.Errorf("disk %s: %s", disk.Endpoint, disk.Error))
+			case disk.Total == 0:
+				errs = append(errs, fmt.Errorf("disk %s: total is zero", disk.Endpoint))
+			}
+		}
+		// Log disk errors.
+		peersLogIf(context.Background(), errors.Join(errs...))
+		return false, fmt.Errorf("not enough online disks to calculate the available space, need %d, found %d", (len(di)/2)+1, nDisks)
 	}
 
 	// Check we have enough on each disk, ignoring diskFillFraction.

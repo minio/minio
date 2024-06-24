@@ -23,7 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v3"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/wildcard"
 )
 
 const (

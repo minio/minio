@@ -22,9 +22,11 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -36,8 +38,8 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/policy"
-	"github.com/minio/pkg/v2/wildcard"
+	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/wildcard"
 )
 
 const (
@@ -74,12 +76,57 @@ const (
 	parentClaim = "parent"
 
 	// LDAP claim keys
-	ldapUser  = "ldapUser"     // this is a key name for a DN value
-	ldapUserN = "ldapUsername" // this is a key name for the short/login username
+	ldapUser       = "ldapUser"       // this is a key name for a normalized DN value
+	ldapActualUser = "ldapActualUser" // this is a key name for the actual DN value
+	ldapUserN      = "ldapUsername"   // this is a key name for the short/login username
+	// Claim key-prefix for LDAP attributes
+	ldapAttribPrefix = "ldapAttrib_"
 
 	// Role Claim key
 	roleArnClaim = "roleArn"
+
+	// maximum supported STS session policy size
+	maxSTSSessionPolicySize = 2048
 )
+
+type stsClaims map[string]interface{}
+
+func (c stsClaims) populateSessionPolicy(form url.Values) error {
+	if len(form) == 0 {
+		return nil
+	}
+
+	sessionPolicyStr := form.Get(stsPolicy)
+	if len(sessionPolicyStr) == 0 {
+		return nil
+	}
+
+	sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
+	if err != nil {
+		return err
+	}
+
+	// Version in policy must not be empty
+	if sessionPolicy.Version == "" {
+		return errors.New("Version cannot be empty expecting '2012-10-17'")
+	}
+
+	policyBuf, err := json.Marshal(sessionPolicy)
+	if err != nil {
+		return err
+	}
+
+	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html
+	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
+	// The plain text that you use for both inline and managed session
+	// policies shouldn't exceed maxSTSSessionPolicySize characters.
+	if len(policyBuf) > maxSTSSessionPolicySize {
+		return errSessionPolicyTooLarge
+	}
+
+	c[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
+	return nil
+}
 
 // stsAPIHandlers implements and provides http handlers for AWS STS API.
 type stsAPIHandlers struct{}
@@ -155,12 +202,12 @@ func checkAssumeRoleAuth(ctx context.Context, r *http.Request) (auth.Credentials
 		return auth.Credentials{}, ErrAccessDenied
 	}
 
-	s3Err := isReqAuthenticated(ctx, r, globalSite.Region, serviceSTS)
+	s3Err := isReqAuthenticated(ctx, r, globalSite.Region(), serviceSTS)
 	if s3Err != ErrNone {
 		return auth.Credentials{}, s3Err
 	}
 
-	user, _, s3Err := getReqAccessKeyV4(r, globalSite.Region, serviceSTS)
+	user, _, s3Err := getReqAccessKeyV4(r, globalSite.Region(), serviceSTS)
 	if s3Err != ErrNone {
 		return auth.Credentials{}, s3Err
 	}
@@ -209,7 +256,7 @@ func getTokenSigningKey() (string, error) {
 func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRole")
 
-	claims := make(map[string]interface{})
+	claims := stsClaims{}
 	defer logger.AuditLog(ctx, w, r, claims)
 
 	// Check auth here (otherwise r.Form will have unexpected values from
@@ -246,27 +293,9 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionPolicyStr := r.Form.Get(stsPolicy)
-	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
-	// The plain text that you use for both inline and managed session
-	// policies shouldn't exceed 2048 characters.
-	if len(sessionPolicyStr) > 2048 {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, errSessionPolicyTooLarge)
+	if err := claims.populateSessionPolicy(r.Form); err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
-	}
-
-	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
-		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
-			return
-		}
-
-		// Version in policy must not be empty
-		if sessionPolicy.Version == "" {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("Version cannot be empty expecting '2012-10-17'"))
-			return
-		}
 	}
 
 	duration, err := openid.GetDefaultExpiration(r.Form.Get(stsDurationSeconds))
@@ -283,10 +312,6 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	if _, err = globalIAMSys.PolicyDBGet(user.AccessKey, user.Groups...); err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
-	}
-
-	if len(sessionPolicyStr) > 0 {
-		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret, err := getTokenSigningKey()
@@ -339,7 +364,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleSSOCommon")
 
-	claims := make(map[string]interface{})
+	claims := stsClaims{}
 	defer logger.AuditLog(ctx, w, r, claims)
 
 	// Parse the incoming form data.
@@ -446,29 +471,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 		claims[iamPolicyClaimNameOpenID()] = policyName
 	}
 
-	sessionPolicyStr := r.Form.Get(stsPolicy)
-	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRoleWithWebIdentity.html
-	// The plain text that you use for both inline and managed session
-	// policies shouldn't exceed 2048 characters.
-	if len(sessionPolicyStr) > 2048 {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("Session policy should not exceed 2048 characters"))
+	if err := claims.populateSessionPolicy(r.Form); err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
-	}
-
-	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
-		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
-			return
-		}
-
-		// Version in policy must not be empty
-		if sessionPolicy.Version == "" {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("Invalid session policy version"))
-			return
-		}
-
-		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
 	}
 
 	secret, err := getTokenSigningKey()
@@ -609,7 +614,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithClientGrants(w http.ResponseWriter, r *
 func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithLDAPIdentity")
 
-	claims := make(map[string]interface{})
+	claims := stsClaims{}
 	defer logger.AuditLog(ctx, w, r, claims, stsLDAPPassword)
 
 	// Parse the incoming form data.
@@ -640,27 +645,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	sessionPolicyStr := r.Form.Get(stsPolicy)
-	// https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html
-	// The plain text that you use for both inline and managed session
-	// policies shouldn't exceed 2048 characters.
-	if len(sessionPolicyStr) > 2048 {
-		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("Session policy should not exceed 2048 characters"))
+	if err := claims.populateSessionPolicy(r.Form); err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
-	}
-
-	if len(sessionPolicyStr) > 0 {
-		sessionPolicy, err := policy.ParseConfig(bytes.NewReader([]byte(sessionPolicyStr)))
-		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
-			return
-		}
-
-		// Version in policy must not be empty
-		if sessionPolicy.Version == "" {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, fmt.Errorf("Version needs to be specified in session policy"))
-			return
-		}
 	}
 
 	if !globalIAMSys.Initialized() {
@@ -668,12 +655,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 		return
 	}
 
-	ldapUserDN, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(ldapUsername, ldapPassword)
+	lookupResult, groupDistNames, err := globalIAMSys.LDAPConfig.Bind(ldapUsername, ldapPassword)
 	if err != nil {
 		err = fmt.Errorf("LDAP server error: %w", err)
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, err)
 		return
 	}
+	ldapUserDN := lookupResult.NormDN
+	ldapActualUserDN := lookupResult.ActualDN
 
 	// Check if this user or their groups have a policy applied.
 	ldapPolicies, err := globalIAMSys.PolicyDBGet(ldapUserDN, groupDistNames...)
@@ -684,7 +673,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	if len(ldapPolicies) == 0 && newGlobalAuthZPluginFn() == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
-				ldapUserDN, strings.Join(groupDistNames, "`,`")))
+				ldapActualUserDN, strings.Join(groupDistNames, "`,`")))
 		return
 	}
 
@@ -696,10 +685,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 
 	claims[expClaim] = UTCNow().Add(expiryDur).Unix()
 	claims[ldapUser] = ldapUserDN
+	claims[ldapActualUser] = ldapActualUserDN
 	claims[ldapUserN] = ldapUsername
-
-	if len(sessionPolicyStr) > 0 {
-		claims[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString([]byte(sessionPolicyStr))
+	// Add lookup up LDAP attributes as claims.
+	for attrib, value := range lookupResult.Attributes {
+		claims[ldapAttribPrefix+attrib] = value
 	}
 
 	secret, err := getTokenSigningKey()
@@ -875,7 +865,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Associate any service accounts to the certificate CN
-	parentUser := "tls:" + certificate.Subject.CommonName
+	parentUser := "tls" + getKeySeparator() + certificate.Subject.CommonName
 
 	claims[expClaim] = UTCNow().Add(expiry).Unix()
 	claims[subClaim] = certificate.Subject.CommonName
@@ -1000,7 +990,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 		expiry = requestedDuration
 	}
 
-	parentUser := "custom:" + res.Success.User
+	parentUser := "custom" + getKeySeparator() + res.Success.User
 
 	// metadata map
 	claims[expClaim] = UTCNow().Add(time.Duration(expiry) * time.Second).Unix()

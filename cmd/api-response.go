@@ -35,7 +35,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 	xxml "github.com/minio/xxml"
 )
 
@@ -544,7 +544,7 @@ func cleanReservedKeys(metadata map[string]string) map[string]string {
 }
 
 // generates an ListBucketVersions response for the said bucket with other enumerated options.
-func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata metaCheckFn) ListVersionsResponse {
+func generateListVersionsResponse(ctx context.Context, bucket, prefix, marker, versionIDMarker, delimiter, encodingType string, maxKeys int, resp ListObjectVersionsInfo, metadata metaCheckFn) ListVersionsResponse {
 	versions := make([]ObjectVersion, 0, len(resp.Objects))
 
 	owner := &Owner{
@@ -573,7 +573,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 		}
 		content.Size = object.Size
 		if object.StorageClass != "" {
-			content.StorageClass = object.StorageClass
+			content.StorageClass = filterStorageClass(ctx, object.StorageClass)
 		} else {
 			content.StorageClass = globalMinioDefaultStorageClass
 		}
@@ -634,7 +634,7 @@ func generateListVersionsResponse(bucket, prefix, marker, versionIDMarker, delim
 }
 
 // generates an ListObjectsV1 response for the said bucket with other enumerated options.
-func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
+func generateListObjectsV1Response(ctx context.Context, bucket, prefix, marker, delimiter, encodingType string, maxKeys int, resp ListObjectsInfo) ListObjectsResponse {
 	contents := make([]Object, 0, len(resp.Objects))
 	owner := &Owner{
 		ID:          globalMinioDefaultOwnerID,
@@ -654,7 +654,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 		}
 		content.Size = object.Size
 		if object.StorageClass != "" {
-			content.StorageClass = object.StorageClass
+			content.StorageClass = filterStorageClass(ctx, object.StorageClass)
 		} else {
 			content.StorageClass = globalMinioDefaultStorageClass
 		}
@@ -683,7 +683,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter, encodingTy
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata metaCheckFn) ListObjectsV2Response {
+func generateListObjectsV2Response(ctx context.Context, bucket, prefix, token, nextToken, startAfter, delimiter, encodingType string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string, metadata metaCheckFn) ListObjectsV2Response {
 	contents := make([]Object, 0, len(objects))
 	var owner *Owner
 	if fetchOwner {
@@ -707,7 +707,7 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 		}
 		content.Size = object.Size
 		if object.StorageClass != "" {
-			content.StorageClass = object.StorageClass
+			content.StorageClass = filterStorageClass(ctx, object.StorageClass)
 		} else {
 			content.StorageClass = globalMinioDefaultStorageClass
 		}
@@ -789,8 +789,8 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 }
 
 // generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
-func generateCompleteMultpartUploadResponse(bucket, key, location string, oi ObjectInfo) CompleteMultipartUploadResponse {
-	cs := oi.decryptChecksums(0)
+func generateCompleteMultipartUploadResponse(bucket, key, location string, oi ObjectInfo, h http.Header) CompleteMultipartUploadResponse {
+	cs := oi.decryptChecksums(0, h)
 	c := CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
@@ -954,9 +954,9 @@ func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError
 
 	switch err.Code {
 	case "InvalidRegion":
-		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region)
+		err.Description = fmt.Sprintf("Region does not match; expecting '%s'.", globalSite.Region())
 	case "AuthorizationHeaderMalformed":
-		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region)
+		err.Description = fmt.Sprintf("The authorization header is malformed; the region is wrong; expecting '%s'.", globalSite.Region())
 	}
 
 	// Similar check to http.checkWriteHeaderCode

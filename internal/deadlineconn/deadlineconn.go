@@ -33,13 +33,13 @@ type DeadlineConn struct {
 // Sets read deadline
 func (c *DeadlineConn) setReadDeadline() {
 	if c.readDeadline > 0 {
-		c.SetReadDeadline(time.Now().UTC().Add(c.readDeadline))
+		c.Conn.SetReadDeadline(time.Now().UTC().Add(c.readDeadline))
 	}
 }
 
 func (c *DeadlineConn) setWriteDeadline() {
 	if c.writeDeadline > 0 {
-		c.SetWriteDeadline(time.Now().UTC().Add(c.writeDeadline))
+		c.Conn.SetWriteDeadline(time.Now().UTC().Add(c.writeDeadline))
 	}
 }
 

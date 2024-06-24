@@ -59,9 +59,9 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v2/logger/message/log"
-	xnet "github.com/minio/pkg/v2/net"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/logger/message/log"
+	xnet "github.com/minio/pkg/v3/net"
+	"github.com/minio/pkg/v3/policy"
 	"github.com/secure-io/sio-go"
 	"github.com/zeebo/xxh3"
 )
@@ -237,6 +237,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 
 	if globalIsDistErasure {
 		// Notify all other MinIO peers signal service.
+		startTime := time.Now().Add(restartUpdateDelay)
 		ng := WithNPeers(len(globalNotificationSys.peerClients))
 		for idx, client := range globalNotificationSys.peerClients {
 			_, ok := failedClients[idx]
@@ -247,7 +248,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 			ng.Go(ctx, func() error {
 				prs, ok := peerResults[client.String()]
 				if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
-					return client.SignalService(serviceRestart, "", dryRun)
+					return client.SignalService(serviceRestart, "", dryRun, &startTime)
 				}
 				return nil
 			}, idx, *client.host)
@@ -542,9 +543,12 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	var objectAPI ObjectLayer
+	var execAt *time.Time
 	switch serviceSig {
 	case serviceRestart:
 		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceRestartAdminAction)
+		t := time.Now().Add(restartUpdateDelay)
+		execAt = &t
 	case serviceStop:
 		objectAPI, _ = validateAdminReq(ctx, w, r, policy.ServiceStopAdminAction)
 	case serviceFreeze, serviceUnFreeze:
@@ -571,7 +575,7 @@ func (a adminAPIHandlers) ServiceV2Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	if globalIsDistErasure {
-		for _, nerr := range globalNotificationSys.SignalServiceV2(serviceSig, dryRun) {
+		for _, nerr := range globalNotificationSys.SignalServiceV2(serviceSig, dryRun, execAt) {
 			if nerr.Err != nil && process {
 				waitingDrives := map[string]madmin.DiskMetrics{}
 				jerr := json.Unmarshal([]byte(nerr.Err.Error()), &waitingDrives)
@@ -1431,7 +1435,7 @@ func getAggregatedBackgroundHealState(ctx context.Context, o ObjectLayer) (madmi
 
 	if globalIsDistErasure {
 		// Get heal status from other peers
-		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus()
+		peersHealStates, nerrs := globalNotificationSys.BackgroundHealStatus(ctx)
 		var errCount int
 		for _, nerr := range nerrs {
 			if nerr.Err != nil {
@@ -2347,7 +2351,7 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 	notifyTarget := fetchLambdaInfo()
 
 	local := getLocalServerProperty(globalEndpoints, r, metrics)
-	servers := globalNotificationSys.ServerInfo(metrics)
+	servers := globalNotificationSys.ServerInfo(ctx, metrics)
 	servers = append(servers, local)
 
 	var poolsInfo map[int]map[int]madmin.ErasureSetInfo
@@ -2416,8 +2420,8 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 	return madmin.InfoMessage{
 		Mode:          string(mode),
 		Domain:        domain,
-		Region:        globalSite.Region,
-		SQSARN:        globalEventNotifier.GetARNList(false),
+		Region:        globalSite.Region(),
+		SQSARN:        globalEventNotifier.GetARNList(),
 		DeploymentID:  globalDeploymentID(),
 		Buckets:       buckets,
 		Objects:       objects,

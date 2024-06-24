@@ -511,12 +511,12 @@ func testBucketRecreateFails(obj ObjectLayer, instanceType string, t TestErrHand
 	}
 }
 
-func enableCompression(t *testing.T, encrypt bool) {
+func enableCompression(t *testing.T, encrypt bool, mimeTypes []string, extensions []string) {
 	// Enable compression and exec...
 	globalCompressConfigMu.Lock()
 	globalCompressConfig.Enabled = true
-	globalCompressConfig.MimeTypes = nil
-	globalCompressConfig.Extensions = nil
+	globalCompressConfig.MimeTypes = mimeTypes
+	globalCompressConfig.Extensions = extensions
 	globalCompressConfig.AllowEncrypted = encrypt
 	globalCompressConfigMu.Unlock()
 	if encrypt {
@@ -553,11 +553,14 @@ func resetCompressEncryption() {
 	GlobalKMS = nil
 }
 
-func execExtended(t *testing.T, fn func(t *testing.T)) {
+func execExtended(t *testing.T, fn func(t *testing.T, init func(), bucketOptions MakeBucketOptions)) {
 	// Exec with default settings...
 	resetCompressEncryption()
 	t.Run("default", func(t *testing.T) {
-		fn(t)
+		fn(t, nil, MakeBucketOptions{})
+	})
+	t.Run("defaultVerioned", func(t *testing.T) {
+		fn(t, nil, MakeBucketOptions{VersioningEnabled: true})
 	})
 
 	if testing.Short() {
@@ -565,28 +568,55 @@ func execExtended(t *testing.T, fn func(t *testing.T)) {
 	}
 
 	t.Run("compressed", func(t *testing.T) {
-		resetCompressEncryption()
-		enableCompression(t, false)
-		fn(t)
+		fn(t, func() {
+			resetCompressEncryption()
+			enableCompression(t, false, []string{"*"}, []string{"*"})
+		}, MakeBucketOptions{})
+	})
+	t.Run("compressedVerioned", func(t *testing.T) {
+		fn(t, func() {
+			resetCompressEncryption()
+			enableCompression(t, false, []string{"*"}, []string{"*"})
+		}, MakeBucketOptions{
+			VersioningEnabled: true,
+		})
 	})
 
 	t.Run("encrypted", func(t *testing.T) {
-		resetCompressEncryption()
-		enableEncryption(t)
-		fn(t)
+		fn(t, func() {
+			resetCompressEncryption()
+			enableEncryption(t)
+		}, MakeBucketOptions{})
+	})
+	t.Run("encryptedVerioned", func(t *testing.T) {
+		fn(t, func() {
+			resetCompressEncryption()
+			enableEncryption(t)
+		}, MakeBucketOptions{
+			VersioningEnabled: true,
+		})
 	})
 
 	t.Run("compressed+encrypted", func(t *testing.T) {
-		resetCompressEncryption()
-		enableCompression(t, true)
-		fn(t)
+		fn(t, func() {
+			resetCompressEncryption()
+			enableCompression(t, true, []string{"*"}, []string{"*"})
+		}, MakeBucketOptions{})
+	})
+	t.Run("compressed+encryptedVerioned", func(t *testing.T) {
+		fn(t, func() {
+			resetCompressEncryption()
+			enableCompression(t, true, []string{"*"}, []string{"*"})
+		}, MakeBucketOptions{
+			VersioningEnabled: true,
+		})
 	})
 }
 
 // ExecExtendedObjectLayerTest will execute the tests with combinations of encrypted & compressed.
 // This can be used to test functionality when reading and writing data.
 func ExecExtendedObjectLayerTest(t *testing.T, objTest objTestType) {
-	execExtended(t, func(t *testing.T) {
+	execExtended(t, func(t *testing.T, init func(), bucketOptions MakeBucketOptions) {
 		ExecObjectLayerTest(t, objTest)
 	})
 }

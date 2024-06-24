@@ -15,6 +15,10 @@ MINIO=("$PWD/minio" --config-dir "$MINIO_CONFIG_DIR" server)
 GOPATH=/tmp/gopath
 
 function start_minio_3_node() {
+	for i in $(seq 1 3); do
+		rm "${WORK_DIR}/dist-minio-server$i.log"
+	done
+
 	export MINIO_ROOT_USER=minio
 	export MINIO_ROOT_PASSWORD=minio123
 	export MINIO_ERASURE_SET_DRIVE_COUNT=6
@@ -22,7 +26,7 @@ function start_minio_3_node() {
 
 	first_time=$(find ${WORK_DIR}/ | grep format.json | wc -l)
 
-	start_port=$2
+	start_port=$1
 	args=""
 	for d in $(seq 1 3 5); do
 		args="$args http://127.0.0.1:$((start_port + 1))${WORK_DIR}/1/${d}/ http://127.0.0.1:$((start_port + 2))${WORK_DIR}/2/${d}/ http://127.0.0.1:$((start_port + 3))${WORK_DIR}/3/${d}/ "
@@ -42,42 +46,26 @@ function start_minio_3_node() {
 	pid3=$!
 	disown $pid3
 
-	sleep "$1"
+	export MC_HOST_myminio="http://minio:minio123@127.0.0.1:$((start_port + 1))"
+	timeout 15m /tmp/mc ready myminio || fail
 
-	[ ${first_time} -eq 0 ] && upload_objects $start_port
+	[ ${first_time} -eq 0 ] && upload_objects
+	[ ${first_time} -ne 0 ] && sleep 120
 
 	if ! ps -p $pid1 1>&2 >/dev/null; then
-		echo "server1 log:"
-		cat "${WORK_DIR}/dist-minio-server1.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio server 1 is not running" && fail
 	fi
 
 	if ! ps -p $pid2 1>&2 >/dev/null; then
-		echo "server2 log:"
-		cat "${WORK_DIR}/dist-minio-server2.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio server 2 is not running" && fail
 	fi
 
 	if ! ps -p $pid3 1>&2 >/dev/null; then
-		echo "server3 log:"
-		cat "${WORK_DIR}/dist-minio-server3.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio server 3 is not running" && fail
 	fi
 
 	if ! pkill minio; then
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		fail
 	fi
 
 	sleep 1
@@ -112,6 +100,17 @@ function purge() {
 	rm -rf "$1"
 }
 
+function fail() {
+	for i in $(seq 1 3); do
+		echo "server$i log:"
+		cat "${WORK_DIR}/dist-minio-server$i.log"
+	done
+	pkill -9 minio
+	echo "FAILED"
+	purge "$WORK_DIR"
+	exit 1
+}
+
 function __init__() {
 	echo "Initializing environment"
 	mkdir -p "$WORK_DIR"
@@ -127,10 +126,6 @@ function __init__() {
 }
 
 function upload_objects() {
-	start_port=$1
-
-	/tmp/mc alias set myminio http://127.0.0.1:$((start_port + 1)) minio minio123 --api=s3v4
-	/tmp/mc ready myminio
 	/tmp/mc mb myminio/testbucket/
 	for ((i = 0; i < 20; i++)); do
 		echo "my content" | /tmp/mc pipe myminio/testbucket/file-$i
@@ -140,7 +135,7 @@ function upload_objects() {
 function perform_test() {
 	start_port=$2
 
-	start_minio_3_node 120 $start_port
+	start_minio_3_node $start_port
 
 	echo "Testing Distributed Erasure setup healing of drives"
 	echo "Remove the contents of the disks belonging to '${1}' node"
@@ -148,19 +143,12 @@ function perform_test() {
 	rm -rf ${WORK_DIR}/${1}/*/
 
 	set -x
-	start_minio_3_node 120 $start_port
+	start_minio_3_node $start_port
 
 	check_heal ${1}
 	rv=$?
 	if [ "$rv" == "1" ]; then
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		pkill -9 minio
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		fail
 	fi
 }
 

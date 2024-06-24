@@ -30,6 +30,10 @@ const (
 	erasureSetOnlineDrivesCount  = "online_drives_count"
 	erasureSetHealingDrivesCount = "healing_drives_count"
 	erasureSetHealth             = "health"
+	erasureSetReadTolerance      = "read_tolerance"
+	erasureSetWriteTolerance     = "write_tolerance"
+	erasureSetReadHealth         = "read_health"
+	erasureSetWriteHealth        = "write_health"
 )
 
 const (
@@ -53,6 +57,18 @@ var (
 	erasureSetHealthMD = NewGaugeMD(erasureSetHealth,
 		"Health of the erasure set in a pool (1=healthy, 0=unhealthy)",
 		poolIDL, setIDL)
+	erasureSetReadToleranceMD = NewGaugeMD(erasureSetReadTolerance,
+		"No of drive failures that can be tolerated without disrupting read operations",
+		poolIDL, setIDL)
+	erasureSetWriteToleranceMD = NewGaugeMD(erasureSetWriteTolerance,
+		"No of drive failures that can be tolerated without disrupting write operations",
+		poolIDL, setIDL)
+	erasureSetReadHealthMD = NewGaugeMD(erasureSetReadHealth,
+		"Health of the erasure set in a pool for read operations (1=healthy, 0=unhealthy)",
+		poolIDL, setIDL)
+	erasureSetWriteHealthMD = NewGaugeMD(erasureSetWriteHealth,
+		"Health of the erasure set in a pool for write operations (1=healthy, 0=unhealthy)",
+		poolIDL, setIDL)
 )
 
 func b2f(v bool) float64 {
@@ -73,16 +89,28 @@ func loadClusterErasureSetMetrics(ctx context.Context, m MetricValues, c *metric
 	for _, h := range result.ESHealth {
 		poolLV := strconv.Itoa(h.PoolID)
 		setLV := strconv.Itoa(h.SetID)
-		m.Set(erasureSetReadQuorum, float64(h.ReadQuorum),
-			poolIDL, poolLV, setIDL, setLV)
-		m.Set(erasureSetWriteQuorum, float64(h.WriteQuorum),
-			poolIDL, poolLV, setIDL, setLV)
-		m.Set(erasureSetOnlineDrivesCount, float64(h.HealthyDrives),
-			poolIDL, poolLV, setIDL, setLV)
-		m.Set(erasureSetHealingDrivesCount, float64(h.HealingDrives),
-			poolIDL, poolLV, setIDL, setLV)
-		m.Set(erasureSetHealth, b2f(h.Healthy),
-			poolIDL, poolLV, setIDL, setLV)
+		labels := []string{poolIDL, poolLV, setIDL, setLV}
+		m.Set(erasureSetReadQuorum, float64(h.ReadQuorum), labels...)
+		m.Set(erasureSetWriteQuorum, float64(h.WriteQuorum), labels...)
+		m.Set(erasureSetOnlineDrivesCount, float64(h.HealthyDrives), labels...)
+		m.Set(erasureSetHealingDrivesCount, float64(h.HealingDrives), labels...)
+		m.Set(erasureSetHealth, b2f(h.Healthy), labels...)
+
+		readHealthy := true
+		readTolerance := float64(h.HealthyDrives - h.ReadQuorum)
+		if readTolerance < 0 {
+			readHealthy = false
+		}
+		m.Set(erasureSetReadTolerance, readTolerance, labels...)
+		m.Set(erasureSetReadHealth, b2f(readHealthy), labels...)
+
+		writeHealthy := true
+		writeTolerance := float64(h.HealthyDrives + h.HealingDrives - h.WriteQuorum)
+		if writeTolerance < 0 {
+			writeHealthy = false
+		}
+		m.Set(erasureSetWriteTolerance, writeTolerance, labels...)
+		m.Set(erasureSetWriteHealth, b2f(writeHealthy), labels...)
 	}
 
 	return nil
