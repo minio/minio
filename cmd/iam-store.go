@@ -537,25 +537,25 @@ func setDefaultCannedPolicies(policies map[string]PolicyDoc) {
 // LoadIAMCache reads all IAM items and populates a new iamCache object and
 // replaces the in-memory cache object.
 func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) error {
-	bootstrapTraceMsg := func(s string) {
+	bootstrapTraceMsgFirstTime := func(s string) {
 		if firstTime {
 			bootstrapTraceMsg(s)
 		}
 	}
-	bootstrapTraceMsg("loading IAM data")
+	bootstrapTraceMsgFirstTime("loading IAM data")
 
 	newCache := newIamCache()
 
 	loadedAt := time.Now()
 
 	if iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore); ok {
-		err := iamOS.loadAllFromObjStore(ctx, newCache)
+		err := iamOS.loadAllFromObjStore(ctx, newCache, firstTime)
 		if err != nil {
 			return err
 		}
 	} else {
 
-		bootstrapTraceMsg("loading policy documents")
+		bootstrapTraceMsgFirstTime("loading policy documents")
 		if err := store.loadPolicyDocs(ctx, newCache.iamPolicyDocsMap); err != nil {
 			return err
 		}
@@ -564,29 +564,29 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 		setDefaultCannedPolicies(newCache.iamPolicyDocsMap)
 
 		if store.getUsersSysType() == MinIOUsersSysType {
-			bootstrapTraceMsg("loading regular users")
+			bootstrapTraceMsgFirstTime("loading regular users")
 			if err := store.loadUsers(ctx, regUser, newCache.iamUsersMap); err != nil {
 				return err
 			}
-			bootstrapTraceMsg("loading regular groups")
+			bootstrapTraceMsgFirstTime("loading regular groups")
 			if err := store.loadGroups(ctx, newCache.iamGroupsMap); err != nil {
 				return err
 			}
 		}
 
-		bootstrapTraceMsg("loading user policy mapping")
+		bootstrapTraceMsgFirstTime("loading user policy mapping")
 		// load polices mapped to users
 		if err := store.loadMappedPolicies(ctx, regUser, false, newCache.iamUserPolicyMap); err != nil {
 			return err
 		}
 
-		bootstrapTraceMsg("loading group policy mapping")
+		bootstrapTraceMsgFirstTime("loading group policy mapping")
 		// load policies mapped to groups
 		if err := store.loadMappedPolicies(ctx, regUser, true, newCache.iamGroupPolicyMap); err != nil {
 			return err
 		}
 
-		bootstrapTraceMsg("loading service accounts")
+		bootstrapTraceMsgFirstTime("loading service accounts")
 		// load service accounts
 		if err := store.loadUsers(ctx, svcUser, newCache.iamUsersMap); err != nil {
 			return err
