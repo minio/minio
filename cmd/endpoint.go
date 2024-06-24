@@ -253,6 +253,14 @@ type PoolEndpoints struct {
 // EndpointServerPools - list of list of endpoints
 type EndpointServerPools []PoolEndpoints
 
+// ESCount returns the total number of erasure sets in this cluster
+func (l EndpointServerPools) ESCount() (count int) {
+	for _, p := range l {
+		count += p.SetCount
+	}
+	return
+}
+
 // GetNodes returns a sorted list of nodes in this cluster
 func (l EndpointServerPools) GetNodes() (nodes []Node) {
 	nodesMap := make(map[string]Node)

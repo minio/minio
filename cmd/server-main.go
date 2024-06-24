@@ -1053,11 +1053,11 @@ func serverMain(ctx *cli.Context) {
 			bootLogIf(GlobalContext, globalEventNotifier.InitBucketTargets(GlobalContext, newObject))
 		})
 
-		var buckets []BucketInfo
+		var buckets []string
 		// List buckets to initialize bucket metadata sub-sys.
 		bootstrapTrace("listBuckets", func() {
 			for {
-				buckets, err = newObject.ListBuckets(GlobalContext, BucketOptions{})
+				bucketsList, err := newObject.ListBuckets(GlobalContext, BucketOptions{NoMetadata: true})
 				if err != nil {
 					if configRetriableErrors(err) {
 						logger.Info("Waiting for list buckets to succeed to initialize buckets.. possible cause (%v)", err)
@@ -1067,6 +1067,10 @@ func serverMain(ctx *cli.Context) {
 					bootLogIf(GlobalContext, fmt.Errorf("Unable to list buckets to initialize bucket metadata sub-system: %w", err))
 				}
 
+				buckets = make([]string, len(bucketsList))
+				for i := range bucketsList {
+					buckets[i] = bucketsList[i].Name
+				}
 				break
 			}
 		})

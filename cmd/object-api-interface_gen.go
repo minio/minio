@@ -9,13 +9,16 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z BucketOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
 	// string "Deleted"
-	o = append(o, 0x82, 0xa7, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64)
+	o = append(o, 0x83, 0xa7, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x64)
 	o = msgp.AppendBool(o, z.Deleted)
 	// string "Cached"
 	o = append(o, 0xa6, 0x43, 0x61, 0x63, 0x68, 0x65, 0x64)
 	o = msgp.AppendBool(o, z.Cached)
+	// string "NoMetadata"
+	o = append(o, 0xaa, 0x4e, 0x6f, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61)
+	o = msgp.AppendBool(o, z.NoMetadata)
 	return
 }
 
@@ -49,6 +52,12 @@ func (z *BucketOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Cached")
 				return
 			}
+		case "NoMetadata":
+			z.NoMetadata, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "NoMetadata")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -63,7 +72,7 @@ func (z *BucketOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z BucketOptions) Msgsize() (s int) {
-	s = 1 + 8 + msgp.BoolSize + 7 + msgp.BoolSize
+	s = 1 + 8 + msgp.BoolSize + 7 + msgp.BoolSize + 11 + msgp.BoolSize
 	return
 }
 
