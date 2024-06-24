@@ -163,7 +163,6 @@ type serverCtxt struct {
 	MemLimit uint64
 
 	UserTimeout         time.Duration
-	ShutdownTimeout     time.Duration
 	IdleTimeout         time.Duration
 	ReadHeaderTimeout   time.Duration
 	MaxIdleConnsPerHost int

@@ -79,6 +79,12 @@ func (z *ServerSystemConfig) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.MinioEnv[za0002] = za0003
 			}
+		case "Checksum":
+			z.Checksum, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Checksum")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -92,9 +98,9 @@ func (z *ServerSystemConfig) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *ServerSystemConfig) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 3
+	// map header, size 4
 	// write "NEndpoints"
-	err = en.Append(0x83, 0xaa, 0x4e, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73)
+	err = en.Append(0x84, 0xaa, 0x4e, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73)
 	if err != nil {
 		return
 	}
@@ -142,15 +148,25 @@ func (z *ServerSystemConfig) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "Checksum"
+	err = en.Append(0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Checksum)
+	if err != nil {
+		err = msgp.WrapError(err, "Checksum")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *ServerSystemConfig) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 3
+	// map header, size 4
 	// string "NEndpoints"
-	o = append(o, 0x83, 0xaa, 0x4e, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73)
+	o = append(o, 0x84, 0xaa, 0x4e, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x73)
 	o = msgp.AppendInt(o, z.NEndpoints)
 	// string "CmdLines"
 	o = append(o, 0xa8, 0x43, 0x6d, 0x64, 0x4c, 0x69, 0x6e, 0x65, 0x73)
@@ -165,6 +181,9 @@ func (z *ServerSystemConfig) MarshalMsg(b []byte) (o []byte, err error) {
 		o = msgp.AppendString(o, za0002)
 		o = msgp.AppendString(o, za0003)
 	}
+	// string "Checksum"
+	o = append(o, 0xa8, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d)
+	o = msgp.AppendString(o, z.Checksum)
 	return
 }
 
@@ -241,6 +260,12 @@ func (z *ServerSystemConfig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.MinioEnv[za0002] = za0003
 			}
+		case "Checksum":
+			z.Checksum, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Checksum")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -266,5 +291,6 @@ func (z *ServerSystemConfig) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0002) + msgp.StringPrefixSize + len(za0003)
 		}
 	}
+	s += 9 + msgp.StringPrefixSize + len(z.Checksum)
 	return
 }

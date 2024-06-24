@@ -424,7 +424,7 @@ func (sys *NotificationSys) SignalConfigReload(subSys string) []NotificationPeer
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(serviceReloadDynamic, subSys, false)
+			return client.SignalService(serviceReloadDynamic, subSys, false, nil)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -440,14 +440,14 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 		client := client
 		ng.Go(GlobalContext, func() error {
 			// force == true preserves the current behavior
-			return client.SignalService(sig, "", false)
+			return client.SignalService(sig, "", false, nil)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
 }
 
 // SignalServiceV2 - calls signal service RPC call on all peers with v2 API
-func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool) []NotificationPeerErr {
+func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool, execAt *time.Time) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -455,7 +455,7 @@ func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool) []No
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(sig, "", dryRun)
+			return client.SignalService(sig, "", dryRun, execAt)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -1314,7 +1314,7 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 		}
 		client := client
 		ng.Go(GlobalContext, func() error {
-			return client.SignalService(serviceSig, "", false)
+			return client.SignalService(serviceSig, "", false, nil)
 		}, idx, *client.host)
 	}
 	nerrs := ng.Wait()

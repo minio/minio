@@ -2008,10 +2008,12 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 				if err != nil {
 					return nil, err
 				}
-				for i := range buckets {
-					createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
-					if err == nil {
-						buckets[i].Created = createdAt
+				if !opts.NoMetadata {
+					for i := range buckets {
+						createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+						if err == nil {
+							buckets[i].Created = createdAt
+						}
 					}
 				}
 				return buckets, nil
@@ -2025,10 +2027,13 @@ func (z *erasureServerPools) ListBuckets(ctx context.Context, opts BucketOptions
 	if err != nil {
 		return nil, err
 	}
-	for i := range buckets {
-		createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
-		if err == nil {
-			buckets[i].Created = createdAt
+
+	if !opts.NoMetadata {
+		for i := range buckets {
+			createdAt, err := globalBucketMetadataSys.CreatedAt(buckets[i].Name)
+			if err == nil {
+				buckets[i].Created = createdAt
+			}
 		}
 	}
 	return buckets, nil
@@ -2082,7 +2087,6 @@ func (z *erasureServerPools) HealBucket(ctx context.Context, bucket string, opts
 
 // Walk a bucket, optionally prefix recursively, until we have returned
 // all the contents of the provided bucket+prefix.
-// TODO: Note that most errors will result in a truncated listing.
 func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, results chan<- itemOrErr[ObjectInfo], opts WalkOptions) error {
 	if err := checkListObjsArgs(ctx, bucket, prefix, ""); err != nil {
 		xioutil.SafeClose(results)
@@ -2199,9 +2203,8 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 	// Convert and filter merged entries.
 	merged := make(chan metaCacheEntry, 100)
 	vcfg, _ := globalBucketVersioningSys.Get(bucket)
+	errCh := make(chan error, 1)
 	go func() {
-		defer cancelCause(nil)
-		defer xioutil.SafeClose(results)
 		sentErr := false
 		sendErr := func(err error) {
 			if !sentErr {
@@ -2212,6 +2215,15 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 			}
 		}
+		defer func() {
+			select {
+			case <-ctx.Done():
+				sendErr(ctx.Err())
+			default:
+			}
+			xioutil.SafeClose(results)
+			cancelCause(nil)
+		}()
 		send := func(oi ObjectInfo) bool {
 			select {
 			case results <- itemOrErr[ObjectInfo]{Item: oi}:
@@ -2266,12 +2278,16 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 				}
 			}
 		}
+		if err := <-errCh; err != nil {
+			sendErr(err)
+		}
 	}()
 	go func() {
+		defer close(errCh)
 		// Merge all entries from all disks.
 		// We leave quorum at 1, since entries are already resolved to have the desired quorum.
 		// mergeEntryChannels will close 'merged' channel upon completion or cancellation.
-		storageLogIf(ctx, mergeEntryChannels(ctx, entries, merged, 1))
+		errCh <- mergeEntryChannels(ctx, entries, merged, 1)
 	}()
 
 	return nil
@@ -2449,6 +2465,24 @@ type HealthResult struct {
 	UsingDefaults bool
 }
 
+func (hr HealthResult) String() string {
+	var str strings.Builder
+	for i, es := range hr.ESHealth {
+		str.WriteString("(Pool: ")
+		str.WriteString(strconv.Itoa(es.PoolID))
+		str.WriteString(" Set: ")
+		str.WriteString(strconv.Itoa(es.SetID))
+		str.WriteString(" Healthy: ")
+		str.WriteString(strconv.FormatBool(es.Healthy))
+		if i == 0 {
+			str.WriteString(")")
+		} else {
+			str.WriteString("), ")
+		}
+	}
+	return str.String()
+}
+
 // Health - returns current status of the object layer health,
 // provides if write access exists across sets, additionally
 // can be used to query scenarios if health may be lost
@@ -2568,16 +2602,16 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
 			if !healthy {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Write quorum may be lost on pool: %d, set: %d, expected write quorum: %d",
-						poolIdx, setIdx, poolWriteQuorums[poolIdx]), logger.FatalKind)
+					fmt.Errorf("Write quorum could not be established on pool: %d, set: %d, expected write quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolWriteQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online), logger.FatalKind)
 			}
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
 			if !healthyRead {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
-					fmt.Errorf("Read quorum may be lost on pool: %d, set: %d, expected read quorum: %d",
-						poolIdx, setIdx, poolReadQuorums[poolIdx]))
+					fmt.Errorf("Read quorum could not be established on pool: %d, set: %d, expected read quorum: %d, drives-online: %d",
+						poolIdx, setIdx, poolReadQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online))
 			}
 			result.HealthyRead = result.HealthyRead && healthyRead
 		}

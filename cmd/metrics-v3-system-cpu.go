@@ -55,15 +55,17 @@ func loadCPUMetrics(ctx context.Context, m MetricValues, c *metricsCache) error 
 	}
 
 	ts := cpuMetrics.TimesStat
-	tot := ts.User + ts.System + ts.Idle + ts.Iowait + ts.Nice + ts.Steal
-	cpuUserVal := math.Round(ts.User/tot*100*100) / 100
-	m.Set(sysCPUUser, cpuUserVal)
-	cpuSystemVal := math.Round(ts.System/tot*100*100) / 100
-	m.Set(sysCPUSystem, cpuSystemVal)
-	cpuNiceVal := math.Round(ts.Nice/tot*100*100) / 100
-	m.Set(sysCPUNice, cpuNiceVal)
-	cpuStealVal := math.Round(ts.Steal/tot*100*100) / 100
-	m.Set(sysCPUSteal, cpuStealVal)
+	if ts != nil {
+		tot := ts.User + ts.System + ts.Idle + ts.Iowait + ts.Nice + ts.Steal
+		cpuUserVal := math.Round(ts.User/tot*100*100) / 100
+		m.Set(sysCPUUser, cpuUserVal)
+		cpuSystemVal := math.Round(ts.System/tot*100*100) / 100
+		m.Set(sysCPUSystem, cpuSystemVal)
+		cpuNiceVal := math.Round(ts.Nice/tot*100*100) / 100
+		m.Set(sysCPUNice, cpuNiceVal)
+		cpuStealVal := math.Round(ts.Steal/tot*100*100) / 100
+		m.Set(sysCPUSteal, cpuStealVal)
+	}
 
 	// metrics-resource.go runs a job to collect resource metrics including their Avg values and
 	// stores them in resourceMetricsMap. We can use it to get the Avg values of CPU idle and IOWait.

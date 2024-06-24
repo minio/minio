@@ -254,9 +254,8 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 				// for the expiring credentials.
 				iamOS.deleteIAMConfig(ctx, getUserIdentityPath(user, userType))
 				iamOS.deleteIAMConfig(ctx, getMappedPolicyPath(user, userType, false))
-				return nil
 			}
-			return err
+			return nil
 
 		}
 		u.Credentials.Claims = jwtClaims.Map()
