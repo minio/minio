@@ -27,7 +27,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/pkg/v2/policy"
+	"github.com/minio/pkg/v3/policy"
 )
 
 func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
@@ -92,7 +92,10 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 	}
 
 	condValues := getConditionValues(r, "", cred)
-	addExpirationToCondValues(createReq.Expiration, condValues)
+	err = addExpirationToCondValues(createReq.Expiration, condValues)
+	if err != nil {
+		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", toAdminAPIErr(ctx, err)
+	}
 
 	// Check if action is allowed if creating access key for another user
 	// Check if action is explicitly denied if for self
