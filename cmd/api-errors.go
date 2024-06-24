@@ -48,6 +48,7 @@ import (
 	levent "github.com/minio/minio/internal/config/lambda/event"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/pkg/v3/cors"
 	"github.com/minio/pkg/v3/policy"
 )
 
@@ -252,6 +253,13 @@ const (
 	ErrOverlappingConfigs
 	ErrUnsupportedNotification
 
+	// Bucket CORS related errors.
+	ErrCORSTooManyRules
+	ErrCORSMalformedXML
+	ErrCORSAllowedOriginWildcards
+	ErrCORSInvalidMethod
+	ErrCORSAllowedHeaderWildcards
+
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
 	ErrContentChecksumMismatch
@@ -446,6 +454,10 @@ const (
 	ErrAdminNoSecretKey
 
 	ErrIAMNotInitialized
+
+	ErrCORSRequestNotAllowed
+
+	ErrMaxMessageLengthExceeded
 
 	apiErrCodeEnd // This is used only for the testing code
 )
@@ -2120,6 +2132,43 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid UTF-8 character detected.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrCORSTooManyRules: {
+		Code: "InvalidRequest",
+		// FIXME: s/should not/may not/ to be more accurate, this string is copied verbatim from the S3 API error response.
+		Description:    "The number of CORS rules should not exceed allowed limit of 100 rules.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCORSMalformedXML: {
+		Code:           "MalformedXML",
+		Description:    "The XML you provided was not well-formed or did not validate against our published schema",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCORSAllowedOriginWildcards: {
+		Code:           "InvalidRequest",
+		Description:    "AllowedOrigin can not have more than one wildcard.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCORSInvalidMethod: {
+		Code:           "InvalidRequest",
+		Description:    "Found unsupported HTTP method in CORS config",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCORSAllowedHeaderWildcards: {
+		Code:           "InvalidRequest",
+		Description:    "AllowedHeader can not have more than one wildcard.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrCORSRequestNotAllowed: {
+		Code: "AccessForbidden",
+		// FIXME: 'the evalution of Origin' is a spelling mistake that is copied verbatim from S3 API, to be as compatible as possible.
+		Description:    "CORSResponse: This CORS request is not allowed. This is usually because the evalution of Origin, request method / Access-Control-Request-Method or Access-Control-Request-Headers are not whitelisted by the resource CORS spec.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrMaxMessageLengthExceeded: {
+		Code:           "MaxMessageLengthExceeded",
+		Description:    "Your request was too big.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience
@@ -2343,6 +2392,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchLifecycleConfiguration
 	case BucketSSEConfigNotFound:
 		apiErr = ErrNoSuchBucketSSEConfig
+	case BucketCorsNotFound:
+		apiErr = ErrNoSuchCORSConfiguration
 	case BucketTaggingNotFound:
 		apiErr = ErrBucketTaggingNotFound
 	case BucketObjectLockConfigNotFound:
@@ -2415,6 +2466,17 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidBucketName
 	case dns.ErrBucketConflict:
 		apiErr = ErrBucketAlreadyExists
+	case cors.ErrTooManyRules:
+		apiErr = ErrCORSTooManyRules
+	case cors.ErrMalformedXML:
+		apiErr = ErrCORSMalformedXML
+	case cors.ErrAllowedOriginWildcards:
+		apiErr = ErrCORSAllowedOriginWildcards
+	case cors.ErrInvalidMethod:
+		apiErr = ErrCORSInvalidMethod
+	case cors.ErrAllowedHeaderWildcards:
+		apiErr = ErrCORSAllowedHeaderWildcards
+
 	default:
 		if strings.Contains(err.Error(), "request declared a Content-Length") {
 			apiErr = ErrIncompleteBody
@@ -2570,6 +2632,19 @@ func toAPIError(ctx context.Context, err error) APIError {
 					Description:    fmt.Sprintf("%s: cause(%v)", apiErr.Description, err),
 					HTTPStatusCode: apiErr.HTTPStatusCode,
 				}
+			}
+		}
+	case "InvalidRequest":
+		baseErr := unwrapAll(err)
+		switch e := baseErr.(type) {
+		case cors.ErrTooManyRules,
+			cors.ErrAllowedOriginWildcards,
+			cors.ErrInvalidMethod,
+			cors.ErrAllowedHeaderWildcards:
+			apiErr = APIError{
+				Code:           "InvalidRequest",
+				Description:    e.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
 			}
 		}
 	}

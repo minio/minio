@@ -52,7 +52,10 @@ const (
 // registerMetricsRouter - add handler functions for metrics.
 func registerMetricsRouter(router *mux.Router) {
 	// metrics router
-	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
+	// SlashSeparator is required in order to not match buckets that start with "minio....", only really
+	// important for the OPTIONS preflight request.
+	metricsRouter := router.NewRoute().PathPrefix(minioReservedBucketPath + SlashSeparator).Subrouter()
+
 	authType := prometheusAuthType(strings.ToLower(env.Get(EnvPrometheusAuthType, string(prometheusJWT))))
 
 	auth := AuthMiddleware
@@ -72,4 +75,7 @@ func registerMetricsRouter(router *mux.Router) {
 	// Register metrics v3 handler. It also accepts an optional query
 	// parameter `?list` - see handler for details.
 	metricsRouter.Methods(http.MethodGet).Path(metricsV3Path + "{pathComps:.*}").Handler(metricsV3Server)
+
+	// Match OPTIONS for CORS preflight, needed by mux in order to trigger the middlewares
+	metricsRouter.Methods(http.MethodOptions).HandlerFunc(httpTraceAll(errorResponseHandler))
 }

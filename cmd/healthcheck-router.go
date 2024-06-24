@@ -50,4 +50,7 @@ func registerHealthCheckRouter(router *mux.Router) {
 	// Readiness handler
 	healthRouter.Methods(http.MethodGet).Path(healthCheckReadinessPath).HandlerFunc(httpTraceAll(ReadinessCheckHandler))
 	healthRouter.Methods(http.MethodHead).Path(healthCheckReadinessPath).HandlerFunc(httpTraceAll(ReadinessCheckHandler))
+
+	// Match OPTIONS for CORS preflight, needed by mux in order to trigger the middlewares
+	healthRouter.Methods(http.MethodOptions).Handler(httpTraceAll(errorResponseHandler))
 }

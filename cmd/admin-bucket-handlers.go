@@ -40,6 +40,7 @@ import (
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/mux"
+	xcors "github.com/minio/pkg/v3/cors"
 	"github.com/minio/pkg/v3/policy"
 )
 
@@ -421,6 +422,7 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 		bucketVersioningConfig,
 		bucketReplicationConfig,
 		bucketTargetsFile,
+		bucketCorsConfig,
 	}
 	for _, bi := range buckets {
 		for _, cfgFile := range cfgFiles {
@@ -564,6 +566,21 @@ func (a adminAPIHandlers) ExportBucketMetadataHandler(w http.ResponseWriter, r *
 					return
 				}
 				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
+			case bucketCorsConfig:
+				config, _, err := globalBucketMetadataSys.GetCorsConfig(bucket)
+				if err != nil {
+					if errors.Is(err, BucketCorsNotFound{Bucket: bucket}) {
+						continue
+					}
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
+					return
+				}
+				configData, err := config.ToXML()
+				if err != nil {
+					writeErrorResponse(ctx, w, exportError(ctx, err, cfgFile, bucket), r.URL)
+					return
+				}
+				rawDataFn(bytes.NewReader(configData), cfgPath, len(configData))
 			}
 		}
 	}
@@ -596,6 +613,8 @@ func (i *importMetaReport) SetStatus(bucket, fname string, err error) {
 		st.ObjectLock = madmin.MetaStatus{IsSet: true, Err: errMsg}
 	case bucketVersioningConfig:
 		st.Versioning = madmin.MetaStatus{IsSet: true, Err: errMsg}
+	case bucketCorsConfig:
+		st.Cors = madmin.MetaStatus{IsSet: true, Err: errMsg}
 	default:
 		st.Err = errMsg
 	}
@@ -933,6 +952,29 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			bucketMap[bucket].QuotaConfigJSON = data
 			bucketMap[bucket].QuotaConfigUpdatedAt = updatedAt
 			rpt.SetStatus(bucket, fileName, nil)
+		case bucketCorsConfig:
+			if sz > maxCorsBodyBytes {
+				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrMaxMessageLengthExceeded.String()))
+				continue
+			}
+			corsConfig, err := xcors.ParseBucketCorsConfig(reader)
+			if err != nil {
+				rpt.SetStatus(bucket, fileName, err)
+				continue
+			}
+			err = corsConfig.Validate()
+			if err != nil {
+				rpt.SetStatus(bucket, fileName, err)
+				continue
+			}
+			corsXML, err := corsConfig.ToXML()
+			if err != nil {
+				rpt.SetStatus(bucket, fileName, err)
+				continue
+			}
+			bucketMap[bucket].CorsConfigXML = corsXML
+			bucketMap[bucket].CorsConfigUpdatedAt = updatedAt
+			rpt.SetStatus(bucket, fileName, nil)
 		}
 	}
 
@@ -959,6 +1001,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			Tags:             enc(meta.TaggingConfigXML),
 			ObjectLockConfig: enc(meta.ObjectLockConfigXML),
 			SSEConfig:        enc(meta.EncryptionConfigXML),
+			Cors:             enc(meta.CorsConfigXML),
 			UpdatedAt:        updatedAt,
 		}); err != nil {
 			rpt.SetStatus(bucket, "", err)

@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
+	xcors "github.com/minio/pkg/v3/cors"
 	"github.com/minio/pkg/v3/policy"
 	"github.com/minio/sio"
 )
@@ -81,6 +82,7 @@ type BucketMetadata struct {
 	ReplicationConfigXML        []byte
 	BucketTargetsConfigJSON     []byte
 	BucketTargetsConfigMetaJSON []byte
+	CorsConfigXML               []byte
 	PolicyConfigUpdatedAt       time.Time
 	ObjectLockConfigUpdatedAt   time.Time
 	EncryptionConfigUpdatedAt   time.Time
@@ -89,6 +91,7 @@ type BucketMetadata struct {
 	ReplicationConfigUpdatedAt  time.Time
 	VersioningConfigUpdatedAt   time.Time
 	LifecycleConfigUpdatedAt    time.Time
+	CorsConfigUpdatedAt         time.Time
 
 	// Unexported fields. Must be updated atomically.
 	policyConfig           *policy.BucketPolicy
@@ -102,6 +105,7 @@ type BucketMetadata struct {
 	replicationConfig      *replication.Config
 	bucketTargetConfig     *madmin.BucketTargets
 	bucketTargetConfigMeta map[string]string
+	corsConfig             *xcors.Config
 }
 
 // newBucketMetadata creates BucketMetadata with the supplied name and Created to Now.
@@ -246,6 +250,15 @@ func (b *BucketMetadata) parseAllConfigs(ctx context.Context, objectAPI ObjectLa
 		}
 	} else {
 		b.lifecycleConfig = nil
+	}
+
+	if len(b.CorsConfigXML) != 0 {
+		b.corsConfig, err = xcors.ParseBucketCorsConfig(bytes.NewReader(b.CorsConfigXML))
+		if err != nil {
+			return err
+		}
+	} else {
+		b.corsConfig = nil
 	}
 
 	if len(b.EncryptionConfigXML) != 0 {

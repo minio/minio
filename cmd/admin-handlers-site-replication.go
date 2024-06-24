@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
@@ -33,6 +34,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/mux"
+	xcors "github.com/minio/pkg/v3/cors"
 	"github.com/minio/pkg/v3/policy"
 )
 
@@ -260,6 +262,26 @@ func (a adminAPIHandlers) SRPeerReplicateBucketItem(w http.ResponseWriter, r *ht
 		err = globalSiteReplicationSys.PeerBucketSSEConfigHandler(ctx, item.Bucket, item.SSEConfig, item.UpdatedAt)
 	case madmin.SRBucketMetaLCConfig:
 		err = globalSiteReplicationSys.PeerBucketLCConfigHandler(ctx, item.Bucket, item.ExpiryLCConfig, item.UpdatedAt)
+	case madmin.SRBucketMetaTypeCorsConfig:
+		if item.Cors == nil {
+			err = globalSiteReplicationSys.PeerBucketCorsHandler(ctx, item.Bucket, nil, item.UpdatedAt)
+		} else {
+			bucketCorsBytes, err := base64.StdEncoding.DecodeString(*item.Cors)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			bucketCors, cerr := xcors.ParseBucketCorsConfig(bytes.NewReader(bucketCorsBytes))
+			if cerr != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, cerr), r.URL)
+				return
+			}
+			err = globalSiteReplicationSys.PeerBucketCorsHandler(ctx, item.Bucket, bucketCors, item.UpdatedAt)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+		}
 	}
 	if err != nil {
 		adminLogIf(ctx, err)

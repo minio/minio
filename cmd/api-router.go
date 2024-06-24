@@ -24,8 +24,6 @@ import (
 	consoleapi "github.com/minio/console/api"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v3/wildcard"
-	"github.com/rs/cors"
 )
 
 func newHTTPServerFn() *xhttp.Server {
@@ -110,11 +108,6 @@ var rejectedBucketAPIs = []rejectedAPI{
 		api:     "inventory",
 		methods: []string{http.MethodGet, http.MethodPut, http.MethodDelete},
 		queries: []string{"inventory", ""},
-	},
-	{
-		api:     "cors",
-		methods: []string{http.MethodPut, http.MethodDelete},
-		queries: []string{"cors", ""},
 	},
 	{
 		api:     "metrics",
@@ -410,6 +403,10 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodGet).
 			HandlerFunc(s3APIMiddleware(api.GetBucketPolicyHandler)).
 			Queries("policy", "")
+		// GetBucketCors
+		router.Methods(http.MethodGet).
+			HandlerFunc(s3APIMiddleware(api.GetBucketCorsHandler)).
+			Queries("cors", "")
 		// GetBucketLifecycle
 		router.Methods(http.MethodGet).
 			HandlerFunc(s3APIMiddleware(api.GetBucketLifecycleHandler)).
@@ -452,10 +449,6 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodPut).
 			HandlerFunc(s3APIMiddleware(api.PutBucketACLHandler)).
 			Queries("acl", "")
-		// GetBucketCors - this is a dummy call.
-		router.Methods(http.MethodGet).
-			HandlerFunc(s3APIMiddleware(api.GetBucketCorsHandler)).
-			Queries("cors", "")
 		// GetBucketWebsiteHandler - this is a dummy call.
 		router.Methods(http.MethodGet).
 			HandlerFunc(s3APIMiddleware(api.GetBucketWebsiteHandler)).
@@ -526,6 +519,10 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodPut).
 			HandlerFunc(s3APIMiddleware(api.PutBucketPolicyHandler)).
 			Queries("policy", "")
+		// PutBucketCors
+		router.Methods(http.MethodPut).
+			HandlerFunc(s3APIMiddleware(api.PutBucketCorsHandler)).
+			Queries("cors", "")
 
 		// PutBucketObjectLockConfig
 		router.Methods(http.MethodPut).
@@ -568,6 +565,11 @@ func registerAPIRouter(router *mux.Router) {
 		router.Methods(http.MethodDelete).
 			HandlerFunc(s3APIMiddleware(api.DeleteBucketPolicyHandler)).
 			Queries("policy", "")
+		// DeleteBucketCors
+		router.Methods(http.MethodDelete).
+			HandlerFunc(s3APIMiddleware(api.DeleteBucketCorsHandler)).
+			Queries("cors", "")
+
 		// DeleteBucketReplication
 		router.Methods(http.MethodDelete).
 			HandlerFunc(s3APIMiddleware(api.DeleteBucketReplicationConfigHandler)).
@@ -609,6 +611,9 @@ func registerAPIRouter(router *mux.Router) {
 		// S3 ListObjectsV1 (Legacy)
 		router.Methods(http.MethodGet).
 			HandlerFunc(s3APIMiddleware(api.ListObjectsV1Handler))
+
+		// Match OPTIONS for CORS, which can be configured per bucket, needed by mux to match and trigger bucket name extraction.
+		router.Methods(http.MethodOptions).HandlerFunc(s3APIMiddleware(httpTraceAll(errorResponseHandler)))
 	}
 
 	// Root operation
@@ -627,55 +632,10 @@ func registerAPIRouter(router *mux.Router) {
 	apiRouter.Methods(http.MethodGet).Path(SlashSeparator + SlashSeparator).
 		HandlerFunc(s3APIMiddleware(api.ListBucketsHandler))
 
+	// Match OPTIONS for CORS, which can be configured per bucket, needed by mux to trigger the middlewares.
+	apiRouter.Methods(http.MethodOptions).HandlerFunc(s3APIMiddleware(httpTraceAll(errorResponseHandler)))
+
 	// If none of the routes match add default error handler routes
 	apiRouter.NotFoundHandler = collectAPIStats("notfound", httpTraceAll(errorResponseHandler))
 	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(methodNotAllowedHandler("S3")))
-}
-
-// corsHandler handler for CORS (Cross Origin Resource Sharing)
-func corsHandler(handler http.Handler) http.Handler {
-	commonS3Headers := []string{
-		xhttp.Date,
-		xhttp.ETag,
-		xhttp.ServerInfo,
-		xhttp.Connection,
-		xhttp.AcceptRanges,
-		xhttp.ContentRange,
-		xhttp.ContentEncoding,
-		xhttp.ContentLength,
-		xhttp.ContentType,
-		xhttp.ContentDisposition,
-		xhttp.LastModified,
-		xhttp.ContentLanguage,
-		xhttp.CacheControl,
-		xhttp.RetryAfter,
-		xhttp.AmzBucketRegion,
-		xhttp.Expires,
-		"X-Amz*",
-		"x-amz*",
-		"*",
-	}
-	opts := cors.Options{
-		AllowOriginFunc: func(origin string) bool {
-			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
-				if wildcard.MatchSimple(allowedOrigin, origin) {
-					return true
-				}
-			}
-			return false
-		},
-		AllowedMethods: []string{
-			http.MethodGet,
-			http.MethodPut,
-			http.MethodHead,
-			http.MethodPost,
-			http.MethodDelete,
-			http.MethodOptions,
-			http.MethodPatch,
-		},
-		AllowedHeaders:   commonS3Headers,
-		ExposedHeaders:   commonS3Headers,
-		AllowCredentials: true,
-	}
-	return cors.New(opts).Handler(handler)
 }

@@ -11,6 +11,7 @@ This feature allows multiple independent MinIO sites (or clusters) that are usin
   - Bucket Tags
   - Bucket Object-Lock configurations (including retention and legal hold configuration)
   - Bucket Encryption configuration
+  - Bucket CORS configuration
 
 > NOTE: Bucket versioning is automatically enabled for all new and existing buckets on all replicated sites.
 

@@ -422,6 +422,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 			HandlerFunc(adminMiddleware(adminAPI.HealthInfoHandler))
 	}
 
+	// Match OPTIONS for CORS preflight, needed by mux in order to trigger the middlewares
+	adminRouter.Methods(http.MethodOptions).Handler(httpTraceAll(errorResponseHandler))
+
 	// If none of the routes match add default error handler routes
 	adminRouter.NotFoundHandler = httpTraceAll(errorResponseHandler)
 	adminRouter.MethodNotAllowedHandler = httpTraceAll(methodNotAllowedHandler("Admin"))

@@ -57,7 +57,6 @@ import (
 	"unsafe"
 
 	"github.com/fatih/color"
-
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/internal/auth"
@@ -364,7 +363,7 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 	}
 
 	// Run TestServer.
-	testServer.Server = httptest.NewUnstartedServer(setCriticalErrorHandler(corsHandler(httpHandler)))
+	testServer.Server = httptest.NewUnstartedServer(setCriticalErrorHandler(httpHandler))
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
@@ -1327,6 +1326,13 @@ func getDeletePolicyURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
+// return URL for put/get/delete bucket CORS config.
+func getBucketCorsURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("cors", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL for creating the bucket.
 func getMakeBucketURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
@@ -2009,6 +2015,12 @@ func registerBucketLevelFunc(bucket *mux.Router, api objectAPIHandlers, apiFunct
 		case "GetBucketPolicy":
 			// Register Get Bucket policy HTTP Handler.
 			bucket.Methods(http.MethodGet).HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+		case "PutBucketCors":
+			bucket.Methods(http.MethodPut).HandlerFunc(api.PutBucketCorsHandler).Queries("cors", "")
+		case "GetBucketCors":
+			bucket.Methods(http.MethodGet).HandlerFunc(api.GetBucketCorsHandler).Queries("cors", "")
+		case "DeleteBucketCors":
+			bucket.Methods(http.MethodDelete).HandlerFunc(api.DeleteBucketCorsHandler).Queries("cors", "")
 		case "GetBucketLifecycle":
 			bucket.Methods(http.MethodGet).HandlerFunc(api.GetBucketLifecycleHandler).Queries("lifecycle", "")
 		case "PutBucketLifecycle":

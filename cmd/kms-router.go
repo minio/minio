@@ -61,6 +61,9 @@ func registerKMSRouter(router *mux.Router) {
 		kmsRouter.Methods(http.MethodGet).Path(version + "/key/status").HandlerFunc(gz(httpTraceAll(kmsAPI.KMSKeyStatusHandler)))
 	}
 
+	// Match OPTIONS for CORS preflight, needed by mux in order to trigger the middlewares
+	kmsRouter.Methods(http.MethodOptions).Handler(httpTraceAll(errorResponseHandler))
+
 	// If none of the routes match add default error handler routes
 	kmsRouter.NotFoundHandler = httpTraceAll(errorResponseHandler)
 	kmsRouter.MethodNotAllowedHandler = httpTraceAll(methodNotAllowedHandler("KMS"))

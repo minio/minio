@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+    <CORSRule>
+      <AllowedOrigin>http://www.example1.com</AllowedOrigin>
+      <AllowedMethod>PUT</AllowedMethod>
+      <AllowedMethod>POST</AllowedMethod>
+      <AllowedMethod>DELETE</AllowedMethod>
+      <AllowedHeader>*</AllowedHeader>
+    </CORSRule>
+    <CORSRule>
+      <AllowedOrigin>http://www.example2.com</AllowedOrigin>
+      <AllowedMethod>PUT</AllowedMethod>
+      <AllowedMethod>POST</AllowedMethod>
+      <AllowedMethod>DELETE</AllowedMethod>
+      <AllowedHeader>*</AllowedHeader>
+    </CORSRule>
+    <CORSRule>
+      <AllowedOrigin>*</AllowedOrigin>
+      <AllowedMethod>GET</AllowedMethod>
+    </CORSRule>
+</CORSConfiguration>

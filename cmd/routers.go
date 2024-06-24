@@ -46,6 +46,8 @@ func registerDistErasureRouters(router *mux.Router, endpointServerPools Endpoint
 	// Add lock grid to router
 	router.Handle(grid.RouteLockPath, adminMiddleware(lockGrid.Handler(storageServerRequestValidate), noGZFlag, noObjLayerFlag))
 
+	// TODO: We probably don't need OPTIONS preflight matching on this router, but just check.
+
 	// Add grid to router
 	router.Handle(grid.RoutePath, adminMiddleware(commonGrid.Handler(storageServerRequestValidate), noGZFlag, noObjLayerFlag))
 }
@@ -77,6 +79,8 @@ var globalMiddlewares = []mux.MiddlewareFunc{
 	setUploadForwardingMiddleware,
 	// Add bucket forwarding middleware
 	setBucketForwardingMiddleware,
+	// CORS middleware
+	corsHandler,
 	// Add new middlewares here.
 }
 

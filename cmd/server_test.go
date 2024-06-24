@@ -38,6 +38,7 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
+	xcors "github.com/minio/pkg/v3/cors"
 	"github.com/minio/pkg/v3/policy"
 )
 
@@ -80,7 +81,8 @@ func verifyError(c *check, response *http.Response, code, description string, st
 
 func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.SetUpSuite(c)
-	suite.TestCors(c)
+	suite.TestGlobalCors(c)
+	suite.TestBucketCors(c)
 	suite.TestObjectDir(c)
 	suite.TestBucketPolicy(c)
 	suite.TestDeleteBucket(c)
@@ -251,7 +253,7 @@ func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *check) {
 	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
 }
 
-func (s *TestSuiteCommon) TestCors(c *check) {
+func (s *TestSuiteCommon) TestGlobalCors(c *check) {
 	expectedMap := http.Header{}
 	expectedMap.Set("Access-Control-Allow-Credentials", "true")
 	expectedMap.Set("Access-Control-Allow-Origin", "http://foobar.com")
@@ -278,21 +280,68 @@ func (s *TestSuiteCommon) TestCors(c *check) {
 	}
 	expectedMap.Set("Vary", "Origin")
 
-	req, _ := http.NewRequest(http.MethodOptions, s.endPoint, nil)
-	req.Header.Set("Origin", "http://foobar.com")
-	res, err := s.client.Do(req)
-	if err != nil {
-		c.Fatal(err)
+	stsPath := fmt.Sprintf("%s?%s=%s&%s=%s", SlashSeparator, stsAction, customTokenIdentity, stsVersion, stsAPIVersion)
+
+	testCases := []struct {
+		path      string
+		anonymous bool
+		method    string
+	}{
+		// One route from each subrouter with global CORS
+		{kmsPathPrefix + kmsAPIVersionPrefix + "/status", false, http.MethodGet},
+		{adminPathPrefix + adminAPIVersionPrefix + "/info", false, http.MethodGet},
+		{healthCheckPathPrefix + healthCheckClusterPath, true, http.MethodGet},
+		{minioReservedBucketPath + prometheusMetricsV2ClusterPath, false, http.MethodGet},
+		{stsPath, true, http.MethodPost},
+	}
+	// Check preflight OPTIONS requests against all paths
+	for _, tc := range testCases {
+		var err error
+		var req *http.Request
+		if tc.anonymous {
+			// The Generic handlers reject non-anonymous requests to some paths using heuristics, e.g. guessIsHealthCheckReq().
+			req, err = http.NewRequest(http.MethodOptions, s.endPoint+tc.path, nil)
+		} else {
+			req, err = newTestSignedRequest(http.MethodOptions, s.endPoint+tc.path, 0, nil, s.accessKey, s.secretKey, s.signer)
+		}
+		c.Assert(err, nil)
+		req.Header.Set("Origin", "http://foobar.com")
+		req.Header.Set("Access-Control-Request-Method", "PUT")
+		res, err := s.client.Do(req)
+		c.Assert(err, nil)
+
+		// Preflight OPTIONS requests return specific headers
+		c.Assert(res.Header.Get("Access-Control-Allow-Credentials"), "true")
+		c.Assert(res.Header.Get("Access-Control-Allow-Methods"), "PUT")
+		c.Assert(res.Header.Get("Access-Control-Allow-Origin"), "http://foobar.com")
+		c.Assert(res.Header.Get("Access-Control-Expose-Headers"), "")
+		c.Assert(res.Header.Get("Vary"), "Origin, Access-Control-Request-Method, Access-Control-Request-Headers")
 	}
 
-	for k := range expectedMap {
-		if v, ok := res.Header[k]; !ok {
-			c.Errorf("Expected key %s missing from %v", k, res.Header)
+	// Check test case's method for requests against all paths
+	for _, tc := range testCases {
+		var err error
+		var req *http.Request
+		if tc.anonymous {
+			// The Generic handlers reject non-anonymous requests to some paths using heuristics, e.g. guessIsHealthCheckReq().
+			req, err = http.NewRequest(tc.method, s.endPoint+tc.path, nil)
 		} else {
-			expectedSet := set.CreateStringSet(expectedMap[k]...)
-			gotSet := set.CreateStringSet(strings.Split(v[0], ", ")...)
-			if !expectedSet.Equals(gotSet) {
-				c.Errorf("Expected value %v, got %v", strings.Join(expectedMap[k], ", "), v)
+			req, err = newTestSignedRequest(tc.method, s.endPoint+tc.path, 0, nil, s.accessKey, s.secretKey, s.signer)
+		}
+		c.Assert(err, nil)
+		req.Header.Set("Origin", "http://foobar.com")
+		res, err := s.client.Do(req)
+		c.Assert(err, nil)
+
+		for k := range expectedMap {
+			if v, ok := res.Header[k]; !ok {
+				c.Errorf("Expected key %s missing from %v", k, res.Header)
+			} else {
+				expectedSet := set.CreateStringSet(expectedMap[k]...)
+				gotSet := set.CreateStringSet(strings.Split(v[0], ", ")...)
+				if !expectedSet.Equals(gotSet) {
+					c.Errorf("Expected value %v, got %v", strings.Join(expectedMap[k], ", "), v)
+				}
 			}
 		}
 	}
@@ -445,6 +494,100 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *check) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, nil)
 
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusNotFound)
+}
+
+// TestBucketCors sets a bucket CORS configuration, verifies it, then deletes and verifies the deletion.
+func (s *TestSuiteCommon) TestBucketCors(c *check) {
+	bucketCorsStr := `<?xml version="1.0" encoding="UTF-8"?><CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><CORSRule><AllowedOrigin>http://*.example.com</AllowedOrigin><AllowedMethod>PUT</AllowedMethod><AllowedHeader>*</AllowedHeader></CORSRule></CORSConfiguration>`
+	bucketName := getRandomBucketName()
+
+	// HTTP request to create the random bucket.
+	request, err := newTestSignedRequest(http.MethodPut, getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	response, err := s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	// Verify global CORS apply to the new bucket
+	request, err = newTestSignedRequest(http.MethodOptions, getBucketLocationURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	request.Header.Set("Origin", "http://bucketcors.example.com")
+	request.Header.Set("Access-Control-Request-Method", "PATCH")
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusNoContent)
+	c.Assert(response.Header.Get("Access-Control-Allow-Origin"), "http://bucketcors.example.com")
+	c.Assert(response.Header.Get("Access-Control-Allow-Methods"), "PATCH")
+	c.Assert(response.Header.Get("Access-Control-Allow-Credentials"), "true")
+
+	// Put a new bucket CORS config.
+	request, err = newTestSignedRequest(http.MethodPut, getBucketCorsURL(s.endPoint, bucketName),
+		int64(len(bucketCorsStr)), bytes.NewReader([]byte(bucketCorsStr)), s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	// Verify bucket specific CORS config now applies and blocks PATCH
+	request, err = newTestSignedRequest(http.MethodOptions, getBucketLocationURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	request.Header.Set("Origin", "http://bucketcors.example.com")
+	request.Header.Set("Access-Control-Request-Method", "PATCH")
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusForbidden)
+
+	// Verify bucket CORS config now applies and allows PUT
+	request, err = newTestSignedRequest(http.MethodOptions, getBucketLocationURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	request.Header.Set("Origin", "http://bucketcors.example.com")
+	request.Header.Set("Access-Control-Request-Method", "PUT")
+	request.Header.Set("Access-Control-Request-Headers", "X-Custom-Header")
+
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+	c.Assert(response.Header.Get("Access-Control-Allow-Origin"), "http://bucketcors.example.com")
+	c.Assert(response.Header.Get("Access-Control-Allow-Methods"), "PUT")
+	c.Assert(response.Header.Get("Access-Control-Allow-Credentials"), "true")
+	c.Assert(response.Header.Get("Access-Control-Allow-Headers"), "x-custom-header")
+
+	// Fetch the uploaded CORS config.
+	request, err = newTestSignedRequest(http.MethodGet, getBucketCorsURL(s.endPoint, bucketName), 0, nil,
+		s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusOK)
+	respCors, err := io.ReadAll(response.Body)
+	c.Assert(err, nil)
+
+	// Verify if downloaded CORS config matches with previously uploaded.
+	wantConf, err := xcors.ParseBucketCorsConfig(strings.NewReader(bucketCorsStr))
+	c.Assert(err, nil)
+	gotConf, err := xcors.ParseBucketCorsConfig(bytes.NewReader(respCors))
+	c.Assert(err, nil)
+	c.Assert(reflect.DeepEqual(wantConf, gotConf), true)
+
+	// Delete CORS config.
+	request, err = newTestSignedRequest(http.MethodDelete, getBucketCorsURL(s.endPoint, bucketName), 0, nil,
+		s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+	response, err = s.client.Do(request)
+	c.Assert(err, nil)
+	c.Assert(response.StatusCode, http.StatusNoContent)
+
+	// Verify if the CORS config was indeed deleted.
+	request, err = newTestSignedRequest(http.MethodGet, getBucketCorsURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
 	response, err = s.client.Do(request)
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusNotFound)

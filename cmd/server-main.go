@@ -872,7 +872,7 @@ func serverMain(ctx *cli.Context) {
 		close(globalLockGridStart)
 
 		httpServer := xhttp.NewServer(getServerListenAddrs()).
-			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
+			UseHandler(setCriticalErrorHandler(handler)).
 			UseTLSConfig(newTLSConfig(getCert)).
 			UseIdleTimeout(globalServerCtxt.IdleTimeout).
 			UseReadHeaderTimeout(globalServerCtxt.ReadHeaderTimeout).

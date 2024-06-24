@@ -219,7 +219,7 @@ func guessIsHealthCheckReq(req *http.Request) bool {
 		return false
 	}
 	aType := getRequestAuthType(req)
-	return aType == authTypeAnonymous && (req.Method == http.MethodGet || req.Method == http.MethodHead) &&
+	return aType == authTypeAnonymous && (req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodOptions) &&
 		(req.URL.Path == healthCheckPathPrefix+healthCheckLivenessPath ||
 			req.URL.Path == healthCheckPathPrefix+healthCheckReadinessPath ||
 			req.URL.Path == healthCheckPathPrefix+healthCheckClusterPath ||

@@ -43,7 +43,6 @@ We found the following APIs to be redundant or less useful outside of AWS S3. If
 ### List of Amazon S3 Bucket API's not supported on MinIO
 
 - BucketACL (Use [bucket policies](https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html) instead)
-- BucketCORS (CORS enabled by default on all buckets for all HTTP verbs, you can optionally restrict the CORS domains)
 - BucketWebsite (Use [`caddy`](https://github.com/caddyserver/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
 - BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://min.io/docs/minio/linux/administration/monitoring/bucket-notifications.html) APIs)
 
