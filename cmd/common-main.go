@@ -433,7 +433,6 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	ctxt.RecvBufSize = ctx.Int("recv-buf-size")
 	ctxt.IdleTimeout = ctx.Duration("idle-timeout")
 	ctxt.UserTimeout = ctx.Duration("conn-user-timeout")
-	ctxt.ShutdownTimeout = ctx.Duration("shutdown-timeout")
 
 	if conf := ctx.String("config"); len(conf) > 0 {
 		err = mergeServerCtxtFromConfigFile(conf, ctxt)

@@ -49,23 +49,18 @@ func NewEventNotifier(ctx context.Context) *EventNotifier {
 }
 
 // GetARNList - returns available ARNs.
-func (evnot *EventNotifier) GetARNList(onlyActive bool) []string {
+func (evnot *EventNotifier) GetARNList() []string {
 	arns := []string{}
 	if evnot == nil {
 		return arns
 	}
 	region := globalSite.Region()
-	for targetID, target := range evnot.targetList.TargetMap() {
+	for targetID := range evnot.targetList.TargetMap() {
 		// httpclient target is part of ListenNotification
 		// which doesn't need to be listed as part of the ARN list
 		// This list is only meant for external targets, filter
 		// this out pro-actively.
 		if !strings.HasPrefix(targetID.ID, "httpclient+") {
-			if onlyActive {
-				if _, err := target.IsActive(); err != nil {
-					continue
-				}
-			}
 			arns = append(arns, targetID.ToARN(region).String())
 		}
 	}
@@ -74,7 +69,7 @@ func (evnot *EventNotifier) GetARNList(onlyActive bool) []string {
 }
 
 // Loads notification policies for all buckets into EventNotifier.
-func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
+func (evnot *EventNotifier) set(bucket string, meta BucketMetadata) {
 	config := meta.notificationConfig
 	if config == nil {
 		return
@@ -86,7 +81,7 @@ func (evnot *EventNotifier) set(bucket BucketInfo, meta BucketMetadata) {
 			internalLogIf(GlobalContext, err)
 		}
 	}
-	evnot.AddRulesMap(bucket.Name, config.ToRulesMap())
+	evnot.AddRulesMap(bucket, config.ToRulesMap())
 }
 
 // Targets returns all the registered targets

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 
 	"cloud.google.com/go/storage"
 	"github.com/minio/madmin-go/v3"
@@ -118,14 +117,9 @@ func newWarmBackendGCS(conf madmin.TierGCS, tier string) (*warmBackendGCS, error
 		return nil, err
 	}
 
-	clnt := &http.Client{
-		Transport: globalRemoteTargetTransport,
-	}
-
 	client, err := storage.NewClient(context.Background(),
 		option.WithCredentialsJSON(credsJSON),
 		option.WithScopes(storage.ScopeReadWrite),
-		option.WithHTTPClient(clnt),
 		option.WithUserAgent(fmt.Sprintf("gcs-tier-%s", tier)+SlashSeparator+ReleaseTag),
 	)
 	if err != nil {

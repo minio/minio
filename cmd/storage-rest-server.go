@@ -378,7 +378,16 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 		return nil, grid.NewRemoteErr(err)
 	}
 
-	fi, err := s.getStorage().ReadVersion(context.Background(), origvolume, volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
+	inclFreeVersions, err := strconv.ParseBool(params.Get(storageRESTInclFreeVersions))
+	if err != nil {
+		return nil, grid.NewRemoteErr(err)
+	}
+
+	fi, err := s.getStorage().ReadVersion(context.Background(), origvolume, volume, filePath, versionID, ReadOptions{
+		InclFreeVersions: inclFreeVersions,
+		ReadData:         readData,
+		Healing:          healing,
+	})
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
@@ -404,7 +413,18 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 		s.writeErrorResponse(w, err)
 		return
 	}
-	fi, err := s.getStorage().ReadVersion(r.Context(), origvolume, volume, filePath, versionID, ReadOptions{ReadData: readData, Healing: healing})
+
+	inclFreeVersions, err := strconv.ParseBool(r.Form.Get(storageRESTInclFreeVersions))
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	fi, err := s.getStorage().ReadVersion(r.Context(), origvolume, volume, filePath, versionID, ReadOptions{
+		InclFreeVersions: inclFreeVersions,
+		ReadData:         readData,
+		Healing:          healing,
+	})
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

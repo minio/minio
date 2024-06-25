@@ -47,43 +47,25 @@ function start_minio_3_node() {
 	disown $pid3
 
 	export MC_HOST_myminio="http://minio:minio123@127.0.0.1:$((start_port + 1))"
-	/tmp/mc ready myminio
+	timeout 15m /tmp/mc ready myminio || fail
 
 	[ ${first_time} -eq 0 ] && upload_objects
 	[ ${first_time} -ne 0 ] && sleep 120
 
 	if ! ps -p $pid1 1>&2 >/dev/null; then
-		echo "server1 log:"
-		cat "${WORK_DIR}/dist-minio-server1.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio server 1 is not running" && fail
 	fi
 
 	if ! ps -p $pid2 1>&2 >/dev/null; then
-		echo "server2 log:"
-		cat "${WORK_DIR}/dist-minio-server2.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio server 2 is not running" && fail
 	fi
 
 	if ! ps -p $pid3 1>&2 >/dev/null; then
-		echo "server3 log:"
-		cat "${WORK_DIR}/dist-minio-server3.log"
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		echo "minio server 3 is not running" && fail
 	fi
 
 	if ! pkill minio; then
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		fail
 	fi
 
 	sleep 1
@@ -116,6 +98,17 @@ function check_heal() {
 
 function purge() {
 	rm -rf "$1"
+}
+
+function fail() {
+	for i in $(seq 1 3); do
+		echo "server$i log:"
+		cat "${WORK_DIR}/dist-minio-server$i.log"
+	done
+	pkill -9 minio
+	echo "FAILED"
+	purge "$WORK_DIR"
+	exit 1
 }
 
 function __init__() {
@@ -155,14 +148,7 @@ function perform_test() {
 	check_heal ${1}
 	rv=$?
 	if [ "$rv" == "1" ]; then
-		for i in $(seq 1 3); do
-			echo "server$i log:"
-			cat "${WORK_DIR}/dist-minio-server$i.log"
-		done
-		pkill -9 minio
-		echo "FAILED"
-		purge "$WORK_DIR"
-		exit 1
+		fail
 	fi
 }
 

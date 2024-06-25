@@ -189,12 +189,14 @@ func printMinIOVersion(c *cli.Context) {
 	io.Copy(c.App.Writer, versionBanner(c))
 }
 
+var debugNoExit = env.Get("_MINIO_DEBUG_NO_EXIT", "") != ""
+
 // Main main for minio server.
 func Main(args []string) {
 	// Set the minio app name.
 	appName := filepath.Base(args[0])
 
-	if env.Get("_MINIO_DEBUG_NO_EXIT", "") != "" {
+	if debugNoExit {
 		freeze := func(_ int) {
 			// Infinite blocking op
 			<-make(chan struct{})

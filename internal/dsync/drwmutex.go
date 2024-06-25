@@ -639,9 +639,17 @@ func (dm *DRWMutex) Unlock(ctx context.Context) {
 	tolerance := len(restClnts) / 2
 
 	isReadLock := false
-	for !releaseAll(ctx, dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
-		time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryMinInterval)))
-	}
+	started := time.Now()
+	// Do async unlocking.
+	// This means unlock will no longer block on the network or missing quorum.
+	go func() {
+		for !releaseAll(ctx, dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
+			time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryMinInterval)))
+			if time.Since(started) > dm.clnt.Timeouts.UnlockCall {
+				return
+			}
+		}
+	}()
 }
 
 // RUnlock releases a read lock held on dm.
@@ -678,11 +686,20 @@ func (dm *DRWMutex) RUnlock(ctx context.Context) {
 
 	// Tolerance is not set, defaults to half of the locker clients.
 	tolerance := len(restClnts) / 2
-
 	isReadLock := true
-	for !releaseAll(ctx, dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
-		time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryMinInterval)))
-	}
+	started := time.Now()
+	// Do async unlocking.
+	// This means unlock will no longer block on the network or missing quorum.
+	go func() {
+		for !releaseAll(ctx, dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
+			time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryMinInterval)))
+			// If we have been waiting for more than the force unlock timeout, return
+			// Remotes will have canceled due to the missing refreshes anyway.
+			if time.Since(started) > dm.clnt.Timeouts.UnlockCall {
+				return
+			}
+		}
+	}()
 }
 
 // sendRelease sends a release message to a node that previously granted a lock

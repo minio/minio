@@ -259,7 +259,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 		}
 		return e.cached.ToFileInfo(bucket, e.name, "", false, false)
 	}
-	return getFileInfo(e.metadata, bucket, e.name, "", false, false)
+	return getFileInfo(e.metadata, bucket, e.name, "", fileInfoOpts{})
 }
 
 // xlmeta returns the decoded metadata.

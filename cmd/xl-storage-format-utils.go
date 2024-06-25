@@ -103,7 +103,13 @@ func getAllFileInfoVersions(xlMetaBuf []byte, volume, path string, allParts bool
 	}, nil
 }
 
-func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allParts bool) (FileInfo, error) {
+type fileInfoOpts struct {
+	InclFreeVersions bool
+	Data             bool
+	AllParts         bool
+}
+
+func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, opts fileInfoOpts) (FileInfo, error) {
 	var fi FileInfo
 	var err error
 	var inData xlMetaInlineData
@@ -111,7 +117,7 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allPart
 		return FileInfo{}, e
 	} else if buf != nil {
 		inData = data
-		fi, err = buf.ToFileInfo(volume, path, versionID, allParts)
+		fi, err = buf.ToFileInfo(volume, path, versionID, opts.AllParts)
 		if len(buf) != 0 && errors.Is(err, errFileNotFound) {
 			// This special case is needed to handle len(xlMeta.versions) == 0
 			return FileInfo{
@@ -140,15 +146,16 @@ func getFileInfo(xlMetaBuf []byte, volume, path, versionID string, data, allPart
 			}, nil
 		}
 		inData = xlMeta.data
-		fi, err = xlMeta.ToFileInfo(volume, path, versionID, false, allParts)
+		fi, err = xlMeta.ToFileInfo(volume, path, versionID, opts.InclFreeVersions, opts.AllParts)
 	}
-	if !data || err != nil {
+	if !opts.Data || err != nil {
 		return fi, err
 	}
 	versionID = fi.VersionID
 	if versionID == "" {
 		versionID = nullVersionID
 	}
+
 	fi.Data = inData.find(versionID)
 	if len(fi.Data) == 0 {
 		// PR #11758 used DataDir, preserve it

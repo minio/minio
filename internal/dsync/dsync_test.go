@@ -293,6 +293,8 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 		dm.Unlock(ctx)
+		// Unlock is not blocking. Try to get a new lock.
+		dm.GetLock(ctx, nil, id, source, Options{Timeout: 5 * time.Minute})
 		unlockReturned <- struct{}{}
 	}()
 

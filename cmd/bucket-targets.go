@@ -612,7 +612,7 @@ func (sys *BucketTargetSys) UpdateAllTargets(bucket string, tgts *madmin.BucketT
 }
 
 // create minio-go clients for buckets having remote targets
-func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
+func (sys *BucketTargetSys) set(bucket string, meta BucketMetadata) {
 	cfg := meta.bucketTargetConfig
 	if cfg == nil || cfg.Empty() {
 		return
@@ -626,9 +626,9 @@ func (sys *BucketTargetSys) set(bucket BucketInfo, meta BucketMetadata) {
 			continue
 		}
 		sys.arnRemotesMap[tgt.Arn] = arnTarget{Client: tgtClient}
-		sys.updateBandwidthLimit(bucket.Name, tgt.Arn, tgt.BandwidthLimit)
+		sys.updateBandwidthLimit(bucket, tgt.Arn, tgt.BandwidthLimit)
 	}
-	sys.targetsMap[bucket.Name] = cfg.Targets
+	sys.targetsMap[bucket] = cfg.Targets
 }
 
 // Returns a minio-go Client configured to access remote host described in replication target config.

@@ -427,11 +427,14 @@ func (client *peerRESTClient) CommitBinary(ctx context.Context) error {
 }
 
 // SignalService - sends signal to peer nodes.
-func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string, dryRun bool) error {
+func (client *peerRESTClient) SignalService(sig serviceSignal, subSys string, dryRun bool, execAt *time.Time) error {
 	values := grid.NewMSS()
 	values.Set(peerRESTSignal, strconv.Itoa(int(sig)))
 	values.Set(peerRESTDryRun, strconv.FormatBool(dryRun))
 	values.Set(peerRESTSubSys, subSys)
+	if execAt != nil {
+		values.Set(peerRESTExecAt, execAt.Format(time.RFC3339Nano))
+	}
 	_, err := signalServiceRPC.Call(context.Background(), client.gridConn(), values)
 	return err
 }

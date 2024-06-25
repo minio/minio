@@ -36,7 +36,6 @@ import (
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio-go/v7/pkg/tags"
 	"github.com/minio/minio/internal/dsync"
-	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/console"
 	"github.com/minio/pkg/v3/sync/errgroup"
@@ -79,10 +78,6 @@ type erasureSets struct {
 	defaultParityCount      int
 
 	poolIndex int
-
-	// A channel to send the set index to the MRF when
-	// any disk belonging to that set is connected
-	setReconnectEvent chan int
 
 	// Distribution algorithm of choice.
 	distributionAlgo string
@@ -380,7 +375,6 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 		setDriveCount:      setDriveCount,
 		defaultParityCount: defaultParityCount,
 		format:             format,
-		setReconnectEvent:  make(chan int),
 		distributionAlgo:   format.Erasure.DistributionAlgo,
 		deploymentID:       uuid.MustParse(format.ID),
 		poolIndex:          poolIdx,
@@ -661,14 +655,6 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-	}
-	select {
-	case _, ok := <-s.setReconnectEvent:
-		if ok {
-			xioutil.SafeClose(s.setReconnectEvent)
-		}
-	default:
-		xioutil.SafeClose(s.setReconnectEvent)
 	}
 	return nil
 }

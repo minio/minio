@@ -22,11 +22,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"log"
-	"math/rand"
 	"net"
 	"net/http"
-	"os"
-	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,11 +40,6 @@ var (
 )
 
 const (
-	shutdownPollIntervalMax = 500 * time.Millisecond
-
-	// DefaultShutdownTimeout - default shutdown timeout to gracefully shutdown server.
-	DefaultShutdownTimeout = 5 * time.Second
-
 	// DefaultIdleTimeout for idle inactive connections
 	DefaultIdleTimeout = 30 * time.Second
 
@@ -61,13 +53,12 @@ const (
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs           []string      // addresses on which the server listens for new connection.
-	TCPOptions      TCPOptions    // all the configurable TCP conn specific configurable options.
-	ShutdownTimeout time.Duration // timeout used for graceful server shutdown.
-	listenerMutex   sync.Mutex    // to guard 'listener' field.
-	listener        *httpListener // HTTP listener for all 'Addrs' field.
-	inShutdown      uint32        // indicates whether the server is in shutdown or not
-	requestCount    int32         // counter holds no. of request in progress.
+	Addrs         []string      // addresses on which the server listens for new connection.
+	TCPOptions    TCPOptions    // all the configurable TCP conn specific configurable options.
+	listenerMutex sync.Mutex    // to guard 'listener' field.
+	listener      *httpListener // HTTP listener for all 'Addrs' field.
+	inShutdown    uint32        // indicates whether the server is in shutdown or not
+	requestCount  int32         // counter holds no. of request in progress.
 }
 
 // GetRequestCount - returns number of request in progress.
@@ -166,53 +157,8 @@ func (srv *Server) Shutdown() error {
 		return err
 	}
 
-	pollIntervalBase := time.Millisecond
-	nextPollInterval := func() time.Duration {
-		// Add 10% jitter.
-		interval := pollIntervalBase + time.Duration(rand.Intn(int(pollIntervalBase/10)))
-		// Double and clamp for next time.
-		pollIntervalBase *= 2
-		if pollIntervalBase > shutdownPollIntervalMax {
-			pollIntervalBase = shutdownPollIntervalMax
-		}
-		return interval
-	}
-
 	// Wait for opened connection to be closed up to Shutdown timeout.
-	shutdownTimeout := srv.ShutdownTimeout
-	shutdownTimer := time.NewTimer(shutdownTimeout)
-	defer shutdownTimer.Stop()
-
-	timer := time.NewTimer(nextPollInterval())
-	defer timer.Stop()
-	for {
-		select {
-		case <-shutdownTimer.C:
-			if atomic.LoadInt32(&srv.requestCount) <= 0 {
-				return nil
-			}
-
-			// Write all running goroutines.
-			tmp, err := os.CreateTemp("", "minio-goroutines-*.txt")
-			if err == nil {
-				_ = pprof.Lookup("goroutine").WriteTo(tmp, 1)
-				tmp.Close()
-				return errors.New("timed out. some connections are still active. goroutines written to " + tmp.Name())
-			}
-			return errors.New("timed out. some connections are still active")
-		case <-timer.C:
-			if atomic.LoadInt32(&srv.requestCount) <= 0 {
-				return nil
-			}
-			timer.Reset(nextPollInterval())
-		}
-	}
-}
-
-// UseShutdownTimeout configure server shutdown timeout
-func (srv *Server) UseShutdownTimeout(d time.Duration) *Server {
-	srv.ShutdownTimeout = d
-	return srv
+	return nil
 }
 
 // UseIdleTimeout configure idle connection timeout

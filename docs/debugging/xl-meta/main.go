@@ -20,6 +20,7 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/zip"
@@ -237,7 +239,7 @@ FLAGS:
 			}
 
 			if c.Bool("data") {
-				b, err := data.json()
+				b, err := data.json(true)
 				if err != nil {
 					return nil, err
 				}
@@ -562,7 +564,7 @@ func (x xlMetaInlineData) versionOK() bool {
 	return x[0] > 0 && x[0] <= xlMetaInlineDataVer
 }
 
-func (x xlMetaInlineData) json() ([]byte, error) {
+func (x xlMetaInlineData) json(value bool) ([]byte, error) {
 	if len(x) == 0 {
 		return []byte("{}"), nil
 	}
@@ -606,6 +608,17 @@ func (x xlMetaInlineData) json() ([]byte, error) {
 				s += ", \"bitrot_valid\": true"
 			} else {
 				s += ", \"bitrot_valid\": false"
+			}
+			if value {
+				if utf8.Valid(data) {
+					// Encode as JSON string.
+					b, err := json.Marshal(string(data))
+					if err == nil {
+						s += `, "data_string": ` + string(b)
+					}
+				}
+				// Base64 encode.
+				s += `, "data_base64": "` + base64.StdEncoding.EncodeToString(data) + `"`
 			}
 			s += "}"
 		}

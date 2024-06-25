@@ -17,6 +17,8 @@
 
 package cmd
 
+import "time"
+
 const (
 	peerRESTVersion       = "v39" // add more flags to speedtest API
 	peerRESTVersionPrefix = SlashSeparator + peerRESTVersion
@@ -69,6 +71,7 @@ const (
 	peerRESTURL         = "url"
 	peerRESTSha256Sum   = "sha256sum"
 	peerRESTReleaseInfo = "releaseinfo"
+	peerRESTExecAt      = "exec-at"
 
 	peerRESTListenBucket = "bucket"
 	peerRESTListenPrefix = "prefix"
@@ -76,3 +79,5 @@ const (
 	peerRESTListenEvents = "events"
 	peerRESTLogMask      = "log-mask"
 )
+
+const restartUpdateDelay = 250 * time.Millisecond
