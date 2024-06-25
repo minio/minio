@@ -834,7 +834,7 @@ func serverHandleEnvVars() {
 		}
 	}
 
-	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
+	globalEnableSyncBoot = env.Get("MINIO_SYNC_BOOT", config.EnableOff) == config.EnableOn
 }
 
 func loadRootCredentials() {
