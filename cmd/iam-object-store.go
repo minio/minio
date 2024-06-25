@@ -440,12 +440,18 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (res map
 }
 
 // Assumes cache is locked by caller.
-func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
+func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache, firstTime bool) error {
+	bootstrapTraceMsgFirstTime := func(s string) {
+		if firstTime {
+			bootstrapTraceMsg(s)
+		}
+	}
+
 	if iamOS.objAPI == nil {
 		return errServerNotInitialized
 	}
 
-	bootstrapTraceMsg("loading all IAM items")
+	bootstrapTraceMsgFirstTime("loading all IAM items")
 
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
@@ -454,7 +460,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 
 	// Loads things in the same order as `LoadIAMCache()`
 
-	bootstrapTraceMsg("loading policy documents")
+	bootstrapTraceMsgFirstTime("loading policy documents")
 
 	policiesList := listedConfigItems[policiesListKey]
 	for _, item := range policiesList {
@@ -466,7 +472,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
 
 	if iamOS.usersSysType == MinIOUsersSysType {
-		bootstrapTraceMsg("loading regular IAM users")
+		bootstrapTraceMsgFirstTime("loading regular IAM users")
 		regUsersList := listedConfigItems[usersListKey]
 		for _, item := range regUsersList {
 			userName := path.Dir(item)
@@ -475,7 +481,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			}
 		}
 
-		bootstrapTraceMsg("loading regular IAM groups")
+		bootstrapTraceMsgFirstTime("loading regular IAM groups")
 		groupsList := listedConfigItems[groupsListKey]
 		for _, item := range groupsList {
 			group := path.Dir(item)
@@ -485,7 +491,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		}
 	}
 
-	bootstrapTraceMsg("loading user policy mapping")
+	bootstrapTraceMsgFirstTime("loading user policy mapping")
 	userPolicyMappingsList := listedConfigItems[policyDBUsersListKey]
 	for _, item := range userPolicyMappingsList {
 		userName := strings.TrimSuffix(item, ".json")
@@ -494,7 +500,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		}
 	}
 
-	bootstrapTraceMsg("loading group policy mapping")
+	bootstrapTraceMsgFirstTime("loading group policy mapping")
 	groupPolicyMappingsList := listedConfigItems[policyDBGroupsListKey]
 	for _, item := range groupPolicyMappingsList {
 		groupName := strings.TrimSuffix(item, ".json")
@@ -503,7 +509,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		}
 	}
 
-	bootstrapTraceMsg("loading service accounts")
+	bootstrapTraceMsgFirstTime("loading service accounts")
 	svcAccList := listedConfigItems[svcAccListKey]
 	svcUsersMap := make(map[string]UserIdentity, len(svcAccList))
 	for _, item := range svcAccList {
