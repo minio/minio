@@ -786,11 +786,15 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 
 	select {
 	case <-sys.configLoaded:
-		ldapUsers := make(map[string]madmin.UserInfo)
-		for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+		stsMap, err := sys.store.GetAllSTSUserMappings(sys.LDAPConfig.IsLDAPUserDN)
+		if err != nil {
+			return nil, err
+		}
+		ldapUsers := make(map[string]madmin.UserInfo, len(stsMap))
+		for user, policy := range stsMap {
 			ldapUsers[user] = madmin.UserInfo{
 				PolicyName: policy,
-				Status:     madmin.AccountEnabled,
+				Status:     statusEnabled,
 			}
 		}
 		return ldapUsers, nil
