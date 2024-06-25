@@ -3086,7 +3086,7 @@ func (p *ReplicationPool) deleteResyncMetadata(ctx context.Context, bucket strin
 }
 
 // initResync - initializes bucket replication resync for all buckets.
-func (p *ReplicationPool) initResync(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (p *ReplicationPool) initResync(ctx context.Context, buckets []string, objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errServerNotInitialized
 	}
@@ -3095,7 +3095,7 @@ func (p *ReplicationPool) initResync(ctx context.Context, buckets []BucketInfo, 
 	return nil
 }
 
-func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) {
+func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []string, objAPI ObjectLayer) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// Run the replication resync in a loop
 	for {
@@ -3113,13 +3113,13 @@ func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []Buck
 }
 
 // Loads bucket replication resync statuses into memory.
-func (p *ReplicationPool) loadResync(ctx context.Context, buckets []BucketInfo, objAPI ObjectLayer) error {
+func (p *ReplicationPool) loadResync(ctx context.Context, buckets []string, objAPI ObjectLayer) error {
 	// Make sure only one node running resync on the cluster.
 	ctx, cancel := globalLeaderLock.GetLock(ctx)
 	defer cancel()
 
 	for index := range buckets {
-		bucket := buckets[index].Name
+		bucket := buckets[index]
 
 		meta, err := loadBucketResyncMetadata(ctx, bucket, objAPI)
 		if err != nil {

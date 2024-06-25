@@ -439,23 +439,42 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (res map
 	return res, nil
 }
 
+const (
+	maxIAMLoadOpTime = 5 * time.Second
+)
+
 // Assumes cache is locked by caller.
-func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache) error {
+func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iamCache, firstTime bool) error {
+	bootstrapTraceMsgFirstTime := func(s string) {
+		if firstTime {
+			bootstrapTraceMsg(s)
+		}
+	}
+
 	if iamOS.objAPI == nil {
 		return errServerNotInitialized
 	}
 
-	bootstrapTraceMsg("loading all IAM items")
+	bootstrapTraceMsgFirstTime("loading all IAM items")
 
+	listStartTime := UTCNow()
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to list IAM data: %w", err)
 	}
+	if took := time.Since(listStartTime); took > maxIAMLoadOpTime {
+		var s strings.Builder
+		for k, v := range listedConfigItems {
+			s.WriteString(fmt.Sprintf("    %s: %d items\n", k, len(v)))
+		}
+		logger.Info("listAllIAMConfigItems took %.2fs with contents:\n%s", took.Seconds(), s.String())
+	}
 
 	// Loads things in the same order as `LoadIAMCache()`
 
-	bootstrapTraceMsg("loading policy documents")
+	bootstrapTraceMsgFirstTime("loading policy documents")
 
+	policyLoadStartTime := UTCNow()
 	policiesList := listedConfigItems[policiesListKey]
 	for _, item := range policiesList {
 		policyName := path.Dir(item)
@@ -463,10 +482,14 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			return fmt.Errorf("unable to load the policy doc `%s`: %w", policyName, err)
 		}
 	}
+	if took := time.Since(policyLoadStartTime); took > maxIAMLoadOpTime {
+		logger.Info("Policy docs load took %.2fs (for %d items)", took.Seconds(), len(policiesList))
+	}
 	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
 
 	if iamOS.usersSysType == MinIOUsersSysType {
-		bootstrapTraceMsg("loading regular IAM users")
+		bootstrapTraceMsgFirstTime("loading regular IAM users")
+		regUsersLoadStartTime := UTCNow()
 		regUsersList := listedConfigItems[usersListKey]
 		for _, item := range regUsersList {
 			userName := path.Dir(item)
@@ -474,8 +497,14 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 				return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
 			}
 		}
+		if took := time.Since(regUsersLoadStartTime); took > maxIAMLoadOpTime {
+			actualLoaded := len(cache.iamUsersMap)
+			logger.Info("Reg. users load took %.2fs (for %d items with %d expired items)", took.Seconds(),
+				len(regUsersList), len(regUsersList)-actualLoaded)
+		}
 
-		bootstrapTraceMsg("loading regular IAM groups")
+		bootstrapTraceMsgFirstTime("loading regular IAM groups")
+		groupsLoadStartTime := UTCNow()
 		groupsList := listedConfigItems[groupsListKey]
 		for _, item := range groupsList {
 			group := path.Dir(item)
@@ -483,9 +512,13 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 				return fmt.Errorf("unable to load the group `%s`: %w", group, err)
 			}
 		}
+		if took := time.Since(groupsLoadStartTime); took > maxIAMLoadOpTime {
+			logger.Info("Groups load took %.2fs (for %d items)", took.Seconds(), len(groupsList))
+		}
 	}
 
-	bootstrapTraceMsg("loading user policy mapping")
+	bootstrapTraceMsgFirstTime("loading user policy mapping")
+	userPolicyMappingLoadStartTime := UTCNow()
 	userPolicyMappingsList := listedConfigItems[policyDBUsersListKey]
 	for _, item := range userPolicyMappingsList {
 		userName := strings.TrimSuffix(item, ".json")
@@ -493,8 +526,12 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			return fmt.Errorf("unable to load the policy mapping for the user `%s`: %w", userName, err)
 		}
 	}
+	if took := time.Since(userPolicyMappingLoadStartTime); took > maxIAMLoadOpTime {
+		logger.Info("User policy mappings load took %.2fs (for %d items)", took.Seconds(), len(userPolicyMappingsList))
+	}
 
-	bootstrapTraceMsg("loading group policy mapping")
+	bootstrapTraceMsgFirstTime("loading group policy mapping")
+	groupPolicyMappingLoadStartTime := UTCNow()
 	groupPolicyMappingsList := listedConfigItems[policyDBGroupsListKey]
 	for _, item := range groupPolicyMappingsList {
 		groupName := strings.TrimSuffix(item, ".json")
@@ -502,8 +539,12 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			return fmt.Errorf("unable to load the policy mapping for the group `%s`: %w", groupName, err)
 		}
 	}
+	if took := time.Since(groupPolicyMappingLoadStartTime); took > maxIAMLoadOpTime {
+		logger.Info("Group policy mappings load took %.2fs (for %d items)", took.Seconds(), len(groupPolicyMappingsList))
+	}
 
-	bootstrapTraceMsg("loading service accounts")
+	bootstrapTraceMsgFirstTime("loading service accounts")
+	svcAccLoadStartTime := UTCNow()
 	svcAccList := listedConfigItems[svcAccListKey]
 	svcUsersMap := make(map[string]UserIdentity, len(svcAccList))
 	for _, item := range svcAccList {
@@ -512,9 +553,18 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			return fmt.Errorf("unable to load the service account `%s`: %w", userName, err)
 		}
 	}
+	if took := time.Since(svcAccLoadStartTime); took > maxIAMLoadOpTime {
+		logger.Info("Service accounts load took %.2fs (for %d items with %d expired items)", took.Seconds(),
+			len(svcAccList), len(svcAccList)-len(svcUsersMap))
+	}
+
+	bootstrapTraceMsg("loading STS account policy mapping")
+	stsPolicyMappingLoadStartTime := UTCNow()
+	var stsPolicyMappingsCount int
 	for _, svcAcc := range svcUsersMap {
 		svcParent := svcAcc.Credentials.ParentUser
 		if _, ok := cache.iamUsersMap[svcParent]; !ok {
+			stsPolicyMappingsCount++
 			// If a service account's parent user is not in iamUsersMap, the
 			// parent is an STS account. Such accounts may have a policy mapped
 			// on the parent user, so we load them. This is not needed for the
@@ -533,6 +583,10 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			}
 		}
 	}
+	if took := time.Since(stsPolicyMappingLoadStartTime); took > maxIAMLoadOpTime {
+		logger.Info("STS policy mappings load took %.2fs (for %d items)", took.Seconds(), stsPolicyMappingsCount)
+	}
+
 	// Copy svcUsersMap to cache.iamUsersMap
 	for k, v := range svcUsersMap {
 		cache.iamUsersMap[k] = v
