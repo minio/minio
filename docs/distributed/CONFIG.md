@@ -74,7 +74,7 @@ pools:
 - Each pool expects a minimum of 2 nodes per pool, and unique non-repeating hosts for each argument.
 - Each pool expects each host in this pool has the same number of drives specified as any other host.
 - Mixing `local-path` and `distributed-path` is not allowed, doing so would cause MinIO to refuse starting the server.
-- Ellipses notation (e.g. `{1...10}`) or bracket notations are fully allowed (e.g. `{a,c,f}`) to have multiple entries in one line.
+- Ellipses and bracket notation (e.g. `{1...10}`) are allowed.
 
 > NOTE: MinIO environmental variables still take precedence over the `config.yaml` file, however `config.yaml` is preferred over MinIO internal config KV settings via `mc admin config set alias/ <sub-system>`.
 
@@ -88,3 +88,4 @@ In subsequent releases we are planning to extend this to provide things like
   and decommissioning to provide a functionality that smaller deployments
   care about.
 
+- Fully allow bracket notation (e.g. `{a,c,f}`) to have multiple entries on one line.
