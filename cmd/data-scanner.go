@@ -227,7 +227,9 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
 				tmp, _ = cycleInfo.MarshalMsg(tmp)
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
-				scannerLogIf(ctx, fmt.Errorf("%w, Object %s", err, dataUsageBloomNamePath))
+				if err != nil {
+					scannerLogIf(ctx, fmt.Errorf("%w, Object %s", err, dataUsageBloomNamePath))
+				}
 			}
 		}
 	}
@@ -797,7 +799,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						}, madmin.HealItemObject)
 						stopFn(int(ver.Size))
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							scannerLogIf(ctx, fmt.Errorf("%w, Object %s/%s/%s", err, bucket, fiv.Name, ver.VersionID))
+							if err != nil {
+								scannerLogIf(ctx, fmt.Errorf("%w, Object %s/%s/%s", err, bucket, fiv.Name, ver.VersionID))
+							}
 						}
 						if err == nil {
 							successVersions++
