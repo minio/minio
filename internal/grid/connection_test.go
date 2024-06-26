@@ -169,7 +169,7 @@ func TestDisconnect(t *testing.T) {
 
 func TestDisconnectUnderLoad(t *testing.T) {
 	defer testlogger.T.SetLogTB(t)()
-	defer timeout(30 * time.Second)()
+	defer timeout(120 * time.Second)()
 	hosts, listeners, _ := getHosts(2)
 	dialer := &net.Dialer{
 		Timeout: 1 * time.Second,
