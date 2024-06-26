@@ -8,10 +8,8 @@ pkill minio
 pkill kes
 rm -rf /tmp/xl
 
-if [ ! -f ./mc ]; then
-	wget --quiet -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
-		chmod +x mc
-fi
+go install -v github.com/minio/mc@master
+cp -a $(go env GOPATH)/bin/mc ./mc
 
 if [ ! -f ./kes ]; then
 	wget --quiet -O kes https://github.com/minio/kes/releases/latest/download/kes-linux-amd64 &&
@@ -39,37 +37,37 @@ export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:9000/"
 (minio server http://localhost:9000/tmp/xl/{1...10}/disk{0...1} 2>&1 >/dev/null) &
 pid=$!
 
-./mc ready myminio
+mc ready myminio
 
-./mc admin user add myminio/ minio123 minio123
+mc admin user add myminio/ minio123 minio123
 
-./mc admin policy create myminio/ deny-non-sse-kms-pol ./docs/iam/policies/deny-non-sse-kms-objects.json
-./mc admin policy create myminio/ deny-invalid-sse-kms-pol ./docs/iam/policies/deny-objects-with-invalid-sse-kms-key-id.json
+mc admin policy create myminio/ deny-non-sse-kms-pol ./docs/iam/policies/deny-non-sse-kms-objects.json
+mc admin policy create myminio/ deny-invalid-sse-kms-pol ./docs/iam/policies/deny-objects-with-invalid-sse-kms-key-id.json
 
-./mc admin policy attach myminio deny-non-sse-kms-pol --user minio123
-./mc admin policy attach myminio deny-invalid-sse-kms-pol --user minio123
-./mc admin policy attach myminio consoleAdmin --user minio123
+mc admin policy attach myminio deny-non-sse-kms-pol --user minio123
+mc admin policy attach myminio deny-invalid-sse-kms-pol --user minio123
+mc admin policy attach myminio consoleAdmin --user minio123
 
-./mc mb -l myminio/test-bucket
-./mc mb -l myminio/multi-key-poc
+mc mb -l myminio/test-bucket
+mc mb -l myminio/multi-key-poc
 
 export MC_HOST_myminio1="http://minio123:minio123@localhost:9000/"
 
-./mc cp /etc/issue myminio1/test-bucket
+mc cp /etc/issue myminio1/test-bucket
 ret=$?
 if [ $ret -ne 0 ]; then
 	echo "BUG: PutObject to bucket: test-bucket should succeed. Failed"
 	exit 1
 fi
 
-./mc cp /etc/issue myminio1/multi-key-poc | grep -q "Insufficient permissions to access this path"
+mc cp /etc/issue myminio1/multi-key-poc | grep -q "Insufficient permissions to access this path"
 ret=$?
 if [ $ret -eq 0 ]; then
 	echo "BUG: PutObject to bucket: multi-key-poc without sse-kms should fail. Succedded"
 	exit 1
 fi
 
-./mc cp /etc/hosts myminio1/multi-key-poc/hosts --enc-kms "myminio1/multi-key-poc/hosts=minio-default-key"
+mc cp /etc/hosts myminio1/multi-key-poc/hosts --enc-kms "myminio1/multi-key-poc/hosts=minio-default-key"
 ret=$?
 if [ $ret -ne 0 ]; then
 	echo "BUG: PutObject to bucket: multi-key-poc with valid sse-kms should succeed. Failed"
