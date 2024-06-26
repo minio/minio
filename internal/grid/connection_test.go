@@ -330,13 +330,13 @@ func disconnectConnections(msg debugMsg, c ...*Connection) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	for _, conn := range c {
-		go func() {
+		go func(c *Connection) {
 			defer wg.Done()
-			conn.debugMsg(msg)
+			c.debugMsg(msg)
 			// There is a small race here...
 			// Technically the connection could be re-established before we wait for the disconnect.
-			conn.waitForDisconnect(ctx)
-		}()
+			c.waitForDisconnect(ctx)
+		}(conn)
 	}
 	wg.Wait()
 }
