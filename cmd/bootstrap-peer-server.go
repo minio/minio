@@ -106,14 +106,17 @@ func (s1 *ServerSystemConfig) Diff(s2 *ServerSystemConfig) error {
 }
 
 var skipEnvs = map[string]struct{}{
-	"MINIO_OPTS":          {},
-	"MINIO_CERT_PASSWD":   {},
-	"MINIO_SERVER_DEBUG":  {},
-	"MINIO_DSYNC_TRACE":   {},
-	"MINIO_ROOT_USER":     {},
-	"MINIO_ROOT_PASSWORD": {},
-	"MINIO_ACCESS_KEY":    {},
-	"MINIO_SECRET_KEY":    {},
+	"MINIO_OPTS":                   {},
+	"MINIO_CERT_PASSWD":            {},
+	"MINIO_SERVER_DEBUG":           {},
+	"MINIO_DSYNC_TRACE":            {},
+	"MINIO_ROOT_USER":              {},
+	"MINIO_ROOT_PASSWORD":          {},
+	"MINIO_ACCESS_KEY":             {},
+	"MINIO_SECRET_KEY":             {},
+	"MINIO_OPERATOR_VERSION":       {},
+	"MINIO_VSPHERE_PLUGIN_VERSION": {},
+	"MINIO_CI_CD":                  {},
 }
 
 func getServerSystemCfg() *ServerSystemConfig {

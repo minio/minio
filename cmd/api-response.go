@@ -946,10 +946,20 @@ func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
 
 // writeErrorResponse writes error headers
 func writeErrorResponse(ctx context.Context, w http.ResponseWriter, err APIError, reqURL *url.URL) {
-	if err.HTTPStatusCode == http.StatusServiceUnavailable {
-		// Set retry-after header to indicate user-agents to retry request after 120secs.
+	switch err.HTTPStatusCode {
+	case http.StatusServiceUnavailable:
+		// Set retry-after header to indicate user-agents to retry request after 60 seconds.
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
-		w.Header().Set(xhttp.RetryAfter, "120")
+		w.Header().Set(xhttp.RetryAfter, "60")
+	case http.StatusTooManyRequests:
+		_, deadline := globalAPIConfig.getRequestsPool()
+		if deadline <= 0 {
+			// Set retry-after header to indicate user-agents to retry request after 10 seconds.
+			// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After
+			w.Header().Set(xhttp.RetryAfter, "10")
+		} else {
+			w.Header().Set(xhttp.RetryAfter, strconv.Itoa(int(deadline.Seconds())))
+		}
 	}
 
 	switch err.Code {

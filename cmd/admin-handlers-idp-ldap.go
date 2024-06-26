@@ -479,3 +479,179 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 
 	writeSuccessResponseJSON(w, encryptedData)
 }
+
+// ListAccessKeysLDAPBulk - GET /minio/admin/v3/idp/ldap/list-access-keys-bulk
+func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	dnList := r.Form["userDNs"]
+	isAll := r.Form.Get("all") == "true"
+	onlySelf := !isAll && len(dnList) == 0
+
+	if isAll && len(dnList) > 0 {
+		// This should be checked on client side, so return generic error
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	// Empty DN list and not self, list access keys for all users
+	if isAll {
+		if !globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.ListUsersAdminAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	} else if len(dnList) == 1 {
+		var dn string
+		foundResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(dnList[0])
+		if err == nil {
+			dn = foundResult.NormDN
+		}
+		if dn == cred.ParentUser || dnList[0] == cred.ParentUser {
+			onlySelf = true
+		}
+	}
+
+	if !globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.ListServiceAccountsAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+		DenyOnly:        onlySelf,
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
+	if onlySelf && len(dnList) == 0 {
+		selfDN := cred.AccessKey
+		if cred.ParentUser != "" {
+			selfDN = cred.ParentUser
+		}
+		dnList = append(dnList, selfDN)
+	}
+
+	accessKeyMap := make(map[string]madmin.ListAccessKeysLDAPResp)
+	if isAll {
+		ldapUsers, err := globalIAMSys.ListLDAPUsers(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		for user := range ldapUsers {
+			accessKeyMap[user] = madmin.ListAccessKeysLDAPResp{}
+		}
+	} else {
+		for _, userDN := range dnList {
+			// Validate the userDN
+			foundResult, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(userDN)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			if foundResult == nil {
+				continue
+			}
+			accessKeyMap[foundResult.NormDN] = madmin.ListAccessKeysLDAPResp{}
+		}
+	}
+
+	listType := r.Form.Get("listType")
+	var listSTSKeys, listServiceAccounts bool
+	switch listType {
+	case madmin.AccessKeyListUsersOnly:
+		listSTSKeys = false
+		listServiceAccounts = false
+	case madmin.AccessKeyListSTSOnly:
+		listSTSKeys = true
+		listServiceAccounts = false
+	case madmin.AccessKeyListSvcaccOnly:
+		listSTSKeys = false
+		listServiceAccounts = true
+	case madmin.AccessKeyListAll:
+		listSTSKeys = true
+		listServiceAccounts = true
+	default:
+		err := errors.New("invalid list type")
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
+		return
+	}
+
+	for dn, accessKeys := range accessKeyMap {
+		if listSTSKeys {
+			stsKeys, err := globalIAMSys.ListSTSAccounts(ctx, dn)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, sts := range stsKeys {
+				expiryTime := sts.Expiration
+				accessKeys.STSKeys = append(accessKeys.STSKeys, madmin.ServiceAccountInfo{
+					AccessKey:  sts.AccessKey,
+					Expiration: &expiryTime,
+				})
+			}
+			// if only STS keys, skip if user has no STS keys
+			if !listServiceAccounts && len(stsKeys) == 0 {
+				delete(accessKeyMap, dn)
+				continue
+			}
+		}
+
+		if listServiceAccounts {
+			serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, dn)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, svc := range serviceAccounts {
+				expiryTime := svc.Expiration
+				accessKeys.ServiceAccounts = append(accessKeys.ServiceAccounts, madmin.ServiceAccountInfo{
+					AccessKey:  svc.AccessKey,
+					Expiration: &expiryTime,
+				})
+			}
+			// if only service accounts, skip if user has no service accounts
+			if !listSTSKeys && len(serviceAccounts) == 0 {
+				delete(accessKeyMap, dn)
+				continue
+			}
+		}
+		accessKeyMap[dn] = accessKeys
+	}
+
+	data, err := json.Marshal(accessKeyMap)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+}

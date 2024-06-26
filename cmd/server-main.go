@@ -897,7 +897,7 @@ func serverMain(ctx *cli.Context) {
 		})
 	}
 
-	if !globalDisableFreezeOnBoot {
+	if globalEnableSyncBoot {
 		// Freeze the services until the bucket notification subsystem gets initialized.
 		bootstrapTrace("freezeServices", freezeServices)
 	}
@@ -1000,10 +1000,11 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	go func() {
-		if !globalDisableFreezeOnBoot {
+		if globalEnableSyncBoot {
 			defer bootstrapTrace("unfreezeServices", unfreezeServices)
 			t := time.AfterFunc(5*time.Minute, func() {
-				warnings = append(warnings, color.YellowBold("- Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+				warnings = append(warnings,
+					color.YellowBold("- Initializing the config subsystem is taking longer than 5 minutes. Please remove 'MINIO_SYNC_BOOT=on' to not freeze the APIs"))
 			})
 			defer t.Stop()
 		}
