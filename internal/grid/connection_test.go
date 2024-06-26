@@ -286,8 +286,8 @@ func TestDisconnectUnderLoad(t *testing.T) {
 	disconnectConnections(debugKillInbound, remoteConn, localConn)
 
 	// Must reconnect
-	errFatal(remoteConn.WaitForConnect(context.Background()))
 	close(nowBlocking)
+	errFatal(remoteConn.WaitForConnect(context.Background()))
 	close(cleanReqs1)
 	respWg.Wait()
 
@@ -316,8 +316,8 @@ func TestDisconnectUnderLoad(t *testing.T) {
 	disconnectConnections(debugKillOutbound, remoteConn, localConn)
 
 	// Must reconnect
-	errFatal(remoteConn.WaitForConnect(context.Background()))
 	close(nowBlocking)
+	errFatal(remoteConn.WaitForConnect(context.Background()))
 	close(cleanReqs2)
 	respWg.Wait()
 }
