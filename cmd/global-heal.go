@@ -441,6 +441,8 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 					continue
 				}
 
+				var versionHealed bool
+
 				res, err := er.HealObject(ctx, bucket, encodedEntryName,
 					version.VersionID, madmin.HealOpts{
 						ScanMode: scanMode,
@@ -453,15 +455,22 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 						versionNotFound++
 						continue
 					}
-					// If not deleted, assume they failed.
+				} else {
+					// Look for the healing results
+					if res.After.Drives[tracker.DiskIndex].State == madmin.DriveStateOk {
+						versionHealed = true
+					}
+				}
+
+				if versionHealed {
+					result = healEntrySuccess(uint64(version.Size))
+				} else {
 					result = healEntryFailure(uint64(version.Size))
 					if version.VersionID != "" {
 						healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s-v(%s): %w", bucket, version.Name, version.VersionID, err))
 					} else {
 						healingLogIf(ctx, fmt.Errorf("unable to heal object %s/%s: %w", bucket, version.Name, err))
 					}
-				} else {
-					result = healEntrySuccess(uint64(res.ObjectSize))
 				}
 
 				if !send(result) {
@@ -509,7 +518,18 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 				jt.Take()
 				go healEntry(bucket, *entry)
 			},
-			finished: nil,
+			finished: func(errs []error) {
+				found := false
+				for _, e := range errs {
+					if e != nil {
+						found = true
+						break
+					}
+				}
+				if found {
+					retErr = fmt.Errorf("one or more errors reported during listing: %v", errs)
+				}
+			},
 		})
 		jt.Wait() // synchronize all the concurrent heal jobs
 		if err != nil {
@@ -517,7 +537,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			// we let the caller retry this disk again for the
 			// buckets it failed to list.
 			retErr = err
-			healingLogIf(ctx, fmt.Errorf("listing failed with: %v on bucket: %v", err, bucket))
+		}
+
+		if retErr != nil {
+			healingLogIf(ctx, fmt.Errorf("listing failed with: %v on bucket: %v", retErr, bucket))
 			continue
 		}
 
