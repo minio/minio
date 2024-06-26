@@ -449,8 +449,8 @@ var (
 	// dynamic sleeper for multipart expiration routine
 	deleteMultipartCleanupSleeper = newDynamicSleeper(5, 25*time.Millisecond, false)
 
-	// Is _MINIO_DISABLE_API_FREEZE_ON_BOOT set?
-	globalDisableFreezeOnBoot bool
+	// Is MINIO_SYNC_BOOT set?
+	globalEnableSyncBoot bool
 
 	// Contains NIC interface name used for internode communication
 	globalInternodeInterface     string
