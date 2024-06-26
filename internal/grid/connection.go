@@ -475,10 +475,15 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 		defer fmt.Println(c.Local, "->", c.Remote, "WaitForConnect done")
 	}
 	c.connChange.L.Lock()
-	if atomic.LoadUint32((*uint32)(&c.state)) == StateConnected {
+	state := atomic.LoadUint32((*uint32)(&c.state))
+	switch state {
+	// Happy path.
+	case StateConnected:
 		c.connChange.L.Unlock()
-		// Happy path.
 		return nil
+	case StateShutdown:
+		c.connChange.L.Unlock()
+		return errors.New("grid: connection is shut down")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -508,6 +513,55 @@ func (c *Connection) WaitForConnect(ctx context.Context) error {
 		case newState := <-changed:
 			if newState == StateConnected {
 				return nil
+			}
+		}
+	}
+}
+
+// waitForDisconnect will block until a connection is no longer connected.
+func (c *Connection) waitForDisconnect(ctx context.Context) {
+	c.connChange.L.Lock()
+	if debugPrint {
+		fmt.Println(c.Local, "->", c.Remote, "waitForDisconnect. Current state:", c.State())
+		defer fmt.Println(c.Local, "->", c.Remote, "waitForDisconnect done")
+	}
+
+	state := atomic.LoadUint32((*uint32)(&c.state))
+	switch state {
+	case StateConnected:
+	// Happy path.
+	default:
+		c.connChange.L.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	changed := make(chan State, 1)
+	go func() {
+		defer xioutil.SafeClose(changed)
+		for {
+			c.connChange.Wait()
+			newState := c.State()
+			select {
+			case changed <- newState:
+				if newState != StateConnected {
+					c.connChange.L.Unlock()
+					return
+				}
+			case <-ctx.Done():
+				c.connChange.L.Unlock()
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case newState := <-changed:
+			if newState != StateConnected {
+				return
 			}
 		}
 	}
@@ -748,6 +802,9 @@ func (c *Connection) connect() {
 		c.handleMessages(c.ctx, conn)
 		// Reconnect unless we are shutting down (debug only).
 		if c.State() == StateShutdown {
+			if debugPrint {
+				fmt.Println(c.Local, "Disconnected. Shutting down.")
+			}
 			conn.Close()
 			return
 		}
@@ -800,6 +857,9 @@ func (c *Connection) receive(conn net.Conn, r receiver) error {
 }
 
 func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req connectReq) error {
+	if c.State() == StateShutdown {
+		return errors.New("grid: connection is shut down")
+	}
 	c.connMu.Lock()
 	c.debugInConn = conn
 	c.connMu.Unlock()
@@ -846,6 +906,9 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 
 	// Handle incoming messages until disconnect.
 	c.handleMessages(ctx, conn)
+	if debugPrint {
+		fmt.Println(c.Local, "Disconnected. Waiting for incoming connection")
+	}
 	return nil
 }
 
@@ -1008,6 +1071,9 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 		var msg []byte
 		for {
 			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
+				if debugPrint {
+					fmt.Println("handleMessages: state not connected", c.State())
+				}
 				cancel(ErrDisconnected)
 				return
 			}
@@ -1020,7 +1086,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
 			if err != nil {
 				cancel(ErrDisconnected)
-				if !xnet.IsNetworkOrHostDown(err, true) {
+				if debugPrint || !xnet.IsNetworkOrHostDown(err, true) {
 					gridLogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
 				}
 				return
@@ -1038,7 +1104,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			var m message
 			subID, remain, err := m.parse(msg)
 			if err != nil {
-				if !xnet.IsNetworkOrHostDown(err, true) {
+				if debugPrint || !xnet.IsNetworkOrHostDown(err, true) {
 					gridLogIf(ctx, fmt.Errorf("ws parse package: %w", err))
 				}
 				cancel(ErrDisconnected)
@@ -1058,12 +1124,15 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			for i := 0; i < messages; i++ {
 				if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 					cancel(ErrDisconnected)
+					if debugPrint {
+						fmt.Println("handleMessages: state not connected", c.State())
+					}
 					return
 				}
 				var next []byte
 				next, remain, err = msgp.ReadBytesZC(remain)
 				if err != nil {
-					if !xnet.IsNetworkOrHostDown(err, true) {
+					if debugPrint || !xnet.IsNetworkOrHostDown(err, true) {
 						gridLogIf(ctx, fmt.Errorf("ws read merged: %w", err))
 					}
 					cancel(ErrDisconnected)
@@ -1073,7 +1142,7 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 				m.Payload = nil
 				subID, _, err = m.parse(next)
 				if err != nil {
-					if !xnet.IsNetworkOrHostDown(err, true) {
+					if debugPrint || !xnet.IsNetworkOrHostDown(err, true) {
 						gridLogIf(ctx, fmt.Errorf("ws parse merged: %w", err))
 					}
 					cancel(ErrDisconnected)
@@ -1212,10 +1281,6 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 
 		// Merge entries and send
 		queue = append(queue, toSend)
-		if debugPrint {
-			fmt.Println("Merging", len(queue), "messages")
-		}
-
 		toSend = merged[:0]
 		m := message{Op: OpMerged, Seq: uint32(len(queue))}
 		var err error
@@ -1678,10 +1743,14 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 	if debugPrint {
 		fmt.Println("debug: sending message", d, args)
 	}
-
+	drain := false
 	switch d {
 	case debugShutdown:
+		if debugPrint {
+			fmt.Println(c, "debug: shutting down connection")
+		}
 		c.updateState(StateShutdown)
+		drain = true
 	case debugKillInbound:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
@@ -1694,14 +1763,15 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 	case debugKillOutbound:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
-		if c.debugInConn != nil {
+		if c.debugOutConn != nil {
 			if debugPrint {
 				fmt.Println("debug: closing outgoing connection")
 			}
-			c.debugInConn.Close()
+			c.debugOutConn.Close()
 		}
 	case debugWaitForExit:
 		c.reconnectMu.Lock()
+		drain = true
 		c.handleMsgWg.Wait()
 		c.reconnectMu.Unlock()
 	case debugSetConnPingDuration:
@@ -1734,6 +1804,16 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		block := (<-chan struct{})(args[0].(chan struct{}))
 		c.blockMessages.Store(&block)
 		c.connMu.Unlock()
+	}
+	for drain {
+		select {
+		case _, ok := <-c.outQueue:
+			if !ok {
+				drain = false
+			}
+		default:
+		}
+		break
 	}
 }
 

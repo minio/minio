@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -72,8 +73,9 @@ func TestDisconnect(t *testing.T) {
 		err := RemoteErr(payload)
 		return nil, &err
 	}))
-
-	remote, err := NewManager(context.Background(), ManagerOptions{
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	remote, err := NewManager(ctx, ManagerOptions{
 		Dialer:       dialer.DialContext,
 		Local:        remoteHost,
 		Hosts:        hosts,
@@ -163,6 +165,180 @@ func TestDisconnect(t *testing.T) {
 	<-gotResp
 	// Killing should cancel the context on the request.
 	<-gotCall
+}
+
+func TestDisconnectUnderLoad(t *testing.T) {
+	defer testlogger.T.SetLogTB(t)()
+	defer timeout(30 * time.Second)()
+	hosts, listeners, _ := getHosts(2)
+	dialer := &net.Dialer{
+		Timeout: 1 * time.Second,
+	}
+	errFatal := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	wrapServer := func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Logf("Got a %s request for: %v", r.Method, r.URL)
+			handler.ServeHTTP(w, r)
+		})
+	}
+	connReady := make(chan struct{})
+	// We fake a local and remote server.
+	localHost := hosts[0]
+	remoteHost := hosts[1]
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	local, err := NewManager(ctx, ManagerOptions{
+		Dialer:       dialer.DialContext,
+		Local:        localHost,
+		Hosts:        hosts,
+		AddAuth:      func(aud string) string { return aud },
+		AuthRequest:  dummyRequestValidate,
+		BlockConnect: connReady,
+	})
+	errFatal(err)
+
+	remote, err := NewManager(context.Background(), ManagerOptions{
+		Dialer:       dialer.DialContext,
+		Local:        remoteHost,
+		Hosts:        hosts,
+		AddAuth:      func(aud string) string { return aud },
+		AuthRequest:  dummyRequestValidate,
+		BlockConnect: connReady,
+	})
+	errFatal(err)
+
+	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
+	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
+	close(connReady)
+
+	defer func() {
+		local.debugMsg(debugShutdown)
+		remote.debugMsg(debugShutdown)
+		remoteServer.Close()
+		localServer.Close()
+		remote.debugMsg(debugWaitForExit)
+		local.debugMsg(debugWaitForExit)
+	}()
+
+	cleanReqs1 := make(chan struct{})
+	// 1: Block forever
+	h1 := func(payload []byte) ([]byte, *RemoteErr) {
+		<-cleanReqs1
+		return nil, nil
+	}
+
+	// 2: Also block, but with streaming.
+	cleanReqs2 := make(chan struct{})
+	h2 := StreamHandler{
+		Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
+			for {
+				select {
+				case <-cleanReqs2:
+					return nil
+				case <-ctx.Done():
+					return nil
+				}
+			}
+		},
+		OutCapacity: 1,
+		InCapacity:  0,
+	}
+	errFatal(remote.RegisterSingleHandler(handlerTest, h1))
+	errFatal(remote.RegisterStreamingHandler(handlerTest2, h2))
+	errFatal(local.RegisterSingleHandler(handlerTest, h1))
+	errFatal(local.RegisterStreamingHandler(handlerTest2, h2))
+
+	// local to remote
+	remoteConn := local.Connection(remoteHost)
+	// remote to local
+	localConn := remote.Connection(localHost)
+	errFatal(remoteConn.WaitForConnect(context.Background()))
+	// Block inbound
+	nowBlocking := make(chan struct{})
+	remote.debugMsg(debugBlockInboundMessages, nowBlocking)
+
+	local.debugMsg(debugSetClientPingDuration, time.Second)
+	remote.debugMsg(debugSetClientPingDuration, time.Second)
+
+	const testPayload = "Hello Grid World!"
+	nReqs := defaultOutQueue * 2
+	if testing.Short() {
+		nReqs = 100
+	}
+	var respWg sync.WaitGroup
+	respWg.Add(nReqs)
+	for i := 0; i < nReqs; i++ {
+		go func() {
+			defer respWg.Done()
+			remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
+		}()
+	}
+
+	// Allow some time for the requests to be sent.
+	for remoteConn.outgoing.Size() < nReqs {
+		time.Sleep(1 * time.Millisecond)
+	}
+	disconnectConnections(debugKillInbound, remoteConn, localConn)
+
+	// Must reconnect
+	errFatal(remoteConn.WaitForConnect(context.Background()))
+	close(nowBlocking)
+	close(cleanReqs1)
+	respWg.Wait()
+
+	nowBlocking = make(chan struct{})
+	remote.debugMsg(debugBlockInboundMessages, nowBlocking)
+	respWg.Add(nReqs)
+	for i := 0; i < nReqs; i++ {
+		go func() {
+			defer respWg.Done()
+			st, err := remoteConn.NewStream(context.Background(), handlerTest2, []byte(testPayload))
+			if err != nil {
+				return
+			}
+			if st.Requests != nil {
+				close(st.Requests)
+			}
+			st.Results(func(b []byte) error {
+				return nil
+			})
+		}()
+	}
+	// Allow some time for the requests to be sent.
+	for remoteConn.outgoing.Size() < nReqs {
+		time.Sleep(1 * time.Millisecond)
+	}
+	disconnectConnections(debugKillOutbound, remoteConn, localConn)
+
+	// Must reconnect
+	errFatal(remoteConn.WaitForConnect(context.Background()))
+	close(nowBlocking)
+	close(cleanReqs2)
+	respWg.Wait()
+}
+
+func disconnectConnections(msg debugMsg, c ...*Connection) {
+	var wg sync.WaitGroup
+	wg.Add(len(c))
+	// There is a race, where the connection could be re-established before we wait for the disconnect.
+	// Thesefore add a timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	for _, conn := range c {
+		go func() {
+			defer wg.Done()
+			conn.debugMsg(msg)
+			// There is a small race here...
+			// Technically the connection could be re-established before we wait for the disconnect.
+			conn.waitForDisconnect(ctx)
+		}()
+	}
+	wg.Wait()
 }
 
 func dummyRequestValidate(r *http.Request) error {
