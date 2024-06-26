@@ -1808,8 +1808,8 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 	for drain {
 		select {
 		case _, ok := <-c.outQueue:
-			if !ok {
-				drain = false
+			if ok {
+				continue
 			}
 		default:
 		}
