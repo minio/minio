@@ -119,11 +119,8 @@ func (z *erasureServerPools) loadRebalanceMeta(ctx context.Context) error {
 	}
 
 	z.rebalMu.Lock()
-	if len(r.PoolStats) == len(z.serverPools) {
-		z.rebalMeta = r
-	} else {
-		z.updateRebalanceStats(ctx)
-	}
+	z.rebalMeta = r
+	z.updateRebalanceStats(ctx)
 	z.rebalMu.Unlock()
 
 	return nil
@@ -147,24 +144,16 @@ func (z *erasureServerPools) updateRebalanceStats(ctx context.Context) error {
 		}
 	}
 	if ok {
-		lock := z.serverPools[0].NewNSLock(minioMetaBucket, rebalMetaName)
-		lkCtx, err := lock.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			rebalanceLogIf(ctx, fmt.Errorf("failed to acquire write lock on %s/%s: %w", minioMetaBucket, rebalMetaName, err))
-			return err
-		}
-		defer lock.Unlock(lkCtx)
-
-		ctx = lkCtx.Context()
-
-		noLockOpts := ObjectOptions{NoLock: true}
-		return z.rebalMeta.saveWithOpts(ctx, z.serverPools[0], noLockOpts)
+		return z.rebalMeta.save(ctx, z.serverPools[0])
 	}
 
 	return nil
 }
 
 func (z *erasureServerPools) findIndex(index int) int {
+	if z.rebalMeta == nil {
+		return 0
+	}
 	for i := 0; i < len(z.rebalMeta.PoolStats); i++ {
 		if i == index {
 			return index
@@ -277,6 +266,10 @@ func (z *erasureServerPools) bucketRebalanceDone(bucket string, poolIdx int) {
 	z.rebalMu.Lock()
 	defer z.rebalMu.Unlock()
 
+	if z.rebalMeta == nil {
+		return
+	}
+
 	ps := z.rebalMeta.PoolStats[poolIdx]
 	if ps == nil {
 		return
@@ -331,6 +324,10 @@ func (r *rebalanceMeta) loadWithOpts(ctx context.Context, store objectIO, opts O
 }
 
 func (r *rebalanceMeta) saveWithOpts(ctx context.Context, store objectIO, opts ObjectOptions) error {
+	if r == nil {
+		return nil
+	}
+
 	data := make([]byte, 4, r.Msgsize()+4)
 
 	// Initialize the header.
@@ -369,7 +366,7 @@ func (z *erasureServerPools) IsPoolRebalancing(poolIndex int) bool {
 		if !r.StoppedAt.IsZero() {
 			return false
 		}
-		ps := z.rebalMeta.PoolStats[poolIndex]
+		ps := r.PoolStats[poolIndex]
 		return ps.Participating && ps.Info.Status == rebalStarted
 	}
 	return false
@@ -794,7 +791,9 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 	case rebalSaveStoppedAt:
 		r.StoppedAt = time.Now()
 	case rebalSaveStats:
-		r.PoolStats[poolIdx] = z.rebalMeta.PoolStats[poolIdx]
+		if z.rebalMeta != nil {
+			r.PoolStats[poolIdx] = z.rebalMeta.PoolStats[poolIdx]
+		}
 	}
 	z.rebalMeta = r
 
