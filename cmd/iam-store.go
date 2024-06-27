@@ -431,7 +431,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 		}
 	}
 
-	// returned policy could be empty, we uset set to de-duplicate.
+	// returned policy could be empty, we use set to de-duplicate.
 	policies := set.CreateStringSet(mp.toSlice()...)
 
 	for _, group := range u.Credentials.Groups {
