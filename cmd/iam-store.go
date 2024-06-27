@@ -937,12 +937,7 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	}, nil
 }
 
-// ListGroups - lists groups. Since this is not going to be a frequent
-// operation, we fetch this info from storage, and refresh the cache as well.
-func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err error) {
-	cache := store.lock()
-	defer store.unlock()
-
+func (store *IAMStoreSys) updateGroups(ctx context.Context, cache *iamCache) (res []string, err error) {
 	if store.getUsersSysType() == MinIOUsersSysType {
 		m := map[string]GroupInfo{}
 		err = store.loadGroups(ctx, m)
@@ -970,7 +965,16 @@ func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err err
 		})
 	}
 
-	return
+	return res, nil
+}
+
+// ListGroups - lists groups. Since this is not going to be a frequent
+// operation, we fetch this info from storage, and refresh the cache as well.
+func (store *IAMStoreSys) ListGroups(ctx context.Context) (res []string, err error) {
+	cache := store.lock()
+	defer store.unlock()
+
+	return store.updateGroups(ctx, cache)
 }
 
 // listGroups - lists groups - fetch groups from cache
@@ -2709,6 +2713,12 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 				}
 			}
 		}
+
+		if _, err = store.updateGroups(ctx, cache); err != nil {
+			return "done", err
+		}
+
+		cache.buildUserGroupMemberships()
 
 		return "done", err
 	})
