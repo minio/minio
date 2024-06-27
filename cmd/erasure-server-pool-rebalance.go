@@ -350,8 +350,15 @@ func (z *erasureServerPools) IsRebalanceStarted() bool {
 	z.rebalMu.RLock()
 	defer z.rebalMu.RUnlock()
 
-	if r := z.rebalMeta; r != nil {
-		if r.StoppedAt.IsZero() {
+	r := z.rebalMeta
+	if r == nil {
+		return false
+	}
+	if !r.StoppedAt.IsZero() {
+		return false
+	}
+	for _, ps := range r.PoolStats {
+		if ps.Participating && ps.Info.Status != rebalCompleted {
 			return true
 		}
 	}
