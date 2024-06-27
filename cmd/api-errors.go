@@ -2152,10 +2152,12 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case errNoSuchUser:
 		apiErr = ErrAdminNoSuchUser
 	case errNoSuchUserLDAPWarn:
-		apiErr = ErrAdminNoSuchUserLDAPWarn
+		apiErr = ErrAdminNoSuchUser
 	case errNoSuchServiceAccount:
 		apiErr = ErrAdminServiceAccountNotFound
 	case errNoSuchGroup:
+		apiErr = ErrAdminNoSuchGroup
+	case errNoSuchGroupLDAPWarn:
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
 		apiErr = ErrAdminGroupNotEmpty

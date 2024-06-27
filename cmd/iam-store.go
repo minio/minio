@@ -151,6 +151,11 @@ func getMappedPolicyPath(name string, userType IAMUserType, isGroup bool) string
 	}
 }
 
+// Determine if user or group name is LDAP format
+func isNameLDAP(name string) bool {
+	return strings.ContainsAny(name, "=,")
+}
+
 // UserIdentity represents a user's secret key and their status
 type UserIdentity struct {
 	Version     int              `json:"version"`
@@ -368,7 +373,7 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 // and group map and check the appropriate policy maps directly.
 func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([]string, time.Time, error) {
 	if isGroup {
-		if store.getUsersSysType() == MinIOUsersSysType {
+		if !isNameLDAP(name) {
 			g, ok := c.iamGroupsMap[name]
 			if !ok {
 				if err := store.loadGroup(context.Background(), name, c.iamGroupsMap); err != nil {
@@ -435,7 +440,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 	policies := mp.toSlice()
 
 	for _, group := range c.iamUserGroupMemberships[name].ToSlice() {
-		if store.getUsersSysType() == MinIOUsersSysType {
+		if !isNameLDAP(group) {
 			g, ok := c.iamGroupsMap[group]
 			if !ok {
 				if err := store.loadGroup(context.Background(), group, c.iamGroupsMap); err != nil {
@@ -913,7 +918,7 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 
 	policy := strings.Join(ps, ",")
 
-	if store.getUsersSysType() != MinIOUsersSysType {
+	if isNameLDAP(group) {
 		return madmin.GroupDesc{
 			Name:      group,
 			Policy:    policy,
@@ -1015,7 +1020,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			mp, _ = cache.iamUserPolicyMap.Load(name)
 		}
 	} else {
-		if store.getUsersSysType() == MinIOUsersSysType {
+		if !isNameLDAP(name) {
 			g, ok := cache.iamGroupsMap[name]
 			if !ok {
 				err = errNoSuchGroup
@@ -1182,7 +1187,7 @@ func (store *IAMStoreSys) PolicyNotificationHandler(ctx context.Context, policy 
 			if !pset.Contains(policy) {
 				return true
 			}
-			if store.getUsersSysType() == MinIOUsersSysType {
+			if !isNameLDAP(u) {
 				_, ok := cache.iamUsersMap[u]
 				if !ok {
 					// happens when account is deleted or
@@ -1233,7 +1238,7 @@ func (store *IAMStoreSys) DeletePolicy(ctx context.Context, policy string, isFro
 		groups := []string{}
 		cache.iamUserPolicyMap.Range(func(u string, mp MappedPolicy) bool {
 			pset := mp.policySet()
-			if store.getUsersSysType() == MinIOUsersSysType {
+			if !isNameLDAP(u) {
 				if _, ok := cache.iamUsersMap[u]; !ok {
 					// This case can happen when a temporary account is
 					// deleted or expired - remove it from userPolicyMap.
@@ -1669,7 +1674,7 @@ func (store *IAMStoreSys) UserNotificationHandler(ctx context.Context, accessKey
 		}()
 
 		// 1. Start with updating user-group memberships
-		if store.getUsersSysType() == MinIOUsersSysType {
+		if !isNameLDAP(accessKey) {
 			memberOf := cache.iamUserGroupMemberships[accessKey].ToSlice()
 			for _, group := range memberOf {
 				_, removeErr := removeMembersFromGroup(ctx, store, cache, group, []string{accessKey}, true)
@@ -1759,7 +1764,7 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 	defer store.unlock()
 
 	// first we remove the user from their groups.
-	if store.getUsersSysType() == MinIOUsersSysType && userType == regUser {
+	if !isNameLDAP(accessKey) && userType == regUser {
 		memberOf := cache.iamUserGroupMemberships[accessKey].ToSlice()
 		for _, group := range memberOf {
 			_, removeErr := removeMembersFromGroup(ctx, store, cache, group, []string{accessKey}, false)
@@ -2591,7 +2596,7 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 			svc, found = cache.iamUsersMap[accessKey]
 			if found {
 				// Load parent user and mapped policies.
-				if store.getUsersSysType() == MinIOUsersSysType {
+				if isNameLDAP(svc.Credentials.ParentUser) {
 					err = store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
 					if err == nil {
 						err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap, 3)
