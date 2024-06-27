@@ -300,7 +300,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Rebalance routine is run on the first node of any pool participating in rebalance.
-	pools.StartRebalance()
+	pools.StartRebalance(false)
 
 	b, err := json.Marshal(struct {
 		ID string `json:"id"`

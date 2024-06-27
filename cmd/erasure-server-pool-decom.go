@@ -496,7 +496,7 @@ func (z *erasureServerPools) Init(ctx context.Context) error {
 	}
 
 	// Start rebalance routine
-	z.StartRebalance()
+	z.StartRebalance(true)
 
 	meta := poolMeta{}
 	if err := meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {

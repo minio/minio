@@ -936,7 +936,7 @@ func (s *peerRESTServer) LoadRebalanceMetaHandler(mss *grid.MSS) (np grid.NoPayl
 	}
 
 	if startRebalance {
-		go pools.StartRebalance()
+		go pools.StartRebalance(false)
 	}
 
 	return

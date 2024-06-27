@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -901,7 +902,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 	return err
 }
 
-func (z *erasureServerPools) StartRebalance() {
+func (z *erasureServerPools) StartRebalance(init bool) {
 	z.rebalMu.Lock()
 	if z.rebalMeta == nil || !z.rebalMeta.StoppedAt.IsZero() { // rebalance not running, nothing to do
 		z.rebalMu.Unlock()
@@ -922,7 +923,8 @@ func (z *erasureServerPools) StartRebalance() {
 		participants[i] = ps.Participating
 	}
 	z.rebalMu.RUnlock()
-
+	wg := sync.WaitGroup{}
+	rebalanceCount := 0
 	for poolIdx, doRebalance := range participants {
 		if !doRebalance {
 			continue
@@ -931,12 +933,23 @@ func (z *erasureServerPools) StartRebalance() {
 		if !globalEndpoints[poolIdx].Endpoints[0].IsLocal {
 			continue
 		}
-
+		wg.Add(1)
+		rebalanceCount++
 		go func(idx int) {
+			defer wg.Done()
 			stopfn := globalRebalanceMetrics.log(rebalanceMetricRebalanceBuckets, idx)
 			err := z.rebalanceBuckets(ctx, idx)
 			stopfn(0, err)
 		}(poolIdx)
+	}
+	if !init || rebalanceCount > 0 {
+		go func() {
+			// wait for all rebalance goroutines to complete
+			wg.Wait()
+			if err := z.saveRebalanceStats(ctx, 0, rebalSaveStoppedAt); err != nil {
+				rebalanceLogIf(ctx, fmt.Errorf("failed to save rebalance stats: %w", err))
+			}
+		}()
 	}
 }
 
