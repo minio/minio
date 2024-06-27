@@ -1445,16 +1445,51 @@ func filterPolicies(cache *iamCache, policyName string, bucketName string) (stri
 	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)
 }
 
-// FilterPolicies - accepts a comma separated list of policy names as a string
-// and bucket and returns only policies that currently exist in MinIO. If
-// bucketName is non-empty, additionally filters policies matching the bucket.
-// The first returned value is the list of currently existing policies, and the
-// second is their combined policy definition.
-func (store *IAMStoreSys) FilterPolicies(policyName string, bucketName string) (string, policy.Policy) {
-	cache := store.rlock()
-	defer store.runlock()
+// MergePolicies - accepts a comma separated list of policy names as a string
+// and returns only policies that currently exist in MinIO. It includes hot loading
+// of policies if not in the memory
+func (store *IAMStoreSys) MergePolicies(policyName string) (string, policy.Policy) {
+	var policies []string
+	var missingPolicies []string
+	var toMerge []policy.Policy
 
-	return filterPolicies(cache, policyName, bucketName)
+	cache := store.rlock()
+	for _, policy := range newMappedPolicy(policyName).toSlice() {
+		if policy == "" {
+			continue
+		}
+		p, found := cache.iamPolicyDocsMap[policy]
+		if !found {
+			missingPolicies = append(missingPolicies, policy)
+			continue
+		}
+		policies = append(policies, policy)
+		toMerge = append(toMerge, p.Policy)
+	}
+	store.runlock()
+
+	if len(missingPolicies) > 0 {
+		m := make(map[string]PolicyDoc)
+		for _, policy := range missingPolicies {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = store.loadPolicyDoc(ctx, policy, m)
+			cancel()
+		}
+
+		cache := store.lock()
+		for policy, p := range m {
+			cache.iamPolicyDocsMap[policy] = p
+		}
+		store.unlock()
+
+		for policy, p := range m {
+			policies = append(policies, policy)
+			toMerge = append(toMerge, p.Policy)
+		}
+
+	}
+
+	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)
 }
 
 // GetBucketUsers - returns users (not STS or service accounts) that have access
