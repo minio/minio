@@ -24,8 +24,8 @@ if [ ! -f ./mc ]; then
 	arch="$(uname -m)"
 	case "${arch}" in
 	"x86_64")
-	arch="amd64"
-	;;
+		arch="amd64"
+		;;
 	esac
 
 	wget -O mc https://dl.minio.io/client/mc/release/${os,,}-${arch,,}/mc &&
