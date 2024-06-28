@@ -315,6 +315,24 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	cache := sys.store.lock()
+	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
+	sys.store.unlock()
+
+	// Load RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	// From AuthN plugin if enabled.
+	if authn := newGlobalAuthNPluginFn(); authn != nil {
+		riMap := authn.GetRoleInfo()
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
 	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx, true); err != nil {
@@ -333,20 +351,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	refreshInterval := sys.iamRefreshInterval
 
 	go sys.periodicRoutines(ctx, refreshInterval)
-
-	// Load RoleARNs
-	sys.rolesMap = make(map[arn.ARN]string)
-
-	// From OpenID
-	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
-	// From AuthN plugin if enabled.
-	if authn := newGlobalAuthNPluginFn(); authn != nil {
-		riMap := authn.GetRoleInfo()
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
 
 	sys.printIAMRoles()
 
