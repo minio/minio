@@ -457,6 +457,8 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 
 	bootstrapTraceMsgFirstTime("loading all IAM items")
 
+	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
+
 	listStartTime := UTCNow()
 	listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 	if err != nil {
@@ -485,7 +487,6 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	if took := time.Since(policyLoadStartTime); took > maxIAMLoadOpTime {
 		logger.Info("Policy docs load took %.2fs (for %d items)", took.Seconds(), len(policiesList))
 	}
-	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
 
 	if iamOS.usersSysType == MinIOUsersSysType {
 		bootstrapTraceMsgFirstTime("loading regular IAM users")

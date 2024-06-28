@@ -436,7 +436,7 @@ func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[a
 	// running server by creating the policies after start up.
 	for arn, rolePolicies := range m {
 		specifiedPoliciesSet := newMappedPolicy(rolePolicies).policySet()
-		validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
+		validPolicies, _ := sys.store.MergePolicies(rolePolicies)
 		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
 		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
 		if len(unknownPoliciesSet) > 0 {
@@ -672,7 +672,7 @@ func (sys *IAMSys) CurrentPolicies(policyName string) string {
 		return ""
 	}
 
-	policies, _ := sys.store.FilterPolicies(policyName, "")
+	policies, _ := sys.store.MergePolicies(policyName)
 	return policies
 }
 
@@ -2122,7 +2122,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args policy.Args, parentUser string) 
 	var combinedPolicy policy.Policy
 	// Policies were found, evaluate all of them.
 	if !isOwnerDerived {
-		availablePoliciesStr, c := sys.store.FilterPolicies(strings.Join(svcPolicies, ","), "")
+		availablePoliciesStr, c := sys.store.MergePolicies(strings.Join(svcPolicies, ","))
 		if availablePoliciesStr == "" {
 			return false
 		}
@@ -2350,7 +2350,7 @@ func isAllowedBySessionPolicy(args policy.Args) (hasSessionPolicy bool, isAllowe
 
 // GetCombinedPolicy returns a combined policy combining all policies
 func (sys *IAMSys) GetCombinedPolicy(policies ...string) policy.Policy {
-	_, policy := sys.store.FilterPolicies(strings.Join(policies, ","), "")
+	_, policy := sys.store.MergePolicies(strings.Join(policies, ","))
 	return policy
 }
 
