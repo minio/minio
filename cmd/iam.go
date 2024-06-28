@@ -315,6 +315,24 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	cache := sys.store.lock()
+	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
+	sys.store.unlock()
+
+	// Load RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	// From AuthN plugin if enabled.
+	if authn := newGlobalAuthNPluginFn(); authn != nil {
+		riMap := authn.GetRoleInfo()
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
 	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx, true); err != nil {
@@ -333,20 +351,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	refreshInterval := sys.iamRefreshInterval
 
 	go sys.periodicRoutines(ctx, refreshInterval)
-
-	// Load RoleARNs
-	sys.rolesMap = make(map[arn.ARN]string)
-
-	// From OpenID
-	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
-	// From AuthN plugin if enabled.
-	if authn := newGlobalAuthNPluginFn(); authn != nil {
-		riMap := authn.GetRoleInfo()
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
 
 	sys.printIAMRoles()
 
@@ -2214,22 +2218,16 @@ func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 	// 2. Combine the mapped policies into a single combined policy.
 
 	var combinedPolicy policy.Policy
+	// Policies were found, evaluate all of them.
 	if !isOwnerDerived {
-		var err error
-		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
-		if errors.Is(err, errNoSuchPolicy) {
-			for _, pname := range policies {
-				_, err := sys.store.GetPolicy(pname)
-				if errors.Is(err, errNoSuchPolicy) {
-					// all policies presented in the claim should exist
-					iamLogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
-					return false
-				}
-			}
-			iamLogIf(GlobalContext, fmt.Errorf("all policies were unexpectedly present!"))
+		availablePoliciesStr, c := sys.store.MergePolicies(strings.Join(policies, ","))
+		if availablePoliciesStr == "" {
+			// all policies presented in the claim should exist
+			iamLogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", policies, iamPolicyClaimNameOpenID()))
+
 			return false
 		}
-
+		combinedPolicy = c
 	}
 
 	// 3. If an inline session-policy is present, evaluate it.
