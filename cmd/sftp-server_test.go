@@ -194,9 +194,12 @@ func (s *TestSuiteIAM) SFTPInvalidServiceAccountPassword(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, "readwrite", accessKey, false)
-	if err != nil {
-		c.Fatalf("unable to set policy: %v", err)
+	userReq := madmin.PolicyAssociationReq{
+		Policies: []string{"readwrite"},
+		User:     accessKey,
+	}
+	if _, err := s.adm.AttachPolicy(ctx, userReq); err != nil {
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	newSSHCon := newSSHConnMock(accessKey + "=svc")
@@ -222,9 +225,12 @@ func (s *TestSuiteIAM) SFTPServiceAccountLogin(c *check) {
 		c.Fatalf("Unable to set user: %v", err)
 	}
 
-	err = s.adm.SetPolicy(ctx, "readwrite", accessKey, false)
-	if err != nil {
-		c.Fatalf("unable to set policy: %v", err)
+	userReq := madmin.PolicyAssociationReq{
+		Policies: []string{"readwrite"},
+		User:     accessKey,
+	}
+	if _, err := s.adm.AttachPolicy(ctx, userReq); err != nil {
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	newSSHCon := newSSHConnMock(accessKey + "=svc")
@@ -270,9 +276,12 @@ func (s *TestSuiteIAM) SFTPValidLDAPLoginWithPassword(c *check) {
 	}
 
 	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-	err = s.adm.SetPolicy(ctx, policy, userDN, false)
-	if err != nil {
-		c.Fatalf("Unable to set policy: %v", err)
+	userReq := madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     userDN,
+	}
+	if _, err := s.adm.AttachPolicy(ctx, userReq); err != nil {
+		c.Fatalf("Unable to attach policy: %v", err)
 	}
 
 	newSSHCon := newSSHConnMock("dillon=ldap")
