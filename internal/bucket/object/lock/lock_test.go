@@ -606,7 +606,7 @@ func TestFilterObjectLockMetadata(t *testing.T) {
 
 	for i, tt := range tests {
 		o := FilterObjectLockMetadata(tt.metadata, tt.filterRetention, tt.filterLegalHold)
-		if !reflect.DeepEqual(o, tt.metadata) {
+		if !reflect.DeepEqual(o, tt.expected) {
 			t.Fatalf("Case %d expected %v, got %v", i, tt.metadata, o)
 		}
 	}
