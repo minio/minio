@@ -236,30 +236,17 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 		return s, err
 	}
 
-	info, err := disk.GetInfo(s.drivePath, true)
+	info, rootDrive, err := getDiskInfo(s.drivePath)
 	if err != nil {
 		return s, err
 	}
+
 	s.major = info.Major
 	s.minor = info.Minor
 	s.fsType = info.FSType
 
-	if !globalIsCICD && !globalIsErasureSD {
-		var rootDrive bool
-		if globalRootDiskThreshold > 0 {
-			// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
-			// this disk is a root disk. treat those disks with
-			// size less than or equal to the threshold as rootDrives.
-			rootDrive = info.Total <= globalRootDiskThreshold
-		} else {
-			rootDrive, err = disk.IsRootDisk(s.drivePath, SlashSeparator)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if rootDrive {
-			return s, errDriveIsRoot
-		}
+	if rootDrive {
+		return s, errDriveIsRoot
 	}
 
 	// Sanitize before setting it
@@ -333,10 +320,11 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	s.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{},
 		func(ctx context.Context) (DiskInfo, error) {
 			dcinfo := DiskInfo{}
-			di, err := getDiskInfo(s.drivePath)
+			di, root, err := getDiskInfo(s.drivePath)
 			if err != nil {
 				return dcinfo, err
 			}
+			dcinfo.RootDisk = root
 			dcinfo.Major = di.Major
 			dcinfo.Minor = di.Minor
 			dcinfo.Total = di.Total
@@ -345,6 +333,10 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 			dcinfo.UsedInodes = di.Files - di.Ffree
 			dcinfo.FreeInodes = di.Ffree
 			dcinfo.FSType = di.FSType
+			if root {
+				return dcinfo, errDriveIsRoot
+			}
+
 			diskID, err := s.GetDiskID()
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')
@@ -360,10 +352,22 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 }
 
 // getDiskInfo returns given disk information.
-func getDiskInfo(drivePath string) (di disk.Info, err error) {
+func getDiskInfo(drivePath string) (di disk.Info, rootDrive bool, err error) {
 	if err = checkPathLength(drivePath); err == nil {
 		di, err = disk.GetInfo(drivePath, false)
+
+		if !globalIsCICD && !globalIsErasureSD {
+			if globalRootDiskThreshold > 0 {
+				// Use MINIO_ROOTDISK_THRESHOLD_SIZE to figure out if
+				// this disk is a root disk. treat those disks with
+				// size less than or equal to the threshold as rootDrives.
+				rootDrive = di.Total <= globalRootDiskThreshold
+			} else {
+				rootDrive, err = disk.IsRootDisk(drivePath, SlashSeparator)
+			}
+		}
 	}
+
 	switch {
 	case osIsNotExist(err):
 		err = errDiskNotFound
@@ -373,7 +377,7 @@ func getDiskInfo(drivePath string) (di disk.Info, err error) {
 		err = errFaultyDisk
 	}
 
-	return di, err
+	return
 }
 
 // Implements stringer compatible interface.
