@@ -2343,12 +2343,18 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 
 	var poolErrs [][]error
 	for idx, erasureSet := range z.serverPools {
+		if opts.Pool != nil && *opts.Pool != idx {
+			continue
+		}
 		if z.IsSuspended(idx) {
 			continue
 		}
 		errs := make([]error, len(erasureSet.sets))
 		var wg sync.WaitGroup
 		for idx, set := range erasureSet.sets {
+			if opts.Set != nil && *opts.Set != idx {
+				continue
+			}
 			wg.Add(1)
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
