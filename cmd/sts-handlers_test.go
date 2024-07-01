@@ -2104,12 +2104,13 @@ func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
 
 	groupDN := "cn=project.c,ou=groups,ou=swengg,dc=min,dc=io"
 	groupPolicy := "readwrite"
-	_, err := s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+	groupReq := madmin.PolicyAssociationReq{
 		Policies: []string{groupPolicy},
 		Group:    groupDN,
-	})
+	}
+	_, err := s.adm.AttachPolicyLDAP(ctx, groupReq)
 	if err != nil {
-		c.Fatalf("Unable to set group policy: %v", err)
+		c.Fatalf("Unable to attach group policy: %v", err)
 	}
 	type caseTemplate struct {
 		inDN                string
@@ -2128,10 +2129,11 @@ func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
 
 	policy := "readonly"
 	for _, testCase := range cases {
-		_, err := s.adm.AttachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
+		userReq := madmin.PolicyAssociationReq{
 			Policies: []string{policy},
 			User:     testCase.inDN,
-		})
+		}
+		_, err := s.adm.AttachPolicyLDAP(ctx, userReq)
 		if err != nil {
 			c.Fatalf("Unable to attach policy: %v", err)
 		}
@@ -2144,7 +2146,7 @@ func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
 			c.Fatalf("Unable to fetch policy entities: %v", err)
 		}
 
-		// ugly behemoth switch statement to check all the conditions
+		// switch statement to check all the conditions
 		switch {
 		case len(entities.UserMappings) != 1:
 			c.Fatalf("Expected to find exactly one user mapping")
@@ -2164,21 +2166,15 @@ func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
 			c.Fatalf("Expected attached policy `%s`, found `%s`", testCase.expectedGroupPolicy, entities.UserMappings[0].MemberOfMappings[0].Policies[0])
 		}
 
-		_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
-			Policies: []string{policy},
-			User:     testCase.inDN,
-		})
+		_, err = s.adm.DetachPolicyLDAP(ctx, userReq)
 		if err != nil {
-			c.Fatalf("Unable to attach policy: %v", err)
+			c.Fatalf("Unable to detach policy: %v", err)
 		}
 	}
 
-	_, err = s.adm.DetachPolicyLDAP(ctx, madmin.PolicyAssociationReq{
-		Policies: []string{groupPolicy},
-		Group:    groupDN,
-	})
+	_, err = s.adm.DetachPolicyLDAP(ctx, groupReq)
 	if err != nil {
-		c.Fatalf("Unable to set group policy: %v", err)
+		c.Fatalf("Unable to detach group policy: %v", err)
 	}
 }
 
