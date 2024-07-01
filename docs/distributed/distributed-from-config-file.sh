@@ -22,6 +22,12 @@ export MINIO_CI_CD=1
 if [ ! -f ./mc ]; then
 	os="$(uname -s)"
 	arch="$(uname -m)"
+	case "${arch}" in
+	"x86_64")
+		arch="amd64"
+		;;
+	esac
+
 	wget -O mc https://dl.minio.io/client/mc/release/${os,,}-${arch,,}/mc &&
 		chmod +x mc
 fi

@@ -120,9 +120,12 @@ func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
 			c.Fatalf("Unable to set user: %v", err)
 		}
 
-		err = s.adm.SetPolicy(ctx, policy, accessKey, false)
-		if err != nil {
-			c.Fatalf("Unable to set policy: %v", err)
+		userReq := madmin.PolicyAssociationReq{
+			Policies: []string{policy},
+			User:     accessKey,
+		}
+		if _, err := s.adm.AttachPolicy(ctx, userReq); err != nil {
+			c.Fatalf("Unable to attach policy: %v", err)
 		}
 
 		accessKeys[i] = accessKey
