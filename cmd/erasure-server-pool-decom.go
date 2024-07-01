@@ -358,7 +358,7 @@ func (p *poolMeta) validate(pools []*erasureSets) (bool, error) {
 			update = true
 		}
 		if ok && pi.completed {
-			return false, fmt.Errorf("pool(%s) = %s is decommissioned, please remove from server command line", humanize.Ordinal(pi.position+1), k)
+			console.Errorf("pool(%s) = %s is decommissioned, please remove from server command line", humanize.Ordinal(pi.position+1), k)
 		}
 	}
 
