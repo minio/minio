@@ -804,7 +804,7 @@ func (fs *FSObjects) GetObjectNInfo(ctx context.Context, bucket, object string, 
 		configId := getConfigId(ctx, fs.fsPath, bucket)
 		readCloser, size, err = gateway.Get(readCloser, configId)
 		if err != nil {
-			return nil, toObjectErr(HandleMantleHttpErrors(err), bucket, object)
+			return nil, toObjectErr(err, bucket, object)
 		}
 	}
 
@@ -920,7 +920,12 @@ func (fs *FSObjects) getObjectInfoNoFSLock(ctx context.Context, bucket, object s
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		id = gateway.GetId(readCloser)
+		id, err = gateway.GetId(readCloser)
+		if err != nil {
+			//errFileNotFound is ignored
+			fmt.Println(err, bucket, object)
+			return ObjectInfo{}, errFileNotFound
+		}
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi, id), nil
@@ -982,7 +987,13 @@ func (fs *FSObjects) getObjectInfo(ctx context.Context, bucket, object string) (
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-		id = gateway.GetId(readCloser)
+
+		id, err = gateway.GetId(readCloser)
+		if err != nil {
+			//errFileNotFound is ignored
+			fmt.Println(err, bucket, object)
+			return ObjectInfo{}, errFileNotFound
+		}
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi, id), nil
