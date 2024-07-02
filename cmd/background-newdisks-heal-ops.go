@@ -365,7 +365,7 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 	for _, disk := range localDrives {
-		_, err := disk.GetDiskID()
+		_, err := disk.DiskInfo(context.Background(), DiskInfoOptions{})
 		if errors.Is(err, errUnformattedDisk) {
 			disksToHeal = append(disksToHeal, disk.Endpoint())
 			continue
@@ -391,6 +391,17 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	disk := getStorageViaEndpoint(endpoint)
 	if disk == nil {
 		return fmt.Errorf("Unexpected error disk must be initialized by now after formatting: %s", endpoint)
+	}
+
+	_, err := disk.DiskInfo(ctx, DiskInfoOptions{})
+	if err != nil {
+		if errors.Is(err, errDriveIsRoot) {
+			// This is a root drive, ignore and move on
+			return nil
+		}
+		if !errors.Is(err, errUnformattedDisk) {
+			return err
+		}
 	}
 
 	// Prevent parallel erasure set healing
