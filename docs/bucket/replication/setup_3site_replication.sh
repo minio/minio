@@ -43,8 +43,8 @@ unset MINIO_KMS_KES_KEY_FILE
 unset MINIO_KMS_KES_ENDPOINT
 unset MINIO_KMS_KES_KEY_NAME
 
-wget -q -O mc https://dl.minio.io/client/mc/release/linux-amd64/mc &&
-	chmod +x mc
+go install -v github.com/minio/mc@master
+cp -a $(go env GOPATH)/bin/mc ./mc
 
 if [ ! -f mc.RELEASE.2021-03-12T03-36-59Z ]; then
 	wget -q -O mc.RELEASE.2021-03-12T03-36-59Z https://dl.minio.io/client/mc/release/linux-amd64/archive/mc.RELEASE.2021-03-12T03-36-59Z &&

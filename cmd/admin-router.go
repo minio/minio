@@ -301,8 +301,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// LDAP specific service accounts ops
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp/ldap/add-service-account").HandlerFunc(adminMiddleware(adminAPI.AddServiceAccountLDAP))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/ldap/list-access-keys").
-			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).
-			Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAP)).Queries("userDN", "{userDN:.*}", "listType", "{listType:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/ldap/list-access-keys-bulk").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysLDAPBulk)).Queries("listType", "{listType:.*}")
 
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(adminMiddleware(adminAPI.ListLDAPPolicyMappingEntities))
@@ -339,6 +340,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/list-jobs").HandlerFunc(
 			adminMiddleware(adminAPI.ListBatchJobs))
+
+		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/status-job").HandlerFunc(
+			adminMiddleware(adminAPI.BatchJobStatus))
 
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/describe-job").HandlerFunc(
 			adminMiddleware(adminAPI.DescribeBatchJob))

@@ -120,13 +120,6 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 
 	format, err := loadFormatErasure(disk, false)
 	if err != nil {
-		if errors.Is(err, errUnformattedDisk) {
-			info, derr := disk.DiskInfo(context.TODO(), DiskInfoOptions{})
-			if derr != nil && info.RootDisk {
-				disk.Close()
-				return nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
-			}
-		}
 		disk.Close()
 		return nil, nil, fmt.Errorf("Drive: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
@@ -230,7 +223,7 @@ func (s *erasureSets) connectDisks() {
 			if err != nil {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-				} else {
+				} else if !errors.Is(err, errDriveIsRoot) {
 					printEndpointError(endpoint, err, true)
 				}
 				return

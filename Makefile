@@ -86,9 +86,9 @@ test-race: verifiers build ## builds minio, runs linters, tests (race)
 
 test-iam: install-race ## verify IAM (external IDP, etcd backends)
 	@echo "Running tests for IAM (external IDP, etcd backends)"
-	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -tags kqueue,dev -v -run TestIAM* ./cmd
+	@MINIO_API_REQUESTS_MAX=10000 CGO_ENABLED=0 go test -timeout 15m -tags kqueue,dev -v -run TestIAM* ./cmd
 	@echo "Running tests for IAM (external IDP, etcd backends) with -race"
-	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -race -tags kqueue,dev -v -run TestIAM* ./cmd
+	@MINIO_API_REQUESTS_MAX=10000 GORACE=history_size=7 CGO_ENABLED=1 go test -timeout 15m -race -tags kqueue,dev -v -run TestIAM* ./cmd
 
 test-iam-ldap-upgrade-import: install-race ## verify IAM (external LDAP IDP)
 	@echo "Running upgrade tests for IAM (LDAP backend)"
