@@ -358,6 +358,9 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 		globalBackgroundHealState.pushHealLocalDisks(getLocalDisksToHeal()...)
 		go monitorLocalDisksAndHeal(ctx, z)
 	}
+
+	go globalMRFState.startMRFPersistence()
+	go globalMRFState.healRoutine(z)
 }
 
 func getLocalDisksToHeal() (disksToHeal Endpoints) {
