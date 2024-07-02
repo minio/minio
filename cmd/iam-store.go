@@ -1688,7 +1688,6 @@ func (store *IAMStoreSys) GetUserInfo(name string) (u madmin.UserInfo, err error
 		}, nil
 	}
 	return u, errNoSuchUser
-
 }
 
 // PolicyMappingNotificationHandler - handles updating a policy mapping from storage.
