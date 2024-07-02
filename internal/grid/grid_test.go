@@ -1260,7 +1260,7 @@ func timeout(after time.Duration) (cancel func()) {
 		case <-cc:
 			return
 		case <-c:
-			buf := make([]byte, 1<<20)
+			buf := make([]byte, 250<<20)
 			stacklen := runtime.Stack(buf, true)
 			fmt.Printf("=== Timeout, assuming deadlock ===\n*** goroutine dump...\n%s\n*** end\n", string(buf[:stacklen]))
 			os.Exit(2)
