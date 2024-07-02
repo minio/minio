@@ -82,11 +82,7 @@ func setMaxResources(ctx serverCtxt) (err error) {
 	}
 
 	if ctx.MemLimit > 0 {
-		maxLimit = ctx.MemLimit
-	}
-
-	if maxLimit > 0 {
-		debug.SetMemoryLimit(int64(maxLimit))
+		debug.SetMemoryLimit(int64(ctx.MemLimit))
 	}
 
 	// Do not use RLIMIT_AS as that is not useful and at times on systems < 4Gi
