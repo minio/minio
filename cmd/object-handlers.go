@@ -502,7 +502,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			perr   error
 		)
 		// avoid proxying if version is a delete marker
-		if !isErrMethodNotAllowed(err) && !(gr != nil && gr.ObjInfo.DeleteMarker) {
+		if !isErrObjectNameInvalid(err) && !isErrMethodNotAllowed(err) && !(gr != nil && gr.ObjInfo.DeleteMarker) {
 			proxytgts := getProxyTargets(ctx, bucket, object, opts)
 			if !proxytgts.Empty() {
 				globalReplicationStats.incProxy(bucket, getObjectAPI, false)
@@ -1028,7 +1028,7 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 
 	objInfo, err := getObjectInfo(ctx, bucket, object, opts)
 	var proxy proxyResult
-	if err != nil && !objInfo.DeleteMarker && !isErrMethodNotAllowed(err) {
+	if err != nil && !objInfo.DeleteMarker && !isErrMethodNotAllowed(err) && !isErrObjectNameInvalid(err) {
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
