@@ -514,7 +514,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		JobType:   string(job.Type()),
 		StartTime: job.Started,
 	}
-	if err := ri.load(ctx, api, job); err != nil {
+	if err := ri.loadOrInit(ctx, api, job); err != nil {
 		return err
 	}
 
