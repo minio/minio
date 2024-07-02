@@ -102,6 +102,8 @@ func diskErrToDriveState(err error) (state string) {
 		state = madmin.DriveStatePermission
 	case errors.Is(err, errFaultyDisk):
 		state = madmin.DriveStateFaulty
+	case errors.Is(err, errDriveIsRoot):
+		state = madmin.DriveStateRootMount
 	case err == nil:
 		state = madmin.DriveStateOk
 	default:
