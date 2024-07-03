@@ -144,7 +144,8 @@ func newWarmBackend(ctx context.Context, tier madmin.TierConfig, probe bool) (d 
 		return nil, errTierTypeUnsupported
 	}
 	if err != nil {
-		return nil, errTierSetupFailed
+		tierLogIf(ctx, errors.Join(err, errTierInvalidConfig))
+		return nil, errTierInvalidConfig
 	}
 
 	if probe {

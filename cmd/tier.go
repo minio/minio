@@ -65,9 +65,9 @@ var (
 		StatusCode: http.StatusBadRequest,
 	}
 
-	errTierSetupFailed = AdminError{
-		Code:       "XMinioAdminTierSetupFailed",
-		Message:    "Failed to setup remote tier, check credentials",
+	errTierInvalidConfig = AdminError{
+		Code:       "XMinioAdminTierInvalidConfig",
+		Message:    "Unable to setup remote tier, check tier configuration",
 		StatusCode: http.StatusBadRequest,
 	}
 )
