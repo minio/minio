@@ -216,6 +216,12 @@ func toAdminAPIErr(ctx context.Context, err error) APIError {
 				Description:    err.Error(),
 				HTTPStatusCode: http.StatusBadRequest,
 			}
+		case errors.Is(err, errTierSetupFailed):
+			apiErr = APIError{
+				Code:           "XMinioAdminTierSetupFailed",
+				Description:    err.Error(),
+				HTTPStatusCode: http.StatusBadRequest,
+			}
 		default:
 			apiErr = errorCodes.ToAPIErrWithErr(toAdminAPIErrCode(ctx, err), err)
 		}
