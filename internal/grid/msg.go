@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
@@ -255,8 +256,20 @@ type sender interface {
 }
 
 type connectReq struct {
-	ID   [16]byte
-	Host string
+	ID    [16]byte
+	Host  string
+	Time  time.Time
+	Token string
+}
+
+// audience returns the audience for the connect call.
+func (c *connectReq) audience() string {
+	return fmt.Sprintf("%s-%d", c.Host, c.Time.Unix())
+}
+
+// addToken will add the token to the connect request.
+func (c *connectReq) addToken(fn AuthFn) {
+	c.Token = fn(c.audience())
 }
 
 func (connectReq) Op() Op {

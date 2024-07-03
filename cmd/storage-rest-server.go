@@ -109,6 +109,24 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 // DefaultSkewTime - skew time is 15 minutes between minio peers.
 const DefaultSkewTime = 15 * time.Minute
 
+// validateStorageRequestToken will validate the token against the provided audience.
+func validateStorageRequestToken(token, audience string) error {
+	claims := xjwt.NewStandardClaims()
+	if err := xjwt.ParseWithStandardClaims(token, claims, []byte(globalActiveCred.SecretKey)); err != nil {
+		return errAuthentication
+	}
+
+	owner := claims.AccessKey == globalActiveCred.AccessKey || claims.Subject == globalActiveCred.AccessKey
+	if !owner {
+		return errAuthentication
+	}
+
+	if claims.Audience != audience {
+		return errAuthentication
+	}
+	return nil
+}
+
 // Authenticates storage client's requests and validates for skewed time.
 func storageServerRequestValidate(r *http.Request) error {
 	token, err := jwtreq.AuthorizationHeaderExtractor.ExtractToken(r)
@@ -118,19 +136,8 @@ func storageServerRequestValidate(r *http.Request) error {
 		}
 		return errMalformedAuth
 	}
-
-	claims := xjwt.NewStandardClaims()
-	if err = xjwt.ParseWithStandardClaims(token, claims, []byte(globalActiveCred.SecretKey)); err != nil {
-		return errAuthentication
-	}
-
-	owner := claims.AccessKey == globalActiveCred.AccessKey || claims.Subject == globalActiveCred.AccessKey
-	if !owner {
-		return errAuthentication
-	}
-
-	if claims.Audience != r.URL.RawQuery {
-		return errAuthentication
+	if err = validateStorageRequestToken(token, r.URL.RawQuery); err != nil {
+		return err
 	}
 
 	requestTimeStr := r.Header.Get("X-Minio-Time")

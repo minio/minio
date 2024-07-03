@@ -20,7 +20,6 @@ package grid
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -28,7 +27,6 @@ import (
 	"math"
 	"math/rand"
 	"net"
-	"net/http"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -100,9 +98,9 @@ type Connection struct {
 	// Client or serverside.
 	side ws.State
 
-	// Transport for outgoing connections.
-	dialer ContextDialer
-	header http.Header
+	// Dialer for outgoing connections.
+	dial   ConnDialer
+	authFn AuthFn
 
 	handleMsgWg sync.WaitGroup
 
@@ -112,10 +110,8 @@ type Connection struct {
 	handlers   *handlers
 
 	remote             *RemoteClient
-	auth               AuthFn
 	clientPingInterval time.Duration
 	connPingInterval   time.Duration
-	tlsConfig          *tls.Config
 	blockConnect       chan struct{}
 
 	incomingBytes func(n int64) // Record incoming bytes.
@@ -205,13 +201,12 @@ type connectionParams struct {
 	ctx           context.Context
 	id            uuid.UUID
 	local, remote string
-	dial          ContextDialer
 	handlers      *handlers
-	auth          AuthFn
-	tlsConfig     *tls.Config
 	incomingBytes func(n int64) // Record incoming bytes.
 	outgoingBytes func(n int64) // Record outgoing bytes.
 	publisher     *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]
+	dialer        ConnDialer
+	authFn        AuthFn
 
 	blockConnect chan struct{}
 }
@@ -227,16 +222,14 @@ func newConnection(o connectionParams) *Connection {
 		outgoing:           xsync.NewMapOfPresized[uint64, *muxClient](1000),
 		inStream:           xsync.NewMapOfPresized[uint64, *muxServer](1000),
 		outQueue:           make(chan []byte, defaultOutQueue),
-		dialer:             o.dial,
 		side:               ws.StateServerSide,
 		connChange:         &sync.Cond{L: &sync.Mutex{}},
 		handlers:           o.handlers,
-		auth:               o.auth,
-		header:             make(http.Header, 1),
 		remote:             &RemoteClient{Name: o.remote},
 		clientPingInterval: clientPingInterval,
 		connPingInterval:   connPingInterval,
-		tlsConfig:          o.tlsConfig,
+		dial:               o.dialer,
+		authFn:             o.authFn,
 	}
 	if debugPrint {
 		// Random Mux ID
@@ -648,41 +641,17 @@ func (c *Connection) connect() {
 		if c.State() == StateShutdown {
 			return
 		}
-		toDial := strings.Replace(c.Remote, "http://", "ws://", 1)
-		toDial = strings.Replace(toDial, "https://", "wss://", 1)
-		toDial += RoutePath
-
-		dialer := ws.DefaultDialer
-		dialer.ReadBufferSize = readBufferSize
-		dialer.WriteBufferSize = writeBufferSize
-		dialer.Timeout = defaultDialTimeout
-		if c.dialer != nil {
-			dialer.NetDial = c.dialer.DialContext
-		}
-		if c.header == nil {
-			c.header = make(http.Header, 2)
-		}
-		c.header.Set("Authorization", "Bearer "+c.auth(""))
-		c.header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
-
-		if len(c.header) > 0 {
-			dialer.Header = ws.HandshakeHeaderHTTP(c.header)
-		}
-		dialer.TLSConfig = c.tlsConfig
 		dialStarted := time.Now()
 		if debugPrint {
-			fmt.Println(c.Local, "Connecting to ", toDial)
+			fmt.Println(c.Local, "Connecting to ", c.Remote)
 		}
-		conn, br, _, err := dialer.Dial(c.ctx, toDial)
-		if br != nil {
-			ws.PutReader(br)
-		}
+		conn, err := c.dial(c.ctx, c.Remote)
 		c.connMu.Lock()
 		c.debugOutConn = conn
 		c.connMu.Unlock()
 		retry := func(err error) {
 			if debugPrint {
-				fmt.Printf("%v Connecting to %v: %v. Retrying.\n", c.Local, toDial, err)
+				fmt.Printf("%v Connecting to %v: %v. Retrying.\n", c.Local, c.Remote, err)
 			}
 			sleep := defaultDialTimeout + time.Duration(rng.Int63n(int64(defaultDialTimeout)))
 			next := dialStarted.Add(sleep / 2)
@@ -696,7 +665,7 @@ func (c *Connection) connect() {
 			}
 			if gotState != StateConnecting {
 				// Don't print error on first attempt, and after that only once per hour.
-				gridLogOnceIf(c.ctx, fmt.Errorf("grid: %s re-connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, toDial, err, err, sleep, gotState), toDial)
+				gridLogOnceIf(c.ctx, fmt.Errorf("grid: %s re-connecting to %s: %w (%T) Sleeping %v (%v)", c.Local, c.Remote, err, err, sleep, gotState), c.Remote)
 			}
 			c.updateState(StateConnectionError)
 			time.Sleep(sleep)
@@ -712,7 +681,9 @@ func (c *Connection) connect() {
 		req := connectReq{
 			Host: c.Local,
 			ID:   c.id,
+			Time: time.Now(),
 		}
+		req.addToken(c.authFn)
 		err = c.sendMsg(conn, m, &req)
 		if err != nil {
 			retry(err)
