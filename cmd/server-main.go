@@ -1030,11 +1030,6 @@ func serverMain(ctx *cli.Context) {
 			globalTransitionState.Init(newObject)
 		})
 
-		// Initialize the license update job
-		bootstrapTrace("initLicenseUpdateJob", func() {
-			initLicenseUpdateJob(GlobalContext, newObject)
-		})
-
 		go func() {
 			// Initialize transition tier configuration manager
 			bootstrapTrace("globalTierConfigMgr.Init", func() {
