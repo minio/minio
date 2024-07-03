@@ -134,11 +134,16 @@ func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 		SSES3SinglePartObjects := make(map[int]bool)
 		for i, object := range batch {
 			if kind, ok := crypto.IsEncrypted(object.UserDefined); ok && kind == crypto.S3 && !crypto.IsMultiPart(object.UserDefined) {
-				SSES3SinglePartObjects[i] = true
-
-				metadata = append(metadata, object.UserDefined)
-				buckets = append(buckets, object.Bucket)
-				names = append(names, object.Name)
+				ETag, err := etag.Parse(object.ETag)
+				if err != nil {
+					continue
+				}
+				if ETag.IsEncrypted() {
+					SSES3SinglePartObjects[i] = true
+					metadata = append(metadata, object.UserDefined)
+					buckets = append(buckets, object.Bucket)
+					names = append(names, object.Name)
+				}
 			}
 		}
 
@@ -190,7 +195,7 @@ func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 				if err != nil {
 					return err
 				}
-				if SSES3SinglePartObjects[i] && ETag.IsEncrypted() {
+				if SSES3SinglePartObjects[i] {
 					ETag, err = etag.Decrypt(keys[0][:], ETag)
 					if err != nil {
 						return err
