@@ -1093,7 +1093,10 @@ func (c *Connection) handleMessages(ctx context.Context, conn net.Conn) {
 			}
 			block := c.blockMessages.Load()
 			if block != nil && *block != nil {
-				<-*block
+				select {
+				case <-*block:
+				case <-ctx.Done():
+				}
 			}
 
 			if c.incomingBytes != nil {
