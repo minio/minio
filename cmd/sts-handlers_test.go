@@ -163,7 +163,7 @@ func (s *TestSuiteIAM) TestSTSServiceAccountsWithUsername(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, false)
 
 	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
 
@@ -1241,17 +1241,26 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 		c.Fatalf("Error initializing client: %v", err)
 	}
 
-	// Validate that user listing does not return any entries
+	// Validate that builtin user listing does not return any entries
 	usersList, err := s.adm.ListUsers(ctx)
 	if err != nil {
 		c.Fatalf("list users should not fail: %v", err)
 	}
-	if len(usersList) != 1 {
-		c.Fatalf("expected user listing output: %v", usersList)
+	if len(usersList) != 0 {
+		c.Fatalf("expected listing to be empty: %v", usersList)
 	}
-	uinfo := usersList[userDN]
-	if uinfo.PolicyName != policy || uinfo.Status != madmin.AccountEnabled {
-		c.Fatalf("expected user listing content: %v", uinfo)
+
+	// Validate that accesskey list returns the user
+	// LDAP TODO: Maybe Entities?
+	accessKeys, err := s.adm.ListAccessKeysLDAPBulk(ctx, []string{userDN}, madmin.AccessKeyListUsersOnly, false)
+	if err != nil {
+		c.Fatalf("list access keys should not fail: %v", err)
+	}
+	if len(accessKeys) != 1 {
+		c.Fatalf("expected access keys listing to have one entry: %v", accessKeys)
+	}
+	if _, ok := accessKeys[userDN]; !ok {
+		c.Fatalf("expected user listing content: %v", accessKeys)
 	}
 
 	// Validate that the client from sts creds can access the bucket.
@@ -1380,12 +1389,21 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
 	if err != nil {
 		c.Fatalf("list users should not fail: %v", err)
 	}
-	if len(usersList) != 1 {
-		c.Fatalf("expected user listing output: %#v", usersList)
+	if len(usersList) != 0 {
+		c.Fatalf("expected listing to be empty: %v", usersList)
 	}
-	uinfo := usersList[actualUserDN]
-	if uinfo.PolicyName != policy || uinfo.Status != madmin.AccountEnabled {
-		c.Fatalf("expected user listing content: %v", uinfo)
+
+	// Validate that accesskey list returns the user
+	// LDAP TODO: Maybe Entities?
+	accessKeys, err := s.adm.ListAccessKeysLDAPBulk(ctx, []string{userDNWithUnicodeDot}, madmin.AccessKeyListUsersOnly, false)
+	if err != nil {
+		c.Fatalf("list access keys should not fail: %v", err)
+	}
+	if len(accessKeys) != 1 {
+		c.Fatalf("expected access keys listing to have one entry: %v", accessKeys)
+	}
+	if _, ok := accessKeys[actualUserDN]; !ok {
+		c.Fatalf("expected user listing content: %v", accessKeys)
 	}
 
 	minioClient, err := minio.New(s.endpoint, &minio.Options{
@@ -1537,12 +1555,21 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
 	if err != nil {
 		c.Fatalf("list users should not fail: %v", err)
 	}
-	if len(usersList) != 1 {
-		c.Fatalf("expected user listing output: %#v", usersList)
+	if len(usersList) != 0 {
+		c.Fatalf("expected listing to be empty: %v", usersList)
 	}
-	uinfo := usersList[actualUserDN]
-	if uinfo.PolicyName != policy || uinfo.Status != madmin.AccountEnabled {
-		c.Fatalf("expected user listing content: %v", uinfo)
+
+	// Validate that accesskey list returns the user
+	// LDAP TODO: Maybe Entities?
+	accessKeys, err := s.adm.ListAccessKeysLDAPBulk(ctx, []string{userDNWithUnicodeDot}, madmin.AccessKeyListUsersOnly, false)
+	if err != nil {
+		c.Fatalf("list access keys should not fail: %v", err)
+	}
+	if len(accessKeys) != 1 {
+		c.Fatalf("expected access keys listing to have one entry: %v", accessKeys)
+	}
+	if _, ok := accessKeys[actualUserDN]; !ok {
+		c.Fatalf("expected user listing content: %v", accessKeys)
 	}
 
 	minioClient, err := minio.New(s.endpoint, &minio.Options{
@@ -1707,7 +1734,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, true)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
@@ -1719,7 +1746,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket, true)
 
 	// 6. Check that service account cannot be created for some other user.
 	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
@@ -1810,7 +1837,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithUsername(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, true)
 
 	svcClient := s.getUserClient(c, cr.AccessKey, cr.SecretKey, "")
 
@@ -1909,7 +1936,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, true)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
@@ -1921,7 +1948,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket, true)
 
 	// 6. Check that service account cannot be created for some other user.
 	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
@@ -2418,7 +2445,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, false)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
@@ -2430,7 +2457,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket, false)
 
 	// 6. Check that service account cannot be created for some other user.
 	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
@@ -2711,7 +2738,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, false)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
@@ -2723,7 +2750,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicy(c *check) {
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket, false)
 }
 
 // Constants for Policy Variables test.
@@ -3137,7 +3164,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicyUnderAMP(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, value.AccessKeyID, userAdmClient, false)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, value.AccessKeyID, cr.AccessKey)
@@ -3192,5 +3219,5 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicyUnderAMP(c *check) {
 	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, value.AccessKeyID, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, value.AccessKeyID, bucket, false)
 }

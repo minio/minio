@@ -488,34 +488,32 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		logger.Info("Policy docs load took %.2fs (for %d items)", took.Seconds(), len(policiesList))
 	}
 
-	if iamOS.usersSysType == MinIOUsersSysType {
-		bootstrapTraceMsgFirstTime("loading regular IAM users")
-		regUsersLoadStartTime := UTCNow()
-		regUsersList := listedConfigItems[usersListKey]
-		for _, item := range regUsersList {
-			userName := path.Dir(item)
-			if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-				return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
-			}
+	bootstrapTraceMsgFirstTime("loading regular IAM users")
+	regUsersLoadStartTime := UTCNow()
+	regUsersList := listedConfigItems[usersListKey]
+	for _, item := range regUsersList {
+		userName := path.Dir(item)
+		if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
+			return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
 		}
-		if took := time.Since(regUsersLoadStartTime); took > maxIAMLoadOpTime {
-			actualLoaded := len(cache.iamUsersMap)
-			logger.Info("Reg. users load took %.2fs (for %d items with %d expired items)", took.Seconds(),
-				len(regUsersList), len(regUsersList)-actualLoaded)
-		}
+	}
+	if took := time.Since(regUsersLoadStartTime); took > maxIAMLoadOpTime {
+		actualLoaded := len(cache.iamUsersMap)
+		logger.Info("Reg. users load took %.2fs (for %d items with %d expired items)", took.Seconds(),
+			len(regUsersList), len(regUsersList)-actualLoaded)
+	}
 
-		bootstrapTraceMsgFirstTime("loading regular IAM groups")
-		groupsLoadStartTime := UTCNow()
-		groupsList := listedConfigItems[groupsListKey]
-		for _, item := range groupsList {
-			group := path.Dir(item)
-			if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
-				return fmt.Errorf("unable to load the group `%s`: %w", group, err)
-			}
+	bootstrapTraceMsgFirstTime("loading regular IAM groups")
+	groupsLoadStartTime := UTCNow()
+	groupsList := listedConfigItems[groupsListKey]
+	for _, item := range groupsList {
+		group := path.Dir(item)
+		if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
+			return fmt.Errorf("unable to load the group `%s`: %w", group, err)
 		}
-		if took := time.Since(groupsLoadStartTime); took > maxIAMLoadOpTime {
-			logger.Info("Groups load took %.2fs (for %d items)", took.Seconds(), len(groupsList))
-		}
+	}
+	if took := time.Since(groupsLoadStartTime); took > maxIAMLoadOpTime {
+		logger.Info("Groups load took %.2fs (for %d items)", took.Seconds(), len(groupsList))
 	}
 
 	bootstrapTraceMsgFirstTime("loading user policy mapping")

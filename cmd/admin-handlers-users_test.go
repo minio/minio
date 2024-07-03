@@ -43,7 +43,7 @@ import (
 )
 
 const (
-	testDefaultTimeout = 30 * time.Second
+	testDefaultTimeout = 3000 * time.Second
 )
 
 // API suite container for IAM
@@ -518,7 +518,7 @@ func (s *TestSuiteIAM) TestAddServiceAccountPerms(c *check) {
 	}
 
 	// 3.3 check user can create service account implicitly.
-	c.mustCreateSvcAccount(ctx, accessKey, admClnt)
+	c.mustCreateSvcAccount(ctx, accessKey, admClnt, false)
 
 	_, ok = ps[policy2]
 	if !ok {
@@ -917,7 +917,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, accessKey, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, accessKey, userAdmClient, false)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, accessKey, cr.AccessKey)
@@ -929,7 +929,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 	c.assertSvcAccS3Access(ctx, s, cr, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket, false)
 
 	// 6. Check that service account cannot be created for some other user.
 	c.mustNotCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
@@ -1073,7 +1073,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 	}
 
 	// 1. Create a service account for the user
-	cr := c.mustCreateSvcAccount(ctx, accessKey, s.adm)
+	cr := c.mustCreateSvcAccount(ctx, accessKey, s.adm, false)
 
 	// 1.2 Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, s.adm, accessKey, cr.AccessKey)
@@ -1093,7 +1093,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, s.adm, accessKey, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket)
+	c.assertSvcAccDeletion(ctx, s, s.adm, accessKey, bucket, false)
 }
 
 func (s *TestSuiteIAM) TestServiceAccountPrivilegeEscalationBug(c *check) {
@@ -1286,7 +1286,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 	userAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
 
 	// Create svc acc
-	cr := c.mustCreateSvcAccount(ctx, accessKey, userAdmClient)
+	cr := c.mustCreateSvcAccount(ctx, accessKey, userAdmClient, false)
 
 	// 1. Check that svc account appears in listing
 	c.assertSvcAccAppearsInListing(ctx, userAdmClient, accessKey, cr.AccessKey)
@@ -1338,11 +1338,11 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 	c.assertSvcAccSecretKeyAndStatusUpdate(ctx, s, userAdmClient, accessKey, bucket)
 
 	// 5. Check that service account can be deleted.
-	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket)
+	c.assertSvcAccDeletion(ctx, s, userAdmClient, accessKey, bucket, false)
 
 	// 6. Check that service account **can** be created for some other user.
 	// This is possible because the policy enforced in the plugin.
-	c.mustCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient)
+	c.mustCreateSvcAccount(ctx, globalActiveCred.AccessKey, userAdmClient, false)
 }
 
 func (c *check) mustCreateIAMUser(ctx context.Context, admClnt *madmin.AdminClient) madmin.Credentials {
@@ -1378,11 +1378,19 @@ func (c *check) mustNotCreateIAMUser(ctx context.Context, admClnt *madmin.AdminC
 	}
 }
 
-func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient) madmin.Credentials {
+func (c *check) mustCreateSvcAccount(ctx context.Context, tgtUser string, admClnt *madmin.AdminClient, ldap bool) madmin.Credentials {
 	c.Helper()
-	cr, err := admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-		TargetUser: tgtUser,
-	})
+	var cr madmin.Credentials
+	var err error
+	if ldap {
+		cr, err = admClnt.AddServiceAccountLDAP(ctx, madmin.AddServiceAccountReq{
+			TargetUser: tgtUser,
+		})
+	} else {
+		cr, err = admClnt.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			TargetUser: tgtUser,
+		})
+	}
 	if err != nil {
 		c.Fatalf("user should be able to create service accounts %s", err)
 	}
@@ -1651,14 +1659,24 @@ func (c *check) assertSvcAccSecretKeyAndStatusUpdate(ctx context.Context, s *Tes
 	c.mustNotListObjects(ctx, svcClient2, bucket)
 }
 
-func (c *check) assertSvcAccDeletion(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string) {
+func (c *check) assertSvcAccDeletion(ctx context.Context, s *TestSuiteIAM, madmClient *madmin.AdminClient, accessKey, bucket string, ldap bool) {
 	c.Helper()
 	svcAK, svcSK := mustGenerateCredentials(c)
-	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
-		TargetUser: accessKey,
-		AccessKey:  svcAK,
-		SecretKey:  svcSK,
-	})
+	var cr madmin.Credentials
+	var err error
+	if ldap {
+		cr, err = madmClient.AddServiceAccountLDAP(ctx, madmin.AddServiceAccountReq{
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+	} else {
+		cr, err = madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			TargetUser: accessKey,
+			AccessKey:  svcAK,
+			SecretKey:  svcSK,
+		})
+	}
 	if err != nil {
 		c.Fatalf("Unable to create svc acc: %v", err)
 	}

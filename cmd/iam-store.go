@@ -372,8 +372,9 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 // generated credentials. Thus we skip looking up group memberships, user map,
 // and group map and check the appropriate policy maps directly.
 func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([]string, time.Time, error) {
+	ldap := isNameLDAP(name)
 	if isGroup {
-		if !isNameLDAP(name) {
+		if !ldap {
 			g, ok := c.iamGroupsMap[name]
 			if !ok {
 				if err := store.loadGroup(context.Background(), name, c.iamGroupsMap); err != nil {
@@ -440,7 +441,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 	policies := set.CreateStringSet(mp.toSlice()...)
 
 	for _, group := range u.Credentials.Groups {
-		if store.getUsersSysType() == MinIOUsersSysType {
+		if !ldap {
 			g, ok := c.iamGroupsMap[group]
 			if !ok {
 				if err := store.loadGroup(context.Background(), group, c.iamGroupsMap); err != nil {
@@ -976,33 +977,16 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 }
 
 func (store *IAMStoreSys) updateGroups(ctx context.Context, cache *iamCache) (res []string, err error) {
-	if store.getUsersSysType() == MinIOUsersSysType {
-		m := map[string]GroupInfo{}
-		err = store.loadGroups(ctx, m)
-		if err != nil {
-			return
-		}
-		cache.iamGroupsMap = m
-		cache.updatedAt = time.Now()
-		for k := range cache.iamGroupsMap {
-			res = append(res, k)
-		}
+	m := map[string]GroupInfo{}
+	err = store.loadGroups(ctx, m)
+	if err != nil {
+		return
 	}
-
-	if store.getUsersSysType() == LDAPUsersSysType {
-		m := xsync.NewMapOf[string, MappedPolicy]()
-		err = store.loadMappedPolicies(ctx, stsUser, true, m)
-		if err != nil {
-			return
-		}
-		cache.iamGroupPolicyMap = m
-		cache.updatedAt = time.Now()
-		cache.iamGroupPolicyMap.Range(func(k string, v MappedPolicy) bool {
-			res = append(res, k)
-			return true
-		})
+	cache.iamGroupsMap = m
+	cache.updatedAt = time.Now()
+	for k := range cache.iamGroupsMap {
+		res = append(res, k)
 	}
-
 	return res, nil
 }
 
