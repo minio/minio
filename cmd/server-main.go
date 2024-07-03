@@ -1030,11 +1030,6 @@ func serverMain(ctx *cli.Context) {
 			globalTransitionState.Init(newObject)
 		})
 
-		// Initialize batch job pool.
-		bootstrapTrace("newBatchJobPool", func() {
-			globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
-		})
-
 		// Initialize the license update job
 		bootstrapTrace("initLicenseUpdateJob", func() {
 			initLicenseUpdateJob(GlobalContext, newObject)
@@ -1103,6 +1098,11 @@ func serverMain(ctx *cli.Context) {
 				go initFederatorBackend(buckets, newObject)
 			})
 		}
+
+		// Initialize batch job pool.
+		bootstrapTrace("newBatchJobPool", func() {
+			globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
+		})
 
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 		printStartupMessage(getAPIEndpoints(), err)
