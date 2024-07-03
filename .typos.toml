@@ -2,6 +2,7 @@
 extend-exclude = [
     ".git/",
     "docs/",
+    "CREDITS",
 ]
 ignore-hidden = false
 

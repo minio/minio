@@ -1815,19 +1815,21 @@ func newBatchJobPool(ctx context.Context, o ObjectLayer, workers int) *BatchJobP
 		jobCancelers: make(map[string]context.CancelFunc),
 	}
 	jpool.ResizeWorkers(workers)
-	jpool.resume()
 
-	go jpool.cleanupReports()
+	randomWait := func() time.Duration {
+		// randomWait depends on the number of nodes to avoid triggering resume and cleanups at the same time.
+		return time.Duration(rand.Float64() * float64(time.Duration(globalEndpoints.NEndpoints())*time.Hour))
+	}
+
+	go func() {
+		jpool.resume(randomWait)
+		jpool.cleanupReports(randomWait)
+	}()
 
 	return jpool
 }
 
-func (j *BatchJobPool) cleanupReports() {
-	randomWait := func() time.Duration {
-		// randomWait depends on the number of nodes to avoid triggering the cleanup at the same time
-		return time.Duration(rand.Float64() * float64(time.Duration(globalEndpoints.NEndpoints())*time.Hour))
-	}
-
+func (j *BatchJobPool) cleanupReports(randomWait func() time.Duration) {
 	t := time.NewTimer(randomWait())
 	defer t.Stop()
 
@@ -1864,7 +1866,9 @@ func (j *BatchJobPool) cleanupReports() {
 	}
 }
 
-func (j *BatchJobPool) resume() {
+func (j *BatchJobPool) resume(randomWait func() time.Duration) {
+	time.Sleep(randomWait())
+
 	results := make(chan itemOrErr[ObjectInfo], 100)
 	ctx, cancel := context.WithCancel(j.ctx)
 	defer cancel()
