@@ -65,9 +65,6 @@ type Manager struct {
 
 	// authToken is a function that will validate a token.
 	authToken ValidateTokenFn
-
-	// signToken is a function that will sign a token.
-	signToken AuthFn
 }
 
 // ManagerOptions are options for creating a new grid manager.
@@ -180,6 +177,8 @@ func (m *Manager) Handler(authReq func(r *http.Request) error) http.HandlerFunc 
 }
 
 // IncomingConn will handle an incoming connection.
+// This should be called with the incoming connection after accept.
+// Auth is handled internally, as well as disconnecting any connections from the same host.
 func (m *Manager) IncomingConn(ctx context.Context, conn net.Conn) {
 	remoteAddr := conn.RemoteAddr().String()
 	// will write an OpConnectResponse message to the remote and log it once locally.
