@@ -1275,7 +1275,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
-		ilmLogIf(ctx, err)
+		ilmLogIf(ctx, fmt.Errorf("expireTransitionedObject(%s, %s): %w", obj.Bucket, obj.Name, err))
 		return false
 	}
 	timeILM(1)
@@ -1328,7 +1328,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			return false
 		}
 		// Assume it is still there.
-		ilmLogOnceIf(ctx, err, "non-transition-expiry")
+		ilmLogOnceIf(ctx, fmt.Errorf("DeleteObject(%s, %s): %w", obj.Bucket, obj.Name, err), "non-transition-expiry"+obj.Name)
 		return false
 	}
 	if dobj.Name == "" {
