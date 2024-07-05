@@ -843,6 +843,7 @@ func loadRootCredentials() {
 	// Check both cases and authenticate them if correctly defined
 	var user, password string
 	var hasCredentials bool
+	var legacyCredentials bool
 	//nolint:gocritic
 	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
 		user = env.Get(config.EnvRootUser, "")
@@ -851,6 +852,7 @@ func loadRootCredentials() {
 	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 		user = env.Get(config.EnvAccessKey, "")
 		password = env.Get(config.EnvSecretKey, "")
+		legacyCredentials = true
 		hasCredentials = true
 	} else if globalServerCtxt.RootUser != "" && globalServerCtxt.RootPwd != "" {
 		user, password = globalServerCtxt.RootUser, globalServerCtxt.RootPwd
@@ -859,8 +861,13 @@ func loadRootCredentials() {
 	if hasCredentials {
 		cred, err := auth.CreateCredentials(user, password)
 		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
+			if legacyCredentials {
+				logger.Fatal(config.ErrInvalidCredentials(err),
+					"Unable to validate credentials inherited from the shell environment")
+			} else {
+				logger.Fatal(config.ErrInvalidRootUserCredentials(err),
+					"Unable to validate credentials inherited from the shell environment")
+			}
 		}
 		if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 			msg := fmt.Sprintf("WARNING: %s and %s are deprecated.\n"+
