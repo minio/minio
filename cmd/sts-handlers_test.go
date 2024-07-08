@@ -733,6 +733,7 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpLDAP(c, ldapServer)
 				suite.TestLDAPSTS(c)
+				suite.TestLDAPPolicyEntitiesLookup(c)
 				suite.TestLDAPUnicodeVariations(c)
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
@@ -764,6 +765,7 @@ func TestIAMWithLDAPNonNormalizedBaseDNConfigServerSuite(t *testing.T) {
 				suite.SetUpSuite(c)
 				suite.SetUpLDAPWithNonNormalizedBaseDN(c, ldapServer)
 				suite.TestLDAPSTS(c)
+				suite.TestLDAPPolicyEntitiesLookup(c)
 				suite.TestLDAPUnicodeVariations(c)
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
@@ -2092,6 +2094,86 @@ func (s *TestSuiteIAM) TestLDAPAttributesLookup(c *check) {
 	}
 
 	if _, err = s.adm.DetachPolicyLDAP(ctx, groupReq); err != nil {
+		c.Fatalf("Unable to detach group policy: %v", err)
+	}
+}
+
+func (s *TestSuiteIAM) TestLDAPPolicyEntitiesLookup(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	groupDN := "cn=projectb,ou=groups,ou=swengg,dc=min,dc=io"
+	groupPolicy := "readwrite"
+	groupReq := madmin.PolicyAssociationReq{
+		Policies: []string{groupPolicy},
+		Group:    groupDN,
+	}
+	_, err := s.adm.AttachPolicyLDAP(ctx, groupReq)
+	if err != nil {
+		c.Fatalf("Unable to attach group policy: %v", err)
+	}
+	type caseTemplate struct {
+		inDN                string
+		expectedOutDN       string
+		expectedGroupDN     string
+		expectedGroupPolicy string
+	}
+	cases := []caseTemplate{
+		{
+			inDN:                "uid=dillon,ou=people,ou=swengg,dc=min,dc=io",
+			expectedOutDN:       "uid=dillon,ou=people,ou=swengg,dc=min,dc=io",
+			expectedGroupDN:     groupDN,
+			expectedGroupPolicy: groupPolicy,
+		},
+	}
+
+	policy := "readonly"
+	for _, testCase := range cases {
+		userReq := madmin.PolicyAssociationReq{
+			Policies: []string{policy},
+			User:     testCase.inDN,
+		}
+		_, err := s.adm.AttachPolicyLDAP(ctx, userReq)
+		if err != nil {
+			c.Fatalf("Unable to attach policy: %v", err)
+		}
+
+		entities, err := s.adm.GetLDAPPolicyEntities(ctx, madmin.PolicyEntitiesQuery{
+			Users:  []string{testCase.inDN},
+			Policy: []string{policy},
+		})
+		if err != nil {
+			c.Fatalf("Unable to fetch policy entities: %v", err)
+		}
+
+		// switch statement to check all the conditions
+		switch {
+		case len(entities.UserMappings) != 1:
+			c.Fatalf("Expected to find exactly one user mapping")
+		case entities.UserMappings[0].User != testCase.expectedOutDN:
+			c.Fatalf("Expected user DN `%s`, found `%s`", testCase.expectedOutDN, entities.UserMappings[0].User)
+		case len(entities.UserMappings[0].Policies) != 1:
+			c.Fatalf("Expected exactly one policy attached to user")
+		case entities.UserMappings[0].Policies[0] != policy:
+			c.Fatalf("Expected attached policy `%s`, found `%s`", policy, entities.UserMappings[0].Policies[0])
+		case len(entities.UserMappings[0].MemberOfMappings) != 1:
+			c.Fatalf("Expected exactly one group attached to user")
+		case entities.UserMappings[0].MemberOfMappings[0].Group != testCase.expectedGroupDN:
+			c.Fatalf("Expected attached group `%s`, found `%s`", testCase.expectedGroupDN, entities.UserMappings[0].MemberOfMappings[0].Group)
+		case len(entities.UserMappings[0].MemberOfMappings[0].Policies) != 1:
+			c.Fatalf("Expected exactly one policy attached to group")
+		case entities.UserMappings[0].MemberOfMappings[0].Policies[0] != testCase.expectedGroupPolicy:
+			c.Fatalf("Expected attached policy `%s`, found `%s`", testCase.expectedGroupPolicy, entities.UserMappings[0].MemberOfMappings[0].Policies[0])
+		}
+
+		_, err = s.adm.DetachPolicyLDAP(ctx, userReq)
+		if err != nil {
+			c.Fatalf("Unable to detach policy: %v", err)
+		}
+	}
+
+	_, err = s.adm.DetachPolicyLDAP(ctx, groupReq)
+	if err != nil {
 		c.Fatalf("Unable to detach group policy: %v", err)
 	}
 }
