@@ -2088,7 +2088,7 @@ func (store *IAMStoreSys) GetAllSTSUserMappings(userPredicate func(string) bool)
 	return stsMap, nil
 }
 
-// Assumes store is locked by caller. If users is empty, returns all user mappings.
+// Assumes store is locked by caller. If userMap is empty, returns all user mappings.
 func (store *IAMStoreSys) listUserPolicyMappings(cache *iamCache, userMap map[string]set.StringSet,
 	userPredicate func(string) bool,
 ) []madmin.UserPolicyEntities {
