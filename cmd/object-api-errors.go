@@ -751,6 +751,12 @@ func isErrSignatureDoesNotMatch(err error) bool {
 	return errors.As(err, &signatureDoesNotMatch)
 }
 
+// isErrObjectNameInvalid - Check if error type is ObjectNameInvalid.
+func isErrObjectNameInvalid(err error) bool {
+	var invalidObject ObjectNameInvalid
+	return errors.As(err, &invalidObject)
+}
+
 // PreConditionFailed - Check if copy precondition failed
 type PreConditionFailed struct{}
 
