@@ -199,7 +199,7 @@ func fwdStatusToAPIError(resp *http.Response) *APIError {
 	return nil
 }
 
-// GetObjectLamdbaHandler - GET Object with transformed data via lambda functions
+// GetObjectLambdaHandler - GET Object with transformed data via lambda functions
 // ----------
 // This implementation of the GET operation applies lambda functions and returns the
 // response generated via the lambda functions. To use this API, you must have READ access
