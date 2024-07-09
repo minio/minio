@@ -125,10 +125,15 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 		authtype = "POST"
 	}
 
+	secureTransport := r.TLS != nil
+	if forwardedScheme := handlers.GetSourceScheme(r); forwardedScheme != "" {
+		secureTransport = forwardedScheme == "https"
+	}
+
 	args := map[string][]string{
 		"CurrentTime":      {currTime.Format(time.RFC3339)},
 		"EpochTime":        {strconv.FormatInt(currTime.Unix(), 10)},
-		"SecureTransport":  {strconv.FormatBool(r.TLS != nil)},
+		"SecureTransport":  {strconv.FormatBool(secureTransport)},
 		"SourceIp":         {handlers.GetSourceIPRaw(r)},
 		"UserAgent":        {r.UserAgent()},
 		"Referer":          {r.Referer()},
