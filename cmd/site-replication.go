@@ -2252,7 +2252,7 @@ func (c *SiteReplicationSys) toErrorFromErrMap(errMap map[string]error, actionNa
 
 	// Get ordered list of keys of errMap
 	keys := []string{}
-	for d, _ := range errMap {
+	for d := range errMap {
 		keys = append(keys, d)
 	}
 	sort.Strings(keys)
