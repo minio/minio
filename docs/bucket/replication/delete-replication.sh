@@ -52,7 +52,9 @@ export MINIO_ROOT_USER="minioadmin"
 export MINIO_ROOT_PASSWORD="minioadmin"
 
 ./minio server --address ":9001" /tmp/xl/1/{1...4}/ 2>&1 >/tmp/dc1.log &
+pid1=$!
 ./minio server --address ":9002" /tmp/xl/2/{1...4}/ 2>&1 >/tmp/dc2.log &
+pid2=$!
 
 sleep 3
 
@@ -68,6 +70,8 @@ export MC_HOST_myminio2=http://minioadmin:minioadmin@localhost:9002
 ./mc version enable myminio2/testbucket/
 
 ./mc replicate add myminio1/testbucket --remote-bucket http://minioadmin:minioadmin@localhost:9002/testbucket/ --priority 1
+
+# Test replication of delete markers and permanent deletes
 
 ./mc cp README.md myminio1/testbucket/dir/file
 ./mc cp README.md myminio1/testbucket/dir/file
@@ -108,6 +112,34 @@ out=$(diff -qpruN /tmp/myminio1.txt /tmp/myminio2.txt)
 ret=$?
 if [ $ret -ne 0 ]; then
 	echo "BUG: expected no missing entries after replication: $out"
+	exit 1
+fi
+
+# Test listing of non replicated permanent deletes
+
+set -x
+
+./mc mb myminio1/foobucket/ myminio2/foobucket/ --with-versioning
+./mc replicate add myminio1/foobucket --remote-bucket http://minioadmin:minioadmin@localhost:9002/foobucket/ --priority 1
+./mc cp README.md myminio1/foobucket/dir/file
+
+versionId="$(./mc ls --json --versions myminio1/foobucket/dir/ | jq -r .versionId)"
+
+kill ${pid2} && wait ${pid2} || true
+
+aws s3api --endpoint-url http://localhost:9001 --profile minioadmin delete-object --bucket foobucket --key dir/file --version-id "$versionId"
+
+out="$(./mc ls myminio1/foobucket/dir/)"
+if [ "$out" != "" ]; then
+	echo "BUG: non versioned listing should not show pending/failed replicated delete:"
+	echo "$out"
+	exit 1
+fi
+
+out="$(./mc ls --versions myminio1/foobucket/dir/)"
+if [ "$out" != "" ]; then
+	echo "BUG: versioned listing should not show pending/failed replicated deletes:"
+	echo "$out"
 	exit 1
 fi
 
