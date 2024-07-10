@@ -101,12 +101,14 @@ var (
 			Value: "",
 		},
 		config.KV{
-			Key:   ClaimPrefix,
-			Value: "",
+			Key:           ClaimPrefix,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 		config.KV{
-			Key:   RedirectURI,
-			Value: "",
+			Key:           RedirectURI,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 		config.KV{
 			Key:   RedirectURIDynamic,
