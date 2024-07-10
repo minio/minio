@@ -520,12 +520,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			},
 			finished: func(errs []error) {
 				found := false
-				for _, e := range errs {
-					if e != nil {
-						found = true
-						break
-					}
-				}
+				found := countErrs(errs, nil) != len(errs)
 				if found {
 					retErr = fmt.Errorf("one or more errors reported during listing: %v", errs)
 				}
