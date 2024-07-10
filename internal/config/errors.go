@@ -73,6 +73,12 @@ var (
 		`Access key length should be at least 3, and secret key length at least 8 characters`,
 	)
 
+	ErrInvalidRootUserCredentials = newErrFn(
+		"Invalid credentials",
+		"Please provide correct credentials",
+		EnvRootUser+` length should be at least 3, and `+EnvRootPassword+` length at least 8 characters`,
+	)
+
 	ErrMissingEnvCredentialRootUser = newErrFn(
 		"Missing credential environment variable, \""+EnvRootUser+"\"",
 		"Environment variable \""+EnvRootUser+"\" is missing",
