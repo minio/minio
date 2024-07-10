@@ -82,20 +82,20 @@ func SetupTestGrid(n int) (*TestGrid, error) {
 	res.cancel = cancel
 	for i, host := range hosts {
 		manager, err := NewManager(ctx, ManagerOptions{
-			Dialer: dialer.DialContext,
-			Local:  host,
-			Hosts:  hosts,
-			AuthRequest: func(r *http.Request) error {
-				return nil
-			},
-			AddAuth:      func(aud string) string { return aud },
+			Dialer: ConnectWS(dialer.DialContext,
+				dummyNewToken,
+				nil),
+			Local:        host,
+			Hosts:        hosts,
+			AuthFn:       dummyNewToken,
+			AuthToken:    dummyTokenValidate,
 			BlockConnect: ready,
 		})
 		if err != nil {
 			return nil, err
 		}
 		m := mux.NewRouter()
-		m.Handle(RoutePath, manager.Handler())
+		m.Handle(RoutePath, manager.Handler(dummyRequestValidate))
 		res.Managers = append(res.Managers, manager)
 		res.Servers = append(res.Servers, startHTTPServer(listeners[i], m))
 		res.Listeners = append(res.Listeners, listeners[i])
@@ -163,4 +163,19 @@ func startHTTPServer(listener net.Listener, handler http.Handler) (server *httpt
 	server.Listener = listener
 	server.Start()
 	return server
+}
+
+func dummyRequestValidate(r *http.Request) error {
+	return nil
+}
+
+func dummyTokenValidate(token, audience string) error {
+	if token == audience {
+		return nil
+	}
+	return fmt.Errorf("invalid token. want %s, got %s", audience, token)
+}
+
+func dummyNewToken(audience string) string {
+	return audience
 }

@@ -977,8 +977,10 @@ func (ri *batchJobInfo) trackCurrentBucketObject(bucket string, info ObjectInfo,
 	ri.mu.Lock()
 	defer ri.mu.Unlock()
 
-	ri.Bucket = bucket
-	ri.Object = info.Name
+	if success {
+		ri.Bucket = bucket
+		ri.Object = info.Name
+	}
 	ri.countItem(info.Size, info.DeleteMarker, success, attempt)
 }
 

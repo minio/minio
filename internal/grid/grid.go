@@ -20,12 +20,17 @@ package grid
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 )
 
@@ -179,3 +184,45 @@ func bytesOrLength(b []byte) string {
 	}
 	return fmt.Sprint(b)
 }
+
+// ConnDialer is a function that dials a connection to the given address.
+// There should be no retries in this function,
+// and should have a timeout of something like 2 seconds.
+// The returned net.Conn should also have quick disconnect on errors.
+// The net.Conn must support all features as described by the net.Conn interface.
+type ConnDialer func(ctx context.Context, address string) (net.Conn, error)
+
+// ConnectWS returns a function that dials a websocket connection to the given address.
+// Route and auth are added to the connection.
+func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx context.Context, remote string) (net.Conn, error) {
+	return func(ctx context.Context, remote string) (net.Conn, error) {
+		toDial := strings.Replace(remote, "http://", "ws://", 1)
+		toDial = strings.Replace(toDial, "https://", "wss://", 1)
+		toDial += RoutePath
+
+		dialer := ws.DefaultDialer
+		dialer.ReadBufferSize = readBufferSize
+		dialer.WriteBufferSize = writeBufferSize
+		dialer.Timeout = defaultDialTimeout
+		if dial != nil {
+			dialer.NetDial = dial
+		}
+		header := make(http.Header, 2)
+		header.Set("Authorization", "Bearer "+auth(""))
+		header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+
+		if len(header) > 0 {
+			dialer.Header = ws.HandshakeHeaderHTTP(header)
+		}
+		dialer.TLSConfig = tls
+
+		conn, br, _, err := dialer.Dial(ctx, toDial)
+		if br != nil {
+			ws.PutReader(br)
+		}
+		return conn, err
+	}
+}
+
+// ValidateTokenFn must validate the token and return an error if it is invalid.
+type ValidateTokenFn func(token, audience string) error
