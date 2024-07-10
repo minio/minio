@@ -101,7 +101,7 @@ func initHelp() {
 		config.HelpKV{
 			Key:         config.SubnetSubSys,
 			Type:        "string",
-			Description: "register the cluster to MinIO SUBNET",
+			Description: "register Enterprise license for the cluster",
 			Optional:    true,
 		},
 		config.HelpKV{
