@@ -669,7 +669,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 		_, isRegularUser := globalIAMSys.GetUser(ctx, targetUser)
 		if !isRegularUser && targetUser != globalActiveCred.AccessKey {
 			apiErr := toAdminAPIErr(ctx, errNoSuchUser)
-			apiErr.Description = fmt.Sprintf("Specified target user does not exist")
+			apiErr.Description = fmt.Sprintf("Specified target user %s does not exist", targetUser)
 			writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 			return
 		}
@@ -2308,7 +2308,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					// clean import.
 					err := globalIAMSys.DeleteServiceAccount(ctx, svcAcctReq.AccessKey, true)
 					if err != nil {
-						delErr := fmt.Errorf("failed to delete existing service account before importing it: %w", err)
+						delErr := fmt.Errorf("failed to delete existing service account (%s) before importing it: %w", svcAcctReq.AccessKey, err)
 						writeErrorResponseJSON(ctx, w, importError(ctx, delErr, allSvcAcctsFile, user), r.URL)
 						return
 					}

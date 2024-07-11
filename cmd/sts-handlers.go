@@ -672,7 +672,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	}
 	if len(ldapPolicies) == 0 && newGlobalAuthZPluginFn() == nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
-			fmt.Errorf("expecting a policy to be set for user or one of their groups - rejecting this request"))
+			fmt.Errorf("expecting a policy to be set for user `%s` or one of their groups: `%s` - rejecting this request",
+				ldapActualUserDN, strings.Join(groupDistNames, "`,`")))
 		return
 	}
 
