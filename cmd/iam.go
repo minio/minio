@@ -841,7 +841,7 @@ func (sys *IAMSys) createCleanEntitiesQuery(q madmin.PolicyEntitiesQuery, ldap b
 		// Validate and normalize groups.
 		for _, group := range q.Groups {
 			lookupRes, underDN, _ := sys.LDAPConfig.GetValidatedGroupDN(nil, group)
-			if lookupRes != nil && !underDN {
+			if lookupRes != nil && underDN {
 				cleanQ.Groups.Add(lookupRes.NormDN)
 			}
 		}
@@ -2044,7 +2044,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 		if dnResult == nil || !underBaseDN {
 			if !isAttach {
-				dn = r.Group
+				dn = sys.LDAPConfig.QuickNormalizeDN(r.Group)
 			} else {
 				err = errNoSuchGroup
 				return
