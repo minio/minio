@@ -419,6 +419,26 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 		o.debugln("listAndSave: listing", o.ID, "finished with ", err)
 	}(*o)
 
+	// Keep alive while initial request is running.
+	go func(ctx context.Context, rpc *peerRESTClient, meta metacache) {
+		// Continuously update while we wait.
+		t := time.NewTicker(metacacheMaxClientWait / 10)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			// Request is done, stop updating.
+			return
+		case <-t.C:
+			meta.lastHandout = time.Now()
+			if m2, err := rpc.UpdateMetacacheListing(ctx, meta); err == nil {
+				if m2.status != scanStateStarted {
+					return
+				}
+				meta = m2
+			}
+		}
+	}(ctx, meta.rpc, *meta.meta)
+
 	// Keep track of when we return since we no longer have to send entries to output.
 	var funcReturned bool
 	var funcReturnedMu sync.Mutex
