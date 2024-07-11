@@ -552,7 +552,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 		dnList = append(dnList, selfDN)
 	}
 
-	accessKeyMap := make(map[string]madmin.ListAccessKeysLDAPResp)
+	var ldapUserList []string
 	if isAll {
 		ldapUsers, err := globalIAMSys.ListLDAPUsers(ctx)
 		if err != nil {
@@ -560,7 +560,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			return
 		}
 		for user := range ldapUsers {
-			accessKeyMap[user] = madmin.ListAccessKeysLDAPResp{}
+			ldapUserList = append(ldapUserList, user)
 		}
 	} else {
 		for _, userDN := range dnList {
@@ -573,7 +573,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			if foundResult == nil {
 				continue
 			}
-			accessKeyMap[foundResult.NormDN] = madmin.ListAccessKeysLDAPResp{}
+			ldapUserList = append(ldapUserList, foundResult.NormDN)
 		}
 	}
 
@@ -598,9 +598,12 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 		return
 	}
 
-	for dn, accessKeys := range accessKeyMap {
+	accessKeyMap := make(map[string]madmin.ListAccessKeysLDAPResp)
+	for _, internalDN := range ldapUserList {
+		externalDN := globalIAMSys.LDAPConfig.DecodeDN(internalDN)
+		accessKeys := madmin.ListAccessKeysLDAPResp{}
 		if listSTSKeys {
-			stsKeys, err := globalIAMSys.ListSTSAccounts(ctx, dn)
+			stsKeys, err := globalIAMSys.ListSTSAccounts(ctx, internalDN)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
@@ -614,13 +617,12 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			}
 			// if only STS keys, skip if user has no STS keys
 			if !listServiceAccounts && len(stsKeys) == 0 {
-				delete(accessKeyMap, dn)
 				continue
 			}
 		}
 
 		if listServiceAccounts {
-			serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, dn)
+			serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, internalDN)
 			if err != nil {
 				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 				return
@@ -634,11 +636,10 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			}
 			// if only service accounts, skip if user has no service accounts
 			if !listSTSKeys && len(serviceAccounts) == 0 {
-				delete(accessKeyMap, dn)
 				continue
 			}
 		}
-		accessKeyMap[dn] = accessKeys
+		accessKeyMap[externalDN] = accessKeys
 	}
 
 	data, err := json.Marshal(accessKeyMap)
