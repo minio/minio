@@ -1571,11 +1571,11 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 		// server and is under a configured base DN.
 		validatedParent, isUnderBaseDN, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
 		if err != nil {
-			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", parent, err))
+			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate parent exists in LDAP directory: %w", err))
 			continue
 		}
 		if validatedParent == nil || !isUnderBaseDN {
-			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", parent)
+			err := fmt.Errorf("DN parent was not found in the LDAP directory")
 			collectedErrors = append(collectedErrors, err)
 			continue
 		}
@@ -1590,11 +1590,11 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			// configured base DN.
 			validatedGroup, _, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
 			if err != nil {
-				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", group, err))
+				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate group exists in LDAP directory: %w", err))
 				continue
 			}
 			if validatedGroup == nil {
-				err := fmt.Errorf("DN `%s` was not found in the LDAP directory", group)
+				err := fmt.Errorf("DN group was not found in the LDAP directory")
 				collectedErrors = append(collectedErrors, err)
 				continue
 			}
@@ -1684,7 +1684,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			continue
 		}
 		if validatedDN == nil || !underBaseDN {
-			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", k)
+			err := fmt.Errorf("DN was not found in the LDAP directory")
 			collectedErrors = append(collectedErrors, err)
 			continue
 		}

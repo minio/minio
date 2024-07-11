@@ -117,7 +117,7 @@ func (k *KeycloakProvider) LookupUser(userid string) (User, error) {
 	case http.StatusUnauthorized:
 		return User{}, ErrAccessTokenExpired
 	}
-	return User{}, fmt.Errorf("Unable to lookup %s - keycloak user lookup returned %v", userid, resp.Status)
+	return User{}, fmt.Errorf("Unable to lookup - keycloak user lookup returned %v", resp.Status)
 }
 
 // Option is a function type that accepts a pointer Target
