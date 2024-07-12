@@ -101,7 +101,7 @@ function fail() {
 }
 
 function check_online() {
-	if ! grep -q 'Status:' ${WORK_DIR}/dist-minio-*.log; then
+	if ! grep -q 'API:' ${WORK_DIR}/dist-minio-*.log; then
 		echo "1"
 	fi
 }
