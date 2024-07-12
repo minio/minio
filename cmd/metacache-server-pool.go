@@ -407,9 +407,6 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 		o.debugln("listAndSave: listing", o.ID, "finished with ", err)
 	}(*o)
 
-	// Keep alive while initial request is running.
-	go meta.meta.keepAlive(ctx, meta.rpc)
-
 	// Keep track of when we return since we no longer have to send entries to output.
 	var funcReturned bool
 	var funcReturnedMu sync.Mutex
