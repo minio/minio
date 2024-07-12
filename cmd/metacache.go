@@ -97,6 +97,29 @@ func (m *metacache) worthKeeping() bool {
 	return true
 }
 
+// keepAlive will continuously update lastHandout until ctx is canceled.
+func (m *metacache) keepAlive(ctx context.Context, rpc *peerRESTClient) {
+	// we intentionally operate on a copy of m, so we can update without locks.
+	meta := *m
+	t := time.NewTicker(metacacheMaxClientWait / 10)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// Request is done, stop updating.
+			return
+		case <-t.C:
+			meta.lastHandout = time.Now()
+			if m2, err := rpc.UpdateMetacacheListing(ctx, meta); err == nil {
+				if m2.status != scanStateStarted {
+					return
+				}
+				meta = m2
+			}
+		}
+	}
+}
+
 // baseDirFromPrefix will return the base directory given an object path.
 // For example an object with name prefix/folder/object.ext will return `prefix/folder/`.
 func baseDirFromPrefix(prefix string) string {
