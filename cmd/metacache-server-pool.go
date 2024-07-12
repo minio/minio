@@ -153,19 +153,7 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 			} else {
 				// Continue listing
 				o.ID = c.id
-				go func(meta metacache) {
-					// Continuously update while we wait.
-					t := time.NewTicker(metacacheMaxClientWait / 10)
-					defer t.Stop()
-					select {
-					case <-ctx.Done():
-						// Request is done, stop updating.
-						return
-					case <-t.C:
-						meta.lastHandout = time.Now()
-						meta, _ = rpc.UpdateMetacacheListing(ctx, meta)
-					}
-				}(*c)
+				go c.keepAlive(ctx, rpc)
 			}
 		}
 	}
@@ -219,6 +207,9 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		o.ID = ""
 	}
 
+	if contextCanceled(ctx) {
+		return entries, ctx.Err()
+	}
 	// Do listing in-place.
 	// Create output for our results.
 	// Create filter for results.
@@ -449,5 +440,10 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 		xioutil.SafeClose(saveCh)
 	}()
 
-	return filteredResults()
+	entries, err = filteredResults()
+	if err == nil {
+		// Check if listing recorded an error.
+		err = meta.getErr()
+	}
+	return entries, err
 }
