@@ -437,5 +437,10 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 		xioutil.SafeClose(saveCh)
 	}()
 
-	return filteredResults()
+	entries, err = filteredResults()
+	if err == nil && err != io.EOF {
+		// Pick up any metadata error, if any.
+		err = meta.getErr()
+	}
+	return entries, err
 }
