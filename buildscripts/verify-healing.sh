@@ -78,7 +78,7 @@ function start_minio_3_node() {
 }
 
 function check_heal() {
-	if ! grep -q 'Status:' ${WORK_DIR}/dist-minio-*.log; then
+	if ! grep -q 'API:' ${WORK_DIR}/dist-minio-*.log; then
 		return 1
 	fi
 

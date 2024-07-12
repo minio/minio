@@ -217,6 +217,9 @@ func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 
 	if firstTime {
 		bootstrapTraceMsg(fmt.Sprintf("globalIAMSys.Load(): (duration: %s)", loadDuration))
+		if globalIsDistErasure {
+			logger.Info("IAM load(startup) finished. (duration: %s)", loadDuration)
+		}
 	}
 
 	select {
@@ -400,12 +403,12 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 			// Load all IAM items (except STS creds) periodically.
 			refreshStart := time.Now()
 			if err := sys.Load(ctx, false); err != nil {
-				iamLogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err), logger.WarningKind)
+				iamLogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (duration: %s): %v", time.Since(refreshStart), err), logger.WarningKind)
 			} else {
 				took := time.Since(refreshStart).Seconds()
 				if took > maxDurationSecondsForLog {
 					// Log if we took a lot of time to load.
-					logger.Info("IAM refresh took %.2fs", took)
+					logger.Info("IAM refresh took (duration: %s)", took)
 				}
 			}
 

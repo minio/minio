@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -110,7 +110,7 @@ func (f fatalMsg) quiet(msg string, args ...interface{}) {
 }
 
 var (
-	logTag      = "ERROR"
+	logTag      = "FATAL"
 	logBanner   = color.BgRed(color.FgWhite(color.Bold(logTag))) + " "
 	emptyBanner = color.BgRed(strings.Repeat(" ", len(logTag))) + " "
 	bannerWidth = len(logTag) + 1
@@ -187,7 +187,7 @@ func (i infoMsg) pretty(msg string, args ...interface{}) {
 	if msg == "" {
 		fmt.Fprintln(Output, args...)
 	} else {
-		fmt.Fprintf(Output, msg, args...)
+		fmt.Fprintf(Output, `INFO: `+msg, args...)
 	}
 }
 
@@ -222,13 +222,13 @@ func (i errorMsg) pretty(msg string, args ...interface{}) {
 	if msg == "" {
 		fmt.Fprintln(Output, args...)
 	} else {
-		fmt.Fprintf(Output, msg, args...)
+		fmt.Fprintf(Output, `ERRO: `+msg, args...)
 	}
 }
 
 // Error :
 func Error(msg string, data ...interface{}) {
-	if DisableErrorLog {
+	if DisableLog {
 		return
 	}
 	consoleLog(errorMessage, msg, data...)
@@ -236,8 +236,92 @@ func Error(msg string, data ...interface{}) {
 
 // Info :
 func Info(msg string, data ...interface{}) {
-	if DisableErrorLog {
+	if DisableLog {
 		return
 	}
 	consoleLog(info, msg, data...)
+}
+
+// Startup :
+func Startup(msg string, data ...interface{}) {
+	if DisableLog {
+		return
+	}
+	consoleLog(startup, msg, data...)
+}
+
+type startupMsg struct{}
+
+var startup startupMsg
+
+func (i startupMsg) json(msg string, args ...interface{}) {
+	var message string
+	if msg != "" {
+		message = fmt.Sprintf(msg, args...)
+	} else {
+		message = fmt.Sprint(args...)
+	}
+	logJSON, err := json.Marshal(&log.Entry{
+		Level:   InfoKind,
+		Message: message,
+		Time:    time.Now().UTC(),
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Fprintln(Output, string(logJSON))
+}
+
+func (i startupMsg) quiet(msg string, args ...interface{}) {
+}
+
+func (i startupMsg) pretty(msg string, args ...interface{}) {
+	if msg == "" {
+		fmt.Fprintln(Output, args...)
+	} else {
+		fmt.Fprintf(Output, msg, args...)
+	}
+}
+
+type warningMsg struct{}
+
+var warningMessage warningMsg
+
+func (i warningMsg) json(msg string, args ...interface{}) {
+	var message string
+	if msg != "" {
+		message = fmt.Sprintf(msg, args...)
+	} else {
+		message = fmt.Sprint(args...)
+	}
+	logJSON, err := json.Marshal(&log.Entry{
+		Level:   WarningKind,
+		Message: message,
+		Time:    time.Now().UTC(),
+		Trace:   &log.Trace{Message: message, Source: []string{getSource(6)}},
+	})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Fprintln(Output, string(logJSON))
+}
+
+func (i warningMsg) quiet(msg string, args ...interface{}) {
+	i.pretty(msg, args...)
+}
+
+func (i warningMsg) pretty(msg string, args ...interface{}) {
+	if msg == "" {
+		fmt.Fprintln(Output, args...)
+	} else {
+		fmt.Fprintf(Output, `WARN: `+msg, args...)
+	}
+}
+
+// Warning :
+func Warning(msg string, data ...interface{}) {
+	if DisableLog {
+		return
+	}
+	consoleLog(warningMessage, msg, data...)
 }

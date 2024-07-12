@@ -189,7 +189,7 @@ func (s *erasureSets) Legacy() (ok bool) {
 
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
-func (s *erasureSets) connectDisks() {
+func (s *erasureSets) connectDisks(log bool) {
 	defer func() {
 		s.lastConnectDisksOpTime = time.Now()
 	}()
@@ -224,7 +224,9 @@ func (s *erasureSets) connectDisks() {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
 				} else if !errors.Is(err, errDriveIsRoot) {
-					printEndpointError(endpoint, err, true)
+					if log {
+						printEndpointError(endpoint, err, true)
+					}
 				}
 				return
 			}
@@ -285,7 +287,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
 
 	// Pre-emptively connect the disks if possible.
-	s.connectDisks()
+	s.connectDisks(false)
 
 	monitor := time.NewTimer(monitorInterval)
 	defer monitor.Stop()
@@ -299,7 +301,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 				console.Debugln("running drive monitoring")
 			}
 
-			s.connectDisks()
+			s.connectDisks(true)
 
 			// Reset the timer for next interval
 			monitor.Reset(monitorInterval)

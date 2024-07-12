@@ -3,6 +3,8 @@ extend-exclude = [
     ".git/",
     "docs/",
     "CREDITS",
+    "go.mod",
+    "go.sum",
 ]
 ignore-hidden = false
 
@@ -17,6 +19,7 @@ extend-ignore-re = [
     "MIIDBTCCAe2gAwIBAgIQWHw7h.*",
     'http\.Header\{"X-Amz-Server-Side-Encryptio":',
     "ZoEoZdLlzVbOlT9rbhD7ZN7TLyiYXSAlB79uGEge",
+    "ERRO:",
 ]
 
 [default.extend-words]

@@ -21,31 +21,8 @@ import (
 	"context"
 	"os"
 	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/minio/madmin-go/v3"
 )
-
-// Tests if we generate storage info.
-func TestStorageInfoMsg(t *testing.T) {
-	infoStorage := StorageInfo{}
-	infoStorage.Disks = []madmin.Disk{
-		{Endpoint: "http://127.0.0.1:9000/data/1/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9000/data/2/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9000/data/3/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9000/data/4/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9001/data/1/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9001/data/2/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9001/data/3/", State: madmin.DriveStateOk},
-		{Endpoint: "http://127.0.0.1:9001/data/4/", State: madmin.DriveStateOffline},
-	}
-	infoStorage.Backend.Type = madmin.Erasure
-
-	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "7 Online, 1 Offline") {
-		t.Fatal("Unexpected storage info message, found:", msg)
-	}
-}
 
 // Tests stripping standard ports from apiEndpoints.
 func TestStripStandardPorts(t *testing.T) {

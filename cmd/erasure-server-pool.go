@@ -2447,6 +2447,7 @@ const (
 type HealthOptions struct {
 	Maintenance    bool
 	DeploymentType string
+	NoLogging      bool
 }
 
 // HealthResult returns the current state of the system, also
@@ -2483,7 +2484,7 @@ func (hr HealthResult) String() string {
 		if i == 0 {
 			str.WriteString(")")
 		} else {
-			str.WriteString("), ")
+			str.WriteString(") | ")
 		}
 	}
 	return str.String()
@@ -2606,7 +2607,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			})
 
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
-			if !healthy {
+			if !healthy && !opts.NoLogging {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum could not be established on pool: %d, set: %d, expected write quorum: %d, drives-online: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online), logger.FatalKind)
@@ -2614,7 +2615,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
-			if !healthyRead {
+			if !healthyRead && !opts.NoLogging {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Read quorum could not be established on pool: %d, set: %d, expected read quorum: %d, drives-online: %d",
 						poolIdx, setIdx, poolReadQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online))

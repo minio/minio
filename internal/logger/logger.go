@@ -53,8 +53,8 @@ const (
 )
 
 var (
-	// DisableErrorLog avoids printing error/event/info kind of logs
-	DisableErrorLog = false
+	// DisableLog avoids printing error/event/info kind of logs
+	DisableLog = false
 	// Output allows configuring custom writer, defaults to os.Stderr
 	Output io.Writer = os.Stderr
 )
@@ -386,7 +386,7 @@ func buildLogEntry(ctx context.Context, subsystem, message string, trace []strin
 // consoleLogIf prints a detailed error message during
 // the execution of the server.
 func consoleLogIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
-	if DisableErrorLog {
+	if DisableLog {
 		return
 	}
 	if err == nil {
@@ -401,7 +401,7 @@ func consoleLogIf(ctx context.Context, subsystem string, err error, errKind ...i
 // logIf prints a detailed error message during
 // the execution of the server.
 func logIf(ctx context.Context, subsystem string, err error, errKind ...interface{}) {
-	if DisableErrorLog {
+	if DisableLog {
 		return
 	}
 	if err == nil {
@@ -430,7 +430,7 @@ func sendLog(ctx context.Context, entry log.Entry) {
 
 // Event sends a event log to  log targets
 func Event(ctx context.Context, subsystem, msg string, args ...interface{}) {
-	if DisableErrorLog {
+	if DisableLog {
 		return
 	}
 	entry := logToEntry(ctx, subsystem, fmt.Sprintf(msg, args...), EventKind)
