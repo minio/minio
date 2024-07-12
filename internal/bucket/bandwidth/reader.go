@@ -74,12 +74,16 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 		need = int(math.Min(float64(b), float64(need)))
 		tokens = need
 	}
-
+	// reduce tokens requested according to availability
+	av := int(r.throttle.Tokens())
+	if av < tokens && av > 0 {
+		tokens = av
+		need = int(math.Min(float64(tokens), float64(need)))
+	}
 	err = r.throttle.WaitN(r.ctx, tokens)
 	if err != nil {
 		return
 	}
-
 	n, err = r.r.Read(buf[:need])
 	if err != nil {
 		r.lastErr = err

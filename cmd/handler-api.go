@@ -39,14 +39,15 @@ import (
 type apiConfig struct {
 	mu sync.RWMutex
 
-	requestsDeadline      time.Duration
-	requestsPool          chan struct{}
-	clusterDeadline       time.Duration
-	listQuorum            string
-	corsAllowOrigins      []string
-	replicationPriority   string
-	replicationMaxWorkers int
-	transitionWorkers     int
+	requestsDeadline       time.Duration
+	requestsPool           chan struct{}
+	clusterDeadline        time.Duration
+	listQuorum             string
+	corsAllowOrigins       []string
+	replicationPriority    string
+	replicationMaxWorkers  int
+	replicationMaxLWorkers int
+	transitionWorkers      int
 
 	staleUploadsExpiry          time.Duration
 	staleUploadsCleanupInterval time.Duration
@@ -170,11 +171,12 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	}
 	t.listQuorum = listQuorum
 	if globalReplicationPool != nil &&
-		(cfg.ReplicationPriority != t.replicationPriority || cfg.ReplicationMaxWorkers != t.replicationMaxWorkers) {
-		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority, cfg.ReplicationMaxWorkers)
+		(cfg.ReplicationPriority != t.replicationPriority || cfg.ReplicationMaxWorkers != t.replicationMaxWorkers || cfg.ReplicationMaxLWorkers != t.replicationMaxLWorkers) {
+		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority, cfg.ReplicationMaxWorkers, cfg.ReplicationMaxLWorkers)
 	}
 	t.replicationPriority = cfg.ReplicationPriority
 	t.replicationMaxWorkers = cfg.ReplicationMaxWorkers
+	t.replicationMaxLWorkers = cfg.ReplicationMaxLWorkers
 
 	// N B api.transition_workers will be deprecated
 	if globalTransitionState != nil {
@@ -381,14 +383,16 @@ func (t *apiConfig) getReplicationOpts() replicationPoolOpts {
 
 	if t.replicationPriority == "" {
 		return replicationPoolOpts{
-			Priority:   "auto",
-			MaxWorkers: WorkerMaxLimit,
+			Priority:    "auto",
+			MaxWorkers:  WorkerMaxLimit,
+			MaxLWorkers: LargeWorkerCount,
 		}
 	}
 
 	return replicationPoolOpts{
-		Priority:   t.replicationPriority,
-		MaxWorkers: t.replicationMaxWorkers,
+		Priority:    t.replicationPriority,
+		MaxWorkers:  t.replicationMaxWorkers,
+		MaxLWorkers: t.replicationMaxLWorkers,
 	}
 }
 
