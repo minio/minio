@@ -441,8 +441,8 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	}()
 
 	entries, err = filteredResults()
-	if err == nil && err != io.EOF {
-		// Pick up any metadata error, if any.
+	if err == nil {
+		// Check if listing recorded an error.
 		err = meta.getErr()
 	}
 	return entries, err
