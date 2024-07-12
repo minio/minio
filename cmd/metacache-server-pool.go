@@ -207,6 +207,9 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 		o.ID = ""
 	}
 
+	if contextCanceled(ctx) {
+		return entries, ctx.Err()
+	}
 	// Do listing in-place.
 	// Create output for our results.
 	// Create filter for results.
