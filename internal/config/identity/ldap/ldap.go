@@ -402,3 +402,21 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 
 	return res, nil
 }
+
+// QuickNormalizeDN - normalizes the given DN without checking if it is valid or
+// exists in the LDAP directory. Returns input if error
+func (l Config) QuickNormalizeDN(dn string) string {
+	if normDN, err := xldap.NormalizeDN(dn); err == nil {
+		return normDN
+	}
+	return dn
+}
+
+// DecodeDN - denormalizes the given DN by unescaping any escaped characters.
+// Returns input if error
+func (l Config) DecodeDN(dn string) string {
+	if decodedDN, err := xldap.DecodeDN(dn); err == nil {
+		return decodedDN
+	}
+	return dn
+}
