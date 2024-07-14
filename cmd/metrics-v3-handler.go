@@ -163,7 +163,7 @@ func (h *metricsV3Server) handle(path string, isListingRequest bool, buckets []s
 		http.Error(w, "Metrics Resource Not found", http.StatusNotFound)
 	})
 
-	// Require that metrics path has at least component.
+	// Require that metrics path has one component at least.
 	if path == "/" {
 		return notFoundHandler
 	}
