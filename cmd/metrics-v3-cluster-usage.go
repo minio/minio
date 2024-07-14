@@ -139,7 +139,7 @@ var (
 )
 
 // loadClusterUsageBucketMetrics - `MetricsLoaderFn` to load bucket usage metrics.
-func loadClusterUsageBucketMetrics(ctx context.Context, m MetricValues, c *metricsCache, buckets []string) error {
+func loadClusterUsageBucketMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
 	dataUsageInfo, err := c.dataUsageInfo.Get()
 	if err != nil {
 		metricsLogIf(ctx, err)
@@ -153,11 +153,7 @@ func loadClusterUsageBucketMetrics(ctx context.Context, m MetricValues, c *metri
 
 	m.Set(usageSinceLastUpdateSeconds, float64(time.Since(dataUsageInfo.LastUpdate)))
 
-	for _, bucket := range buckets {
-		usage, ok := dataUsageInfo.BucketsUsage[bucket]
-		if !ok {
-			continue
-		}
+	for bucket, usage := range dataUsageInfo.BucketsUsage {
 		quota, err := globalBucketQuotaSys.Get(ctx, bucket)
 		if err != nil {
 			// Log and continue if we are unable to retrieve metrics for this

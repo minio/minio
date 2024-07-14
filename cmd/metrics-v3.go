@@ -270,7 +270,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 		loadClusterUsageObjectMetrics,
 	)
 
-	clusterUsageBucketsMG := NewBucketMetricsGroup(clusterUsageBucketsCollectorPath,
+	clusterUsageBucketsMG := NewMetricsGroup(clusterUsageBucketsCollectorPath,
 		[]MetricDescriptor{
 			usageSinceLastUpdateSecondsMD,
 			usageBucketTotalBytesMD,
