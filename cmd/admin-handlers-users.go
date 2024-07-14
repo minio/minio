@@ -2308,7 +2308,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 					// clean import.
 					err := globalIAMSys.DeleteServiceAccount(ctx, svcAcctReq.AccessKey, true)
 					if err != nil {
-						delErr := fmt.Errorf("failed to delete existing service account(%s) before importing it: %w", svcAcctReq.AccessKey, err)
+						delErr := fmt.Errorf("failed to delete existing service account (%s) before importing it: %w", svcAcctReq.AccessKey, err)
 						writeErrorResponseJSON(ctx, w, importError(ctx, delErr, allSvcAcctsFile, user), r.URL)
 						return
 					}

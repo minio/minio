@@ -5390,7 +5390,7 @@ func (c *SiteReplicationSys) healUserPolicies(ctx context.Context, objAPI Object
 			UpdatedAt: lastUpdate,
 		})
 		if err != nil {
-			replLogOnceIf(ctx, fmt.Errorf("Unable to heal IAM user policy mapping for %s from peer site %s -> site %s : %w", user, latestPeerName, peerName, err),
+			replLogOnceIf(ctx, fmt.Errorf("Unable to heal IAM user policy mapping from peer site %s -> site %s : %w", latestPeerName, peerName, err),
 				fmt.Sprintf("heal-user-policy-%s", user))
 		}
 	}
@@ -5455,7 +5455,7 @@ func (c *SiteReplicationSys) healGroupPolicies(ctx context.Context, objAPI Objec
 		})
 		if err != nil {
 			replLogOnceIf(ctx,
-				fmt.Errorf("Unable to heal IAM group policy mapping for %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err),
+				fmt.Errorf("Unable to heal IAM group policy mapping for from peer site %s -> site %s : %w", latestPeerName, peerName, err),
 				fmt.Sprintf("heal-group-policy-%s", group))
 		}
 	}
@@ -5518,7 +5518,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			claims, err := globalIAMSys.GetClaimsForSvcAcc(ctx, creds.AccessKey)
 			if err != nil {
 				replLogOnceIf(ctx,
-					fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+					fmt.Errorf("Unable to heal service account from peer site %s -> %s : %w", latestPeerName, peerName, err),
 					fmt.Sprintf("heal-user-%s", user))
 				continue
 			}
@@ -5526,7 +5526,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			_, policy, err := globalIAMSys.GetServiceAccount(ctx, creds.AccessKey)
 			if err != nil {
 				replLogOnceIf(ctx,
-					fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+					fmt.Errorf("Unable to heal service account from peer site %s -> %s : %w", latestPeerName, peerName, err),
 					fmt.Sprintf("heal-user-%s", user))
 				continue
 			}
@@ -5536,7 +5536,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				policyJSON, err = json.Marshal(policy)
 				if err != nil {
 					replLogOnceIf(ctx,
-						fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+						fmt.Errorf("Unable to heal service account from peer site %s -> %s : %w", latestPeerName, peerName, err),
 						fmt.Sprintf("heal-user-%s", user))
 					continue
 				}
@@ -5561,7 +5561,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				UpdatedAt: lastUpdate,
 			}); err != nil {
 				replLogOnceIf(ctx,
-					fmt.Errorf("Unable to heal service account %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+					fmt.Errorf("Unable to heal service account from peer site %s -> %s : %w", latestPeerName, peerName, err),
 					fmt.Sprintf("heal-user-%s", user))
 			}
 			continue
@@ -5576,7 +5576,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				// be applied.
 				if !errors.Is(err, errNoSuchUser) {
 					replLogOnceIf(ctx,
-						fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+						fmt.Errorf("Unable to heal temporary credentials from peer site %s -> %s : %w", latestPeerName, peerName, err),
 						fmt.Sprintf("heal-user-%s", user))
 					continue
 				}
@@ -5596,7 +5596,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 				UpdatedAt: lastUpdate,
 			}); err != nil {
 				replLogOnceIf(ctx,
-					fmt.Errorf("Unable to heal temporary credentials %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+					fmt.Errorf("Unable to heal temporary credentials from peer site %s -> %s : %w", latestPeerName, peerName, err),
 					fmt.Sprintf("heal-user-%s", user))
 			}
 			continue
@@ -5614,7 +5614,7 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 			UpdatedAt: lastUpdate,
 		}); err != nil {
 			replLogOnceIf(ctx,
-				fmt.Errorf("Unable to heal user %s from peer site %s -> %s : %w", user, latestPeerName, peerName, err),
+				fmt.Errorf("Unable to heal user from peer site %s -> %s : %w", latestPeerName, peerName, err),
 				fmt.Sprintf("heal-user-%s", user))
 		}
 	}
@@ -5680,7 +5680,7 @@ func (c *SiteReplicationSys) healGroups(ctx context.Context, objAPI ObjectLayer,
 			UpdatedAt: lastUpdate,
 		}); err != nil {
 			replLogOnceIf(ctx,
-				fmt.Errorf("Unable to heal group %s from peer site %s -> site %s : %w", group, latestPeerName, peerName, err),
+				fmt.Errorf("Unable to heal group from peer site %s -> site %s : %w", latestPeerName, peerName, err),
 				fmt.Sprintf("heal-group-%s", group))
 		}
 	}

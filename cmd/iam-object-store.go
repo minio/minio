@@ -495,7 +495,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		for _, item := range regUsersList {
 			userName := path.Dir(item)
 			if err := iamOS.loadUser(ctx, userName, regUser, cache.iamUsersMap); err != nil && err != errNoSuchUser {
-				return fmt.Errorf("unable to load the user `%s`: %w", userName, err)
+				return fmt.Errorf("unable to load the user: %w", err)
 			}
 		}
 		if took := time.Since(regUsersLoadStartTime); took > maxIAMLoadOpTime {
@@ -510,7 +510,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 		for _, item := range groupsList {
 			group := path.Dir(item)
 			if err := iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && err != errNoSuchGroup {
-				return fmt.Errorf("unable to load the group `%s`: %w", group, err)
+				return fmt.Errorf("unable to load the group: %w", err)
 			}
 		}
 		if took := time.Since(groupsLoadStartTime); took > maxIAMLoadOpTime {
@@ -524,7 +524,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range userPolicyMappingsList {
 		userName := strings.TrimSuffix(item, ".json")
 		if err := iamOS.loadMappedPolicy(ctx, userName, regUser, false, cache.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return fmt.Errorf("unable to load the policy mapping for the user `%s`: %w", userName, err)
+			return fmt.Errorf("unable to load the policy mapping for the user: %w", err)
 		}
 	}
 	if took := time.Since(userPolicyMappingLoadStartTime); took > maxIAMLoadOpTime {
@@ -537,7 +537,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range groupPolicyMappingsList {
 		groupName := strings.TrimSuffix(item, ".json")
 		if err := iamOS.loadMappedPolicy(ctx, groupName, regUser, true, cache.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return fmt.Errorf("unable to load the policy mapping for the group `%s`: %w", groupName, err)
+			return fmt.Errorf("unable to load the policy mapping for the group: %w", err)
 		}
 	}
 	if took := time.Since(groupPolicyMappingLoadStartTime); took > maxIAMLoadOpTime {
@@ -551,7 +551,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range svcAccList {
 		userName := path.Dir(item)
 		if err := iamOS.loadUser(ctx, userName, svcUser, svcUsersMap); err != nil && err != errNoSuchUser {
-			return fmt.Errorf("unable to load the service account `%s`: %w", userName, err)
+			return fmt.Errorf("unable to load the service account: %w", err)
 		}
 	}
 	if took := time.Since(svcAccLoadStartTime); took > maxIAMLoadOpTime {
@@ -580,7 +580,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 			// OIDC/AssumeRoleWithCustomToken/AssumeRoleWithCertificate).
 			err := iamOS.loadMappedPolicy(ctx, svcParent, stsUser, false, cache.iamSTSPolicyMap)
 			if err != nil && !errors.Is(err, errNoSuchPolicy) {
-				return fmt.Errorf("unable to load the policy mapping for the STS user `%s`: %w", svcParent, err)
+				return fmt.Errorf("unable to load the policy mapping for the STS user: %w", err)
 			}
 		}
 	}
