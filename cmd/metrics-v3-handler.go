@@ -23,9 +23,12 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/mcontext"
 	"github.com/minio/mux"
+	"github.com/minio/pkg/v3/env"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -33,41 +36,39 @@ import (
 type promLogger struct{}
 
 func (p promLogger) Println(v ...interface{}) {
-	s := make([]string, 0, len(v))
-	for _, val := range v {
-		s = append(s, fmt.Sprintf("%v", val))
-	}
-	err := fmt.Errorf("metrics handler error: %v", strings.Join(s, " "))
-	metricsLogIf(GlobalContext, err)
+	metricsLogIf(GlobalContext, fmt.Errorf("metrics handler error: %v", v))
 }
 
 type metricsV3Server struct {
 	registry *prometheus.Registry
 	opts     promhttp.HandlerOpts
-	authFn   func(http.Handler) http.Handler
+	auth     func(http.Handler) http.Handler
 
 	metricsData *metricsV3Collection
 }
 
-func newMetricsV3Server(authType prometheusAuthType) *metricsV3Server {
+var (
+	globalMetricsV3CollectorPaths []collectorPath
+	globalMetricsV3Once           sync.Once
+)
+
+func newMetricsV3Server(auth func(h http.Handler) http.Handler) *metricsV3Server {
 	registry := prometheus.NewRegistry()
-	authFn := AuthMiddleware
-	if authType == prometheusPublic {
-		authFn = NoAuthMiddleware
-	}
-
 	metricGroups := newMetricGroups(registry)
-
+	globalMetricsV3Once.Do(func() {
+		globalMetricsV3CollectorPaths = metricGroups.collectorPaths
+	})
 	return &metricsV3Server{
 		registry: registry,
 		opts: promhttp.HandlerOpts{
 			ErrorLog:            promLogger{},
-			ErrorHandling:       promhttp.HTTPErrorOnError,
+			ErrorHandling:       promhttp.ContinueOnError,
 			Registry:            registry,
 			MaxRequestsInFlight: 2,
+			EnableOpenMetrics:   env.Get(EnvPrometheusOpenMetrics, config.EnableOff) == config.EnableOn,
+			ProcessStartTime:    globalBootTime,
 		},
-		authFn: authFn,
-
+		auth:        auth,
 		metricsData: metricGroups,
 	}
 }
@@ -221,7 +222,7 @@ func (h *metricsV3Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pathComponents := mux.Vars(r)["pathComps"]
 	isListingRequest := r.Form.Has("list")
 
-	buckets := []string{}
+	var buckets []string
 	if strings.HasPrefix(pathComponents, "/bucket/") {
 		// bucket specific metrics, extract the bucket name from the path.
 		// it's the last part of the path. e.g. /bucket/api/<bucket-name>
@@ -246,5 +247,5 @@ func (h *metricsV3Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Add authentication
-	h.authFn(tracedHandler).ServeHTTP(w, r)
+	h.auth(tracedHandler).ServeHTTP(w, r)
 }
