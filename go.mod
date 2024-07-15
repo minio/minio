@@ -262,4 +262,4 @@ require (
 	google.golang.org/protobuf v1.34.2 // indirect
 )
 
-replace github.com/minio/pkg/v3 => github.com/marktheunissen/pkg/v3 v3.0.0-20240712060311-48eacf5d0fef
+replace github.com/minio/pkg/v3 => github.com/marktheunissen/pkg/v3 v3.0.0-20240715004115-6d3bb9abe3b5
