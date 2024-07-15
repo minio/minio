@@ -413,8 +413,8 @@ github.com/lufia/plan9stats v0.0.0-20240513124658-fba389f38bae/go.mod h1:ilwx/Dt
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/mailru/easyjson v0.7.7 h1:UGYAvKxe3sBsEDzO8ZeWOSlIQfWFlxbzLZe7hwFURr0=
 github.com/mailru/easyjson v0.7.7/go.mod h1:xzfreul335JAWq5oZzymOObrkdz5UnU4kGfJJLY9Nlc=
-github.com/marktheunissen/pkg/v3 v3.0.0-20240715004115-6d3bb9abe3b5 h1:Rf3F3zxA8pydQKBYGRaknZ8oCL9hdyTSYZcTmmbqrfA=
-github.com/marktheunissen/pkg/v3 v3.0.0-20240715004115-6d3bb9abe3b5/go.mod h1:njlf539caYrgXqn/CXewqvkqBIMDTQo9oBBEL34LzY0=
+github.com/marktheunissen/pkg/v3 v3.0.0-20240715013114-8e0d6a8ddddd h1:PWjf0VV6EGhjLPYCU0YCV55mW2WbVBx7T2H/uLm9AGA=
+github.com/marktheunissen/pkg/v3 v3.0.0-20240715013114-8e0d6a8ddddd/go.mod h1:njlf539caYrgXqn/CXewqvkqBIMDTQo9oBBEL34LzY0=
 github.com/mattn/go-colorable v0.1.4/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
 github.com/mattn/go-colorable v0.1.13 h1:fFA4WZxdEF4tXPZVKMLwD8oUnCTTo08duU7wxecdEvA=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
