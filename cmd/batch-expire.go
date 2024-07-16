@@ -552,22 +552,25 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	go func() {
 		saveTicker := time.NewTicker(10 * time.Second)
 		defer saveTicker.Stop()
-		for {
+		quit := false
+		after := time.Minute
+		for !quit {
 			select {
 			case <-saveTicker.C:
-				// persist in-memory state to disk after every 10secs.
-				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
-
 			case <-ctx.Done():
-				// persist in-memory state immediately before exiting due to context cancellation.
-				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
-				return
-
+				quit = true
 			case <-saverQuitCh:
-				// persist in-memory state immediately to disk.
-				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
-				return
+				quit = true
 			}
+
+			if quit {
+				// save immediately if we are quitting
+				after = 0
+			}
+
+			ctx, cancel := context.WithTimeout(GlobalContext, 30*time.Second) // independent context
+			batchLogIf(ctx, ri.updateAfter(ctx, api, after, job))
+			cancel()
 		}
 	}()
 
@@ -584,7 +587,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		versionsCount int
 		toDel         []expireObjInfo
 	)
-	failed := true
+	failed := false
 	for result := range results {
 		if result.Err != nil {
 			failed = true
