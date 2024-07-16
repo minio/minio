@@ -44,7 +44,7 @@ var (
 	ErrKeyNotFound = Error{
 		Code:    http.StatusNotFound,
 		APICode: "kms:KeyNotFound",
-		Err:     "key with given key ID does not exit",
+		Err:     "key with given key ID does not exist",
 	}
 
 	// ErrDecrypt is an error returned by the KMS when the decryption
