@@ -52,7 +52,7 @@ require (
 	github.com/minio/highwayhash v1.0.3
 	github.com/minio/kms-go/kes v0.3.0
 	github.com/minio/kms-go/kms v0.4.0
-	github.com/minio/madmin-go/v3 v3.0.58
+	github.com/minio/madmin-go/v3 v3.0.59-0.20240716180118-e43c647f65a7
 	github.com/minio/minio-go/v7 v7.0.73
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v3 v3.0.7
@@ -261,5 +261,3 @@ require (
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
-
-replace github.com/minio/madmin-go/v3 => github.com/vadmeste/madmin-go/v3 v3.0.0-20240712162440-165eb7c5ef9c

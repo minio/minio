@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -22,6 +22,22 @@ import (
 	"sync"
 	"time"
 )
+
+/*
+
+bucketsScanMgr decides what is the next bucket to scan for a given pool/set. It
+holds internal information about when the last time a bucket was finished scanned
+to select buckets with the oldest last scan for the next scan operation.
+
+A minimal use of the bucketsScanMgr is by doing this:
+```
+  mgr := newBucketsScanMgr(ObjectLayer)
+  for bucket := range mgr.getBucketCh() {
+      ...
+  }
+```
+
+*/
 
 const (
 	// the interval to discover if there are new buckets created in the cluster
