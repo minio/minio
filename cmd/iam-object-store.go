@@ -262,7 +262,7 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 
 		// Don't load LDAP users if not configured.
 		if iamOS.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
-			return errNoSuchUser
+			return nil
 		}
 	}
 

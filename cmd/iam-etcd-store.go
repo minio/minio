@@ -243,7 +243,7 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 
 		// Don't load LDAP users if not configured.
 		if ies.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
-			return errNoSuchUser
+			return nil
 		}
 	}
 	if u.Credentials.Description == "" {
