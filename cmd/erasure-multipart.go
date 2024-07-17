@@ -197,6 +197,24 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 	drivePath := disk.Endpoint().Path
 
 	readDirFn(pathJoin(drivePath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
+		vi, err := disk.StatVol(ctx, pathJoin(minioMetaMultipartBucket, shaDir))
+		if err != nil {
+			return nil
+		}
+		if time.Since(vi.Created) < expiry {
+			return nil
+		}
+		dirs, err := disk.ListDir(ctx, "", minioMetaMultipartBucket, shaDir, 1)
+		if err != nil || len(dirs) > 0 {
+			return nil
+		}
+		wait := deleteMultipartCleanupSleeper.Timer(ctx)
+		er.deleteAll(ctx, minioMetaMultipartBucket, shaDir)
+		wait()
+		return nil
+	})
+
+	readDirFn(pathJoin(drivePath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
 		readDirFn(pathJoin(drivePath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
 			uploadIDPath := pathJoin(shaDir, uploadIDDir)
 			var modTime time.Time
