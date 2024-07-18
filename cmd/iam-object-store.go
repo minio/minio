@@ -226,6 +226,14 @@ func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]Po
 }
 
 func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
+	return iamOS.loadUserHelper(ctx, user, userType, m, false)
+}
+
+func (iamOS *IAMObjectStore) loadUserForce(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
+	return iamOS.loadUserHelper(ctx, user, userType, m, true)
+}
+
+func (iamOS *IAMObjectStore) loadUserHelper(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity, force bool) error {
 	var u UserIdentity
 	err := iamOS.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
 	if err != nil {
@@ -260,8 +268,8 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 
-		// Don't load LDAP users if not configured.
-		if iamOS.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
+		// Don't load LDAP users if not configured and force is not specified.
+		if !force && iamOS.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
 			return nil
 		}
 	}
@@ -275,6 +283,14 @@ func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType
 }
 
 func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
+	return iamOS.loadUsersHelper(ctx, userType, m, false)
+}
+
+func (iamOS *IAMObjectStore) loadUsersForce(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
+	return iamOS.loadUsersHelper(ctx, userType, m, true)
+}
+
+func (iamOS *IAMObjectStore) loadUsersHelper(ctx context.Context, userType IAMUserType, m map[string]UserIdentity, force bool) error {
 	var basePrefix string
 	switch userType {
 	case svcUser:
@@ -293,7 +309,7 @@ func (iamOS *IAMObjectStore) loadUsers(ctx context.Context, userType IAMUserType
 		}
 
 		userName := path.Dir(item.Item)
-		if err := iamOS.loadUser(ctx, userName, userType, m); err != nil && err != errNoSuchUser {
+		if err := iamOS.loadUserHelper(ctx, userName, userType, m, force); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}
