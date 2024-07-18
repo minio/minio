@@ -47,6 +47,12 @@ func (l *Config) Enabled() bool {
 	return l.LDAP.Enabled
 }
 
+// Configured returns if LDAP is configured (may be disabled).
+func (l *Config) Configured() bool {
+	// Since ServerAddr is mandatory, we can use it to check if LDAP is configured.
+	return l.LDAP.ServerAddr != ""
+}
+
 // Clone returns a cloned copy of LDAP config.
 func (l *Config) Clone() Config {
 	if l == nil {

@@ -351,6 +351,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	if !sys.LDAPConfig.Configured() {
+		sys.purgeLDAPAccessKeys(ctx)
+	}
+
 	refreshInterval := sys.iamRefreshInterval
 
 	go sys.periodicRoutines(ctx, refreshInterval)
@@ -1538,6 +1542,15 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// purgeLDAPAccessKeys - purges all LDAP access keys when LDAP config is deleted.
+func (sys *IAMSys) purgeLDAPAccessKeys(ctx context.Context) {
+	predicate := func(ui UserIdentity) bool {
+		_, ok := ui.Credentials.Claims[ldapUser]
+		return ok
+	}
+	sys.store.DeleteMatchingUsersWithRefresh(ctx, []IAMUserType{stsUser, svcUser}, true, predicate)
 }
 
 // NormalizeLDAPAccessKeypairs - normalize the access key pairs (service

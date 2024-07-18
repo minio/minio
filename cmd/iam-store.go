@@ -520,6 +520,37 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 	return nil
 }
 
+func (cache *iamCache) deleteMatchingUsers(store *IAMStoreSys, ctx context.Context, predicate func(UserIdentity) bool) {
+	deleted := false
+	for user, ui := range cache.iamUsersMap {
+		userType := regUser
+		cred := ui.Credentials
+
+		if cred.IsServiceAccount() {
+			userType = svcUser
+		} else if cred.IsTemp() {
+			userType = stsUser
+		}
+
+		if predicate(ui) {
+			// Delete this user account and its policy mapping
+			store.deleteMappedPolicy(ctx, user, userType, false)
+			cache.iamUserPolicyMap.Delete(user)
+
+			// we are only logging errors, not handling them.
+			err := store.deleteUserIdentity(ctx, user, userType)
+			iamLogIf(GlobalContext, err)
+			delete(cache.iamUsersMap, user)
+			store.group.Forget(user)
+
+			deleted = true
+		}
+	}
+	if deleted {
+		cache.updatedAt = time.Now()
+	}
+}
+
 // IAMStorageAPI defines an interface for the IAM persistence layer
 type IAMStorageAPI interface {
 	// The role of the read-write lock is to prevent go routines from
@@ -1934,37 +1965,32 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	cache := store.lock()
 	defer store.unlock()
 
-	var deleted bool
 	usersToDelete := set.CreateStringSet(users...)
-	for user, ui := range cache.iamUsersMap {
-		userType := regUser
-		cred := ui.Credentials
+	predicate := func(ui UserIdentity) bool {
+		return usersToDelete.Contains(ui.Credentials.AccessKey) || usersToDelete.Contains(ui.Credentials.ParentUser)
+	}
+	cache.deleteMatchingUsers(store, ctx, predicate)
+	return nil
+}
 
-		if cred.IsServiceAccount() {
-			userType = svcUser
-		} else if cred.IsTemp() {
-			userType = stsUser
-		}
+// DeleteMatchingUsers - reloads specified user types then deletes users that match the given predicate.
+func (store *IAMStoreSys) DeleteMatchingUsersWithRefresh(ctx context.Context, refresh []IAMUserType, force bool, predicate func(UserIdentity) bool) error {
+	cache := store.lock()
+	defer store.unlock()
 
-		if usersToDelete.Contains(user) || usersToDelete.Contains(cred.ParentUser) {
-			// Delete this user account and its policy mapping
-			store.deleteMappedPolicy(ctx, user, userType, false)
-			cache.iamUserPolicyMap.Delete(user)
-
-			// we are only logging errors, not handling them.
-			err := store.deleteUserIdentity(ctx, user, userType)
-			iamLogIf(GlobalContext, err)
-			delete(cache.iamUsersMap, user)
-			store.group.Forget(user)
-
-			deleted = true
+	for _, userType := range refresh {
+		if force {
+			if err := store.loadUsersForce(ctx, userType, cache.iamUsersMap); err != nil {
+				return err
+			}
+		} else {
+			if err := store.loadUsers(ctx, userType, cache.iamUsersMap); err != nil {
+				return err
+			}
 		}
 	}
 
-	if deleted {
-		cache.updatedAt = time.Now()
-	}
-
+	cache.deleteMatchingUsers(store, ctx, predicate)
 	return nil
 }
 
