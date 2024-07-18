@@ -72,8 +72,8 @@ KEY:
 storage_class  define object level redundancy
 
 ARGS:
-standard  (string)    set the parity count for default standard storage class e.g. "EC:4"
-rrs       (string)    set the parity count for reduced redundancy storage class e.g. "EC:2"
+standard  (string)    set the parity count for default standard storage class e.g. "EC:3"
+rrs       (string)    set the parity count for reduced redundancy storage class e.g. "EC:1"
 comment   (sentence)  optionally add a comment to this setting
 ```
 
@@ -84,8 +84,8 @@ KEY:
 storage_class  define object level redundancy
 
 ARGS:
-MINIO_STORAGE_CLASS_STANDARD  (string)    set the parity count for default standard storage class e.g. "EC:4"
-MINIO_STORAGE_CLASS_RRS       (string)    set the parity count for reduced redundancy storage class e.g. "EC:2"
+MINIO_STORAGE_CLASS_STANDARD  (string)    set the parity count for default standard storage class e.g. "EC:3"
+MINIO_STORAGE_CLASS_RRS       (string)    set the parity count for reduced redundancy storage class e.g. "EC:1"
 MINIO_STORAGE_CLASS_COMMENT   (sentence)  optionally add a comment to this setting
 ```
 

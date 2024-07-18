@@ -49,9 +49,9 @@ The default value for the `STANDARD` storage class depends on the number of volu
 
 | Erasure Set Size | Default Parity (EC:N) |
 |------------------|-----------------------|
-| 5 or fewer       |                 EC:2  |
-| 6-7              |                 EC:3  |
-| 8 or more        |                 EC:4  |
+| 6 or fewer       | EC:2                  |
+| 7-8              | EC:3                  |
+| 9 or more        | EC:4                  |
 
 For more complete documentation on Erasure Set sizing, see the [MinIO Documentation on Erasure Sets](https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html#erasure-sets).
 
