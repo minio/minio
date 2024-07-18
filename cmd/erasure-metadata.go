@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/internal/amztime"
+	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash/sha256"
@@ -456,6 +457,7 @@ func commonParity(parities []int, defaultParityCount int) int {
 }
 
 func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int) {
+	N := len(partsMetadata)
 	parities = make([]int, len(partsMetadata))
 	for index, metadata := range partsMetadata {
 		if errs[index] != nil {
@@ -468,7 +470,10 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 		}
 		// Delete marker or zero byte objects take highest parity.
 		if metadata.Deleted || metadata.Size == 0 {
-			parities[index] = len(partsMetadata) / 2
+			parities[index] = N / 2
+		} else if metadata.TransitionStatus == lifecycle.TransitionComplete {
+			// For tiered objects, read quorum is N/2+1 to ensure simple majority on xl.meta. It is not equal to EcM because the data integrity is entrusted with the warm tier.
+			parities[index] = N - (N/2 + 1)
 		} else {
 			parities[index] = metadata.Erasure.ParityBlocks
 		}
