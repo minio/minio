@@ -18,11 +18,11 @@
 package cmd
 
 import (
-	"gopkg.in/yaml.v3"
 	"time"
 
 	miniogo "github.com/minio/minio-go/v7"
 	xtime "github.com/minio/pkg/v3/xtime"
+	"gopkg.in/yaml.v3"
 
 	"github.com/minio/minio/internal/auth"
 )
