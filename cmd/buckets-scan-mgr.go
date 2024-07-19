@@ -64,7 +64,7 @@ type bucketsScanMgr struct {
 	bucketsLister func(context.Context, BucketOptions) ([]BucketInfo, error)
 
 	mu           sync.RWMutex
-	knownBuckets map[string]struct{}                 // Current buckets in the S3 namespace
+	knownBuckets map[string]bool                     // Current buckets in the S3 namespace
 	bucketsCh    map[setID]chan string               // A map of an erasure set identifier and a channel of buckets to scan
 	bucketStats  map[setID]map[string]bucketScanStat // A map of an erasure set identifier and bucket scan stats
 }
@@ -103,7 +103,8 @@ func (mgr *bucketsScanMgr) start() {
 	m := &sync.Mutex{}
 	c := sync.NewCond(m)
 
-	// A routine that discovers new buckets and initialize scan stats for each new bucket
+	// A routine that discovers new buckets,  initialize scan stats for each new bucket
+	// and update if each bucket has a lifecycle document
 	go func() {
 		t := time.NewTimer(bucketsListInterval)
 		defer t.Stop()
@@ -113,20 +114,24 @@ func (mgr *bucketsScanMgr) start() {
 			case <-t.C:
 				buckets, err := mgr.bucketsLister(mgr.ctx, BucketOptions{})
 				if err == nil {
-					mgr.mu.Lock()
-					mgr.knownBuckets = make(map[string]struct{}, len(buckets))
+					knownBuckets := make(map[string]bool, len(buckets)) // bucket => has-lifecycle
 					for _, b := range buckets {
-						mgr.knownBuckets[b.Name] = struct{}{}
+						hasLifecycle := false
+						if l, err := globalLifecycleSys.Get(b.Name); err == nil && l.HasActiveRules("") {
+							hasLifecycle = true
+						}
+						knownBuckets[b.Name] = hasLifecycle
 					}
-					for bucket := range mgr.knownBuckets {
+
+					mgr.mu.Lock()
+					for bucket, hasLifecycle := range knownBuckets {
 						for _, set := range mgr.bucketStats {
 							st := set[bucket]
-							if l, err := globalLifecycleSys.Get(bucket); err == nil && l.HasActiveRules("") {
-								st.lifecycle = true
-							}
+							st.lifecycle = hasLifecycle
 							set[bucket] = st
 						}
 					}
+					mgr.knownBuckets = knownBuckets
 					mgr.mu.Unlock()
 
 					m.Lock()
@@ -254,8 +259,7 @@ func (mgr *bucketsScanMgr) getNextBucketLocked(id setID) string {
 	return nextBucketName
 }
 
-// Mark a bucket as done in a specific erasure set - returns true if successful,
-// false if the bucket is already in a scanning phase
+// Mark a bucket as started in a specific erasure set
 func (mgr *bucketsScanMgr) markBucketScanStarted(id setID, bucket string, cycle uint32, lastKnownUpdate time.Time) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
