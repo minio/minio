@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 )
@@ -65,33 +66,34 @@ type bucketsScanMgr struct {
 	mu           sync.RWMutex
 	knownBuckets map[string]struct{}                 // Current buckets in the S3 namespace
 	bucketsCh    map[setID]chan string               // A map of an erasure set identifier and a channel of buckets to scan
-	internal     map[setID]map[string]bucketScanStat // A map of an erasure set identifier and bucket scan stats
+	bucketStats  map[setID]map[string]bucketScanStat // A map of an erasure set identifier and bucket scan stats
 }
 
 func newBucketsScanMgr(s3 ObjectLayer) *bucketsScanMgr {
 	mgr := &bucketsScanMgr{
 		ctx:           GlobalContext,
 		bucketsLister: s3.ListBuckets,
-		internal:      make(map[setID]map[string]bucketScanStat),
+		bucketStats:   make(map[setID]map[string]bucketScanStat),
 		bucketsCh:     make(map[setID]chan string),
 	}
 	return mgr
 }
 
 func (mgr *bucketsScanMgr) getKnownBuckets() []string {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+	mgr.mu.RLock()
+	defer mgr.mu.RUnlock()
 
 	ret := make([]string, 0, len(mgr.knownBuckets))
 	for k := range mgr.knownBuckets {
 		ret = append(ret, k)
 	}
+	sort.Strings(ret)
 	return ret
 }
 
 func (mgr *bucketsScanMgr) isKnownBucket(bucket string) bool {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
+	mgr.mu.RLock()
+	defer mgr.mu.RUnlock()
 
 	_, ok := mgr.knownBuckets[bucket]
 	return ok
@@ -117,7 +119,7 @@ func (mgr *bucketsScanMgr) start() {
 						mgr.knownBuckets[b.Name] = struct{}{}
 					}
 					for bucket := range mgr.knownBuckets {
-						for _, set := range mgr.internal {
+						for _, set := range mgr.bucketStats {
 							st := set[bucket]
 							if l, err := globalLifecycleSys.Get(bucket); err == nil && l.HasActiveRules("") {
 								st.lifecycle = true
@@ -154,7 +156,7 @@ func (mgr *bucketsScanMgr) start() {
 			select {
 			case <-t.C:
 				mgr.mu.Lock()
-				for _, set := range mgr.internal {
+				for _, set := range mgr.bucketStats {
 					for bkt := range set {
 						if _, ok := mgr.knownBuckets[bkt]; !ok {
 							delete(set, bkt)
@@ -183,7 +185,7 @@ func (mgr *bucketsScanMgr) start() {
 				mgr.mu.RLock()
 				for id, ch := range mgr.bucketsCh {
 					if len(ch) == 0 {
-						b := mgr.unsafeGetNextBucket(id)
+						b := mgr.getNextBucketLocked(id)
 						if b != "" {
 							select {
 							case ch <- b:
@@ -207,7 +209,7 @@ func (mgr *bucketsScanMgr) getBucketCh(id setID) chan string {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
-	mgr.internal[id] = make(map[string]bucketScanStat)
+	mgr.bucketStats[id] = make(map[string]bucketScanStat)
 	mgr.bucketsCh[id] = make(chan string, 1)
 
 	return mgr.bucketsCh[id]
@@ -228,13 +230,13 @@ func scanBefore(st1, st2 bucketScanStat) bool {
 
 // Return the next bucket name to scan of a given erasure set identifier
 // If all buckets are in a scanning state, return empty result
-func (mgr *bucketsScanMgr) unsafeGetNextBucket(id setID) string {
+func (mgr *bucketsScanMgr) getNextBucketLocked(id setID) string {
 	var (
 		nextBucketStat = bucketScanStat{}
 		nextBucketName = ""
 	)
 
-	for bucket, stat := range mgr.internal[id] {
+	for bucket, stat := range mgr.bucketStats[id] {
 		if stat.ongoing {
 			continue
 		}
@@ -258,11 +260,11 @@ func (mgr *bucketsScanMgr) markBucketScanStarted(id setID, bucket string, cycle 
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
-	m, _ := mgr.internal[id][bucket]
+	m, _ := mgr.bucketStats[id][bucket]
 	m.ongoing = true
 	m.cycle = cycle
 	m.lastUpdate = lastKnownUpdate
-	mgr.internal[id][bucket] = m
+	mgr.bucketStats[id][bucket] = m
 	return
 }
 
@@ -271,8 +273,8 @@ func (mgr *bucketsScanMgr) markBucketScanDone(id setID, bucket string) {
 	mgr.mu.Lock()
 	defer mgr.mu.Unlock()
 
-	m, _ := mgr.internal[id][bucket]
+	m, _ := mgr.bucketStats[id][bucket]
 	m.ongoing = false
 	m.lastFinished = time.Now()
-	mgr.internal[id][bucket] = m
+	mgr.bucketStats[id][bucket] = m
 }
