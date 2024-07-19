@@ -18,9 +18,11 @@
 package cmd
 
 import (
+	"gopkg.in/yaml.v3"
 	"time"
 
 	miniogo "github.com/minio/minio-go/v7"
+	xtime "github.com/minio/pkg/v3/xtime"
 
 	"github.com/minio/minio/internal/auth"
 )
@@ -72,6 +74,33 @@ type BatchReplicateFilter struct {
 	Tags          []BatchJobKV  `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV  `yaml:"metadata,omitempty" json:"metadata"`
 }
+
+// UnmarshalYAML to support xtime.Duration
+func (z *BatchReplicateFilter) UnmarshalYAML(val *yaml.Node) error {
+	tmp := struct {
+		NewerThan     xtime.Duration `yaml:"newerThan,omitempty" json:"newerThan"`
+		OlderThan     xtime.Duration `yaml:"olderThan,omitempty" json:"olderThan"`
+		CreatedAfter  time.Time      `yaml:"createdAfter,omitempty" json:"createdAfter"`
+		CreatedBefore time.Time      `yaml:"createdBefore,omitempty" json:"createdBefore"`
+		Tags          []BatchJobKV   `yaml:"tags,omitempty" json:"tags"`
+		Metadata      []BatchJobKV   `yaml:"metadata,omitempty" json:"metadata"`
+	}{}
+	err := val.Decode(&tmp)
+	if err != nil {
+		return err
+	}
+	*z = BatchReplicateFilter{
+		NewerThan:     time.Duration(tmp.NewerThan),
+		OlderThan:     time.Duration(tmp.OlderThan),
+		CreatedAfter:  tmp.CreatedAfter,
+		CreatedBefore: tmp.CreatedBefore,
+		Tags:          tmp.Tags,
+		Metadata:      tmp.Metadata,
+	}
+	return nil
+}
+
+var _ yaml.Unmarshaler = &BatchReplicateFilter{}
 
 // BatchJobReplicateFlags various configurations for replication job definition currently includes
 // - filter
