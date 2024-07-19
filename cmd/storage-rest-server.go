@@ -586,16 +586,12 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	rc, err := s.getStorage().ReadFileStream(r.Context(), volume, filePath, offset, length)
-	if err != nil {
+	if err := s.getStorage().ReadFileStreamTo(r.Context(), volume, filePath, offset, length, w); err != nil {
+		if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+			storageLogIf(r.Context(), err)
+		}
 		s.writeErrorResponse(w, err)
 		return
-	}
-	defer rc.Close()
-
-	_, err = xioutil.Copy(w, rc)
-	if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-		storageLogIf(r.Context(), err)
 	}
 }
 

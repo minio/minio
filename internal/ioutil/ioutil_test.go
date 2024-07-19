@@ -205,7 +205,7 @@ func TestCopyAligned(t *testing.T) {
 	bufp := ODirectPoolSmall.Get().(*[]byte)
 	defer ODirectPoolSmall.Put(bufp)
 
-	written, err := CopyAligned(f, io.LimitReader(r, 5), *bufp, r.Size(), f)
+	written, err := CopyAligned(f, io.LimitReader(r, 5), *bufp, r.Size(), f.Fd())
 	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Errorf("Expected io.ErrUnexpectedEOF, but got %v", err)
 	}
@@ -216,7 +216,7 @@ func TestCopyAligned(t *testing.T) {
 	f.Seek(0, io.SeekStart)
 	r.Seek(0, io.SeekStart)
 
-	written, err = CopyAligned(f, r, *bufp, r.Size(), f)
+	written, err = CopyAligned(f, r, *bufp, r.Size(), f.Fd())
 	if !errors.Is(err, nil) {
 		t.Errorf("Expected nil, but got %v", err)
 	}

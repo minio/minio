@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -621,7 +621,15 @@ func (client *storageRESTClient) ReadAll(ctx context.Context, volume string, pat
 	return *gridBytes, nil
 }
 
+// ReadFileStreamTo - writes to writer from the contents at path.
+func (client *storageRESTClient) ReadFileStreamTo(ctx context.Context, volume, path string, offset, length int64, writer io.Writer) error {
+	// This function must not be called over the network, only implemented for local disks.
+	// ReadFileStream client remote handler uses ReadFileStreamTo to read from file locally.
+	return errInvalidArgument
+}
+
 // ReadFileStream - returns a reader for the requested file.
+
 func (client *storageRESTClient) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)

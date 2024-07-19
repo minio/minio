@@ -35,8 +35,7 @@ func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, er
 }
 
 // DisableDirectIO - disables directio mode.
-func DisableDirectIO(f *os.File) error {
-	fd := f.Fd()
+func DisableDirectIO(fd uintptr) error {
 	_, err := unix.FcntlInt(fd, unix.F_NOCACHE, 0)
 	return err
 }

@@ -61,6 +61,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/signer"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
@@ -84,6 +85,10 @@ func TestMain(m *testing.M) {
 	}
 
 	globalNodeAuthToken, _ = authenticateNode(auth.DefaultAccessKey, auth.DefaultSecretKey)
+
+	// Initialize byte pool once for all sets, bpool size is set to
+	// setCount * setDriveCount with each memory upto blockSizeV2.
+	globalBytePoolCap.Store(bpool.NewBytePoolCap(256, blockSizeV2, blockSizeV2*2))
 
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{

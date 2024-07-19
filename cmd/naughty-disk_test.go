@@ -180,6 +180,13 @@ func (d *naughtyDisk) ReadFile(ctx context.Context, volume string, path string, 
 	return d.disk.ReadFile(ctx, volume, path, offset, buf, verifier)
 }
 
+func (d *naughtyDisk) ReadFileStreamTo(ctx context.Context, volume, path string, offset, length int64, writer io.Writer) error {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.ReadFileStreamTo(ctx, volume, path, offset, length, writer)
+}
+
 func (d *naughtyDisk) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
 	if err := d.calcError(); err != nil {
 		return nil, err

@@ -196,8 +196,8 @@ func getValidPath(path string) (string, error) {
 }
 
 // Make Erasure backend meta volumes.
-func makeFormatErasureMetaVolumes(disk StorageAPI) error {
-	if disk == nil {
+func makeFormatErasureMetaVolumes(store *xlStorage) error {
+	if store == nil {
 		return errDiskNotFound
 	}
 	volumes := []string{
@@ -207,7 +207,7 @@ func makeFormatErasureMetaVolumes(disk StorageAPI) error {
 		minioConfigBucket,         // creates .minio.sys/config
 	}
 	// Attempt to create MinIO internal buckets.
-	return disk.MakeVolBulk(context.TODO(), volumes...)
+	return store.MakeVolBulk(context.TODO(), volumes...)
 }
 
 // Initialize a new storage disk.
@@ -1988,84 +1988,122 @@ func (s *xlStorage) openFile(filePath string, mode int, skipParent string) (f *o
 	return w, nil
 }
 
-type sendFileReader struct {
-	io.Reader
-	io.Closer
-}
-
-// ReadFileStream - Returns the read stream of the file.
-func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error) {
-	if offset < 0 {
-		return nil, errInvalidArgument
+// ReadFileStreamTo - Writes to the provided io.Writer, by reading from the file. If the ReadFileStreamTo cannot
+// write all the `length` then it returns an error indicating truncated WRITE at reader side premature EOF.
+func (s *xlStorage) ReadFileStreamTo(ctx context.Context, volume, path string, offset, length int64, w io.Writer) (err error) {
+	if offset < 0 || length < 0 {
+		return errInvalidArgument
 	}
 
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
 	if err = checkPathLength(filePath); err != nil {
-		return nil, err
+		return err
 	}
 
-	file, err := OpenFile(filePath, readMode, 0o666)
-	if err != nil {
-		switch {
-		case osIsNotExist(err):
-			if !skipAccessChecks(volume) {
-				if err = Access(volumeDir); err != nil && osIsNotExist(err) {
-					return nil, errVolumeNotFound
+	odirectEnabled := globalAPIConfig.odirectEnabled() && s.oDirect
+
+	var rd *os.File
+	// Add deadline worker to look for hung Open() calls.
+	work := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
+	if err := work.Run(func() error {
+		if odirectEnabled {
+			rd, err = OpenFileDirectIO(filePath, readMode, 0o666)
+		} else {
+			rd, err = OpenFile(filePath, readMode, 0o666)
+		}
+		if err != nil {
+			switch {
+			case osIsNotExist(err):
+				if !skipAccessChecks(volume) {
+					if err = Access(volumeDir); err != nil && osIsNotExist(err) {
+						return errVolumeNotFound
+					}
 				}
+				return errFileNotFound
+			case osIsPermission(err):
+				return errFileAccessDenied
+			case isSysErrNotDir(err):
+				return errFileAccessDenied
+			case isSysErrIO(err):
+				return errFaultyDisk
+			case isSysErrTooManyFiles(err):
+				return errTooManyOpenFiles
+			case isSysErrInvalidArg(err):
+				return errUnsupportedDisk
+			default:
+				return err
 			}
-			return nil, errFileNotFound
-		case osIsPermission(err):
-			return nil, errFileAccessDenied
-		case isSysErrNotDir(err):
-			return nil, errFileAccessDenied
-		case isSysErrIO(err):
-			return nil, errFaultyDisk
-		case isSysErrTooManyFiles(err):
-			return nil, errTooManyOpenFiles
-		case isSysErrInvalidArg(err):
-			return nil, errUnsupportedDisk
-		default:
-			return nil, err
 		}
+
+		st, err := rd.Stat()
+		if err != nil {
+			return err
+		}
+
+		// Verify it is a regular file, otherwise subsequent Seek is undefined.
+		if !st.Mode().IsRegular() {
+			return errIsNotRegular
+		}
+
+		if st.Size() < offset+length {
+			// Expected size cannot be satisfied for
+			// requested offset and length
+			return errFileCorrupt
+		}
+
+		alignment := offset%xioutil.DirectioAlignSize == 0
+		if !alignment && odirectEnabled {
+			if err = disk.DisableDirectIO(rd.Fd()); err != nil {
+				return err
+			}
+		}
+
+		if offset > 0 {
+			if _, err = rd.Seek(offset, io.SeekStart); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}); err != nil {
+		return err
 	}
 
-	if length < 0 {
-		return file, nil
+	if rd != nil {
+		defer rd.Close()
 	}
 
-	st, err := file.Stat()
+	buf := globalBytePoolCap.Load().Get()
+	var written int64
+	if odirectEnabled {
+		written, err = xioutil.CopyAligned(w, diskHealthReader(ctx, rd), buf, length, rd.Fd())
+	} else {
+		written, err = io.CopyBuffer(w, diskHealthReader(ctx, rd), buf)
+	}
 	if err != nil {
-		file.Close()
-		return nil, err
+		return err
 	}
 
-	// Verify it is a regular file, otherwise subsequent Seek is
-	// undefined.
-	if !st.Mode().IsRegular() {
-		file.Close()
-		return nil, errIsNotRegular
+	if written != length {
+		return io.ErrShortWrite
 	}
 
-	if st.Size() < offset+length {
-		// Expected size cannot be satisfied for
-		// requested offset and length
-		file.Close()
-		return nil, errFileCorrupt
-	}
+	return nil
+}
 
-	if offset > 0 {
-		if _, err = file.Seek(offset, io.SeekStart); err != nil {
-			file.Close()
-			return nil, err
-		}
-	}
-	return &sendFileReader{Reader: io.LimitReader(file, length), Closer: file}, nil
+// ReadFileStream - Returns the read stream of the file.
+func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (r io.ReadCloser, err error) {
+	pr, pw := xioutil.WaitPipe()
+	go func() {
+		pw.CloseWithError(s.ReadFileStreamTo(ctx, volume, path, offset, length, pw))
+	}()
+	return pr, nil
 }
 
 // closeWrapper converts a function to an io.Closer
@@ -2156,7 +2194,7 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 
 	var written int64
 	if odirectEnabled {
-		written, err = xioutil.CopyAligned(diskHealthWriter(ctx, w), r, *bufp, fileSize, w)
+		written, err = xioutil.CopyAligned(diskHealthWriter(ctx, w), r, *bufp, fileSize, w.Fd())
 	} else {
 		written, err = io.CopyBuffer(diskHealthWriter(ctx, w), r, *bufp)
 	}

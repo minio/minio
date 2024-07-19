@@ -57,7 +57,7 @@ func OpenFileDirectIO(filePath string, flag int, perm os.FileMode) (*os.File, er
 }
 
 // DisableDirectIO is a no-op
-func DisableDirectIO(f *os.File) error {
+func DisableDirectIO(fd uintptr) error {
 	return nil
 }
 

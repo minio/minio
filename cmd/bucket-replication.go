@@ -18,6 +18,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
@@ -3578,9 +3579,7 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 
 // load mrf entries from disk
 func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
-	loadMRF := func(rc io.ReadCloser) (re MRFReplicateEntries, err error) {
-		defer rc.Close()
-
+	loadMRF := func(rc io.Reader) (re MRFReplicateEntries, err error) {
 		if !p.initialized() {
 			return re, nil
 		}
@@ -3616,12 +3615,12 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {
-		rc, err := localDrive.ReadFileStream(p.ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"), 0, -1)
+		buf, err := localDrive.ReadAll(p.ctx, minioMetaBucket, pathJoin(replicationMRFDir, globalLocalNodeNameHex+".bin"))
 		if err != nil {
 			continue
 		}
 
-		mrfRec, err = loadMRF(rc)
+		mrfRec, err = loadMRF(bytes.NewReader(buf))
 		if err != nil {
 			continue
 		}

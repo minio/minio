@@ -93,6 +93,7 @@ type StorageAPI interface {
 	ReadFile(ctx context.Context, volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
 	AppendFile(ctx context.Context, volume string, path string, buf []byte) (err error)
 	CreateFile(ctx context.Context, origvolume, olume, path string, size int64, reader io.Reader) error
+	ReadFileStreamTo(ctx context.Context, volume, path string, offset, length int64, writer io.Writer) error
 	ReadFileStream(ctx context.Context, volume, path string, offset, length int64) (io.ReadCloser, error)
 	RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) error
 	CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error)

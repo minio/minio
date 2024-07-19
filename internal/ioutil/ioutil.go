@@ -343,7 +343,7 @@ const DirectioAlignSize = 4096
 // used with DIRECT I/O based file descriptor and it is expected that
 // input writer *os.File not a generic io.Writer. Make sure to have
 // the file opened for writes with syscall.O_DIRECT flag.
-func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, file *os.File) (int64, error) {
+func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, fd uintptr) (int64, error) {
 	if totalSize == 0 {
 		return 0, nil
 	}
@@ -355,6 +355,16 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 			remaining := totalSize - written
 			if remaining < int64(len(buf)) {
 				buf = buf[:remaining]
+			}
+		}
+
+		if len(buf)%DirectioAlignSize != 0 {
+			// Disable O_DIRECT on fd's on unaligned buffer
+			// perform an amortized Fdatasync(fd) on the fd at
+			// the end, this is performed by the caller before
+			// closing 'w'.
+			if err := disk.DisableDirectIO(fd); err != nil {
+				return written, err
 			}
 		}
 
@@ -389,7 +399,7 @@ func CopyAligned(w io.Writer, r io.Reader, alignedBuf []byte, totalSize int64, f
 			// perform an amortized Fdatasync(fd) on the fd at
 			// the end, this is performed by the caller before
 			// closing 'w'.
-			if err = disk.DisableDirectIO(file); err != nil {
+			if err = disk.DisableDirectIO(fd); err != nil {
 				return written, err
 			}
 
