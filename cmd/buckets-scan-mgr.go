@@ -100,14 +100,15 @@ func (mgr *bucketsScanMgr) isKnownBucket(bucket string) bool {
 }
 
 func (mgr *bucketsScanMgr) start() {
-	m := &sync.Mutex{}
-	c := sync.NewCond(m)
+	firstListBucketsDone := make(chan interface{})
 
 	// A routine that discovers new buckets,  initialize scan stats for each new bucket
 	// and update if each bucket has a lifecycle document
 	go func() {
 		t := time.NewTimer(bucketsListInterval)
 		defer t.Stop()
+
+		firstTime := true
 
 		for {
 			select {
@@ -134,9 +135,10 @@ func (mgr *bucketsScanMgr) start() {
 					mgr.knownBuckets = knownBuckets
 					mgr.mu.Unlock()
 
-					m.Lock()
-					c.Broadcast()
-					m.Unlock()
+					if firstTime {
+						close(firstListBucketsDone)
+						firstTime = false
+					}
 				}
 				t.Reset(bucketsListInterval)
 			case <-mgr.ctx.Done():
@@ -145,10 +147,7 @@ func (mgr *bucketsScanMgr) start() {
 		}
 	}()
 
-	// Wait until first buckets listing is successful
-	m.Lock()
-	c.Wait() // Unlocks m, waits, then locks m again
-	m.Unlock()
+	<-firstListBucketsDone
 
 	// Clean up internal data when a deleted bucket is found
 	go func() {
