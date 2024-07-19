@@ -20,7 +20,7 @@ package cmd
 import (
 	"testing"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func TestParseBatchJobExpire(t *testing.T) {
@@ -32,7 +32,7 @@ expire: # Expire objects that match a condition
   rules:
     - type: object  # regular objects with zero or more older versions
       name: NAME # match object names that satisfy the wildcard expression.
-      olderThan: 70h # match objects older than this value
+      olderThan: 7d10h # match objects older than this value
       createdBefore: "2006-01-02T15:04:05.00Z" # match objects created before "date"
       tags:
         - key: name
@@ -64,7 +64,7 @@ expire: # Expire objects that match a condition
     delay: 500ms # least amount of delay between each retry
 `
 	var job BatchJobRequest
-	err := yaml.UnmarshalStrict([]byte(expireYaml), &job)
+	err := yaml.Unmarshal([]byte(expireYaml), &job)
 	if err != nil {
 		t.Fatal("Failed to parse batch-job-expire yaml", err)
 	}

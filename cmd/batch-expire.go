@@ -36,6 +36,7 @@ import (
 	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/wildcard"
 	"github.com/minio/pkg/v3/workers"
+	"github.com/minio/pkg/v3/xtime"
 	"gopkg.in/yaml.v3"
 )
 
@@ -131,13 +132,33 @@ var _ yaml.Unmarshaler = &BatchJobExpireFilter{}
 // UnmarshalYAML - BatchJobExpireFilter extends unmarshal to extract line, col
 // information
 func (ef *BatchJobExpireFilter) UnmarshalYAML(value *yaml.Node) error {
-	type expFilter BatchJobExpireFilter
-	var tmp expFilter
+	tmp := struct {
+		line, col     int
+		OlderThan     xtime.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
+		CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
+		Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
+		Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
+		Size          BatchJobSizeFilter  `yaml:"size" json:"size"`
+		Type          string              `yaml:"type" json:"type"`
+		Name          string              `yaml:"name" json:"name"`
+		Purge         BatchJobExpirePurge `yaml:"purge" json:"purge"`
+	}{}
 	err := value.Decode(&tmp)
 	if err != nil {
 		return err
 	}
-	*ef = BatchJobExpireFilter(tmp)
+	*ef = BatchJobExpireFilter{
+		line:          tmp.line,
+		col:           tmp.col,
+		OlderThan:     time.Duration(tmp.OlderThan),
+		CreatedBefore: tmp.CreatedBefore,
+		Tags:          tmp.Tags,
+		Metadata:      tmp.Metadata,
+		Size:          tmp.Size,
+		Type:          tmp.Type,
+		Name:          tmp.Name,
+		Purge:         tmp.Purge,
+	}
 	ef.line, ef.col = value.Line, value.Column
 	return err
 }
