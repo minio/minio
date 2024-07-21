@@ -685,16 +685,6 @@ func loadEnvVarsFromFiles() {
 		}
 	}
 
-	if env.IsSet(kms.EnvKMSSecretKeyFile) {
-		kmsSecret, err := readFromSecret(env.Get(kms.EnvKMSSecretKeyFile, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to read the KMS secret key inherited from secret file")
-		}
-		if kmsSecret != "" {
-			os.Setenv(kms.EnvKMSSecretKey, kmsSecret)
-		}
-	}
-
 	if env.IsSet(config.EnvConfigEnvFile) {
 		ekvs, err := minioEnvironFromFile(env.Get(config.EnvConfigEnvFile, ""))
 		if err != nil && !os.IsNotExist(err) {
