@@ -262,14 +262,9 @@ type connectReq struct {
 	Token string
 }
 
-// audience returns the audience for the connect call.
-func (c *connectReq) audience() string {
-	return fmt.Sprintf("%s-%d", c.Host, c.Time.Unix())
-}
-
 // addToken will add the token to the connect request.
 func (c *connectReq) addToken(fn AuthFn) {
-	c.Token = fn(c.audience())
+	c.Token = fn()
 }
 
 func (connectReq) Op() Op {
