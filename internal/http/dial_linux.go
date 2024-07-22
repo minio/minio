@@ -49,6 +49,11 @@ func setTCPParametersFn(opts TCPOptions) func(network, address string, c syscall
 				_ = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_RCVBUF, opts.RecvBufSize)
 			}
 
+			if opts.NoDelay {
+				_ = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, unix.TCP_NODELAY, 1)
+				_ = syscall.SetsockoptInt(fd, syscall.SOL_TCP, unix.TCP_CORK, 0)
+			}
+
 			// Enable TCP open
 			// https://lwn.net/Articles/508865/ - 32k queue size.
 			_ = syscall.SetsockoptInt(fd, syscall.SOL_TCP, unix.TCP_FASTOPEN, 32*1024)
