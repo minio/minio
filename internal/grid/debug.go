@@ -169,13 +169,13 @@ func dummyRequestValidate(r *http.Request) error {
 	return nil
 }
 
-func dummyTokenValidate(token, audience string) error {
-	if token == audience {
+func dummyTokenValidate(token string) error {
+	if token == "debug" {
 		return nil
 	}
-	return fmt.Errorf("invalid token. want %s, got %s", audience, token)
+	return fmt.Errorf("invalid token. want empty, got %s", token)
 }
 
-func dummyNewToken(audience string) string {
-	return audience
+func dummyNewToken() string {
+	return "debug"
 }

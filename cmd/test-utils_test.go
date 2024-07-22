@@ -83,6 +83,8 @@ func TestMain(m *testing.M) {
 		SecretKey: auth.DefaultSecretKey,
 	}
 
+	globalNodeAuthToken, _ = authenticateNode(auth.DefaultAccessKey, auth.DefaultSecretKey)
+
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
 		crypto.EnvKMSAutoEncryption,

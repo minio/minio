@@ -110,7 +110,7 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 const DefaultSkewTime = 15 * time.Minute
 
 // validateStorageRequestToken will validate the token against the provided audience.
-func validateStorageRequestToken(token, audience string) error {
+func validateStorageRequestToken(token string) error {
 	claims := xjwt.NewStandardClaims()
 	if err := xjwt.ParseWithStandardClaims(token, claims, []byte(globalActiveCred.SecretKey)); err != nil {
 		return errAuthentication
@@ -121,9 +121,6 @@ func validateStorageRequestToken(token, audience string) error {
 		return errAuthentication
 	}
 
-	if claims.Audience != audience {
-		return errAuthentication
-	}
 	return nil
 }
 
@@ -136,20 +133,24 @@ func storageServerRequestValidate(r *http.Request) error {
 		}
 		return errMalformedAuth
 	}
-	if err = validateStorageRequestToken(token, r.URL.RawQuery); err != nil {
+
+	if err = validateStorageRequestToken(token); err != nil {
 		return err
 	}
 
-	requestTimeStr := r.Header.Get("X-Minio-Time")
-	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
+	nanoTime, err := strconv.ParseInt(r.Header.Get("X-Minio-Time"), 10, 64)
 	if err != nil {
 		return errMalformedAuth
 	}
-	utcNow := UTCNow()
-	delta := requestTime.Sub(utcNow)
+
+	localTime := UTCNow()
+	remoteTime := time.Unix(0, nanoTime)
+
+	delta := remoteTime.Sub(localTime)
 	if delta < 0 {
 		delta *= -1
 	}
+
 	if delta > DefaultSkewTime {
 		return errSkewedAuthTime
 	}

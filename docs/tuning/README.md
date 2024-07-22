@@ -22,5 +22,5 @@ sudo mv tuned.conf /usr/lib/tuned/minio
 
 #### Step 3 - to enable minio performance profile on all the nodes
 ```
-sudo tuned-admin profile minio
+sudo tuned-adm profile minio
 ```

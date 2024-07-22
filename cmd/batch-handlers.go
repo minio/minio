@@ -1567,6 +1567,9 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 			writeErrorResponseJSON(ctx, w, toAPIError(ctx, result.Err), r.URL)
 			return
 		}
+		if strings.HasPrefix(result.Item.Name, batchJobReportsPrefix+slashSeparator) {
+			continue
+		}
 		req := &BatchJobRequest{}
 		if err := req.load(ctx, objectAPI, result.Item.Name); err != nil {
 			if !errors.Is(err, errNoSuchJob) {
@@ -1881,6 +1884,9 @@ func (j *BatchJobPool) resume(randomWait func() time.Duration) {
 	for result := range results {
 		if result.Err != nil {
 			batchLogIf(j.ctx, result.Err)
+			continue
+		}
+		if strings.HasPrefix(result.Item.Name, batchJobReportsPrefix+slashSeparator) {
 			continue
 		}
 		// ignore batch-replicate.bin and batch-rotate.bin entries

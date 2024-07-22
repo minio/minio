@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -208,8 +209,8 @@ func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx contex
 			dialer.NetDial = dial
 		}
 		header := make(http.Header, 2)
-		header.Set("Authorization", "Bearer "+auth(""))
-		header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+		header.Set("Authorization", "Bearer "+auth())
+		header.Set("X-Minio-Time", strconv.FormatInt(time.Now().UnixNano(), 10))
 
 		if len(header) > 0 {
 			dialer.Header = ws.HandshakeHeaderHTTP(header)
@@ -225,4 +226,4 @@ func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx contex
 }
 
 // ValidateTokenFn must validate the token and return an error if it is invalid.
-type ValidateTokenFn func(token, audience string) error
+type ValidateTokenFn func(token string) error

@@ -310,6 +310,7 @@ var (
 	globalBootTime = UTCNow()
 
 	globalActiveCred         auth.Credentials
+	globalNodeAuthToken      string
 	globalSiteReplicatorCred siteReplicatorCred
 
 	// Captures if root credentials are set via ENV.

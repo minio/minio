@@ -2186,7 +2186,7 @@ func (a adminAPIHandlers) KMSCreateKeyHandler(w http.ResponseWriter, r *http.Req
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// KMSKeyStatusHandler - GET /minio/admin/v3/kms/status
+// KMSStatusHandler - GET /minio/admin/v3/kms/status
 func (a adminAPIHandlers) KMSStatusHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
