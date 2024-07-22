@@ -871,6 +871,12 @@ func loadRootCredentials() {
 	} else {
 		globalActiveCred = auth.DefaultCredentials
 	}
+
+	var err error
+	globalNodeAuthToken, err = authenticateNode(globalActiveCred.AccessKey, globalActiveCred.SecretKey)
+	if err != nil {
+		logger.Fatal(err, "Unable to generate internode credentials")
+	}
 }
 
 // Initialize KMS global variable after valiadating and loading the configuration.
