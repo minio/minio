@@ -54,7 +54,7 @@ require (
 	github.com/minio/madmin-go/v3 v3.0.58
 	github.com/minio/minio-go/v7 v7.0.73
 	github.com/minio/mux v1.9.0
-	github.com/minio/pkg/v3 v3.0.8
+	github.com/minio/pkg/v3 v3.0.9
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/simdjson-go v0.4.5
 	github.com/minio/sio v0.4.0
@@ -66,7 +66,7 @@ require (
 	github.com/nats-io/stan.go v0.10.4
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.1.0
-	github.com/philhofer/fwd v1.1.2
+	github.com/philhofer/fwd v1.1.3-0.20240612014219-fbbf4953d986
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.6
@@ -81,7 +81,7 @@ require (
 	github.com/rs/cors v1.11.0
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.24.5
-	github.com/tinylib/msgp v1.1.9
+	github.com/tinylib/msgp v1.2.0
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v1.0.5
 	github.com/zeebo/xxh3 v1.0.2
