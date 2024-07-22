@@ -28,6 +28,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -95,9 +96,9 @@ type Client struct {
 	// TraceOutput will print debug information on non-200 calls if set.
 	TraceOutput io.Writer // Debug trace output
 
-	httpClient   *http.Client
-	url          *url.URL
-	newAuthToken func(audience string) string
+	httpClient *http.Client
+	url        *url.URL
+	auth       func() string
 
 	sync.RWMutex // mutex for lastErr
 	lastErr      error
@@ -188,10 +189,10 @@ func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*ht
 		}
 	}
 
-	if c.newAuthToken != nil {
-		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(u.RawQuery))
+	if c.auth != nil {
+		req.Header.Set("Authorization", "Bearer "+c.auth())
 	}
-	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+	req.Header.Set("X-Minio-Time", strconv.FormatInt(time.Now().UnixNano(), 10))
 
 	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
 		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
@@ -387,7 +388,7 @@ func (c *Client) Close() {
 }
 
 // NewClient - returns new REST client.
-func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
+func NewClient(uu *url.URL, tr http.RoundTripper, auth func() string) *Client {
 	connected := int32(online)
 	urlStr := uu.String()
 	u, err := url.Parse(urlStr)
@@ -404,7 +405,7 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 	clnt := &Client{
 		httpClient:               &http.Client{Transport: tr},
 		url:                      u,
-		newAuthToken:             newAuthToken,
+		auth:                     auth,
 		connected:                connected,
 		lastConn:                 time.Now().UnixNano(),
 		MaxErrResponseSize:       4096,

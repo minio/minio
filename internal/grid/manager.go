@@ -245,7 +245,7 @@ func (m *Manager) IncomingConn(ctx context.Context, conn net.Conn) {
 		writeErr(fmt.Errorf("time difference too large between servers: %v", time.Since(cReq.Time).Abs()))
 		return
 	}
-	if err := m.authToken(cReq.Token, cReq.audience()); err != nil {
+	if err := m.authToken(cReq.Token); err != nil {
 		writeErr(fmt.Errorf("auth token: %w", err))
 		return
 	}
@@ -257,10 +257,10 @@ func (m *Manager) IncomingConn(ctx context.Context, conn net.Conn) {
 }
 
 // AuthFn should provide an authentication string for the given aud.
-type AuthFn func(aud string) string
+type AuthFn func() string
 
 // ValidateAuthFn should check authentication for the given aud.
-type ValidateAuthFn func(auth, aud string) string
+type ValidateAuthFn func(auth string) string
 
 // Connection will return the connection for the specified host.
 // If the host does not exist nil will be returned.

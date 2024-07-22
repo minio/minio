@@ -24,10 +24,8 @@ import (
 
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	jwtreq "github.com/golang-jwt/jwt/v4/request"
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/minio/minio/internal/auth"
 	xjwt "github.com/minio/minio/internal/jwt"
-	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/policy"
 )
 
@@ -37,8 +35,8 @@ const (
 	// Default JWT token for web handlers is one day.
 	defaultJWTExpiry = 24 * time.Hour
 
-	// Inter-node JWT token expiry is 15 minutes.
-	defaultInterNodeJWTExpiry = 15 * time.Minute
+	// Inter-node JWT token expiry is 100 years approx.
+	defaultInterNodeJWTExpiry = 100 * 365 * 24 * time.Hour
 )
 
 var (
@@ -50,17 +48,10 @@ var (
 	errMalformedAuth      = errors.New("Malformed authentication input")
 )
 
-type cacheKey struct {
-	accessKey, secretKey, audience string
-}
-
-var cacheLRU = expirable.NewLRU[cacheKey, string](1000, nil, 15*time.Second)
-
-func authenticateNode(accessKey, secretKey, audience string) (string, error) {
+func authenticateNode(accessKey, secretKey string) (string, error) {
 	claims := xjwt.NewStandardClaims()
 	claims.SetExpiry(UTCNow().Add(defaultInterNodeJWTExpiry))
 	claims.SetAccessKey(accessKey)
-	claims.SetAudience(audience)
 
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, claims)
 	return jwt.SignedString([]byte(secretKey))
@@ -141,27 +132,9 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 	return claims, groups, owner, nil
 }
 
-// newCachedAuthToken returns a token that is cached up to 15 seconds.
-// If globalActiveCred is updated it is reflected at once.
-func newCachedAuthToken() func(audience string) string {
-	fn := func(accessKey, secretKey, audience string) (s string, err error) {
-		k := cacheKey{accessKey: accessKey, secretKey: secretKey, audience: audience}
-
-		var ok bool
-		s, ok = cacheLRU.Get(k)
-		if !ok {
-			s, err = authenticateNode(accessKey, secretKey, audience)
-			if err != nil {
-				return "", err
-			}
-			cacheLRU.Add(k, s)
-		}
-		return s, nil
-	}
-	return func(audience string) string {
-		cred := globalActiveCred
-		token, err := fn(cred.AccessKey, cred.SecretKey, audience)
-		logger.CriticalIf(GlobalContext, err)
-		return token
+// newCachedAuthToken returns the cached token.
+func newCachedAuthToken() func() string {
+	return func() string {
+		return globalNodeAuthToken
 	}
 }
