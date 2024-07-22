@@ -241,7 +241,7 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 
-		// Don't load LDAP users if not configured and force is not specified.
+		// Don't load LDAP users if not enabled and force is not specified.
 		if !force && ies.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
 			return nil
 		}

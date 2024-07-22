@@ -268,7 +268,7 @@ func (iamOS *IAMObjectStore) loadUserHelper(ctx context.Context, user string, us
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 
-		// Don't load LDAP users if not configured and force is not specified.
+		// Don't load LDAP users if not enabled and force is not specified.
 		if !force && iamOS.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
 			return nil
 		}
