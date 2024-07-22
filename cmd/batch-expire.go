@@ -163,7 +163,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, obj.Name) {
 		return false
 	}
-	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= time.Duration(ef.OlderThan) {
+	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan.D() {
 		return false
 	}
 
