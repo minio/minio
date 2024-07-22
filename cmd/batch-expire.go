@@ -117,7 +117,7 @@ func (p BatchJobExpirePurge) Validate() error {
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
 	line, col     int
-	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
+	OlderThan     xtime.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
@@ -132,33 +132,13 @@ var _ yaml.Unmarshaler = &BatchJobExpireFilter{}
 // UnmarshalYAML - BatchJobExpireFilter extends unmarshal to extract line, col
 // information
 func (ef *BatchJobExpireFilter) UnmarshalYAML(value *yaml.Node) error {
-	tmp := struct {
-		line, col     int
-		OlderThan     xtime.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
-		CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
-		Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
-		Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
-		Size          BatchJobSizeFilter  `yaml:"size" json:"size"`
-		Type          string              `yaml:"type" json:"type"`
-		Name          string              `yaml:"name" json:"name"`
-		Purge         BatchJobExpirePurge `yaml:"purge" json:"purge"`
-	}{}
+	type expFilter BatchJobExpireFilter
+	var tmp expFilter
 	err := value.Decode(&tmp)
 	if err != nil {
 		return err
 	}
-	*ef = BatchJobExpireFilter{
-		line:          tmp.line,
-		col:           tmp.col,
-		OlderThan:     time.Duration(tmp.OlderThan),
-		CreatedBefore: tmp.CreatedBefore,
-		Tags:          tmp.Tags,
-		Metadata:      tmp.Metadata,
-		Size:          tmp.Size,
-		Type:          tmp.Type,
-		Name:          tmp.Name,
-		Purge:         tmp.Purge,
-	}
+	*ef = BatchJobExpireFilter(tmp)
 	ef.line, ef.col = value.Line, value.Column
 	return err
 }
@@ -183,7 +163,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, obj.Name) {
 		return false
 	}
-	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan {
+	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= time.Duration(ef.OlderThan) {
 		return false
 	}
 

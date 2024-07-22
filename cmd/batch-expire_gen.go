@@ -306,7 +306,7 @@ func (z *BatchJobExpireFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "OlderThan":
-			z.OlderThan, err = dc.ReadDuration()
+			err = z.OlderThan.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "OlderThan")
 				return
@@ -433,7 +433,7 @@ func (z *BatchJobExpireFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteDuration(z.OlderThan)
+	err = z.OlderThan.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "OlderThan")
 		return
@@ -544,7 +544,11 @@ func (z *BatchJobExpireFilter) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 8
 	// string "OlderThan"
 	o = append(o, 0x88, 0xa9, 0x4f, 0x6c, 0x64, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendDuration(o, z.OlderThan)
+	o, err = z.OlderThan.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "OlderThan")
+		return
+	}
 	// string "CreatedBefore"
 	o = append(o, 0xad, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x42, 0x65, 0x66, 0x6f, 0x72, 0x65)
 	if z.CreatedBefore == nil {
@@ -613,7 +617,7 @@ func (z *BatchJobExpireFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "OlderThan":
-			z.OlderThan, bts, err = msgp.ReadDurationBytes(bts)
+			bts, err = z.OlderThan.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "OlderThan")
 				return
@@ -734,7 +738,7 @@ func (z *BatchJobExpireFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobExpireFilter) Msgsize() (s int) {
-	s = 1 + 10 + msgp.DurationSize + 14
+	s = 1 + 10 + z.OlderThan.Msgsize() + 14
 	if z.CreatedBefore == nil {
 		s += msgp.NilSize
 	} else {
