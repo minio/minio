@@ -95,6 +95,6 @@ replicate:
 	var job BatchJobRequest
 	err := yaml.Unmarshal([]byte(replicateYaml), &job)
 	if err != nil {
-		t.Fatal("Failed to parse batch-job-expire yaml", err)
+		t.Fatal("Failed to parse batch-job-replicate yaml", err)
 	}
 }
