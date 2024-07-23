@@ -520,7 +520,7 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 	return nil
 }
 
-func (cache *iamCache) deleteMatchingUsers(store *IAMStoreSys, ctx context.Context, predicate func(UserIdentity) bool) {
+func (cache *iamCache) deleteMatchingUsers(ctx context.Context, store *IAMStoreSys, predicate func(UserIdentity) bool) {
 	deleted := false
 	for user, ui := range cache.iamUsersMap {
 		userType := regUser
@@ -1969,11 +1969,11 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	predicate := func(ui UserIdentity) bool {
 		return usersToDelete.Contains(ui.Credentials.AccessKey) || usersToDelete.Contains(ui.Credentials.ParentUser)
 	}
-	cache.deleteMatchingUsers(store, ctx, predicate)
+	cache.deleteMatchingUsers(ctx, store, predicate)
 	return nil
 }
 
-// DeleteMatchingUsers - reloads specified user types then deletes users that match the given predicate.
+// DeleteMatchingUsersWithRefresh - reloads specified user types then deletes users that match the given predicate.
 func (store *IAMStoreSys) DeleteMatchingUsersWithRefresh(ctx context.Context, refresh []IAMUserType, force bool, predicate func(UserIdentity) bool) error {
 	cache := store.lock()
 	defer store.unlock()
@@ -1990,7 +1990,7 @@ func (store *IAMStoreSys) DeleteMatchingUsersWithRefresh(ctx context.Context, re
 		}
 	}
 
-	cache.deleteMatchingUsers(store, ctx, predicate)
+	cache.deleteMatchingUsers(ctx, store, predicate)
 	return nil
 }
 
