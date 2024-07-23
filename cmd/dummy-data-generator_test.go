@@ -61,10 +61,9 @@ func NewDummyDataGen(totalLength, skipOffset int64) io.ReadSeeker {
 	}
 
 	skipOffset %= int64(len(alphabets))
-	as := make([]byte, 2*len(alphabets))
-	copy(as, alphabets)
-	copy(as[len(alphabets):], alphabets)
-	b := as[skipOffset : skipOffset+int64(len(alphabets))]
+	const multiply = 100
+	as := bytes.Repeat(alphabets, multiply)
+	b := as[skipOffset : skipOffset+int64(len(alphabets)*(multiply-1))]
 	return &DummyDataGen{
 		length: totalLength,
 		b:      b,

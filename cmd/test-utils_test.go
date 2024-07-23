@@ -83,6 +83,8 @@ func TestMain(m *testing.M) {
 		SecretKey: auth.DefaultSecretKey,
 	}
 
+	globalNodeAuthToken, _ = authenticateNode(auth.DefaultAccessKey, auth.DefaultSecretKey)
+
 	// disable ENVs which interfere with tests.
 	for _, env := range []string{
 		crypto.EnvKMSAutoEncryption,
@@ -100,7 +102,7 @@ func TestMain(m *testing.M) {
 	// Disable printing console messages during tests.
 	color.Output = io.Discard
 	// Disable Error logging in testing.
-	logger.DisableErrorLog = true
+	logger.DisableLog = true
 
 	// Uncomment the following line to see trace logs during unit tests.
 	// logger.AddTarget(console.New())

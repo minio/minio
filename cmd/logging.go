@@ -184,10 +184,6 @@ func etcdLogOnceIf(ctx context.Context, err error, id string, errKind ...interfa
 	logger.LogOnceIf(ctx, "etcd", err, id, errKind...)
 }
 
-func subnetLogIf(ctx context.Context, err error, errKind ...interface{}) {
-	logger.LogIf(ctx, "subnet", err, errKind...)
-}
-
 func metricsLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "metrics", err, errKind...)
 }

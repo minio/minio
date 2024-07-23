@@ -134,7 +134,7 @@ func TestPoolMetaValidate(t *testing.T) {
 			meta:           nmeta1,
 			pools:          pools,
 			name:           "Invalid-Completed-Pool-Not-Removed",
-			expectedErr:    true,
+			expectedErr:    false,
 			expectedUpdate: false,
 		},
 		{

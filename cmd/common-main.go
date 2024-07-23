@@ -685,16 +685,6 @@ func loadEnvVarsFromFiles() {
 		}
 	}
 
-	if env.IsSet(kms.EnvKMSSecretKeyFile) {
-		kmsSecret, err := readFromSecret(env.Get(kms.EnvKMSSecretKeyFile, ""))
-		if err != nil {
-			logger.Fatal(err, "Unable to read the KMS secret key inherited from secret file")
-		}
-		if kmsSecret != "" {
-			os.Setenv(kms.EnvKMSSecretKey, kmsSecret)
-		}
-	}
-
 	if env.IsSet(config.EnvConfigEnvFile) {
 		ekvs, err := minioEnvironFromFile(env.Get(config.EnvConfigEnvFile, ""))
 		if err != nil && !os.IsNotExist(err) {
@@ -834,7 +824,7 @@ func serverHandleEnvVars() {
 		}
 	}
 
-	globalDisableFreezeOnBoot = env.Get("_MINIO_DISABLE_API_FREEZE_ON_BOOT", "") == "true" || serverDebugLog
+	globalEnableSyncBoot = env.Get("MINIO_SYNC_BOOT", config.EnableOff) == config.EnableOn
 }
 
 func loadRootCredentials() {
@@ -843,6 +833,7 @@ func loadRootCredentials() {
 	// Check both cases and authenticate them if correctly defined
 	var user, password string
 	var hasCredentials bool
+	var legacyCredentials bool
 	//nolint:gocritic
 	if env.IsSet(config.EnvRootUser) && env.IsSet(config.EnvRootPassword) {
 		user = env.Get(config.EnvRootUser, "")
@@ -851,6 +842,7 @@ func loadRootCredentials() {
 	} else if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 		user = env.Get(config.EnvAccessKey, "")
 		password = env.Get(config.EnvSecretKey, "")
+		legacyCredentials = true
 		hasCredentials = true
 	} else if globalServerCtxt.RootUser != "" && globalServerCtxt.RootPwd != "" {
 		user, password = globalServerCtxt.RootUser, globalServerCtxt.RootPwd
@@ -859,8 +851,13 @@ func loadRootCredentials() {
 	if hasCredentials {
 		cred, err := auth.CreateCredentials(user, password)
 		if err != nil {
-			logger.Fatal(config.ErrInvalidCredentials(err),
-				"Unable to validate credentials inherited from the shell environment")
+			if legacyCredentials {
+				logger.Fatal(config.ErrInvalidCredentials(err),
+					"Unable to validate credentials inherited from the shell environment")
+			} else {
+				logger.Fatal(config.ErrInvalidRootUserCredentials(err),
+					"Unable to validate credentials inherited from the shell environment")
+			}
 		}
 		if env.IsSet(config.EnvAccessKey) && env.IsSet(config.EnvSecretKey) {
 			msg := fmt.Sprintf("WARNING: %s and %s are deprecated.\n"+
@@ -873,6 +870,12 @@ func loadRootCredentials() {
 		globalCredViaEnv = true
 	} else {
 		globalActiveCred = auth.DefaultCredentials
+	}
+
+	var err error
+	globalNodeAuthToken, err = authenticateNode(globalActiveCred.AccessKey, globalActiveCred.SecretKey)
+	if err != nil {
+		logger.Fatal(err, "Unable to generate internode credentials")
 	}
 }
 

@@ -52,11 +52,13 @@ func TestDisconnect(t *testing.T) {
 	localHost := hosts[0]
 	remoteHost := hosts[1]
 	local, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:       dialer.DialContext,
+		Dialer: ConnectWS(dialer.DialContext,
+			dummyNewToken,
+			nil),
 		Local:        localHost,
 		Hosts:        hosts,
-		AddAuth:      func(aud string) string { return aud },
-		AuthRequest:  dummyRequestValidate,
+		AuthFn:       dummyNewToken,
+		AuthToken:    dummyTokenValidate,
 		BlockConnect: connReady,
 	})
 	errFatal(err)
@@ -74,17 +76,19 @@ func TestDisconnect(t *testing.T) {
 	}))
 
 	remote, err := NewManager(context.Background(), ManagerOptions{
-		Dialer:       dialer.DialContext,
+		Dialer: ConnectWS(dialer.DialContext,
+			dummyNewToken,
+			nil),
 		Local:        remoteHost,
 		Hosts:        hosts,
-		AddAuth:      func(aud string) string { return aud },
-		AuthRequest:  dummyRequestValidate,
+		AuthFn:       dummyNewToken,
+		AuthToken:    dummyTokenValidate,
 		BlockConnect: connReady,
 	})
 	errFatal(err)
 
-	localServer := startServer(t, listeners[0], wrapServer(local.Handler()))
-	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler()))
+	localServer := startServer(t, listeners[0], wrapServer(local.Handler(dummyRequestValidate)))
+	remoteServer := startServer(t, listeners[1], wrapServer(remote.Handler(dummyRequestValidate)))
 	close(connReady)
 
 	defer func() {
@@ -163,10 +167,6 @@ func TestDisconnect(t *testing.T) {
 	<-gotResp
 	// Killing should cancel the context on the request.
 	<-gotCall
-}
-
-func dummyRequestValidate(r *http.Request) error {
-	return nil
 }
 
 func TestShouldConnect(t *testing.T) {

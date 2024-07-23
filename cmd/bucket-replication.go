@@ -1803,15 +1803,18 @@ var (
 type ReplicationPool struct {
 	// atomic ops:
 	activeWorkers    int32
+	activeLrgWorkers int32
 	activeMRFWorkers int32
 
-	objLayer   ObjectLayer
-	ctx        context.Context
-	priority   string
-	maxWorkers int
-	mu         sync.RWMutex
-	mrfMU      sync.Mutex
-	resyncer   *replicationResyncer
+	objLayer    ObjectLayer
+	ctx         context.Context
+	priority    string
+	maxWorkers  int
+	maxLWorkers int
+
+	mu       sync.RWMutex
+	mrfMU    sync.Mutex
+	resyncer *replicationResyncer
 
 	// workers:
 	workers    []chan ReplicationWorkerOperation
@@ -1882,9 +1885,13 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 	if maxWorkers > 0 && failedWorkers > maxWorkers {
 		failedWorkers = maxWorkers
 	}
+	maxLWorkers := LargeWorkerCount
+	if opts.MaxLWorkers > 0 {
+		maxLWorkers = opts.MaxLWorkers
+	}
 	pool := &ReplicationPool{
 		workers:         make([]chan ReplicationWorkerOperation, 0, workers),
-		lrgworkers:      make([]chan ReplicationWorkerOperation, 0, LargeWorkerCount),
+		lrgworkers:      make([]chan ReplicationWorkerOperation, 0, maxLWorkers),
 		mrfReplicaCh:    make(chan ReplicationWorkerOperation, 100000),
 		mrfWorkerKillCh: make(chan struct{}, failedWorkers),
 		resyncer:        newresyncer(),
@@ -1894,9 +1901,10 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		objLayer:        o,
 		priority:        priority,
 		maxWorkers:      maxWorkers,
+		maxLWorkers:     maxLWorkers,
 	}
 
-	pool.AddLargeWorkers()
+	pool.ResizeLrgWorkers(maxLWorkers, 0)
 	pool.ResizeWorkers(workers, 0)
 	pool.ResizeFailedWorkers(failedWorkers)
 	go pool.resyncer.PersistToDisk(ctx, o)
@@ -1975,23 +1983,8 @@ func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opT
 	}
 }
 
-// AddLargeWorkers adds a static number of workers to handle large uploads
-func (p *ReplicationPool) AddLargeWorkers() {
-	for i := 0; i < LargeWorkerCount; i++ {
-		p.lrgworkers = append(p.lrgworkers, make(chan ReplicationWorkerOperation, 100000))
-		i := i
-		go p.AddLargeWorker(p.lrgworkers[i])
-	}
-	go func() {
-		<-p.ctx.Done()
-		for i := 0; i < LargeWorkerCount; i++ {
-			xioutil.SafeClose(p.lrgworkers[i])
-		}
-	}()
-}
-
 // AddLargeWorker adds a replication worker to the static pool for large uploads.
-func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation) {
+func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation, opTracker *int32) {
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -2002,15 +1995,51 @@ func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation
 			}
 			switch v := oi.(type) {
 			case ReplicateObjectInfo:
+				if opTracker != nil {
+					atomic.AddInt32(opTracker, 1)
+				}
 				globalReplicationStats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 				replicateObject(p.ctx, v, p.objLayer)
 				globalReplicationStats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				if opTracker != nil {
+					atomic.AddInt32(opTracker, -1)
+				}
 			case DeletedObjectReplicationInfo:
+				if opTracker != nil {
+					atomic.AddInt32(opTracker, 1)
+				}
 				replicateDelete(p.ctx, v, p.objLayer)
+				if opTracker != nil {
+					atomic.AddInt32(opTracker, -1)
+				}
 			default:
 				bugLogIf(p.ctx, fmt.Errorf("unknown replication type: %T", oi), "unknown-replicate-type")
 			}
 		}
+	}
+}
+
+// ResizeLrgWorkers sets replication workers pool for large transfers(>=128MiB) to new size.
+// checkOld can be set to an expected value.
+// If the worker count changed
+func (p *ReplicationPool) ResizeLrgWorkers(n, checkOld int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if (checkOld > 0 && len(p.lrgworkers) != checkOld) || n == len(p.lrgworkers) || n < 1 {
+		// Either already satisfied or worker count changed while we waited for the lock.
+		return
+	}
+	for len(p.lrgworkers) < n {
+		input := make(chan ReplicationWorkerOperation, 100000)
+		p.lrgworkers = append(p.lrgworkers, input)
+
+		go p.AddLargeWorker(input, &p.activeLrgWorkers)
+	}
+	for len(p.lrgworkers) > n {
+		worker := p.lrgworkers[len(p.lrgworkers)-1]
+		p.lrgworkers = p.lrgworkers[:len(p.lrgworkers)-1]
+		xioutil.SafeClose(worker)
 	}
 }
 
@@ -2022,6 +2051,11 @@ func (p *ReplicationPool) ActiveWorkers() int {
 // ActiveMRFWorkers returns the number of active workers handling replication failures.
 func (p *ReplicationPool) ActiveMRFWorkers() int {
 	return int(atomic.LoadInt32(&p.activeMRFWorkers))
+}
+
+// ActiveLrgWorkers returns the number of active workers handling traffic > 128MiB object size.
+func (p *ReplicationPool) ActiveLrgWorkers() int {
+	return int(atomic.LoadInt32(&p.activeLrgWorkers))
 }
 
 // ResizeWorkers sets replication workers pool to new size.
@@ -2049,7 +2083,7 @@ func (p *ReplicationPool) ResizeWorkers(n, checkOld int) {
 }
 
 // ResizeWorkerPriority sets replication failed workers pool size
-func (p *ReplicationPool) ResizeWorkerPriority(pri string, maxWorkers int) {
+func (p *ReplicationPool) ResizeWorkerPriority(pri string, maxWorkers, maxLWorkers int) {
 	var workers, mrfWorkers int
 	p.mu.Lock()
 	switch pri {
@@ -2076,11 +2110,15 @@ func (p *ReplicationPool) ResizeWorkerPriority(pri string, maxWorkers int) {
 	if maxWorkers > 0 && mrfWorkers > maxWorkers {
 		mrfWorkers = maxWorkers
 	}
+	if maxLWorkers <= 0 {
+		maxLWorkers = LargeWorkerCount
+	}
 	p.priority = pri
 	p.maxWorkers = maxWorkers
 	p.mu.Unlock()
 	p.ResizeWorkers(workers, 0)
 	p.ResizeFailedWorkers(mrfWorkers)
+	p.ResizeLrgWorkers(maxLWorkers, 0)
 }
 
 // ResizeFailedWorkers sets replication failed workers pool size
@@ -2127,6 +2165,15 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		case p.lrgworkers[h%LargeWorkerCount] <- ri:
 		default:
 			globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+			p.mu.RLock()
+			maxLWorkers := p.maxLWorkers
+			existing := len(p.lrgworkers)
+			p.mu.RUnlock()
+			maxLWorkers = min(maxLWorkers, LargeWorkerCount)
+			if p.ActiveLrgWorkers() < maxLWorkers {
+				workers := min(existing+1, maxLWorkers)
+				p.ResizeLrgWorkers(workers, existing)
+			}
 		}
 		return
 	}
@@ -2229,8 +2276,9 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 }
 
 type replicationPoolOpts struct {
-	Priority   string
-	MaxWorkers int
+	Priority    string
+	MaxWorkers  int
+	MaxLWorkers int
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {

@@ -1526,14 +1526,12 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 			loi.NextMarker = last.Name
 		}
 
-		if merged.lastSkippedEntry != "" {
-			if merged.lastSkippedEntry > loi.NextMarker {
-				// An object hidden by ILM was found during listing. Since the number of entries
-				// fetched from drives is limited, set IsTruncated to true to ask the s3 client
-				// to continue listing if it wishes in order to find if there is more objects.
-				loi.IsTruncated = true
-				loi.NextMarker = merged.lastSkippedEntry
-			}
+		if loi.IsTruncated && merged.lastSkippedEntry > loi.NextMarker {
+			// An object hidden by ILM was found during a truncated listing. Since the number of entries
+			// fetched from drives is limited by max-keys, we should use the last ILM filtered entry
+			// as a continuation token if it is lexially higher than the last visible object so that the
+			// next call of WalkDir() with the max-keys can reach new objects not seen previously.
+			loi.NextMarker = merged.lastSkippedEntry
 		}
 
 		if loi.NextMarker != "" {
@@ -2343,12 +2341,18 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 
 	var poolErrs [][]error
 	for idx, erasureSet := range z.serverPools {
+		if opts.Pool != nil && *opts.Pool != idx {
+			continue
+		}
 		if z.IsSuspended(idx) {
 			continue
 		}
 		errs := make([]error, len(erasureSet.sets))
 		var wg sync.WaitGroup
 		for idx, set := range erasureSet.sets {
+			if opts.Set != nil && *opts.Set != idx {
+				continue
+			}
 			wg.Add(1)
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
@@ -2441,6 +2445,7 @@ const (
 type HealthOptions struct {
 	Maintenance    bool
 	DeploymentType string
+	NoLogging      bool
 }
 
 // HealthResult returns the current state of the system, also
@@ -2477,7 +2482,7 @@ func (hr HealthResult) String() string {
 		if i == 0 {
 			str.WriteString(")")
 		} else {
-			str.WriteString("), ")
+			str.WriteString(") | ")
 		}
 	}
 	return str.String()
@@ -2600,7 +2605,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			})
 
 			healthy := erasureSetUpCount[poolIdx][setIdx].online >= poolWriteQuorums[poolIdx]
-			if !healthy {
+			if !healthy && !opts.NoLogging {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Write quorum could not be established on pool: %d, set: %d, expected write quorum: %d, drives-online: %d",
 						poolIdx, setIdx, poolWriteQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online), logger.FatalKind)
@@ -2608,7 +2613,7 @@ func (z *erasureServerPools) Health(ctx context.Context, opts HealthOptions) Hea
 			result.Healthy = result.Healthy && healthy
 
 			healthyRead := erasureSetUpCount[poolIdx][setIdx].online >= poolReadQuorums[poolIdx]
-			if !healthyRead {
+			if !healthyRead && !opts.NoLogging {
 				storageLogIf(logger.SetReqInfo(ctx, reqInfo),
 					fmt.Errorf("Read quorum could not be established on pool: %d, set: %d, expected read quorum: %d, drives-online: %d",
 						poolIdx, setIdx, poolReadQuorums[poolIdx], erasureSetUpCount[poolIdx][setIdx].online))

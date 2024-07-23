@@ -42,12 +42,14 @@ const (
 var (
 	DefaultKVS = config.KVS{
 		config.KV{
-			Key:   URL,
-			Value: "",
+			Key:           URL,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 		config.KV{
-			Key:   AuthToken,
-			Value: "",
+			Key:           AuthToken,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 	}
 )

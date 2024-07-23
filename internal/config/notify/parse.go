@@ -861,20 +861,24 @@ var (
 			Value: config.EnableOff,
 		},
 		config.KV{
-			Key:   target.NATSStreaming,
-			Value: config.EnableOff,
+			Key:           target.NATSStreaming,
+			Value:         config.EnableOff,
+			HiddenIfEmpty: true,
 		},
 		config.KV{
-			Key:   target.NATSStreamingAsync,
-			Value: config.EnableOff,
+			Key:           target.NATSStreamingAsync,
+			Value:         config.EnableOff,
+			HiddenIfEmpty: true,
 		},
 		config.KV{
-			Key:   target.NATSStreamingMaxPubAcksInFlight,
-			Value: "0",
+			Key:           target.NATSStreamingMaxPubAcksInFlight,
+			Value:         "0",
+			HiddenIfEmpty: true,
 		},
 		config.KV{
-			Key:   target.NATSStreamingClusterID,
-			Value: "",
+			Key:           target.NATSStreamingClusterID,
+			Value:         "",
+			HiddenIfEmpty: true,
 		},
 		config.KV{
 			Key:   target.NATSQueueDir,

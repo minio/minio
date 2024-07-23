@@ -35,8 +35,8 @@ type collectorPath string
 // converted to snake-case (by replaced '/' and '-' with '_') and prefixed with
 // `minio_`.
 func (cp collectorPath) metricPrefix() string {
-	s := strings.TrimPrefix(string(cp), "/")
-	s = strings.ReplaceAll(s, "/", "_")
+	s := strings.TrimPrefix(string(cp), SlashSeparator)
+	s = strings.ReplaceAll(s, SlashSeparator, "_")
 	s = strings.ReplaceAll(s, "-", "_")
 	return "minio_" + s
 }
@@ -56,8 +56,8 @@ func (cp collectorPath) isDescendantOf(arg string) bool {
 	if len(arg) >= len(descendant) {
 		return false
 	}
-	if !strings.HasSuffix(arg, "/") {
-		arg += "/"
+	if !strings.HasSuffix(arg, SlashSeparator) {
+		arg += SlashSeparator
 	}
 	return strings.HasPrefix(descendant, arg)
 }
@@ -72,9 +72,10 @@ const (
 	GaugeMT
 	// HistogramMT - represents a histogram metric.
 	HistogramMT
-	// rangeL - represents a range label.
-	rangeL = "range"
 )
+
+// rangeL - represents a range label.
+const rangeL = "range"
 
 func (mt MetricType) String() string {
 	switch mt {

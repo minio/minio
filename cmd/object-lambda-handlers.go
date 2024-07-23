@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"crypto/subtle"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"net/url"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/minio/minio/internal/auth"
 	levent "github.com/minio/minio/internal/config/lambda/event"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 )
@@ -77,16 +79,13 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 		return levent.Event{}, err
 	}
 
-	token, err := authenticateNode(cred.AccessKey, cred.SecretKey, u.RawQuery)
-	if err != nil {
-		return levent.Event{}, err
-	}
+	ckSum := sha256.Sum256([]byte(cred.AccessKey + u.RawQuery))
 
 	eventData := levent.Event{
 		GetObjectContext: &levent.GetObjectContext{
 			InputS3URL:  u.String(),
 			OutputRoute: shortuuid.New(),
-			OutputToken: token,
+			OutputToken: hex.EncodeToString(ckSum[:]),
 		},
 		UserRequest: levent.UserRequest{
 			URL:     r.URL.String(),
@@ -199,7 +198,7 @@ func fwdStatusToAPIError(resp *http.Response) *APIError {
 	return nil
 }
 
-// GetObjectLamdbaHandler - GET Object with transformed data via lambda functions
+// GetObjectLambdaHandler - GET Object with transformed data via lambda functions
 // ----------
 // This implementation of the GET operation applies lambda functions and returns the
 // response generated via the lambda functions. To use this API, you must have READ access

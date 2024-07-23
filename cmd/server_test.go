@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio-go/v7/pkg/set"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/v3/policy"
@@ -122,6 +123,9 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.TestObjectMultipartListError(c)
 	suite.TestObjectValidMD5(c)
 	suite.TestObjectMultipart(c)
+	suite.TestMetricsV3Handler(c)
+	suite.TestBucketSQSNotificationWebHook(c)
+	suite.TestBucketSQSNotificationAMQP(c)
 	suite.TearDownSuite(c)
 }
 
@@ -187,6 +191,36 @@ func (s *TestSuiteCommon) RestartTestServer(c *check) {
 
 func (s *TestSuiteCommon) TearDownSuite(c *check) {
 	s.testServer.Stop()
+}
+
+const (
+	defaultPrometheusJWTExpiry = 100 * 365 * 24 * time.Hour
+)
+
+func (s *TestSuiteCommon) TestMetricsV3Handler(c *check) {
+	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: time.Now().UTC().Add(defaultPrometheusJWTExpiry).Unix(),
+		Subject:   s.accessKey,
+		Issuer:    "prometheus",
+	})
+
+	token, err := jwt.SignedString([]byte(s.secretKey))
+	c.Assert(err, nil)
+
+	for _, cpath := range globalMetricsV3CollectorPaths {
+		request, err := newTestSignedRequest(http.MethodGet, s.endPoint+minioReservedBucketPath+metricsV3Path+string(cpath),
+			0, nil, s.accessKey, s.secretKey, s.signer)
+		c.Assert(err, nil)
+
+		request.Header.Set("Authorization", "Bearer "+token)
+
+		// execute the request.
+		response, err := s.client.Do(request)
+		c.Assert(err, nil)
+
+		// assert the http response status code.
+		c.Assert(response.StatusCode, http.StatusOK)
+	}
 }
 
 func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *check) {

@@ -805,6 +805,17 @@ func (m *metaCacheRPC) setErr(err string) {
 	*m.meta = meta
 }
 
+// getErr will return an error if the listing failed.
+// The error is not type safe.
+func (m *metaCacheRPC) getErr() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.meta.status == scanStateError {
+		return errors.New(m.meta.error)
+	}
+	return nil
+}
+
 func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCacheRPC, entries <-chan metaCacheEntry) (err error) {
 	o := mc.o
 	o.debugf(color.Green("saveMetaCacheStream:")+" with options: %#v", o)

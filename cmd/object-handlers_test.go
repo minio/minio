@@ -692,8 +692,8 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		{"small-1", []int64{509}, make(map[string]string)},
 		{"small-2", []int64{5 * oneMiB}, make(map[string]string)},
 		// // // cases 4-7: multipart part objects
-		{"mp-0", []int64{5 * oneMiB, 1}, make(map[string]string)},
-		{"mp-1", []int64{5*oneMiB + 1, 1}, make(map[string]string)},
+		{"mp-0", []int64{5 * oneMiB, 10}, make(map[string]string)},
+		{"mp-1", []int64{5*oneMiB + 1, 10}, make(map[string]string)},
 		{"mp-2", []int64{5487701, 5487799, 3}, make(map[string]string)},
 		{"mp-3", []int64{10499807, 10499963, 7}, make(map[string]string)},
 		// cases 8-11: small single part objects with encryption
@@ -702,17 +702,13 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		{"enc-small-1", []int64{509}, mapCopy(metaWithSSEC)},
 		{"enc-small-2", []int64{5 * oneMiB}, mapCopy(metaWithSSEC)},
 		// cases 12-15: multipart part objects with encryption
-		{"enc-mp-0", []int64{5 * oneMiB, 1}, mapCopy(metaWithSSEC)},
-		{"enc-mp-1", []int64{5*oneMiB + 1, 1}, mapCopy(metaWithSSEC)},
+		{"enc-mp-0", []int64{5 * oneMiB, 10}, mapCopy(metaWithSSEC)},
+		{"enc-mp-1", []int64{5*oneMiB + 1, 10}, mapCopy(metaWithSSEC)},
 		{"enc-mp-2", []int64{5487701, 5487799, 3}, mapCopy(metaWithSSEC)},
 		{"enc-mp-3", []int64{10499807, 10499963, 7}, mapCopy(metaWithSSEC)},
 	}
-	// SSEC can't be used with compression
-	globalCompressConfigMu.Lock()
-	globalCompressEnabled := globalCompressConfig.Enabled
-	globalCompressConfigMu.Unlock()
-	if globalCompressEnabled {
-		objectInputs = objectInputs[0:8]
+	if testing.Short() {
+		objectInputs = append(objectInputs[0:5], objectInputs[8:11]...)
 	}
 	// iterate through the above set of inputs and upload the object.
 	for _, input := range objectInputs {
@@ -768,6 +764,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 			readers = append(readers, NewDummyDataGen(p, cumulativeSum))
 			cumulativeSum += p
 		}
+
 		refReader := io.LimitReader(ioutilx.NewSkipReader(io.MultiReader(readers...), off), length)
 		if ok, msg := cmpReaders(refReader, rec.Body); !ok {
 			t.Fatalf("(%s) Object: %s Case %d ByteRange: %s --> data mismatch! (msg: %s)", instanceType, oi.objectName, i+1, byteRange, msg)

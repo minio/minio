@@ -315,6 +315,7 @@ func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
 	url.Path = t.TempDir()
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(url.Host)
+	globalNodeAuthToken, _ = authenticateNode(globalActiveCred.AccessKey, globalActiveCred.SecretKey)
 
 	endpoint, err := NewEndpoint(url.String())
 	if err != nil {

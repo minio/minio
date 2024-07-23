@@ -31,8 +31,6 @@ MINIO_IDENTITY_OPENID_CLAIM_USERINFO        (on|off)    Enable fetching claims f
 MINIO_IDENTITY_OPENID_KEYCLOAK_REALM        (string)    Specify Keycloak 'realm' name, only honored if vendor was set to 'keycloak' as value, if no realm is specified 'master' is default
 MINIO_IDENTITY_OPENID_KEYCLOAK_ADMIN_URL    (string)    Specify Keycloak 'admin' REST API endpoint e.g. http://localhost:8080/auth/admin/
 MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC  (on|off)    Enable 'Host' header based dynamic redirect URI (default: 'off')
-MINIO_IDENTITY_OPENID_CLAIM_PREFIX          (string)    [DEPRECATED use 'claim_name'] JWT claim namespace prefix e.g. "customer1/"
-MINIO_IDENTITY_OPENID_REDIRECT_URI          (string)    [DEPRECATED use env 'MINIO_BROWSER_REDIRECT_URL'] Configure custom redirect_uri for OpenID login flow callback
 MINIO_IDENTITY_OPENID_COMMENT               (sentence)  optionally add a comment to this setting
 ```
 

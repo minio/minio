@@ -572,6 +572,7 @@ func FilterObjectLockMetadata(metadata map[string]string, filterRetention, filte
 	dst := metadata
 	var copied bool
 	delKey := func(key string) {
+		key = strings.ToLower(key)
 		if _, ok := metadata[key]; !ok {
 			return
 		}

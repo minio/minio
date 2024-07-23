@@ -179,6 +179,54 @@ func (l *Config) GetValidatedDNUnderBaseDN(conn *ldap.Conn, dn string, baseDNLis
 	return searchRes, false, nil
 }
 
+// GetValidatedDNWithGroups - Gets validated DN from given DN or short username
+// and returns the DN and the groups the user is a member of.
+//
+// If username is required in group search but a DN is passed, no groups are
+// returned.
+func (l *Config) GetValidatedDNWithGroups(username string) (*xldap.DNSearchResult, []string, error) {
+	conn, err := l.LDAP.Connect()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer conn.Close()
+
+	// Bind to the lookup user account
+	if err = l.LDAP.LookupBind(conn); err != nil {
+		return nil, nil, err
+	}
+
+	var lookupRes *xldap.DNSearchResult
+	shortUsername := ""
+	// Check if the passed in username is a valid DN.
+	if !l.ParsesAsDN(username) {
+		// We consider it as a login username and attempt to check it exists in
+		// the directory.
+		lookupRes, err = l.LDAP.LookupUsername(conn, username)
+		if err != nil {
+			if strings.Contains(err.Error(), "User DN not found for") {
+				return nil, nil, nil
+			}
+			return nil, nil, fmt.Errorf("Unable to find user DN: %w", err)
+		}
+		shortUsername = username
+	} else {
+		// Since the username parses as a valid DN, check that it exists and is
+		// under a configured base DN in the LDAP directory.
+		var isUnderBaseDN bool
+		lookupRes, isUnderBaseDN, err = l.GetValidatedUserDN(conn, username)
+		if err == nil && !isUnderBaseDN {
+			return nil, nil, fmt.Errorf("Unable to find user DN: %w", err)
+		}
+	}
+
+	groups, err := l.LDAP.SearchForUserGroups(conn, shortUsername, lookupRes.ActualDN)
+	if err != nil {
+		return nil, nil, err
+	}
+	return lookupRes, groups, nil
+}
+
 // Bind - binds to ldap, searches LDAP and returns the distinguished name of the
 // user and the list of groups.
 func (l *Config) Bind(username, password string) (*xldap.DNSearchResult, []string, error) {
@@ -353,4 +401,22 @@ func (l *Config) LookupGroupMemberships(userDistNames []string, userDNToUsername
 	}
 
 	return res, nil
+}
+
+// QuickNormalizeDN - normalizes the given DN without checking if it is valid or
+// exists in the LDAP directory. Returns input if error
+func (l Config) QuickNormalizeDN(dn string) string {
+	if normDN, err := xldap.NormalizeDN(dn); err == nil {
+		return normDN
+	}
+	return dn
+}
+
+// DecodeDN - denormalizes the given DN by unescaping any escaped characters.
+// Returns input if error
+func (l Config) DecodeDN(dn string) string {
+	if decodedDN, err := xldap.DecodeDN(dn); err == nil {
+		return decodedDN
+	}
+	return dn
 }

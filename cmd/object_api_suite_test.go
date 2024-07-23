@@ -559,13 +559,9 @@ func execExtended(t *testing.T, fn func(t *testing.T, init func(), bucketOptions
 	t.Run("default", func(t *testing.T) {
 		fn(t, nil, MakeBucketOptions{})
 	})
-	t.Run("defaultVerioned", func(t *testing.T) {
+	t.Run("default+versioned", func(t *testing.T) {
 		fn(t, nil, MakeBucketOptions{VersioningEnabled: true})
 	})
-
-	if testing.Short() {
-		return
-	}
 
 	t.Run("compressed", func(t *testing.T) {
 		fn(t, func() {
@@ -573,7 +569,7 @@ func execExtended(t *testing.T, fn func(t *testing.T, init func(), bucketOptions
 			enableCompression(t, false, []string{"*"}, []string{"*"})
 		}, MakeBucketOptions{})
 	})
-	t.Run("compressedVerioned", func(t *testing.T) {
+	t.Run("compressed+versioned", func(t *testing.T) {
 		fn(t, func() {
 			resetCompressEncryption()
 			enableCompression(t, false, []string{"*"}, []string{"*"})
@@ -588,7 +584,7 @@ func execExtended(t *testing.T, fn func(t *testing.T, init func(), bucketOptions
 			enableEncryption(t)
 		}, MakeBucketOptions{})
 	})
-	t.Run("encryptedVerioned", func(t *testing.T) {
+	t.Run("encrypted+versioned", func(t *testing.T) {
 		fn(t, func() {
 			resetCompressEncryption()
 			enableEncryption(t)
@@ -603,7 +599,7 @@ func execExtended(t *testing.T, fn func(t *testing.T, init func(), bucketOptions
 			enableCompression(t, true, []string{"*"}, []string{"*"})
 		}, MakeBucketOptions{})
 	})
-	t.Run("compressed+encryptedVerioned", func(t *testing.T) {
+	t.Run("compressed+encrypted+versioned", func(t *testing.T) {
 		fn(t, func() {
 			resetCompressEncryption()
 			enableCompression(t, true, []string{"*"}, []string{"*"})

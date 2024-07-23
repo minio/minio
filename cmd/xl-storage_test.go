@@ -196,7 +196,7 @@ func TestXLStorageGetDiskInfo(t *testing.T) {
 
 	// Check test cases.
 	for _, testCase := range testCases {
-		if _, err := getDiskInfo(testCase.diskPath); err != testCase.expectedErr {
+		if _, _, err := getDiskInfo(testCase.diskPath); err != testCase.expectedErr {
 			t.Fatalf("expected: %s, got: %s", testCase.expectedErr, err)
 		}
 	}

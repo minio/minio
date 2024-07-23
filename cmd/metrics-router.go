@@ -38,7 +38,8 @@ const (
 
 // Standard env prometheus auth type
 const (
-	EnvPrometheusAuthType = "MINIO_PROMETHEUS_AUTH_TYPE"
+	EnvPrometheusAuthType    = "MINIO_PROMETHEUS_AUTH_TYPE"
+	EnvPrometheusOpenMetrics = "MINIO_PROMETHEUS_OPEN_METRICS"
 )
 
 type prometheusAuthType string
@@ -58,14 +59,15 @@ func registerMetricsRouter(router *mux.Router) {
 	if authType == prometheusPublic {
 		auth = NoAuthMiddleware
 	}
+
 	metricsRouter.Handle(prometheusMetricsPathLegacy, auth(metricsHandler()))
 	metricsRouter.Handle(prometheusMetricsV2ClusterPath, auth(metricsServerHandler()))
 	metricsRouter.Handle(prometheusMetricsV2BucketPath, auth(metricsBucketHandler()))
 	metricsRouter.Handle(prometheusMetricsV2NodePath, auth(metricsNodeHandler()))
 	metricsRouter.Handle(prometheusMetricsV2ResourcePath, auth(metricsResourceHandler()))
 
-	// Metrics v3!
-	metricsV3Server := newMetricsV3Server(authType)
+	// Metrics v3
+	metricsV3Server := newMetricsV3Server(auth)
 
 	// Register metrics v3 handler. It also accepts an optional query
 	// parameter `?list` - see handler for details.

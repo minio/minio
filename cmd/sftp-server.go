@@ -161,11 +161,13 @@ internalAuth:
 		return nil, errNoSuchUser
 	}
 
-	if caPublicKey != nil {
+	if caPublicKey != nil && pass == nil {
+
 		err := validateKey(c, key)
 		if err != nil {
 			return nil, errAuthentication
 		}
+
 	} else {
 
 		// Temporary credentials are not allowed.

@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -27,23 +27,23 @@ var (
 	// HelpSubnet - provides help for subnet api key config
 	HelpSubnet = config.HelpKVS{
 		config.HelpKV{
-			Key:         config.License, // Deprecated Dec 2021
+			Key:         config.License,
 			Type:        "string",
-			Description: "[DEPRECATED use api_key] Subnet license token for the cluster" + defaultHelpPostfix(config.License),
+			Description: "Enterprise license for the cluster" + defaultHelpPostfix(config.License),
 			Optional:    true,
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.APIKey,
 			Type:        "string",
-			Description: "Subnet api key for the cluster" + defaultHelpPostfix(config.APIKey),
+			Description: "Enterprise license API key for the cluster" + defaultHelpPostfix(config.APIKey),
 			Optional:    true,
 			Sensitive:   true,
 		},
 		config.HelpKV{
 			Key:         config.Proxy,
 			Type:        "string",
-			Description: "HTTP(S) proxy URL to use for connecting to SUBNET" + defaultHelpPostfix(config.Proxy),
+			Description: "HTTP(s) proxy URL to use for connecting to SUBNET" + defaultHelpPostfix(config.Proxy),
 			Optional:    true,
 			Sensitive:   true,
 		},

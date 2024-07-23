@@ -120,13 +120,6 @@ func connectEndpoint(endpoint Endpoint) (StorageAPI, *formatErasureV3, error) {
 
 	format, err := loadFormatErasure(disk, false)
 	if err != nil {
-		if errors.Is(err, errUnformattedDisk) {
-			info, derr := disk.DiskInfo(context.TODO(), DiskInfoOptions{})
-			if derr != nil && info.RootDisk {
-				disk.Close()
-				return nil, nil, fmt.Errorf("Drive: %s is a root drive", disk)
-			}
-		}
 		disk.Close()
 		return nil, nil, fmt.Errorf("Drive: %s returned %w", disk, err) // make sure to '%w' to wrap the error
 	}
@@ -196,7 +189,7 @@ func (s *erasureSets) Legacy() (ok bool) {
 
 // connectDisks - attempt to connect all the endpoints, loads format
 // and re-arranges the disks in proper position.
-func (s *erasureSets) connectDisks() {
+func (s *erasureSets) connectDisks(log bool) {
 	defer func() {
 		s.lastConnectDisksOpTime = time.Now()
 	}()
@@ -230,8 +223,10 @@ func (s *erasureSets) connectDisks() {
 			if err != nil {
 				if endpoint.IsLocal && errors.Is(err, errUnformattedDisk) {
 					globalBackgroundHealState.pushHealLocalDisks(endpoint)
-				} else {
-					printEndpointError(endpoint, err, true)
+				} else if !errors.Is(err, errDriveIsRoot) {
+					if log {
+						printEndpointError(endpoint, err, true)
+					}
 				}
 				return
 			}
@@ -292,7 +287,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 	time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
 
 	// Pre-emptively connect the disks if possible.
-	s.connectDisks()
+	s.connectDisks(false)
 
 	monitor := time.NewTimer(monitorInterval)
 	defer monitor.Stop()
@@ -306,7 +301,7 @@ func (s *erasureSets) monitorAndConnectEndpoints(ctx context.Context, monitorInt
 				console.Debugln("running drive monitoring")
 			}
 
-			s.connectDisks()
+			s.connectDisks(true)
 
 			// Reset the timer for next interval
 			monitor.Reset(monitorInterval)

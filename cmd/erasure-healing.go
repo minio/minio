@@ -629,7 +629,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		}
 
 		for i, v := range result.Before.Drives {
-			if v.Endpoint == disk.String() {
+			if v.Endpoint == disk.Endpoint().String() {
 				result.After.Drives[i].State = madmin.DriveStateOk
 			}
 		}

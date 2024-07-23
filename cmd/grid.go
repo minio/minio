@@ -41,17 +41,19 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 		// Pass Dialer for websocket grid, make sure we do not
 		// provide any DriveOPTimeout() function, as that is not
 		// useful over persistent connections.
-		Dialer:       grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions.ForWebsocket()))),
+		Dialer: grid.ConnectWS(
+			grid.ContextDialer(xhttp.DialContextWithLookupHost(lookupHost, xhttp.NewInternodeDialContext(rest.DefaultTimeout, globalTCPOptions.ForWebsocket()))),
+			newCachedAuthToken(),
+			&tls.Config{
+				RootCAs:          globalRootCAs,
+				CipherSuites:     fips.TLSCiphers(),
+				CurvePreferences: fips.TLSCurveIDs(),
+			}),
 		Local:        local,
 		Hosts:        hosts,
-		AddAuth:      newCachedAuthToken(),
-		AuthRequest:  storageServerRequestValidate,
+		AuthToken:    validateStorageRequestToken,
+		AuthFn:       newCachedAuthToken(),
 		BlockConnect: globalGridStart,
-		TLSConfig: &tls.Config{
-			RootCAs:          globalRootCAs,
-			CipherSuites:     fips.TLSCiphers(),
-			CurvePreferences: fips.TLSCurveIDs(),
-		},
 		// Record incoming and outgoing bytes.
 		Incoming: globalConnStats.incInternodeInputBytes,
 		Outgoing: globalConnStats.incInternodeOutputBytes,

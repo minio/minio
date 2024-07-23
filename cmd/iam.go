@@ -217,6 +217,9 @@ func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 
 	if firstTime {
 		bootstrapTraceMsg(fmt.Sprintf("globalIAMSys.Load(): (duration: %s)", loadDuration))
+		if globalIsDistErasure {
+			logger.Info("IAM load(startup) finished. (duration: %s)", loadDuration)
+		}
 	}
 
 	select {
@@ -315,6 +318,24 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	cache := sys.store.lock()
+	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
+	sys.store.unlock()
+
+	// Load RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	// From AuthN plugin if enabled.
+	if authn := newGlobalAuthNPluginFn(); authn != nil {
+		riMap := authn.GetRoleInfo()
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
 	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx, true); err != nil {
@@ -333,20 +354,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	refreshInterval := sys.iamRefreshInterval
 
 	go sys.periodicRoutines(ctx, refreshInterval)
-
-	// Load RoleARNs
-	sys.rolesMap = make(map[arn.ARN]string)
-
-	// From OpenID
-	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
-	// From AuthN plugin if enabled.
-	if authn := newGlobalAuthNPluginFn(); authn != nil {
-		riMap := authn.GetRoleInfo()
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
 
 	sys.printIAMRoles()
 
@@ -396,12 +403,12 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 			// Load all IAM items (except STS creds) periodically.
 			refreshStart := time.Now()
 			if err := sys.Load(ctx, false); err != nil {
-				iamLogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (took %.2fs): %v", time.Since(refreshStart).Seconds(), err), logger.WarningKind)
+				iamLogIf(ctx, fmt.Errorf("Failure in periodic refresh for IAM (duration: %s): %v", time.Since(refreshStart), err), logger.WarningKind)
 			} else {
 				took := time.Since(refreshStart).Seconds()
 				if took > maxDurationSecondsForLog {
 					// Log if we took a lot of time to load.
-					logger.Info("IAM refresh took %.2fs", took)
+					logger.Info("IAM refresh took (duration: %s)", took)
 				}
 			}
 
@@ -436,7 +443,7 @@ func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[a
 	// running server by creating the policies after start up.
 	for arn, rolePolicies := range m {
 		specifiedPoliciesSet := newMappedPolicy(rolePolicies).policySet()
-		validPolicies, _ := sys.store.FilterPolicies(rolePolicies, "")
+		validPolicies, _ := sys.store.MergePolicies(rolePolicies)
 		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
 		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
 		if len(unknownPoliciesSet) > 0 {
@@ -672,7 +679,7 @@ func (sys *IAMSys) CurrentPolicies(policyName string) string {
 		return ""
 	}
 
-	policies, _ := sys.store.FilterPolicies(policyName, "")
+	policies, _ := sys.store.MergePolicies(policyName)
 	return policies
 }
 
@@ -786,17 +793,72 @@ func (sys *IAMSys) ListLDAPUsers(ctx context.Context) (map[string]madmin.UserInf
 
 	select {
 	case <-sys.configLoaded:
-		ldapUsers := make(map[string]madmin.UserInfo)
-		for user, policy := range sys.store.GetUsersWithMappedPolicies() {
+		stsMap, err := sys.store.GetAllSTSUserMappings(sys.LDAPConfig.IsLDAPUserDN)
+		if err != nil {
+			return nil, err
+		}
+		ldapUsers := make(map[string]madmin.UserInfo, len(stsMap))
+		for user, policy := range stsMap {
 			ldapUsers[user] = madmin.UserInfo{
 				PolicyName: policy,
-				Status:     madmin.AccountEnabled,
+				Status:     statusEnabled,
 			}
 		}
 		return ldapUsers, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+type cleanEntitiesQuery struct {
+	Users    map[string]set.StringSet
+	Groups   set.StringSet
+	Policies set.StringSet
+}
+
+// createCleanEntitiesQuery - maps users to their groups and normalizes user or group DNs if ldap.
+func (sys *IAMSys) createCleanEntitiesQuery(q madmin.PolicyEntitiesQuery, ldap bool) cleanEntitiesQuery {
+	cleanQ := cleanEntitiesQuery{
+		Users:    make(map[string]set.StringSet),
+		Groups:   set.CreateStringSet(q.Groups...),
+		Policies: set.CreateStringSet(q.Policy...),
+	}
+
+	if ldap {
+		// Validate and normalize users, then fetch and normalize their groups
+		// Also include unvalidated users for backward compatibility.
+		for _, user := range q.Users {
+			lookupRes, actualGroups, _ := sys.LDAPConfig.GetValidatedDNWithGroups(user)
+			if lookupRes != nil {
+				groupSet := set.CreateStringSet(actualGroups...)
+
+				// duplicates can be overwritten, fetched groups should be identical.
+				cleanQ.Users[lookupRes.NormDN] = groupSet
+			}
+			// Search for non-normalized DN as well for backward compatibility.
+			if _, ok := cleanQ.Users[user]; !ok {
+				cleanQ.Users[user] = nil
+			}
+		}
+
+		// Validate and normalize groups.
+		for _, group := range q.Groups {
+			lookupRes, underDN, _ := sys.LDAPConfig.GetValidatedGroupDN(nil, group)
+			if lookupRes != nil && underDN {
+				cleanQ.Groups.Add(lookupRes.NormDN)
+			}
+		}
+	} else {
+		for _, user := range q.Users {
+			info, err := sys.store.GetUserInfo(user)
+			var groupSet set.StringSet
+			if err == nil {
+				groupSet = set.CreateStringSet(info.MemberOf...)
+			}
+			cleanQ.Users[user] = groupSet
+		}
+	}
+	return cleanQ
 }
 
 // QueryLDAPPolicyEntities - queries policy associations for LDAP users/groups/policies.
@@ -811,7 +873,8 @@ func (sys *IAMSys) QueryLDAPPolicyEntities(ctx context.Context, q madmin.PolicyE
 
 	select {
 	case <-sys.configLoaded:
-		pe := sys.store.ListPolicyMappings(q, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN)
+		cleanQuery := sys.createCleanEntitiesQuery(q, true)
+		pe := sys.store.ListPolicyMappings(cleanQuery, sys.LDAPConfig.IsLDAPUserDN, sys.LDAPConfig.IsLDAPGroupDN, sys.LDAPConfig.DecodeDN)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -885,6 +948,7 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 
 	select {
 	case <-sys.configLoaded:
+		cleanQuery := sys.createCleanEntitiesQuery(q, false)
 		var userPredicate, groupPredicate func(string) bool
 		if sys.LDAPConfig.Enabled() {
 			userPredicate = func(s string) bool {
@@ -894,7 +958,7 @@ func (sys *IAMSys) QueryPolicyEntities(ctx context.Context, q madmin.PolicyEntit
 				return !sys.LDAPConfig.IsLDAPGroupDN(s)
 			}
 		}
-		pe := sys.store.ListPolicyMappings(q, userPredicate, groupPredicate)
+		pe := sys.store.ListPolicyMappings(cleanQuery, userPredicate, groupPredicate, nil)
 		pe.Timestamp = UTCNow()
 		return &pe, nil
 	case <-ctx.Done():
@@ -1510,11 +1574,11 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 		// server and is under a configured base DN.
 		validatedParent, isUnderBaseDN, err := sys.LDAPConfig.GetValidatedUserDN(conn, parent)
 		if err != nil {
-			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", parent, err))
+			collectedErrors = append(collectedErrors, fmt.Errorf("could not validate parent exists in LDAP directory: %w", err))
 			continue
 		}
 		if validatedParent == nil || !isUnderBaseDN {
-			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", parent)
+			err := fmt.Errorf("DN parent was not found in the LDAP directory")
 			collectedErrors = append(collectedErrors, err)
 			continue
 		}
@@ -1529,11 +1593,11 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			// configured base DN.
 			validatedGroup, _, err := sys.LDAPConfig.GetValidatedGroupDN(conn, group)
 			if err != nil {
-				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate `%s` exists in LDAP directory: %w", group, err))
+				collectedErrors = append(collectedErrors, fmt.Errorf("could not validate group exists in LDAP directory: %w", err))
 				continue
 			}
 			if validatedGroup == nil {
-				err := fmt.Errorf("DN `%s` was not found in the LDAP directory", group)
+				err := fmt.Errorf("DN group was not found in the LDAP directory")
 				collectedErrors = append(collectedErrors, err)
 				continue
 			}
@@ -1623,7 +1687,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			continue
 		}
 		if validatedDN == nil || !underBaseDN {
-			err := fmt.Errorf("DN `%s` was not found in the LDAP directory", k)
+			err := fmt.Errorf("DN was not found in the LDAP directory")
 			collectedErrors = append(collectedErrors, err)
 			continue
 		}
@@ -1966,7 +2030,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		if dnResult == nil {
 			// dn not found - still attempt to detach if provided user is a DN.
 			if !isAttach && sys.LDAPConfig.IsLDAPUserDN(r.User) {
-				dn = r.User
+				dn = sys.LDAPConfig.QuickNormalizeDN(r.User)
 			} else {
 				err = errNoSuchUser
 				return
@@ -1983,7 +2047,7 @@ func (sys *IAMSys) PolicyDBUpdateLDAP(ctx context.Context, isAttach bool,
 		}
 		if dnResult == nil || !underBaseDN {
 			if !isAttach {
-				dn = r.Group
+				dn = sys.LDAPConfig.QuickNormalizeDN(r.Group)
 			} else {
 				err = errNoSuchGroup
 				return
@@ -2118,7 +2182,7 @@ func (sys *IAMSys) IsAllowedServiceAccount(args policy.Args, parentUser string) 
 	var combinedPolicy policy.Policy
 	// Policies were found, evaluate all of them.
 	if !isOwnerDerived {
-		availablePoliciesStr, c := sys.store.FilterPolicies(strings.Join(svcPolicies, ","), "")
+		availablePoliciesStr, c := sys.store.MergePolicies(strings.Join(svcPolicies, ","))
 		if availablePoliciesStr == "" {
 			return false
 		}
@@ -2210,22 +2274,16 @@ func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 	// 2. Combine the mapped policies into a single combined policy.
 
 	var combinedPolicy policy.Policy
+	// Policies were found, evaluate all of them.
 	if !isOwnerDerived {
-		var err error
-		combinedPolicy, err = sys.store.GetPolicy(strings.Join(policies, ","))
-		if errors.Is(err, errNoSuchPolicy) {
-			for _, pname := range policies {
-				_, err := sys.store.GetPolicy(pname)
-				if errors.Is(err, errNoSuchPolicy) {
-					// all policies presented in the claim should exist
-					iamLogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", pname, iamPolicyClaimNameOpenID()))
-					return false
-				}
-			}
-			iamLogIf(GlobalContext, fmt.Errorf("all policies were unexpectedly present!"))
+		availablePoliciesStr, c := sys.store.MergePolicies(strings.Join(policies, ","))
+		if availablePoliciesStr == "" {
+			// all policies presented in the claim should exist
+			iamLogIf(GlobalContext, fmt.Errorf("expected policy (%s) missing from the JWT claim %s, rejecting the request", policies, iamPolicyClaimNameOpenID()))
+
 			return false
 		}
-
+		combinedPolicy = c
 	}
 
 	// 3. If an inline session-policy is present, evaluate it.
@@ -2346,7 +2404,7 @@ func isAllowedBySessionPolicy(args policy.Args) (hasSessionPolicy bool, isAllowe
 
 // GetCombinedPolicy returns a combined policy combining all policies
 func (sys *IAMSys) GetCombinedPolicy(policies ...string) policy.Policy {
-	_, policy := sys.store.FilterPolicies(strings.Join(policies, ","), "")
+	_, policy := sys.store.MergePolicies(strings.Join(policies, ","))
 	return policy
 }
 

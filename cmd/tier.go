@@ -64,6 +64,12 @@ var (
 		Message:    "Specified remote backend is not empty",
 		StatusCode: http.StatusBadRequest,
 	}
+
+	errTierInvalidConfig = AdminError{
+		Code:       "XMinioAdminTierInvalidConfig",
+		Message:    "Unable to setup remote tier, check tier configuration",
+		StatusCode: http.StatusBadRequest,
+	}
 )
 
 const (

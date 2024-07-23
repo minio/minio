@@ -1409,13 +1409,13 @@ func (z *BatchReplicateFilter) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "NewerThan":
-			z.NewerThan, err = dc.ReadDuration()
+			err = z.NewerThan.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "NewerThan")
 				return
 			}
 		case "OlderThan":
-			z.OlderThan, err = dc.ReadDuration()
+			err = z.OlderThan.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "OlderThan")
 				return
@@ -1489,7 +1489,7 @@ func (z *BatchReplicateFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteDuration(z.NewerThan)
+	err = z.NewerThan.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "NewerThan")
 		return
@@ -1499,7 +1499,7 @@ func (z *BatchReplicateFilter) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteDuration(z.OlderThan)
+	err = z.OlderThan.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "OlderThan")
 		return
@@ -1567,10 +1567,18 @@ func (z *BatchReplicateFilter) MarshalMsg(b []byte) (o []byte, err error) {
 	// map header, size 6
 	// string "NewerThan"
 	o = append(o, 0x86, 0xa9, 0x4e, 0x65, 0x77, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendDuration(o, z.NewerThan)
+	o, err = z.NewerThan.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "NewerThan")
+		return
+	}
 	// string "OlderThan"
 	o = append(o, 0xa9, 0x4f, 0x6c, 0x64, 0x65, 0x72, 0x54, 0x68, 0x61, 0x6e)
-	o = msgp.AppendDuration(o, z.OlderThan)
+	o, err = z.OlderThan.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "OlderThan")
+		return
+	}
 	// string "CreatedAfter"
 	o = append(o, 0xac, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x64, 0x41, 0x66, 0x74, 0x65, 0x72)
 	o = msgp.AppendTime(o, z.CreatedAfter)
@@ -1619,13 +1627,13 @@ func (z *BatchReplicateFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		switch msgp.UnsafeString(field) {
 		case "NewerThan":
-			z.NewerThan, bts, err = msgp.ReadDurationBytes(bts)
+			bts, err = z.NewerThan.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "NewerThan")
 				return
 			}
 		case "OlderThan":
-			z.OlderThan, bts, err = msgp.ReadDurationBytes(bts)
+			bts, err = z.OlderThan.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "OlderThan")
 				return
@@ -1694,7 +1702,7 @@ func (z *BatchReplicateFilter) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchReplicateFilter) Msgsize() (s int) {
-	s = 1 + 10 + msgp.DurationSize + 10 + msgp.DurationSize + 13 + msgp.TimeSize + 14 + msgp.TimeSize + 5 + msgp.ArrayHeaderSize
+	s = 1 + 10 + z.NewerThan.Msgsize() + 10 + z.OlderThan.Msgsize() + 13 + msgp.TimeSize + 14 + msgp.TimeSize + 5 + msgp.ArrayHeaderSize
 	for za0001 := range z.Tags {
 		s += z.Tags[za0001].Msgsize()
 	}

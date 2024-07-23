@@ -257,7 +257,7 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		JobType:   string(job.Type()),
 		StartTime: job.Started,
 	}
-	if err := ri.load(ctx, api, job); err != nil {
+	if err := ri.loadOrInit(ctx, api, job); err != nil {
 		return err
 	}
 	if ri.Complete {
@@ -389,6 +389,17 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 					stopFn(result, err)
 					batchLogIf(ctx, err)
 					success = false
+					if attempts >= retryAttempts {
+						auditOptions := AuditLogOptions{
+							Event:     "KeyRotate",
+							APIName:   "StartBatchJob",
+							Bucket:    result.Bucket,
+							Object:    result.Name,
+							VersionID: result.VersionID,
+							Error:     err.Error(),
+						}
+						auditLogInternal(ctx, auditOptions)
+					}
 				} else {
 					stopFn(result, nil)
 				}

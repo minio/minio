@@ -256,15 +256,26 @@ func (s *SkipReader) Read(p []byte) (int, error) {
 	if l == 0 {
 		return 0, nil
 	}
-	for s.skipCount > 0 {
-		if l > s.skipCount {
-			l = s.skipCount
+	if s.skipCount > 0 {
+		tmp := p
+		if s.skipCount > l && l < copyBufferSize {
+			// We may get a very small buffer, so we grab a temporary buffer.
+			bufp := copyBufPool.Get().(*[]byte)
+			buf := *bufp
+			tmp = buf[:copyBufferSize]
+			defer copyBufPool.Put(bufp)
+			l = int64(len(tmp))
 		}
-		n, err := s.Reader.Read(p[:l])
-		if err != nil {
-			return 0, err
+		for s.skipCount > 0 {
+			if l > s.skipCount {
+				l = s.skipCount
+			}
+			n, err := s.Reader.Read(tmp[:l])
+			if err != nil {
+				return 0, err
+			}
+			s.skipCount -= int64(n)
 		}
-		s.skipCount -= int64(n)
 	}
 	return s.Reader.Read(p)
 }
@@ -274,9 +285,11 @@ func NewSkipReader(r io.Reader, n int64) io.Reader {
 	return &SkipReader{r, n}
 }
 
+const copyBufferSize = 32 * 1024
+
 var copyBufPool = sync.Pool{
 	New: func() interface{} {
-		b := make([]byte, 32*1024)
+		b := make([]byte, copyBufferSize)
 		return &b
 	},
 }
@@ -285,6 +298,7 @@ var copyBufPool = sync.Pool{
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
 	bufp := copyBufPool.Get().(*[]byte)
 	buf := *bufp
+	buf = buf[:copyBufferSize]
 	defer copyBufPool.Put(bufp)
 
 	return io.CopyBuffer(dst, src, buf)

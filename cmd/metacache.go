@@ -24,6 +24,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/minio/pkg/v3/console"
 )
 
 type scanStatus uint8
@@ -97,6 +99,37 @@ func (m *metacache) worthKeeping() bool {
 	return true
 }
 
+// keepAlive will continuously update lastHandout until ctx is canceled.
+func (m metacache) keepAlive(ctx context.Context, rpc *peerRESTClient) {
+	// we intentionally operate on a copy of m, so we can update without locks.
+	t := time.NewTicker(metacacheMaxClientWait / 10)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			// Request is done, stop updating.
+			return
+		case <-t.C:
+			m.lastHandout = time.Now()
+
+			if m2, err := rpc.UpdateMetacacheListing(ctx, m); err == nil {
+				if m2.status != scanStateStarted {
+					if serverDebugLog {
+						console.Debugln("returning", m.id, "due to scan state", m2.status, time.Now().Format(time.RFC3339))
+					}
+					return
+				}
+				m = m2
+				if serverDebugLog {
+					console.Debugln("refreshed", m.id, time.Now().Format(time.RFC3339))
+				}
+			} else if serverDebugLog {
+				console.Debugln("error refreshing", m.id, time.Now().Format(time.RFC3339))
+			}
+		}
+	}
+}
+
 // baseDirFromPrefix will return the base directory given an object path.
 // For example an object with name prefix/folder/object.ext will return `prefix/folder/`.
 func baseDirFromPrefix(prefix string) string {
@@ -116,13 +149,17 @@ func baseDirFromPrefix(prefix string) string {
 // update cache with new status.
 // The updates are conditional so multiple callers can update with different states.
 func (m *metacache) update(update metacache) {
-	m.lastUpdate = UTCNow()
+	now := UTCNow()
+	m.lastUpdate = now
 
-	if m.lastHandout.After(m.lastHandout) {
-		m.lastHandout = UTCNow()
+	if update.lastHandout.After(m.lastHandout) {
+		m.lastHandout = update.lastUpdate
+		if m.lastHandout.After(now) {
+			m.lastHandout = now
+		}
 	}
 	if m.status == scanStateStarted && update.status == scanStateSuccess {
-		m.ended = UTCNow()
+		m.ended = now
 	}
 
 	if m.status == scanStateStarted && update.status != scanStateStarted {
@@ -138,7 +175,7 @@ func (m *metacache) update(update metacache) {
 	if m.error == "" && update.error != "" {
 		m.error = update.error
 		m.status = scanStateError
-		m.ended = UTCNow()
+		m.ended = now
 	}
 	m.fileNotFound = m.fileNotFound || update.fileNotFound
 }

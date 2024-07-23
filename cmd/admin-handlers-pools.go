@@ -374,6 +374,7 @@ func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) 
 	globalNotificationSys.StopRebalance(r.Context())
 	writeSuccessResponseHeadersOnly(w)
 	adminLogIf(ctx, pools.saveRebalanceStats(GlobalContext, 0, rebalSaveStoppedAt))
+	globalNotificationSys.LoadRebalanceMeta(ctx, false)
 }
 
 func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w http.ResponseWriter, r *http.Request) (proxy bool) {

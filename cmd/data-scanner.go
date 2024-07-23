@@ -227,7 +227,9 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
 				tmp, _ = cycleInfo.MarshalMsg(tmp)
 				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
-				scannerLogIf(ctx, err, dataUsageBloomNamePath)
+				if err != nil {
+					scannerLogIf(ctx, fmt.Errorf("%w, Object %s", err, dataUsageBloomNamePath))
+				}
 			}
 		}
 	}
@@ -797,7 +799,9 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 						}, madmin.HealItemObject)
 						stopFn(int(ver.Size))
 						if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-							scannerLogIf(ctx, err, fiv.Name)
+							if err != nil {
+								scannerLogIf(ctx, fmt.Errorf("%w, Object %s/%s/%s", err, bucket, fiv.Name, ver.VersionID))
+							}
 						}
 						if err == nil {
 							successVersions++
@@ -1271,7 +1275,7 @@ func applyExpiryOnTransitionedObject(ctx context.Context, objLayer ObjectLayer, 
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			return false
 		}
-		ilmLogIf(ctx, err)
+		ilmLogIf(ctx, fmt.Errorf("expireTransitionedObject(%s, %s): %w", obj.Bucket, obj.Name, err))
 		return false
 	}
 	timeILM(1)
@@ -1324,7 +1328,7 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 			return false
 		}
 		// Assume it is still there.
-		ilmLogOnceIf(ctx, err, "non-transition-expiry")
+		ilmLogOnceIf(ctx, fmt.Errorf("DeleteObject(%s, %s): %w", obj.Bucket, obj.Name, err), "non-transition-expiry"+obj.Name)
 		return false
 	}
 	if dobj.Name == "" {

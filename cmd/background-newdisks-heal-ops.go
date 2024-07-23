@@ -88,6 +88,8 @@ type healingTracker struct {
 
 	ItemsSkipped uint64
 	BytesSkipped uint64
+
+	RetryAttempts uint64
 	// Add future tracking capabilities
 	// Be sure that they are included in toHealingDisk
 }
@@ -363,7 +365,7 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 	localDrives := cloneDrives(globalLocalDrives)
 	globalLocalDrivesMu.RUnlock()
 	for _, disk := range localDrives {
-		_, err := disk.GetDiskID()
+		_, err := disk.DiskInfo(context.Background(), DiskInfoOptions{})
 		if errors.Is(err, errUnformattedDisk) {
 			disksToHeal = append(disksToHeal, disk.Endpoint())
 			continue
@@ -382,11 +384,24 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 
 var newDiskHealingTimeout = newDynamicTimeout(30*time.Second, 10*time.Second)
 
+var errRetryHealing = errors.New("some items failed to heal, we will retry healing this drive again")
+
 func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint) error {
 	poolIdx, setIdx := endpoint.PoolIdx, endpoint.SetIdx
 	disk := getStorageViaEndpoint(endpoint)
 	if disk == nil {
 		return fmt.Errorf("Unexpected error disk must be initialized by now after formatting: %s", endpoint)
+	}
+
+	_, err := disk.DiskInfo(ctx, DiskInfoOptions{})
+	if err != nil {
+		if errors.Is(err, errDriveIsRoot) {
+			// This is a root drive, ignore and move on
+			return nil
+		}
+		if !errors.Is(err, errUnformattedDisk) {
+			return err
+		}
 	}
 
 	// Prevent parallel erasure set healing
@@ -451,8 +466,27 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 		return err
 	}
 
-	healingLogEvent(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d, failed: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
+	// if objects have failed healing, we attempt a retry to heal the drive upto 3 times before giving up.
+	if tracker.ItemsFailed > 0 && tracker.RetryAttempts < 4 {
+		tracker.RetryAttempts++
+		bugLogIf(ctx, tracker.update(ctx))
 
+		healingLogEvent(ctx, "Healing of drive '%s' is incomplete, retrying %s time (healed: %d, skipped: %d, failed: %d).", disk,
+			humanize.Ordinal(int(tracker.RetryAttempts)), tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
+		return errRetryHealing
+	}
+
+	if tracker.ItemsFailed > 0 {
+		healingLogEvent(ctx, "Healing of drive '%s' is incomplete, retried %d times (healed: %d, skipped: %d, failed: %d).", disk,
+			tracker.RetryAttempts-1, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
+	} else {
+		if tracker.RetryAttempts > 0 {
+			healingLogEvent(ctx, "Healing of drive '%s' is complete, retried %d times (healed: %d, skipped: %d).", disk,
+				tracker.RetryAttempts-1, tracker.ItemsHealed, tracker.ItemsSkipped)
+		} else {
+			healingLogEvent(ctx, "Healing of drive '%s' is finished (healed: %d, skipped: %d).", disk, tracker.ItemsHealed, tracker.ItemsSkipped)
+		}
+	}
 	if serverDebugLog {
 		tracker.printTo(os.Stdout)
 		fmt.Printf("\n")
@@ -524,7 +558,7 @@ func monitorLocalDisksAndHeal(ctx context.Context, z *erasureServerPools) {
 					if err := healFreshDisk(ctx, z, disk); err != nil {
 						globalBackgroundHealState.setDiskHealingStatus(disk, false)
 						timedout := OperationTimedOut{}
-						if !errors.Is(err, context.Canceled) && !errors.As(err, &timedout) {
+						if !errors.Is(err, context.Canceled) && !errors.As(err, &timedout) && !errors.Is(err, errRetryHealing) {
 							printEndpointError(disk, err, false)
 						}
 						return

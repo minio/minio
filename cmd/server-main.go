@@ -841,13 +841,14 @@ func serverMain(ctx *cli.Context) {
 
 	// Verify kernel release and version.
 	if oldLinux() {
-		warnings = append(warnings, color.YellowBold("- Detected Linux kernel version older than 4.0.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x.x linux kernel version for best performance"))
+		warnings = append(warnings, color.YellowBold("Detected Linux kernel version older than 4.0 release, there are some known potential performance problems with this kernel version. MinIO recommends a minimum of 4.x linux kernel version for best performance"))
 	}
 
 	maxProcs := runtime.GOMAXPROCS(0)
 	cpuProcs := runtime.NumCPU()
 	if maxProcs < cpuProcs {
-		warnings = append(warnings, color.YellowBold("- Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance", maxProcs, cpuProcs))
+		warnings = append(warnings, color.YellowBold("Detected GOMAXPROCS(%d) < NumCPU(%d), please make sure to provide all PROCS to MinIO for optimal performance",
+			maxProcs, cpuProcs))
 	}
 
 	// Initialize grid
@@ -897,7 +898,7 @@ func serverMain(ctx *cli.Context) {
 		})
 	}
 
-	if !globalDisableFreezeOnBoot {
+	if globalEnableSyncBoot {
 		// Freeze the services until the bucket notification subsystem gets initialized.
 		bootstrapTrace("freezeServices", freezeServices)
 	}
@@ -921,16 +922,18 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	bootstrapTrace("waitForQuorum", func() {
-		result := newObject.Health(context.Background(), HealthOptions{})
+		result := newObject.Health(context.Background(), HealthOptions{NoLogging: true})
 		for !result.HealthyRead {
 			if debugNoExit {
-				logger.Info("Not waiting for quorum since we are debugging.. possible cause unhealthy sets (%s)", result)
+				logger.Info("Not waiting for quorum since we are debugging.. possible cause unhealthy sets")
+				logger.Info(result.String())
 				break
 			}
 			d := time.Duration(r.Float64() * float64(time.Second))
-			logger.Info("Waiting for quorum READ healthcheck to succeed.. possible cause unhealthy sets (%s), retrying in %s", result, d)
+			logger.Info("Waiting for quorum READ healthcheck to succeed retrying in %s.. possible cause unhealthy sets", d)
+			logger.Info(result.String())
 			time.Sleep(d)
-			result = newObject.Health(context.Background(), HealthOptions{})
+			result = newObject.Health(context.Background(), HealthOptions{NoLogging: true})
 		}
 	})
 
@@ -953,11 +956,11 @@ func serverMain(ctx *cli.Context) {
 		}
 
 		if !globalServerCtxt.StrictS3Compat {
-			warnings = append(warnings, color.YellowBold("- Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
+			warnings = append(warnings, color.YellowBold("Strict AWS S3 compatible incoming PUT, POST content payload validation is turned off, caution is advised do not use in production"))
 		}
 	})
 	if globalActiveCred.Equal(auth.DefaultCredentials) {
-		msg := fmt.Sprintf("- Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
+		msg := fmt.Sprintf("Detected default credentials '%s', we recommend that you change these values with 'MINIO_ROOT_USER' and 'MINIO_ROOT_PASSWORD' environment variables",
 			globalActiveCred)
 		warnings = append(warnings, color.YellowBold(msg))
 	}
@@ -1000,10 +1003,11 @@ func serverMain(ctx *cli.Context) {
 	}()
 
 	go func() {
-		if !globalDisableFreezeOnBoot {
+		if globalEnableSyncBoot {
 			defer bootstrapTrace("unfreezeServices", unfreezeServices)
 			t := time.AfterFunc(5*time.Minute, func() {
-				warnings = append(warnings, color.YellowBold("- Initializing the config subsystem is taking longer than 5 minutes. Please set '_MINIO_DISABLE_API_FREEZE_ON_BOOT=true' to not freeze the APIs"))
+				warnings = append(warnings,
+					color.YellowBold("- Initializing the config subsystem is taking longer than 5 minutes. Please remove 'MINIO_SYNC_BOOT=on' to not freeze the APIs"))
 			})
 			defer t.Stop()
 		}
@@ -1027,16 +1031,6 @@ func serverMain(ctx *cli.Context) {
 
 		bootstrapTrace("globalTransitionState.Init", func() {
 			globalTransitionState.Init(newObject)
-		})
-
-		// Initialize batch job pool.
-		bootstrapTrace("newBatchJobPool", func() {
-			globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
-		})
-
-		// Initialize the license update job
-		bootstrapTrace("initLicenseUpdateJob", func() {
-			initLicenseUpdateJob(GlobalContext, newObject)
 		})
 
 		go func() {
@@ -1103,22 +1097,21 @@ func serverMain(ctx *cli.Context) {
 			})
 		}
 
+		// Initialize batch job pool.
+		bootstrapTrace("newBatchJobPool", func() {
+			globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
+		})
+
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
 		printStartupMessage(getAPIEndpoints(), err)
 
 		// Print a warning at the end of the startup banner so it is more noticeable
-		if newObject.BackendInfo().StandardSCParity == 0 {
-			warnings = append(warnings, color.YellowBold("- The standard parity is set to 0. This can lead to data loss."))
+		if newObject.BackendInfo().StandardSCParity == 0 && !globalIsErasureSD {
+			warnings = append(warnings, color.YellowBold("The standard parity is set to 0. This can lead to data loss."))
 		}
-		objAPI := newObjectLayerFn()
-		if objAPI != nil {
-			printStorageInfo(objAPI.StorageInfo(GlobalContext, true))
-		}
-		if len(warnings) > 0 {
-			logger.Info(color.Yellow("STARTUP WARNINGS:"))
-			for _, warn := range warnings {
-				logger.Info(warn)
-			}
+
+		for _, warn := range warnings {
+			logger.Warning(warn)
 		}
 	}()
 
