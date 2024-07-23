@@ -499,7 +499,7 @@ var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader
 func msgpNewReader(r io.Reader) *msgp.Reader {
 	p := readMsgpReaderPool.Get().(*msgp.Reader)
 	if p.R == nil {
-		p.R = xbufio.NewReaderSize(r, 4<<10)
+		p.R = xbufio.NewReaderSize(r, 32<<10)
 	} else {
 		p.R.Reset(r)
 	}

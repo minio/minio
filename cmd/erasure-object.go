@@ -283,7 +283,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	}
 
 	if unlockOnDefer {
-		unlockOnDefer = fi.InlineData()
+		unlockOnDefer = fi.InlineData() || len(fi.Data) > 0
 	}
 
 	pr, pw := xioutil.WaitPipe()
@@ -908,6 +908,8 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		}
 
 		rw.Lock()
+		// when its a versioned bucket and empty versionID - at totalResp == setDriveCount
+		// we must use rawFileInfo to resolve versions to figure out the latest version.
 		if opts.VersionID == "" && totalResp == er.setDriveCount {
 			fi, onlineMeta, onlineDisks, modTime, etag, err = calcQuorum(pickLatestQuorumFilesInfo(ctx,
 				rawArr, errs, bucket, object, readData, opts.InclFreeVersions, true))
@@ -915,7 +917,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 			fi, onlineMeta, onlineDisks, modTime, etag, err = calcQuorum(metaArr, errs)
 		}
 		rw.Unlock()
-		if err == nil && fi.InlineData() {
+		if err == nil && (fi.InlineData() || len(fi.Data) > 0) {
 			break
 		}
 	}
@@ -1399,7 +1401,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	writers := make([]io.Writer, len(onlineDisks))
 	var inlineBuffers []*bytes.Buffer
 	if shardFileSize >= 0 {
-		if !opts.Versioned && shardFileSize < inlineBlock {
+		if !opts.Versioned && shardFileSize <= inlineBlock {
 			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 		} else if shardFileSize < inlineBlock/8 {
 			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
@@ -1407,7 +1409,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	} else {
 		// If compressed, use actual size to determine.
 		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
-			if !opts.Versioned && sz < inlineBlock {
+			if !opts.Versioned && sz <= inlineBlock {
 				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 			} else if sz < inlineBlock/8 {
 				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
