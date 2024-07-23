@@ -2848,6 +2848,42 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 	return err
 }
 
+// DoesUserExit - checks if user exists in cache or backend without updating cache.
+func (store *IAMStoreSys) DoesUserExist(ctx context.Context, accessKey string) (bool, IAMUserType, error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	if userInfo, found := cache.iamUsersMap[accessKey]; found {
+		if userInfo.Credentials.IsServiceAccount() {
+			return true, svcUser, nil
+		}
+		return true, regUser, nil
+	} else if _, found := cache.iamSTSAccountsMap[accessKey]; found {
+		return true, stsUser, nil
+	}
+
+	checkerMap := map[string]UserIdentity{}
+
+	// Check for each user type.
+	err := store.loadUserForce(ctx, accessKey, regUser, checkerMap)
+	if _, found := checkerMap[accessKey]; found {
+		return true, regUser, nil
+	}
+	err = store.loadUserForce(ctx, accessKey, svcUser, checkerMap)
+	if _, found := checkerMap[accessKey]; found {
+		return true, svcUser, nil
+	}
+	err = store.loadUserForce(ctx, accessKey, stsUser, checkerMap)
+	if _, found := checkerMap[accessKey]; found {
+		return true, stsUser, nil
+	}
+
+	if err == errNoSuchUser {
+		err = nil
+	}
+	return false, unknownIAMUserType, nil
+}
+
 func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {
 	jwtClaims, err := auth.ExtractClaims(u.Credentials.SessionToken, u.Credentials.SecretKey)
 	if err != nil {

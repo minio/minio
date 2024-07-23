@@ -1822,6 +1822,15 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 	return u, ok
 }
 
+// DoesUserExist - check if user exists and returns type if it does
+func (sys *IAMSys) DoesUserExist(ctx context.Context, accessKey string) (exists bool, userType IAMUserType, err error) {
+	exists, userType, err = sys.store.DoesUserExist(ctx, accessKey)
+	if err != nil {
+		return false, unknownIAMUserType, err
+	}
+	return exists, userType, nil
+}
+
 // Notify all other MinIO peers to load group.
 func (sys *IAMSys) notifyForGroup(ctx context.Context, group string) {
 	if !sys.HasWatcher() {
