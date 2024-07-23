@@ -1,5 +1,4 @@
-//go:build !windows && !darwin && !freebsd
-// +build !windows,!darwin,!freebsd
+//go:build unix && !darwin && !freebsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
@@ -22,12 +21,14 @@ package cmd
 
 import (
 	"os"
+	"syscall"
 )
 
 var (
 	// Disallow updating access times
-	readMode = os.O_RDONLY | 0x40000 // O_NOATIME
+	// Add non-block to avoid syscall to attempt to set epoll on files.
+	readMode = os.O_RDONLY | 0x40000 | syscall.O_NONBLOCK // O_NOATIME
 
 	// Write with data sync only used only for `xl.meta` writes
-	writeMode = 0x1000 // O_DSYNC
+	writeMode = 0x1000 | syscall.O_NONBLOCK // O_DSYNC
 )
