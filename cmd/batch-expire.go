@@ -36,6 +36,7 @@ import (
 	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/wildcard"
 	"github.com/minio/pkg/v3/workers"
+	"github.com/minio/pkg/v3/xtime"
 	"gopkg.in/yaml.v3"
 )
 
@@ -116,7 +117,7 @@ func (p BatchJobExpirePurge) Validate() error {
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
 	line, col     int
-	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
+	OlderThan     xtime.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
@@ -162,7 +163,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, obj.Name) {
 		return false
 	}
-	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan {
+	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan.D() {
 		return false
 	}
 
@@ -552,22 +553,25 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 	go func() {
 		saveTicker := time.NewTicker(10 * time.Second)
 		defer saveTicker.Stop()
-		for {
+		quit := false
+		after := time.Minute
+		for !quit {
 			select {
 			case <-saveTicker.C:
-				// persist in-memory state to disk after every 10secs.
-				batchLogIf(ctx, ri.updateAfter(ctx, api, 10*time.Second, job))
-
 			case <-ctx.Done():
-				// persist in-memory state immediately before exiting due to context cancellation.
-				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
-				return
-
+				quit = true
 			case <-saverQuitCh:
-				// persist in-memory state immediately to disk.
-				batchLogIf(ctx, ri.updateAfter(ctx, api, 0, job))
-				return
+				quit = true
 			}
+
+			if quit {
+				// save immediately if we are quitting
+				after = 0
+			}
+
+			ctx, cancel := context.WithTimeout(GlobalContext, 30*time.Second) // independent context
+			batchLogIf(ctx, ri.updateAfter(ctx, api, after, job))
+			cancel()
 		}
 	}()
 
@@ -584,7 +588,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		versionsCount int
 		toDel         []expireObjInfo
 	)
-	failed := true
+	failed := false
 	for result := range results {
 		if result.Err != nil {
 			failed = true

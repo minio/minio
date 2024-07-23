@@ -26,6 +26,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -56,7 +57,7 @@ const (
 	biggerBufMax = maxBufferSize
 
 	// If there is a queue, merge up to this many messages.
-	maxMergeMessages = 30
+	maxMergeMessages = 50
 
 	// clientPingInterval will ping the remote handler every 15 seconds.
 	// Clients disconnect when we exceed 2 intervals.
@@ -125,7 +126,8 @@ var PutByteBuffer = func(b []byte) {
 // A successful call returns err == nil, not err == EOF. Because readAllInto is
 // defined to read from src until EOF, it does not treat an EOF from Read
 // as an error to be reported.
-func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
+func readAllInto(b []byte, r *wsutil.Reader, want int64) ([]byte, error) {
+	read := int64(0)
 	for {
 		if len(b) == cap(b) {
 			// Add more capacity (let append pick how much).
@@ -135,9 +137,17 @@ func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
 		b = b[:len(b)+n]
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				if want >= 0 && read+int64(n) != want {
+					return nil, io.ErrUnexpectedEOF
+				}
 				err = nil
 			}
 			return b, err
+		}
+		read += int64(n)
+		if want >= 0 && read == want {
+			// No need to read more...
+			return b, nil
 		}
 	}
 }
@@ -208,8 +218,8 @@ func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx contex
 			dialer.NetDial = dial
 		}
 		header := make(http.Header, 2)
-		header.Set("Authorization", "Bearer "+auth(""))
-		header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+		header.Set("Authorization", "Bearer "+auth())
+		header.Set("X-Minio-Time", strconv.FormatInt(time.Now().UnixNano(), 10))
 
 		if len(header) > 0 {
 			dialer.Header = ws.HandshakeHeaderHTTP(header)
@@ -225,4 +235,4 @@ func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx contex
 }
 
 // ValidateTokenFn must validate the token and return an error if it is invalid.
-type ValidateTokenFn func(token, audience string) error
+type ValidateTokenFn func(token string) error

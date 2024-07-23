@@ -1703,18 +1703,23 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 			fi.Data = nil
 		}
 
+		attemptInline := fi.TransitionStatus == "" && fi.DataDir != "" && len(fi.Parts) == 1
 		// Reading data for small objects when
 		// - object has not yet transitioned
-		// - object size lesser than 128KiB
 		// - object has maximum of 1 parts
-		if fi.TransitionStatus == "" &&
-			fi.DataDir != "" && fi.Size <= smallFileThreshold &&
-			len(fi.Parts) == 1 {
-			partPath := fmt.Sprintf("part.%d", fi.Parts[0].Number)
-			dataPath := pathJoin(volumeDir, path, fi.DataDir, partPath)
-			fi.Data, _, err = s.readAllData(ctx, volume, volumeDir, dataPath, false)
-			if err != nil {
-				return FileInfo{}, err
+		if attemptInline {
+			inlineBlock := globalStorageClass.InlineBlock()
+			if inlineBlock <= 0 {
+				inlineBlock = 128 * humanize.KiByte
+			}
+
+			canInline := fi.ShardFileSize(fi.Parts[0].ActualSize) <= inlineBlock
+			if canInline {
+				dataPath := pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", fi.Parts[0].Number))
+				fi.Data, _, err = s.readAllData(ctx, volume, volumeDir, dataPath, false)
+				if err != nil {
+					return FileInfo{}, err
+				}
 			}
 		}
 	}
@@ -1768,7 +1773,7 @@ func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, f
 	}
 
 	if discard {
-		// This discard is mostly true for DELETEEs
+		// This discard is mostly true for deletes
 		// so we need to make sure we do not keep
 		// page-cache references after.
 		defer disk.Fdatasync(f)
@@ -2993,7 +2998,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 			if req.MetadataOnly {
 				data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
 			} else {
-				data, mt, err = s.readAllData(ctx, req.Bucket, volumeDir, fullPath, true)
+				data, mt, err = s.readAllData(ctx, req.Bucket, volumeDir, fullPath, false)
 			}
 			return err
 		}); err != nil {
@@ -3096,7 +3101,7 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 	}
 	baseDir := pathJoin(volumeDir, path+slashSeparator)
 	metaPath := pathutil.Join(baseDir, xlStorageFormatFile)
-	buf, _, err := s.readAllData(ctx, volume, volumeDir, metaPath, true)
+	buf, _, err := s.readAllData(ctx, volume, volumeDir, metaPath, false)
 	if err != nil {
 		return err
 	}

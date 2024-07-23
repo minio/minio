@@ -20,4 +20,6 @@
 
 package fips
 
+import _ "crypto/tls/fipsonly"
+
 const enabled = true

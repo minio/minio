@@ -264,6 +264,24 @@ type FileInfo struct {
 	Versioned bool `msg:"vs"`
 }
 
+func (fi FileInfo) shardSize() int64 {
+	return ceilFrac(fi.Erasure.BlockSize, int64(fi.Erasure.DataBlocks))
+}
+
+// ShardFileSize - returns final erasure size from original size.
+func (fi FileInfo) ShardFileSize(totalLength int64) int64 {
+	if totalLength == 0 {
+		return 0
+	}
+	if totalLength == -1 {
+		return -1
+	}
+	numShards := totalLength / fi.Erasure.BlockSize
+	lastBlockSize := totalLength % fi.Erasure.BlockSize
+	lastShardSize := ceilFrac(lastBlockSize, int64(fi.Erasure.DataBlocks))
+	return numShards*fi.shardSize() + lastShardSize
+}
+
 // ShallowCopy - copies minimal information for READ MRF checks.
 func (fi FileInfo) ShallowCopy() (n FileInfo) {
 	n.Volume = fi.Volume
