@@ -1,5 +1,4 @@
-//go:build windows || darwin || freebsd
-// +build windows darwin freebsd
+//go:build !unix || darwin || freebsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
