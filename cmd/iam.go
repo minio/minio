@@ -1442,7 +1442,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	// 1. Collect all LDAP users with active creds.
 	allCreds := sys.store.GetSTSAndServiceAccounts()
 	// List of unique LDAP (parent) user DNs that have active creds
-	var parentUserActualDNs []string
+	var parentUserActualDNList []string
 	// Map of LDAP user (internal representation) to list of active credential objects
 	parentUserToCredsMap := make(map[string][]auth.Credentials)
 	// DN to ldap username mapping for each LDAP user
@@ -1500,7 +1500,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 			}
 
 			// Collect each new cred.ParentUser into parentUsers
-			parentUserActualDNs = append(parentUserActualDNs, ldapActualDN)
+			parentUserActualDNList = append(parentUserActualDNList, ldapActualDN)
 
 			// Update the ldapUsernameMap
 			actualDNToLDAPUsernameMap[ldapActualDN] = ldapUsername
@@ -1512,7 +1512,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 
 	// 2. Query LDAP server for groups of the LDAP users collected.
-	updatedGroups, err := sys.LDAPConfig.LookupGroupMemberships(parentUserActualDNs, actualDNToLDAPUsernameMap)
+	updatedGroups, err := sys.LDAPConfig.LookupGroupMemberships(parentUserActualDNList, actualDNToLDAPUsernameMap)
 	if err != nil {
 		// Log and return on error - perhaps it'll work the next time.
 		iamLogIf(GlobalContext, err)
@@ -1520,7 +1520,7 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 
 	// 3. Update creds for those users whose groups are changed
-	for _, parentActualDN := range parentUserActualDNs {
+	for _, parentActualDN := range parentUserActualDNList {
 		currGroupsSet := updatedGroups[parentActualDN]
 		parentUser := actualDNToParentUserMap[parentActualDN]
 		currGroups := currGroupsSet.ToSlice()
