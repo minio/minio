@@ -566,6 +566,7 @@ type IAMStorageAPI interface {
 	loadPolicyDocWithRetry(ctx context.Context, policy string, m map[string]PolicyDoc, retries int) error
 	loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error
 	loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error
+	loadUserForce(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error
 	loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error
 	loadUsersForce(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error
 	loadGroup(ctx context.Context, group string, m map[string]GroupInfo) error

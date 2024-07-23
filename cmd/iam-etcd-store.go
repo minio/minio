@@ -255,6 +255,14 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 }
 
 func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
+	return ies.loadUserHelper(ctx, user, userType, m, false)
+}
+
+func (ies *IAMEtcdStore) loadUserForce(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
+	return ies.loadUserHelper(ctx, user, userType, m, true)
+}
+
+func (ies *IAMEtcdStore) loadUserHelper(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity, force bool) error {
 	var u UserIdentity
 	err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
 	if err != nil {
@@ -263,7 +271,7 @@ func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAM
 		}
 		return err
 	}
-	return ies.addUser(ctx, user, userType, u, m, false)
+	return ies.addUser(ctx, user, userType, u, m, force)
 }
 
 func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
