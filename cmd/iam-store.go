@@ -520,9 +520,9 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 	return nil
 }
 
-func (cache *iamCache) deleteMatchingUsers(ctx context.Context, store *IAMStoreSys, predicate func(UserIdentity) bool) {
+func (c *iamCache) deleteMatchingUsers(ctx context.Context, store *IAMStoreSys, predicate func(UserIdentity) bool) {
 	deleted := false
-	for user, ui := range cache.iamUsersMap {
+	for user, ui := range c.iamUsersMap {
 		userType := regUser
 		cred := ui.Credentials
 
@@ -535,19 +535,19 @@ func (cache *iamCache) deleteMatchingUsers(ctx context.Context, store *IAMStoreS
 		if predicate(ui) {
 			// Delete this user account and its policy mapping
 			store.deleteMappedPolicy(ctx, user, userType, false)
-			cache.iamUserPolicyMap.Delete(user)
+			c.iamUserPolicyMap.Delete(user)
 
 			// we are only logging errors, not handling them.
 			err := store.deleteUserIdentity(ctx, user, userType)
 			iamLogIf(GlobalContext, err)
-			delete(cache.iamUsersMap, user)
+			delete(c.iamUsersMap, user)
 			store.group.Forget(user)
 
 			deleted = true
 		}
 	}
 	if deleted {
-		cache.updatedAt = time.Now()
+		c.updatedAt = time.Now()
 	}
 }
 
