@@ -664,7 +664,7 @@ var errUnsupportedSignal = fmt.Errorf("unsupported signal")
 
 func waitingDrivesNode() map[string]madmin.DiskMetrics {
 	globalLocalDrivesMu.RLock()
-	localDrives := cloneDrives(globalLocalDrives)
+	localDrives := cloneDrives(globalLocalDrivesMap)
 	globalLocalDrivesMu.RUnlock()
 
 	errs := make([]error, len(localDrives))
