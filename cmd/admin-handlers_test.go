@@ -463,6 +463,7 @@ func TestTopLockEntries(t *testing.T) {
 			Owner:      lri.Owner,
 			ID:         lri.UID,
 			Quorum:     lri.Quorum,
+			Timestamp:  time.Unix(0, lri.Timestamp),
 		})
 	}
 

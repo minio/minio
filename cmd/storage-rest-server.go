@@ -36,6 +36,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/grid"
 	"github.com/tinylib/msgp/msgp"
 
@@ -594,44 +595,47 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	}
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
-	offset, err := strconv.Atoi(r.Form.Get(storageRESTOffset))
+	offset, err := strconv.ParseInt(r.Form.Get(storageRESTOffset), 10, 64)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	length, err := strconv.Atoi(r.Form.Get(storageRESTLength))
+	length, err := strconv.ParseInt(r.Form.Get(storageRESTLength), 10, 64)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
+	w.Header().Set(xhttp.ContentLength, strconv.FormatInt(length, 10))
 
-	rc, err := s.getStorage().ReadFileStream(r.Context(), volume, filePath, int64(offset), int64(length))
+	rc, err := s.getStorage().ReadFileStream(r.Context(), volume, filePath, offset, length)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 	defer rc.Close()
 
-	rf, ok := w.(io.ReaderFrom)
-	if ok && runtime.GOOS != "windows" {
-		// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
-		// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
-		// Windows can lock up with this optimization, so we fall back to regular copy.
-		sr, ok := rc.(*sendFileReader)
+	noReadFrom := runtime.GOOS == "windows" || length < 4*humanize.MiByte
+	if !noReadFrom {
+		rf, ok := w.(io.ReaderFrom)
 		if ok {
-			// Sendfile sends in 4MiB chunks per sendfile syscall which is more than enough
-			// for most setups.
-			_, err = rf.ReadFrom(sr.Reader)
-			if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-				storageLogIf(r.Context(), err)
-			}
-			if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
-				return
+			// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
+			// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
+			// Windows can lock up with this optimization, so we fall back to regular copy.
+			sr, ok := rc.(*sendFileReader)
+			if ok {
+				// Sendfile sends in 4MiB chunks per sendfile syscall which is more than enough
+				// for most setups.
+				_, err = rf.ReadFrom(sr.Reader)
+				if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
+					storageLogIf(r.Context(), err)
+				}
+				if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
+					return
+				}
 			}
 		}
-	} // Fallback to regular copy
+	} // noReadFrom means use io.Copy()
 
 	_, err = xioutil.Copy(w, rc)
 	if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients

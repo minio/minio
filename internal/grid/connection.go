@@ -27,6 +27,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -980,7 +981,10 @@ func (c *Connection) readStream(ctx context.Context, conn net.Conn, cancel conte
 			if int64(cap(dst)) < hdr.Length+1 {
 				dst = make([]byte, 0, hdr.Length+hdr.Length>>3)
 			}
-			return readAllInto(dst[:0], &wsReader)
+			if !hdr.Fin {
+				hdr.Length = -1
+			}
+			return readAllInto(dst[:0], &wsReader, hdr.Length)
 		}
 	}
 
@@ -1125,10 +1129,16 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 				continue
 			}
 		}
-		if len(queue) < maxMergeMessages && queueSize+len(toSend) < writeBufferSize-1024 && len(c.outQueue) > 0 {
-			queue = append(queue, toSend)
-			queueSize += len(toSend)
-			continue
+		if len(queue) < maxMergeMessages && queueSize+len(toSend) < writeBufferSize-1024 {
+			if len(c.outQueue) == 0 {
+				// Yield to allow more messages to fill.
+				runtime.Gosched()
+			}
+			if len(c.outQueue) > 0 {
+				queue = append(queue, toSend)
+				queueSize += len(toSend)
+				continue
+			}
 		}
 		c.outMessages.Add(int64(len(queue) + 1))
 		if c.outgoingBytes != nil {
@@ -1158,7 +1168,7 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 		}
 		c.connChange.L.Unlock()
 		if len(queue) == 0 {
-			// Combine writes.
+			// Send single message without merging.
 			buf.Reset()
 			err := wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 			if err != nil {
