@@ -204,13 +204,13 @@ func (z *lockRequesterInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Timestamp":
-			z.Timestamp, err = dc.ReadTime()
+			z.Timestamp, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "Timestamp")
 				return
 			}
 		case "TimeLastRefresh":
-			z.TimeLastRefresh, err = dc.ReadTime()
+			z.TimeLastRefresh, err = dc.ReadInt64()
 			if err != nil {
 				err = msgp.WrapError(err, "TimeLastRefresh")
 				return
@@ -288,7 +288,7 @@ func (z *lockRequesterInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteTime(z.Timestamp)
+	err = en.WriteInt64(z.Timestamp)
 	if err != nil {
 		err = msgp.WrapError(err, "Timestamp")
 		return
@@ -298,7 +298,7 @@ func (z *lockRequesterInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteTime(z.TimeLastRefresh)
+	err = en.WriteInt64(z.TimeLastRefresh)
 	if err != nil {
 		err = msgp.WrapError(err, "TimeLastRefresh")
 		return
@@ -361,10 +361,10 @@ func (z *lockRequesterInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.UID)
 	// string "Timestamp"
 	o = append(o, 0xa9, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70)
-	o = msgp.AppendTime(o, z.Timestamp)
+	o = msgp.AppendInt64(o, z.Timestamp)
 	// string "TimeLastRefresh"
 	o = append(o, 0xaf, 0x54, 0x69, 0x6d, 0x65, 0x4c, 0x61, 0x73, 0x74, 0x52, 0x65, 0x66, 0x72, 0x65, 0x73, 0x68)
-	o = msgp.AppendTime(o, z.TimeLastRefresh)
+	o = msgp.AppendInt64(o, z.TimeLastRefresh)
 	// string "Source"
 	o = append(o, 0xa6, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65)
 	o = msgp.AppendString(o, z.Source)
@@ -417,13 +417,13 @@ func (z *lockRequesterInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Timestamp":
-			z.Timestamp, bts, err = msgp.ReadTimeBytes(bts)
+			z.Timestamp, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Timestamp")
 				return
 			}
 		case "TimeLastRefresh":
-			z.TimeLastRefresh, bts, err = msgp.ReadTimeBytes(bts)
+			z.TimeLastRefresh, bts, err = msgp.ReadInt64Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "TimeLastRefresh")
 				return
@@ -466,7 +466,7 @@ func (z *lockRequesterInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *lockRequesterInfo) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 7 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.UID) + 10 + msgp.TimeSize + 16 + msgp.TimeSize + 7 + msgp.StringPrefixSize + len(z.Source) + 6 + msgp.BoolSize + 6 + msgp.StringPrefixSize + len(z.Owner) + 7 + msgp.IntSize
+	s = 1 + 5 + msgp.StringPrefixSize + len(z.Name) + 7 + msgp.BoolSize + 4 + msgp.StringPrefixSize + len(z.UID) + 10 + msgp.Int64Size + 16 + msgp.Int64Size + 7 + msgp.StringPrefixSize + len(z.Source) + 6 + msgp.BoolSize + 6 + msgp.StringPrefixSize + len(z.Owner) + 7 + msgp.IntSize
 	return
 }
 

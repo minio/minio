@@ -433,7 +433,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 		UID:       id,
 		Resources: names,
 		Source:    source,
-		Quorum:    quorum,
+		Quorum:    &quorum,
 	}
 
 	// Combined timeout for the lock attempt.
