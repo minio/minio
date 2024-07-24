@@ -1340,6 +1340,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
 
+	globalLocalDrivesMap = make(map[string]StorageAPI)
 	globalLocalSetDrives = make([][][]StorageAPI, len(endpointServerPools))
 	for pool := range globalLocalSetDrives {
 		globalLocalSetDrives[pool] = make([][]StorageAPI, endpointServerPools[pool].SetCount)
@@ -1413,7 +1414,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				globalLocalDrivesMu.Lock()
 				defer globalLocalDrivesMu.Unlock()
 
-				globalLocalDrives = append(globalLocalDrives, storage)
 				globalLocalDrivesMap[endpoint.String()] = storage
 				globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
 				return true

@@ -3553,7 +3553,7 @@ func (p *ReplicationPool) persistToDrive(ctx context.Context, v MRFReplicateEntr
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := cloneDrives(globalLocalDrives)
+	localDrives := cloneDrives(globalLocalDrivesMap)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {
@@ -3620,7 +3620,7 @@ func (p *ReplicationPool) loadMRF() (mrfRec MRFReplicateEntries, err error) {
 	}
 
 	globalLocalDrivesMu.RLock()
-	localDrives := cloneDrives(globalLocalDrives)
+	localDrives := cloneDrives(globalLocalDrivesMap)
 	globalLocalDrivesMu.RUnlock()
 
 	for _, localDrive := range localDrives {

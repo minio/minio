@@ -414,10 +414,9 @@ var (
 	globalServiceFreezeCnt int32
 	globalServiceFreezeMu  sync.Mutex // Updates.
 
-	// List of local drives to this node, this is only set during server startup,
-	// and is only mutated by HealFormat. Hold globalLocalDrivesMu to access.
-	globalLocalDrives    []StorageAPI
-	globalLocalDrivesMap = make(map[string]StorageAPI)
+	// Map of local drives to this node, this is set during server startup,
+	// disk reconnect and mutated by HealFormat. Hold globalLocalDrivesMu to access.
+	globalLocalDrivesMap map[string]StorageAPI
 	globalLocalDrivesMu  sync.RWMutex
 
 	globalDriveMonitoring = env.Get("_MINIO_DRIVE_ACTIVE_MONITORING", config.EnableOn) == config.EnableOn
