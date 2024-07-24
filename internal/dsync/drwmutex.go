@@ -442,7 +442,9 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 
 	// Special context for NetLockers - do not use timeouts.
 	// Also, pass the trace context info if found for debugging
-	netLockCtx := context.Background()
+	netLockCtx, newCancel := context.WithCancel(context.Background())
+	defer newCancel()
+
 	tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 	if ok {
 		netLockCtx = context.WithValue(netLockCtx, mcontext.ContextTraceKey, tc)
@@ -529,7 +531,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	// We may have some unused results in ch, release them async.
 	go func() {
 		wg.Wait()
-		xioutil.SafeClose(ch)
+		close(ch)
 		for grantToBeReleased := range ch {
 			if grantToBeReleased.isLocked() {
 				// release abandoned lock
