@@ -2067,7 +2067,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 			return nil, err
 		}
 	}
-
 	return &sendFileReader{Reader: io.LimitReader(file, length), Closer: file}, nil
 }
 

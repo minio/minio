@@ -243,6 +243,15 @@ func NopCloser(w io.Writer) io.WriteCloser {
 	return nopCloser{w}
 }
 
+const copyBufferSize = 32 * 1024
+
+var copyBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, copyBufferSize)
+		return &b
+	},
+}
+
 // SkipReader skips a given number of bytes and then returns all
 // remaining data.
 type SkipReader struct {
@@ -285,21 +294,11 @@ func NewSkipReader(r io.Reader, n int64) io.Reader {
 	return &SkipReader{r, n}
 }
 
-const copyBufferSize = 32 * 1024
-
-var copyBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, copyBufferSize)
-		return &b
-	},
-}
-
 // Copy is exactly like io.Copy but with reusable buffers.
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
-	bufp := copyBufPool.Get().(*[]byte)
+	bufp := ODirectPoolLarge.Get().(*[]byte)
 	buf := *bufp
-	buf = buf[:copyBufferSize]
-	defer copyBufPool.Put(bufp)
+	defer ODirectPoolLarge.Put(bufp)
 
 	return io.CopyBuffer(dst, src, buf)
 }
