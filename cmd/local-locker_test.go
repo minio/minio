@@ -32,6 +32,7 @@ import (
 func TestLocalLockerExpire(t *testing.T) {
 	wResources := make([]string, 1000)
 	rResources := make([]string, 1000)
+	quorum := 0
 	l := newLocker()
 	ctx := context.Background()
 	for i := range wResources {
@@ -40,7 +41,7 @@ func TestLocalLockerExpire(t *testing.T) {
 			Resources: []string{mustGetUUID()},
 			Source:    t.Name(),
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.Lock(ctx, arg)
 		if err != nil {
@@ -58,14 +59,14 @@ func TestLocalLockerExpire(t *testing.T) {
 			Resources: []string{name},
 			Source:    t.Name(),
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.RLock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !ok {
-			t.Fatal("did not get write lock")
+			t.Fatal("did not get read lock")
 		}
 		// RLock twice
 		ok, err = l.RLock(ctx, arg)
@@ -112,6 +113,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 	rUIDs := make([]string, 0, n*2)
 	l := newLocker()
 	ctx := context.Background()
+	quorum := 0
 	for i := range wResources {
 		names := [m]string{}
 		for j := range names {
@@ -123,7 +125,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Resources: names[:],
 			Source:    t.Name(),
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.Lock(ctx, arg)
 		if err != nil {
@@ -144,7 +146,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Resources: []string{name},
 			Source:    t.Name(),
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.RLock(ctx, arg)
 		if err != nil {
@@ -183,7 +185,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Resources: []string{name},
 			Source:    t.Name(),
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.RUnlock(ctx, arg)
 		if err != nil {
@@ -203,6 +205,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 	if len(l.lockUID) != len(rResources)+len(wResources)*m {
 		t.Fatalf("lockUID len, got %d, want %d + %d", len(l.lockUID), len(rResources), len(wResources)*m)
 	}
+
 	// RUnlock again, different uids
 	for i, name := range rResources {
 		arg := dsync.LockArgs{
@@ -210,7 +213,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Resources: []string{name},
 			Source:    "minio",
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.RUnlock(ctx, arg)
 		if err != nil {
@@ -238,7 +241,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Resources: names[:],
 			Source:    "minio",
 			Owner:     "owner",
-			Quorum:    0,
+			Quorum:    &quorum,
 		}
 		ok, err := l.Unlock(ctx, arg)
 		if err != nil {
@@ -261,6 +264,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 
 func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 	rng := rand.New(rand.NewSource(0))
+	quorum := 0
 	// Numbers of unique locks
 	for _, locks := range []int{100, 1000, 1e6} {
 		if testing.Short() && locks > 100 {
@@ -289,7 +293,7 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 								Resources: res,
 								Source:    hex.EncodeToString(tmp[:8]),
 								Owner:     hex.EncodeToString(tmp[8:]),
-								Quorum:    0,
+								Quorum:    &quorum,
 							})
 							if !ok || err != nil {
 								t.Fatal("failed:", err, ok)
@@ -311,7 +315,7 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 					for _, v := range l.lockMap {
 						for i := range v {
 							if rng.Intn(2) == 0 {
-								v[i].TimeLastRefresh = expired
+								v[i].TimeLastRefresh = expired.UnixNano()
 							}
 						}
 					}
@@ -347,6 +351,7 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 
 func Test_localLocker_RUnlock(t *testing.T) {
 	rng := rand.New(rand.NewSource(0))
+	quorum := 0
 	// Numbers of unique locks
 	for _, locks := range []int{1, 100, 1000, 1e6} {
 		if testing.Short() && locks > 100 {
@@ -375,7 +380,7 @@ func Test_localLocker_RUnlock(t *testing.T) {
 								Resources: res,
 								Source:    hex.EncodeToString(tmp[:8]),
 								Owner:     hex.EncodeToString(tmp[8:]),
-								Quorum:    0,
+								Quorum:    &quorum,
 							})
 							if !ok || err != nil {
 								t.Fatal("failed:", err, ok)

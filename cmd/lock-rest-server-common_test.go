@@ -63,15 +63,15 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 		Owner:           "owner",
 		Writer:          true,
 		UID:             "0123-4567",
-		Timestamp:       UTCNow(),
-		TimeLastRefresh: UTCNow(),
+		Timestamp:       UTCNow().UnixNano(),
+		TimeLastRefresh: UTCNow().UnixNano(),
 	}
 	lockRequesterInfo2 := lockRequesterInfo{
 		Owner:           "owner",
 		Writer:          true,
 		UID:             "89ab-cdef",
-		Timestamp:       UTCNow(),
-		TimeLastRefresh: UTCNow(),
+		Timestamp:       UTCNow().UnixNano(),
+		TimeLastRefresh: UTCNow().UnixNano(),
 	}
 
 	locker.ll.lockMap["name"] = []lockRequesterInfo{

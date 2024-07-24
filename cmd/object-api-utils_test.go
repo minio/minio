@@ -20,8 +20,10 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -45,6 +47,43 @@ func pathJoinOld(elem ...string) string {
 		}
 	}
 	return path.Join(elem...) + trailingSlash
+}
+
+func concatNaive(ss ...string) string {
+	rs := ss[0]
+	for i := 1; i < len(ss); i++ {
+		rs += ss[i]
+	}
+	return rs
+}
+
+func benchmark(b *testing.B, data []string) {
+	b.Run("concat naive", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			concatNaive(data...)
+		}
+	})
+	b.Run("concat fast", func(b *testing.B) {
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			concat(data...)
+		}
+	})
+}
+
+func BenchmarkConcatImplementation(b *testing.B) {
+	data := make([]string, 2)
+	rng := rand.New(rand.NewSource(0))
+	for i := 0; i < 2; i++ {
+		var tmp [16]byte
+		rng.Read(tmp[:])
+		data[i] = hex.EncodeToString(tmp[:])
+	}
+	b.ResetTimer()
+	benchmark(b, data)
 }
 
 func BenchmarkPathJoinOld(b *testing.B) {
