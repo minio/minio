@@ -254,7 +254,7 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_node_io_read_bytes`                 | Total bytes read by the process from the underlying storage system, /proc/[pid]/io read_bytes.                  |
 | `minio_node_io_wchar_bytes`                | Total bytes written by the process to the underlying storage system including page cache, /proc/[pid]/io wchar. |
 | `minio_node_io_write_bytes`                | Total bytes written by the process to the underlying storage system, /proc/[pid]/io write_bytes.                |
-| `minio_node_process_cpu_total_seconds`     | Total user and system CPU time spent in seconds by this process.                                                |
+| `minio_node_process_cpu_total_seconds`     | Total user and system CPU time spent in seconds by the process.                                                |
 | `minio_node_process_resident_memory_bytes` | Resident memory size in bytes.                                                                                  |
 | `minio_node_process_virtual_memory_bytes`  | Virtual memory size in bytes.                                                                                   |
 | `minio_node_process_starttime_seconds`     | Start time for MinIO process per node, time in seconds since Unix epoc.                                         |
