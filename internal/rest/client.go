@@ -129,13 +129,13 @@ func removeEmptyPort(host string) string {
 }
 
 // Copied from http.NewRequest but implemented to ensure we reuse `url.URL` instance.
-func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*http.Request, error) {
+func (c *Client) newRequest(ctx context.Context, method string, u url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
 		rc = io.NopCloser(body)
 	}
 	req := &http.Request{
-		Method:     http.MethodPost,
+		Method:     method,
 		URL:        &u,
 		Proto:      "HTTP/1.1",
 		ProtoMajor: 1,
@@ -290,8 +290,8 @@ func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
 // ErrClientClosed returned when *Client is closed.
 var ErrClientClosed = errors.New("rest client is closed")
 
-// Call - make a REST call with context.
-func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+// CallWithHTTPMethod - make a REST call with context, using a custom HTTP method.
+func (c *Client) CallWithHTTPMethod(ctx context.Context, httpMethod, rpcMethod string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	switch atomic.LoadInt32(&c.connected) {
 	case closed:
 		// client closed, this is usually a manual process
@@ -307,10 +307,10 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	// Shallow copy. We don't modify the *UserInfo, if set.
 	// All other fields are copied.
 	u := *c.url
-	u.Path = path.Join(u.Path, method)
+	u.Path = path.Join(u.Path, rpcMethod)
 	u.RawQuery = values.Encode()
 
-	req, err := c.newRequest(ctx, u, body)
+	req, err := c.newRequest(ctx, httpMethod, u, body)
 	if err != nil {
 		return nil, &NetworkError{Err: err}
 	}
@@ -380,6 +380,11 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 		resp.Body = &respBodyMonitor{ReadCloser: resp.Body, expectTimeouts: expectTimeouts}
 	}
 	return resp.Body, nil
+}
+
+// Call - make a REST call with context.
+func (c *Client) Call(ctx context.Context, rpcMethod string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+	return c.CallWithHTTPMethod(ctx, http.MethodPost, rpcMethod, values, body, length)
 }
 
 // Close closes all idle connections of the underlying http client

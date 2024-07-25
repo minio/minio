@@ -251,7 +251,7 @@ func guessIsRPCReq(req *http.Request) bool {
 		return true
 	}
 
-	return req.Method == http.MethodPost &&
+	return (req.Method == http.MethodPost || req.Method == http.MethodGet) &&
 		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+SlashSeparator)
 }
 

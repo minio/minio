@@ -29,14 +29,12 @@ import (
 	"net/http"
 	"os/user"
 	"path"
-	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/grid"
 	"github.com/tinylib/msgp/msgp"
 
@@ -606,36 +604,12 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	w.Header().Set(xhttp.ContentLength, strconv.FormatInt(length, 10))
-
 	rc, err := s.getStorage().ReadFileStream(r.Context(), volume, filePath, offset, length)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 	defer rc.Close()
-
-	noReadFrom := runtime.GOOS == "windows" || length < 4*humanize.MiByte
-	if !noReadFrom {
-		rf, ok := w.(io.ReaderFrom)
-		if ok {
-			// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
-			// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
-			// Windows can lock up with this optimization, so we fall back to regular copy.
-			sr, ok := rc.(*sendFileReader)
-			if ok {
-				// Sendfile sends in 4MiB chunks per sendfile syscall which is more than enough
-				// for most setups.
-				_, err = rf.ReadFrom(sr.Reader)
-				if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-					storageLogIf(r.Context(), err)
-				}
-				if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
-					return
-				}
-			}
-		}
-	} // noReadFrom means use io.Copy()
 
 	_, err = xioutil.Copy(w, rc)
 	if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
@@ -1367,12 +1341,12 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(h(server.CreateFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFile).HandlerFunc(h(server.ReadFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
-
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(h(server.DeleteVersionsHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(h(server.VerifyFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
+			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
 			logger.FatalIf(storageListDirRPC.RegisterNoInput(gm, server.ListDirHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageReadAllRPC.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageWriteAllRPC.Register(gm, server.WriteAllHandler, endpoint.Path), "unable to register handler")
