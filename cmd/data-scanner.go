@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,10 +115,12 @@ type backgroundHealInfo struct {
 	CurrentScanMode  madmin.HealScanMode `json:"currentScanMode"`
 }
 
-func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundHealInfo {
+func readBackgroundHealInfo(ctx context.Context, objAPI erasureObjects, bucketName string) backgroundHealInfo {
 	if globalIsErasureSD {
 		return backgroundHealInfo{}
 	}
+
+	backgroundHealInfoPath := bucketMetaPrefix + SlashSeparator + bucketName + SlashSeparator + backgroundHealInfoName
 
 	// Get last healing information
 	buf, err := readConfig(ctx, objAPI, backgroundHealInfoPath)
@@ -136,7 +137,7 @@ func readBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer) backgroundH
 	return info
 }
 
-func saveBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer, info backgroundHealInfo) {
+func saveBackgroundHealInfo(ctx context.Context, objAPI erasureObjects, bucketName string, info backgroundHealInfo) {
 	if globalIsErasureSD {
 		return
 	}
@@ -147,7 +148,7 @@ func saveBackgroundHealInfo(ctx context.Context, objAPI ObjectLayer, info backgr
 		return
 	}
 	// Get last healing information
-	err = saveConfig(ctx, objAPI, backgroundHealInfoPath, b)
+	err = saveConfig(ctx, objAPI, bucketMetaPrefix+SlashSeparator+bucketName+SlashSeparator+backgroundHealInfoName, b)
 	if err != nil {
 		internalLogIf(ctx, err)
 	}
@@ -160,22 +161,8 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 	ctx, cancel := globalLeaderLock.GetLock(ctx)
 	defer cancel()
 
-	// Load current bloom cycle
-	var cycleInfo currentScannerCycle
-
-	buf, _ := readConfig(ctx, objAPI, dataUsageBloomNamePath)
-	if len(buf) == 8 {
-		cycleInfo.next = binary.LittleEndian.Uint64(buf)
-	} else if len(buf) > 8 {
-		cycleInfo.next = binary.LittleEndian.Uint64(buf[:8])
-		buf = buf[8:]
-		_, err := cycleInfo.UnmarshalMsg(buf)
-		bugLogIf(ctx, err)
-	}
-
 	scannerTimer := time.NewTimer(scannerCycle.Load())
 	defer scannerTimer.Stop()
-	defer globalScannerMetrics.setCycle(nil)
 
 	for {
 		select {
@@ -186,51 +173,10 @@ func runDataScanner(ctx context.Context, objAPI ObjectLayer) {
 			// If scanner takes longer we start at once.
 			scannerTimer.Reset(scannerCycle.Load())
 
-			stopFn := globalScannerMetrics.log(scannerMetricScanCycle)
-			cycleInfo.current = cycleInfo.next
-			cycleInfo.started = time.Now()
-			globalScannerMetrics.setCycle(&cycleInfo)
-
-			bgHealInfo := readBackgroundHealInfo(ctx, objAPI)
-			scanMode := getCycleScanMode(cycleInfo.current, bgHealInfo.BitrotStartCycle, bgHealInfo.BitrotStartTime)
-			if bgHealInfo.CurrentScanMode != scanMode {
-				newHealInfo := bgHealInfo
-				newHealInfo.CurrentScanMode = scanMode
-				if scanMode == madmin.HealDeepScan {
-					newHealInfo.BitrotStartTime = time.Now().UTC()
-					newHealInfo.BitrotStartCycle = cycleInfo.current
-				}
-				saveBackgroundHealInfo(ctx, objAPI, newHealInfo)
-			}
-
 			// Wait before starting next cycle and wait on startup.
 			results := make(chan DataUsageInfo, 1)
 			go storeDataUsageInBackend(ctx, objAPI, results)
-			err := objAPI.NSScanner(ctx, results, uint32(cycleInfo.current), scanMode)
-			scannerLogIf(ctx, err)
-			res := map[string]string{"cycle": strconv.FormatUint(cycleInfo.current, 10)}
-			if err != nil {
-				res["error"] = err.Error()
-			}
-			stopFn(res)
-			if err == nil {
-				// Store new cycle...
-				cycleInfo.next++
-				cycleInfo.current = 0
-				cycleInfo.cycleCompleted = append(cycleInfo.cycleCompleted, time.Now())
-				if len(cycleInfo.cycleCompleted) > dataUsageUpdateDirCycles {
-					cycleInfo.cycleCompleted = cycleInfo.cycleCompleted[len(cycleInfo.cycleCompleted)-dataUsageUpdateDirCycles:]
-				}
-				globalScannerMetrics.setCycle(&cycleInfo)
-				tmp := make([]byte, 8, 8+cycleInfo.Msgsize())
-				// Cycle for backward compat.
-				binary.LittleEndian.PutUint64(tmp, cycleInfo.next)
-				tmp, _ = cycleInfo.MarshalMsg(tmp)
-				err = saveConfig(ctx, objAPI, dataUsageBloomNamePath, tmp)
-				if err != nil {
-					scannerLogIf(ctx, fmt.Errorf("%w, Object %s", err, dataUsageBloomNamePath))
-				}
-			}
+			scannerLogIf(ctx, objAPI.NSScanner(ctx, results))
 		}
 	}
 }
