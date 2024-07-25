@@ -290,10 +290,19 @@ func (muxConnectError) Op() Op {
 }
 
 type pongMsg struct {
-	NotFound bool    `msg:"nf"`
-	Err      *string `msg:"e,allownil"`
+	NotFound bool      `msg:"nf"`
+	Err      *string   `msg:"e,allownil"`
+	T        time.Time `msg:"t"`
 }
 
 func (pongMsg) Op() Op {
 	return OpPong
+}
+
+type pingMsg struct {
+	T time.Time `msg:"t"`
+}
+
+func (pingMsg) Op() Op {
+	return OpPing
 }
