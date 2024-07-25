@@ -362,7 +362,7 @@ func initAutoHeal(ctx context.Context, objAPI ObjectLayer) {
 
 func getLocalDisksToHeal() (disksToHeal Endpoints) {
 	globalLocalDrivesMu.RLock()
-	localDrives := cloneDrives(globalLocalDrives)
+	localDrives := cloneDrives(globalLocalDrivesMap)
 	globalLocalDrivesMu.RUnlock()
 	for _, disk := range localDrives {
 		_, err := disk.DiskInfo(context.Background(), DiskInfoOptions{})

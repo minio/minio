@@ -168,7 +168,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 
 	if !globalIsDistErasure {
 		globalLocalDrivesMu.Lock()
-		globalLocalDrives = localDrives
+		globalLocalDrivesMap = make(map[string]StorageAPI, len(localDrives))
 		for _, drive := range localDrives {
 			globalLocalDrivesMap[drive.Endpoint().String()] = drive
 		}
