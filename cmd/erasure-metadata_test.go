@@ -399,7 +399,8 @@ func TestListObjectParities(t *testing.T) {
 		errs     []error
 		parities []int
 		parity   int
-	}) {
+	},
+	) {
 		res.metaArr = mkMetaArr(N, parity, agree)
 		res.parities = mkParities(N, N-(N/2+1), parity, agree)
 		res.errs = make([]error, N)
@@ -416,7 +417,8 @@ func TestListObjectParities(t *testing.T) {
 		errs     []error
 		parities []int
 		parity   int
-	}) {
+	},
+	) {
 		fi := newFileInfo("obj-1", N-parity, parity)
 		fi.Size = 1 << 20
 		metaArr := make([]FileInfo, N)

@@ -468,6 +468,7 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = -1
 			continue
 		}
+		//nolint:gocritic
 		// Delete marker or zero byte objects take highest parity.
 		if metadata.Deleted || metadata.Size == 0 {
 			parities[index] = totalShards / 2
