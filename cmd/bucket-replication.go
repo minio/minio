@@ -91,7 +91,10 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
-func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config, checkRemote bool) (bool, APIError) {
+func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config, opts *validateReplicationDestinationOptions) (bool, APIError) {
+	if opts == nil {
+		opts = &validateReplicationDestinationOptions{}
+	}
 	var arns []string
 	if rCfg.RoleArn != "" {
 		arns = append(arns, rCfg.RoleArn)
@@ -113,7 +116,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		if clnt == nil {
 			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
-		if checkRemote { // validate remote bucket
+		if opts.CheckRemoteBucket { // validate remote bucket
 			found, err := clnt.BucketExists(ctx, arn.Bucket)
 			if err != nil {
 				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
@@ -133,23 +136,29 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 				}
 			}
 		}
+		// if checked bucket, then check the ready is unnecessary
+		if !opts.CheckRemoteBucket && opts.CheckReady {
+			endpoint := clnt.EndpointURL().String()
+			if errInt, ok := opts.checkReadyErr.Load(endpoint); !ok {
+				err = checkRemoteEndpoint(ctx, clnt.EndpointURL())
+				opts.checkReadyErr.Store(endpoint, err)
+			} else {
+				if errInt == nil {
+					err = nil
+				} else {
+					err = errInt.(error)
+				}
+			}
+			switch err.(type) {
+			case BucketRemoteIdenticalToSource:
+				return true, errorCodes.ToAPIErrWithErr(ErrBucketRemoteIdenticalToSource, fmt.Errorf("remote target endpoint %s is self referential", clnt.EndpointURL().String()))
+			default:
+			}
+		}
 		// validate replication ARN against target endpoint
-		c := globalBucketTargetSys.GetRemoteTargetClient(bucket, arnStr)
-		if c != nil {
-			if err := checkRemoteEndpoint(ctx, c.EndpointURL()); err != nil {
-				switch err.(type) {
-				case BucketRemoteIdenticalToSource:
-					return true, errorCodes.ToAPIErrWithErr(ErrBucketRemoteIdenticalToSource, fmt.Errorf("remote target endpoint %s is self referential", c.EndpointURL().String()))
-				default:
-				}
-			}
-			if c.EndpointURL().String() == clnt.EndpointURL().String() {
-				selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
-				if !sameTarget {
-					sameTarget = selfTarget
-				}
-				continue
-			}
+		selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
+		if !sameTarget {
+			sameTarget = selfTarget
 		}
 	}
 
@@ -3740,4 +3749,13 @@ func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch <-chan 
 	}()
 
 	return mrfCh, nil
+}
+
+// validateReplicationDestinationOptions is used to configure the validation of the replication destination.
+// validateReplicationDestination uses this to configure the validation.
+type validateReplicationDestinationOptions struct {
+	CheckRemoteBucket bool
+	CheckReady        bool
+
+	checkReadyErr sync.Map
 }
