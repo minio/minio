@@ -1470,10 +1470,11 @@ func (c *Connection) handlePong(ctx context.Context, m message) {
 
 func (c *Connection) handlePing(ctx context.Context, m message) {
 	var ping pingMsg
-	_, err := ping.UnmarshalMsg(m.Payload)
-	if err != nil {
-		gridLogIf(ctx, err)
-		return
+	if len(m.Payload) > 0 {
+		_, err := ping.UnmarshalMsg(m.Payload)
+		if err != nil {
+			gridLogIf(ctx, err)
+		}
 	}
 	// c.queueMsg will reuse m.Payload
 
