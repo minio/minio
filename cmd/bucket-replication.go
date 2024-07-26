@@ -2171,7 +2171,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		h := xxh3.HashString(ri.Bucket + ri.Name)
 		select {
 		case <-p.ctx.Done():
-		case p.lrgworkers[h%LargeWorkerCount] <- ri:
+		case p.lrgworkers[h%uint64(len(p.lrgworkers))] <- ri:
 		default:
 			globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
 			p.mu.RLock()
