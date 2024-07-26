@@ -1129,7 +1129,7 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 		if err != nil {
 			return err
 		}
-		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig, true)
+		sameTarget, apiErr := validateReplicationDestination(ctx, bucket, newReplicationConfig, &validateReplicationDestinationOptions{CheckRemoteBucket: true})
 		if apiErr != noError {
 			return fmt.Errorf("bucket replication config validation error: %#v", apiErr)
 		}
@@ -4453,6 +4453,7 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 		return err
 	}
 	ilmExpiryCfgHealed := false
+	opts := validateReplicationDestinationOptions{CheckReady: true}
 	for _, bi := range buckets {
 		bucket := bi.Name
 		info, err := c.siteReplicationStatus(ctx, objAPI, madmin.SRStatusOptions{
@@ -4472,7 +4473,7 @@ func (c *SiteReplicationSys) healBuckets(ctx context.Context, objAPI ObjectLayer
 			c.healVersioningMetadata(ctx, objAPI, bucket, info)
 			c.healOLockConfigMetadata(ctx, objAPI, bucket, info)
 			c.healSSEMetadata(ctx, objAPI, bucket, info)
-			c.healBucketReplicationConfig(ctx, objAPI, bucket, info)
+			c.healBucketReplicationConfig(ctx, objAPI, bucket, info, &opts)
 			c.healBucketPolicies(ctx, objAPI, bucket, info)
 			c.healTagMetadata(ctx, objAPI, bucket, info)
 			c.healBucketQuotaConfig(ctx, objAPI, bucket, info)
@@ -5172,7 +5173,7 @@ func (c *SiteReplicationSys) healBucket(ctx context.Context, objAPI ObjectLayer,
 	return nil
 }
 
-func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo) error {
+func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, objAPI ObjectLayer, bucket string, info srStatusInfo, opts *validateReplicationDestinationOptions) error {
 	bs := info.BucketStats[bucket]
 
 	c.RLock()
@@ -5226,7 +5227,7 @@ func (c *SiteReplicationSys) healBucketReplicationConfig(ctx context.Context, ob
 
 	if rcfg != nil && !replMismatch {
 		// validate remote targets on current cluster for this bucket
-		_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, false)
+		_, apiErr := validateReplicationDestination(ctx, bucket, rcfg, opts)
 		if apiErr != noError {
 			replMismatch = true
 		}
