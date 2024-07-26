@@ -51,9 +51,10 @@ func TestGuessIsRPC(t *testing.T) {
 	r = &http.Request{
 		Proto:  "HTTP/1.1",
 		Method: http.MethodGet,
+		URL:    u,
 	}
-	if guessIsRPCReq(r) {
-		t.Fatal("Test shouldn't report as net/rpc for a non net/rpc request.")
+	if !guessIsRPCReq(r) {
+		t.Fatal("Test shouldn't fail for a possible net/rpc request.")
 	}
 	r = &http.Request{
 		Proto:  "HTTP/1.1",
