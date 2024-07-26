@@ -151,10 +151,77 @@ func isServerResolvable(endpoint Endpoint, timeout time.Duration) error {
 	return nil
 }
 
+var errNoFormatFound = errors.New("no format.json found")
+
+// Load format.json from only local drives. Each local and remote storage will have an associated
+// disk-id in the memory, the remote drive will only accept requests if the disk-id is correct.
+// Checking of the cluster drives layout is needed or deployment-id is needed since the disk-id
+// is random and the fact that it is matching is enough proof that the remote drive belongs to the
+// same cluster and the same deployment ID format. There is no concept of outdated format.json as well
+// since each new fresh drive format.json is calculated based on the quorum format.json.
+func loadFormatsFromLocalDrives(storageDisks []StorageAPI, poolIndex int) (*formatErasureV3, error) {
+	var (
+		formatConfigs               []*formatErasureV3
+		localDrives, formatNotFound int
+	)
+
+	for _, disk := range storageDisks {
+		if disk == nil || !disk.IsLocal() {
+			continue
+		}
+		localDrives++
+		f, err := loadFormatErasure(disk, false)
+		if err == nil {
+			formatConfigs = append(formatConfigs, f)
+		} else {
+			if err == errFileNotFound {
+				formatNotFound++
+			} else {
+				storageLogIf(GlobalContext, fmt.Errorf("unable to load format.json from %s: %w",
+					disk.String(), err))
+			}
+		}
+	}
+
+	// No drive is formatted - quit early
+	if formatNotFound == localDrives {
+		return nil, errNoFormatFound
+	}
+
+	format, err := getFormatErasureInQuorum(formatConfigs)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		p, s, d := disk.GetDiskLoc()
+		if p != poolIndex {
+			continue
+		}
+		diskID, err := disk.GetDiskID()
+		if err != nil {
+			storageDisks[i] = nil
+			continue
+		}
+		if diskID == "" {
+			disk.SetDiskID(format.Erasure.Sets[s][d])
+		} else if diskID != format.Erasure.Sets[s][d] {
+			storageDisks[i] = nil
+			storageLogIf(GlobalContext, fmt.Errorf("unexpected disk uuid at this location: %s, expected: %s, found: %s",
+				disk.String(), diskID, format.Erasure.Sets[s][d]))
+		}
+
+	}
+	return format, nil
+}
+
 // connect to list of endpoints and load all Erasure disk formats, validate the formats are correct
 // and are in quorum, if no formats are found attempt to initialize all of them for the first
 // time. additionally make sure to close all the disks used in this attempt.
-func connectLoadInitFormats(verboseLogging bool, firstDisk bool, storageDisks []StorageAPI, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) (format *formatErasureV3, err error) {
+func connectLoadInitFormats(verboseLogging bool, firstDisk bool, storageDisks []StorageAPI, endpoints Endpoints, poolIndex, setCount, setDriveCount int, deploymentID string) (format *formatErasureV3, err error) {
 	// Attempt to load all `format.json` from all disks.
 	formatConfigs, sErrs := loadFormatErasureAll(storageDisks, false)
 
@@ -192,7 +259,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, storageDisks []
 	// All disks report unformatted we should initialized everyone.
 	if shouldInitErasureDisks(sErrs) && firstDisk {
 		logger.Info("Formatting %s pool, %v set(s), %v drives per set.",
-			humanize.Ordinal(poolCount), setCount, setDriveCount)
+			humanize.Ordinal(poolIndex+1), setCount, setDriveCount)
 
 		// Initialize erasure code format on disks
 		format, err = initFormatErasure(GlobalContext, storageDisks, setCount, setDriveCount, deploymentID, sErrs)
@@ -236,7 +303,7 @@ func connectLoadInitFormats(verboseLogging bool, firstDisk bool, storageDisks []
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
+func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolIndex, setCount, setDriveCount int, deploymentID string) (storageDisks []StorageAPI, format *formatErasureV3, err error) {
 	if len(endpoints) == 0 || setCount == 0 || setDriveCount == 0 {
 		return nil, nil, errInvalidArgument
 	}
@@ -272,7 +339,16 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 		}
 	}()
 
-	format, err = connectLoadInitFormats(verbose, firstDisk, storageDisks, endpoints, poolCount, setCount, setDriveCount, deploymentID)
+	// Tentative to get formatted drives location of the cluster
+	// from the local disks alone
+	format, err = loadFormatsFromLocalDrives(storageDisks, poolIndex)
+	if err == nil {
+		return storageDisks, format, nil
+	}
+
+	// Local drives are not accessible or formatted, let's try to get an overview of
+	// this cluster from all nodes and get a quorum
+	format, err = connectLoadInitFormats(verbose, firstDisk, storageDisks, endpoints, poolIndex, setCount, setDriveCount, deploymentID)
 	if err == nil {
 		return storageDisks, format, nil
 	}
@@ -290,7 +366,7 @@ func waitForFormatErasure(firstDisk bool, endpoints Endpoints, poolCount, setCou
 			tries = 1
 		}
 
-		format, err = connectLoadInitFormats(verbose, firstDisk, storageDisks, endpoints, poolCount, setCount, setDriveCount, deploymentID)
+		format, err = connectLoadInitFormats(verbose, firstDisk, storageDisks, endpoints, poolIndex, setCount, setDriveCount, deploymentID)
 		if err == nil {
 			return storageDisks, format, nil
 		}

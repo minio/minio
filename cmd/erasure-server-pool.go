@@ -131,7 +131,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 
 		bootstrapTrace("waitForFormatErasure: loading disks", func() {
-			storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i+1,
+			storageDisks[i], formats[i], err = waitForFormatErasure(local, ep.Endpoints, i,
 				ep.SetCount, ep.DrivesPerSet, deploymentID)
 		})
 		if err != nil {
