@@ -123,6 +123,9 @@ type Connection struct {
 	inBytes       atomic.Int64
 	inMessages    atomic.Int64
 	outMessages   atomic.Int64
+	reconnects    atomic.Int64
+	lastConnect   atomic.Pointer[time.Time]
+	lastPingDur   atomic.Int64
 
 	// For testing only
 	debugInConn   net.Conn
@@ -707,6 +710,8 @@ func (c *Connection) connect() {
 			retry(fmt.Errorf("connection rejected: %s", r.RejectedReason))
 			continue
 		}
+		t := time.Now().UTC()
+		c.lastConnect.Store(&t)
 		c.reconnectMu.Lock()
 		remoteUUID := uuid.UUID(r.ID)
 		if c.remoteID != nil {
@@ -807,6 +812,8 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	if err != nil {
 		return err
 	}
+	t := time.Now().UTC()
+	c.lastConnect.Store(&t)
 	// Signal that we are reconnected, update state and handle messages.
 	// Prevent other connections from connecting while we process.
 	c.reconnectMu.Lock()
@@ -826,6 +833,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 // caller *must* hold reconnectMu.
 func (c *Connection) reconnected() {
 	c.updateState(StateConnectionError)
+	c.reconnects.Add(1)
 
 	// Drain the outQueue, so any blocked messages can be sent.
 	// We keep the queue, but start draining it, if it gets full.
@@ -1090,7 +1098,8 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 	ping := time.NewTicker(connPingInterval)
 	pingFrame := message{
 		Op:         OpPing,
-		DeadlineMS: 5000,
+		DeadlineMS: uint32(connPingInterval.Milliseconds()),
+		Payload:    make([]byte, pingMsg{}.Msgsize()),
 	}
 
 	defer ping.Stop()
@@ -1116,11 +1125,18 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 					return
 				}
 			}
+			ping := pingMsg{
+				T: time.Now(),
+			}
 			var err error
+			if pingFrame.Payload, err = ping.MarshalMsg(pingFrame.Payload[:0]); err != nil {
+				gridLogIf(ctx, err) // Fake it... Though this should never fail.
+				atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+				continue
+			}
 			toSend, err = pingFrame.MarshalMsg(GetByteBuffer()[:0])
 			if err != nil {
-				gridLogIf(ctx, err)
-				// Fake it...
+				gridLogIf(ctx, err) // Fake it... Though this should never fail.
 				atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 				continue
 			}
@@ -1428,13 +1444,16 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 }
 
 func (c *Connection) handlePong(ctx context.Context, m message) {
-	if m.MuxID == 0 && m.Payload == nil {
-		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
-		return
-	}
 	var pong pongMsg
 	_, err := pong.UnmarshalMsg(m.Payload)
 	PutByteBuffer(m.Payload)
+	m.Payload = nil
+
+	if m.MuxID == 0 {
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+		c.lastPingDur.Store(int64(time.Since(pong.T)))
+		return
+	}
 	gridLogIf(ctx, err)
 	if m.MuxID == 0 {
 		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
@@ -1450,18 +1469,26 @@ func (c *Connection) handlePong(ctx context.Context, m message) {
 }
 
 func (c *Connection) handlePing(ctx context.Context, m message) {
+	var ping pingMsg
+	if len(m.Payload) > 0 {
+		_, err := ping.UnmarshalMsg(m.Payload)
+		if err != nil {
+			gridLogIf(ctx, err)
+		}
+	}
+	// c.queueMsg will reuse m.Payload
+
 	if m.MuxID == 0 {
-		m.Flags.Clear(FlagPayloadIsZero)
-		m.Op = OpPong
-		gridLogIf(ctx, c.queueMsg(m, nil))
+		gridLogIf(ctx, c.queueMsg(m, &pongMsg{T: ping.T}))
 		return
 	}
 	// Single calls do not support pinging.
 	if v, ok := c.inStream.Load(m.MuxID); ok {
 		pong := v.ping(m.Seq)
+		pong.T = ping.T
 		gridLogIf(ctx, c.queueMsg(m, &pong))
 	} else {
-		pong := pongMsg{NotFound: true}
+		pong := pongMsg{NotFound: true, T: ping.T}
 		gridLogIf(ctx, c.queueMsg(m, &pong))
 	}
 	return
@@ -1640,6 +1667,11 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 	if c.State() == StateConnected {
 		conn++
 	}
+	var lastConn time.Time
+	if t := c.lastConnect.Load(); t != nil {
+		lastConn = *t
+	}
+	pingMS := float64(c.lastPingDur.Load()) / float64(time.Millisecond)
 	m := madmin.RPCMetrics{
 		CollectedAt:      time.Now(),
 		Connected:        conn,
@@ -1652,6 +1684,10 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 		OutgoingMessages: c.outMessages.Load(),
 		OutQueue:         len(c.outQueue),
 		LastPongTime:     time.Unix(0, c.LastPong).UTC(),
+		LastConnectTime:  lastConn,
+		ReconnectCount:   int(c.reconnects.Load()),
+		LastPingMS:       pingMS,
+		MaxPingDurMS:     pingMS,
 	}
 	m.ByDestination = map[string]madmin.RPCMetrics{
 		c.Remote: m,
