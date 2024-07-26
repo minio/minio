@@ -1079,10 +1079,8 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return err
 	}
 
-	discard := true
-
 	var legacyJSON bool
-	buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile), discard)
+	buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
 	if err != nil {
 		if !errors.Is(err, errFileNotFound) {
 			return err
@@ -1092,7 +1090,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		legacy := s.formatLegacy
 		s.RUnlock()
 		if legacy {
-			buf, _, err = s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1), discard)
+			buf, _, err = s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1))
 			if err != nil {
 				return err
 			}
@@ -1293,7 +1291,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 	}
 
 	var legacyJSON bool
-	buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(filePath, xlStorageFormatFile), true)
+	buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(filePath, xlStorageFormatFile))
 	if err != nil {
 		if !errors.Is(err, errFileNotFound) {
 			return err
@@ -1558,7 +1556,7 @@ func (s *xlStorage) readRaw(ctx context.Context, volume, volumeDir, filePath str
 
 	xlPath := pathJoin(filePath, xlStorageFormatFile)
 	if readData {
-		buf, dmTime, err = s.readAllData(ctx, volume, volumeDir, xlPath, false)
+		buf, dmTime, err = s.readAllData(ctx, volume, volumeDir, xlPath)
 	} else {
 		buf, dmTime, err = s.readMetadataWithDMTime(ctx, xlPath)
 		if err != nil {
@@ -1578,7 +1576,7 @@ func (s *xlStorage) readRaw(ctx context.Context, volume, volumeDir, filePath str
 	s.RUnlock()
 
 	if err != nil && errors.Is(err, errFileNotFound) && legacy {
-		buf, dmTime, err = s.readAllData(ctx, volume, volumeDir, pathJoin(filePath, xlStorageFormatFileV1), false)
+		buf, dmTime, err = s.readAllData(ctx, volume, volumeDir, pathJoin(filePath, xlStorageFormatFileV1))
 		if err != nil {
 			return nil, time.Time{}, err
 		}
@@ -1716,7 +1714,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 			canInline := fi.ShardFileSize(fi.Parts[0].ActualSize) <= inlineBlock
 			if canInline {
 				dataPath := pathJoin(volumeDir, path, fi.DataDir, fmt.Sprintf("part.%d", fi.Parts[0].Number))
-				fi.Data, _, err = s.readAllData(ctx, volume, volumeDir, dataPath, false)
+				fi.Data, _, err = s.readAllData(ctx, volume, volumeDir, dataPath)
 				if err != nil {
 					return FileInfo{}, err
 				}
@@ -1727,7 +1725,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 	return fi, nil
 }
 
-func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, filePath string, discard bool) (buf []byte, dmTime time.Time, err error) {
+func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, filePath string) (buf []byte, dmTime time.Time, err error) {
 	if filePath == "" {
 		return nil, dmTime, errFileNotFound
 	}
@@ -1771,14 +1769,6 @@ func (s *xlStorage) readAllData(ctx context.Context, volume, volumeDir string, f
 		}
 		return nil, dmTime, err
 	}
-
-	if discard {
-		// This discard is mostly true for deletes
-		// so we need to make sure we do not keep
-		// page-cache references after.
-		defer disk.Fdatasync(f)
-	}
-
 	defer f.Close()
 
 	// Get size for precise allocation.
@@ -1830,7 +1820,7 @@ func (s *xlStorage) ReadAll(ctx context.Context, volume string, path string) (bu
 		return nil, err
 	}
 
-	buf, _, err = s.readAllData(ctx, volume, volumeDir, filePath, false)
+	buf, _, err = s.readAllData(ctx, volume, volumeDir, filePath)
 	return buf, err
 }
 
@@ -2997,7 +2987,7 @@ func (s *xlStorage) ReadMultiple(ctx context.Context, req ReadMultipleReq, resp 
 			if req.MetadataOnly {
 				data, mt, err = s.readMetadataWithDMTime(ctx, fullPath)
 			} else {
-				data, mt, err = s.readAllData(ctx, req.Bucket, volumeDir, fullPath, false)
+				data, mt, err = s.readAllData(ctx, req.Bucket, volumeDir, fullPath)
 			}
 			return err
 		}); err != nil {
@@ -3100,7 +3090,7 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 	}
 	baseDir := pathJoin(volumeDir, path+slashSeparator)
 	metaPath := pathutil.Join(baseDir, xlStorageFormatFile)
-	buf, _, err := s.readAllData(ctx, volume, volumeDir, metaPath, false)
+	buf, _, err := s.readAllData(ctx, volume, volumeDir, metaPath)
 	if err != nil {
 		return err
 	}
