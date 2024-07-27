@@ -251,7 +251,7 @@ func guessIsRPCReq(req *http.Request) bool {
 		return true
 	}
 
-	return req.Method == http.MethodPost &&
+	return (req.Method == http.MethodPost || req.Method == http.MethodGet) &&
 		strings.HasPrefix(req.URL.Path, minioReservedBucketPath+SlashSeparator)
 }
 
@@ -469,7 +469,7 @@ func setBucketForwardingMiddleware(h http.Handler) http.Handler {
 		}
 		if globalDNSConfig == nil || !globalBucketFederation ||
 			guessIsHealthCheckReq(r) || guessIsMetricsReq(r) ||
-			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) {
+			guessIsRPCReq(r) || guessIsLoginSTSReq(r) || isAdminReq(r) || isKMSReq(r) {
 			h.ServeHTTP(w, r)
 			return
 		}

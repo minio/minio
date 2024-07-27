@@ -36,6 +36,7 @@ import (
 	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/wildcard"
 	"github.com/minio/pkg/v3/workers"
+	"github.com/minio/pkg/v3/xtime"
 	"gopkg.in/yaml.v3"
 )
 
@@ -116,7 +117,7 @@ func (p BatchJobExpirePurge) Validate() error {
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
 	line, col     int
-	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
+	OlderThan     xtime.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
@@ -162,7 +163,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, obj.Name) {
 		return false
 	}
-	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan {
+	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan.D() {
 		return false
 	}
 

@@ -31,16 +31,16 @@ import (
 
 // lockRequesterInfo stores various info from the client for each lock that is requested.
 type lockRequesterInfo struct {
-	Name            string    // name of the resource lock was requested for
-	Writer          bool      // Bool whether write or read lock.
-	UID             string    // UID to uniquely identify request of client.
-	Timestamp       time.Time // Timestamp set at the time of initialization.
-	TimeLastRefresh time.Time // Timestamp for last lock refresh.
-	Source          string    // Contains line, function and filename requesting the lock.
-	Group           bool      // indicates if it was a group lock.
-	Owner           string    // Owner represents the UUID of the owner who originally requested the lock.
-	Quorum          int       // Quorum represents the quorum required for this lock to be active.
-	idx             int       `msg:"-"` // index of the lock in the lockMap.
+	Name            string // name of the resource lock was requested for
+	Writer          bool   // Bool whether write or read lock.
+	UID             string // UID to uniquely identify request of client.
+	Timestamp       int64  // Timestamp set at the time of initialization.
+	TimeLastRefresh int64  // Timestamp for last lock refresh.
+	Source          string // Contains line, function and filename requesting the lock.
+	Group           bool   // indicates if it was a group lock.
+	Owner           string // Owner represents the UUID of the owner who originally requested the lock.
+	Quorum          int    // Quorum represents the quorum required for this lock to be active.
+	idx             int    `msg:"-"` // index of the lock in the lockMap.
 }
 
 // isWriteLock returns whether the lock is a write or read lock.
@@ -87,6 +87,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 
 	// No locks held on the all resources, so claim write
 	// lock on all resources at once.
+	now := UTCNow()
 	for i, resource := range args.Resources {
 		l.lockMap[resource] = []lockRequesterInfo{
 			{
@@ -95,10 +96,10 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 				Source:          args.Source,
 				Owner:           args.Owner,
 				UID:             args.UID,
-				Timestamp:       UTCNow(),
-				TimeLastRefresh: UTCNow(),
+				Timestamp:       now.UnixNano(),
+				TimeLastRefresh: now.UnixNano(),
 				Group:           len(args.Resources) > 1,
-				Quorum:          args.Quorum,
+				Quorum:          *args.Quorum,
 				idx:             i,
 			},
 		}
@@ -108,7 +109,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 }
 
 func formatUUID(s string, idx int) string {
-	return s + strconv.Itoa(idx)
+	return concat(s, strconv.Itoa(idx))
 }
 
 func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
@@ -167,17 +168,19 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	resource := args.Resources[0]
+	now := UTCNow()
 	lrInfo := lockRequesterInfo{
 		Name:            resource,
 		Writer:          false,
 		Source:          args.Source,
 		Owner:           args.Owner,
 		UID:             args.UID,
-		Timestamp:       UTCNow(),
-		TimeLastRefresh: UTCNow(),
-		Quorum:          args.Quorum,
+		Timestamp:       now.UnixNano(),
+		TimeLastRefresh: now.UnixNano(),
+		Quorum:          *args.Quorum,
 	}
-	if lri, ok := l.lockMap[resource]; ok {
+	lri, ok := l.lockMap[resource]
+	if ok {
 		if reply = !isWriteLock(lri); reply {
 			// Unless there is a write lock
 			l.lockMap[resource] = append(l.lockMap[resource], lrInfo)
@@ -351,9 +354,10 @@ func (l *localLocker) Refresh(ctx context.Context, args dsync.LockArgs) (refresh
 				delete(l.lockUID, formatUUID(args.UID, idx))
 				return idx > 0, nil
 			}
+			now := UTCNow()
 			for i := range lris {
 				if lris[i].UID == args.UID {
-					lris[i].TimeLastRefresh = UTCNow()
+					lris[i].TimeLastRefresh = now.UnixNano()
 				}
 			}
 			idx++
@@ -376,7 +380,7 @@ func (l *localLocker) expireOldLocks(interval time.Duration) {
 		modified := false
 		for i := 0; i < len(lris); {
 			lri := &lris[i]
-			if time.Since(lri.TimeLastRefresh) > interval {
+			if time.Since(time.Unix(0, lri.TimeLastRefresh)) > interval {
 				delete(l.lockUID, formatUUID(lri.UID, lri.idx))
 				if len(lris) == 1 {
 					// Remove the write lock.

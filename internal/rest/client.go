@@ -28,6 +28,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -95,9 +96,9 @@ type Client struct {
 	// TraceOutput will print debug information on non-200 calls if set.
 	TraceOutput io.Writer // Debug trace output
 
-	httpClient   *http.Client
-	url          *url.URL
-	newAuthToken func(audience string) string
+	httpClient *http.Client
+	url        *url.URL
+	auth       func() string
 
 	sync.RWMutex // mutex for lastErr
 	lastErr      error
@@ -128,13 +129,13 @@ func removeEmptyPort(host string) string {
 }
 
 // Copied from http.NewRequest but implemented to ensure we reuse `url.URL` instance.
-func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*http.Request, error) {
+func (c *Client) newRequest(ctx context.Context, method string, u url.URL, body io.Reader) (*http.Request, error) {
 	rc, ok := body.(io.ReadCloser)
 	if !ok && body != nil {
 		rc = io.NopCloser(body)
 	}
 	req := &http.Request{
-		Method:     http.MethodPost,
+		Method:     method,
 		URL:        &u,
 		Proto:      "HTTP/1.1",
 		ProtoMajor: 1,
@@ -188,10 +189,10 @@ func (c *Client) newRequest(ctx context.Context, u url.URL, body io.Reader) (*ht
 		}
 	}
 
-	if c.newAuthToken != nil {
-		req.Header.Set("Authorization", "Bearer "+c.newAuthToken(u.RawQuery))
+	if c.auth != nil {
+		req.Header.Set("Authorization", "Bearer "+c.auth())
 	}
-	req.Header.Set("X-Minio-Time", time.Now().UTC().Format(time.RFC3339))
+	req.Header.Set("X-Minio-Time", strconv.FormatInt(time.Now().UnixNano(), 10))
 
 	if tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt); ok {
 		req.Header.Set(xhttp.AmzRequestID, tc.AmzReqID)
@@ -289,8 +290,8 @@ func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
 // ErrClientClosed returned when *Client is closed.
 var ErrClientClosed = errors.New("rest client is closed")
 
-// Call - make a REST call with context.
-func (c *Client) Call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+// CallWithHTTPMethod - make a REST call with context, using a custom HTTP method.
+func (c *Client) CallWithHTTPMethod(ctx context.Context, httpMethod, rpcMethod string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
 	switch atomic.LoadInt32(&c.connected) {
 	case closed:
 		// client closed, this is usually a manual process
@@ -306,10 +307,10 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	// Shallow copy. We don't modify the *UserInfo, if set.
 	// All other fields are copied.
 	u := *c.url
-	u.Path = path.Join(u.Path, method)
+	u.Path = path.Join(u.Path, rpcMethod)
 	u.RawQuery = values.Encode()
 
-	req, err := c.newRequest(ctx, u, body)
+	req, err := c.newRequest(ctx, httpMethod, u, body)
 	if err != nil {
 		return nil, &NetworkError{Err: err}
 	}
@@ -381,13 +382,18 @@ func (c *Client) Call(ctx context.Context, method string, values url.Values, bod
 	return resp.Body, nil
 }
 
+// Call - make a REST call with context.
+func (c *Client) Call(ctx context.Context, rpcMethod string, values url.Values, body io.Reader, length int64) (reply io.ReadCloser, err error) {
+	return c.CallWithHTTPMethod(ctx, http.MethodPost, rpcMethod, values, body, length)
+}
+
 // Close closes all idle connections of the underlying http client
 func (c *Client) Close() {
 	atomic.StoreInt32(&c.connected, closed)
 }
 
 // NewClient - returns new REST client.
-func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) string) *Client {
+func NewClient(uu *url.URL, tr http.RoundTripper, auth func() string) *Client {
 	connected := int32(online)
 	urlStr := uu.String()
 	u, err := url.Parse(urlStr)
@@ -404,7 +410,7 @@ func NewClient(uu *url.URL, tr http.RoundTripper, newAuthToken func(aud string) 
 	clnt := &Client{
 		httpClient:               &http.Client{Transport: tr},
 		url:                      u,
-		newAuthToken:             newAuthToken,
+		auth:                     auth,
 		connected:                connected,
 		lastConn:                 time.Now().UnixNano(),
 		MaxErrResponseSize:       4096,

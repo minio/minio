@@ -262,14 +262,9 @@ type connectReq struct {
 	Token string
 }
 
-// audience returns the audience for the connect call.
-func (c *connectReq) audience() string {
-	return fmt.Sprintf("%s-%d", c.Host, c.Time.Unix())
-}
-
 // addToken will add the token to the connect request.
 func (c *connectReq) addToken(fn AuthFn) {
-	c.Token = fn(c.audience())
+	c.Token = fn()
 }
 
 func (connectReq) Op() Op {
@@ -295,10 +290,19 @@ func (muxConnectError) Op() Op {
 }
 
 type pongMsg struct {
-	NotFound bool    `msg:"nf"`
-	Err      *string `msg:"e,allownil"`
+	NotFound bool      `msg:"nf"`
+	Err      *string   `msg:"e,allownil"`
+	T        time.Time `msg:"t"`
 }
 
 func (pongMsg) Op() Op {
 	return OpPong
+}
+
+type pingMsg struct {
+	T time.Time `msg:"t"`
+}
+
+func (pingMsg) Op() Op {
+	return OpPing
 }

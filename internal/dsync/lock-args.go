@@ -27,16 +27,16 @@ type LockArgs struct {
 	// Resources contains single or multiple entries to be locked/unlocked.
 	Resources []string
 
-	// Source contains the line number, function and file name of the code
-	// on the client node that requested the lock.
-	Source string
-
 	// Owner represents unique ID for this instance, an owner who originally requested
 	// the locked resource, useful primarily in figuring out stale locks.
 	Owner string
 
+	// Source contains the line number, function and file name of the code
+	// on the client node that requested the lock.
+	Source string `msgp:"omitempty"`
+
 	// Quorum represents the expected quorum for this lock type.
-	Quorum int
+	Quorum *int `msgp:"omitempty"`
 }
 
 // ResponseCode is the response code for a locking request.

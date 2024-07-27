@@ -29,7 +29,6 @@ import (
 	"net/http"
 	"os/user"
 	"path"
-	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -110,7 +109,7 @@ func (s *storageRESTServer) writeErrorResponse(w http.ResponseWriter, err error)
 const DefaultSkewTime = 15 * time.Minute
 
 // validateStorageRequestToken will validate the token against the provided audience.
-func validateStorageRequestToken(token, audience string) error {
+func validateStorageRequestToken(token string) error {
 	claims := xjwt.NewStandardClaims()
 	if err := xjwt.ParseWithStandardClaims(token, claims, []byte(globalActiveCred.SecretKey)); err != nil {
 		return errAuthentication
@@ -121,9 +120,6 @@ func validateStorageRequestToken(token, audience string) error {
 		return errAuthentication
 	}
 
-	if claims.Audience != audience {
-		return errAuthentication
-	}
 	return nil
 }
 
@@ -136,20 +132,24 @@ func storageServerRequestValidate(r *http.Request) error {
 		}
 		return errMalformedAuth
 	}
-	if err = validateStorageRequestToken(token, r.URL.RawQuery); err != nil {
+
+	if err = validateStorageRequestToken(token); err != nil {
 		return err
 	}
 
-	requestTimeStr := r.Header.Get("X-Minio-Time")
-	requestTime, err := time.Parse(time.RFC3339, requestTimeStr)
+	nanoTime, err := strconv.ParseInt(r.Header.Get("X-Minio-Time"), 10, 64)
 	if err != nil {
 		return errMalformedAuth
 	}
-	utcNow := UTCNow()
-	delta := requestTime.Sub(utcNow)
+
+	localTime := UTCNow()
+	remoteTime := time.Unix(0, nanoTime)
+
+	delta := remoteTime.Sub(localTime)
 	if delta < 0 {
 		delta *= -1
 	}
+
 	if delta > DefaultSkewTime {
 		return errSkewedAuthTime
 	}
@@ -593,44 +593,23 @@ func (s *storageRESTServer) ReadFileStreamHandler(w http.ResponseWriter, r *http
 	}
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
-	offset, err := strconv.Atoi(r.Form.Get(storageRESTOffset))
+	offset, err := strconv.ParseInt(r.Form.Get(storageRESTOffset), 10, 64)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
-	length, err := strconv.Atoi(r.Form.Get(storageRESTLength))
+	length, err := strconv.ParseInt(r.Form.Get(storageRESTLength), 10, 64)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 
-	w.Header().Set(xhttp.ContentLength, strconv.Itoa(length))
-
-	rc, err := s.getStorage().ReadFileStream(r.Context(), volume, filePath, int64(offset), int64(length))
+	rc, err := s.getStorage().ReadFileStream(r.Context(), volume, filePath, offset, length)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
 	}
 	defer rc.Close()
-
-	rf, ok := w.(io.ReaderFrom)
-	if ok && runtime.GOOS != "windows" {
-		// Attempt to use splice/sendfile() optimization, A very specific behavior mentioned below is necessary.
-		// See https://github.com/golang/go/blob/f7c5cbb82087c55aa82081e931e0142783700ce8/src/net/sendfile_linux.go#L20
-		// Windows can lock up with this optimization, so we fall back to regular copy.
-		sr, ok := rc.(*sendFileReader)
-		if ok {
-			// Sendfile sends in 4MiB chunks per sendfile syscall which is more than enough
-			// for most setups.
-			_, err = rf.ReadFrom(sr.Reader)
-			if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
-				storageLogIf(r.Context(), err)
-			}
-			if err == nil || !errors.Is(err, xhttp.ErrNotImplemented) {
-				return
-			}
-		}
-	} // Fallback to regular copy
 
 	_, err = xioutil.Copy(w, rc)
 	if !xnet.IsNetworkOrHostDown(err, true) { // do not need to log disconnected clients
@@ -1335,6 +1314,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 		return collectInternodeStats(httpTraceHdrs(f))
 	}
 
+	globalLocalDrivesMap = make(map[string]StorageAPI)
 	globalLocalSetDrives = make([][][]StorageAPI, len(endpointServerPools))
 	for pool := range globalLocalSetDrives {
 		globalLocalSetDrives[pool] = make([][]StorageAPI, endpointServerPools[pool].SetCount)
@@ -1361,12 +1341,12 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(h(server.CreateFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFile).HandlerFunc(h(server.ReadFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
-
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(h(server.DeleteVersionsHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(h(server.VerifyFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
+			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
 			logger.FatalIf(storageListDirRPC.RegisterNoInput(gm, server.ListDirHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageReadAllRPC.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageWriteAllRPC.Register(gm, server.WriteAllHandler, endpoint.Path), "unable to register handler")
@@ -1408,7 +1388,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 				globalLocalDrivesMu.Lock()
 				defer globalLocalDrivesMu.Unlock()
 
-				globalLocalDrives = append(globalLocalDrives, storage)
 				globalLocalDrivesMap[endpoint.String()] = storage
 				globalLocalSetDrives[endpoint.PoolIdx][endpoint.SetIdx][endpoint.DiskIdx] = storage
 				return true

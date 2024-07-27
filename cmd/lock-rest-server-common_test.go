@@ -44,7 +44,7 @@ func createLockTestServer(ctx context.Context, t *testing.T) (string, *lockRESTS
 		},
 	}
 	creds := globalActiveCred
-	token, err := authenticateNode(creds.AccessKey, creds.SecretKey, "")
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,15 +63,15 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 		Owner:           "owner",
 		Writer:          true,
 		UID:             "0123-4567",
-		Timestamp:       UTCNow(),
-		TimeLastRefresh: UTCNow(),
+		Timestamp:       UTCNow().UnixNano(),
+		TimeLastRefresh: UTCNow().UnixNano(),
 	}
 	lockRequesterInfo2 := lockRequesterInfo{
 		Owner:           "owner",
 		Writer:          true,
 		UID:             "89ab-cdef",
-		Timestamp:       UTCNow(),
-		TimeLastRefresh: UTCNow(),
+		Timestamp:       UTCNow().UnixNano(),
+		TimeLastRefresh: UTCNow().UnixNano(),
 	}
 
 	locker.ll.lockMap["name"] = []lockRequesterInfo{

@@ -49,23 +49,35 @@ func (z *LockArgs) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
-		case "Source":
-			z.Source, err = dc.ReadString()
-			if err != nil {
-				err = msgp.WrapError(err, "Source")
-				return
-			}
 		case "Owner":
 			z.Owner, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Owner")
 				return
 			}
-		case "Quorum":
-			z.Quorum, err = dc.ReadInt()
+		case "Source":
+			z.Source, err = dc.ReadString()
 			if err != nil {
-				err = msgp.WrapError(err, "Quorum")
+				err = msgp.WrapError(err, "Source")
 				return
+			}
+		case "Quorum":
+			if dc.IsNil() {
+				err = dc.ReadNil()
+				if err != nil {
+					err = msgp.WrapError(err, "Quorum")
+					return
+				}
+				z.Quorum = nil
+			} else {
+				if z.Quorum == nil {
+					z.Quorum = new(int)
+				}
+				*z.Quorum, err = dc.ReadInt()
+				if err != nil {
+					err = msgp.WrapError(err, "Quorum")
+					return
+				}
 			}
 		default:
 			err = dc.Skip()
@@ -108,16 +120,6 @@ func (z *LockArgs) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
-	// write "Source"
-	err = en.Append(0xa6, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Source)
-	if err != nil {
-		err = msgp.WrapError(err, "Source")
-		return
-	}
 	// write "Owner"
 	err = en.Append(0xa5, 0x4f, 0x77, 0x6e, 0x65, 0x72)
 	if err != nil {
@@ -128,15 +130,32 @@ func (z *LockArgs) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Owner")
 		return
 	}
+	// write "Source"
+	err = en.Append(0xa6, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Source)
+	if err != nil {
+		err = msgp.WrapError(err, "Source")
+		return
+	}
 	// write "Quorum"
 	err = en.Append(0xa6, 0x51, 0x75, 0x6f, 0x72, 0x75, 0x6d)
 	if err != nil {
 		return
 	}
-	err = en.WriteInt(z.Quorum)
-	if err != nil {
-		err = msgp.WrapError(err, "Quorum")
-		return
+	if z.Quorum == nil {
+		err = en.WriteNil()
+		if err != nil {
+			return
+		}
+	} else {
+		err = en.WriteInt(*z.Quorum)
+		if err != nil {
+			err = msgp.WrapError(err, "Quorum")
+			return
+		}
 	}
 	return
 }
@@ -154,15 +173,19 @@ func (z *LockArgs) MarshalMsg(b []byte) (o []byte, err error) {
 	for za0001 := range z.Resources {
 		o = msgp.AppendString(o, z.Resources[za0001])
 	}
-	// string "Source"
-	o = append(o, 0xa6, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65)
-	o = msgp.AppendString(o, z.Source)
 	// string "Owner"
 	o = append(o, 0xa5, 0x4f, 0x77, 0x6e, 0x65, 0x72)
 	o = msgp.AppendString(o, z.Owner)
+	// string "Source"
+	o = append(o, 0xa6, 0x53, 0x6f, 0x75, 0x72, 0x63, 0x65)
+	o = msgp.AppendString(o, z.Source)
 	// string "Quorum"
 	o = append(o, 0xa6, 0x51, 0x75, 0x6f, 0x72, 0x75, 0x6d)
-	o = msgp.AppendInt(o, z.Quorum)
+	if z.Quorum == nil {
+		o = msgp.AppendNil(o)
+	} else {
+		o = msgp.AppendInt(o, *z.Quorum)
+	}
 	return
 }
 
@@ -209,23 +232,34 @@ func (z *LockArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
-		case "Source":
-			z.Source, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "Source")
-				return
-			}
 		case "Owner":
 			z.Owner, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Owner")
 				return
 			}
-		case "Quorum":
-			z.Quorum, bts, err = msgp.ReadIntBytes(bts)
+		case "Source":
+			z.Source, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "Quorum")
+				err = msgp.WrapError(err, "Source")
 				return
+			}
+		case "Quorum":
+			if msgp.IsNil(bts) {
+				bts, err = msgp.ReadNilBytes(bts)
+				if err != nil {
+					return
+				}
+				z.Quorum = nil
+			} else {
+				if z.Quorum == nil {
+					z.Quorum = new(int)
+				}
+				*z.Quorum, bts, err = msgp.ReadIntBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Quorum")
+					return
+				}
 			}
 		default:
 			bts, err = msgp.Skip(bts)
@@ -245,7 +279,12 @@ func (z *LockArgs) Msgsize() (s int) {
 	for za0001 := range z.Resources {
 		s += msgp.StringPrefixSize + len(z.Resources[za0001])
 	}
-	s += 7 + msgp.StringPrefixSize + len(z.Source) + 6 + msgp.StringPrefixSize + len(z.Owner) + 7 + msgp.IntSize
+	s += 6 + msgp.StringPrefixSize + len(z.Owner) + 7 + msgp.StringPrefixSize + len(z.Source) + 7
+	if z.Quorum == nil {
+		s += msgp.NilSize
+	} else {
+		s += msgp.IntSize
+	}
 	return
 }
 

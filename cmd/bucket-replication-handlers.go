@@ -75,7 +75,7 @@ func (api objectAPIHandlers) PutBucketReplicationConfigHandler(w http.ResponseWr
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
-	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig, true)
+	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig, &validateReplicationDestinationOptions{CheckRemoteBucket: true})
 	if apiErr != noError {
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
@@ -559,7 +559,7 @@ func (api objectAPIHandlers) ValidateBucketReplicationCredsHandler(w http.Respon
 		lockEnabled = lcfg.Enabled()
 	}
 
-	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig, true)
+	sameTarget, apiErr := validateReplicationDestination(ctx, bucket, replicationConfig, &validateReplicationDestinationOptions{CheckRemoteBucket: true})
 	if apiErr != noError {
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return

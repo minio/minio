@@ -499,7 +499,7 @@ var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader
 func msgpNewReader(r io.Reader) *msgp.Reader {
 	p := readMsgpReaderPool.Get().(*msgp.Reader)
 	if p.R == nil {
-		p.R = xbufio.NewReaderSize(r, 4<<10)
+		p.R = xbufio.NewReaderSize(r, 32<<10)
 	} else {
 		p.R.Reset(r)
 	}
@@ -617,9 +617,11 @@ func (client *storageRESTClient) ReadFileStream(ctx context.Context, volume, pat
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(ctx, storageRESTMethodReadFileStream, values, nil, -1)
+	values.Set(storageRESTDiskID, *client.diskID.Load())
+
+	respBody, err := client.restClient.CallWithHTTPMethod(ctx, http.MethodGet, storageRESTMethodReadFileStream, values, nil, -1)
 	if err != nil {
-		return nil, err
+		return nil, toStorageErr(err)
 	}
 	return respBody, nil
 }

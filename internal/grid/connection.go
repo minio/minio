@@ -27,6 +27,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -122,6 +123,9 @@ type Connection struct {
 	inBytes       atomic.Int64
 	inMessages    atomic.Int64
 	outMessages   atomic.Int64
+	reconnects    atomic.Int64
+	lastConnect   atomic.Pointer[time.Time]
+	lastPingDur   atomic.Int64
 
 	// For testing only
 	debugInConn   net.Conn
@@ -706,6 +710,8 @@ func (c *Connection) connect() {
 			retry(fmt.Errorf("connection rejected: %s", r.RejectedReason))
 			continue
 		}
+		t := time.Now().UTC()
+		c.lastConnect.Store(&t)
 		c.reconnectMu.Lock()
 		remoteUUID := uuid.UUID(r.ID)
 		if c.remoteID != nil {
@@ -806,6 +812,8 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 	if err != nil {
 		return err
 	}
+	t := time.Now().UTC()
+	c.lastConnect.Store(&t)
 	// Signal that we are reconnected, update state and handle messages.
 	// Prevent other connections from connecting while we process.
 	c.reconnectMu.Lock()
@@ -825,6 +833,7 @@ func (c *Connection) handleIncoming(ctx context.Context, conn net.Conn, req conn
 // caller *must* hold reconnectMu.
 func (c *Connection) reconnected() {
 	c.updateState(StateConnectionError)
+	c.reconnects.Add(1)
 
 	// Drain the outQueue, so any blocked messages can be sent.
 	// We keep the queue, but start draining it, if it gets full.
@@ -958,7 +967,7 @@ func (c *Connection) readStream(ctx context.Context, conn net.Conn, cancel conte
 		SkipHeaderCheck: false,
 		OnIntermediate:  controlHandler,
 	}
-	readDataInto := func(dst []byte, rw io.ReadWriter, s ws.State, want ws.OpCode) ([]byte, error) {
+	readDataInto := func(dst []byte, s ws.State, want ws.OpCode) ([]byte, error) {
 		dst = dst[:0]
 		for {
 			hdr, err := wsReader.NextFrame()
@@ -980,7 +989,10 @@ func (c *Connection) readStream(ctx context.Context, conn net.Conn, cancel conte
 			if int64(cap(dst)) < hdr.Length+1 {
 				dst = make([]byte, 0, hdr.Length+hdr.Length>>3)
 			}
-			return readAllInto(dst[:0], &wsReader)
+			if !hdr.Fin {
+				hdr.Length = -1
+			}
+			return readAllInto(dst[:0], &wsReader, hdr.Length)
 		}
 	}
 
@@ -993,7 +1005,7 @@ func (c *Connection) readStream(ctx context.Context, conn net.Conn, cancel conte
 		}
 
 		var err error
-		msg, err = readDataInto(msg, conn, c.side, ws.OpBinary)
+		msg, err = readDataInto(msg, c.side, ws.OpBinary)
 		if err != nil {
 			if !xnet.IsNetworkOrHostDown(err, true) {
 				gridLogIfNot(ctx, fmt.Errorf("ws read: %w", err), net.ErrClosed, io.EOF)
@@ -1086,7 +1098,8 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 	ping := time.NewTicker(connPingInterval)
 	pingFrame := message{
 		Op:         OpPing,
-		DeadlineMS: 5000,
+		DeadlineMS: uint32(connPingInterval.Milliseconds()),
+		Payload:    make([]byte, pingMsg{}.Msgsize()),
 	}
 
 	defer ping.Stop()
@@ -1095,6 +1108,38 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 	var queueSize int
 	var buf bytes.Buffer
 	var wsw wsWriter
+	var lastSetDeadline time.Time
+
+	// Helper to write everything in buf.
+	// Return false if an error occurred and the connection is unusable.
+	// Buffer will be reset empty when returning successfully.
+	writeBuffer := func() (ok bool) {
+		now := time.Now()
+		// Only set write deadline once every second
+		if now.Sub(lastSetDeadline) > time.Second {
+			err := conn.SetWriteDeadline(now.Add(connWriteTimeout + time.Second))
+			if err != nil {
+				gridLogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
+				return false
+			}
+			lastSetDeadline = now
+		}
+
+		_, err := buf.WriteTo(conn)
+		if err != nil {
+			if !xnet.IsNetworkOrHostDown(err, true) {
+				gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
+			}
+			return false
+		}
+		if buf.Cap() > writeBufferSize*4 {
+			// Reset buffer if it gets too big, so we don't keep it around.
+			buf = bytes.Buffer{}
+		}
+		buf.Reset()
+		return true
+	}
+
 	for {
 		var toSend []byte
 		select {
@@ -1112,11 +1157,18 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 					return
 				}
 			}
+			ping := pingMsg{
+				T: time.Now(),
+			}
 			var err error
+			if pingFrame.Payload, err = ping.MarshalMsg(pingFrame.Payload[:0]); err != nil {
+				gridLogIf(ctx, err) // Fake it... Though this should never fail.
+				atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+				continue
+			}
 			toSend, err = pingFrame.MarshalMsg(GetByteBuffer()[:0])
 			if err != nil {
-				gridLogIf(ctx, err)
-				// Fake it...
+				gridLogIf(ctx, err) // Fake it... Though this should never fail.
 				atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
 				continue
 			}
@@ -1125,10 +1177,16 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 				continue
 			}
 		}
-		if len(queue) < maxMergeMessages && queueSize+len(toSend) < writeBufferSize-1024 && len(c.outQueue) > 0 {
-			queue = append(queue, toSend)
-			queueSize += len(toSend)
-			continue
+		if len(queue) < maxMergeMessages && queueSize+len(toSend) < writeBufferSize-1024 {
+			if len(c.outQueue) == 0 {
+				// Yield to allow more messages to fill.
+				runtime.Gosched()
+			}
+			if len(c.outQueue) > 0 {
+				queue = append(queue, toSend)
+				queueSize += len(toSend)
+				continue
+			}
 		}
 		c.outMessages.Add(int64(len(queue) + 1))
 		if c.outgoingBytes != nil {
@@ -1158,8 +1216,7 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 		}
 		c.connChange.L.Unlock()
 		if len(queue) == 0 {
-			// Combine writes.
-			buf.Reset()
+			// Send single message without merging.
 			err := wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 			if err != nil {
 				if !xnet.IsNetworkOrHostDown(err, true) {
@@ -1169,17 +1226,7 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 			}
 			PutByteBuffer(toSend)
 
-			err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
-			if err != nil {
-				gridLogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
-				return
-			}
-
-			_, err = buf.WriteTo(conn)
-			if err != nil {
-				if !xnet.IsNetworkOrHostDown(err, true) {
-					gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
-				}
+			if !writeBuffer() {
 				return
 			}
 			continue
@@ -1209,7 +1256,6 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 
 		// Combine writes.
 		// Consider avoiding buffer copy.
-		buf.Reset()
 		err = wsw.writeMessage(&buf, c.side, ws.OpBinary, toSend)
 		if err != nil {
 			if !xnet.IsNetworkOrHostDown(err, true) {
@@ -1218,24 +1264,8 @@ func (c *Connection) writeStream(ctx context.Context, conn net.Conn, cancel cont
 			return
 		}
 
-		err = conn.SetWriteDeadline(time.Now().Add(connWriteTimeout))
-		if err != nil {
-			gridLogIf(ctx, fmt.Errorf("conn.SetWriteDeadline: %w", err))
+		if !writeBuffer() {
 			return
-		}
-
-		// buf is our local buffer, so we can reuse it.
-		_, err = buf.WriteTo(conn)
-		if err != nil {
-			if !xnet.IsNetworkOrHostDown(err, true) {
-				gridLogIf(ctx, fmt.Errorf("ws write: %w", err))
-			}
-			return
-		}
-
-		if buf.Cap() > writeBufferSize*4 {
-			// Reset buffer if it gets too big, so we don't keep it around.
-			buf = bytes.Buffer{}
 		}
 	}
 }
@@ -1418,13 +1448,16 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 }
 
 func (c *Connection) handlePong(ctx context.Context, m message) {
-	if m.MuxID == 0 && m.Payload == nil {
-		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
-		return
-	}
 	var pong pongMsg
 	_, err := pong.UnmarshalMsg(m.Payload)
 	PutByteBuffer(m.Payload)
+	m.Payload = nil
+
+	if m.MuxID == 0 {
+		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
+		c.lastPingDur.Store(int64(time.Since(pong.T)))
+		return
+	}
 	gridLogIf(ctx, err)
 	if m.MuxID == 0 {
 		atomic.StoreInt64(&c.LastPong, time.Now().UnixNano())
@@ -1440,18 +1473,26 @@ func (c *Connection) handlePong(ctx context.Context, m message) {
 }
 
 func (c *Connection) handlePing(ctx context.Context, m message) {
+	var ping pingMsg
+	if len(m.Payload) > 0 {
+		_, err := ping.UnmarshalMsg(m.Payload)
+		if err != nil {
+			gridLogIf(ctx, err)
+		}
+	}
+	// c.queueMsg will reuse m.Payload
+
 	if m.MuxID == 0 {
-		m.Flags.Clear(FlagPayloadIsZero)
-		m.Op = OpPong
-		gridLogIf(ctx, c.queueMsg(m, nil))
+		gridLogIf(ctx, c.queueMsg(m, &pongMsg{T: ping.T}))
 		return
 	}
 	// Single calls do not support pinging.
 	if v, ok := c.inStream.Load(m.MuxID); ok {
 		pong := v.ping(m.Seq)
+		pong.T = ping.T
 		gridLogIf(ctx, c.queueMsg(m, &pong))
 	} else {
-		pong := pongMsg{NotFound: true}
+		pong := pongMsg{NotFound: true, T: ping.T}
 		gridLogIf(ctx, c.queueMsg(m, &pong))
 	}
 	return
@@ -1630,6 +1671,11 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 	if c.State() == StateConnected {
 		conn++
 	}
+	var lastConn time.Time
+	if t := c.lastConnect.Load(); t != nil {
+		lastConn = *t
+	}
+	pingMS := float64(c.lastPingDur.Load()) / float64(time.Millisecond)
 	m := madmin.RPCMetrics{
 		CollectedAt:      time.Now(),
 		Connected:        conn,
@@ -1642,6 +1688,10 @@ func (c *Connection) Stats() madmin.RPCMetrics {
 		OutgoingMessages: c.outMessages.Load(),
 		OutQueue:         len(c.outQueue),
 		LastPongTime:     time.Unix(0, c.LastPong).UTC(),
+		LastConnectTime:  lastConn,
+		ReconnectCount:   int(c.reconnects.Load()),
+		LastPingMS:       pingMS,
+		MaxPingDurMS:     pingMS,
 	}
 	m.ByDestination = map[string]madmin.RPCMetrics{
 		c.Remote: m,

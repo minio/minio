@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/s2"
@@ -244,6 +245,24 @@ func pathsJoinPrefix(prefix string, elem ...string) (paths []string) {
 		paths[i] = pathJoin(prefix, e)
 	}
 	return paths
+}
+
+// string concat alternative to s1 + s2 with low overhead.
+func concat(ss ...string) string {
+	length := len(ss)
+	if length == 0 {
+		return ""
+	}
+	// create & allocate the memory in advance.
+	n := 0
+	for i := 0; i < length; i++ {
+		n += len(ss[i])
+	}
+	b := make([]byte, 0, n)
+	for i := 0; i < length; i++ {
+		b = append(b, ss[i]...)
+	}
+	return unsafe.String(unsafe.SliceData(b), n)
 }
 
 // pathJoin - like path.Join() but retains trailing SlashSeparator of the last element
