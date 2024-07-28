@@ -64,6 +64,14 @@ func TestGuessIsRPC(t *testing.T) {
 	if !guessIsRPCReq(r) {
 		t.Fatal("Grid RPC path not detected")
 	}
+	r = &http.Request{
+		Proto:  "HTTP/1.1",
+		Method: http.MethodGet,
+		URL:    &url.URL{Path: grid.RouteLockPath},
+	}
+	if !guessIsRPCReq(r) {
+		t.Fatal("Grid RPC path not detected")
+	}
 }
 
 var isHTTPHeaderSizeTooLargeTests = []struct {
