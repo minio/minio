@@ -375,10 +375,6 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 	volume := params.Get(storageRESTVolume)
 	filePath := params.Get(storageRESTFilePath)
 	versionID := params.Get(storageRESTVersionID)
-	readData, err := strconv.ParseBool(params.Get(storageRESTReadData))
-	if err != nil {
-		return nil, grid.NewRemoteErr(err)
-	}
 
 	healing, err := strconv.ParseBool(params.Get(storageRESTHealing))
 	if err != nil {
@@ -392,7 +388,7 @@ func (s *storageRESTServer) ReadVersionHandlerWS(params *grid.MSS) (*FileInfo, *
 
 	fi, err := s.getStorage().ReadVersion(context.Background(), origvolume, volume, filePath, versionID, ReadOptions{
 		InclFreeVersions: inclFreeVersions,
-		ReadData:         readData,
+		ReadData:         false,
 		Healing:          healing,
 	})
 	if err != nil {
@@ -410,11 +406,6 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
 	versionID := r.Form.Get(storageRESTVersionID)
-	readData, err := strconv.ParseBool(r.Form.Get(storageRESTReadData))
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
 	healing, err := strconv.ParseBool(r.Form.Get(storageRESTHealing))
 	if err != nil {
 		s.writeErrorResponse(w, err)
@@ -429,7 +420,7 @@ func (s *storageRESTServer) ReadVersionHandler(w http.ResponseWriter, r *http.Re
 
 	fi, err := s.getStorage().ReadVersion(r.Context(), origvolume, volume, filePath, versionID, ReadOptions{
 		InclFreeVersions: inclFreeVersions,
-		ReadData:         readData,
+		ReadData:         true,
 		Healing:          healing,
 	})
 	if err != nil {
@@ -506,15 +497,11 @@ func (s *storageRESTServer) ReadXLHandler(w http.ResponseWriter, r *http.Request
 	if !s.IsValid(w, r) {
 		return
 	}
+
 	volume := r.Form.Get(storageRESTVolume)
 	filePath := r.Form.Get(storageRESTFilePath)
-	readData, err := strconv.ParseBool(r.Form.Get(storageRESTReadData))
-	if err != nil {
-		s.writeErrorResponse(w, err)
-		return
-	}
 
-	rf, err := s.getStorage().ReadXL(r.Context(), volume, filePath, readData)
+	rf, err := s.getStorage().ReadXL(r.Context(), volume, filePath, true)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return
@@ -528,14 +515,10 @@ func (s *storageRESTServer) ReadXLHandlerWS(params *grid.MSS) (*RawFileInfo, *gr
 	if !s.checkID(params.Get(storageRESTDiskID)) {
 		return nil, grid.NewRemoteErr(errDiskNotFound)
 	}
+
 	volume := params.Get(storageRESTVolume)
 	filePath := params.Get(storageRESTFilePath)
-	readData, err := strconv.ParseBool(params.Get(storageRESTReadData))
-	if err != nil {
-		return nil, grid.NewRemoteErr(err)
-	}
-
-	rf, err := s.getStorage().ReadXL(context.Background(), volume, filePath, readData)
+	rf, err := s.getStorage().ReadXL(context.Background(), volume, filePath, false)
 	if err != nil {
 		return nil, grid.NewRemoteErr(err)
 	}
@@ -1336,17 +1319,18 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodHealth).HandlerFunc(h(server.HealthHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodAppendFile).HandlerFunc(h(server.AppendFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadXL).HandlerFunc(h(server.ReadXLHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCreateFile).HandlerFunc(h(server.CreateFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFile).HandlerFunc(h(server.ReadFileHandler))
-			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteVersions).HandlerFunc(h(server.DeleteVersionsHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodVerifyFile).HandlerFunc(h(server.VerifyFileHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
+
 			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
+			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))
+			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadXL).HandlerFunc(h(server.ReadXLHandler))
+			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadFile).HandlerFunc(h(server.ReadFileHandler))
+
 			logger.FatalIf(storageListDirRPC.RegisterNoInput(gm, server.ListDirHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageReadAllRPC.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageWriteAllRPC.Register(gm, server.WriteAllHandler, endpoint.Path), "unable to register handler")
