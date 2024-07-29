@@ -47,19 +47,22 @@ import (
 	"github.com/minio/pkg/v3/wildcard"
 )
 
+// ObjectPart represents the part details to be cached
 type ObjectPart struct {
 	Bucket         string
 	Prefix         string
 	Object         string
-	PartId         int
+	PartID         int
 	UploadIDMarker string
 }
 
+// ObjectPartCacheEntry represents one object part cache entry
 type ObjectPartCacheEntry struct {
 	Part      ObjectPart
 	Timestamp time.Time
 }
 
+// ObjectPartCache represents a in memory cache to hold part details
 type ObjectPartCache struct {
 	// Key would be partid as it's unique UUID
 	data  map[string]ObjectPartCacheEntry
@@ -1920,7 +1923,7 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		Bucket:         bucket,
 		Prefix:         "",
 		Object:         object,
-		PartId:         partID,
+		PartID:         partID,
 		UploadIDMarker: "",
 	})
 
