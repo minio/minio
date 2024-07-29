@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -629,12 +628,6 @@ func (s *storageRESTServer) DeleteFileHandler(p *DeleteFileHandlerParams) (grid.
 	return grid.NewNPErr(s.getStorage().Delete(context.Background(), p.Volume, p.FilePath, p.Opts))
 }
 
-// DeleteVersionsErrsResp - collection of delete errors
-// for bulk version deletes
-type DeleteVersionsErrsResp struct {
-	Errs []error
-}
-
 // DeleteVersionsHandler - delete a set of a versions.
 func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -659,21 +652,20 @@ func (s *storageRESTServer) DeleteVersionsHandler(w http.ResponseWriter, r *http
 		}
 	}
 
-	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]error, totalVersions)}
-
-	setEventStreamHeaders(w)
-	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
-
 	opts := DeleteOptions{}
 	errs := s.getStorage().DeleteVersions(r.Context(), volume, versions, opts)
 	done(nil)
+
+	dErrsResp := &DeleteVersionsErrsResp{Errs: make([]string, totalVersions)}
 	for idx := range versions {
 		if errs[idx] != nil {
-			dErrsResp.Errs[idx] = StorageErr(errs[idx].Error())
+			dErrsResp.Errs[idx] = errs[idx].Error()
 		}
 	}
-	encoder.Encode(dErrsResp)
+
+	buf, _ := dErrsResp.MarshalMsg(nil)
+	w.Write(buf)
 }
 
 // RenameDataHandler - renames a meta object and data dir to destination.
@@ -1107,18 +1099,15 @@ func (s *storageRESTServer) VerifyFileHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	setEventStreamHeaders(w)
-	encoder := gob.NewEncoder(w)
 	done := keepHTTPResponseAlive(w)
 	resp, err := s.getStorage().VerifyFile(r.Context(), volume, filePath, fi)
-	done(nil)
-
+	done(err)
 	if err != nil {
-		s.writeErrorResponse(w, err)
 		return
 	}
 
-	encoder.Encode(resp)
+	buf, _ := resp.MarshalMsg(nil)
+	w.Write(buf)
 }
 
 func checkDiskFatalErrs(errs []error) error {
@@ -1243,6 +1232,24 @@ func (s *storageRESTServer) StatInfoFile(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+func (s *storageRESTServer) DeleteBulkHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+
+	var req DeleteBulkReq
+	mr := msgpNewReader(r.Body)
+	defer readMsgpReaderPoolPut(mr)
+
+	if err := req.DecodeMsg(mr); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	volume := r.Form.Get(storageRESTVolume)
+	keepHTTPResponseAlive(w)(s.getStorage().DeleteBulk(r.Context(), volume, req.Paths...))
+}
+
 // ReadMultiple returns multiple files
 func (s *storageRESTServer) ReadMultiple(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -1325,6 +1332,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodStatInfoFile).HandlerFunc(h(server.StatInfoFile))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteBulk).HandlerFunc(h(server.DeleteBulkHandler))
 
 			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
 			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))

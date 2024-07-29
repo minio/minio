@@ -1079,32 +1079,37 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return err
 	}
 
+	s.RLock()
+	legacy := s.formatLegacy
+	s.RUnlock()
+
 	var legacyJSON bool
-	buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
-	if err != nil {
-		if !errors.Is(err, errFileNotFound) {
-			return err
+	buf, err := xioutil.WithDeadline[[]byte](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) ([]byte, error) {
+		buf, _, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
+		if err != nil && !errors.Is(err, errFileNotFound) {
+			return nil, err
 		}
 
-		s.RLock()
-		legacy := s.formatLegacy
-		s.RUnlock()
-		if legacy {
+		if errors.Is(err, errFileNotFound) && legacy {
 			buf, _, err = s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1))
 			if err != nil {
-				return err
+				return nil, err
 			}
 			legacyJSON = true
 		}
-	}
 
-	if len(buf) == 0 {
-		if errors.Is(err, errFileNotFound) && !skipAccessChecks(volume) {
-			if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
-				return errVolumeNotFound
+		if len(buf) == 0 {
+			if errors.Is(err, errFileNotFound) && !skipAccessChecks(volume) {
+				if aerr := Access(volumeDir); aerr != nil && osIsNotExist(aerr) {
+					return nil, errVolumeNotFound
+				}
+				return nil, errFileNotFound
 			}
 		}
-		return errFileNotFound
+		return buf, nil
+	})
+	if err != nil {
+		return err
 	}
 
 	if legacyJSON {
@@ -1178,10 +1183,7 @@ func (s *xlStorage) DeleteVersions(ctx context.Context, volume string, versions 
 			errs[i] = ctx.Err()
 			continue
 		}
-		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
-		if err := w.Run(func() error { return s.deleteVersions(ctx, volume, fiv.Name, fiv.Versions...) }); err != nil {
-			errs[i] = err
-		}
+		errs[i] = s.deleteVersions(ctx, volume, fiv.Name, fiv.Versions...)
 		diskHealthCheckOK(ctx, errs[i])
 	}
 
@@ -1212,7 +1214,7 @@ func (s *xlStorage) diskAlmostFilled() bool {
 	return (float64(info.Free)/float64(info.Used)) < almostFilledPercent || (float64(info.FreeInodes)/float64(info.UsedInodes)) < almostFilledPercent
 }
 
-func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool) (err error) {
+func (s *xlStorage) moveToTrashNoDeadline(filePath string, recursive, immediatePurge bool) (err error) {
 	pathUUID := mustGetUUID()
 	targetPath := pathutil.Join(s.drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
@@ -1265,8 +1267,14 @@ func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool)
 			}
 		}
 	}
-
 	return nil
+}
+
+func (s *xlStorage) moveToTrash(filePath string, recursive, immediatePurge bool) (err error) {
+	w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
+	return w.Run(func() (err error) {
+		return s.moveToTrashNoDeadline(filePath, recursive, immediatePurge)
+	})
 }
 
 // DeleteVersion - deletes FileInfo metadata for path at `xl.meta`. forceDelMarker
@@ -2417,7 +2425,41 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate
 	return nil
 }
 
-// DeleteFile - delete a file at path.
+// DeleteBulk - delete many files in bulk to trash.
+// this delete does not recursively delete empty
+// parents, if you need empty parent delete support
+// please use Delete() instead. This API is meant as
+// an optimization for Multipart operations.
+func (s *xlStorage) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+
+	if !skipAccessChecks(volume) {
+		// Stat a volume entry.
+		if err = Access(volumeDir); err != nil {
+			return convertAccessError(err, errVolumeAccessDenied)
+		}
+	}
+
+	for _, fp := range paths {
+		// Following code is needed so that we retain SlashSeparator suffix if any in
+		// path argument.
+		filePath := pathJoin(volumeDir, fp)
+		if err = checkPathLength(filePath); err != nil {
+			return err
+		}
+
+		if err = s.moveToTrash(filePath, false, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Delete - delete a file at path.
 func (s *xlStorage) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {

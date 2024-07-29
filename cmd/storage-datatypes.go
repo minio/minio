@@ -392,24 +392,24 @@ func newFileInfo(object string, dataBlocks, parityBlocks int) (fi FileInfo) {
 
 // ReadMultipleReq contains information of multiple files to read from disk.
 type ReadMultipleReq struct {
-	Bucket       string   // Bucket. Can be empty if multiple buckets.
-	Prefix       string   // Shared prefix of all files. Can be empty. Will be joined to filename without modification.
-	Files        []string // Individual files to read.
-	MaxSize      int64    // Return error if size is exceed.
-	MetadataOnly bool     // Read as XL meta and truncate data.
-	AbortOn404   bool     // Stop reading after first file not found.
-	MaxResults   int      // Stop after this many successful results. <= 0 means all.
+	Bucket       string   `msg:"bk"`           // Bucket. Can be empty if multiple buckets.
+	Prefix       string   `msg:"pr,omitempty"` // Shared prefix of all files. Can be empty. Will be joined to filename without modification.
+	Files        []string `msg:"fl"`           // Individual files to read.
+	MaxSize      int64    `msg:"ms"`           // Return error if size is exceed.
+	MetadataOnly bool     `msg:"mo"`           // Read as XL meta and truncate data.
+	AbortOn404   bool     `msg:"ab"`           // Stop reading after first file not found.
+	MaxResults   int      `msg:"mr"`           // Stop after this many successful results. <= 0 means all.
 }
 
 // ReadMultipleResp contains a single response from a ReadMultipleReq.
 type ReadMultipleResp struct {
-	Bucket  string    // Bucket as given by request.
-	Prefix  string    // Prefix as given by request.
-	File    string    // File name as given in request.
-	Exists  bool      // Returns whether the file existed on disk.
-	Error   string    // Returns any error when reading.
-	Data    []byte    // Contains all data of file.
-	Modtime time.Time // Modtime of file on disk.
+	Bucket  string    `msg:"bk"`           // Bucket as given by request.
+	Prefix  string    `msg:"pr,omitempty"` // Prefix as given by request.
+	File    string    `msg:"fl"`           // File name as given in request.
+	Exists  bool      `msg:"ex"`           // Returns whether the file existed on disk.
+	Error   string    `msg:"er,omitempty"` // Returns any error when reading.
+	Data    []byte    `msg:"d"`            // Contains all data of file.
+	Modtime time.Time `msg:"m"`            // Modtime of file on disk.
 }
 
 // DeleteVersionHandlerParams are parameters for DeleteVersionHandler
@@ -516,8 +516,8 @@ type WriteAllHandlerParams struct {
 //     only after as a 2-phase call, allowing the older dataDir to
 //     hang-around in-case we need some form of recovery.
 type RenameDataResp struct {
-	Sign       []byte
-	OldDataDir string // contains '<uuid>', it is designed to be passed as value to Delete(bucket, pathJoin(object, dataDir))
+	Sign       []byte `msg:"s"`
+	OldDataDir string `msg:"od"` // contains '<uuid>', it is designed to be passed as value to Delete(bucket, pathJoin(object, dataDir))
 }
 
 const (
@@ -534,15 +534,26 @@ const (
 
 // CheckPartsResp is a response of the storage CheckParts and VerifyFile APIs
 type CheckPartsResp struct {
-	Results []int
+	Results []int `msg:"r"`
 }
 
 // LocalDiskIDs - GetLocalIDs response.
 type LocalDiskIDs struct {
-	IDs []string
+	IDs []string `msg:"i"`
 }
 
 // ListDirResult - ListDir()'s response.
 type ListDirResult struct {
 	Entries []string `msg:"e"`
+}
+
+// DeleteBulkReq - send multiple paths in same delete request.
+type DeleteBulkReq struct {
+	Paths []string `msg:"p"`
+}
+
+// DeleteVersionsErrsResp - collection of delete errors
+// for bulk version deletes
+type DeleteVersionsErrsResp struct {
+	Errs []string `msg:"e"`
 }
