@@ -47,6 +47,105 @@ import (
 	"github.com/minio/pkg/v3/wildcard"
 )
 
+type ObjectPart struct {
+	Bucket         string
+	Prefix         string
+	Object         string
+	PartId         int
+	UploadIDMarker string
+}
+
+type ObjectPartCacheEntry struct {
+	Part      ObjectPart
+	Timestamp time.Time
+}
+
+type ObjectPartCache struct {
+	// Key would be partid as it's unique UUID
+	data  map[string]ObjectPartCacheEntry
+	mutex sync.RWMutex
+}
+
+// NewObjectPartsCache initializes and returns a new Cache
+func NewObjectPartsCache() *ObjectPartCache {
+	cache := &ObjectPartCache{
+		data: make(map[string]ObjectPartCacheEntry),
+	}
+	// Start the cleanup process
+	go cache.cleanExpiredEntries()
+	return cache
+}
+
+// Set adds a value to the cache with the current timestamp
+func (c *ObjectPartCache) Set(key string, value ObjectPart) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.data[key] = ObjectPartCacheEntry{
+		Part:      value,
+		Timestamp: time.Now(),
+	}
+}
+
+// Get retrieves a value from the cache if it has not expired
+func (c *ObjectPartCache) Get(key string) (ObjectPart, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	entry, exists := c.data[key]
+	if !exists || time.Since(entry.Timestamp) > 24*time.Hour {
+		return ObjectPart{}, false
+	}
+	return entry.Part, true
+}
+
+// GetAll returns all the cached object parts for a bucket
+func (c *ObjectPartCache) GetAll(bucket string) (parts []ObjectPart) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	for _, value := range c.data {
+		parts = append(parts, value.Part)
+	}
+	return parts
+}
+
+// GetAllByPrefix returns all the cached object parts of a bucket at given prefix
+func (c *ObjectPartCache) GetAllByPrefix(bucket, prefix string) (parts []ObjectPart) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	for _, value := range c.data {
+		if value.Part.Prefix == prefix {
+			parts = append(parts, value.Part)
+		}
+	}
+	return parts
+}
+
+// GetAllByUploadIDMarker returns all the cached object parts of a bucket with given uploadIDMarker
+func (c *ObjectPartCache) GetAllByUploadIDMarker(bucket, marker string) (parts []ObjectPart) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	for _, value := range c.data {
+		if value.Part.UploadIDMarker == marker {
+			parts = append(parts, value.Part)
+		}
+	}
+	return parts
+}
+
+// cleanExpiredEntries removes expired entries every hour
+func (c *ObjectPartCache) cleanExpiredEntries() {
+	for {
+		time.Sleep(1 * time.Hour)
+		c.mutex.Lock()
+		now := time.Now()
+		for key, entry := range c.data {
+			if now.Sub(entry.Timestamp) > 24*time.Hour {
+				delete(c.data, key)
+			}
+		}
+		c.mutex.Unlock()
+	}
+}
+
 type erasureServerPools struct {
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
@@ -63,6 +162,8 @@ type erasureServerPools struct {
 	decommissionCancelers []context.CancelFunc
 
 	s3Peer *S3PeerSys
+
+	objectPartsCache *ObjectPartCache
 }
 
 func (z *erasureServerPools) SinglePool() bool {
@@ -215,6 +316,9 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		}
 		break
 	}
+
+	// initialize the object part cache
+	z.objectPartsCache = NewObjectPartsCache()
 
 	return z, nil
 }
@@ -1810,6 +1914,15 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		// Any other unhandled errors such as quorum return.
 		return PartInfo{}, err
 	}
+
+	// Add the object part to the cache
+	z.objectPartsCache.Set(fmt.Sprintf("%s:part-%d", uploadID, partID), ObjectPart{
+		Bucket:         bucket,
+		Prefix:         "",
+		Object:         object,
+		PartId:         partID,
+		UploadIDMarker: "",
+	})
 
 	return PartInfo{}, InvalidUploadID{
 		Bucket:   bucket,
