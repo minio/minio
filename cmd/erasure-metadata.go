@@ -174,6 +174,7 @@ func (fi FileInfo) ToObjectInfo(bucket, object string, versioned bool) ObjectInf
 		}
 	}
 	objInfo.Checksum = fi.Checksum
+	objInfo.decryptPartsChecksums(nil)
 	objInfo.Inlined = fi.InlineData()
 	// Success.
 	return objInfo

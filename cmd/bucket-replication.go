@@ -774,21 +774,6 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) map[string]string {
-	meta := make(map[string]string)
-	cs := oi.decryptChecksums(partNum, h)
-	for k, v := range cs {
-		cksum := hash.NewChecksumString(k, v)
-		if cksum == nil {
-			continue
-		}
-		if cksum.Valid() {
-			meta[cksum.Type.Key()] = v
-		}
-	}
-	return meta
-}
-
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, partNum int) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
@@ -797,11 +782,6 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		// In case of SSE-C objects copy the allowed internal headers as well
 		if !isSSEC || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-				if strings.EqualFold(k, ReservedMetadataPrefixLower+"crc") {
-					for k, v := range getCRCMeta(objInfo, partNum, nil) {
-						meta[k] = v
-					}
-				}
 				continue
 			}
 			if isStandardHeader(k) {
@@ -820,8 +800,12 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		if isSSEC {
 			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
 		} else {
-			for k, v := range getCRCMeta(objInfo, 0, nil) {
-				meta[k] = v
+			for _, pi := range objInfo.Parts {
+				if pi.Number == partNum {
+					for k, v := range pi.Checksums {
+						meta[k] = v
+					}
+				}
 			}
 		}
 	}
@@ -1675,8 +1659,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		if !isSSEC {
-			crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
-			for k, v := range crc {
+			for k, v := range partInfo.Checksums {
 				cHeader.Add(k, v)
 			}
 		}
