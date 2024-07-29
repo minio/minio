@@ -115,6 +115,7 @@ var (
 	signalServiceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerSignalService, grid.NewMSS, grid.NewNoPayload)
 	stopRebalanceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerStopRebalance, grid.NewMSS, grid.NewNoPayload)
 	updateMetacacheListingRPC      = grid.NewSingleHandler[*metacache, *metacache](grid.HandlerUpdateMetacacheListing, func() *metacache { return &metacache{} }, func() *metacache { return &metacache{} })
+	cleanupUploadIDCacheMetaRPC    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerClearUploadID, grid.NewMSS, grid.NewNoPayload)
 
 	// STREAMS
 	// Set an output capacity of 100 for consoleLog and listenRPC
@@ -900,6 +901,26 @@ func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload
 
 	if err := pools.ReloadPoolMeta(context.Background()); err != nil {
 		return np, grid.NewRemoteErr(err)
+	}
+
+	return
+}
+
+func (s *peerRESTServer) HandlerClearUploadID(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return np, grid.NewRemoteErr(errServerNotInitialized)
+	}
+
+	pools, ok := objAPI.(*erasureServerPools)
+	if !ok {
+		return
+	}
+
+	// No need to return errors, this is not a highly strict operation.
+	uploadID := mss.Get(peerRESTUploadID)
+	if uploadID != "" {
+		pools.ClearUploadID(uploadID)
 	}
 
 	return
