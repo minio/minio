@@ -45,6 +45,9 @@ const (
 
 	// RoutePath is the remote path to connect to.
 	RoutePath = "/minio/grid/" + apiVersion
+
+	// RouteLockPath is the remote lock path to connect to.
+	RouteLockPath = "/minio/grid/lock/" + apiVersion
 )
 
 // Manager will contain all the connections to the grid.
@@ -65,6 +68,9 @@ type Manager struct {
 
 	// authToken is a function that will validate a token.
 	authToken ValidateTokenFn
+
+	// routePath indicates the dial route path
+	routePath string
 }
 
 // ManagerOptions are options for creating a new grid manager.
@@ -74,6 +80,7 @@ type ManagerOptions struct {
 	Incoming     func(n int64) // Record incoming bytes.
 	Outgoing     func(n int64) // Record outgoing bytes.
 	BlockConnect chan struct{} // If set, incoming and outgoing connections will be blocked until closed.
+	RoutePath    string
 	TraceTo      *pubsub.PubSub[madmin.TraceInfo, madmin.TraceType]
 	Dialer       ConnDialer
 	// Sign a token for the given audience.
@@ -99,6 +106,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 		targets:   make(map[string]*Connection, len(o.Hosts)),
 		local:     o.Local,
 		authToken: o.AuthToken,
+		routePath: o.RoutePath,
 	}
 	m.handlers.init()
 	if ctx == nil {
@@ -137,7 +145,7 @@ func NewManager(ctx context.Context, o ManagerOptions) (*Manager, error) {
 
 // AddToMux will add the grid manager to the given mux.
 func (m *Manager) AddToMux(router *mux.Router, authReq func(r *http.Request) error) {
-	router.Handle(RoutePath, m.Handler(authReq))
+	router.Handle(m.routePath, m.Handler(authReq))
 }
 
 // Handler returns a handler that can be used to serve grid requests.

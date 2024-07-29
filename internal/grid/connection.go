@@ -1319,7 +1319,11 @@ func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *sub
 			handler = c.handlers.subStateless[*subID]
 		}
 		if handler == nil {
-			gridLogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+			msg := fmt.Sprintf("Invalid Handler for type: %v", m.Handler)
+			if subID != nil {
+				msg = fmt.Sprintf("Invalid Handler for type: %v", *subID)
+			}
+			gridLogIf(ctx, c.queueMsg(m, muxConnectError{Error: msg}))
 			return
 		}
 		_, _ = c.inStream.LoadOrCompute(m.MuxID, func() *muxServer {
@@ -1338,7 +1342,11 @@ func (c *Connection) handleConnectMux(ctx context.Context, m message, subID *sub
 			handler = c.handlers.subStreams[*subID]
 		}
 		if handler == nil {
-			gridLogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+			msg := fmt.Sprintf("Invalid Handler for type: %v", m.Handler)
+			if subID != nil {
+				msg = fmt.Sprintf("Invalid Handler for type: %v", *subID)
+			}
+			gridLogIf(ctx, c.queueMsg(m, muxConnectError{Error: msg}))
 			return
 		}
 
@@ -1392,7 +1400,11 @@ func (c *Connection) handleRequest(ctx context.Context, m message, subID *subHan
 		handler = c.handlers.subSingle[*subID]
 	}
 	if handler == nil {
-		gridLogIf(ctx, c.queueMsg(m, muxConnectError{Error: "Invalid Handler for type"}))
+		msg := fmt.Sprintf("Invalid Handler for type: %v", m.Handler)
+		if subID != nil {
+			msg = fmt.Sprintf("Invalid Handler for type: %v", *subID)
+		}
+		gridLogIf(ctx, c.queueMsg(m, muxConnectError{Error: msg}))
 		return
 	}
 

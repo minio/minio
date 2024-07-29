@@ -202,13 +202,12 @@ func bytesOrLength(b []byte) string {
 // The net.Conn must support all features as described by the net.Conn interface.
 type ConnDialer func(ctx context.Context, address string) (net.Conn, error)
 
-// ConnectWS returns a function that dials a websocket connection to the given address.
-// Route and auth are added to the connection.
-func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx context.Context, remote string) (net.Conn, error) {
+// ConnectWSWithRoutePath is like ConnectWS but with a custom grid route path.
+func ConnectWSWithRoutePath(dial ContextDialer, auth AuthFn, tls *tls.Config, routePath string) func(ctx context.Context, remote string) (net.Conn, error) {
 	return func(ctx context.Context, remote string) (net.Conn, error) {
 		toDial := strings.Replace(remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
-		toDial += RoutePath
+		toDial += routePath
 
 		dialer := ws.DefaultDialer
 		dialer.ReadBufferSize = readBufferSize
@@ -232,6 +231,12 @@ func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx contex
 		}
 		return conn, err
 	}
+}
+
+// ConnectWS returns a function that dials a websocket connection to the given address.
+// Route and auth are added to the connection.
+func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx context.Context, remote string) (net.Conn, error) {
+	return ConnectWSWithRoutePath(dial, auth, tls, RoutePath)
 }
 
 // ValidateTokenFn must validate the token and return an error if it is invalid.
