@@ -540,7 +540,7 @@ func toObjectInfo(bucket, object string, objInfo miniogo.ObjectInfo) ObjectInfo 
 	return oi
 }
 
-func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLayer, remoteClnt *minio.Client, entries []ObjectInfo) error {
+func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLayer, remoteClnt *minio.Client, entries []ObjectInfo, prefix string) error {
 	input := make(chan minio.SnowballObject, 1)
 	opts := minio.SnowballOptions{
 		Opts:     minio.PutObjectOptions{},
@@ -560,6 +560,10 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 			if err != nil {
 				batchLogIf(ctx, err)
 				continue
+			}
+
+			if prefix != "" {
+				entry.Name = pathJoin(prefix, entry.Name)
 			}
 
 			snowballObj := minio.SnowballObject{
@@ -1135,7 +1139,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				batch := make([]ObjectInfo, 0, *r.Source.Snowball.Batch)
 				writeFn := func(batch []ObjectInfo) {
 					if len(batch) > 0 {
-						if err := r.writeAsArchive(ctx, api, cl, batch); err != nil {
+						if err := r.writeAsArchive(ctx, api, cl, batch, r.Target.Prefix); err != nil {
 							batchLogOnceIf(ctx, err, job.ID+"writeAsArchive")
 							for _, b := range batch {
 								slowCh <- itemOrErr[ObjectInfo]{Item: b}
