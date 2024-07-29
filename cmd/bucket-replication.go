@@ -1299,7 +1299,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 		HeaderSize: headerSize,
 	}
 	newCtx := ctx
-	if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) {
+	if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) && objInfo.Size < minLargeObjSize {
 		var cancel context.CancelFunc
 		newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
 		defer cancel()
@@ -1574,7 +1574,7 @@ applyAction:
 			HeaderSize: headerSize,
 		}
 		newCtx := ctx
-		if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) {
+		if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) && objInfo.Size < minLargeObjSize {
 			var cancel context.CancelFunc
 			newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
 			defer cancel()
