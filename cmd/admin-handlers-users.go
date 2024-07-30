@@ -454,7 +454,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, exists := globalIAMSys.GetUser(ctx, accessKey)
+	user, exists := globalIAMSys.GetUserForce(ctx, accessKey)
 	if exists && (user.Credentials.IsTemp() || user.Credentials.IsServiceAccount()) {
 		// Updating STS credential is not allowed, and this API does not
 		// support updating service accounts.
@@ -1116,8 +1116,9 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	}
 	// We do not care if service account is readable or not at this point,
 	// since this is a delete call we shall allow it to be deleted if possible.
-	svcAccount, _, err := globalIAMSys.GetServiceAccount(ctx, serviceAccount)
-	if errors.Is(err, errNoSuchServiceAccount) {
+	ui, ok := globalIAMSys.GetUserForce(ctx, serviceAccount)
+	svcAccount := ui.Credentials
+	if !ok || !svcAccount.IsServiceAccount() {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminServiceAccountNotFound), r.URL)
 		return
 	}

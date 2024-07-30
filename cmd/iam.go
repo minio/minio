@@ -1303,7 +1303,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, n
 		return errServerNotInitialized
 	}
 
-	sa, ok := sys.store.GetUser(accessKey)
+	sa, ok := sys.store.GetUserForce(ctx, accessKey)
 	if !ok || !sa.Credentials.IsServiceAccount() {
 		return nil
 	}
@@ -1822,13 +1822,10 @@ func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentit
 	return u, ok
 }
 
-// DoesUserExist - check if user exists and returns type if it does
-func (sys *IAMSys) DoesUserExist(ctx context.Context, accessKey string) (exists bool, userType IAMUserType, err error) {
-	exists, userType, err = sys.store.DoesUserExist(ctx, accessKey)
-	if err != nil {
-		return false, unknownIAMUserType, err
-	}
-	return exists, userType, nil
+// GetUserForce - get user credentials, fetch from storage without loading cache if not found
+func (sys *IAMSys) GetUserForce(ctx context.Context, accessKey string) (u UserIdentity, ok bool) {
+	u, ok = sys.store.GetUserForce(ctx, accessKey)
+	return u, ok
 }
 
 // Notify all other MinIO peers to load group.
