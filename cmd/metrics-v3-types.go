@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/logger"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
@@ -247,28 +248,38 @@ func (m *MetricValues) Set(name MetricName, value float64, labels ...string) {
 // SetHistogram - sets values for the given MetricName using the provided
 // histogram.
 //
+// `filterByLabels` is a map of label names to list of allowed label values to
+// filter by. Note that this filtering happens before any renaming of labels.
+//
 // `renameLabels` is a map of label names to rename. The keys are the original
 // label names and the values are the new label names.
 //
-// TODO: bucketFilter doc
+// `bucketFilter` is a list of bucket values to filter. If this is non-empty,
+// only metrics for the given buckets are added.
 //
 // `extraLabels` are additional labels to add to each metric. They are ordered
 // label name and value pairs.
 func (m *MetricValues) SetHistogram(name MetricName, hist *prometheus.HistogramVec,
-	renameLabels map[string]string, bucketFilter []string, extraLabels ...string,
+	filterByLabels map[string]set.StringSet, renameLabels map[string]string, bucketFilter []string,
+	extraLabels ...string,
 ) {
 	if _, ok := m.descriptors[name]; !ok {
 		panic(fmt.Sprintf("metric has no description: %s", name))
 	}
 	dummyDesc := MetricDescription{}
 	metricsV2 := getHistogramMetrics(hist, dummyDesc, false)
+mainLoop:
 	for _, metric := range metricsV2 {
+		for label, allowedValues := range filterByLabels {
+			if !allowedValues.Contains(metric.VariableLabels[label]) {
+				continue mainLoop
+			}
+		}
+
 		// If a bucket filter is provided, only add metrics for the given
 		// buckets.
-		if len(bucketFilter) > 0 {
-			if !slices.Contains(bucketFilter, metric.VariableLabels["bucket"]) {
-				continue
-			}
+		if len(bucketFilter) > 0 && !slices.Contains(bucketFilter, metric.VariableLabels["bucket"]) {
+			continue
 		}
 
 		labels := make([]string, 0, len(metric.VariableLabels)*2)
