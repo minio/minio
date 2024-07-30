@@ -47,32 +47,30 @@ import (
 	"github.com/minio/pkg/v3/wildcard"
 )
 
-// ObjectPart represents the part details to be cached
-type ObjectPart struct {
-	Bucket         string
-	Prefix         string
-	Object         string
-	PartID         int
-	UploadIDMarker string
+// MultipartUpload represents multipart upload details to be cached
+type MultipartUpload struct {
+	Bucket   string
+	Object   string
+	UploadID string
 }
 
-// ObjectPartCacheEntry represents one object part cache entry
-type ObjectPartCacheEntry struct {
-	Part      ObjectPart
+// MultipartUploadCacheEntry represents one multipart upload cache entry
+type MultipartUploadCacheEntry struct {
+	Upload    MultipartUpload
 	Timestamp time.Time
 }
 
-// ObjectPartCache represents a in memory cache to hold part details
-type ObjectPartCache struct {
-	// Key would be partid as it's unique UUID
-	data  map[string]ObjectPartCacheEntry
+// MultipartUploadCache represents a in memory cache to hold multipart upload details
+type MultipartUploadCache struct {
+	// Key would be uploadID as it's unique UUID
+	data  map[string]MultipartUploadCacheEntry
 	mutex sync.RWMutex
 }
 
-// NewObjectPartsCache initializes and returns a new Cache
-func NewObjectPartsCache() *ObjectPartCache {
-	cache := &ObjectPartCache{
-		data: make(map[string]ObjectPartCacheEntry),
+// NewMultipartUploadsCache initializes and returns a new Cache
+func NewMultipartUploadsCache() *MultipartUploadCache {
+	cache := &MultipartUploadCache{
+		data: make(map[string]MultipartUploadCacheEntry),
 	}
 	// Start the cleanup process
 	go cache.cleanExpiredEntries()
@@ -80,62 +78,28 @@ func NewObjectPartsCache() *ObjectPartCache {
 }
 
 // Set adds a value to the cache with the current timestamp
-func (c *ObjectPartCache) Set(key string, value ObjectPart) {
+func (c *MultipartUploadCache) Set(key string, value MultipartUpload) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.data[key] = ObjectPartCacheEntry{
-		Part:      value,
+	c.data[key] = MultipartUploadCacheEntry{
+		Upload:    value,
 		Timestamp: time.Now(),
 	}
 }
 
 // Get retrieves a value from the cache if it has not expired
-func (c *ObjectPartCache) Get(key string) (ObjectPart, bool) {
+func (c *MultipartUploadCache) Get(key string) (MultipartUpload, bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	entry, exists := c.data[key]
 	if !exists || time.Since(entry.Timestamp) > 24*time.Hour {
-		return ObjectPart{}, false
+		return MultipartUpload{}, false
 	}
-	return entry.Part, true
-}
-
-// GetAll returns all the cached object parts for a bucket
-func (c *ObjectPartCache) GetAll(bucket string) (parts []ObjectPart) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	for _, value := range c.data {
-		parts = append(parts, value.Part)
-	}
-	return parts
-}
-
-// GetAllByPrefix returns all the cached object parts of a bucket at given prefix
-func (c *ObjectPartCache) GetAllByPrefix(bucket, prefix string) (parts []ObjectPart) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	for _, value := range c.data {
-		if value.Part.Prefix == prefix {
-			parts = append(parts, value.Part)
-		}
-	}
-	return parts
-}
-
-// GetAllByUploadIDMarker returns all the cached object parts of a bucket with given uploadIDMarker
-func (c *ObjectPartCache) GetAllByUploadIDMarker(bucket, marker string) (parts []ObjectPart) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	for _, value := range c.data {
-		if value.Part.UploadIDMarker == marker {
-			parts = append(parts, value.Part)
-		}
-	}
-	return parts
+	return entry.Upload, true
 }
 
 // cleanExpiredEntries removes expired entries every hour
-func (c *ObjectPartCache) cleanExpiredEntries() {
+func (c *MultipartUploadCache) cleanExpiredEntries() {
 	for {
 		time.Sleep(1 * time.Hour)
 		c.mutex.Lock()
@@ -166,7 +130,7 @@ type erasureServerPools struct {
 
 	s3Peer *S3PeerSys
 
-	objectPartsCache *ObjectPartCache
+	multipartUploadsCache *MultipartUploadCache
 }
 
 func (z *erasureServerPools) SinglePool() bool {
@@ -321,7 +285,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	}
 
 	// initialize the object part cache
-	z.objectPartsCache = NewObjectPartsCache()
+	z.multipartUploadsCache = NewMultipartUploadsCache()
 
 	return z, nil
 }
@@ -1822,6 +1786,7 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 	poolResult.KeyMarker = keyMarker
 	poolResult.Prefix = prefix
 	poolResult.Delimiter = delimiter
+	var uploads []MultipartInfo
 	for idx, pool := range z.serverPools {
 		if z.IsSuspended(idx) {
 			continue
@@ -1831,8 +1796,16 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		if err != nil {
 			return result, err
 		}
-		poolResult.Uploads = append(poolResult.Uploads, result.Uploads...)
+		// poolResult.Uploads = append(poolResult.Uploads, result.Uploads...)
+		uploads = append(uploads, result.Uploads...)
 	}
+
+	for _, upload := range uploads {
+		if _, found := z.multipartUploadsCache.Get(upload.UploadID); found {
+			poolResult.Uploads = append(poolResult.Uploads, upload)
+		}
+	}
+
 	return poolResult, nil
 }
 
@@ -1919,12 +1892,10 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 	}
 
 	// Add the object part to the cache
-	z.objectPartsCache.Set(fmt.Sprintf("%s:part-%d", uploadID, partID), ObjectPart{
-		Bucket:         bucket,
-		Prefix:         "",
-		Object:         object,
-		PartID:         partID,
-		UploadIDMarker: "",
+	z.multipartUploadsCache.Set(uploadID, MultipartUpload{
+		Bucket:   bucket,
+		Object:   object,
+		UploadID: uploadID,
 	})
 
 	return PartInfo{}, InvalidUploadID{
