@@ -91,7 +91,10 @@ func getReplicationConfig(ctx context.Context, bucketName string) (rc *replicati
 
 // validateReplicationDestination returns error if replication destination bucket missing or not configured
 // It also returns true if replication destination is same as this server.
-func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config, checkRemote bool) (bool, APIError) {
+func validateReplicationDestination(ctx context.Context, bucket string, rCfg *replication.Config, opts *validateReplicationDestinationOptions) (bool, APIError) {
+	if opts == nil {
+		opts = &validateReplicationDestinationOptions{}
+	}
 	var arns []string
 	if rCfg.RoleArn != "" {
 		arns = append(arns, rCfg.RoleArn)
@@ -113,7 +116,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 		if clnt == nil {
 			return sameTarget, toAPIError(ctx, BucketRemoteTargetNotFound{Bucket: bucket})
 		}
-		if checkRemote { // validate remote bucket
+		if opts.CheckRemoteBucket { // validate remote bucket
 			found, err := clnt.BucketExists(ctx, arn.Bucket)
 			if err != nil {
 				return sameTarget, errorCodes.ToAPIErrWithErr(ErrRemoteDestinationNotFoundError, err)
@@ -133,23 +136,29 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 				}
 			}
 		}
+		// if checked bucket, then check the ready is unnecessary
+		if !opts.CheckRemoteBucket && opts.CheckReady {
+			endpoint := clnt.EndpointURL().String()
+			if errInt, ok := opts.checkReadyErr.Load(endpoint); !ok {
+				err = checkRemoteEndpoint(ctx, clnt.EndpointURL())
+				opts.checkReadyErr.Store(endpoint, err)
+			} else {
+				if errInt == nil {
+					err = nil
+				} else {
+					err = errInt.(error)
+				}
+			}
+			switch err.(type) {
+			case BucketRemoteIdenticalToSource:
+				return true, errorCodes.ToAPIErrWithErr(ErrBucketRemoteIdenticalToSource, fmt.Errorf("remote target endpoint %s is self referential", clnt.EndpointURL().String()))
+			default:
+			}
+		}
 		// validate replication ARN against target endpoint
-		c := globalBucketTargetSys.GetRemoteTargetClient(bucket, arnStr)
-		if c != nil {
-			if err := checkRemoteEndpoint(ctx, c.EndpointURL()); err != nil {
-				switch err.(type) {
-				case BucketRemoteIdenticalToSource:
-					return true, errorCodes.ToAPIErrWithErr(ErrBucketRemoteIdenticalToSource, fmt.Errorf("remote target endpoint %s is self referential", c.EndpointURL().String()))
-				default:
-				}
-			}
-			if c.EndpointURL().String() == clnt.EndpointURL().String() {
-				selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
-				if !sameTarget {
-					sameTarget = selfTarget
-				}
-				continue
-			}
+		selfTarget, _ := isLocalHost(clnt.EndpointURL().Hostname(), clnt.EndpointURL().Port(), globalMinioPort)
+		if !sameTarget {
+			sameTarget = selfTarget
 		}
 	}
 
@@ -765,21 +774,6 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) map[string]string {
-	meta := make(map[string]string)
-	cs := oi.decryptChecksums(partNum, h)
-	for k, v := range cs {
-		cksum := hash.NewChecksumString(k, v)
-		if cksum == nil {
-			continue
-		}
-		if cksum.Valid() {
-			meta[cksum.Type.Key()] = v
-		}
-	}
-	return meta
-}
-
 func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, partNum int) (putOpts minio.PutObjectOptions, err error) {
 	meta := make(map[string]string)
 	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
@@ -788,11 +782,6 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		// In case of SSE-C objects copy the allowed internal headers as well
 		if !isSSEC || !slices.Contains(maps.Keys(validSSEReplicationHeaders), k) {
 			if stringsHasPrefixFold(k, ReservedMetadataPrefixLower) {
-				if strings.EqualFold(k, ReservedMetadataPrefixLower+"crc") {
-					for k, v := range getCRCMeta(objInfo, partNum, nil) {
-						meta[k] = v
-					}
-				}
 				continue
 			}
 			if isStandardHeader(k) {
@@ -811,8 +800,12 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		if isSSEC {
 			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
 		} else {
-			for k, v := range getCRCMeta(objInfo, 0, nil) {
-				meta[k] = v
+			for _, pi := range objInfo.Parts {
+				if pi.Number == partNum {
+					for k, v := range pi.Checksums {
+						meta[k] = v
+					}
+				}
 			}
 		}
 	}
@@ -1306,7 +1299,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 		HeaderSize: headerSize,
 	}
 	newCtx := ctx
-	if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) {
+	if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) && objInfo.Size < minLargeObjSize {
 		var cancel context.CancelFunc
 		newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
 		defer cancel()
@@ -1581,7 +1574,7 @@ applyAction:
 			HeaderSize: headerSize,
 		}
 		newCtx := ctx
-		if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) {
+		if globalBucketMonitor.IsThrottled(bucket, tgt.ARN) && objInfo.Size < minLargeObjSize {
 			var cancel context.CancelFunc
 			newCtx, cancel = context.WithTimeout(ctx, throttleDeadline)
 			defer cancel()
@@ -1666,8 +1659,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		if !isSSEC {
-			crc := getCRCMeta(objInfo, partInfo.Number, nil) // No SSE-C keys here.
-			for k, v := range crc {
+			for k, v := range partInfo.Checksums {
 				cHeader.Add(k, v)
 			}
 		}
@@ -2162,7 +2154,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		h := xxh3.HashString(ri.Bucket + ri.Name)
 		select {
 		case <-p.ctx.Done():
-		case p.lrgworkers[h%LargeWorkerCount] <- ri:
+		case p.lrgworkers[h%uint64(len(p.lrgworkers))] <- ri:
 		default:
 			globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
 			p.mu.RLock()
@@ -3740,4 +3732,13 @@ func (p *ReplicationPool) getMRF(ctx context.Context, bucket string) (ch <-chan 
 	}()
 
 	return mrfCh, nil
+}
+
+// validateReplicationDestinationOptions is used to configure the validation of the replication destination.
+// validateReplicationDestination uses this to configure the validation.
+type validateReplicationDestinationOptions struct {
+	CheckRemoteBucket bool
+	CheckReady        bool
+
+	checkReadyErr sync.Map
 }

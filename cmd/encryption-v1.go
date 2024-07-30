@@ -1172,6 +1172,14 @@ func (o *ObjectInfo) decryptChecksums(part int, h http.Header) map[string]string
 	if len(data) == 0 {
 		return nil
 	}
+	if part > 0 && !crypto.SSEC.IsEncrypted(o.UserDefined) {
+		// already decrypted in ToObjectInfo for multipart objects
+		for _, pi := range o.Parts {
+			if pi.Number == part {
+				return pi.Checksums
+			}
+		}
+	}
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
 		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
 		if err != nil {

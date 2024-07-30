@@ -23,23 +23,35 @@ import (
 	"time"
 )
 
+const updateInterval = 250 * time.Millisecond
+
 // DeadlineConn - is a generic stream-oriented network connection supporting buffered reader and read/write timeout.
 type DeadlineConn struct {
 	net.Conn
 	readDeadline  time.Duration // sets the read deadline on a connection.
+	readSetAt     time.Time
 	writeDeadline time.Duration // sets the write deadline on a connection.
+	writeSetAt    time.Time
 }
 
 // Sets read deadline
 func (c *DeadlineConn) setReadDeadline() {
 	if c.readDeadline > 0 {
-		c.Conn.SetReadDeadline(time.Now().UTC().Add(c.readDeadline))
+		now := time.Now()
+		if now.Sub(c.readSetAt) > updateInterval {
+			c.Conn.SetReadDeadline(now.Add(c.readDeadline + updateInterval))
+			c.readSetAt = now
+		}
 	}
 }
 
 func (c *DeadlineConn) setWriteDeadline() {
 	if c.writeDeadline > 0 {
-		c.Conn.SetWriteDeadline(time.Now().UTC().Add(c.writeDeadline))
+		now := time.Now()
+		if now.Sub(c.writeSetAt) > updateInterval {
+			c.Conn.SetWriteDeadline(now.Add(c.writeDeadline + updateInterval))
+			c.writeSetAt = now
+		}
 	}
 }
 
