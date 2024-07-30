@@ -123,7 +123,7 @@ func (er erasureObjects) cleanupMultipartPath(ctx context.Context, paths ...stri
 }
 
 // Clean-up the old multipart uploads. Should be run in a Go routine.
-func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Duration) {
+func (er erasureObjects) cleanupStaleUploads(ctx context.Context) {
 	// run multiple cleanup's local to this server.
 	var wg sync.WaitGroup
 	for _, disk := range er.getLocalDisks() {
@@ -131,7 +131,7 @@ func (er erasureObjects) cleanupStaleUploads(ctx context.Context, expiry time.Du
 			wg.Add(1)
 			go func(disk StorageAPI) {
 				defer wg.Done()
-				er.cleanupStaleUploadsOnDisk(ctx, disk, expiry)
+				er.cleanupStaleUploadsOnDisk(ctx, disk)
 			}(disk)
 		}
 	}
@@ -157,7 +157,7 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 }
 
 // Remove the old multipart uploads on the given disk.
-func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk StorageAPI, expiry time.Duration) {
+func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk StorageAPI) {
 	drivePath := disk.Endpoint().Path
 
 	readDirFn(pathJoin(drivePath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
@@ -183,7 +183,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 				modTime = fi.ModTime
 				wait()
 			}
-			if time.Since(modTime) < expiry {
+			if time.Since(modTime) < globalAPIConfig.getStaleUploadsExpiry() {
 				return nil
 			}
 			w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
@@ -202,7 +202,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			return nil
 		}
 		// Modtime is returned in the Created field. See (*xlStorage).StatVol
-		if time.Since(vi.Created) < expiry {
+		if time.Since(vi.Created) < globalAPIConfig.getStaleUploadsExpiry() {
 			return nil
 		}
 		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
@@ -231,7 +231,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 		w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
 		return w.Run(func() error {
 			wait := deleteMultipartCleanupSleeper.Timer(ctx)
-			if time.Since(vi.Created) > expiry {
+			if time.Since(vi.Created) > globalAPIConfig.getStaleUploadsExpiry() {
 				pathUUID := mustGetUUID()
 				targetPath := pathJoin(drivePath, minioMetaTmpDeletedBucket, pathUUID)
 
