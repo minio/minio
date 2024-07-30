@@ -525,7 +525,7 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 					if set == nil {
 						return
 					}
-					set.cleanupStaleUploads(ctx, globalAPIConfig.getStaleUploadsExpiry())
+					set.cleanupStaleUploads(ctx)
 				}(set)
 			}
 			wg.Wait()
