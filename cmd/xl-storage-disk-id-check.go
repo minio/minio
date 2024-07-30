@@ -70,6 +70,7 @@ const (
 	storageMetricReadMultiple
 	storageMetricDeleteAbandonedParts
 	storageMetricDiskInfo
+	storageMetricDeleteBulk
 
 	// .... add more
 
@@ -497,6 +498,16 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	return xioutil.WithDeadline[*CheckPartsResp](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (res *CheckPartsResp, err error) {
 		return p.storage.CheckParts(ctx, volume, path, fi)
 	})
+}
+
+func (p *xlStorageDiskIDCheck) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
+	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricDeleteBulk, append([]string{volume}, paths...)...)
+	if err != nil {
+		return err
+	}
+	defer done(0, &err)
+
+	return p.storage.DeleteBulk(ctx, volume, paths...)
 }
 
 func (p *xlStorageDiskIDCheck) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {

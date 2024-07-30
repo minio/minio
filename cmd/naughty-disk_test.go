@@ -222,6 +222,13 @@ func (d *naughtyDisk) CheckParts(ctx context.Context, volume string, path string
 	return d.disk.CheckParts(ctx, volume, path, fi)
 }
 
+func (d *naughtyDisk) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.DeleteBulk(ctx, volume, paths...)
+}
+
 func (d *naughtyDisk) Delete(ctx context.Context, volume string, path string, deleteOpts DeleteOptions) (err error) {
 	if err := d.calcError(); err != nil {
 		return err

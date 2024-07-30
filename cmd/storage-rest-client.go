@@ -737,7 +737,9 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	}
 
 	dErrResp := &DeleteVersionsErrsResp{}
-	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
+	decoder := msgpNewReader(reader)
+	defer readMsgpReaderPoolPut(decoder)
+	if err = dErrResp.DecodeMsg(decoder); err != nil {
 		for i := range errs {
 			errs[i] = toStorageErr(err)
 		}
@@ -745,7 +747,11 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	}
 
 	for i, dErr := range dErrResp.Errs {
-		errs[i] = toStorageErr(dErr)
+		if dErr != "" {
+			errs[i] = toStorageErr(errors.New(dErr))
+		} else {
+			errs[i] = nil
+		}
 	}
 
 	return errs
@@ -793,6 +799,26 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 	}
 
 	return verifyResp, nil
+}
+
+func (client *storageRESTClient) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+
+	req := &DeleteBulkReq{Paths: paths}
+	body, err := req.MarshalMsg(nil)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodDeleteBulk, values, bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(respBody)
+
+	_, err = waitForHTTPResponse(respBody)
+	return toStorageErr(err)
 }
 
 func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {
