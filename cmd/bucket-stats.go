@@ -20,6 +20,7 @@ package cmd
 import (
 	"fmt"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -127,8 +128,7 @@ func (l *ReplicationLastHour) getTotal() AccElem {
 
 // forwardTo time t, clearing any entries in between.
 func (l *ReplicationLastHour) forwardTo(t int64) {
-	tMin := t / 60
-	if l.LastMin >= tMin {
+	if l.LastMin >= t {
 		return
 	}
 	if t-l.LastMin >= 60 {
@@ -314,6 +314,9 @@ func (r *ReplicationStats) getNodeQueueStats(bucket string) (qs ReplQNodeStats) 
 	qs.XferStats = make(map[RMetricName]XferStats)
 	qs.QStats = r.qCache.getBucketStats(bucket)
 	qs.TgtXferStats = make(map[string]map[RMetricName]XferStats)
+	qs.MRFStats = ReplicationMRFStats{
+		LastFailedCount: atomic.LoadUint64(&r.mrfStats.LastFailedCount),
+	}
 
 	r.RLock()
 	defer r.RUnlock()
@@ -402,7 +405,9 @@ func (r *ReplicationStats) getNodeQueueStatsSummary() (qs ReplQNodeStats) {
 	qs.ActiveWorkers = globalReplicationStats.ActiveWorkers()
 	qs.XferStats = make(map[RMetricName]XferStats)
 	qs.QStats = r.qCache.getSiteStats()
-
+	qs.MRFStats = ReplicationMRFStats{
+		LastFailedCount: atomic.LoadUint64(&r.mrfStats.LastFailedCount),
+	}
 	r.RLock()
 	defer r.RUnlock()
 	tx := newXferStats()
