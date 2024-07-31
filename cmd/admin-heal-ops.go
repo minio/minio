@@ -761,6 +761,15 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		return nil
 	}
 
+	countOKDrives := func(drives []madmin.HealDriveInfo) (count int) {
+		for _, drive := range drives {
+			if drive.State == madmin.DriveStateOk {
+				count++
+			}
+		}
+		return count
+	}
+
 	// task queued, now wait for the response.
 	select {
 	case res := <-task.respCh:
@@ -780,6 +789,11 @@ func (h *healSequence) queueHealTask(source healSource, healType madmin.HealItem
 		res.result.Type = healType
 		if res.err != nil {
 			res.result.Detail = res.err.Error()
+		}
+		if res.result.ParityBlocks > 0 && res.result.DataBlocks > 0 && res.result.DataBlocks > res.result.ParityBlocks {
+			if got := countOKDrives(res.result.After.Drives); got < res.result.ParityBlocks {
+				res.result.Detail = fmt.Sprintf("quorum loss - expected %d minimum, got drive states in OK %d", res.result.ParityBlocks, got)
+			}
 		}
 		return h.pushHealResultItem(res.result)
 	case <-h.ctx.Done():
