@@ -89,10 +89,11 @@ func (c *MultipartUploadCache) Set(key string, value MultipartUpload) {
 
 // Get retrieves a value from the cache if it has not expired
 func (c *MultipartUploadCache) Get(key string) (MultipartUpload, bool) {
+	expiry := globalAPIConfig.getStaleUploadsExpiry()
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	entry, exists := c.data[key]
-	if !exists || time.Since(entry.Timestamp) > globalAPIConfig.getStaleUploadsExpiry() {
+	if !exists || time.Since(entry.Timestamp) > expiry {
 		return MultipartUpload{}, false
 	}
 	return entry.Upload, true
@@ -108,12 +109,13 @@ func (c *MultipartUploadCache) Has(key string) bool {
 
 // cleanExpiredEntries removes expired entries every hour
 func (c *MultipartUploadCache) cleanExpiredEntries() {
+	expiry := globalAPIConfig.getStaleUploadsExpiry()
 	for {
 		time.Sleep(1 * time.Hour)
 		c.mutex.Lock()
 		now := time.Now()
 		for key, entry := range c.data {
-			if now.Sub(entry.Timestamp) > globalAPIConfig.getStaleUploadsExpiry() {
+			if now.Sub(entry.Timestamp) > expiry {
 				delete(c.data, key)
 			}
 		}
