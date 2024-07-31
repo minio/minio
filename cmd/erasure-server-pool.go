@@ -92,10 +92,18 @@ func (c *MultipartUploadCache) Get(key string) (MultipartUpload, bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	entry, exists := c.data[key]
-	if !exists || time.Since(entry.Timestamp) > 24*time.Hour {
+	if !exists || time.Since(entry.Timestamp) > globalAPIConfig.getStaleUploadsExpiry() {
 		return MultipartUpload{}, false
 	}
 	return entry.Upload, true
+}
+
+// Has returns true if cache contains the key
+func (c *MultipartUploadCache) Has(key string) bool {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	_, exists := c.data[key]
+	return exists
 }
 
 // cleanExpiredEntries removes expired entries every hour
@@ -105,7 +113,7 @@ func (c *MultipartUploadCache) cleanExpiredEntries() {
 		c.mutex.Lock()
 		now := time.Now()
 		for key, entry := range c.data {
-			if now.Sub(entry.Timestamp) > 24*time.Hour {
+			if now.Sub(entry.Timestamp) > globalAPIConfig.getStaleUploadsExpiry() {
 				delete(c.data, key)
 			}
 		}
@@ -1801,7 +1809,7 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 	}
 
 	for _, upload := range uploads {
-		if _, found := z.multipartUploadsCache.Get(upload.UploadID); found {
+		if ok := z.multipartUploadsCache.Has(upload.UploadID); ok {
 			poolResult.Uploads = append(poolResult.Uploads, upload)
 		}
 	}
