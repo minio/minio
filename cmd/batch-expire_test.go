@@ -18,7 +18,7 @@
 package cmd
 
 import (
-	"reflect"
+	"slices"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -69,7 +69,7 @@ expire: # Expire objects that match a condition
 	if err != nil {
 		t.Fatal("Failed to parse batch-job-expire yaml", err)
 	}
-	if !reflect.DeepEqual(job.Expire.Prefix.F(), []string{"myprefix"}) {
+	if !slices.Equal(job.Expire.Prefix.F(), []string{"myprefix"}) {
 		t.Fatal("Failed to parse batch-job-expire yaml")
 	}
 
@@ -119,7 +119,7 @@ expire: # Expire objects that match a condition
 	if err != nil {
 		t.Fatal("Failed to parse batch-job-expire yaml", err)
 	}
-	if !reflect.DeepEqual(multiPrefixJob.Expire.Prefix.F(), []string{"myprefix", "myprefix1"}) {
+	if !slices.Equal(multiPrefixJob.Expire.Prefix.F(), []string{"myprefix", "myprefix1"}) {
 		t.Fatal("Failed to parse batch-job-expire yaml")
 	}
 }

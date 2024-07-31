@@ -18,7 +18,7 @@
 package cmd
 
 import (
-	"reflect"
+	"slices"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -98,7 +98,7 @@ replicate:
 	if err != nil {
 		t.Fatal("Failed to parse batch-job-replicate yaml", err)
 	}
-	if !reflect.DeepEqual(job.Replicate.Source.Prefix.F(), []string{"object-prefix1"}) {
+	if !slices.Equal(job.Replicate.Source.Prefix.F(), []string{"object-prefix1"}) {
 		t.Fatal("Failed to parse batch-job-replicate yaml", err)
 	}
 	multiPrefixReplicateYaml := `
@@ -176,7 +176,7 @@ replicate:
 	if err != nil {
 		t.Fatal("Failed to parse batch-job-replicate yaml", err)
 	}
-	if !reflect.DeepEqual(multiPrefixJob.Replicate.Source.Prefix.F(), []string{"object-prefix1", "object-prefix2"}) {
+	if !slices.Equal(multiPrefixJob.Replicate.Source.Prefix.F(), []string{"object-prefix1", "object-prefix2"}) {
 		t.Fatal("Failed to parse batch-job-replicate yaml")
 	}
 }
