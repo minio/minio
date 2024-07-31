@@ -536,8 +536,8 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		return err
 	}
 
-	ctx, cancelCancel := context.WithCancelCause(ctx)
-	defer cancelCancel(nil)
+	ctx, cancelCause := context.WithCancelCause(ctx)
+	defer cancelCause(nil)
 
 	results := make(chan itemOrErr[ObjectInfo], workerSize)
 	go func() {
@@ -549,7 +549,7 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 				VersionsSort: WalkVersionsSortDesc,
 			})
 			if err != nil {
-				cancelCancel(err)
+				cancelCause(err)
 				xioutil.SafeClose(results)
 				return
 			}

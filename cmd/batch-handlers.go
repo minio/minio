@@ -2256,12 +2256,12 @@ func lookupStyle(s string) miniogo.BucketLookupType {
 	return lookup
 }
 
-// BatchJobPrefix - to support prefix field yaml unmarshalling with string or slice string
+// BatchJobPrefix - to support prefix field yaml unmarshalling with string or slice of strings
 type BatchJobPrefix []string
 
 var _ yaml.Unmarshaler = &BatchJobPrefix{}
 
-// UnmarshalYAML - to support prefix field yaml unmarshalling with string or slice string
+// UnmarshalYAML - to support prefix field yaml unmarshalling with string or slice of strings
 func (b *BatchJobPrefix) UnmarshalYAML(value *yaml.Node) error {
 	// try slice first
 	tmpSlice := []string{}
@@ -2278,7 +2278,7 @@ func (b *BatchJobPrefix) UnmarshalYAML(value *yaml.Node) error {
 	return fmt.Errorf("unable to decode %s", value.Value)
 }
 
-// F - return prefix as slice
+// F - return prefix(es) as slice
 func (b *BatchJobPrefix) F() []string {
 	return *b
 }
