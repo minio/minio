@@ -84,6 +84,8 @@ type erasureSets struct {
 	deploymentID     [16]byte
 
 	lastConnectDisksOpTime time.Time
+
+	cleanedupUploadIDs []string
 }
 
 func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
@@ -370,6 +372,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 		distributionAlgo:   format.Erasure.DistributionAlgo,
 		deploymentID:       uuid.MustParse(format.ID),
 		poolIndex:          poolIdx,
+		cleanedupUploadIDs: []string{},
 	}
 
 	mutex := newNSLock(globalIsDistErasure)
@@ -512,6 +515,7 @@ func (s *erasureSets) cleanupDeletedObjects(ctx context.Context) {
 }
 
 func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
+	// var allUploadIDs []string
 	timer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
 	defer timer.Stop()
 
@@ -528,7 +532,8 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 					if set == nil {
 						return
 					}
-					set.cleanupStaleUploads(ctx)
+					uploadIDs := set.cleanupStaleUploads(ctx)
+					s.cleanedupUploadIDs = append(s.cleanedupUploadIDs, uploadIDs...)
 				}(set)
 			}
 			wg.Wait()

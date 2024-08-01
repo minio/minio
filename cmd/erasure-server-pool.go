@@ -68,12 +68,12 @@ type MultipartUploadCache struct {
 }
 
 // NewMultipartUploadsCache initializes and returns a new Cache
-func NewMultipartUploadsCache() *MultipartUploadCache {
+func NewMultipartUploadsCache(z *erasureServerPools) *MultipartUploadCache {
 	cache := &MultipartUploadCache{
 		data: make(map[string]MultipartUploadCacheEntry),
 	}
 	// Start the cleanup process
-	go cache.cleanExpiredEntries()
+	go cache.cleanExpiredEntries(z)
 	return cache
 }
 
@@ -107,16 +107,21 @@ func (c *MultipartUploadCache) Has(key string) bool {
 	return exists
 }
 
+// Remove removes given entry from cache
+func (c *MultipartUploadCache) Remove(key string) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	delete(c.data, key)
+}
+
 // cleanExpiredEntries removes expired entries every hour
-func (c *MultipartUploadCache) cleanExpiredEntries() {
-	expiry := globalAPIConfig.getStaleUploadsExpiry()
+func (c *MultipartUploadCache) cleanExpiredEntries(z *erasureServerPools) {
 	for {
 		time.Sleep(1 * time.Hour)
 		c.mutex.Lock()
-		now := time.Now()
-		for key, entry := range c.data {
-			if now.Sub(entry.Timestamp) > expiry {
-				delete(c.data, key)
+		for _, set := range z.serverPools {
+			for _, entry := range set.cleanedupUploadIDs {
+				delete(c.data, entry)
 			}
 		}
 		c.mutex.Unlock()
@@ -295,7 +300,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 	}
 
 	// initialize the object part cache
-	z.multipartUploadsCache = NewMultipartUploadsCache()
+	z.multipartUploadsCache = NewMultipartUploadsCache(z)
 
 	return z, nil
 }
@@ -1826,7 +1831,16 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	}
 
 	if z.SinglePool() {
-		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
+		res, err := z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
+		if err == nil {
+			// Add the object part to the cache
+			z.multipartUploadsCache.Set(res.UploadID, MultipartUpload{
+				Bucket:   bucket,
+				Object:   object,
+				UploadID: res.UploadID,
+			})
+		}
+		return res, err
 	}
 
 	for idx, pool := range z.serverPools {
@@ -1842,7 +1856,16 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		// create the new multipart in the same pool, this will avoid
 		// creating two multiparts uploads in two different pools
 		if len(result.Uploads) != 0 {
-			return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
+			res, err := z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
+			if err == nil {
+				// Add the object part to the cache
+				z.multipartUploadsCache.Set(res.UploadID, MultipartUpload{
+					Bucket:   bucket,
+					Object:   object,
+					UploadID: res.UploadID,
+				})
+			}
+			return res, err
 		}
 	}
 
@@ -1900,13 +1923,6 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		// Any other unhandled errors such as quorum return.
 		return PartInfo{}, err
 	}
-
-	// Add the object part to the cache
-	z.multipartUploadsCache.Set(uploadID, MultipartUpload{
-		Bucket:   bucket,
-		Object:   object,
-		UploadID: uploadID,
-	})
 
 	return PartInfo{}, InvalidUploadID{
 		Bucket:   bucket,
@@ -1981,7 +1997,11 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 	}
 
 	if z.SinglePool() {
-		return z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
+		err := z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
+		if err == nil {
+			z.multipartUploadsCache.Remove(uploadID)
+		}
+		return err
 	}
 
 	for idx, pool := range z.serverPools {
@@ -1990,6 +2010,7 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		}
 		err := pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		if err == nil {
+			z.multipartUploadsCache.Remove(uploadID)
 			return nil
 		}
 		if _, ok := err.(InvalidUploadID); ok {
@@ -2012,7 +2033,11 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 	}
 
 	if z.SinglePool() {
-		return z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+		resp, err := z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
+		if err == nil {
+			z.multipartUploadsCache.Remove(uploadID)
+		}
+		return resp, err
 	}
 
 	for idx, pool := range z.serverPools {
@@ -2021,6 +2046,7 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		}
 		objInfo, err = pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		if err == nil {
+			z.multipartUploadsCache.Remove(uploadID)
 			return objInfo, nil
 		}
 		if _, ok := err.(InvalidUploadID); ok {

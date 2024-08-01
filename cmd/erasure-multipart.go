@@ -130,19 +130,26 @@ func (er erasureObjects) cleanupMultipartPath(ctx context.Context, paths ...stri
 }
 
 // Clean-up the old multipart uploads. Should be run in a Go routine.
-func (er erasureObjects) cleanupStaleUploads(ctx context.Context) {
+func (er erasureObjects) cleanupStaleUploads(ctx context.Context) []string {
 	// run multiple cleanup's local to this server.
 	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var allUploadIDs []string
+
 	for _, disk := range er.getLocalDisks() {
 		if disk != nil {
 			wg.Add(1)
 			go func(disk StorageAPI) {
 				defer wg.Done()
-				er.cleanupStaleUploadsOnDisk(ctx, disk)
+				uploadIDs := er.cleanupStaleUploadsOnDisk(ctx, disk)
+				mu.Lock()
+				allUploadIDs = append(allUploadIDs, uploadIDs...)
+				mu.Unlock()
 			}(disk)
 		}
 	}
 	wg.Wait()
+	return allUploadIDs
 }
 
 func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
@@ -164,8 +171,9 @@ func (er erasureObjects) deleteAll(ctx context.Context, bucket, prefix string) {
 }
 
 // Remove the old multipart uploads on the given disk.
-func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk StorageAPI) {
+func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk StorageAPI) []string {
 	drivePath := disk.Endpoint().Path
+	var uploadIDs []string
 
 	readDirFn(pathJoin(drivePath, minioMetaMultipartBucket), func(shaDir string, typ os.FileMode) error {
 		readDirFn(pathJoin(drivePath, minioMetaMultipartBucket, shaDir), func(uploadIDDir string, typ os.FileMode) error {
@@ -199,6 +207,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 				pathUUID := mustGetUUID()
 				targetPath := pathJoin(drivePath, minioMetaTmpDeletedBucket, pathUUID)
 				renameAll(pathJoin(drivePath, minioMetaMultipartBucket, uploadIDPath), targetPath, pathJoin(drivePath, minioMetaBucket))
+				uploadIDs = append(uploadIDs, uploadIDDir)
 				wait()
 				return nil
 			})
@@ -248,6 +257,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 			return nil
 		})
 	})
+	return uploadIDs
 }
 
 // ListMultipartUploads - lists all the pending multipart
