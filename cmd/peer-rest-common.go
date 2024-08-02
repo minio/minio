@@ -67,6 +67,7 @@ const (
 	peerRESTStartRebalance  = "start-rebalance"
 	peerRESTMetrics         = "metrics"
 	peerRESTDryRun          = "dry-run"
+	peerRESTCleanUploadID   = "cleanup-upload-id"
 
 	peerRESTURL         = "url"
 	peerRESTSha256Sum   = "sha256sum"

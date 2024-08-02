@@ -115,6 +115,7 @@ var (
 	signalServiceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerSignalService, grid.NewMSS, grid.NewNoPayload)
 	stopRebalanceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerStopRebalance, grid.NewMSS, grid.NewNoPayload)
 	updateMetacacheListingRPC      = grid.NewSingleHandler[*metacache, *metacache](grid.HandlerUpdateMetacacheListing, func() *metacache { return &metacache{} }, func() *metacache { return &metacache{} })
+	cleanupUploadIDCacheMetaRPC    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerCleanupUploadIDCache, grid.NewMSS, grid.NewNoPayload)
 
 	// STREAMS
 	// Set an output capacity of 100 for consoleLog and listenRPC
@@ -902,6 +903,23 @@ func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload
 		return np, grid.NewRemoteErr(err)
 	}
 
+	return
+}
+
+func (s *peerRESTServer) HandlerCleanupUploadIDCache(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return np, grid.NewRemoteErr(errServerNotInitialized)
+	}
+
+	pools, ok := objAPI.(*erasureServerPools)
+	if !ok {
+		return np, grid.NewRemoteErr(errors.New("not a pooled setup"))
+	}
+
+	uploadID := mss.Get(peerRESTCleanUploadID)
+
+	pools.CleanupUploadIDCache(uploadID)
 	return
 }
 
