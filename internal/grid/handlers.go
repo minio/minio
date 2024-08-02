@@ -113,6 +113,7 @@ const (
 	HandlerRenameDataInline
 	HandlerRenameData2
 	HandlerCheckParts2
+	HandlerCleanupUploadIDCache
 
 	// Add more above here ^^^
 	// If all handlers are used, the type of Handler can be changed.
@@ -194,6 +195,7 @@ var handlerPrefixes = [handlerLast]string{
 	HandlerRenameDataInline:            storagePrefix,
 	HandlerRenameData2:                 storagePrefix,
 	HandlerCheckParts2:                 storagePrefix,
+	HandlerCleanupUploadIDCache:        peerPrefix,
 }
 
 const (

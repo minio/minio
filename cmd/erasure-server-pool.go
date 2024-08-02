@@ -72,8 +72,6 @@ func NewMultipartUploadsCache(z *erasureServerPools) *MultipartUploadCache {
 	cache := &MultipartUploadCache{
 		data: make(map[string]MultipartUploadCacheEntry),
 	}
-	// Start the cleanup process
-	go cache.cleanExpiredEntries(z)
 	return cache
 }
 
@@ -112,20 +110,6 @@ func (c *MultipartUploadCache) Remove(key string) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	delete(c.data, key)
-}
-
-// cleanExpiredEntries removes expired entries every hour
-func (c *MultipartUploadCache) cleanExpiredEntries(z *erasureServerPools) {
-	for {
-		time.Sleep(1 * time.Hour)
-		c.mutex.Lock()
-		for _, set := range z.serverPools {
-			for _, entry := range set.cleanedupUploadIDs {
-				delete(c.data, entry)
-			}
-		}
-		c.mutex.Unlock()
-	}
 }
 
 type erasureServerPools struct {
@@ -1997,6 +1981,7 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		err := z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			z.multipartUploadsCache.Remove(uploadID)
+			globalNotificationSys.RemoveUploadIDFromCache(ctx, uploadID)
 		}
 		return err
 	}
@@ -2008,6 +1993,7 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 		err := pool.AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
 		if err == nil {
 			z.multipartUploadsCache.Remove(uploadID)
+			globalNotificationSys.RemoveUploadIDFromCache(ctx, uploadID)
 			return nil
 		}
 		if _, ok := err.(InvalidUploadID); ok {
@@ -2033,6 +2019,7 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		resp, err := z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		if err == nil {
 			z.multipartUploadsCache.Remove(uploadID)
+			globalNotificationSys.RemoveUploadIDFromCache(ctx, uploadID)
 		}
 		return resp, err
 	}
@@ -2044,6 +2031,7 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 		objInfo, err = pool.CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
 		if err == nil {
 			z.multipartUploadsCache.Remove(uploadID)
+			globalNotificationSys.RemoveUploadIDFromCache(ctx, uploadID)
 			return objInfo, nil
 		}
 		if _, ok := err.(InvalidUploadID); ok {
@@ -2074,6 +2062,12 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 		bucketInfo.ObjectLocking = meta.ObjectLocking()
 	}
 	return bucketInfo, nil
+}
+
+// CleanupUploadIDCache removes given uploadID from cache
+func (z *erasureServerPools) CleanupUploadIDCache(uploadID string) error {
+	z.multipartUploadsCache.Remove(uploadID)
+	return nil
 }
 
 // DeleteBucket - deletes a bucket on all serverPools simultaneously,
