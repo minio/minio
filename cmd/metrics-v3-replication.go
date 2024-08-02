@@ -34,6 +34,7 @@ const (
 	replicationMaxQueuedBytes          = "max_queued_bytes"
 	replicationMaxQueuedCount          = "max_queued_count"
 	replicationMaxDataTransferRate     = "max_data_transfer_rate"
+	replicationRecentBacklogCount      = "recent_backlog_count"
 )
 
 var (
@@ -61,6 +62,8 @@ var (
 		"Maximum number of objects queued for replication since server start")
 	replicationMaxDataTransferRateMD = NewGaugeMD(replicationMaxDataTransferRate,
 		"Maximum replication data transfer rate in bytes/sec seen since server start")
+	replicationRecentBacklogCountMD = NewGaugeMD(replicationRecentBacklogCount,
+		"Total number of objects seen in replication backlog in the last 5 minutes")
 )
 
 // loadClusterReplicationMetrics - `MetricsLoaderFn` for cluster replication metrics
@@ -91,6 +94,7 @@ func loadClusterReplicationMetrics(ctx context.Context, m MetricValues, c *metri
 		m.Set(replicationCurrentDataTransferRate, tots.Curr)
 		m.Set(replicationMaxDataTransferRate, tots.Peak)
 	}
+	m.Set(replicationRecentBacklogCount, float64(qs.MRFStats.LastFailedCount))
 
 	return nil
 }
