@@ -82,6 +82,9 @@ spec:
               - key: {{ .Values.tls.publicCrt }}
                 path: CAs/public.crt
         {{- end }}
+        {{- if .Values.customCommandJob.extraVolumes }}
+          {{- toYaml .Values.customCommandJob.extraVolumes | nindent 8 }}
+        {{- end }}
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
@@ -216,6 +219,9 @@ spec:
             {{- if .Values.tls.enabled }}
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
+            {{- end }}
+            {{- if .Values.customCommandJob.extraVolumeMounts }}
+              {{- toYaml .Values.customCommandJob.extraVolumeMounts | nindent 12 }}
             {{- end }}
           resources: {{- toYaml .Values.customCommandJob.resources | nindent 12 }}
         {{- end }}
