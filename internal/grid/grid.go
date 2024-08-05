@@ -57,7 +57,7 @@ const (
 	biggerBufMax = maxBufferSize
 
 	// If there is a queue, merge up to this many messages.
-	maxMergeMessages = 30
+	maxMergeMessages = 50
 
 	// clientPingInterval will ping the remote handler every 15 seconds.
 	// Clients disconnect when we exceed 2 intervals.
@@ -126,7 +126,8 @@ var PutByteBuffer = func(b []byte) {
 // A successful call returns err == nil, not err == EOF. Because readAllInto is
 // defined to read from src until EOF, it does not treat an EOF from Read
 // as an error to be reported.
-func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
+func readAllInto(b []byte, r *wsutil.Reader, want int64) ([]byte, error) {
+	read := int64(0)
 	for {
 		if len(b) == cap(b) {
 			// Add more capacity (let append pick how much).
@@ -136,9 +137,17 @@ func readAllInto(b []byte, r *wsutil.Reader) ([]byte, error) {
 		b = b[:len(b)+n]
 		if err != nil {
 			if errors.Is(err, io.EOF) {
+				if want >= 0 && read+int64(n) != want {
+					return nil, io.ErrUnexpectedEOF
+				}
 				err = nil
 			}
 			return b, err
+		}
+		read += int64(n)
+		if want >= 0 && read == want {
+			// No need to read more...
+			return b, nil
 		}
 	}
 }
@@ -193,13 +202,12 @@ func bytesOrLength(b []byte) string {
 // The net.Conn must support all features as described by the net.Conn interface.
 type ConnDialer func(ctx context.Context, address string) (net.Conn, error)
 
-// ConnectWS returns a function that dials a websocket connection to the given address.
-// Route and auth are added to the connection.
-func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx context.Context, remote string) (net.Conn, error) {
+// ConnectWSWithRoutePath is like ConnectWS but with a custom grid route path.
+func ConnectWSWithRoutePath(dial ContextDialer, auth AuthFn, tls *tls.Config, routePath string) func(ctx context.Context, remote string) (net.Conn, error) {
 	return func(ctx context.Context, remote string) (net.Conn, error) {
 		toDial := strings.Replace(remote, "http://", "ws://", 1)
 		toDial = strings.Replace(toDial, "https://", "wss://", 1)
-		toDial += RoutePath
+		toDial += routePath
 
 		dialer := ws.DefaultDialer
 		dialer.ReadBufferSize = readBufferSize
@@ -223,6 +231,12 @@ func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx contex
 		}
 		return conn, err
 	}
+}
+
+// ConnectWS returns a function that dials a websocket connection to the given address.
+// Route and auth are added to the connection.
+func ConnectWS(dial ContextDialer, auth AuthFn, tls *tls.Config) func(ctx context.Context, remote string) (net.Conn, error) {
+	return ConnectWSWithRoutePath(dial, auth, tls, RoutePath)
 }
 
 // ValidateTokenFn must validate the token and return an error if it is invalid.

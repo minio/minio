@@ -173,14 +173,28 @@ func (client *storageRESTClient) GetDiskLoc() (poolIdx, setIdx, diskIdx int) {
 	return client.endpoint.PoolIdx, client.endpoint.SetIdx, client.endpoint.DiskIdx
 }
 
-// Wrapper to restClient.Call to handle network errors, in case of network error the connection is disconnected
+// Wrapper to restClient.CallWithMethod to handle network errors, in case of network error the connection is disconnected
 // and a healthcheck routine gets invoked that would reconnect.
-func (client *storageRESTClient) call(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
+func (client *storageRESTClient) callGet(ctx context.Context, rpcMethod string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
 	if values == nil {
 		values = make(url.Values)
 	}
 	values.Set(storageRESTDiskID, *client.diskID.Load())
-	respBody, err := client.restClient.Call(ctx, method, values, body, length)
+	respBody, err := client.restClient.CallWithHTTPMethod(ctx, http.MethodGet, rpcMethod, values, body, length)
+	if err != nil {
+		return nil, toStorageErr(err)
+	}
+	return respBody, nil
+}
+
+// Wrapper to restClient.Call to handle network errors, in case of network error the connection is disconnected
+// and a healthcheck routine gets invoked that would reconnect.
+func (client *storageRESTClient) call(ctx context.Context, rpcMethod string, values url.Values, body io.Reader, length int64) (io.ReadCloser, error) {
+	if values == nil {
+		values = make(url.Values)
+	}
+	values.Set(storageRESTDiskID, *client.diskID.Load())
+	respBody, err := client.restClient.CallWithHTTPMethod(ctx, http.MethodPost, rpcMethod, values, body, length)
 	if err != nil {
 		return nil, toStorageErr(err)
 	}
@@ -499,7 +513,7 @@ var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader
 func msgpNewReader(r io.Reader) *msgp.Reader {
 	p := readMsgpReaderPool.Get().(*msgp.Reader)
 	if p.R == nil {
-		p.R = xbufio.NewReaderSize(r, 4<<10)
+		p.R = xbufio.NewReaderSize(r, 32<<10)
 	} else {
 		p.R.Reset(r)
 	}
@@ -526,7 +540,6 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, vo
 			storageRESTFilePath:         path,
 			storageRESTVersionID:        versionID,
 			storageRESTInclFreeVersions: strconv.FormatBool(opts.InclFreeVersions),
-			storageRESTReadData:         strconv.FormatBool(opts.ReadData),
 			storageRESTHealing:          strconv.FormatBool(opts.Healing),
 		}))
 		if err != nil {
@@ -541,10 +554,9 @@ func (client *storageRESTClient) ReadVersion(ctx context.Context, origvolume, vo
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTVersionID, versionID)
 	values.Set(storageRESTInclFreeVersions, strconv.FormatBool(opts.InclFreeVersions))
-	values.Set(storageRESTReadData, strconv.FormatBool(opts.ReadData))
 	values.Set(storageRESTHealing, strconv.FormatBool(opts.Healing))
 
-	respBody, err := client.call(ctx, storageRESTMethodReadVersion, values, nil, -1)
+	respBody, err := client.callGet(ctx, storageRESTMethodReadVersion, values, nil, -1)
 	if err != nil {
 		return fi, err
 	}
@@ -568,7 +580,6 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 			storageRESTDiskID:   *client.diskID.Load(),
 			storageRESTVolume:   volume,
 			storageRESTFilePath: path,
-			storageRESTReadData: "false",
 		}))
 		if err != nil {
 			return rf, toStorageErr(err)
@@ -579,8 +590,8 @@ func (client *storageRESTClient) ReadXL(ctx context.Context, volume string, path
 	values := make(url.Values)
 	values.Set(storageRESTVolume, volume)
 	values.Set(storageRESTFilePath, path)
-	values.Set(storageRESTReadData, strconv.FormatBool(readData))
-	respBody, err := client.call(ctx, storageRESTMethodReadXL, values, nil, -1)
+
+	respBody, err := client.callGet(ctx, storageRESTMethodReadXL, values, nil, -1)
 	if err != nil {
 		return rf, toStorageErr(err)
 	}
@@ -617,9 +628,10 @@ func (client *storageRESTClient) ReadFileStream(ctx context.Context, volume, pat
 	values.Set(storageRESTFilePath, path)
 	values.Set(storageRESTOffset, strconv.Itoa(int(offset)))
 	values.Set(storageRESTLength, strconv.Itoa(int(length)))
-	respBody, err := client.call(ctx, storageRESTMethodReadFileStream, values, nil, -1)
+
+	respBody, err := client.callGet(ctx, storageRESTMethodReadFileStream, values, nil, -1)
 	if err != nil {
-		return nil, err
+		return nil, toStorageErr(err)
 	}
 	return respBody, nil
 }
@@ -638,7 +650,7 @@ func (client *storageRESTClient) ReadFile(ctx context.Context, volume string, pa
 		values.Set(storageRESTBitrotAlgo, "")
 		values.Set(storageRESTBitrotHash, "")
 	}
-	respBody, err := client.call(ctx, storageRESTMethodReadFile, values, nil, -1)
+	respBody, err := client.callGet(ctx, storageRESTMethodReadFile, values, nil, -1)
 	if err != nil {
 		return 0, err
 	}
@@ -725,7 +737,9 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	}
 
 	dErrResp := &DeleteVersionsErrsResp{}
-	if err = gob.NewDecoder(reader).Decode(dErrResp); err != nil {
+	decoder := msgpNewReader(reader)
+	defer readMsgpReaderPoolPut(decoder)
+	if err = dErrResp.DecodeMsg(decoder); err != nil {
 		for i := range errs {
 			errs[i] = toStorageErr(err)
 		}
@@ -733,7 +747,11 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	}
 
 	for i, dErr := range dErrResp.Errs {
-		errs[i] = toStorageErr(dErr)
+		if dErr != "" {
+			errs[i] = toStorageErr(errors.New(dErr))
+		} else {
+			errs[i] = nil
+		}
 	}
 
 	return errs
@@ -781,6 +799,26 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 	}
 
 	return verifyResp, nil
+}
+
+func (client *storageRESTClient) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+
+	req := &DeleteBulkReq{Paths: paths}
+	body, err := req.MarshalMsg(nil)
+	if err != nil {
+		return err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodDeleteBulk, values, bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return err
+	}
+	defer xhttp.DrainBody(respBody)
+
+	_, err = waitForHTTPResponse(respBody)
+	return toStorageErr(err)
 }
 
 func (client *storageRESTClient) StatInfoFile(ctx context.Context, volume, path string, glob bool) (stat []StatInfo, err error) {

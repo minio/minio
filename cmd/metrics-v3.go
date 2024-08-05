@@ -341,6 +341,7 @@ func newMetricGroups(r *prometheus.Registry) *metricsV3Collection {
 			replicationMaxQueuedBytesMD,
 			replicationMaxQueuedCountMD,
 			replicationMaxDataTransferRateMD,
+			replicationRecentBacklogCountMD,
 		},
 		loadClusterReplicationMetrics,
 	)

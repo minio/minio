@@ -125,6 +125,7 @@ type TCPOptions struct {
 
 	SendBufSize int              // SO_SNDBUF size for the socket connection, NOTE: this sets server and client connection
 	RecvBufSize int              // SO_RECVBUF size for the socket connection, NOTE: this sets server and client connection
+	NoDelay     bool             // Indicates callers to enable TCP_NODELAY on the net.Conn
 	Interface   string           // This is a VRF device passed via `--interface` flag
 	Trace       func(msg string) // Trace when starting.
 }
@@ -136,6 +137,7 @@ func (t TCPOptions) ForWebsocket() TCPOptions {
 		Interface:   t.Interface,
 		SendBufSize: t.SendBufSize,
 		RecvBufSize: t.RecvBufSize,
+		NoDelay:     true,
 	}
 }
 

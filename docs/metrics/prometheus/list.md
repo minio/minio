@@ -157,9 +157,9 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 
 | Name                                           | Description                                                                                                                                 |
 |:-----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------|
-| `minio_notify_current_send_in_progress`        | Number of concurrent async Send calls active to all targets (deprecated, please use 'minio_notify_target_current_send_in_progress' instead) |
-| `minio_notify_events_errors_total`             | Events that were failed to be sent to the targets (deprecated, please use 'minio_notify_target_failed_events' instead)                      |
-| `minio_notify_events_sent_total`               | Total number of events sent to the targets (deprecated, please use 'minio_notify_target_total_events' instead)                              |
+| `minio_notify_current_send_in_progress`        | Number of concurrent async Send calls active to all targets (deprecated, please use `minio_notify_target_current_send_in_progress` instead) |
+| `minio_notify_events_errors_total`             | Events that were failed to be sent to the targets (deprecated, please use `minio_notify_target_failed_events` instead)                      |
+| `minio_notify_events_sent_total`               | Total number of events sent to the targets (deprecated, please use `minio_notify_target_total_events` instead)                              |
 | `minio_notify_events_skipped_total`            | Events that were skipped to be sent to the targets due to the in-memory queue being full                                                    |
 | `minio_notify_target_current_send_in_progress` | Number of concurrent async Send calls active to the target                                                                                  |
 | `minio_notify_target_queue_length`             | Number of events currently staged in the queue_dir configured for the target.                                                               |
@@ -254,7 +254,7 @@ For deployments with [bucket](https://min.io/docs/minio/linux/administration/buc
 | `minio_node_io_read_bytes`                 | Total bytes read by the process from the underlying storage system, /proc/[pid]/io read_bytes.                  |
 | `minio_node_io_wchar_bytes`                | Total bytes written by the process to the underlying storage system including page cache, /proc/[pid]/io wchar. |
 | `minio_node_io_write_bytes`                | Total bytes written by the process to the underlying storage system, /proc/[pid]/io write_bytes.                |
-| `minio_node_process_cpu_total_seconds`     | Total user and system CPU time spent in seconds.                                                                |
+| `minio_node_process_cpu_total_seconds`     | Total user and system CPU time spent in seconds by the process.                                                |
 | `minio_node_process_resident_memory_bytes` | Resident memory size in bytes.                                                                                  |
 | `minio_node_process_virtual_memory_bytes`  | Virtual memory size in bytes.                                                                                   |
 | `minio_node_process_starttime_seconds`     | Start time for MinIO process per node, time in seconds since Unix epoc.                                         |

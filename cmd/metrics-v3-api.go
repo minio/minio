@@ -19,6 +19,8 @@ package cmd
 
 import (
 	"context"
+
+	"github.com/minio/minio-go/v7/pkg/set"
 )
 
 const (
@@ -127,7 +129,8 @@ func loadAPIRequestsHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsC
 // This is a `MetricsLoaderFn`.
 func loadAPIRequestsTTFBMetrics(ctx context.Context, m MetricValues, _ *metricsCache) error {
 	renameLabels := map[string]string{"api": "name"}
-	m.SetHistogram(apiRequestsTTFBSecondsDistribution, httpRequestsDuration, renameLabels, nil,
+	labelsFilter := map[string]set.StringSet{"api": set.CreateStringSet("GetObject")}
+	m.SetHistogram(apiRequestsTTFBSecondsDistribution, httpRequestsDuration, labelsFilter, renameLabels, nil,
 		"type", "s3")
 	return nil
 }
@@ -214,7 +217,8 @@ func loadBucketAPIHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsCac
 // This is a `MetricsLoaderFn`.
 func loadBucketAPITTFBMetrics(ctx context.Context, m MetricValues, _ *metricsCache, buckets []string) error {
 	renameLabels := map[string]string{"api": "name"}
-	m.SetHistogram(apiRequestsTTFBSecondsDistribution, bucketHTTPRequestsDuration, renameLabels,
+	labelsFilter := map[string]set.StringSet{"api": set.CreateStringSet("GetObject")}
+	m.SetHistogram(apiRequestsTTFBSecondsDistribution, bucketHTTPRequestsDuration, labelsFilter, renameLabels,
 		buckets, "type", "s3")
 	return nil
 }

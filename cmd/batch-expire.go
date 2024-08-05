@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -36,6 +37,7 @@ import (
 	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/wildcard"
 	"github.com/minio/pkg/v3/workers"
+	"github.com/minio/pkg/v3/xtime"
 	"gopkg.in/yaml.v3"
 )
 
@@ -116,7 +118,7 @@ func (p BatchJobExpirePurge) Validate() error {
 // BatchJobExpireFilter holds all the filters currently supported for batch replication
 type BatchJobExpireFilter struct {
 	line, col     int
-	OlderThan     time.Duration       `yaml:"olderThan,omitempty" json:"olderThan"`
+	OlderThan     xtime.Duration      `yaml:"olderThan,omitempty" json:"olderThan"`
 	CreatedBefore *time.Time          `yaml:"createdBefore,omitempty" json:"createdBefore"`
 	Tags          []BatchJobKV        `yaml:"tags,omitempty" json:"tags"`
 	Metadata      []BatchJobKV        `yaml:"metadata,omitempty" json:"metadata"`
@@ -162,7 +164,7 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 	if len(ef.Name) > 0 && !wildcard.Match(ef.Name, obj.Name) {
 		return false
 	}
-	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan {
+	if ef.OlderThan > 0 && now.Sub(obj.ModTime) <= ef.OlderThan.D() {
 		return false
 	}
 
@@ -280,7 +282,7 @@ type BatchJobExpire struct {
 	line, col       int
 	APIVersion      string                 `yaml:"apiVersion" json:"apiVersion"`
 	Bucket          string                 `yaml:"bucket" json:"bucket"`
-	Prefix          string                 `yaml:"prefix" json:"prefix"`
+	Prefix          BatchJobPrefix         `yaml:"prefix" json:"prefix"`
 	NotificationCfg BatchJobNotification   `yaml:"notify" json:"notify"`
 	Retry           BatchJobRetry          `yaml:"retry" json:"retry"`
 	Rules           []BatchJobExpireFilter `yaml:"rules" json:"rules"`
@@ -340,8 +342,24 @@ func (r *BatchJobExpire) Expire(ctx context.Context, api ObjectLayer, vc *versio
 		PrefixEnabledFn:  vc.PrefixEnabled,
 		VersionSuspended: vc.Suspended(),
 	}
-	_, errs := api.DeleteObjects(ctx, r.Bucket, objsToDel, opts)
-	return errs
+
+	allErrs := make([]error, 0, len(objsToDel))
+
+	for {
+		count := len(objsToDel)
+		if count == 0 {
+			break
+		}
+		if count > maxDeleteList {
+			count = maxDeleteList
+		}
+		_, errs := api.DeleteObjects(ctx, r.Bucket, objsToDel[:count], opts)
+		allErrs = append(allErrs, errs...)
+		// Next batch of deletion
+		objsToDel = objsToDel[count:]
+	}
+
+	return allErrs
 }
 
 const (
@@ -534,18 +552,29 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	ctx, cancelCause := context.WithCancelCause(ctx)
+	defer cancelCause(nil)
 
 	results := make(chan itemOrErr[ObjectInfo], workerSize)
-	if err := api.Walk(ctx, r.Bucket, r.Prefix, results, WalkOptions{
-		Marker:       lastObject,
-		LatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
-		VersionsSort: WalkVersionsSortDesc,
-	}); err != nil {
-		// Do not need to retry if we can't list objects on source.
-		return err
-	}
+	go func() {
+		for _, prefix := range r.Prefix.F() {
+			prefixResultCh := make(chan itemOrErr[ObjectInfo], workerSize)
+			err := api.Walk(ctx, r.Bucket, strings.TrimSpace(prefix), prefixResultCh, WalkOptions{
+				Marker:       lastObject,
+				LatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
+				VersionsSort: WalkVersionsSortDesc,
+			})
+			if err != nil {
+				cancelCause(err)
+				xioutil.SafeClose(results)
+				return
+			}
+			for result := range prefixResultCh {
+				results <- result
+			}
+		}
+		xioutil.SafeClose(results)
+	}()
 
 	// Goroutine to periodically save batch-expire job's in-memory state
 	saverQuitCh := make(chan struct{})
@@ -655,6 +684,10 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		toDel = append(toDel, expireObjInfo{
 			ObjectInfo: result.Item,
 		})
+	}
+	if context.Cause(ctx) != nil {
+		xioutil.SafeClose(expireCh)
+		return context.Cause(ctx)
 	}
 	// Send any remaining objects downstream
 	if len(toDel) > 0 {

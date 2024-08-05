@@ -262,13 +262,7 @@ func (s *erasureSets) connectDisks(log bool) {
 				if globalIsDistErasure {
 					globalLocalSetDrives[s.poolIndex][setIndex][diskIndex] = disk
 				}
-				for i, ldisk := range globalLocalDrives {
-					_, k, l := ldisk.GetDiskLoc()
-					if k == setIndex && l == diskIndex {
-						globalLocalDrives[i] = disk
-						break
-					}
-				}
+				globalLocalDrivesMap[disk.Endpoint().String()] = disk
 				globalLocalDrivesMu.Unlock()
 			}
 			s.erasureDisksMu.Unlock()
@@ -531,7 +525,7 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 					if set == nil {
 						return
 					}
-					set.cleanupStaleUploads(ctx, globalAPIConfig.getStaleUploadsExpiry())
+					set.cleanupStaleUploads(ctx)
 				}(set)
 			}
 			wg.Wait()
@@ -1135,13 +1129,7 @@ func (s *erasureSets) HealFormat(ctx context.Context, dryRun bool) (res madmin.H
 					if globalIsDistErasure {
 						globalLocalSetDrives[s.poolIndex][m][n] = disk
 					}
-					for i, ldisk := range globalLocalDrives {
-						_, k, l := ldisk.GetDiskLoc()
-						if k == m && l == n {
-							globalLocalDrives[i] = disk
-							break
-						}
-					}
+					globalLocalDrivesMap[disk.Endpoint().String()] = disk
 					globalLocalDrivesMu.Unlock()
 				}
 			}

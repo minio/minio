@@ -26,20 +26,28 @@ import (
 
 // Composed function registering routers for only distributed Erasure setup.
 func registerDistErasureRouters(router *mux.Router, endpointServerPools EndpointServerPools) {
+	var (
+		lockGrid   = globalLockGrid.Load()
+		commonGrid = globalGrid.Load()
+	)
+
 	// Register storage REST router only if its a distributed setup.
-	registerStorageRESTHandlers(router, endpointServerPools, globalGrid.Load())
+	registerStorageRESTHandlers(router, endpointServerPools, commonGrid)
 
 	// Register peer REST router only if its a distributed setup.
-	registerPeerRESTHandlers(router, globalGrid.Load())
+	registerPeerRESTHandlers(router, commonGrid)
 
 	// Register bootstrap REST router for distributed setups.
-	registerBootstrapRESTHandlers(globalGrid.Load())
+	registerBootstrapRESTHandlers(commonGrid)
 
 	// Register distributed namespace lock routers.
-	registerLockRESTHandlers()
+	registerLockRESTHandlers(lockGrid)
+
+	// Add lock grid to router
+	router.Handle(grid.RouteLockPath, adminMiddleware(lockGrid.Handler(storageServerRequestValidate), noGZFlag, noObjLayerFlag))
 
 	// Add grid to router
-	router.Handle(grid.RoutePath, adminMiddleware(globalGrid.Load().Handler(storageServerRequestValidate), noGZFlag, noObjLayerFlag))
+	router.Handle(grid.RoutePath, adminMiddleware(commonGrid.Handler(storageServerRequestValidate), noGZFlag, noObjLayerFlag))
 }
 
 // List of some generic middlewares which are applied for all incoming requests.

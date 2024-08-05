@@ -21,8 +21,8 @@ import (
 	"time"
 
 	miniogo "github.com/minio/minio-go/v7"
-
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/pkg/v3/xtime"
 )
 
 //go:generate msgp -file $GOFILE
@@ -65,12 +65,12 @@ import (
 
 // BatchReplicateFilter holds all the filters currently supported for batch replication
 type BatchReplicateFilter struct {
-	NewerThan     time.Duration `yaml:"newerThan,omitempty" json:"newerThan"`
-	OlderThan     time.Duration `yaml:"olderThan,omitempty" json:"olderThan"`
-	CreatedAfter  time.Time     `yaml:"createdAfter,omitempty" json:"createdAfter"`
-	CreatedBefore time.Time     `yaml:"createdBefore,omitempty" json:"createdBefore"`
-	Tags          []BatchJobKV  `yaml:"tags,omitempty" json:"tags"`
-	Metadata      []BatchJobKV  `yaml:"metadata,omitempty" json:"metadata"`
+	NewerThan     xtime.Duration `yaml:"newerThan,omitempty" json:"newerThan"`
+	OlderThan     xtime.Duration `yaml:"olderThan,omitempty" json:"olderThan"`
+	CreatedAfter  time.Time      `yaml:"createdAfter,omitempty" json:"createdAfter"`
+	CreatedBefore time.Time      `yaml:"createdBefore,omitempty" json:"createdBefore"`
+	Tags          []BatchJobKV   `yaml:"tags,omitempty" json:"tags"`
+	Metadata      []BatchJobKV   `yaml:"metadata,omitempty" json:"metadata"`
 }
 
 // BatchJobReplicateFlags various configurations for replication job definition currently includes
@@ -151,7 +151,7 @@ func (t BatchJobReplicateTarget) ValidPath() bool {
 type BatchJobReplicateSource struct {
 	Type     BatchJobReplicateResourceType `yaml:"type" json:"type"`
 	Bucket   string                        `yaml:"bucket" json:"bucket"`
-	Prefix   string                        `yaml:"prefix" json:"prefix"`
+	Prefix   BatchJobPrefix                `yaml:"prefix" json:"prefix"`
 	Endpoint string                        `yaml:"endpoint" json:"endpoint"`
 	Path     string                        `yaml:"path" json:"path"`
 	Creds    BatchJobReplicateCredentials  `yaml:"credentials" json:"credentials"`

@@ -107,5 +107,5 @@ func newLockAPI(endpoint Endpoint) dsync.NetLocker {
 
 // Returns a lock rest client.
 func newlockRESTClient(ep Endpoint) *lockRESTClient {
-	return &lockRESTClient{globalGrid.Load().Connection(ep.GridHost())}
+	return &lockRESTClient{globalLockGrid.Load().Connection(ep.GridHost())}
 }

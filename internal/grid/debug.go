@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/mux"
 )
 
@@ -90,6 +89,7 @@ func SetupTestGrid(n int) (*TestGrid, error) {
 			AuthFn:       dummyNewToken,
 			AuthToken:    dummyTokenValidate,
 			BlockConnect: ready,
+			RoutePath:    RoutePath,
 		})
 		if err != nil {
 			return nil, err
@@ -101,7 +101,7 @@ func SetupTestGrid(n int) (*TestGrid, error) {
 		res.Listeners = append(res.Listeners, listeners[i])
 		res.Mux = append(res.Mux, m)
 	}
-	xioutil.SafeClose(ready)
+	close(ready)
 	for _, m := range res.Managers {
 		for _, remote := range m.Targets() {
 			if err := m.Connection(remote).WaitForConnect(ctx); err != nil {

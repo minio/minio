@@ -34,8 +34,9 @@ import (
 
 // Block sizes constant.
 const (
-	SmallBlock = 32 * humanize.KiByte // Default r/w block size for smaller objects.
-	LargeBlock = 1 * humanize.MiByte  // Default r/w block size for normal objects.
+	SmallBlock  = 32 * humanize.KiByte  // Default r/w block size for smaller objects.
+	MediumBlock = 128 * humanize.KiByte // Default r/w block size for medium sized objects.
+	LargeBlock  = 1 * humanize.MiByte   // Default r/w block size for normal objects.
 )
 
 // aligned sync.Pool's
@@ -43,6 +44,12 @@ var (
 	ODirectPoolLarge = sync.Pool{
 		New: func() interface{} {
 			b := disk.AlignedBlock(LargeBlock)
+			return &b
+		},
+	}
+	ODirectPoolMedium = sync.Pool{
+		New: func() interface{} {
+			b := disk.AlignedBlock(MediumBlock)
 			return &b
 		},
 	}
@@ -243,6 +250,15 @@ func NopCloser(w io.Writer) io.WriteCloser {
 	return nopCloser{w}
 }
 
+const copyBufferSize = 32 * 1024
+
+var copyBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, copyBufferSize)
+		return &b
+	},
+}
+
 // SkipReader skips a given number of bytes and then returns all
 // remaining data.
 type SkipReader struct {
@@ -285,23 +301,19 @@ func NewSkipReader(r io.Reader, n int64) io.Reader {
 	return &SkipReader{r, n}
 }
 
-const copyBufferSize = 32 * 1024
-
-var copyBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, copyBufferSize)
-		return &b
-	},
+// writerOnly hides an io.Writer value's optional ReadFrom method
+// from io.Copy.
+type writerOnly struct {
+	io.Writer
 }
 
 // Copy is exactly like io.Copy but with reusable buffers.
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
-	bufp := copyBufPool.Get().(*[]byte)
+	bufp := ODirectPoolMedium.Get().(*[]byte)
+	defer ODirectPoolMedium.Put(bufp)
 	buf := *bufp
-	buf = buf[:copyBufferSize]
-	defer copyBufPool.Put(bufp)
 
-	return io.CopyBuffer(dst, src, buf)
+	return io.CopyBuffer(writerOnly{dst}, src, buf)
 }
 
 // SameFile returns if the files are same.

@@ -107,6 +107,11 @@ func newApp(name string) *cli.App {
 
 	// registerCommand registers a cli command.
 	registerCommand := func(command cli.Command) {
+		// avoid registering commands which are not being built (via
+		// go:build tags)
+		if command.Name == "" {
+			return
+		}
 		commands = append(commands, command)
 		commandsTree.Insert(command.Name)
 	}
@@ -134,6 +139,7 @@ func newApp(name string) *cli.App {
 
 	// Register all commands.
 	registerCommand(serverCmd)
+	registerCommand(fmtGenCmd)
 
 	// Set up app.
 	cli.HelpFlag = cli.BoolFlag{

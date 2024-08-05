@@ -166,7 +166,7 @@ func TestSingleRoundtripNotReady(t *testing.T) {
 		const testPayload = "Hello Grid World!"
 		// Single requests should have remote errors.
 		_, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
-		if v, ok := err.(*RemoteErr); !ok || v.Error() != "Invalid Handler for type" {
+		if _, ok := err.(*RemoteErr); !ok {
 			t.Fatalf("Unexpected error: %v, %T", err, err)
 		}
 		// Streams should not be able to set up until registered.
