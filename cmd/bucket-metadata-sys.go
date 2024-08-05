@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/policy"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 )
 
 // BucketMetadataSys captures all bucket metadata for a given cluster.
@@ -47,6 +48,7 @@ type BucketMetadataSys struct {
 
 	sync.RWMutex
 	initialized bool
+	group       *singleflight.Group
 	metadataMap map[string]BucketMetadata
 }
 
@@ -62,6 +64,7 @@ func (sys *BucketMetadataSys) Count() int {
 func (sys *BucketMetadataSys) Remove(buckets ...string) {
 	sys.Lock()
 	for _, bucket := range buckets {
+		sys.group.Forget(bucket)
 		delete(sys.metadataMap, bucket)
 		globalBucketMonitor.DeleteBucket(bucket)
 	}
@@ -154,8 +157,7 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		return updatedAt, fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
 
-	err = sys.save(ctx, meta)
-	return updatedAt, err
+	return updatedAt, sys.save(ctx, meta)
 }
 
 func (sys *BucketMetadataSys) save(ctx context.Context, meta BucketMetadata) error {
@@ -451,13 +453,20 @@ func (sys *BucketMetadataSys) GetConfig(ctx context.Context, bucket string) (met
 	if ok {
 		return meta, reloaded, nil
 	}
-	meta, err = loadBucketMetadata(ctx, objAPI, bucket)
-	if err != nil {
-		if !sys.Initialized() {
-			// bucket metadata not yet initialized
-			return newBucketMetadata(bucket), reloaded, errBucketMetadataNotInitialized
+
+	val, err, _ := sys.group.Do(bucket, func() (val interface{}, err error) {
+		meta, err = loadBucketMetadata(ctx, objAPI, bucket)
+		if err != nil {
+			if !sys.Initialized() {
+				// bucket metadata not yet initialized
+				return newBucketMetadata(bucket), errBucketMetadataNotInitialized
+			}
 		}
-		return meta, reloaded, err
+		return meta, err
+	})
+	meta, _ = val.(BucketMetadata)
+	if err != nil {
+		return meta, false, err
 	}
 	sys.Lock()
 	sys.metadataMap[bucket] = meta
@@ -630,5 +639,6 @@ func (sys *BucketMetadataSys) Reset() {
 func NewBucketMetadataSys() *BucketMetadataSys {
 	return &BucketMetadataSys{
 		metadataMap: make(map[string]BucketMetadata),
+		group:       &singleflight.Group{},
 	}
 }
