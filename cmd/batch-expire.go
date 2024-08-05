@@ -342,8 +342,24 @@ func (r *BatchJobExpire) Expire(ctx context.Context, api ObjectLayer, vc *versio
 		PrefixEnabledFn:  vc.PrefixEnabled,
 		VersionSuspended: vc.Suspended(),
 	}
-	_, errs := api.DeleteObjects(ctx, r.Bucket, objsToDel, opts)
-	return errs
+
+	allErrs := make([]error, 0, len(objsToDel))
+
+	for {
+		count := len(objsToDel)
+		if count == 0 {
+			break
+		}
+		if count > maxDeleteList {
+			count = maxDeleteList
+		}
+		_, errs := api.DeleteObjects(ctx, r.Bucket, objsToDel[:count], opts)
+		allErrs = append(allErrs, errs...)
+		// Next batch of deletion
+		objsToDel = objsToDel[count:]
+	}
+
+	return allErrs
 }
 
 const (
