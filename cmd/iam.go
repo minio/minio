@@ -244,21 +244,26 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
 
+	localIAMInitialized := true
+
 	openidConfig, err := openid.LookupConfig(s,
 		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err), logger.WarningKind)
+		localIAMInitialized = false
 	}
 
 	// Initialize if LDAP is enabled
 	ldapConfig, err := xldap.Lookup(s, globalRootCAs)
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to load LDAP configuration (LDAP configuration will be disabled!): %w", err), logger.WarningKind)
+		localIAMInitialized = false
 	}
 
 	stsTLSConfig, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize X.509/TLS STS API: %w", err), logger.WarningKind)
+		localIAMInitialized = false
 	}
 
 	if stsTLSConfig.InsecureSkipVerify {
@@ -269,6 +274,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err), logger.WarningKind)
+		localIAMInitialized = false
 	}
 
 	setGlobalAuthNPlugin(idplugin.New(GlobalContext, authNPluginCfg))
@@ -276,6 +282,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err), logger.WarningKind)
+		localIAMInitialized = false
 	}
 
 	if authZPluginCfg.URL == nil {
@@ -283,6 +290,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 			NewHTTPTransport(), xhttp.DrainBody)
 		if err != nil {
 			iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
+			localIAMInitialized = false
 		} else {
 			authZPluginCfg.URL = opaCfg.URL
 			authZPluginCfg.AuthToken = opaCfg.AuthToken
@@ -355,6 +363,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 			}
 			if err != nil {
 				iamLogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available: %w", err), logger.WarningKind)
+				localIAMInitialized = false
 			}
 		}
 		break
@@ -367,6 +376,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.printIAMRoles()
 
 	bootstrapTraceMsg("finishing IAM loading")
+
+	// Set the flag that IAM initialzied fine
+	globalIAMFullyInitialized = localIAMInitialized
 }
 
 const maxDurationSecondsForLog = 5

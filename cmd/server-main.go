@@ -980,6 +980,31 @@ func serverMain(ctx *cli.Context) {
 			globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
 		})
 
+		// Start a thread to keep checking IAM initialized and re-trigger
+		go func() {
+			ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if !globalIAMFullyInitialized {
+						globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+						if globalIAMFullyInitialized && globalBrowserEnabled {
+							bootstrapTrace("initConsoleServer", func() {
+								srv, err := initConsoleServer()
+								if err != nil {
+									logger.FatalIf(err, "Unable to initialize console service")
+								}
+
+								setConsoleSrv(srv)
+							})
+							return
+						}
+					}
+				}
+			}
+		}()
+
 		// Initialize Console UI
 		if globalBrowserEnabled {
 			bootstrapTrace("initConsoleServer", func() {
