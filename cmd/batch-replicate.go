@@ -151,7 +151,7 @@ func (t BatchJobReplicateTarget) ValidPath() bool {
 type BatchJobReplicateSource struct {
 	Type     BatchJobReplicateResourceType `yaml:"type" json:"type"`
 	Bucket   string                        `yaml:"bucket" json:"bucket"`
-	Prefix   string                        `yaml:"prefix" json:"prefix"`
+	Prefix   BatchJobPrefix                `yaml:"prefix" json:"prefix"`
 	Endpoint string                        `yaml:"endpoint" json:"endpoint"`
 	Path     string                        `yaml:"path" json:"path"`
 	Creds    BatchJobReplicateCredentials  `yaml:"credentials" json:"credentials"`

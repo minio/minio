@@ -39,7 +39,7 @@ func (z *BatchJobExpire) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Prefix":
-			z.Prefix, err = dc.ReadString()
+			err = z.Prefix.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "Prefix")
 				return
@@ -114,7 +114,7 @@ func (z *BatchJobExpire) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.Prefix)
+	err = z.Prefix.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "Prefix")
 		return
@@ -171,7 +171,11 @@ func (z *BatchJobExpire) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.Bucket)
 	// string "Prefix"
 	o = append(o, 0xa6, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78)
-	o = msgp.AppendString(o, z.Prefix)
+	o, err = z.Prefix.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Prefix")
+		return
+	}
 	// string "NotificationCfg"
 	o = append(o, 0xaf, 0x4e, 0x6f, 0x74, 0x69, 0x66, 0x69, 0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x43, 0x66, 0x67)
 	o, err = z.NotificationCfg.MarshalMsg(o)
@@ -230,7 +234,7 @@ func (z *BatchJobExpire) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case "Prefix":
-			z.Prefix, bts, err = msgp.ReadStringBytes(bts)
+			bts, err = z.Prefix.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Prefix")
 				return
@@ -280,7 +284,7 @@ func (z *BatchJobExpire) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobExpire) Msgsize() (s int) {
-	s = 1 + 11 + msgp.StringPrefixSize + len(z.APIVersion) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 16 + z.NotificationCfg.Msgsize() + 6 + z.Retry.Msgsize() + 6 + msgp.ArrayHeaderSize
+	s = 1 + 11 + msgp.StringPrefixSize + len(z.APIVersion) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + z.Prefix.Msgsize() + 16 + z.NotificationCfg.Msgsize() + 6 + z.Retry.Msgsize() + 6 + msgp.ArrayHeaderSize
 	for za0001 := range z.Rules {
 		s += z.Rules[za0001].Msgsize()
 	}

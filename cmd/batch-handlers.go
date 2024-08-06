@@ -385,12 +385,23 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 		minioSrc := r.Source.Type == BatchJobReplicateResourceMinIO
 		ctx, cancel := context.WithCancel(ctx)
-		objInfoCh := c.ListObjects(ctx, r.Source.Bucket, miniogo.ListObjectsOptions{
-			Prefix:       r.Source.Prefix,
-			WithVersions: minioSrc,
-			Recursive:    true,
-			WithMetadata: true,
-		})
+
+		objInfoCh := make(chan miniogo.ObjectInfo, 1)
+		go func() {
+			for _, prefix := range r.Source.Prefix.F() {
+				prefixObjInfoCh := c.ListObjects(ctx, r.Source.Bucket, miniogo.ListObjectsOptions{
+					Prefix:       strings.TrimSpace(prefix),
+					WithVersions: minioSrc,
+					Recursive:    true,
+					WithMetadata: true,
+				})
+				for obj := range prefixObjInfoCh {
+					objInfoCh <- obj
+				}
+			}
+			xioutil.SafeClose(objInfoCh)
+		}()
+
 		prevObj := ""
 		skipReplicate := false
 
@@ -1188,19 +1199,28 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		if walkQuorum == "" {
 			walkQuorum = "strict"
 		}
-		ctx, cancel := context.WithCancel(ctx)
+		ctx, cancelCause := context.WithCancelCause(ctx)
 		// one of source/target is s3, skip delete marker and all versions under the same object name.
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 
-		if err := api.Walk(ctx, r.Source.Bucket, r.Source.Prefix, walkCh, WalkOptions{
-			Marker:   lastObject,
-			Filter:   selectObj,
-			AskDisks: walkQuorum,
-		}); err != nil {
-			cancel()
-			// Do not need to retry if we can't list objects on source.
-			return err
-		}
+		go func() {
+			for _, prefix := range r.Source.Prefix.F() {
+				prefixWalkCh := make(chan itemOrErr[ObjectInfo], 100)
+				if err := api.Walk(ctx, r.Source.Bucket, strings.TrimSpace(prefix), prefixWalkCh, WalkOptions{
+					Marker:   lastObject,
+					Filter:   selectObj,
+					AskDisks: walkQuorum,
+				}); err != nil {
+					cancelCause(err)
+					xioutil.SafeClose(walkCh)
+					return
+				}
+				for obj := range prefixWalkCh {
+					walkCh <- obj
+				}
+			}
+			xioutil.SafeClose(walkCh)
+		}()
 
 		prevObj := ""
 
@@ -1251,7 +1271,10 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			}()
 		}
 		wk.Wait()
-
+		// Do not need to retry if we can't list objects on source.
+		if context.Cause(ctx) != nil {
+			return context.Cause(ctx)
+		}
 		ri.RetryAttempts = attempts
 		ri.Complete = ri.ObjectsFailed == 0
 		ri.Failed = ri.ObjectsFailed > 0
@@ -1264,7 +1287,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			batchLogOnceIf(ctx, fmt.Errorf("unable to notify %v", err), job.ID+"notify")
 		}
 
-		cancel()
+		cancelCause(nil)
 		if ri.Failed {
 			ri.ObjectsFailed = 0
 			ri.Bucket = ""
@@ -2231,4 +2254,31 @@ func lookupStyle(s string) miniogo.BucketLookupType {
 
 	}
 	return lookup
+}
+
+// BatchJobPrefix - to support prefix field yaml unmarshalling with string or slice of strings
+type BatchJobPrefix []string
+
+var _ yaml.Unmarshaler = &BatchJobPrefix{}
+
+// UnmarshalYAML - to support prefix field yaml unmarshalling with string or slice of strings
+func (b *BatchJobPrefix) UnmarshalYAML(value *yaml.Node) error {
+	// try slice first
+	tmpSlice := []string{}
+	if err := value.Decode(&tmpSlice); err == nil {
+		*b = tmpSlice
+		return nil
+	}
+	// try string
+	tmpStr := ""
+	if err := value.Decode(&tmpStr); err == nil {
+		*b = []string{tmpStr}
+		return nil
+	}
+	return fmt.Errorf("unable to decode %s", value.Value)
+}
+
+// F - return prefix(es) as slice
+func (b *BatchJobPrefix) F() []string {
+	return *b
 }

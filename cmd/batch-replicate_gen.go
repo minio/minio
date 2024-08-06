@@ -411,7 +411,7 @@ func (z *BatchJobReplicateSource) DecodeMsg(dc *msgp.Reader) (err error) {
 				return
 			}
 		case "Prefix":
-			z.Prefix, err = dc.ReadString()
+			err = z.Prefix.DecodeMsg(dc)
 			if err != nil {
 				err = msgp.WrapError(err, "Prefix")
 				return
@@ -514,7 +514,7 @@ func (z *BatchJobReplicateSource) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	err = en.WriteString(z.Prefix)
+	err = z.Prefix.EncodeMsg(en)
 	if err != nil {
 		err = msgp.WrapError(err, "Prefix")
 		return
@@ -600,7 +600,11 @@ func (z *BatchJobReplicateSource) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendString(o, z.Bucket)
 	// string "Prefix"
 	o = append(o, 0xa6, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78)
-	o = msgp.AppendString(o, z.Prefix)
+	o, err = z.Prefix.MarshalMsg(o)
+	if err != nil {
+		err = msgp.WrapError(err, "Prefix")
+		return
+	}
 	// string "Endpoint"
 	o = append(o, 0xa8, 0x45, 0x6e, 0x64, 0x70, 0x6f, 0x69, 0x6e, 0x74)
 	o = msgp.AppendString(o, z.Endpoint)
@@ -664,7 +668,7 @@ func (z *BatchJobReplicateSource) UnmarshalMsg(bts []byte) (o []byte, err error)
 				return
 			}
 		case "Prefix":
-			z.Prefix, bts, err = msgp.ReadStringBytes(bts)
+			bts, err = z.Prefix.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Prefix")
 				return
@@ -742,7 +746,7 @@ func (z *BatchJobReplicateSource) UnmarshalMsg(bts []byte) (o []byte, err error)
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BatchJobReplicateSource) Msgsize() (s int) {
-	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + msgp.StringPrefixSize + len(z.Prefix) + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 5 + msgp.StringPrefixSize + len(z.Path) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken) + 9 + z.Snowball.Msgsize()
+	s = 1 + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 7 + msgp.StringPrefixSize + len(z.Bucket) + 7 + z.Prefix.Msgsize() + 9 + msgp.StringPrefixSize + len(z.Endpoint) + 5 + msgp.StringPrefixSize + len(z.Path) + 6 + 1 + 10 + msgp.StringPrefixSize + len(z.Creds.AccessKey) + 10 + msgp.StringPrefixSize + len(z.Creds.SecretKey) + 13 + msgp.StringPrefixSize + len(z.Creds.SessionToken) + 9 + z.Snowball.Msgsize()
 	return
 }
 
