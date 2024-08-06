@@ -20,7 +20,7 @@ package cmd
 //go:generate msgp -file $GOFILE -unexported
 
 const (
-	storageRESTVersion       = "v62" // Introduce DeleteBulk internode API.
+	storageRESTVersion       = "v63" // Introduce RenamePart and ReadParts API
 	storageRESTVersionPrefix = SlashSeparator + storageRESTVersion
 	storageRESTPrefix        = minioReservedBucketPath + "/storage"
 )
@@ -44,6 +44,7 @@ const (
 	storageRESTMethodReadMultiple   = "/rmpl"
 	storageRESTMethodCleanAbandoned = "/cln"
 	storageRESTMethodDeleteBulk     = "/dblk"
+	storageRESTMethodReadParts      = "/rps"
 )
 
 const (

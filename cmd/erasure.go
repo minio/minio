@@ -90,6 +90,11 @@ func (er erasureObjects) defaultWQuorum() int {
 	return dataCount
 }
 
+// defaultRQuorum read quorum based on setDriveCount and defaultParityCount
+func (er erasureObjects) defaultRQuorum() int {
+	return er.setDriveCount - er.defaultParityCount
+}
+
 func diskErrToDriveState(err error) (state string) {
 	switch {
 	case errors.Is(err, errDiskNotFound) || errors.Is(err, context.DeadlineExceeded):

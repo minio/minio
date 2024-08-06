@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -71,6 +72,8 @@ const (
 	storageMetricDeleteAbandonedParts
 	storageMetricDiskInfo
 	storageMetricDeleteBulk
+	storageMetricRenamePart
+	storageMetricReadParts
 
 	// .... add more
 
@@ -453,6 +456,17 @@ func (p *xlStorageDiskIDCheck) ReadFileStream(ctx context.Context, volume, path 
 	})
 }
 
+func (p *xlStorageDiskIDCheck) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string, meta []byte) (err error) {
+	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricRenamePart, srcVolume, srcPath, dstVolume, dstPath)
+	if err != nil {
+		return err
+	}
+	defer done(0, &err)
+
+	w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
+	return w.Run(func() error { return p.storage.RenamePart(ctx, srcVolume, srcPath, dstVolume, dstPath, meta) })
+}
+
 func (p *xlStorageDiskIDCheck) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricRenameFile, srcVolume, srcPath, dstVolume, dstPath)
 	if err != nil {
@@ -697,6 +711,16 @@ func (p *xlStorageDiskIDCheck) StatInfoFile(ctx context.Context, volume, path st
 	defer done(0, &err)
 
 	return p.storage.StatInfoFile(ctx, volume, path, glob)
+}
+
+func (p *xlStorageDiskIDCheck) ReadParts(ctx context.Context, volume string, partMetaPaths ...string) ([]*ObjectPartInfo, error) {
+	ctx, done, err := p.TrackDiskHealth(ctx, storageMetricReadParts, volume, path.Dir(partMetaPaths[0]))
+	if err != nil {
+		return nil, err
+	}
+	defer done(0, &err)
+
+	return p.storage.ReadParts(ctx, volume, partMetaPaths...)
 }
 
 // ReadMultiple will read multiple files and send each files as response.
