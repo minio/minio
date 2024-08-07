@@ -520,6 +520,37 @@ func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
 	return nil
 }
 
+func (c *iamCache) deleteMatchingUsers(ctx context.Context, store *IAMStoreSys, predicate func(UserIdentity) bool) {
+	deleted := false
+	for user, ui := range c.iamUsersMap {
+		userType := regUser
+		cred := ui.Credentials
+
+		if cred.IsServiceAccount() {
+			userType = svcUser
+		} else if cred.IsTemp() {
+			userType = stsUser
+		}
+
+		if predicate(ui) {
+			// Delete this user account and its policy mapping
+			store.deleteMappedPolicy(ctx, user, userType, false)
+			c.iamUserPolicyMap.Delete(user)
+
+			// we are only logging errors, not handling them.
+			err := store.deleteUserIdentity(ctx, user, userType)
+			iamLogIf(GlobalContext, err)
+			delete(c.iamUsersMap, user)
+			store.group.Forget(user)
+
+			deleted = true
+		}
+	}
+	if deleted {
+		c.updatedAt = time.Now()
+	}
+}
+
 // IAMStorageAPI defines an interface for the IAM persistence layer
 type IAMStorageAPI interface {
 	// The role of the read-write lock is to prevent go routines from
@@ -535,7 +566,9 @@ type IAMStorageAPI interface {
 	loadPolicyDocWithRetry(ctx context.Context, policy string, m map[string]PolicyDoc, retries int) error
 	loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error
 	loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error
+	loadUserForce(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error
 	loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error
+	loadUsersForce(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error
 	loadGroup(ctx context.Context, group string, m map[string]GroupInfo) error
 	loadGroups(ctx context.Context, m map[string]GroupInfo) error
 	loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error
@@ -1933,37 +1966,32 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	cache := store.lock()
 	defer store.unlock()
 
-	var deleted bool
 	usersToDelete := set.CreateStringSet(users...)
-	for user, ui := range cache.iamUsersMap {
-		userType := regUser
-		cred := ui.Credentials
+	predicate := func(ui UserIdentity) bool {
+		return usersToDelete.Contains(ui.Credentials.AccessKey) || usersToDelete.Contains(ui.Credentials.ParentUser)
+	}
+	cache.deleteMatchingUsers(ctx, store, predicate)
+	return nil
+}
 
-		if cred.IsServiceAccount() {
-			userType = svcUser
-		} else if cred.IsTemp() {
-			userType = stsUser
-		}
+// DeleteMatchingUsersWithRefresh - reloads specified user types then deletes users that match the given predicate.
+func (store *IAMStoreSys) DeleteMatchingUsersWithRefresh(ctx context.Context, refresh []IAMUserType, force bool, predicate func(UserIdentity) bool) error {
+	cache := store.lock()
+	defer store.unlock()
 
-		if usersToDelete.Contains(user) || usersToDelete.Contains(cred.ParentUser) {
-			// Delete this user account and its policy mapping
-			store.deleteMappedPolicy(ctx, user, userType, false)
-			cache.iamUserPolicyMap.Delete(user)
-
-			// we are only logging errors, not handling them.
-			err := store.deleteUserIdentity(ctx, user, userType)
-			iamLogIf(GlobalContext, err)
-			delete(cache.iamUsersMap, user)
-			store.group.Forget(user)
-
-			deleted = true
+	for _, userType := range refresh {
+		if force {
+			if err := store.loadUsersForce(ctx, userType, cache.iamUsersMap); err != nil {
+				return err
+			}
+		} else {
+			if err := store.loadUsers(ctx, userType, cache.iamUsersMap); err != nil {
+				return err
+			}
 		}
 	}
 
-	if deleted {
-		cache.updatedAt = time.Now()
-	}
-
+	cache.deleteMatchingUsers(ctx, store, predicate)
 	return nil
 }
 
@@ -2818,6 +2846,38 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 	}
 
 	return err
+}
+
+// GetUserForce - checks if user exists in cache or backend without updating cache.
+func (store *IAMStoreSys) GetUserForce(ctx context.Context, accessKey string) (UserIdentity, bool) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	if ui, found := cache.iamUsersMap[accessKey]; found {
+		return ui, true
+	}
+	if ui, found := cache.iamSTSAccountsMap[accessKey]; found {
+		return ui, true
+	}
+
+	checkerMap := map[string]UserIdentity{}
+
+	// Check for each user type.
+	// Ignore any errors, as we are only checking if the user exists.
+	store.loadUserForce(ctx, accessKey, regUser, checkerMap)
+	if ui, found := checkerMap[accessKey]; found {
+		return ui, true
+	}
+	store.loadUserForce(ctx, accessKey, svcUser, checkerMap)
+	if ui, found := checkerMap[accessKey]; found {
+		return ui, true
+	}
+	store.loadUserForce(ctx, accessKey, stsUser, checkerMap)
+	if ui, found := checkerMap[accessKey]; found {
+		return ui, true
+	}
+
+	return UserIdentity{}, false
 }
 
 func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {

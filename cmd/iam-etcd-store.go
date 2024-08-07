@@ -205,7 +205,7 @@ func (ies *IAMEtcdStore) loadPolicyDocs(ctx context.Context, m map[string]Policy
 	return nil
 }
 
-func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]UserIdentity, basePrefix string) error {
+func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue, userType IAMUserType, m map[string]UserIdentity, basePrefix string, force bool) error {
 	var u UserIdentity
 	err := getIAMConfig(&u, userkv.Value, string(userkv.Key))
 	if err != nil {
@@ -215,10 +215,10 @@ func (ies *IAMEtcdStore) getUserKV(ctx context.Context, userkv *mvccpb.KeyValue,
 		return err
 	}
 	user := extractPathPrefixAndSuffix(string(userkv.Key), basePrefix, path.Base(string(userkv.Key)))
-	return ies.addUser(ctx, user, userType, u, m)
+	return ies.addUser(ctx, user, userType, u, m, force)
 }
 
-func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]UserIdentity) error {
+func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMUserType, u UserIdentity, m map[string]UserIdentity, force bool) error {
 	if u.Credentials.IsExpired() {
 		// Delete expired identity.
 		deleteKeyEtcd(ctx, ies.client, getUserIdentityPath(user, userType))
@@ -240,6 +240,11 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 			return nil
 		}
 		u.Credentials.Claims = jwtClaims.Map()
+
+		// Don't load LDAP users if not enabled and force is not specified.
+		if !force && ies.usersSysType != LDAPUsersSysType && u.Credentials.Claims["ldapUser"] != nil {
+			return nil
+		}
 	}
 	if u.Credentials.Description == "" {
 		u.Credentials.Description = u.Credentials.Comment
@@ -250,6 +255,14 @@ func (ies *IAMEtcdStore) addUser(ctx context.Context, user string, userType IAMU
 }
 
 func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
+	return ies.loadUserHelper(ctx, user, userType, m, false)
+}
+
+func (ies *IAMEtcdStore) loadUserForce(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
+	return ies.loadUserHelper(ctx, user, userType, m, true)
+}
+
+func (ies *IAMEtcdStore) loadUserHelper(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity, force bool) error {
 	var u UserIdentity
 	err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
 	if err != nil {
@@ -258,10 +271,18 @@ func (ies *IAMEtcdStore) loadUser(ctx context.Context, user string, userType IAM
 		}
 		return err
 	}
-	return ies.addUser(ctx, user, userType, u, m)
+	return ies.addUser(ctx, user, userType, u, m, force)
 }
 
 func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
+	return ies.loadUsersHelper(ctx, userType, m, false)
+}
+
+func (ies *IAMEtcdStore) loadUsersForce(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error {
+	return ies.loadUsersHelper(ctx, userType, m, true)
+}
+
+func (ies *IAMEtcdStore) loadUsersHelper(ctx context.Context, userType IAMUserType, m map[string]UserIdentity, force bool) error {
 	var basePrefix string
 	switch userType {
 	case svcUser:
@@ -284,7 +305,7 @@ func (ies *IAMEtcdStore) loadUsers(ctx context.Context, userType IAMUserType, m 
 
 	// Parse all users values to create the proper data model
 	for _, userKv := range r.Kvs {
-		if err = ies.getUserKV(ctx, userKv, userType, m, basePrefix); err != nil && err != errNoSuchUser {
+		if err = ies.getUserKV(ctx, userKv, userType, m, basePrefix, force); err != nil && err != errNoSuchUser {
 			return err
 		}
 	}

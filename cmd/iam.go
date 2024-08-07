@@ -351,6 +351,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	if !sys.LDAPConfig.Configured() {
+		sys.purgeLDAPAccessKeys(ctx)
+	}
+
 	refreshInterval := sys.iamRefreshInterval
 
 	go sys.periodicRoutines(ctx, refreshInterval)
@@ -1299,7 +1303,7 @@ func (sys *IAMSys) DeleteServiceAccount(ctx context.Context, accessKey string, n
 		return errServerNotInitialized
 	}
 
-	sa, ok := sys.store.GetUser(accessKey)
+	sa, ok := sys.store.GetUserForce(ctx, accessKey)
 	if !ok || !sa.Credentials.IsServiceAccount() {
 		return nil
 	}
@@ -1544,6 +1548,15 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// purgeLDAPAccessKeys - purges all LDAP access keys when LDAP config is deleted.
+func (sys *IAMSys) purgeLDAPAccessKeys(ctx context.Context) {
+	predicate := func(ui UserIdentity) bool {
+		_, ok := ui.Credentials.Claims[ldapUser]
+		return ok
+	}
+	sys.store.DeleteMatchingUsersWithRefresh(ctx, []IAMUserType{stsUser, svcUser}, true, predicate)
 }
 
 // NormalizeLDAPAccessKeypairs - normalize the access key pairs (service
@@ -1812,6 +1825,12 @@ func (sys *IAMSys) CheckKey(ctx context.Context, accessKey string) (u UserIdenti
 // GetUser - get user credentials
 func (sys *IAMSys) GetUser(ctx context.Context, accessKey string) (u UserIdentity, ok bool) {
 	u, ok, _ = sys.CheckKey(ctx, accessKey)
+	return u, ok
+}
+
+// GetUserForce - get user credentials, fetch from storage without loading cache if not found
+func (sys *IAMSys) GetUserForce(ctx context.Context, accessKey string) (u UserIdentity, ok bool) {
+	u, ok = sys.store.GetUserForce(ctx, accessKey)
 	return u, ok
 }
 
