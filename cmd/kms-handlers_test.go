@@ -658,13 +658,24 @@ func execKMSTest(t *testing.T, test kmsTestCase, adminTestBed *adminErasureTestB
 
 	// Check returned key list is correct
 	if test.wantKeyNames != nil {
-		gotKeyNames := keyNamesFromListKeysResp(t, rec.Body.Bytes())
-		if len(test.wantKeyNames) != len(gotKeyNames) {
-			t.Fatalf("want keys len: %d, got len: %d", len(test.wantKeyNames), len(gotKeyNames))
+		keys := []madmin.KMSKeyInfo{}
+		err := json.Unmarshal(rec.Body.Bytes(), &keys)
+		if err != nil {
+			t.Fatal(err)
 		}
-		for i, wantKeyName := range test.wantKeyNames {
-			if gotKeyNames[i] != wantKeyName {
-				t.Fatalf("want key name %s, in position %d, got %s", wantKeyName, i, gotKeyNames[i])
+		if len(keys) != len(test.wantKeyNames) {
+			t.Fatalf("want %d keys, got %d", len(test.wantKeyNames), len(keys))
+		}
+
+		for i, want := range keys {
+			if want.CreatedBy != kms.StubCreatedBy {
+				t.Fatalf("want key created by %s, got %s", kms.StubCreatedBy, want.CreatedBy)
+			}
+			if want.CreatedAt != kms.StubCreatedAt {
+				t.Fatalf("want key created at %s, got %s", kms.StubCreatedAt, want.CreatedAt)
+			}
+			if test.wantKeyNames[i] != want.Name {
+				t.Fatalf("want key name %s, got %s", test.wantKeyNames[i], want.Name)
 			}
 		}
 	}
@@ -834,18 +845,4 @@ func setupKMSUser(t *testing.T, accessKey, secretKey, p string) {
 			t.Fatal(err)
 		}
 	}
-}
-
-func keyNamesFromListKeysResp(t *testing.T, b []byte) []string {
-	var keyInfos []madmin.KMSKeyInfo
-	err := json.Unmarshal(b, &keyInfos)
-	if err != nil {
-		t.Fatalf("cannot unmarshal '%s', err: %v", b, err)
-	}
-
-	var gotKeyNames []string
-	for _, keyInfo := range keyInfos {
-		gotKeyNames = append(gotKeyNames, keyInfo.Name)
-	}
-	return gotKeyNames
 }
