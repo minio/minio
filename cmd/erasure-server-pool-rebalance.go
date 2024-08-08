@@ -706,7 +706,13 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 						continue
 					}
 
-					if err = z.rebalanceObject(ctx, bucket, gr); err != nil {
+					if err = z.rebalanceObject(ctx, poolIdx, bucket, gr); err != nil {
+						// This can happen when rebalance stop races with ongoing rebalance workers.
+						// These rebalance failures can be ignored.
+						if isDataMovementOverWriteErr(err) {
+							ignore = true
+							continue
+						}
 						failure = true
 						rebalanceLogIf(ctx, err)
 						stopFn(version.Size, err)
@@ -822,7 +828,7 @@ func auditLogRebalance(ctx context.Context, apiName, bucket, object, versionID s
 	})
 }
 
-func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string, gr *GetObjectReader) (err error) {
+func (z *erasureServerPools) rebalanceObject(ctx context.Context, poolIdx int, bucket string, gr *GetObjectReader) (err error) {
 	oi := gr.ObjInfo
 
 	defer func() {
@@ -837,9 +843,11 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 
 	if oi.isMultipart() {
 		res, err := z.NewMultipartUpload(ctx, bucket, oi.Name, ObjectOptions{
-			VersionID:   oi.VersionID,
-			UserDefined: oi.UserDefined,
-			NoAuditLog:  true,
+			VersionID:    oi.VersionID,
+			UserDefined:  oi.UserDefined,
+			NoAuditLog:   true,
+			DataMovement: true,
+			SrcPoolIdx:   poolIdx,
 		})
 		if err != nil {
 			return fmt.Errorf("rebalanceObject: NewMultipartUpload() %w", err)
@@ -891,6 +899,7 @@ func (z *erasureServerPools) rebalanceObject(ctx context.Context, bucket string,
 		oi.Name,
 		NewPutObjReader(hr),
 		ObjectOptions{
+			SrcPoolIdx:   poolIdx,
 			DataMovement: true,
 			VersionID:    oi.VersionID,
 			MTime:        oi.ModTime,
@@ -980,6 +989,8 @@ const (
 	rebalanceMetricRebalanceRemoveObject
 	rebalanceMetricSaveMetadata
 )
+
+var errDataMovementSrcDstPoolSame = errors.New("source and destination pool are the same")
 
 func rebalanceTrace(r rebalanceMetric, poolIdx int, startTime time.Time, duration time.Duration, err error, path string, sz int64) madmin.TraceInfo {
 	var errStr string

@@ -1087,6 +1087,14 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return ObjectInfo{}, err
 	}
 
+	if opts.DataMovement && idx == opts.SrcPoolIdx {
+		return ObjectInfo{}, DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
+	}
 	// Overwrite the object at the right pool
 	return z.serverPools[idx].PutObject(ctx, bucket, object, data, opts)
 }
@@ -1750,6 +1758,15 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 	idx, err := z.getPoolIdx(ctx, bucket, object, -1)
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.DataMovement && idx == opts.SrcPoolIdx {
+		return nil, DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
 	}
 
 	return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
