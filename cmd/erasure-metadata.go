@@ -289,13 +289,14 @@ func findFileInfoInQuorum(ctx context.Context, metaArr []FileInfo, modTime time.
 		mtimeValid := meta.ModTime.Equal(modTime)
 		if mtimeValid || etagOnly {
 			fmt.Fprintf(h, "%v", meta.XLV1)
-			if !etagOnly {
-				// Verify dataDir is same only when mtime is valid and etag is not considered.
-				fmt.Fprintf(h, "%v", meta.GetDataDir())
-			}
 			for _, part := range meta.Parts {
 				fmt.Fprintf(h, "part.%d", part.Number)
+				fmt.Fprintf(h, "part.%d", part.Size)
 			}
+			// Previously we checked if we had quorum on DataDir value.
+			// We have removed this check to allow reading objects with different DataDir
+			// values in a few drives (due to a rebalance-stop race bug)
+			// provided their their etags or ModTimes match.
 
 			if !meta.Deleted && meta.Size != 0 {
 				fmt.Fprintf(h, "%v+%v", meta.Erasure.DataBlocks, meta.Erasure.ParityBlocks)
