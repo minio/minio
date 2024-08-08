@@ -762,21 +762,14 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
 		chkSums := objInfo.decryptChecksums(0, r.Header)
 		// AWS does not appear to append part number on this API call.
-		switch {
-		case chkSums["CRC32"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
-		case chkSums["CRC32C"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
-		case chkSums["SHA256"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
-		case chkSums["SHA1"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumSHA256 = strings.Split(chkSums["SHA256"], "-")[0]
+		if len(chkSums) > 0 {
+			OA.Checksum = &objectAttributesChecksum{
+				ChecksumCRC32:  strings.Split(chkSums["CRC32"], "-")[0],
+				ChecksumCRC32C: strings.Split(chkSums["CRC32C"], "-")[0],
+				ChecksumSHA1:   strings.Split(chkSums["SHA1"], "-")[0],
+				ChecksumSHA256: strings.Split(chkSums["SHA256"], "-")[0],
+			}
 		}
-
 	}
 
 	if _, ok := opts.ObjectAttributes[xhttp.ETag]; ok {
