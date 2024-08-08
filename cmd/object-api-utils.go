@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -554,28 +554,41 @@ func (o ObjectInfo) GetActualSize() (int64, error) {
 		return *o.ActualSize, nil
 	}
 	if o.IsCompressed() {
-		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
-		if !ok {
+		sizeStr := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
+		if sizeStr != "" {
+			size, err := strconv.ParseInt(sizeStr, 10, 64)
+			if err != nil {
+				return -1, errInvalidDecompressedSize
+			}
+			return size, nil
+		}
+		var actualSize int64
+		for _, part := range o.Parts {
+			actualSize += part.ActualSize
+		}
+		if (actualSize == 0) && (actualSize != o.Size) {
 			return -1, errInvalidDecompressedSize
 		}
-		size, err := strconv.ParseInt(sizeStr, 10, 64)
-		if err != nil {
-			return -1, errInvalidDecompressedSize
-		}
-		return size, nil
+		return actualSize, nil
 	}
 	if _, ok := crypto.IsEncrypted(o.UserDefined); ok {
-		sizeStr, ok := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
-		if ok {
+		sizeStr := o.UserDefined[ReservedMetadataPrefix+"actual-size"]
+		if sizeStr != "" {
 			size, err := strconv.ParseInt(sizeStr, 10, 64)
 			if err != nil {
 				return -1, errObjectTampered
 			}
 			return size, nil
 		}
-		return o.DecryptedSize()
+		actualSize, err := o.DecryptedSize()
+		if err != nil {
+			return -1, err
+		}
+		if (actualSize == 0) && (actualSize != o.Size) {
+			return -1, errObjectTampered
+		}
+		return actualSize, nil
 	}
-
 	return o.Size, nil
 }
 
