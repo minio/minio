@@ -260,3 +260,7 @@ require (
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
+
+replace github.com/minio/madmin-go/v3 => github.com/marktheunissen/madmin-go/v3 v3.0.0-20240808031524-8a6ddcc05e14
+
+replace github.com/minio/console => github.com/marktheunissen/console v0.0.0-20240808032105-88d96a2677bf
