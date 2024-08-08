@@ -396,7 +396,7 @@ func (m *muxClient) handleTwowayResponses(responseCh chan<- Response, internalRe
 		xioutil.SafeClose(responseCh)
 	}()
 
-	// Cancelation and errors are handled by handleTwowayRequests below.
+	// Cancellation and errors are handled by handleTwowayRequests below.
 	for resp := range internalResp {
 		m.send(message{Op: OpUnblockSrvMux, MuxID: m.MuxID})
 		responseCh <- resp

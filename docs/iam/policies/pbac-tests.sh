@@ -63,7 +63,7 @@ fi
 mc cp /etc/issue myminio1/multi-key-poc | grep -q "Insufficient permissions to access this path"
 ret=$?
 if [ $ret -eq 0 ]; then
-	echo "BUG: PutObject to bucket: multi-key-poc without sse-kms should fail. Succedded"
+	echo "BUG: PutObject to bucket: multi-key-poc without sse-kms should fail. Succeeded"
 	exit 1
 fi
 
