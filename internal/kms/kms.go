@@ -20,7 +20,6 @@ package kms
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"sync/atomic"
@@ -335,7 +334,7 @@ func (c *kmsConn) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSK
 	keyInfos := make([]madmin.KMSKeyInfo, len(resp.Items))
 	for i, v := range resp.Items {
 		keyInfos[i].Name = v.Name
-		keyInfos[i].CreatedAt = fmt.Sprintf("%d", v.CreatedAt.Unix())
+		keyInfos[i].CreatedAt = v.CreatedAt
 		keyInfos[i].CreatedBy = string(v.CreatedBy)
 	}
 	return keyInfos, resp.ContinueAt, nil

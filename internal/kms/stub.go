@@ -19,7 +19,6 @@ package kms
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"slices"
 	"sync/atomic"
@@ -31,7 +30,7 @@ import (
 
 var (
 	// StubCreatedAt is a constant timestamp for testing
-	StubCreatedAt = fmt.Sprintf("%d", time.Date(2024, time.January, 1, 15, 0, 0, 0, time.UTC).Unix())
+	StubCreatedAt = time.Date(2024, time.January, 1, 15, 0, 0, 0, time.UTC)
 	// StubCreatedBy is a constant created identity for testing
 	StubCreatedBy = "MinIO"
 )
