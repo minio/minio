@@ -1301,7 +1301,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	// Save the consolidated actual size.
 	if opts.ReplicationRequest {
-		fi.Metadata[ReservedMetadataPrefix+"actual-size"] = opts.UserDefined["X-Minio-Internal-Actual-Object-Size"]
+		if v := opts.UserDefined[ReservedMetadataPrefix+"Actual-Object-Size"]; v != "" {
+			fi.Metadata[ReservedMetadataPrefix+"actual-size"] = v
+		}
 	} else {
 		fi.Metadata[ReservedMetadataPrefix+"actual-size"] = strconv.FormatInt(objectActualSize, 10)
 	}

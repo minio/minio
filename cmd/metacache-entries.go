@@ -257,7 +257,7 @@ func (e *metaCacheEntry) fileInfo(bucket string) (FileInfo, error) {
 				ModTime:  timeSentinel1970,
 			}, nil
 		}
-		return e.cached.ToFileInfo(bucket, e.name, "", false, false)
+		return e.cached.ToFileInfo(bucket, e.name, "", false, true)
 	}
 	return getFileInfo(e.metadata, bucket, e.name, "", fileInfoOpts{})
 }
@@ -300,7 +300,7 @@ func (e *metaCacheEntry) fileInfoVersions(bucket string) (FileInfoVersions, erro
 		}, nil
 	}
 	// Too small gains to reuse cache here.
-	return getFileInfoVersions(e.metadata, bucket, e.name, false, true)
+	return getFileInfoVersions(e.metadata, bucket, e.name, true)
 }
 
 // metaCacheEntries is a slice of metacache entries.

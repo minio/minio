@@ -97,7 +97,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 	if srcOpts.VersionID != "" {
 		metaArr, errs = readAllFileInfo(ctx, storageDisks, "", srcBucket, srcObject, srcOpts.VersionID, true, false)
 	} else {
-		metaArr, errs = readAllXL(ctx, storageDisks, srcBucket, srcObject, true, false, true)
+		metaArr, errs = readAllXL(ctx, storageDisks, srcBucket, srcObject, true, false)
 	}
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
@@ -575,11 +575,10 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 	return m, nil
 }
 
-func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVers, allParts bool) (FileInfo, error) {
+func fileInfoFromRaw(ri RawFileInfo, bucket, object string, readData, inclFreeVers bool) (FileInfo, error) {
 	return getFileInfo(ri.Buf, bucket, object, "", fileInfoOpts{
 		Data:             readData,
 		InclFreeVersions: inclFreeVers,
-		AllParts:         allParts,
 	})
 }
 
@@ -604,7 +603,7 @@ func readAllRawFileInfo(ctx context.Context, disks []StorageAPI, bucket, object 
 	return rawFileInfos, g.Wait()
 }
 
-func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, errs []error, bucket, object string, readData, inclFreeVers, allParts bool) ([]FileInfo, []error) {
+func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, errs []error, bucket, object string, readData, inclFreeVers bool) ([]FileInfo, []error) {
 	metadataArray := make([]*xlMetaV2, len(rawFileInfos))
 	metaFileInfos := make([]FileInfo, len(rawFileInfos))
 	metadataShallowVersions := make([][]xlMetaV2ShallowVersion, len(rawFileInfos))
@@ -641,7 +640,7 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 
 	readQuorum := (len(rawFileInfos) + 1) / 2
 	meta := &xlMetaV2{versions: mergeXLV2Versions(readQuorum, false, 1, metadataShallowVersions...)}
-	lfi, err := meta.ToFileInfo(bucket, object, "", inclFreeVers, allParts)
+	lfi, err := meta.ToFileInfo(bucket, object, "", inclFreeVers, true)
 	if err != nil {
 		for i := range errs {
 			if errs[i] == nil {
@@ -670,7 +669,7 @@ func pickLatestQuorumFilesInfo(ctx context.Context, rawFileInfos []RawFileInfo, 
 		}
 
 		// make sure to preserve this for diskmtime based healing bugfix.
-		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, versionID, inclFreeVers, allParts)
+		metaFileInfos[index], errs[index] = metadataArray[index].ToFileInfo(bucket, object, versionID, inclFreeVers, true)
 		if errs[index] != nil {
 			continue
 		}
@@ -715,9 +714,9 @@ func shouldCheckForDangling(err error, errs []error, bucket string) bool {
 	return false
 }
 
-func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, readData, inclFreeVers, allParts bool) ([]FileInfo, []error) {
+func readAllXL(ctx context.Context, disks []StorageAPI, bucket, object string, readData, inclFreeVers bool) ([]FileInfo, []error) {
 	rawFileInfos, errs := readAllRawFileInfo(ctx, disks, bucket, object, readData)
-	return pickLatestQuorumFilesInfo(ctx, rawFileInfos, errs, bucket, object, readData, inclFreeVers, allParts)
+	return pickLatestQuorumFilesInfo(ctx, rawFileInfos, errs, bucket, object, readData, inclFreeVers)
 }
 
 func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object string, opts ObjectOptions, readData bool) (FileInfo, []FileInfo, []StorageAPI, error) {
@@ -774,7 +773,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 					// Read the latest version
 					rfi, err = disk.ReadXL(ctx, bucket, object, readData)
 					if err == nil {
-						fi, err = fileInfoFromRaw(rfi, bucket, object, readData, opts.InclFreeVersions, true)
+						fi, err = fileInfoFromRaw(rfi, bucket, object, readData, opts.InclFreeVersions)
 					}
 				}
 
@@ -912,7 +911,7 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		// we must use rawFileInfo to resolve versions to figure out the latest version.
 		if opts.VersionID == "" && totalResp == er.setDriveCount {
 			fi, onlineMeta, onlineDisks, modTime, etag, err = calcQuorum(pickLatestQuorumFilesInfo(ctx,
-				rawArr, errs, bucket, object, readData, opts.InclFreeVersions, true))
+				rawArr, errs, bucket, object, readData, opts.InclFreeVersions))
 		} else {
 			fi, onlineMeta, onlineDisks, modTime, etag, err = calcQuorum(metaArr, errs)
 		}
@@ -2142,7 +2141,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 	if opts.VersionID != "" {
 		metaArr, errs = readAllFileInfo(ctx, disks, "", bucket, object, opts.VersionID, false, false)
 	} else {
-		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false, true)
+		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false)
 	}
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
@@ -2219,7 +2218,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 	if opts.VersionID != "" {
 		metaArr, errs = readAllFileInfo(ctx, disks, "", bucket, object, opts.VersionID, false, false)
 	} else {
-		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false, true)
+		metaArr, errs = readAllXL(ctx, disks, bucket, object, false, false)
 	}
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)

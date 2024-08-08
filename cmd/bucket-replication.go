@@ -1641,7 +1641,6 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 
 	var (
 		hr     *hash.Reader
-		pInfo  minio.ObjectPart
 		isSSEC = crypto.SSEC.IsEncrypted(objInfo.UserDefined)
 	)
 
@@ -1668,18 +1667,19 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			CustomHeader: cHeader,
 		}
 
+		var size int64
 		if isSSEC {
-			objectSize += partInfo.Size
-			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.Size, popts)
+			size = partInfo.Size
 		} else {
-			objectSize += partInfo.ActualSize
-			pInfo, err = c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, partInfo.ActualSize, popts)
+			size = partInfo.ActualSize
 		}
+		objectSize += size
+		pInfo, err := c.PutObjectPart(ctx, bucket, object, uploadID, partInfo.Number, hr, size, popts)
 		if err != nil {
 			return err
 		}
-		if !isSSEC && pInfo.Size != partInfo.ActualSize {
-			return fmt.Errorf("Part size mismatch: got %d, want %d", pInfo.Size, partInfo.ActualSize)
+		if pInfo.Size != size {
+			return fmt.Errorf("ssec(%t): Part size mismatch: got %d, want %d", isSSEC, pInfo.Size, size)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
 			PartNumber:     pInfo.PartNumber,
@@ -1691,7 +1691,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		})
 	}
 	userMeta := map[string]string{
-		validSSEReplicationHeaders[ReservedMetadataPrefix+"Actual-Object-Size"]: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"],
+		xhttp.MinIOReplicationActualObjectSize: objInfo.UserDefined[ReservedMetadataPrefix+"actual-size"],
 	}
 	if isSSEC && objInfo.UserDefined[ReplicationSsecChecksumHeader] != "" {
 		userMeta[ReplicationSsecChecksumHeader] = objInfo.UserDefined[ReplicationSsecChecksumHeader]
