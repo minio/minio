@@ -494,6 +494,16 @@ type RenameFileHandlerParams struct {
 	DstFilePath string `msg:"dp"`
 }
 
+// RenamePartHandlerParams are parameters for RenamePartHandler.
+type RenamePartHandlerParams struct {
+	DiskID      string `msg:"id"`
+	SrcVolume   string `msg:"sv"`
+	SrcFilePath string `msg:"sp"`
+	DstVolume   string `msg:"dv"`
+	DstFilePath string `msg:"dp"`
+	Meta        []byte `msg:"m"`
+}
+
 // ReadAllHandlerParams are parameters for ReadAllHandler.
 type ReadAllHandlerParams struct {
 	DiskID   string `msg:"id"`
@@ -545,6 +555,16 @@ type LocalDiskIDs struct {
 // ListDirResult - ListDir()'s response.
 type ListDirResult struct {
 	Entries []string `msg:"e"`
+}
+
+// ReadPartsReq - send multiple part paths to read from
+type ReadPartsReq struct {
+	Paths []string `msg:"p"`
+}
+
+// ReadPartsResp - is the response for ReadPartsReq
+type ReadPartsResp struct {
+	Infos []*ObjectPartInfo `msg:"is"`
 }
 
 // DeleteBulkReq - send multiple paths in same delete request.
