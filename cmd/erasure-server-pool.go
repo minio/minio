@@ -85,18 +85,6 @@ func (c *MultipartUploadCache) Set(key string, value MultipartUpload) {
 	}
 }
 
-// Get retrieves a value from the cache if it has not expired
-func (c *MultipartUploadCache) Get(key string) (MultipartUpload, bool) {
-	expiry := globalAPIConfig.getStaleUploadsExpiry()
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-	entry, exists := c.data[key]
-	if !exists || time.Since(entry.Timestamp) > expiry {
-		return MultipartUpload{}, false
-	}
-	return entry.Upload, true
-}
-
 // Has returns true if cache contains the key
 func (c *MultipartUploadCache) Has(key string) bool {
 	c.mutex.RLock()
