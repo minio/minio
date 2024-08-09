@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/minio/kms-go/kes"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/kms"
@@ -197,7 +196,7 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrKMSNotConfigured), r.URL)
 		return
 	}
-	allKeyNames, _, err := GlobalKMS.ListKeyNames(ctx, &kms.ListRequest{
+	allKeys, _, err := GlobalKMS.ListKeys(ctx, &kms.ListRequest{
 		Prefix: r.Form.Get("pattern"),
 	})
 	if err != nil {
@@ -213,21 +212,17 @@ func (a kmsAPIHandlers) KMSListKeysHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Now we have all the key names, for each of them, check whether the policy grants permission for
-	// the user to list it.
-	keyNames := []string{}
-	for _, name := range allKeyNames {
-		if checkKMSActionAllowed(r, owner, cred, policy.KMSListKeysAction, name) {
-			keyNames = append(keyNames, name)
+	// the user to list it. Filter in place to leave only allowed keys.
+	n := 0
+	for _, k := range allKeys {
+		if checkKMSActionAllowed(r, owner, cred, policy.KMSListKeysAction, k.Name) {
+			allKeys[n] = k
+			n++
 		}
 	}
+	allKeys = allKeys[:n]
 
-	values := make([]kes.KeyInfo, 0, len(keyNames))
-	for _, name := range keyNames {
-		values = append(values, kes.KeyInfo{
-			Name: name,
-		})
-	}
-	if res, err := json.Marshal(values); err != nil {
+	if res, err := json.Marshal(allKeys); err != nil {
 		writeCustomErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInternalError), err.Error(), r.URL)
 	} else {
 		writeSuccessResponseJSON(w, res)

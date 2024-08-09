@@ -22,9 +22,17 @@ import (
 	"net/http"
 	"slices"
 	"sync/atomic"
+	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/pkg/v3/wildcard"
+)
+
+var (
+	// StubCreatedAt is a constant timestamp for testing
+	StubCreatedAt = time.Date(2024, time.January, 1, 15, 0, 0, 0, time.UTC)
+	// StubCreatedBy is a constant created identity for testing
+	StubCreatedBy = "MinIO"
 )
 
 // NewStub returns a stub of KMS for testing
@@ -64,15 +72,15 @@ func (s StubKMS) Status(context.Context) (map[string]madmin.ItemState, error) {
 	}, nil
 }
 
-// ListKeyNames returns a list of key names.
-func (s StubKMS) ListKeyNames(ctx context.Context, req *ListRequest) ([]string, string, error) {
-	matches := []string{}
+// ListKeys returns a list of keys with metadata.
+func (s StubKMS) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSKeyInfo, string, error) {
+	matches := []madmin.KMSKeyInfo{}
 	if req.Prefix == "" {
 		req.Prefix = "*"
 	}
 	for _, keyName := range s.KeyNames {
 		if wildcard.MatchAsPatternPrefix(req.Prefix, keyName) {
-			matches = append(matches, keyName)
+			matches = append(matches, madmin.KMSKeyInfo{Name: keyName, CreatedAt: StubCreatedAt, CreatedBy: StubCreatedBy})
 		}
 	}
 
