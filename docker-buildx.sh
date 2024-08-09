@@ -33,6 +33,14 @@ docker buildx build --push --no-cache \
 docker buildx prune -f
 
 docker buildx build --push --no-cache \
+	-t "minio/minio:latest.cicd" \
+	-t "quay.io/minio/minio:latest.cicd" \
+	-t "minio/minio:${release}.cicd" \
+	-t "quay.io/minio/minio:${release}.cicd" \
+	--platform=linux/arm64,linux/amd64,linux/ppc64le,linux/s390x \
+	-f Dockerfile.cicd .
+
+docker buildx build --push --no-cache \
 	--build-arg RELEASE="${release}" \
 	-t "minio/minio:${release}.fips" \
 	-t "quay.io/minio/minio:${release}.fips" \
