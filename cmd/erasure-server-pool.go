@@ -1776,15 +1776,38 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		return ListMultipartsInfo{}, err
 	}
 
-	if z.SinglePool() {
-		return z.serverPools[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
-	}
-
 	poolResult := ListMultipartsInfo{}
 	poolResult.MaxUploads = maxUploads
 	poolResult.KeyMarker = keyMarker
 	poolResult.Prefix = prefix
 	poolResult.Delimiter = delimiter
+
+	// if no prefix provided, return the list from cache
+	if prefix == "" {
+		for _, entry := range z.multipartUploadsCache.data {
+			upload := MultipartInfo{
+				Bucket:   entry.Upload.Bucket,
+				Object:   entry.Upload.Object,
+				UploadID: entry.Upload.UploadID,
+			}
+			poolResult.Uploads = append(poolResult.Uploads, upload)
+		}
+		return poolResult, nil
+	}
+
+	if z.SinglePool() {
+		result, err := z.serverPools[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+		if err != nil {
+			return result, err
+		}
+		for _, upload := range result.Uploads {
+			if ok := z.multipartUploadsCache.Has(upload.UploadID); ok {
+				poolResult.Uploads = append(poolResult.Uploads, upload)
+			}
+		}
+		return poolResult, nil
+	}
+
 	var uploads []MultipartInfo
 	for idx, pool := range z.serverPools {
 		if z.IsSuspended(idx) {
