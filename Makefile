@@ -133,6 +133,10 @@ test-site-replication-minio: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of SSE-C objects with compression enabled for site"
 	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication-with-compression.sh)
 
+test-resiliency:
+	@echo "Running resiliency tests"
+	@(DOCKER_COMPOSE_FILE=$(PWD)/docs/orchestration/docker-compose/docker-compose.yaml env bash $(PWD)/docs/resiliency/resiliency-tests.sh)
+
 verify: install-race ## verify minio various setups
 	@echo "Verifying build with race"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
