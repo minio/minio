@@ -626,14 +626,18 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 
 			var rebalanced, expired int
 			for _, version := range fivs.Versions {
+				stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceObject, poolIdx, bucket, version.Name, version.VersionID)
+
 				// Skip transitioned objects for now. TBD
 				if version.IsRemote() {
+					stopFn(version.Size, errors.New("ILM Tiered version will be skipped for now"))
 					continue
 				}
 
 				// Apply lifecycle rules on the objects that are expired.
 				if filterLifecycle(bucket, version.Name, version) {
 					expired++
+					stopFn(version.Size, errors.New("ILM expired object/version will be skipped"))
 					continue
 				}
 
@@ -643,6 +647,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				remainingVersions := len(fivs.Versions) - expired
 				if version.Deleted && remainingVersions == 1 {
 					rebalanced++
+					stopFn(version.Size, errors.New("DELETE marked object with no other non-current versions will be skipped"))
 					continue
 				}
 
@@ -651,6 +656,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					versionID = nullVersionID
 				}
 
+				var failure, ignore bool
 				if version.Deleted {
 					_, err := z.DeleteObject(ctx,
 						bucket,
@@ -660,16 +666,26 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 							VersionID:         versionID,
 							MTime:             version.ModTime,
 							DeleteReplication: version.ReplicationState,
+							SrcPoolIdx:        poolIdx,
+							DataMovement:      true,
 							DeleteMarker:      true, // make sure we create a delete marker
 							SkipRebalancing:   true, // make sure we skip the decommissioned pool
 							NoAuditLog:        true,
 						})
-					var failure bool
-					if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-						rebalanceLogIf(ctx, err)
-						failure = true
+					// This can happen when rebalance stop races with ongoing rebalance workers.
+					// These rebalance failures can be ignored.
+					if err != nil {
+						// This can happen when rebalance stop races with ongoing rebalance workers.
+						// These rebalance failures can be ignored.
+						if isErrObjectNotFound(err) || isErrVersionNotFound(err) || isDataMovementOverWriteErr(err) {
+							ignore = true
+							stopFn(0, nil)
+							continue
+						}
 					}
-
+					stopFn(version.Size, err)
+					rebalanceLogIf(ctx, err)
+					failure = err != nil
 					if !failure {
 						z.updatePoolStats(poolIdx, bucket, version)
 						rebalanced++
@@ -678,10 +694,8 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					continue
 				}
 
-				var failure, ignore bool
 				for try := 0; try < 3; try++ {
 					// GetObjectReader.Close is called by rebalanceObject
-					stopFn := globalRebalanceMetrics.log(rebalanceMetricRebalanceObject, poolIdx, bucket, version.Name, version.VersionID)
 					gr, err := set.GetObjectNInfo(ctx,
 						bucket,
 						encodeDirObject(version.Name),
@@ -709,9 +723,10 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					if err = z.rebalanceObject(ctx, poolIdx, bucket, gr); err != nil {
 						// This can happen when rebalance stop races with ongoing rebalance workers.
 						// These rebalance failures can be ignored.
-						if isDataMovementOverWriteErr(err) {
+						if isErrObjectNotFound(err) || isErrVersionNotFound(err) || isDataMovementOverWriteErr(err) {
 							ignore = true
-							continue
+							stopFn(0, nil)
+							break
 						}
 						failure = true
 						rebalanceLogIf(ctx, err)

@@ -1147,6 +1147,16 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return pinfo.ObjInfo, nil
 	}
 
+	// Datamovement must never be allowed on the same pool.
+	if opts.DataMovement && opts.SrcPoolIdx == pinfo.Index {
+		return pinfo.ObjInfo, DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
+	}
+
 	// Delete concurrently in all server pools with read quorum error for unversioned objects.
 	if len(noReadQuorumPools) > 0 && !opts.Versioned && !opts.VersionSuspended {
 		return z.deleteObjectFromAllPools(ctx, bucket, object, opts, noReadQuorumPools)
@@ -2795,6 +2805,15 @@ func (z *erasureServerPools) DecomTieredObject(ctx context.Context, bucket, obje
 	idx, err := z.getPoolIdxNoLock(ctx, bucket, object, fi.Size)
 	if err != nil {
 		return err
+	}
+
+	if opts.DataMovement && idx == opts.SrcPoolIdx {
+		return DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
 	}
 
 	return z.serverPools[idx].DecomTieredObject(ctx, bucket, object, fi, opts)
