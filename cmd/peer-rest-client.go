@@ -257,10 +257,10 @@ func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.Proc
 }
 
 // StartProfiling - Issues profiling command on the peer node.
-func (client *peerRESTClient) StartProfiling(profiler string) error {
+func (client *peerRESTClient) StartProfiling(ctx context.Context, profiler string) error {
 	values := make(url.Values)
 	values.Set(peerRESTProfiler, profiler)
-	respBody, err := client.call(peerRESTMethodStartProfiling, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodStartProfiling, values, nil, -1)
 	if err != nil {
 		return err
 	}
@@ -269,8 +269,8 @@ func (client *peerRESTClient) StartProfiling(profiler string) error {
 }
 
 // DownloadProfileData - download profiled data from a remote node.
-func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err error) {
-	respBody, err := client.call(peerRESTMethodDownloadProfilingData, nil, nil, -1)
+func (client *peerRESTClient) DownloadProfileData(ctx context.Context) (data map[string][]byte, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDownloadProfilingData, nil, nil, -1)
 	if err != nil {
 		return
 	}
