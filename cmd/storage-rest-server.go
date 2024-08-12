@@ -68,6 +68,7 @@ var (
 	storageRenameDataRPC       = grid.NewSingleHandler[*RenameDataHandlerParams, *RenameDataResp](grid.HandlerRenameData2, func() *RenameDataHandlerParams { return &RenameDataHandlerParams{} }, func() *RenameDataResp { return &RenameDataResp{} })
 	storageRenameDataInlineRPC = grid.NewSingleHandler[*RenameDataInlineHandlerParams, *RenameDataResp](grid.HandlerRenameDataInline, newRenameDataInlineHandlerParams, func() *RenameDataResp { return &RenameDataResp{} }).AllowCallRequestPool(false)
 	storageRenameFileRPC       = grid.NewSingleHandler[*RenameFileHandlerParams, grid.NoPayload](grid.HandlerRenameFile, func() *RenameFileHandlerParams { return &RenameFileHandlerParams{} }, grid.NewNoPayload).AllowCallRequestPool(true)
+	storageRenamePartRPC       = grid.NewSingleHandler[*RenamePartHandlerParams, grid.NoPayload](grid.HandlerRenamePart, func() *RenamePartHandlerParams { return &RenamePartHandlerParams{} }, grid.NewNoPayload)
 	storageStatVolRPC          = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerStatVol, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
 	storageUpdateMetadataRPC   = grid.NewSingleHandler[*MetadataHandlerParams, grid.NoPayload](grid.HandlerUpdateMetadata, func() *MetadataHandlerParams { return &MetadataHandlerParams{} }, grid.NewNoPayload)
 	storageWriteMetadataRPC    = grid.NewSingleHandler[*MetadataHandlerParams, grid.NoPayload](grid.HandlerWriteMetadata, func() *MetadataHandlerParams { return &MetadataHandlerParams{} }, grid.NewNoPayload)
@@ -525,6 +526,31 @@ func (s *storageRESTServer) ReadXLHandlerWS(params *grid.MSS) (*RawFileInfo, *gr
 	return &rf, nil
 }
 
+// ReadPartsHandler - read section of a file.
+func (s *storageRESTServer) ReadPartsHandler(w http.ResponseWriter, r *http.Request) {
+	if !s.IsValid(w, r) {
+		return
+	}
+	volume := r.Form.Get(storageRESTVolume)
+
+	var preq ReadPartsReq
+	if err := msgp.Decode(r.Body, &preq); err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	done := keepHTTPResponseAlive(w)
+	infos, err := s.getStorage().ReadParts(r.Context(), volume, preq.Paths...)
+	done(nil)
+	if err != nil {
+		s.writeErrorResponse(w, err)
+		return
+	}
+
+	presp := &ReadPartsResp{Infos: infos}
+	storageLogIf(r.Context(), msgp.Encode(w, presp))
+}
+
 // ReadFileHandler - read section of a file.
 func (s *storageRESTServer) ReadFileHandler(w http.ResponseWriter, r *http.Request) {
 	if !s.IsValid(w, r) {
@@ -690,6 +716,14 @@ func (s *storageRESTServer) RenameFileHandler(p *RenameFileHandlerParams) (grid.
 		return grid.NewNPErr(errDiskNotFound)
 	}
 	return grid.NewNPErr(s.getStorage().RenameFile(context.Background(), p.SrcVolume, p.SrcFilePath, p.DstVolume, p.DstFilePath))
+}
+
+// RenamePartHandler - rename a multipart part from source to destination
+func (s *storageRESTServer) RenamePartHandler(p *RenamePartHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
+	if !s.checkID(p.DiskID) {
+		return grid.NewNPErr(errDiskNotFound)
+	}
+	return grid.NewNPErr(s.getStorage().RenamePart(context.Background(), p.SrcVolume, p.SrcFilePath, p.DstVolume, p.DstFilePath, p.Meta))
 }
 
 // CleanAbandonedDataHandler - Clean unused data directories.
@@ -1333,6 +1367,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadMultiple).HandlerFunc(h(server.ReadMultiple))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodCleanAbandoned).HandlerFunc(h(server.CleanAbandonedDataHandler))
 			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodDeleteBulk).HandlerFunc(h(server.DeleteBulkHandler))
+			subrouter.Methods(http.MethodPost).Path(storageRESTVersionPrefix + storageRESTMethodReadParts).HandlerFunc(h(server.ReadPartsHandler))
 
 			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadFileStream).HandlerFunc(h(server.ReadFileStreamHandler))
 			subrouter.Methods(http.MethodGet).Path(storageRESTVersionPrefix + storageRESTMethodReadVersion).HandlerFunc(h(server.ReadVersionHandler))
@@ -1343,6 +1378,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			logger.FatalIf(storageReadAllRPC.Register(gm, server.ReadAllHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageWriteAllRPC.Register(gm, server.WriteAllHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageRenameFileRPC.Register(gm, server.RenameFileHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageRenamePartRPC.Register(gm, server.RenamePartHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageRenameDataRPC.Register(gm, server.RenameDataHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageRenameDataInlineRPC.Register(gm, server.RenameDataInlineHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageDeleteFileRPC.Register(gm, server.DeleteFileHandler, endpoint.Path), "unable to register handler")
