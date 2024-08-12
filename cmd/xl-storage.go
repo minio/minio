@@ -341,7 +341,13 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 			// Healing is 'true' when
 			// - if we found an unformatted disk (no 'format.json')
 			// - if we found healing tracker 'healing.bin'
-			dcinfo.Healing = errors.Is(err, errUnformattedDisk) || (s.Healing() != nil)
+			dcinfo.Healing = errors.Is(err, errUnformattedDisk)
+			if !dcinfo.Healing {
+				if hi := s.Healing(); hi != nil && !hi.Finished {
+					dcinfo.Healing = true
+				}
+			}
+
 			dcinfo.ID = diskID
 			return dcinfo, err
 		},

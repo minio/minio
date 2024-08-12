@@ -227,7 +227,11 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 	// Collect updates to tracker from concurrent healEntry calls
 	results := make(chan healEntryResult, 1000)
-	defer close(results)
+	quitting := make(chan struct{})
+	defer func() {
+		close(results)
+		<-quitting
+	}()
 
 	go func() {
 		for res := range results {
@@ -241,6 +245,9 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 			tracker.updateProgress(res.success, res.skipped, res.bytes)
 		}
+
+		healingLogIf(ctx, tracker.update(ctx))
+		close(quitting)
 	}()
 
 	var retErr error

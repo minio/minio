@@ -72,10 +72,12 @@ type healingTracker struct {
 
 	// Numbers when current bucket started healing,
 	// for resuming with correct numbers.
-	ResumeItemsHealed uint64 `json:"-"`
-	ResumeItemsFailed uint64 `json:"-"`
-	ResumeBytesDone   uint64 `json:"-"`
-	ResumeBytesFailed uint64 `json:"-"`
+	ResumeItemsHealed  uint64 `json:"-"`
+	ResumeItemsFailed  uint64 `json:"-"`
+	ResumeItemsSkipped uint64 `json:"-"`
+	ResumeBytesDone    uint64 `json:"-"`
+	ResumeBytesFailed  uint64 `json:"-"`
+	ResumeBytesSkipped uint64 `json:"-"`
 
 	// Filled on startup/restarts.
 	QueuedBuckets []string
@@ -90,6 +92,9 @@ type healingTracker struct {
 	BytesSkipped uint64
 
 	RetryAttempts uint64
+
+	Finished bool // finished healing, whether with errors or not
+
 	// Add future tracking capabilities
 	// Be sure that they are included in toHealingDisk
 }
@@ -262,8 +267,10 @@ func (h *healingTracker) resume() {
 
 	h.ItemsHealed = h.ResumeItemsHealed
 	h.ItemsFailed = h.ResumeItemsFailed
+	h.ItemsSkipped = h.ResumeItemsSkipped
 	h.BytesDone = h.ResumeBytesDone
 	h.BytesFailed = h.ResumeBytesFailed
+	h.BytesSkipped = h.ResumeBytesSkipped
 }
 
 // bucketDone should be called when a bucket is done healing.
@@ -274,8 +281,10 @@ func (h *healingTracker) bucketDone(bucket string) {
 
 	h.ResumeItemsHealed = h.ItemsHealed
 	h.ResumeItemsFailed = h.ItemsFailed
+	h.ResumeItemsSkipped = h.ItemsSkipped
 	h.ResumeBytesDone = h.BytesDone
 	h.ResumeBytesFailed = h.BytesFailed
+	h.ResumeBytesSkipped = h.BytesSkipped
 	h.HealedBuckets = append(h.HealedBuckets, bucket)
 	for i, b := range h.QueuedBuckets {
 		if b == bucket {
@@ -324,6 +333,7 @@ func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
 		PoolIndex:         h.PoolIndex,
 		SetIndex:          h.SetIndex,
 		DiskIndex:         h.DiskIndex,
+		Finished:          h.Finished,
 		Path:              h.Path,
 		Started:           h.Started.UTC(),
 		LastUpdate:        h.LastUpdate.UTC(),
@@ -373,7 +383,7 @@ func getLocalDisksToHeal() (disksToHeal Endpoints) {
 			disksToHeal = append(disksToHeal, disk.Endpoint())
 			continue
 		}
-		if disk.Healing() != nil {
+		if h := disk.Healing(); h != nil && !h.Finished {
 			disksToHeal = append(disksToHeal, disk.Endpoint())
 		}
 	}
@@ -519,7 +529,8 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 			continue
 		}
 		if t.HealID == tracker.HealID {
-			t.delete(ctx)
+			t.Finished = true
+			t.update(ctx)
 		}
 	}
 
