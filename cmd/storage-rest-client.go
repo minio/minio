@@ -757,6 +757,55 @@ func (client *storageRESTClient) DeleteVersions(ctx context.Context, volume stri
 	return errs
 }
 
+// RenamePart - renames multipart part file
+func (client *storageRESTClient) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string, meta []byte) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
+	defer cancel()
+
+	_, err = storageRenamePartRPC.Call(ctx, client.gridConn, &RenamePartHandlerParams{
+		DiskID:      *client.diskID.Load(),
+		SrcVolume:   srcVolume,
+		SrcFilePath: srcPath,
+		DstVolume:   dstVolume,
+		DstFilePath: dstPath,
+		Meta:        meta,
+	})
+	return toStorageErr(err)
+}
+
+// ReadParts - reads various part.N.meta paths from a drive remotely and returns object part info for each of those part.N.meta if found
+func (client *storageRESTClient) ReadParts(ctx context.Context, volume string, partMetaPaths ...string) ([]*ObjectPartInfo, error) {
+	values := make(url.Values)
+	values.Set(storageRESTVolume, volume)
+
+	rp := &ReadPartsReq{Paths: partMetaPaths}
+	buf, err := rp.MarshalMsg(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	respBody, err := client.call(ctx, storageRESTMethodReadParts, values, bytes.NewReader(buf), -1)
+	defer xhttp.DrainBody(respBody)
+	if err != nil {
+		return nil, err
+	}
+
+	respReader, err := waitForHTTPResponse(respBody)
+	if err != nil {
+		return nil, toStorageErr(err)
+	}
+
+	rd := msgpNewReader(respReader)
+	defer readMsgpReaderPoolPut(rd)
+
+	readPartsResp := &ReadPartsResp{}
+	if err = readPartsResp.DecodeMsg(rd); err != nil {
+		return nil, toStorageErr(err)
+	}
+
+	return readPartsResp.Infos, nil
+}
+
 // RenameFile - renames a file.
 func (client *storageRESTClient) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
