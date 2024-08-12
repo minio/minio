@@ -2331,6 +2331,7 @@ func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]
 }
 
 func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) madmin.InfoMessage {
+	const operationTimeout = 10 * time.Second
 	ldap := madmin.LDAP{}
 	if globalIAMSys.LDAPConfig.Enabled() {
 		ldapConn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
@@ -2371,7 +2372,9 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 		mode = madmin.ItemOnline
 
 		// Load data usage
-		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+		ctx2, cancel := context.WithTimeout(ctx, operationTimeout)
+		dataUsageInfo, err := loadDataUsageFromBackend(ctx2, objectAPI)
+		cancel()
 		if err == nil {
 			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
 			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
@@ -2405,17 +2408,23 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 		}
 
 		if pools {
-			poolsInfo, _ = getPoolsInfo(ctx, allDisks)
+			ctx2, cancel := context.WithTimeout(ctx, operationTimeout)
+			poolsInfo, _ = getPoolsInfo(ctx2, allDisks)
+			cancel()
 		}
 	}
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		KMSStatus:     fetchKMSStatus(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
 		Notifications: notifyTarget,
+	}
+	{
+		ctx2, cancel := context.WithTimeout(ctx, operationTimeout)
+		services.KMSStatus = fetchKMSStatus(ctx2)
+		cancel()
 	}
 
 	return madmin.InfoMessage{
