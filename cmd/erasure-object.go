@@ -395,24 +395,16 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			// that we have some parts or data blocks missing or corrupted
 			// - attempt a heal to successfully heal them for future calls.
 			if written == partLength {
-				var scan madmin.HealScanMode
-				switch {
-				case errors.Is(err, errFileNotFound):
-					scan = madmin.HealNormalScan
-				case errors.Is(err, errFileCorrupt):
-					scan = madmin.HealDeepScan
-				}
-				switch scan {
-				case madmin.HealNormalScan, madmin.HealDeepScan:
+				if errors.Is(err, errFileNotFound) || errors.Is(err, errFileCorrupt) {
 					healOnce.Do(func() {
-						globalMRFState.addPartialOp(partialOperation{
-							bucket:    bucket,
-							object:    object,
-							versionID: fi.VersionID,
-							queued:    time.Now(),
-							setIndex:  er.setIndex,
-							poolIndex: er.poolIndex,
-							scanMode:  scan,
+						globalMRFState.addPartialOp(PartialOperation{
+							Bucket:     bucket,
+							Object:     object,
+							VersionID:  fi.VersionID,
+							Queued:     time.Now(),
+							SetIndex:   er.setIndex,
+							PoolIndex:  er.poolIndex,
+							BitrotScan: errors.Is(err, errFileCorrupt),
 						})
 					})
 					// Healing is triggered and we have written
@@ -814,13 +806,13 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		// additionally do not heal delete markers inline, let them be
 		// healed upon regular heal process.
 		if missingBlocks > 0 && missingBlocks < fi.Erasure.DataBlocks {
-			globalMRFState.addPartialOp(partialOperation{
-				bucket:    fi.Volume,
-				object:    fi.Name,
-				versionID: fi.VersionID,
-				queued:    time.Now(),
-				setIndex:  er.setIndex,
-				poolIndex: er.poolIndex,
+			globalMRFState.addPartialOp(PartialOperation{
+				Bucket:    fi.Volume,
+				Object:    fi.Name,
+				VersionID: fi.VersionID,
+				Queued:    time.Now(),
+				SetIndex:  er.setIndex,
+				PoolIndex: er.poolIndex,
 			})
 		}
 
@@ -1572,13 +1564,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 				break
 			}
 		} else {
-			globalMRFState.addPartialOp(partialOperation{
-				bucket:    bucket,
-				object:    object,
-				queued:    time.Now(),
-				versions:  versions,
-				setIndex:  er.setIndex,
-				poolIndex: er.poolIndex,
+			globalMRFState.addPartialOp(PartialOperation{
+				Bucket:    bucket,
+				Object:    object,
+				Queued:    time.Now(),
+				Versions:  versions,
+				SetIndex:  er.setIndex,
+				PoolIndex: er.poolIndex,
 			})
 		}
 	}
@@ -2107,11 +2099,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
 func (er erasureObjects) addPartial(bucket, object, versionID string) {
-	globalMRFState.addPartialOp(partialOperation{
-		bucket:    bucket,
-		object:    object,
-		versionID: versionID,
-		queued:    time.Now(),
+	globalMRFState.addPartialOp(PartialOperation{
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+		Queued:    time.Now(),
 	})
 }
 

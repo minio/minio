@@ -258,9 +258,9 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 		for bktName, count := range bucketsMap {
 			if count < quorum {
 				// Queue a bucket heal task
-				globalMRFState.addPartialOp(partialOperation{
-					bucket: bktName,
-					queued: time.Now(),
+				globalMRFState.addPartialOp(PartialOperation{
+					Bucket: bktName,
+					Queued: time.Now(),
 				})
 			}
 		}

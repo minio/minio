@@ -23,10 +23,25 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/minio/minio/internal/logger"
 )
+
+func shutdownHealMRFWithTimeout() {
+	const shutdownTimeout = time.Minute
+
+	finished := make(chan struct{})
+	go func() {
+		globalMRFState.shutdown()
+		close(finished)
+	}()
+	select {
+	case <-time.After(shutdownTimeout):
+	case <-finished:
+	}
+}
 
 func handleSignals() {
 	// Custom exit function
@@ -50,6 +65,9 @@ func handleSignals() {
 	}
 
 	stopProcess := func() bool {
+		shutdownHealMRFWithTimeout() // this can take time sometimes, it needs to be executed
+		// before stopping s3 operations
+
 		// send signal to various go-routines that they need to quit.
 		cancelGlobalContext()
 
