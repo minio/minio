@@ -71,7 +71,7 @@ func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
 }
 
-func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string) madmin.TraceInfo {
+func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string, metadata map[string]string) madmin.TraceInfo {
 	sz, _ := oi.GetActualSize()
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceILM,
@@ -83,16 +83,16 @@ func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event 
 		Bytes:     sz,
 		Error:     "",
 		Message:   getSource(4),
-		Custom:    map[string]string{"version-id": oi.VersionID},
+		Custom:    metadata,
 	}
 }
 
-func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string) {
+func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string, metadata map[string]string) {
 	startTime := time.Now()
-	return func(event string) {
+	return func(event string, metadata map[string]string) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceILM) > 0 {
-			globalTrace.Publish(ilmTrace(startTime, duration, oi, event))
+			globalTrace.Publish(ilmTrace(startTime, duration, oi, event, metadata))
 		}
 	}
 }
@@ -707,6 +707,11 @@ type auditTierOp struct {
 	Error            string `json:"error,omitempty"`
 }
 
+func (op auditTierOp) String() string {
+	// flattening the auditTierOp{} for audit
+	return fmt.Sprintf("tier:%s,respNS:%d,tx:%d,err:%s", op.Tier, op.TimeToResponseNS, op.OutputBytes, op.Error)
+}
+
 func auditTierActions(ctx context.Context, tier string, bytes int64) func(err error) {
 	startTime := time.Now()
 	return func(err error) {
@@ -730,7 +735,7 @@ func auditTierActions(ctx context.Context, tier string, bytes int64) func(err er
 			globalTierMetrics.logFailure(tier)
 		}
 
-		logger.GetReqInfo(ctx).AppendTags("tierStats", op)
+		logger.GetReqInfo(ctx).AppendTags("tierStats", op.String())
 	}
 }
 

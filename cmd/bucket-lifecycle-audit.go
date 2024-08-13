@@ -17,7 +17,11 @@
 
 package cmd
 
-import "github.com/minio/minio/internal/bucket/lifecycle"
+import (
+	"strconv"
+
+	"github.com/minio/minio/internal/bucket/lifecycle"
+)
 
 //go:generate stringer -type lcEventSrc -trimprefix lcEventSrc_ $GOFILE
 type lcEventSrc uint8
@@ -43,7 +47,7 @@ type lcAuditEvent struct {
 	source lcEventSrc
 }
 
-func (lae lcAuditEvent) Tags() map[string]interface{} {
+func (lae lcAuditEvent) Tags() map[string]string {
 	event := lae.Event
 	src := lae.source
 	const (
@@ -55,7 +59,7 @@ func (lae lcAuditEvent) Tags() map[string]interface{} {
 		ilmNewerNoncurrentVersions = "ilm-newer-noncurrent-versions"
 		ilmNoncurrentDays          = "ilm-noncurrent-days"
 	)
-	tags := make(map[string]interface{}, 5)
+	tags := make(map[string]string, 5)
 	if src > lcEventSrc_None {
 		tags[ilmSrc] = src.String()
 	}
@@ -63,7 +67,7 @@ func (lae lcAuditEvent) Tags() map[string]interface{} {
 	tags[ilmRuleID] = event.RuleID
 
 	if !event.Due.IsZero() {
-		tags[ilmDue] = event.Due
+		tags[ilmDue] = event.Due.Format(iso8601Format)
 	}
 
 	// rule with Transition/NoncurrentVersionTransition in effect
@@ -73,10 +77,10 @@ func (lae lcAuditEvent) Tags() map[string]interface{} {
 
 	// rule with NewernoncurrentVersions in effect
 	if event.NewerNoncurrentVersions > 0 {
-		tags[ilmNewerNoncurrentVersions] = event.NewerNoncurrentVersions
+		tags[ilmNewerNoncurrentVersions] = strconv.Itoa(event.NewerNoncurrentVersions)
 	}
 	if event.NoncurrentDays > 0 {
-		tags[ilmNoncurrentDays] = event.NoncurrentDays
+		tags[ilmNoncurrentDays] = strconv.Itoa(event.NoncurrentDays)
 	}
 	return tags
 }
