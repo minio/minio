@@ -1099,6 +1099,8 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context, metrics bool) []madm
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
 			info, err := client.ServerInfo(ctx, metrics)
 			if err != nil {
 				info.Endpoint = client.host.String()
