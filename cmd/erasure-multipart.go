@@ -258,7 +258,7 @@ func (er erasureObjects) cleanupStaleUploadsOnDisk(ctx context.Context, disk Sto
 // towards simplification of multipart APIs.
 // The resulting ListMultipartsInfo structure is unmarshalled directly as XML.
 func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, object, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
-	auditObjectErasureSet(ctx, object, &er)
+	auditObjectErasureSet(ctx, "ListMultipartUploads", object, &er)
 
 	result.MaxUploads = maxUploads
 	result.KeyMarker = keyMarker
@@ -514,7 +514,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 // Implements S3 compatible initiate multipart API.
 func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "NewMultipartUpload", object, &er)
 	}
 
 	return er.newMultipartUpload(ctx, bucket, object, opts)
@@ -560,7 +560,7 @@ func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, src
 // Implements S3 compatible Upload Part API.
 func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uploadID string, partID int, r *PutObjReader, opts ObjectOptions) (pi PartInfo, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "PutObjectPart", object, &er)
 	}
 
 	data := r.Reader
@@ -766,7 +766,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 // Does not contain currently uploaded parts by design.
 func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (MultipartInfo, error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "GetMultipartInfo", object, &er)
 	}
 
 	result := MultipartInfo{
@@ -804,7 +804,7 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 // replied back to the client.
 func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, uploadID string, partNumberMarker, maxParts int, opts ObjectOptions) (result ListPartsInfo, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "ListObjectParts", object, &er)
 	}
 
 	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
@@ -1058,7 +1058,7 @@ func errStrToPartErr(errStr string) error {
 // Implements S3 compatible Complete multipart API.
 func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket string, object string, uploadID string, parts []CompletePart, opts ObjectOptions) (oi ObjectInfo, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "CompleteMultipartUpload", object, &er)
 	}
 
 	if opts.CheckPrecondFn != nil {
@@ -1455,7 +1455,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 // operation.
 func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "AbortMultipartUpload", object, &er)
 	}
 
 	lk := er.NewNSLock(bucket, pathJoin(object, uploadID))

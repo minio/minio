@@ -15,8 +15,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build fmtgen
-
 package cmd
 
 import (
@@ -51,6 +49,7 @@ var fmtGenCmd = cli.Command{
 	Usage:  "Generate format.json files for an erasure server pool",
 	Flags:  append(fmtGenFlags, GlobalFlags...),
 	Action: fmtGenMain,
+	Hidden: true,
 	CustomHelpTemplate: `NAME:
   {{.HelpName}} - {{.Usage}}
 
