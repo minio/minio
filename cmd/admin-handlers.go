@@ -3059,7 +3059,7 @@ func targetStatus(ctx context.Context, h logger.Target) madmin.Status {
 	return madmin.Status{Status: string(madmin.ItemOffline)}
 }
 
-// fetchLoggerDetails return log info
+// fetchLoggerInfo return log info
 func fetchLoggerInfo(ctx context.Context) ([]madmin.Logger, []madmin.Audit) {
 	var loggerInfo []madmin.Logger
 	var auditloggerInfo []madmin.Audit

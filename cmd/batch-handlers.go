@@ -1705,7 +1705,7 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 	w.Write(buf)
 }
 
-// StarBatchJob queue a new job for execution
+// StartBatchJob queue a new job for execution
 func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
