@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/minio/minio/internal/ioutil"
 	"google.golang.org/api/googleapi"
 
@@ -2549,11 +2549,11 @@ func toAPIError(ctx context.Context, err error) APIError {
 			if len(e.Errors) >= 1 {
 				apiErr.Code = e.Errors[0].Reason
 			}
-		case azblob.StorageError:
+		case *azcore.ResponseError:
 			apiErr = APIError{
-				Code:           string(e.ServiceCode()),
+				Code:           e.ErrorCode,
 				Description:    e.Error(),
-				HTTPStatusCode: e.Response().StatusCode,
+				HTTPStatusCode: e.StatusCode,
 			}
 			// Add more other SDK related errors here if any in future.
 		default:
