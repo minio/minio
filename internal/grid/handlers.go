@@ -435,6 +435,7 @@ func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle fun
 	return func() RT { return pool.Get().(RT) },
 		func(r RT) {
 			if r != rZero {
+				//nolint:staticcheck // SA6002 IT IS A GENERIC VALUE!
 				pool.Put(r)
 			}
 		}
@@ -612,6 +613,7 @@ func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
 }
 
 func setSubroute(ctx context.Context, s string) context.Context {
+	//nolint:staticcheck // SA1029 Staticcheck is drunk.
 	return context.WithValue(ctx, ctxSubrouteKey{}, s)
 }
 
