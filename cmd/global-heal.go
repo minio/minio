@@ -194,7 +194,7 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		numHealers = uint64(v)
 	}
 
-	healingLogEvent(ctx, fmt.Sprintf("Healing drive '%s' - use %d parallel workers.", tracker.disk.String(), numHealers))
+	healingLogEvent(ctx, "Healing drive '%s' - use %d parallel workers.", tracker.disk.String(), numHealers)
 
 	jt, _ := workers.New(int(numHealers))
 

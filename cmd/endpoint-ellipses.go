@@ -311,7 +311,7 @@ func GetAllSets(setDriveCount uint64, args ...string) ([][]string, error) {
 	for _, sargs := range setArgs {
 		for _, arg := range sargs {
 			if uniqueArgs.Contains(arg) {
-				return nil, config.ErrInvalidErasureEndpoints(nil).Msg(fmt.Sprintf("Input args (%s) has duplicate ellipses", args))
+				return nil, config.ErrInvalidErasureEndpoints(nil).Msgf("Input args (%s) has duplicate ellipses", args)
 			}
 			uniqueArgs.Add(arg)
 		}

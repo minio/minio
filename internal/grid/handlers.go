@@ -210,7 +210,7 @@ const (
 func init() {
 	// Static check if we exceed 255 handler ids.
 	// Extend the type to uint16 when hit.
-	if handlerLast > 255 {
+	if uint32(handlerLast) > 255 {
 		panic(fmt.Sprintf("out of handler IDs. %d > %d", handlerLast, 255))
 	}
 }
@@ -435,6 +435,7 @@ func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle fun
 	return func() RT { return pool.Get().(RT) },
 		func(r RT) {
 			if r != rZero {
+				//nolint:staticcheck // SA6002 IT IS A GENERIC VALUE!
 				pool.Put(r)
 			}
 		}
@@ -601,15 +602,18 @@ func GetCaller(ctx context.Context) *RemoteClient {
 
 // GetSubroute returns caller information from contexts provided to handlers.
 func GetSubroute(ctx context.Context) string {
+	//nolint:staticcheck // SA1029 Staticcheck is drunk.
 	val, _ := ctx.Value(ctxSubrouteKey{}).(string)
 	return val
 }
 
 func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
+	//nolint:staticcheck // SA1029 Staticcheck is drunk.
 	return context.WithValue(ctx, ctxCallerKey{}, cl)
 }
 
 func setSubroute(ctx context.Context, s string) context.Context {
+	//nolint:staticcheck // SA1029 Staticcheck is drunk.
 	return context.WithValue(ctx, ctxSubrouteKey{}, s)
 }
 
@@ -681,6 +685,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) NewRequest() Req {
 // These should be returned by the handler.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
 	if r != h.nilReq {
+		//nolint:staticcheck // SA6002 IT IS A GENERIC VALUE! (and always a pointer)
 		h.reqPool.Put(r)
 	}
 }
@@ -689,6 +694,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
 // These should be returned by the caller.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutResponse(r Resp) {
 	if r != h.nilResp {
+		//nolint:staticcheck // SA6002 IT IS A GENERIC VALUE! (and always a pointer)
 		h.respPool.Put(r)
 	}
 }

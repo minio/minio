@@ -598,6 +598,7 @@ func (p *ArrayOf[T]) newA(sz uint32) []T {
 func (p *ArrayOf[T]) putA(v []T) {
 	var zero T // nil
 	for i, t := range v {
+		//nolint:staticcheck // SA6002 IT IS A GENERIC VALUE!
 		p.ePool.Put(t)
 		v[i] = zero
 	}
