@@ -800,7 +800,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 		case bucketPolicyConfig:
 			// Error out if Content-Length is beyond allowed size.
 			if sz > maxBucketPolicySize {
-				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrPolicyTooLarge.String()))
+				rpt.SetStatus(bucket, fileName, errors.New(ErrPolicyTooLarge.String()))
 				continue
 			}
 
@@ -818,7 +818,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 
 			// Version in policy must not be empty
 			if bucketPolicy.Version == "" {
-				rpt.SetStatus(bucket, fileName, fmt.Errorf(ErrPolicyInvalidVersion.String()))
+				rpt.SetStatus(bucket, fileName, errors.New(ErrPolicyInvalidVersion.String()))
 				continue
 			}
 
