@@ -70,7 +70,7 @@ func countOnlineDisks(onlineDisks []StorageAPI) (online int) {
 // update metadata.
 func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, dstBucket, dstObject string, srcInfo ObjectInfo, srcOpts, dstOpts ObjectOptions) (oi ObjectInfo, err error) {
 	if !dstOpts.NoAuditLog {
-		auditObjectErasureSet(ctx, dstObject, &er)
+		auditObjectErasureSet(ctx, "CopyObject", dstObject, &er)
 	}
 
 	// This call shouldn't be used for anything other than metadata updates or adding self referential versions.
@@ -199,7 +199,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 // Read(Closer). When err != nil, the returned reader is always nil.
 func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object string, rs *HTTPRangeSpec, h http.Header, opts ObjectOptions) (gr *GetObjectReader, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "GetObject", object, &er)
 	}
 
 	var unlockOnDefer bool
@@ -395,24 +395,16 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 			// that we have some parts or data blocks missing or corrupted
 			// - attempt a heal to successfully heal them for future calls.
 			if written == partLength {
-				var scan madmin.HealScanMode
-				switch {
-				case errors.Is(err, errFileNotFound):
-					scan = madmin.HealNormalScan
-				case errors.Is(err, errFileCorrupt):
-					scan = madmin.HealDeepScan
-				}
-				switch scan {
-				case madmin.HealNormalScan, madmin.HealDeepScan:
+				if errors.Is(err, errFileNotFound) || errors.Is(err, errFileCorrupt) {
 					healOnce.Do(func() {
-						globalMRFState.addPartialOp(partialOperation{
-							bucket:    bucket,
-							object:    object,
-							versionID: fi.VersionID,
-							queued:    time.Now(),
-							setIndex:  er.setIndex,
-							poolIndex: er.poolIndex,
-							scanMode:  scan,
+						globalMRFState.addPartialOp(PartialOperation{
+							Bucket:     bucket,
+							Object:     object,
+							VersionID:  fi.VersionID,
+							Queued:     time.Now(),
+							SetIndex:   er.setIndex,
+							PoolIndex:  er.poolIndex,
+							BitrotScan: errors.Is(err, errFileCorrupt),
 						})
 					})
 					// Healing is triggered and we have written
@@ -439,7 +431,7 @@ func (er erasureObjects) getObjectWithFileInfo(ctx context.Context, bucket, obje
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object string, opts ObjectOptions) (info ObjectInfo, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "GetObjectInfo", object, &er)
 	}
 
 	if !opts.NoLock {
@@ -456,7 +448,7 @@ func (er erasureObjects) GetObjectInfo(ctx context.Context, bucket, object strin
 	return er.getObjectInfo(ctx, bucket, object, opts)
 }
 
-func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, tags map[string]interface{}) {
+func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID string, tags map[string]string) {
 	if len(logger.AuditTargets()) == 0 {
 		return
 	}
@@ -472,13 +464,16 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 	auditLogInternal(ctx, opts)
 }
 
-func joinErrs(errs []error) []string {
-	s := make([]string, len(errs))
+func joinErrs(errs []error) string {
+	var s string
 	for i := range s {
+		if s != "" {
+			s += ","
+		}
 		if errs[i] == nil {
-			s[i] = "<nil>"
+			s += "<nil>"
 		} else {
-			s[i] = errs[i].Error()
+			s += errs[i].Error()
 		}
 	}
 	return s
@@ -491,20 +486,18 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		// can be deleted safely, in such a scenario return ReadQuorum error.
 		return FileInfo{}, errErasureReadQuorum
 	}
-	tags := make(map[string]interface{}, 4)
-	tags["set"] = er.setIndex
-	tags["pool"] = er.poolIndex
+	tags := make(map[string]string, 16)
+	tags["set"] = strconv.Itoa(er.setIndex)
+	tags["pool"] = strconv.Itoa(er.poolIndex)
 	tags["merrs"] = joinErrs(errs)
-	tags["derrs"] = dataErrsByPart
+	tags["derrs"] = fmt.Sprintf("%v", dataErrsByPart)
 	if m.IsValid() {
-		tags["size"] = m.Size
-		tags["mtime"] = m.ModTime.Format(http.TimeFormat)
-		tags["data"] = m.Erasure.DataBlocks
-		tags["parity"] = m.Erasure.ParityBlocks
+		tags["sz"] = strconv.FormatInt(m.Size, 10)
+		tags["mt"] = m.ModTime.Format(iso8601Format)
+		tags["d:p"] = fmt.Sprintf("%d:%d", m.Erasure.DataBlocks, m.Erasure.ParityBlocks)
 	} else {
-		tags["invalid-meta"] = true
-		tags["data"] = er.setDriveCount - er.defaultParityCount
-		tags["parity"] = er.defaultParityCount
+		tags["invalid"] = "1"
+		tags["d:p"] = fmt.Sprintf("%d:%d", er.setDriveCount-er.defaultParityCount, er.defaultParityCount)
 	}
 
 	// count the number of offline disks
@@ -527,7 +520,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		}
 	}
 	if offline > 0 {
-		tags["offline"] = offline
+		tags["offline"] = strconv.Itoa(offline)
 	}
 
 	_, file, line, cok := runtime.Caller(1)
@@ -556,22 +549,16 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 		}, index)
 	}
 
-	rmDisks := make(map[string]string, len(disks))
 	for index, err := range g.Wait() {
-		var errStr, diskName string
+		var errStr string
 		if err != nil {
 			errStr = err.Error()
 		} else {
 			errStr = "<nil>"
 		}
-		if disks[index] != nil {
-			diskName = disks[index].String()
-		} else {
-			diskName = fmt.Sprintf("disk-%d", index)
-		}
-		rmDisks[diskName] = errStr
+		tags[fmt.Sprintf("ddisk-%d", index)] = errStr
 	}
-	tags["cleanupResult"] = rmDisks
+
 	return m, nil
 }
 
@@ -819,13 +806,13 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		// additionally do not heal delete markers inline, let them be
 		// healed upon regular heal process.
 		if missingBlocks > 0 && missingBlocks < fi.Erasure.DataBlocks {
-			globalMRFState.addPartialOp(partialOperation{
-				bucket:    fi.Volume,
-				object:    fi.Name,
-				versionID: fi.VersionID,
-				queued:    time.Now(),
-				setIndex:  er.setIndex,
-				poolIndex: er.poolIndex,
+			globalMRFState.addPartialOp(PartialOperation{
+				Bucket:    fi.Volume,
+				Object:    fi.Name,
+				VersionID: fi.VersionID,
+				Queued:    time.Now(),
+				SetIndex:  er.setIndex,
+				PoolIndex: er.poolIndex,
 			})
 		}
 
@@ -1251,7 +1238,7 @@ func (er erasureObjects) PutObject(ctx context.Context, bucket string, object st
 // putObject wrapper for erasureObjects PutObject
 func (er erasureObjects) putObject(ctx context.Context, bucket string, object string, r *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "PutObject", object, &er)
 	}
 
 	data := r.Reader
@@ -1577,13 +1564,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 				break
 			}
 		} else {
-			globalMRFState.addPartialOp(partialOperation{
-				bucket:    bucket,
-				object:    object,
-				queued:    time.Now(),
-				versions:  versions,
-				setIndex:  er.setIndex,
-				poolIndex: er.poolIndex,
+			globalMRFState.addPartialOp(PartialOperation{
+				Bucket:    bucket,
+				Object:    object,
+				Queued:    time.Now(),
+				Versions:  versions,
+				SetIndex:  er.setIndex,
+				PoolIndex: er.poolIndex,
 			})
 		}
 	}
@@ -1626,7 +1613,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	if !opts.NoAuditLog {
 		for _, obj := range objects {
-			auditObjectErasureSet(ctx, obj.ObjectV.ObjectName, &er)
+			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectV.ObjectName, &er)
 		}
 	}
 
@@ -1846,7 +1833,7 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 // response to the client request.
 func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string, opts ObjectOptions) (objInfo ObjectInfo, err error) {
 	if !opts.NoAuditLog {
-		auditObjectErasureSet(ctx, object, &er)
+		auditObjectErasureSet(ctx, "DeleteObject", object, &er)
 	}
 
 	var lc *lifecycle.Lifecycle
@@ -2112,11 +2099,11 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 // Send the successful but partial upload/delete, however ignore
 // if the channel is blocked by other items.
 func (er erasureObjects) addPartial(bucket, object, versionID string) {
-	globalMRFState.addPartialOp(partialOperation{
-		bucket:    bucket,
-		object:    object,
-		versionID: versionID,
-		queued:    time.Now(),
+	globalMRFState.addPartialOp(PartialOperation{
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+		Queued:    time.Now(),
 	})
 }
 

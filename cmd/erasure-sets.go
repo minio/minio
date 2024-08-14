@@ -537,26 +537,29 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 }
 
 type auditObjectOp struct {
-	Name   string   `json:"name"`
-	Pool   int      `json:"poolId"`
-	Set    int      `json:"setId"`
-	Drives []string `json:"drives"`
+	Name string `json:"name"`
+	Pool int    `json:"poolId"`
+	Set  int    `json:"setId"`
+}
+
+func (op auditObjectOp) String() string {
+	// Flatten the auditObjectOp
+	return fmt.Sprintf("name=%s,pool=%d,set=%d", op.Name, op.Pool, op.Set)
 }
 
 // Add erasure set information to the current context
-func auditObjectErasureSet(ctx context.Context, object string, set *erasureObjects) {
+func auditObjectErasureSet(ctx context.Context, api, object string, set *erasureObjects) {
 	if len(logger.AuditTargets()) == 0 {
 		return
 	}
 
 	op := auditObjectOp{
-		Name:   decodeDirObject(object),
-		Pool:   set.poolIndex + 1,
-		Set:    set.setIndex + 1,
-		Drives: set.getEndpointStrings(),
+		Name: decodeDirObject(object),
+		Pool: set.poolIndex + 1,
+		Set:  set.setIndex + 1,
 	}
 
-	logger.GetReqInfo(ctx).AppendTags("objectLocation", op)
+	logger.GetReqInfo(ctx).AppendTags(api, op.String())
 }
 
 // NewNSLock - initialize a new namespace RWLocker instance.

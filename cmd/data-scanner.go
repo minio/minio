@@ -569,7 +569,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 				APIName: "Scanner",
 				Bucket:  f.root,
 				Object:  prefixName,
-				Tags: map[string]interface{}{
+				Tags: map[string]string{
 					"x-minio-prefixes-total": strconv.Itoa(totalFolders),
 				},
 			})
@@ -1138,7 +1138,7 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			APIName: "Scanner",
 			Bucket:  i.bucket,
 			Object:  i.objectPath(),
-			Tags: map[string]interface{}{
+			Tags: map[string]string{
 				"x-minio-versions": strconv.Itoa(len(objInfos)),
 			},
 		})
@@ -1170,7 +1170,7 @@ func (i *scannerItem) applyVersionActions(ctx context.Context, o ObjectLayer, fi
 			APIName: "Scanner",
 			Bucket:  i.bucket,
 			Object:  i.objectPath(),
-			Tags: map[string]interface{}{
+			Tags: map[string]string{
 				"x-minio-versions-count": strconv.Itoa(len(objInfos)),
 				"x-minio-versions-size":  strconv.FormatInt(cumulativeSize, 10),
 			},
@@ -1336,6 +1336,8 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	}
 
 	tags := newLifecycleAuditEvent(src, lcEvent).Tags()
+	tags["version-id"] = dobj.VersionID
+
 	// Send audit for the lifecycle delete operation
 	auditLogLifecycle(ctx, dobj, ILMExpiry, tags, traceFn)
 
@@ -1547,7 +1549,7 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]interface{}, traceFn func(event string)) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]string, traceFn func(event string, metadata map[string]string)) {
 	var apiName string
 	switch event {
 	case ILMExpiry:
@@ -1565,5 +1567,5 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags ma
 		VersionID: oi.VersionID,
 		Tags:      tags,
 	})
-	traceFn(event)
+	traceFn(event, tags)
 }
