@@ -1193,7 +1193,7 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 		} else {
 			hint = "Drives do not support O_DIRECT flags, MinIO erasure coding requires filesystems with O_DIRECT support"
 		}
-		logger.Fatal(config.ErrUnsupportedBackend(err).Hint(hint), "Unable to initialize backend")
+		logger.Fatal(config.ErrUnsupportedBackend(err).Hint("%s", hint), "Unable to initialize backend")
 	case errors.Is(err, errDiskNotDir):
 		var hint string
 		if endpoint.URL != nil {
@@ -1201,7 +1201,7 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 		} else {
 			hint = "Drives are not directories, MinIO erasure coding needs directories"
 		}
-		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
+		logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint("%s", hint), "Unable to initialize backend")
 	case errors.Is(err, errDiskAccessDenied):
 		// Show a descriptive error with a hint about how to fix it.
 		var username string
@@ -1220,7 +1220,7 @@ func logFatalErrs(err error, endpoint Endpoint, exit bool) {
 		if !exit {
 			storageLogOnceIf(GlobalContext, fmt.Errorf("Drive is not writable %s, %s", endpoint, hint), "log-fatal-errs")
 		} else {
-			logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint(hint), "Unable to initialize backend")
+			logger.Fatal(config.ErrUnableToWriteInBackend(err).Hint("%s", hint), "Unable to initialize backend")
 		}
 	case errors.Is(err, errFaultyDisk):
 		if !exit {
