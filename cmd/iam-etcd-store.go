@@ -253,7 +253,7 @@ func (ies *IAMEtcdStore) loadSecretKey(ctx context.Context, user string, userTyp
 	var u UserIdentity
 	err := ies.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
 	if err != nil {
-		if err == errConfigNotFound {
+		if errors.Is(err, errConfigNotFound) {
 			return "", errNoSuchUser
 		}
 		return "", err

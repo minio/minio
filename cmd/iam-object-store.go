@@ -229,7 +229,7 @@ func (iamOS *IAMObjectStore) loadSecretKey(ctx context.Context, user string, use
 	var u UserIdentity
 	err := iamOS.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
 	if err != nil {
-		if err == errConfigNotFound {
+		if errors.Is(err, errConfigNotFound) {
 			return "", errNoSuchUser
 		}
 		return "", err
