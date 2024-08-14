@@ -241,11 +241,11 @@ func parseForm(r *http.Request) error {
 func getTokenSigningKey() (string, error) {
 	secret := globalActiveCred.SecretKey
 	if globalSiteReplicationSys.isEnabled() {
-		c, err := globalSiteReplicatorCred.Get(GlobalContext)
+		secretKey, err := globalSiteReplicatorCred.Get(GlobalContext)
 		if err != nil {
 			return "", err
 		}
-		return c.SecretKey, nil
+		return secretKey, nil
 	}
 	return secret, nil
 }

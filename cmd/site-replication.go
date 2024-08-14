@@ -597,7 +597,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	}
 
 	if !globalSiteReplicatorCred.IsValid() {
-		globalSiteReplicatorCred.Set(svcCred)
+		globalSiteReplicatorCred.Set(svcCred.SecretKey)
 	}
 	result := madmin.ReplicateAddStatus{
 		Success: true,
@@ -659,7 +659,7 @@ func (c *SiteReplicationSys) PeerJoinReq(ctx context.Context, arg madmin.SRPeerJ
 		return errSRBackendIssue(fmt.Errorf("unable to save cluster-replication state to drive on %s: %v", ourName, err))
 	}
 	if !globalSiteReplicatorCred.IsValid() {
-		globalSiteReplicatorCred.Set(sa)
+		globalSiteReplicatorCred.Set(sa.SecretKey)
 	}
 
 	return nil
@@ -6269,34 +6269,36 @@ func ilmExpiryReplicationEnabled(sites map[string]madmin.PeerInfo) bool {
 }
 
 type siteReplicatorCred struct {
-	Creds auth.Credentials
+	secretKey string
 	sync.RWMutex
 }
 
 // Get or attempt to load site replicator credentials from disk.
-func (s *siteReplicatorCred) Get(ctx context.Context) (auth.Credentials, error) {
+func (s *siteReplicatorCred) Get(ctx context.Context) (string, error) {
 	s.RLock()
-	if s.Creds.IsValid() {
-		s.RUnlock()
-		return s.Creds, nil
-	}
+	secretKey := s.secretKey
 	s.RUnlock()
-	m := make(map[string]UserIdentity)
-	if err := globalIAMSys.store.loadUser(ctx, siteReplicatorSvcAcc, svcUser, m); err != nil {
-		return auth.Credentials{}, err
+
+	if secretKey != "" {
+		return secretKey, nil
 	}
-	s.Set(m[siteReplicatorSvcAcc].Credentials)
-	return m[siteReplicatorSvcAcc].Credentials, nil
+
+	secretKey, err := globalIAMSys.store.loadSecretKey(ctx, siteReplicatorSvcAcc, svcUser)
+	if err != nil {
+		return "", err
+	}
+	s.Set(secretKey)
+	return secretKey, nil
 }
 
-func (s *siteReplicatorCred) Set(c auth.Credentials) {
+func (s *siteReplicatorCred) Set(secretKey string) {
 	s.Lock()
 	defer s.Unlock()
-	s.Creds = c
+	s.secretKey = secretKey
 }
 
 func (s *siteReplicatorCred) IsValid() bool {
 	s.RLock()
 	defer s.RUnlock()
-	return s.Creds.IsValid()
+	return s.secretKey != ""
 }
