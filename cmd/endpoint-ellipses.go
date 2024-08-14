@@ -143,7 +143,7 @@ func getSetIndexes(args []string, totalSizes []uint64, setDriveCount uint64, arg
 		// Check if totalSize has minimum range upto setSize
 		if totalSize < setSizes[0] || totalSize < setDriveCount {
 			msg := fmt.Sprintf("Incorrect number of endpoints provided %s", args)
-			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
+			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg("%s", msg)
 		}
 	}
 
@@ -160,7 +160,7 @@ func getSetIndexes(args []string, totalSizes []uint64, setDriveCount uint64, arg
 	setCounts := possibleSetCounts(commonSize)
 	if len(setCounts) == 0 {
 		msg := fmt.Sprintf("Incorrect number of endpoints provided %s, number of drives %d is not divisible by any supported erasure set sizes %d", args, commonSize, setSizes)
-		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
+		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg("%s", msg)
 	}
 
 	var setSize uint64
@@ -175,7 +175,7 @@ func getSetIndexes(args []string, totalSizes []uint64, setDriveCount uint64, arg
 			}
 		}
 		if !found {
-			return nil, config.ErrInvalidErasureSetSize(nil).Msg(msg)
+			return nil, config.ErrInvalidErasureSetSize(nil).Msg("%s", msg)
 		}
 
 		// No automatic symmetry calculation expected, user is on their own
@@ -186,7 +186,7 @@ func getSetIndexes(args []string, totalSizes []uint64, setDriveCount uint64, arg
 
 		if len(setCounts) == 0 {
 			msg := fmt.Sprintf("No symmetric distribution detected with input endpoints provided %s, drives %d cannot be spread symmetrically by any supported erasure set sizes %d", args, commonSize, setSizes)
-			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
+			return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg("%s", msg)
 		}
 
 		// Final set size with all the symmetry accounted for.
@@ -196,7 +196,7 @@ func getSetIndexes(args []string, totalSizes []uint64, setDriveCount uint64, arg
 	// Check whether setSize is with the supported range.
 	if !isValidSetSize(setSize) {
 		msg := fmt.Sprintf("Incorrect number of endpoints provided %s, number of drives %d is not divisible by any supported erasure set sizes %d", args, commonSize, setSizes)
-		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg(msg)
+		return nil, config.ErrInvalidNumberOfErasureEndpoints(nil).Msg("%s", msg)
 	}
 
 	for i := range totalSizes {

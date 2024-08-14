@@ -114,7 +114,7 @@ func ftpTrace(s *ftp.Context, startTime time.Time, source, objPath string, err e
 		TraceType: madmin.TraceFTP,
 		Time:      startTime,
 		NodeName:  globalLocalNodeName,
-		FuncName:  fmt.Sprintf(s.Cmd),
+		FuncName:  s.Cmd,
 		Duration:  time.Since(startTime),
 		Path:      objPath,
 		Error:     errStr,
