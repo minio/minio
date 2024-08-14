@@ -268,7 +268,7 @@ func TestDownloadReleaseData(t *testing.T) {
 	}{
 		{httpServer1.URL, "", nil},
 		{httpServer2.URL, "fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", nil},
-		{httpServer3.URL, "", fmt.Errorf("Error downloading URL " + httpServer3.URL + ". Response: 404 Not Found")},
+		{httpServer3.URL, "", fmt.Errorf("Error downloading URL %s. Response: 404 Not Found", httpServer3.URL)},
 	}
 
 	for _, testCase := range testCases {

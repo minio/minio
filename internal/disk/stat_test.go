@@ -23,14 +23,10 @@ package disk
 import (
 	"os"
 	"reflect"
-	"runtime"
 	"testing"
 )
 
 func TestReadDriveStats(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("skipping this test in windows")
-	}
 	testCases := []struct {
 		stat            string
 		expectedIOStats IOStats
