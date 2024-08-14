@@ -50,6 +50,9 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 	bucketStorageCache.InitOnce(10*time.Second,
 		cachevalue.Opts{ReturnLastGood: true, NoWait: true},
 		func(ctx context.Context) (DataUsageInfo, error) {
+			if objAPI == nil {
+				return DataUsageInfo{}, errServerNotInitialized
+			}
 			ctx, done := context.WithTimeout(ctx, 2*time.Second)
 			defer done()
 
@@ -59,7 +62,9 @@ func (sys *BucketQuotaSys) Init(objAPI ObjectLayer) {
 }
 
 // GetBucketUsageInfo return bucket usage info for a given bucket
-func (sys *BucketQuotaSys) GetBucketUsageInfo(ctx context.Context, bucket string) (BucketUsageInfo, error) {
+func (sys *BucketQuotaSys) GetBucketUsageInfo(ctx context.Context, bucket string) BucketUsageInfo {
+	sys.Init(newObjectLayerFn())
+
 	dui, err := bucketStorageCache.GetWithCtx(ctx)
 	timedout := OperationTimedOut{}
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) && !errors.As(err, &timedout) {
@@ -73,10 +78,10 @@ func (sys *BucketQuotaSys) GetBucketUsageInfo(ctx context.Context, bucket string
 	if len(dui.BucketsUsage) > 0 {
 		bui, ok := dui.BucketsUsage[bucket]
 		if ok {
-			return bui, nil
+			return bui
 		}
 	}
-	return BucketUsageInfo{}, nil
+	return BucketUsageInfo{}
 }
 
 // parseBucketQuota parses BucketQuota from json
@@ -118,11 +123,7 @@ func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, 
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
 
-		bui, err := sys.GetBucketUsageInfo(ctx, bucket)
-		if err != nil {
-			return err
-		}
-
+		bui := sys.GetBucketUsageInfo(ctx, bucket)
 		if bui.Size > 0 && ((bui.Size + uint64(size)) >= quotaSize) {
 			return BucketQuotaExceeded{Bucket: bucket}
 		}
