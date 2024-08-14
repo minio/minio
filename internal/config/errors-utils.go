@@ -60,7 +60,11 @@ func (u Err) Error() string {
 // Msg - Replace the current error's message
 func (u Err) Msg(m string, args ...interface{}) Err {
 	e := u.Clone()
-	e.msg = fmt.Sprintf(m, args...)
+	if len(args) == 0 {
+		e.msg = m
+	} else {
+		e.msg = fmt.Sprintf(m, args...)
+	}
 	return e
 }
 
