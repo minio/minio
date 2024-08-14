@@ -601,13 +601,13 @@ func GetCaller(ctx context.Context) *RemoteClient {
 
 // GetSubroute returns caller information from contexts provided to handlers.
 func GetSubroute(ctx context.Context) string {
-	//lint:ignore SA1029
+	//lint:ignore SA1029 Staticcheck is drunk.
 	val, _ := ctx.Value(ctxSubrouteKey{}).(string)
 	return val
 }
 
 func setCaller(ctx context.Context, cl *RemoteClient) context.Context {
-	//lint:ignore SA1029
+	//lint:ignore SA1029 Staticcheck is drunk.
 	return context.WithValue(ctx, ctxCallerKey{}, cl)
 }
 
@@ -683,7 +683,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) NewRequest() Req {
 // These should be returned by the handler.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
 	if r != h.nilReq {
-		//lint:ignore SA6002
+		//lint:ignore SA6002 IT IS A GENERIC VALUE! (and always a pointer)
 		h.reqPool.Put(r)
 	}
 }
@@ -692,7 +692,7 @@ func (h *StreamTypeHandler[Payload, Req, Resp]) PutRequest(r Req) {
 // These should be returned by the caller.
 func (h *StreamTypeHandler[Payload, Req, Resp]) PutResponse(r Resp) {
 	if r != h.nilResp {
-		//lint:ignore SA6002
+		//lint:ignore SA6002 IT IS A GENERIC VALUE! (and always a pointer)
 		h.respPool.Put(r)
 	}
 }
