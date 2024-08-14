@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -158,22 +157,22 @@ func createPermDeniedFile(t *testing.T) (permDeniedDir string) {
 	permDeniedDir = t.TempDir()
 
 	if err = os.Mkdir(slashpath.Join(permDeniedDir, "mybucket"), 0o775); err != nil {
-		t.Fatalf(fmt.Sprintf("Unable to create temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err))
+		t.Fatalf("Unable to create temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err)
 	}
 
 	if err = os.WriteFile(slashpath.Join(permDeniedDir, "mybucket", "myobject"), []byte(""), 0o400); err != nil {
-		t.Fatalf(fmt.Sprintf("Unable to create file %v. %v", slashpath.Join(permDeniedDir, "mybucket", "myobject"), err))
+		t.Fatalf("Unable to create file %v. %v", slashpath.Join(permDeniedDir, "mybucket", "myobject"), err)
 	}
 
 	if err = os.Chmod(slashpath.Join(permDeniedDir, "mybucket"), 0o400); err != nil {
-		t.Fatalf(fmt.Sprintf("Unable to change permission to temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err))
+		t.Fatalf("Unable to change permission to temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err)
 	}
 	t.Cleanup(func() {
 		os.Chmod(slashpath.Join(permDeniedDir, "mybucket"), 0o775)
 	})
 
 	if err = os.Chmod(permDeniedDir, 0o400); err != nil {
-		t.Fatalf(fmt.Sprintf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err))
+		t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
 	}
 	t.Cleanup(func() {
 		os.Chmod(permDeniedDir, 0o775)
