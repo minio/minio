@@ -2122,7 +2122,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 			disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)
 			if len(disks) == 0 {
 				xioutil.SafeClose(results)
-				err := fmt.Errorf("Walk: no online disks found in pool %d, set %d", setIdx, poolIdx)
+				err := fmt.Errorf("Walk: no online disks found in (set:%d pool:%d) %w", setIdx, poolIdx, errErasureReadQuorum)
 				cancelCause(err)
 				return err
 			}

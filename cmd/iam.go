@@ -46,9 +46,9 @@ import (
 	"github.com/minio/minio/internal/config/policy/opa"
 	polplugin "github.com/minio/minio/internal/config/policy/plugin"
 	xhttp "github.com/minio/minio/internal/http"
-	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/ldap"
 	"github.com/minio/pkg/v3/policy"
 	etcd "go.etcd.io/etcd/client/v3"
@@ -178,9 +178,16 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	}
 
 	if etcdClient == nil {
-		sys.store = &IAMStoreSys{newIAMObjectStore(objAPI, sys.usersSysType), &singleflight.Group{}}
+		var group *singleflight.Group
+		if env.Get("_MINIO_IAM_SINGLE_FLIGHT", config.EnableOff) == config.EnableOn {
+			group = &singleflight.Group{}
+		}
+		sys.store = &IAMStoreSys{
+			IAMStorageAPI: newIAMObjectStore(objAPI, sys.usersSysType),
+			group:         group,
+		}
 	} else {
-		sys.store = &IAMStoreSys{newIAMEtcdStore(etcdClient, sys.usersSysType), &singleflight.Group{}}
+		sys.store = &IAMStoreSys{IAMStorageAPI: newIAMEtcdStore(etcdClient, sys.usersSysType)}
 	}
 }
 
@@ -225,7 +232,7 @@ func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	select {
 	case <-sys.configLoaded:
 	default:
-		xioutil.SafeClose(sys.configLoaded)
+		close(sys.configLoaded)
 	}
 	return nil
 }
@@ -307,8 +314,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		// Migrate IAM configuration, if necessary.
 		if err := saveIAMFormat(retryCtx, sys.store); err != nil {
 			if configRetriableErrors(err) {
-				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
-				time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
+				retryInterval := time.Duration(r.Float64() * float64(time.Second))
+				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v) (retrying in %s)", err, retryInterval)
+				time.Sleep(retryInterval)
 				continue
 			}
 			iamLogIf(ctx, fmt.Errorf("IAM sub-system is partially initialized, unable to write the IAM format: %w", err), logger.WarningKind)
@@ -340,8 +348,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	for {
 		if err := sys.Load(retryCtx, true); err != nil {
 			if configRetriableErrors(err) {
-				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v)", err)
-				time.Sleep(time.Duration(r.Float64() * float64(time.Second)))
+				retryInterval := time.Duration(r.Float64() * float64(time.Second))
+				logger.Info("Waiting for all MinIO IAM sub-system to be initialized.. possible cause (%v) (retrying in %s)", err, retryInterval)
+				time.Sleep(retryInterval)
 				continue
 			}
 			if err != nil {

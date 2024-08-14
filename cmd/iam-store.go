@@ -31,9 +31,10 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/identity/openid"
 	"github.com/minio/minio/internal/jwt"
-	"github.com/minio/pkg/v3/console"
+	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/policy"
 	"github.com/puzpuzpuz/xsync/v3"
 	"golang.org/x/sync/singleflight"
@@ -642,7 +643,7 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 	// An in-memory cache must be replaced only if we know for sure that the
 	// values loaded from disk are not stale. They might be stale if the
 	// cached.updatedAt is more recent than the refresh cycle began.
-	if cache.updatedAt.Before(loadedAt) {
+	if cache.updatedAt.Before(loadedAt) || firstTime {
 		// No one has updated anything since the config was loaded,
 		// so we just replace whatever is on the disk into memory.
 		cache.iamGroupPolicyMap = newCache.iamGroupPolicyMap
@@ -1863,7 +1864,11 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 					delete(cache.iamUsersMap, u.AccessKey)
 				case u.IsTemp():
 					_ = store.deleteUserIdentity(ctx, u.AccessKey, stsUser)
+					delete(cache.iamSTSAccountsMap, u.AccessKey)
 					delete(cache.iamUsersMap, u.AccessKey)
+				}
+				if store.group != nil {
+					store.group.Forget(u.AccessKey)
 				}
 			}
 		}
@@ -1878,8 +1883,13 @@ func (store *IAMStoreSys) DeleteUser(ctx context.Context, accessKey string, user
 		// ignore if user is already deleted.
 		err = nil
 	}
+	if userType == stsUser {
+		delete(cache.iamSTSAccountsMap, accessKey)
+	}
 	delete(cache.iamUsersMap, accessKey)
-	store.group.Forget(accessKey)
+	if store.group != nil {
+		store.group.Forget(accessKey)
+	}
 
 	cache.updatedAt = time.Now()
 
@@ -1954,8 +1964,13 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 			// we are only logging errors, not handling them.
 			err := store.deleteUserIdentity(ctx, user, userType)
 			iamLogIf(GlobalContext, err)
+			if userType == stsUser {
+				delete(cache.iamSTSAccountsMap, user)
+			}
 			delete(cache.iamUsersMap, user)
-			store.group.Forget(user)
+			if store.group != nil {
+				store.group.Forget(user)
+			}
 
 			deleted = true
 		}
@@ -2726,99 +2741,138 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 
 // LoadUser - attempts to load user info from storage and updates cache.
 func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error {
-	// We use singleflight to de-duplicate requests when server
-	// is coming up and loading accessKey and its associated assets
-	val, err, shared := store.group.Do(accessKey, func() (val interface{}, err error) {
-		cache := store.lock()
-		defer func() {
-			cache.updatedAt = time.Now()
-			store.unlock()
-		}()
+	groupLoad := env.Get("_MINIO_IAM_GROUP_REFRESH", config.EnableOff) == config.EnableOn
 
-		_, found := cache.iamUsersMap[accessKey]
+	newCachePopulate := func() (val interface{}, err error) {
+		newCache := newIamCache()
 
-		// Check for regular user access key
-		if !found {
-			err = store.loadUser(ctx, accessKey, regUser, cache.iamUsersMap)
-			if _, found = cache.iamUsersMap[accessKey]; found {
-				// load mapped policies
-				err = store.loadMappedPolicyWithRetry(ctx, accessKey, regUser, false, cache.iamUserPolicyMap, 3)
+		// Check for service account first
+		store.loadUser(ctx, accessKey, svcUser, newCache.iamUsersMap)
+
+		svc, found := newCache.iamUsersMap[accessKey]
+		if found {
+			// Load parent user and mapped policies.
+			if store.getUsersSysType() == MinIOUsersSysType {
+				err = store.loadUser(ctx, svc.Credentials.ParentUser, regUser, newCache.iamUsersMap)
+				// NOTE: we are not worried about loading errors from policies.
+				store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, newCache.iamUserPolicyMap, 3)
+			} else {
+				// In case of LDAP the parent user's policy mapping needs to be loaded into sts map
+				// NOTE: we are not worried about loading errors from policies.
+				store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, stsUser, false, newCache.iamSTSPolicyMap, 3)
 			}
 		}
 
-		// Check for service account
 		if !found {
-			err = store.loadUser(ctx, accessKey, svcUser, cache.iamUsersMap)
-			var svc UserIdentity
-			svc, found = cache.iamUsersMap[accessKey]
-			if found {
-				// Load parent user and mapped policies.
-				if store.getUsersSysType() == MinIOUsersSysType {
-					err = store.loadUser(ctx, svc.Credentials.ParentUser, regUser, cache.iamUsersMap)
-					if err == nil {
-						err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, regUser, false, cache.iamUserPolicyMap, 3)
-					}
-				} else {
-					// In case of LDAP the parent user's policy mapping needs to be
-					// loaded into sts map
-					err = store.loadMappedPolicyWithRetry(ctx, svc.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
-				}
+			err = store.loadUser(ctx, accessKey, regUser, newCache.iamUsersMap)
+			if _, found = newCache.iamUsersMap[accessKey]; found {
+				// NOTE: we are not worried about loading errors from policies.
+				store.loadMappedPolicyWithRetry(ctx, accessKey, regUser, false, newCache.iamUserPolicyMap, 3)
 			}
 		}
 
 		// Check for STS account
-		stsAccountFound := false
 		var stsUserCred UserIdentity
 		if !found {
-			err = store.loadUser(ctx, accessKey, stsUser, cache.iamSTSAccountsMap)
-			if stsUserCred, found = cache.iamSTSAccountsMap[accessKey]; found {
+			err = store.loadUser(ctx, accessKey, stsUser, newCache.iamSTSAccountsMap)
+			if stsUserCred, found = newCache.iamSTSAccountsMap[accessKey]; found {
 				// Load mapped policy
-				err = store.loadMappedPolicyWithRetry(ctx, stsUserCred.Credentials.ParentUser, stsUser, false, cache.iamSTSPolicyMap, 3)
-				stsAccountFound = true
+				// NOTE: we are not worried about loading errors from policies.
+				store.loadMappedPolicyWithRetry(ctx, stsUserCred.Credentials.ParentUser, stsUser, false, newCache.iamSTSPolicyMap, 3)
 			}
 		}
 
 		// Load any associated policy definitions
-		if !stsAccountFound {
-			pols, _ := cache.iamUserPolicyMap.Load(accessKey)
-			for _, policy := range pols.toSlice() {
-				if _, found = cache.iamPolicyDocsMap[policy]; !found {
-					err = store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
-				}
-			}
-		} else {
-			pols, _ := cache.iamSTSPolicyMap.Load(stsUserCred.Credentials.AccessKey)
-			for _, policy := range pols.toSlice() {
-				if _, found = cache.iamPolicyDocsMap[policy]; !found {
-					err = store.loadPolicyDocWithRetry(ctx, policy, cache.iamPolicyDocsMap, 3)
-				}
+		pols, _ := newCache.iamUserPolicyMap.Load(accessKey)
+		for _, policy := range pols.toSlice() {
+			if _, found = newCache.iamPolicyDocsMap[policy]; !found {
+				// NOTE: we are not worried about loading errors from policies.
+				store.loadPolicyDocWithRetry(ctx, policy, newCache.iamPolicyDocsMap, 3)
 			}
 		}
 
-		load := len(cache.iamGroupsMap) == 0
-		if store.getUsersSysType() == LDAPUsersSysType && cache.iamGroupPolicyMap.Size() == 0 {
-			load = true
-		}
-		if load {
-			if _, err = store.updateGroups(ctx, cache); err != nil {
-				return "done", err
+		pols, _ = newCache.iamSTSPolicyMap.Load(stsUserCred.Credentials.AccessKey)
+		for _, policy := range pols.toSlice() {
+			if _, found = newCache.iamPolicyDocsMap[policy]; !found {
+				// NOTE: we are not worried about loading errors from policies.
+				store.loadPolicyDocWithRetry(ctx, policy, newCache.iamPolicyDocsMap, 3)
 			}
 		}
 
-		cache.buildUserGroupMemberships()
+		if groupLoad {
+			load := len(newCache.iamGroupsMap) == 0
+			if store.getUsersSysType() == LDAPUsersSysType && newCache.iamGroupPolicyMap.Size() == 0 {
+				load = true
+			}
+			if load {
+				// NOTE: we are not worried about loading errors from groups.
+				store.updateGroups(ctx, newCache)
+			}
+			newCache.buildUserGroupMemberships()
+		}
 
-		return "done", err
+		return newCache, err
+	}
+
+	var (
+		val interface{}
+		err error
+	)
+	if store.group != nil {
+		val, err, _ = store.group.Do(accessKey, newCachePopulate)
+	} else {
+		val, err = newCachePopulate()
+	}
+
+	// Return error right away if any.
+	if err != nil {
+		if errors.Is(err, errNoSuchUser) || errors.Is(err, errConfigNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	newCache := val.(*iamCache)
+
+	cache := store.lock()
+	defer store.unlock()
+
+	// We need to merge the new cache with the existing cache because the
+	// periodic IAM reload is partial. The periodic load here is to account.
+	newCache.iamGroupPolicyMap.Range(func(k string, v MappedPolicy) bool {
+		cache.iamGroupPolicyMap.Store(k, v)
+		return true
 	})
 
-	if serverDebugLog {
-		console.Debugln("loadUser: loading shared", val, err, shared)
+	for k, v := range newCache.iamGroupsMap {
+		cache.iamGroupsMap[k] = v
 	}
 
-	if IsErr(err, errNoSuchUser, errNoSuchPolicy, errNoSuchGroup) {
-		return nil
+	for k, v := range newCache.iamPolicyDocsMap {
+		cache.iamPolicyDocsMap[k] = v
 	}
 
-	return err
+	for k, v := range newCache.iamUserGroupMemberships {
+		cache.iamUserGroupMemberships[k] = v
+	}
+
+	newCache.iamUserPolicyMap.Range(func(k string, v MappedPolicy) bool {
+		cache.iamUserPolicyMap.Store(k, v)
+		return true
+	})
+
+	for k, v := range newCache.iamUsersMap {
+		cache.iamUsersMap[k] = v
+	}
+
+	newCache.iamSTSPolicyMap.Range(func(k string, v MappedPolicy) bool {
+		cache.iamSTSPolicyMap.Store(k, v)
+		return true
+	})
+
+	cache.updatedAt = time.Now()
+
+	return nil
 }
 
 func extractJWTClaims(u UserIdentity) (jwtClaims *jwt.MapClaims, err error) {
