@@ -289,7 +289,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	if apiErrCode != ErrNone {
 		stsErr := apiToSTSError(apiErrCode)
 		// Borrow the description error from the API error code
-		writeSTSErrorResponse(ctx, w, stsErr, fmt.Errorf(errorCodes[apiErrCode].Description))
+		writeSTSErrorResponse(ctx, w, stsErr, errors.New(errorCodes[apiErrCode].Description))
 		return
 	}
 
