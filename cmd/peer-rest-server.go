@@ -1178,7 +1178,7 @@ func (s *peerRESTServer) GetReplicationMRFHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucketName := vars[peerRESTBucket]
 	ctx := newContext(r, w, "GetReplicationMRF")
-	re, err := globalReplicationPool.getMRF(ctx, bucketName)
+	re, err := globalReplicationPool.Get().getMRF(ctx, bucketName)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

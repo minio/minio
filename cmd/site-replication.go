@@ -5858,7 +5858,7 @@ func (c *SiteReplicationSys) startResync(ctx context.Context, objAPI ObjectLayer
 			})
 			continue
 		}
-		if err := globalReplicationPool.resyncer.start(ctx, objAPI, resyncOpts{
+		if err := globalReplicationPool.Get().resyncer.start(ctx, objAPI, resyncOpts{
 			bucket:   bucket,
 			arn:      tgtArn,
 			resyncID: rs.ResyncID,
@@ -5953,8 +5953,8 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 				continue
 			}
 			// update resync state for the bucket
-			globalReplicationPool.resyncer.Lock()
-			m, ok := globalReplicationPool.resyncer.statusMap[bucket]
+			globalReplicationPool.Get().resyncer.Lock()
+			m, ok := globalReplicationPool.Get().resyncer.statusMap[bucket]
 			if !ok {
 				m = newBucketResyncStatus(bucket)
 			}
@@ -5964,8 +5964,8 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 				m.TargetsMap[t.Arn] = st
 				m.LastUpdate = UTCNow()
 			}
-			globalReplicationPool.resyncer.statusMap[bucket] = m
-			globalReplicationPool.resyncer.Unlock()
+			globalReplicationPool.Get().resyncer.statusMap[bucket] = m
+			globalReplicationPool.Get().resyncer.Unlock()
 		}
 	}
 
@@ -5975,7 +5975,7 @@ func (c *SiteReplicationSys) cancelResync(ctx context.Context, objAPI ObjectLaye
 		return res, err
 	}
 	select {
-	case globalReplicationPool.resyncer.resyncCancelCh <- struct{}{}:
+	case globalReplicationPool.Get().resyncer.resyncCancelCh <- struct{}{}:
 	case <-ctx.Done():
 	}
 

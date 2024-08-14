@@ -422,7 +422,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		return
 	}
 
-	if err := globalReplicationPool.resyncer.start(ctx, objectAPI, resyncOpts{
+	if err := globalReplicationPool.Get().resyncer.start(ctx, objectAPI, resyncOpts{
 		bucket:       bucket,
 		arn:          arn,
 		resyncID:     resetID,

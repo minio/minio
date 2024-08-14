@@ -50,6 +50,7 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/minio/internal/once"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
 	"golang.org/x/exp/maps"
@@ -478,7 +479,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	lk := objectAPI.NewNSLock(bucket, "/[replicate]/"+dobj.ObjectName)
 	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
-		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
+		globalReplicationPool.Get().queueMRFSave(dobj.ToMRFEntry())
 		sendEvent(eventArgs{
 			BucketName: bucket,
 			Object: ObjectInfo{
@@ -556,7 +557,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	eventName := event.ObjectReplicationComplete
 	if replicationStatus == replication.Failed {
 		eventName = event.ObjectReplicationFailed
-		globalReplicationPool.queueMRFSave(dobj.ToMRFEntry())
+		globalReplicationPool.Get().queueMRFSave(dobj.ToMRFEntry())
 	}
 	drs := getReplicationState(rinfos, dobj.ReplicationState, dobj.VersionID)
 	if replicationStatus != prevStatus {
@@ -1054,7 +1055,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 			UserAgent:  "Internal: [Replication]",
 			Host:       globalLocalNodeName,
 		})
-		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+		globalReplicationPool.Get().queueMRFSave(ri.ToMRFEntry())
 		return
 	}
 	ctx = lkctx.Context()
@@ -1159,7 +1160,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		ri.EventType = ReplicateMRF
 		ri.ReplicationStatusInternal = rinfos.ReplicationStatusInternal()
 		ri.RetryCount++
-		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+		globalReplicationPool.Get().queueMRFSave(ri.ToMRFEntry())
 	}
 }
 
@@ -1787,7 +1788,7 @@ const (
 )
 
 var (
-	globalReplicationPool  *ReplicationPool
+	globalReplicationPool  = once.NewSingleton[ReplicationPool]()
 	globalReplicationStats atomic.Pointer[ReplicationStats]
 )
 
@@ -2158,7 +2159,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 		case <-p.ctx.Done():
 		case p.lrgworkers[h%uint64(len(p.lrgworkers))] <- ri:
 		default:
-			globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+			p.queueMRFSave(ri.ToMRFEntry())
 			p.mu.RLock()
 			maxLWorkers := p.maxLWorkers
 			existing := len(p.lrgworkers)
@@ -2189,7 +2190,7 @@ func (p *ReplicationPool) queueReplicaTask(ri ReplicateObjectInfo) {
 	case healCh <- ri:
 	case ch <- ri:
 	default:
-		globalReplicationPool.queueMRFSave(ri.ToMRFEntry())
+		globalReplicationPool.Get().queueMRFSave(ri.ToMRFEntry())
 		p.mu.RLock()
 		prio := p.priority
 		maxWorkers := p.maxWorkers
@@ -2225,7 +2226,7 @@ func queueReplicateDeletesWrapper(doi DeletedObjectReplicationInfo, existingObje
 			doi.ResetID = v.ResetID
 			doi.TargetArn = k
 
-			globalReplicationPool.queueReplicaDeleteTask(doi)
+			globalReplicationPool.Get().queueReplicaDeleteTask(doi)
 		}
 	}
 }
@@ -2246,7 +2247,7 @@ func (p *ReplicationPool) queueReplicaDeleteTask(doi DeletedObjectReplicationInf
 	case <-p.ctx.Done():
 	case ch <- doi:
 	default:
-		globalReplicationPool.queueMRFSave(doi.ToMRFEntry())
+		p.queueMRFSave(doi.ToMRFEntry())
 		p.mu.RLock()
 		prio := p.priority
 		maxWorkers := p.maxWorkers
@@ -2277,7 +2278,7 @@ type replicationPoolOpts struct {
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
 	stats := NewReplicationStats(ctx, objectAPI)
-	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationOpts(), stats)
+	globalReplicationPool.Set(NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationOpts(), stats))
 	globalReplicationStats.Store(stats)
 	go stats.trackEWMA()
 }
@@ -2485,7 +2486,7 @@ func scheduleReplication(ctx context.Context, oi ObjectInfo, o ObjectLayer, dsc 
 	if dsc.Synchronous() {
 		replicateObject(ctx, ri, o)
 	} else {
-		globalReplicationPool.queueReplicaTask(ri)
+		globalReplicationPool.Get().queueReplicaTask(ri)
 	}
 }
 
@@ -2613,7 +2614,7 @@ func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts
 }
 
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectReplicationInfo, o ObjectLayer) {
-	globalReplicationPool.queueReplicaDeleteTask(dv)
+	globalReplicationPool.Get().queueReplicaDeleteTask(dv)
 	for arn := range dv.ReplicationState.Targets {
 		globalReplicationStats.Load().Update(dv.Bucket, replicatedTargetInfo{Arn: arn, Size: 0, Duration: 0, OpType: replication.DeleteReplicationType}, replication.Pending, replication.StatusType(""))
 	}
@@ -3045,9 +3046,9 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 	if len(tgtArns) == 0 {
 		return fmt.Errorf("arn %s specified for resync not found in replication config", opts.arn)
 	}
-	globalReplicationPool.resyncer.RLock()
-	data, ok := globalReplicationPool.resyncer.statusMap[opts.bucket]
-	globalReplicationPool.resyncer.RUnlock()
+	globalReplicationPool.Get().resyncer.RLock()
+	data, ok := globalReplicationPool.Get().resyncer.statusMap[opts.bucket]
+	globalReplicationPool.Get().resyncer.RUnlock()
 	if !ok {
 		data, err = loadBucketResyncMetadata(ctx, opts.bucket, objAPI)
 		if err != nil {
@@ -3073,9 +3074,9 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 		return err
 	}
 
-	globalReplicationPool.resyncer.Lock()
-	defer globalReplicationPool.resyncer.Unlock()
-	brs, ok := globalReplicationPool.resyncer.statusMap[opts.bucket]
+	globalReplicationPool.Get().resyncer.Lock()
+	defer globalReplicationPool.Get().resyncer.Unlock()
+	brs, ok := globalReplicationPool.Get().resyncer.statusMap[opts.bucket]
 	if !ok {
 		brs = BucketReplicationResyncStatus{
 			Version:    resyncMetaVersion,
@@ -3083,8 +3084,8 @@ func (s *replicationResyncer) start(ctx context.Context, objAPI ObjectLayer, opt
 		}
 	}
 	brs.TargetsMap[opts.arn] = status
-	globalReplicationPool.resyncer.statusMap[opts.bucket] = brs
-	go globalReplicationPool.resyncer.resyncBucket(GlobalContext, objAPI, false, opts)
+	globalReplicationPool.Get().resyncer.statusMap[opts.bucket] = brs
+	go globalReplicationPool.Get().resyncer.resyncBucket(GlobalContext, objAPI, false, opts)
 	return nil
 }
 
@@ -3416,7 +3417,7 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 		if roi.ReplicationStatus == replication.Pending ||
 			roi.ReplicationStatus == replication.Failed ||
 			roi.VersionPurgeStatus == Failed || roi.VersionPurgeStatus == Pending {
-			globalReplicationPool.queueReplicaDeleteTask(dv)
+			globalReplicationPool.Get().queueReplicaDeleteTask(dv)
 			return
 		}
 		// if replication status is Complete on DeleteMarker and existing object resync required
@@ -3432,12 +3433,12 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 	switch roi.ReplicationStatus {
 	case replication.Pending, replication.Failed:
 		roi.EventType = ReplicateHeal
-		globalReplicationPool.queueReplicaTask(roi)
+		globalReplicationPool.Get().queueReplicaTask(roi)
 		return
 	}
 	if roi.ExistingObjResync.mustResync() {
 		roi.EventType = ReplicateExisting
-		globalReplicationPool.queueReplicaTask(roi)
+		globalReplicationPool.Get().queueReplicaTask(roi)
 	}
 	return
 }

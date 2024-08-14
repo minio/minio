@@ -1590,7 +1590,7 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 		if node != "all" && node != globalLocalNodeName {
 			return nil
 		}
-		mCh, err := globalReplicationPool.getMRF(ctx, bucket)
+		mCh, err := globalReplicationPool.Get().getMRF(ctx, bucket)
 		if err != nil {
 			return err
 		}

@@ -172,7 +172,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	t.listQuorum = listQuorum
 	if globalReplicationPool != nil &&
 		(cfg.ReplicationPriority != t.replicationPriority || cfg.ReplicationMaxWorkers != t.replicationMaxWorkers || cfg.ReplicationMaxLWorkers != t.replicationMaxLWorkers) {
-		globalReplicationPool.ResizeWorkerPriority(cfg.ReplicationPriority, cfg.ReplicationMaxWorkers, cfg.ReplicationMaxLWorkers)
+		globalReplicationPool.Get().ResizeWorkerPriority(cfg.ReplicationPriority, cfg.ReplicationMaxWorkers, cfg.ReplicationMaxLWorkers)
 	}
 	t.replicationPriority = cfg.ReplicationPriority
 	t.replicationMaxWorkers = cfg.ReplicationMaxWorkers
