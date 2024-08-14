@@ -520,7 +520,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
-	globalReplicationStats.Delete(bucketName)
+	globalReplicationStats.Load().Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	globalBucketTargetSys.Delete(bucketName)
 	globalEventNotifier.RemoveNotification(bucketName)
@@ -574,7 +574,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 		}
 	}
 
-	replicationStatsList := globalReplicationStats.GetAll()
+	replicationStatsList := globalReplicationStats.Load().GetAll()
 	bucketStatsMap := BucketStatsMap{
 		Stats:     make(map[string]BucketStats, len(replicationStatsList)),
 		Timestamp: UTCNow(),
@@ -582,7 +582,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	for k, replicationStats := range replicationStatsList {
 		bucketStatsMap.Stats[k] = BucketStats{
 			ReplicationStats: replicationStats,
-			ProxyStats:       globalReplicationStats.getProxyStats(k),
+			ProxyStats:       globalReplicationStats.Load().getProxyStats(k),
 		}
 	}
 
@@ -615,11 +615,13 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
-	bucketStats = append(bucketStats, BucketStats{
-		ReplicationStats: globalReplicationStats.Get(bucketName),
-		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
-		ProxyStats:       globalReplicationStats.getProxyStats(bucketName),
-	})
+	if st := globalReplicationStats.Load(); st != nil {
+		bucketStats = append(bucketStats, BucketStats{
+			ReplicationStats: st.Get(bucketName),
+			QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{st.getNodeQueueStats(bucketName)}},
+			ProxyStats:       st.getProxyStats(bucketName),
+		})
+	}
 	return bucketStats
 }
 
@@ -648,7 +650,7 @@ func (sys *NotificationSys) GetClusterSiteMetrics(ctx context.Context) []SRMetri
 			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
-	siteStats = append(siteStats, globalReplicationStats.getSRMetricsForNode())
+	siteStats = append(siteStats, globalReplicationStats.Load().getSRMetricsForNode())
 	return siteStats
 }
 

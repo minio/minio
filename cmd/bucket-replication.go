@@ -548,7 +548,7 @@ func replicateDelete(ctx context.Context, dobj DeletedObjectReplicationInfo, obj
 	// to decrement pending count later.
 	for _, rinfo := range rinfos.Targets {
 		if rinfo.ReplicationStatus != rinfo.PrevReplicationStatus {
-			globalReplicationStats.Update(dobj.Bucket, rinfo, replicationStatus,
+			globalReplicationStats.Load().Update(dobj.Bucket, rinfo, replicationStatus,
 				prevStatus)
 		}
 	}
@@ -1139,7 +1139,7 @@ func replicateObject(ctx context.Context, ri ReplicateObjectInfo, objectAPI Obje
 		for _, rinfo := range rinfos.Targets {
 			if rinfo.ReplicationStatus != rinfo.PrevReplicationStatus {
 				rinfo.OpType = opType // update optype to reflect correct operation.
-				globalReplicationStats.Update(bucket, rinfo, rinfo.ReplicationStatus, rinfo.PrevReplicationStatus)
+				globalReplicationStats.Load().Update(bucket, rinfo, rinfo.ReplicationStatus, rinfo.PrevReplicationStatus)
 			}
 		}
 	}
@@ -1788,7 +1788,7 @@ const (
 
 var (
 	globalReplicationPool  *ReplicationPool
-	globalReplicationStats *ReplicationStats
+	globalReplicationStats atomic.Pointer[ReplicationStats]
 )
 
 // ReplicationPool describes replication pool
@@ -1803,6 +1803,7 @@ type ReplicationPool struct {
 	priority    string
 	maxWorkers  int
 	maxLWorkers int
+	stats       *ReplicationStats
 
 	mu       sync.RWMutex
 	mrfMU    sync.Mutex
@@ -1849,7 +1850,7 @@ const (
 )
 
 // NewReplicationPool creates a pool of replication workers of specified size
-func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPoolOpts) *ReplicationPool {
+func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPoolOpts, stats *ReplicationStats) *ReplicationPool {
 	var workers, failedWorkers int
 	priority := "auto"
 	maxWorkers := WorkerMaxLimit
@@ -1891,6 +1892,7 @@ func NewReplicationPool(ctx context.Context, o ObjectLayer, opts replicationPool
 		mrfStopCh:       make(chan struct{}, 1),
 		ctx:             ctx,
 		objLayer:        o,
+		stats:           stats,
 		priority:        priority,
 		maxWorkers:      maxWorkers,
 		maxLWorkers:     maxLWorkers,
@@ -1918,11 +1920,11 @@ func (p *ReplicationPool) AddMRFWorker() {
 			}
 			switch v := oi.(type) {
 			case ReplicateObjectInfo:
-				globalReplicationStats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				p.stats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 				atomic.AddInt32(&p.activeMRFWorkers, 1)
 				replicateObject(p.ctx, v, p.objLayer)
 				atomic.AddInt32(&p.activeMRFWorkers, -1)
-				globalReplicationStats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				p.stats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 
 			default:
 				bugLogIf(p.ctx, fmt.Errorf("unknown mrf replication type: %T", oi), "unknown-mrf-replicate-type")
@@ -1950,9 +1952,9 @@ func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opT
 				if opTracker != nil {
 					atomic.AddInt32(opTracker, 1)
 				}
-				globalReplicationStats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				p.stats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 				replicateObject(p.ctx, v, p.objLayer)
-				globalReplicationStats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				p.stats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 				if opTracker != nil {
 					atomic.AddInt32(opTracker, -1)
 				}
@@ -1960,10 +1962,10 @@ func (p *ReplicationPool) AddWorker(input <-chan ReplicationWorkerOperation, opT
 				if opTracker != nil {
 					atomic.AddInt32(opTracker, 1)
 				}
-				globalReplicationStats.incQ(v.Bucket, 0, true, v.OpType)
+				p.stats.incQ(v.Bucket, 0, true, v.OpType)
 
 				replicateDelete(p.ctx, v, p.objLayer)
-				globalReplicationStats.decQ(v.Bucket, 0, true, v.OpType)
+				p.stats.decQ(v.Bucket, 0, true, v.OpType)
 
 				if opTracker != nil {
 					atomic.AddInt32(opTracker, -1)
@@ -1990,9 +1992,9 @@ func (p *ReplicationPool) AddLargeWorker(input <-chan ReplicationWorkerOperation
 				if opTracker != nil {
 					atomic.AddInt32(opTracker, 1)
 				}
-				globalReplicationStats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				p.stats.incQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 				replicateObject(p.ctx, v, p.objLayer)
-				globalReplicationStats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
+				p.stats.decQ(v.Bucket, v.Size, v.DeleteMarker, v.OpType)
 				if opTracker != nil {
 					atomic.AddInt32(opTracker, -1)
 				}
@@ -2274,9 +2276,10 @@ type replicationPoolOpts struct {
 }
 
 func initBackgroundReplication(ctx context.Context, objectAPI ObjectLayer) {
-	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationOpts())
-	globalReplicationStats = NewReplicationStats(ctx, objectAPI)
-	go globalReplicationStats.trackEWMA()
+	stats := NewReplicationStats(ctx, objectAPI)
+	globalReplicationPool = NewReplicationPool(ctx, objectAPI, globalAPIConfig.getReplicationOpts(), stats)
+	globalReplicationStats.Store(stats)
+	go stats.trackEWMA()
 }
 
 type proxyResult struct {
@@ -2612,7 +2615,7 @@ func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts
 func scheduleReplicationDelete(ctx context.Context, dv DeletedObjectReplicationInfo, o ObjectLayer) {
 	globalReplicationPool.queueReplicaDeleteTask(dv)
 	for arn := range dv.ReplicationState.Targets {
-		globalReplicationStats.Update(dv.Bucket, replicatedTargetInfo{Arn: arn, Size: 0, Duration: 0, OpType: replication.DeleteReplicationType}, replication.Pending, replication.StatusType(""))
+		globalReplicationStats.Load().Update(dv.Bucket, replicatedTargetInfo{Arn: arn, Size: 0, Duration: 0, OpType: replication.DeleteReplicationType}, replication.Pending, replication.StatusType(""))
 	}
 }
 
@@ -3499,8 +3502,8 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 		return
 	}
 	if entry.RetryCount > mrfRetryLimit { // let scanner catch up if retry count exceeded
-		atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedCount, 1)
-		atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
+		atomic.AddUint64(&p.stats.mrfStats.TotalDroppedCount, 1)
+		atomic.AddUint64(&p.stats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
 		return
 	}
 
@@ -3513,8 +3516,8 @@ func (p *ReplicationPool) queueMRFSave(entry MRFReplicateEntry) {
 		select {
 		case p.mrfSaveCh <- entry:
 		default:
-			atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedCount, 1)
-			atomic.AddUint64(&globalReplicationStats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
+			atomic.AddUint64(&p.stats.mrfStats.TotalDroppedCount, 1)
+			atomic.AddUint64(&p.stats.mrfStats.TotalDroppedBytes, uint64(entry.sz))
 		}
 	}
 }
@@ -3563,7 +3566,7 @@ func (p *ReplicationPool) saveMRFEntries(ctx context.Context, entries map[string
 	if !p.initialized() {
 		return
 	}
-	atomic.StoreUint64(&globalReplicationStats.mrfStats.LastFailedCount, uint64(len(entries)))
+	atomic.StoreUint64(&p.stats.mrfStats.LastFailedCount, uint64(len(entries)))
 	if len(entries) == 0 {
 		return
 	}

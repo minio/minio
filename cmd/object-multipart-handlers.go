@@ -1029,7 +1029,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 	if _, ok := r.Header[xhttp.MinIOSourceReplicationRequest]; ok {
 		actualSize, _ := objInfo.GetActualSize()
-		defer globalReplicationStats.UpdateReplicaStat(bucket, actualSize)
+		defer globalReplicationStats.Load().UpdateReplicaStat(bucket, actualSize)
 	}
 
 	// Get object location.

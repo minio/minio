@@ -230,7 +230,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	stats := globalReplicationStats.getLatestReplicationStats(bucket)
+	stats := globalReplicationStats.Load().getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
 	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
@@ -286,7 +286,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsV2Handler(w http.Respons
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	stats := globalReplicationStats.getLatestReplicationStats(bucket)
+	stats := globalReplicationStats.Load().getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
 	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
