@@ -562,7 +562,6 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 		return nil
 	}
 
-retry:
 	select {
 	case h.logCh <- entry:
 		h.totalMessages.Add(1)
@@ -573,12 +572,6 @@ retry:
 		}
 		return nil
 	default:
-		nWorkers := h.workers.Load()
-		if nWorkers < h.maxWorkers {
-			// Just sleep to avoid any possible hot-loops.
-			time.Sleep(50 * time.Millisecond)
-			goto retry
-		}
 		h.totalMessages.Add(1)
 		h.failedMessages.Add(1)
 		return errors.New("log buffer full")
