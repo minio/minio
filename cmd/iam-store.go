@@ -535,6 +535,7 @@ type IAMStorageAPI interface {
 	loadPolicyDocWithRetry(ctx context.Context, policy string, m map[string]PolicyDoc, retries int) error
 	loadPolicyDocs(ctx context.Context, m map[string]PolicyDoc) error
 	loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error
+	loadSecretKey(ctx context.Context, user string, userType IAMUserType) (string, error)
 	loadUsers(ctx context.Context, userType IAMUserType, m map[string]UserIdentity) error
 	loadGroup(ctx context.Context, group string, m map[string]GroupInfo) error
 	loadGroups(ctx context.Context, m map[string]GroupInfo) error
@@ -2820,20 +2821,29 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 	return err
 }
 
-func extractJWTClaims(u UserIdentity) (*jwt.MapClaims, error) {
-	jwtClaims, err := auth.ExtractClaims(u.Credentials.SessionToken, u.Credentials.SecretKey)
-	if err != nil {
-		secretKey, err := getTokenSigningKey()
-		if err != nil {
-			return nil, err
+func extractJWTClaims(u UserIdentity) (jwtClaims *jwt.MapClaims, err error) {
+	keys := make([]string, 0, 3)
+	// Append credentials secret key itself
+	keys = append(keys, u.Credentials.SecretKey)
+	// Use site-replication credentials if found
+	if globalSiteReplicationSys.isEnabled() {
+		siteReplSecretKey, e := globalSiteReplicatorCred.Get(GlobalContext)
+		if e != nil {
+			return nil, e
 		}
-		// Session tokens for STS creds will be generated with root secret or site-replicator-0 secret
-		jwtClaims, err = auth.ExtractClaims(u.Credentials.SessionToken, secretKey)
-		if err != nil {
-			return nil, err
+		keys = append(keys, siteReplSecretKey)
+	}
+	// Use root credentials for credentials created with older deployments
+	keys = append(keys, globalActiveCred.SecretKey)
+
+	// Iterate over all keys and return with the first successful claim extraction
+	for _, key := range keys {
+		jwtClaims, err = auth.ExtractClaims(u.Credentials.SessionToken, key)
+		if err == nil {
+			break
 		}
 	}
-	return jwtClaims, nil
+	return
 }
 
 func validateSvcExpirationInUTC(expirationInUTC time.Time) error {
