@@ -132,39 +132,41 @@ KEY:
 api  manage global HTTP API call specific features, such as throttling, authentication types, etc.
 
 ARGS:
-requests_max                    (number)    set the maximum number of concurrent requests (default: '0')
-requests_deadline               (duration)  set the deadline for API requests waiting to be processed (default: '10s')
+requests_max                    (number)    set the maximum number of concurrent requests (default: 'auto')
 cluster_deadline                (duration)  set the deadline for cluster readiness check (default: '10s')
 cors_allow_origin               (csv)       set comma separated list of origins allowed for CORS requests (default: '*')
 remote_transport_deadline       (duration)  set the deadline for API requests on remote transports while proxying between federated instances e.g. "2h" (default: '2h')
-list_quorum                     (string)    set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict" (default: 'strict')
+list_quorum                     (string)    set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict", "auto" (default: 'strict')
 replication_priority            (string)    set replication priority (default: 'auto')
+replication_max_workers         (number)    set the maximum number of replication workers (default: '500')
 transition_workers              (number)    set the number of transition workers (default: '100')
 stale_uploads_expiry            (duration)  set to expire stale multipart uploads older than this values (default: '24h')
 stale_uploads_cleanup_interval  (duration)  set to change intervals when stale multipart uploads are expired (default: '6h')
 delete_cleanup_interval         (duration)  set to change intervals when deleted objects are permanently deleted from ".trash" folder (default: '5m')
-odirect                         (boolean)   set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
+odirect                         (boolean)   set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
 root_access                     (boolean)   turn 'off' root credential access for all API calls including s3, admin operations (default: 'on')
 sync_events                     (boolean)   set to enable synchronous bucket notifications (default: 'off')
+object_max_versions             (number)    set max allowed number of versions per object (default: '9223372036854775807')
 ```
 
 or environment variables
 
 ```
-MINIO_API_REQUESTS_MAX                    (number)    set the maximum number of concurrent requests (default: '0')
-MINIO_API_REQUESTS_DEADLINE               (duration)  set the deadline for API requests waiting to be processed (default: '10s')
+MINIO_API_REQUESTS_MAX                    (number)    set the maximum number of concurrent requests (default: 'auto')
 MINIO_API_CLUSTER_DEADLINE                (duration)  set the deadline for cluster readiness check (default: '10s')
 MINIO_API_CORS_ALLOW_ORIGIN               (csv)       set comma separated list of origins allowed for CORS requests (default: '*')
 MINIO_API_REMOTE_TRANSPORT_DEADLINE       (duration)  set the deadline for API requests on remote transports while proxying between federated instances e.g. "2h" (default: '2h')
-MINIO_API_LIST_QUORUM                     (string)    set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict" (default: 'strict')
+MINIO_API_LIST_QUORUM                     (string)    set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict", "auto" (default: 'strict')
 MINIO_API_REPLICATION_PRIORITY            (string)    set replication priority (default: 'auto')
+MINIO_API_REPLICATION_MAX_WORKERS         (number)    set the maximum number of replication workers (default: '500')
 MINIO_API_TRANSITION_WORKERS              (number)    set the number of transition workers (default: '100')
 MINIO_API_STALE_UPLOADS_EXPIRY            (duration)  set to expire stale multipart uploads older than this values (default: '24h')
 MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL  (duration)  set to change intervals when stale multipart uploads are expired (default: '6h')
 MINIO_API_DELETE_CLEANUP_INTERVAL         (duration)  set to change intervals when deleted objects are permanently deleted from ".trash" folder (default: '5m')
-MINIO_API_ODIRECT                         (boolean)   set to enable or disable O_DIRECT for read and writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
+MINIO_API_ODIRECT                         (boolean)   set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
 MINIO_API_ROOT_ACCESS                     (boolean)   turn 'off' root credential access for all API calls including s3, admin operations (default: 'on')
 MINIO_API_SYNC_EVENTS                     (boolean)   set to enable synchronous bucket notifications (default: 'off')
+MINIO_API_OBJECT_MAX_VERSIONS             (number)    set max allowed number of versions per object (default: '9223372036854775807')
 ```
 
 #### Notifications
