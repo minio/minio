@@ -18,6 +18,26 @@ func (s *Singleton[T]) Get() *T {
 	return s.v
 }
 
+// GetNonBlocking will return the singleton value or nil if not set yet.
+func (s *Singleton[T]) GetNonBlocking() *T {
+	select {
+	case <-s.set:
+		return s.v
+	default:
+		return nil
+	}
+}
+
+// IsSet will return whether the singleton has been set.
+func (s *Singleton[T]) IsSet() bool {
+	select {
+	case <-s.set:
+		return true
+	default:
+		return false
+	}
+}
+
 // Set the value and unblock all Get requests.
 // This may only be called once, a second call will panic.
 func (s *Singleton[T]) Set(v *T) {
