@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -254,6 +255,13 @@ func Connect(ctx context.Context, opts *ConnectionOptions) (*KMS, error) {
 		var s string
 		if lookup(EnvKMSSecretKeyFile) {
 			b, err := os.ReadFile(env.Get(EnvKMSSecretKeyFile, ""))
+			if err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+			if os.IsNotExist(err) {
+				// Relative path where "/run/secrets" is the default docker path for secrets
+				b, err = os.ReadFile(filepath.Join("/run/secrets", env.Get(EnvKMSSecretKeyFile, "")))
+			}
 			if err != nil {
 				return nil, err
 			}
