@@ -17,6 +17,12 @@ RUN curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archiv
     curl -s -q https://dl.min.io/server/minio/release/linux-${TARGETARCH}/archive/minio.${RELEASE}.fips.sha256sum -o /go/bin/minio.sha256sum && \
     chmod +x /go/bin/minio
 
+# Download mc binary and signature files
+RUN curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc.fips -o /go/bin/mc && \
+    curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc.fips.minisig -o /go/bin/mc.minisig && \
+    curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc.fips.sha256sum -o /go/bin/mc.sha256sum && \
+    chmod +x /go/bin/mc
+
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
        curl -L -s -q https://github.com/moparisthebest/static-curl/releases/latest/download/curl-${TARGETARCH} -o /go/bin/curl; \
        chmod +x /go/bin/curl; \
@@ -48,7 +54,10 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /go/bin/minio /usr/bin/minio
 COPY --from=build /go/bin/minio.minisig /usr/bin/minio.minisig
-COPY --from=build /go/bin/minio.shasum256 /usr/bin/minio.shasum256
+COPY --from=build /go/bin/minio.sha256sum /usr/bin/minio.sha256sum
+COPY --from=build /go/bin/mc /usr/bin/mc
+COPY --from=build /go/bin/mc.minisig /usr/bin/mc.minisig
+COPY --from=build /go/bin/mc.sha256sum /usr/bin/mc.sha256sum
 COPY --from=build /go/bin/cur* /usr/bin/
 
 COPY CREDITS /licenses/CREDITS
