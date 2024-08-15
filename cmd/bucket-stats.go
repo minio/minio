@@ -310,7 +310,7 @@ type ReplQNodeStats struct {
 func (r *ReplicationStats) getNodeQueueStats(bucket string) (qs ReplQNodeStats) {
 	qs.NodeName = globalLocalNodeName
 	qs.Uptime = UTCNow().Unix() - globalBootTime.Unix()
-	qs.ActiveWorkers = globalReplicationStats.ActiveWorkers()
+	qs.ActiveWorkers = globalReplicationStats.Load().ActiveWorkers()
 	qs.XferStats = make(map[RMetricName]XferStats)
 	qs.QStats = r.qCache.getBucketStats(bucket)
 	qs.TgtXferStats = make(map[string]map[RMetricName]XferStats)
@@ -402,7 +402,7 @@ func (r *ReplicationStats) getNodeQueueStats(bucket string) (qs ReplQNodeStats) 
 func (r *ReplicationStats) getNodeQueueStatsSummary() (qs ReplQNodeStats) {
 	qs.NodeName = globalLocalNodeName
 	qs.Uptime = UTCNow().Unix() - globalBootTime.Unix()
-	qs.ActiveWorkers = globalReplicationStats.ActiveWorkers()
+	qs.ActiveWorkers = globalReplicationStats.Load().ActiveWorkers()
 	qs.XferStats = make(map[RMetricName]XferStats)
 	qs.QStats = r.qCache.getSiteStats()
 	qs.MRFStats = ReplicationMRFStats{

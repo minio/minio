@@ -119,7 +119,7 @@ func loadBucketReplicationMetrics(ctx context.Context, m MetricValues, c *metric
 		return nil
 	}
 
-	bucketReplStats := globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+	bucketReplStats := globalReplicationStats.Load().getAllLatest(dataUsageInfo.BucketsUsage)
 	for _, bucket := range buckets {
 		labels := []string{bucketL, bucket}
 		if s, ok := bucketReplStats[bucket]; ok {

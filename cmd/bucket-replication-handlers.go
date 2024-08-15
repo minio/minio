@@ -230,7 +230,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsHandler(w http.ResponseW
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	stats := globalReplicationStats.getLatestReplicationStats(bucket)
+	stats := globalReplicationStats.Load().getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
 	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
@@ -286,7 +286,7 @@ func (api objectAPIHandlers) GetBucketReplicationMetricsV2Handler(w http.Respons
 	w.Header().Set(xhttp.ContentType, string(mimeJSON))
 
 	enc := json.NewEncoder(w)
-	stats := globalReplicationStats.getLatestReplicationStats(bucket)
+	stats := globalReplicationStats.Load().getLatestReplicationStats(bucket)
 	bwRpt := globalNotificationSys.GetBandwidthReports(ctx, bucket)
 	bwMap := bwRpt.BucketStats
 	for arn, st := range stats.ReplicationStats.Stats {
@@ -422,7 +422,7 @@ func (api objectAPIHandlers) ResetBucketReplicationStartHandler(w http.ResponseW
 		return
 	}
 
-	if err := globalReplicationPool.resyncer.start(ctx, objectAPI, resyncOpts{
+	if err := globalReplicationPool.Get().resyncer.start(ctx, objectAPI, resyncOpts{
 		bucket:       bucket,
 		arn:          arn,
 		resyncID:     resetID,

@@ -300,7 +300,7 @@ func bucketUsageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	}
 
 	for bucket, usageInfo := range dataUsageInfo.BucketsUsage {
-		stat := globalReplicationStats.getLatestReplicationStats(bucket)
+		stat := globalReplicationStats.Load().getLatestReplicationStats(bucket)
 		// Total space used by bucket
 		ch <- prometheus.MustNewConstMetric(
 			prometheus.NewDesc(
