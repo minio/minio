@@ -351,7 +351,9 @@ func initTestServerWithBackend(ctx context.Context, t TestErrHandler, testServer
 	// Test Server needs to start before formatting of disks.
 	// Get credential.
 	credentials := globalActiveCred
-
+	if !globalReplicationPool.IsSet() {
+		globalReplicationPool.Set(nil)
+	}
 	testServer.Obj = objLayer
 	testServer.rawDiskPaths = disks
 	testServer.Disks = mustGetPoolEndpoints(0, disks...)
