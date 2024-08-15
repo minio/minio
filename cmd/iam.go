@@ -211,7 +211,7 @@ func (sys *IAMSys) Load(ctx context.Context, firstTime bool) error {
 	if !globalSiteReplicatorCred.IsValid() {
 		sa, _, err := sys.getServiceAccount(ctx, siteReplicatorSvcAcc)
 		if err == nil {
-			globalSiteReplicatorCred.Set(sa.Credentials)
+			globalSiteReplicatorCred.Set(sa.Credentials.SecretKey)
 		}
 	}
 

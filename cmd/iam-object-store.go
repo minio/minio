@@ -225,6 +225,18 @@ func (iamOS *IAMObjectStore) loadPolicyDocs(ctx context.Context, m map[string]Po
 	return nil
 }
 
+func (iamOS *IAMObjectStore) loadSecretKey(ctx context.Context, user string, userType IAMUserType) (string, error) {
+	var u UserIdentity
+	err := iamOS.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return "", errNoSuchUser
+		}
+		return "", err
+	}
+	return u.Credentials.SecretKey, nil
+}
+
 func (iamOS *IAMObjectStore) loadUser(ctx context.Context, user string, userType IAMUserType, m map[string]UserIdentity) error {
 	var u UserIdentity
 	err := iamOS.loadIAMConfig(ctx, &u, getUserIdentityPath(user, userType))

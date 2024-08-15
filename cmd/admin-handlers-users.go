@@ -34,7 +34,6 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
-	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/mux"
 	xldap "github.com/minio/pkg/v3/ldap"
@@ -1235,18 +1234,6 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		return rd, wr
 	}
 
-	bucketStorageCache.InitOnce(10*time.Second,
-		cachevalue.Opts{ReturnLastGood: true},
-		func(ctx context.Context) (DataUsageInfo, error) {
-			ctx, done := context.WithTimeout(ctx, 2*time.Second)
-			defer done()
-
-			return loadDataUsageFromBackend(ctx, objectAPI)
-		},
-	)
-
-	dataUsageInfo, _ := bucketStorageCache.Get()
-
 	// If etcd, dns federation configured list buckets from etcd.
 	var err error
 	var buckets []BucketInfo
@@ -1333,15 +1320,12 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 		rd, wr := isAllowedAccess(bucket.Name)
 		if rd || wr {
 			// Fetch the data usage of the current bucket
-			var size uint64
-			var objectsCount uint64
-			var objectsHist, versionsHist map[string]uint64
-			if !dataUsageInfo.LastUpdate.IsZero() {
-				size = dataUsageInfo.BucketsUsage[bucket.Name].Size
-				objectsCount = dataUsageInfo.BucketsUsage[bucket.Name].ObjectsCount
-				objectsHist = dataUsageInfo.BucketsUsage[bucket.Name].ObjectSizesHistogram
-				versionsHist = dataUsageInfo.BucketsUsage[bucket.Name].ObjectVersionsHistogram
-			}
+			bui := globalBucketQuotaSys.GetBucketUsageInfo(ctx, bucket.Name)
+			size := bui.Size
+			objectsCount := bui.ObjectsCount
+			objectsHist := bui.ObjectSizesHistogram
+			versionsHist := bui.ObjectVersionsHistogram
+
 			// Fetch the prefix usage of the current bucket
 			var prefixUsage map[string]uint64
 			if enablePrefixUsage {
