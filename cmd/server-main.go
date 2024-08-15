@@ -1082,7 +1082,7 @@ func serverMain(ctx *cli.Context) {
 
 		// initialize replication resync state.
 		bootstrapTrace("initResync", func() {
-			globalReplicationPool.initResync(GlobalContext, buckets, newObject)
+			globalReplicationPool.Get().initResync(GlobalContext, buckets, newObject)
 		})
 
 		// Initialize site replication manager after bucket metadata
