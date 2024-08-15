@@ -1036,7 +1036,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	// Start profiling on remote servers.
 	var hostErrs []NotificationPeerErr
 	for _, profiler := range profiles {
-		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(profiler)...)
+		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(ctx, profiler)...)
 
 		// Start profiling locally as well.
 		prof, err := startProfiler(profiler)
@@ -1117,7 +1117,11 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 
 	// Start profiling on remote servers.
 	for _, profiler := range profiles {
-		globalNotificationSys.StartProfiling(profiler)
+		// Limit start time to max 10s.
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		globalNotificationSys.StartProfiling(ctx, profiler)
+		// StartProfiling blocks, so we can cancel now.
+		cancel()
 
 		// Start profiling locally as well.
 		prof, err := startProfiler(profiler)
@@ -1132,6 +1136,10 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	for {
 		select {
 		case <-ctx.Done():
+			// Stop remote profiles
+			go globalNotificationSys.DownloadProfilingData(GlobalContext, io.Discard)
+
+			// Stop local
 			globalProfilerMu.Lock()
 			defer globalProfilerMu.Unlock()
 			for k, v := range globalProfiler {

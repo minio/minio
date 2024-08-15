@@ -108,13 +108,6 @@ func newPeerRESTClient(peer *xnet.Host, gridHost string) *peerRESTClient {
 // Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
 // permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
 // after verifying format.json
-func (client *peerRESTClient) call(method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
-	return client.callWithContext(GlobalContext, method, values, body, length)
-}
-
-// Wrapper to restClient.Call to handle network errors, in case of network error the connection is marked disconnected
-// permanently. The only way to restore the connection is at the xl-sets layer by xlsets.monitorAndConnectEndpoints()
-// after verifying format.json
 func (client *peerRESTClient) callWithContext(ctx context.Context, method string, values url.Values, body io.Reader, length int64) (respBody io.ReadCloser, err error) {
 	if client == nil {
 		return nil, errPeerNotReachable
@@ -257,10 +250,10 @@ func (client *peerRESTClient) GetProcInfo(ctx context.Context) (info madmin.Proc
 }
 
 // StartProfiling - Issues profiling command on the peer node.
-func (client *peerRESTClient) StartProfiling(profiler string) error {
+func (client *peerRESTClient) StartProfiling(ctx context.Context, profiler string) error {
 	values := make(url.Values)
 	values.Set(peerRESTProfiler, profiler)
-	respBody, err := client.call(peerRESTMethodStartProfiling, values, nil, -1)
+	respBody, err := client.callWithContext(ctx, peerRESTMethodStartProfiling, values, nil, -1)
 	if err != nil {
 		return err
 	}
@@ -269,8 +262,8 @@ func (client *peerRESTClient) StartProfiling(profiler string) error {
 }
 
 // DownloadProfileData - download profiled data from a remote node.
-func (client *peerRESTClient) DownloadProfileData() (data map[string][]byte, err error) {
-	respBody, err := client.call(peerRESTMethodDownloadProfilingData, nil, nil, -1)
+func (client *peerRESTClient) DownloadProfileData(ctx context.Context) (data map[string][]byte, err error) {
+	respBody, err := client.callWithContext(ctx, peerRESTMethodDownloadProfilingData, nil, nil, -1)
 	if err != nil {
 		return
 	}
