@@ -39,7 +39,6 @@ import (
 type apiConfig struct {
 	mu sync.RWMutex
 
-	requestsDeadline       time.Duration
 	requestsPool           chan struct{}
 	clusterDeadline        time.Duration
 	listQuorum             string
@@ -164,7 +163,6 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 		// but this shouldn't last long.
 		t.requestsPool = make(chan struct{}, apiRequestsMaxPerNode)
 	}
-	t.requestsDeadline = cfg.RequestsDeadline
 	listQuorum := cfg.ListQuorum
 	if listQuorum == "" {
 		listQuorum = "strict"
@@ -290,19 +288,15 @@ func (t *apiConfig) getRequestsPoolCapacity() int {
 	return cap(t.requestsPool)
 }
 
-func (t *apiConfig) getRequestsPool() (chan struct{}, time.Duration) {
+func (t *apiConfig) getRequestsPool() chan struct{} {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if t.requestsPool == nil {
-		return nil, 10 * time.Second
+		return nil
 	}
 
-	if t.requestsDeadline <= 0 {
-		return t.requestsPool, 10 * time.Second
-	}
-
-	return t.requestsPool, t.requestsDeadline
+	return t.requestsPool
 }
 
 // maxClients throttles the S3 API calls
@@ -325,16 +319,8 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 		}
 
 		globalHTTPStats.addRequestsInQueue(1)
-		pool, deadline := globalAPIConfig.getRequestsPool()
+		pool := globalAPIConfig.getRequestsPool()
 		if pool == nil {
-			globalHTTPStats.addRequestsInQueue(-1)
-			f.ServeHTTP(w, r)
-			return
-		}
-
-		// No deadline to wait, there is nothing to queue
-		// perform the API call immediately.
-		if deadline <= 0 {
 			globalHTTPStats.addRequestsInQueue(-1)
 			f.ServeHTTP(w, r)
 			return
@@ -344,8 +330,8 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			tc.FuncName = "s3.MaxClients"
 		}
 
-		deadlineTimer := time.NewTimer(deadline)
-		defer deadlineTimer.Stop()
+		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(cap(pool)))
+		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(cap(pool)-len(pool)))
 
 		ctx := r.Context()
 		select {
@@ -357,7 +343,13 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 			f.ServeHTTP(w, r)
-		case <-deadlineTimer.C:
+		case <-r.Context().Done():
+			globalHTTPStats.addRequestsInQueue(-1)
+			// When the client disconnects before getting the S3 handler
+			// status code response, set the status code to 499 so this request
+			// will be properly audited and traced.
+			w.WriteHeader(499)
+		default:
 			globalHTTPStats.addRequestsInQueue(-1)
 			if contextCanceled(ctx) {
 				w.WriteHeader(499)
@@ -367,12 +359,7 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			writeErrorResponse(ctx, w,
 				errorCodes.ToAPIErr(ErrTooManyRequests),
 				r.URL)
-		case <-r.Context().Done():
-			globalHTTPStats.addRequestsInQueue(-1)
-			// When the client disconnects before getting the S3 handler
-			// status code response, set the status code to 499 so this request
-			// will be properly audited and traced.
-			w.WriteHeader(499)
+
 		}
 	}
 }
