@@ -1221,9 +1221,18 @@ func (sys *IAMSys) getServiceAccount(ctx context.Context, accessKey string) (Use
 
 // GetTemporaryAccount - wrapper method to get information about a temporary account
 func (sys *IAMSys) GetTemporaryAccount(ctx context.Context, accessKey string) (auth.Credentials, *policy.Policy, error) {
+	if !sys.Initialized() {
+		return auth.Credentials{}, nil, errServerNotInitialized
+	}
 	tmpAcc, embeddedPolicy, err := sys.getTempAccount(ctx, accessKey)
 	if err != nil {
-		return auth.Credentials{}, nil, err
+		if err == errNoSuchTempAccount {
+			sys.store.LoadUser(ctx, accessKey)
+			tmpAcc, embeddedPolicy, err = sys.getTempAccount(ctx, accessKey)
+		}
+		if err != nil {
+			return auth.Credentials{}, nil, err
+		}
 	}
 	// Hide secret & session keys
 	tmpAcc.Credentials.SecretKey = ""
