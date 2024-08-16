@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	none = "none"
-	use  = "use"
+	none   = "none"
+	use    = "use"
+	ignore = "ignore"
 
 	defaultRecordDelimiter      = "\n"
 	defaultFieldDelimiter       = ","
@@ -92,11 +93,22 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (er
 				}
 				switch tagName {
 				case "FileHeaderInfo":
-					args.FileHeaderInfo = strings.ToLower(s)
+					s = strings.ToLower(s)
+					if len(s) != 0 {
+						if s != none && s != use && s != ignore {
+							return errors.New("unsupported FileHeaderInfo")
+						}
+						args.FileHeaderInfo = s
+					}
+
 				case "RecordDelimiter":
-					args.RecordDelimiter = s
+					if len(s) != 0 {
+						args.RecordDelimiter = s
+					}
 				case "FieldDelimiter":
-					args.FieldDelimiter = s
+					if len(s) != 0 {
+						args.FieldDelimiter = s
+					}
 				case "QuoteCharacter":
 					if utf8.RuneCountInString(s) > 1 {
 						return fmt.Errorf("unsupported QuoteCharacter '%v'", s)
@@ -112,7 +124,9 @@ func (args *ReaderArgs) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (er
 						return fmt.Errorf("unsupported QuoteEscapeCharacter '%v'", s)
 					}
 				case "Comments":
-					args.CommentCharacter = s
+					if len(s) != 0 {
+						args.CommentCharacter = s
+					}
 				default:
 					return errors.New("unrecognized option")
 				}
