@@ -179,7 +179,7 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 
 	if etcdClient == nil {
 		var group *singleflight.Group
-		if env.Get("_MINIO_IAM_SINGLE_FLIGHT", config.EnableOff) == config.EnableOn {
+		if env.Get("_MINIO_IAM_SINGLE_FLIGHT", config.EnableOn) == config.EnableOn {
 			group = &singleflight.Group{}
 		}
 		sys.store = &IAMStoreSys{

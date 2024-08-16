@@ -2865,6 +2865,10 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 		cache.iamUsersMap[k] = v
 	}
 
+	for k, v := range newCache.iamSTSAccountsMap {
+		cache.iamSTSAccountsMap[k] = v
+	}
+
 	newCache.iamSTSPolicyMap.Range(func(k string, v MappedPolicy) bool {
 		cache.iamSTSPolicyMap.Store(k, v)
 		return true
