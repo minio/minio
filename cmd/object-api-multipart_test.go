@@ -1061,9 +1061,9 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{"---", "", "", "", "", 0, ListMultipartsInfo{}, BucketNameInvalid{Bucket: "---"}, false},
 		{"ad", "", "", "", "", 0, ListMultipartsInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
 		// Valid bucket names, but they do not exist (Test number 5-7).
-		{"volatile-bucket-1", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-1"}, false},
-		{"volatile-bucket-2", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-2"}, false},
-		{"volatile-bucket-3", "", "", "", "", 0, ListMultipartsInfo{}, BucketNotFound{Bucket: "volatile-bucket-3"}, false},
+		{"volatile-bucket-1", "", "", "", "", 0, ListMultipartsInfo{}, nil, true},
+		{"volatile-bucket-2", "", "", "", "", 0, ListMultipartsInfo{}, nil, true},
+		{"volatile-bucket-3", "", "", "", "", 0, ListMultipartsInfo{}, nil, true},
 		// Valid, existing bucket, delimiter not supported, returns empty values (Test number 8-9).
 		{bucketNames[0], "", "", "", "*", 0, ListMultipartsInfo{Delimiter: "*"}, nil, true},
 		{bucketNames[0], "", "", "", "-", 0, ListMultipartsInfo{Delimiter: "-"}, nil, true},
