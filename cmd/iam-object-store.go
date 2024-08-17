@@ -802,7 +802,11 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	// Store the newly populated map in the iam cache. This takes care of
 	// removing stale entries from the existing map.
 	cache.iamSTSAccountsMap = stsAccountsFromStore
-	cache.iamSTSPolicyMap = stsAccPoliciesFromStore
+
+	stsAccPoliciesFromStore.Range(func(k string, v MappedPolicy) bool {
+		cache.iamSTSPolicyMap.Store(k, v)
+		return true
+	})
 
 	return nil
 }
