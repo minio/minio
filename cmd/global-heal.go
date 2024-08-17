@@ -167,6 +167,19 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 		return errServerNotInitialized
 	}
 
+	started := tracker.Started
+	if started.IsZero() || started.Equal(timeSentinel) {
+		healingLogIf(ctx, fmt.Errorf("unexpected tracker healing start time found: %v", started))
+		started = time.Time{}
+	}
+
+	// Final tracer update before quitting
+	defer func() {
+		tracker.setObject("")
+		tracker.setBucket("")
+		healingLogIf(ctx, tracker.update(ctx))
+	}()
+
 	for _, bucket := range healBuckets {
 		if err := bgSeq.healBucket(objAPI, bucket, true); err != nil {
 			// Log bucket healing error if any, we shall retry again.
@@ -435,13 +448,10 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 
 			var versionNotFound int
 			for _, version := range fivs.Versions {
-				// Ignore a version with a modtime newer than healing start time.
-				if version.ModTime.After(tracker.Started) {
-					continue
-				}
-
-				// Apply lifecycle rules on the objects that are expired.
-				if filterLifecycle(bucket, version.Name, version) {
+				// Ignore healing a version if:
+				// - It is uploaded after the drive healing is started
+				// - An object that is already expired by ILM rule.
+				if !started.IsZero() && version.ModTime.After(started) || filterLifecycle(bucket, version.Name, version) {
 					versionNotFound++
 					if !send(healEntrySkipped(uint64(version.Size))) {
 						return
@@ -556,10 +566,6 @@ func (er *erasureObjects) healErasureSet(ctx context.Context, buckets []string, 
 			healingLogIf(ctx, tracker.update(ctx))
 		}
 	}
-
-	tracker.setObject("")
-	tracker.setBucket("")
-
 	if retErr != nil {
 		return retErr
 	}
