@@ -95,12 +95,12 @@ func (secretKey) Status(context.Context) (map[string]madmin.ItemState, error) {
 	}, nil
 }
 
-// ListKeyNames returns a list of key names. The builtin KMS consists of just a single key.
-func (s secretKey) ListKeyNames(ctx context.Context, req *ListRequest) ([]string, string, error) {
+// ListKeys returns a list of keys with metadata. The builtin KMS consists of just a single key.
+func (s secretKey) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSKeyInfo, string, error) {
 	if strings.HasPrefix(s.keyID, req.Prefix) && strings.HasPrefix(s.keyID, req.ContinueAt) {
-		return []string{s.keyID}, "", nil
+		return []madmin.KMSKeyInfo{{Name: s.keyID}}, "", nil
 	}
-	return []string{}, "", nil
+	return []madmin.KMSKeyInfo{}, "", nil
 }
 
 // CreateKey returns ErrKeyExists unless req.Name is equal to the secretKey name.

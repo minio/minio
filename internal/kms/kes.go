@@ -126,8 +126,16 @@ func (c *kesConn) Status(ctx context.Context) (map[string]madmin.ItemState, erro
 	return status, nil
 }
 
-func (c *kesConn) ListKeyNames(ctx context.Context, req *ListRequest) ([]string, string, error) {
-	return c.client.ListKeys(ctx, req.Prefix, req.Limit)
+func (c *kesConn) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSKeyInfo, string, error) {
+	names, continueAt, err := c.client.ListKeys(ctx, req.Prefix, req.Limit)
+	if err != nil {
+		return nil, "", err
+	}
+	keyInfos := make([]madmin.KMSKeyInfo, len(names))
+	for i := range names {
+		keyInfos[i].Name = names[i]
+	}
+	return keyInfos, continueAt, nil
 }
 
 // CreateKey tries to create a new key at the KMS with the
