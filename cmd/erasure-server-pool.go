@@ -187,17 +187,10 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		globalLeaderLock = newSharedLock(GlobalContext, z, "leader.lock")
 	})
 
-	// Enable background operations on
-	//
-	// - Disk auto healing
-	// - MRF (most recently failed) healing
-	// - Background expiration routine for lifecycle policies
+	// Start self healing after the object initialization
+	// so various tasks will be useful
 	bootstrapTrace("initAutoHeal", func() {
 		initAutoHeal(GlobalContext, z)
-	})
-
-	bootstrapTrace("initHealMRF", func() {
-		go globalMRFState.healRoutine(z)
 	})
 
 	// initialize the object layer.
@@ -1087,6 +1080,14 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return ObjectInfo{}, err
 	}
 
+	if opts.DataMovement && idx == opts.SrcPoolIdx {
+		return ObjectInfo{}, DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
+	}
 	// Overwrite the object at the right pool
 	return z.serverPools[idx].PutObject(ctx, bucket, object, data, opts)
 }
@@ -1137,6 +1138,16 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	if pinfo.ObjInfo.DeleteMarker && opts.VersionID == "" {
 		pinfo.ObjInfo.Name = decodeDirObject(object)
 		return pinfo.ObjInfo, nil
+	}
+
+	// Datamovement must never be allowed on the same pool.
+	if opts.DataMovement && opts.SrcPoolIdx == pinfo.Index {
+		return pinfo.ObjInfo, DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
 	}
 
 	// Delete concurrently in all server pools with read quorum error for unversioned objects.
@@ -1752,6 +1763,15 @@ func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, obj
 		return nil, err
 	}
 
+	if opts.DataMovement && idx == opts.SrcPoolIdx {
+		return nil, DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
+	}
+
 	return z.serverPools[idx].NewMultipartUpload(ctx, bucket, object, opts)
 }
 
@@ -2102,7 +2122,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 			disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)
 			if len(disks) == 0 {
 				xioutil.SafeClose(results)
-				err := fmt.Errorf("Walk: no online disks found in pool %d, set %d", setIdx, poolIdx)
+				err := fmt.Errorf("Walk: no online disks found in (set:%d pool:%d) %w", setIdx, poolIdx, errErasureReadQuorum)
 				cancelCause(err)
 				return err
 			}
@@ -2778,6 +2798,15 @@ func (z *erasureServerPools) DecomTieredObject(ctx context.Context, bucket, obje
 	idx, err := z.getPoolIdxNoLock(ctx, bucket, object, fi.Size)
 	if err != nil {
 		return err
+	}
+
+	if opts.DataMovement && idx == opts.SrcPoolIdx {
+		return DataMovementOverwriteErr{
+			Bucket:    bucket,
+			Object:    object,
+			VersionID: opts.VersionID,
+			Err:       errDataMovementSrcDstPoolSame,
+		}
 	}
 
 	return z.serverPools[idx].DecomTieredObject(ctx, bucket, object, fi, opts)

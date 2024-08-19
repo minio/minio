@@ -22,8 +22,6 @@ import (
 	"net/http/httptrace"
 	"sync/atomic"
 	"time"
-
-	"github.com/minio/minio/internal/logger"
 )
 
 var globalStats = struct {
@@ -71,8 +69,6 @@ func setupReqStatsUpdate(req *http.Request) (*http.Request, func()) {
 		ConnectDone: func(network, addr string, err error) {
 			if err == nil {
 				atomic.StoreInt64(&dialEnd, time.Now().UnixNano())
-			} else {
-				logger.LogOnceIf(req.Context(), logSubsys, err, req.URL.Hostname())
 			}
 		},
 	}

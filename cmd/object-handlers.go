@@ -505,11 +505,11 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		if (isErrObjectNotFound(err) || isErrVersionNotFound(err) || isErrReadQuorum(err)) && !(gr != nil && gr.ObjInfo.DeleteMarker) {
 			proxytgts := getProxyTargets(ctx, bucket, object, opts)
 			if !proxytgts.Empty() {
-				globalReplicationStats.incProxy(bucket, getObjectAPI, false)
+				globalReplicationStats.Load().incProxy(bucket, getObjectAPI, false)
 				// proxy to replication target if active-active replication is in place.
 				reader, proxy, perr = proxyGetToReplicationTarget(ctx, bucket, object, rs, r.Header, opts, proxytgts)
 				if perr != nil {
-					globalReplicationStats.incProxy(bucket, getObjectAPI, true)
+					globalReplicationStats.Load().incProxy(bucket, getObjectAPI, true)
 					proxyGetErr := ErrorRespToObjectError(perr, bucket, object)
 					if !isErrBucketNotFound(proxyGetErr) && !isErrObjectNotFound(proxyGetErr) && !isErrVersionNotFound(proxyGetErr) &&
 						!isErrPreconditionFailed(proxyGetErr) && !isErrInvalidRange(proxyGetErr) {
@@ -762,21 +762,14 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
 		chkSums := objInfo.decryptChecksums(0, r.Header)
 		// AWS does not appear to append part number on this API call.
-		switch {
-		case chkSums["CRC32"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumCRC32 = strings.Split(chkSums["CRC32"], "-")[0]
-		case chkSums["CRC32C"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumCRC32C = strings.Split(chkSums["CRC32C"], "-")[0]
-		case chkSums["SHA256"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumSHA1 = strings.Split(chkSums["SHA1"], "-")[0]
-		case chkSums["SHA1"] != "":
-			OA.Checksum = new(objectAttributesChecksum)
-			OA.Checksum.ChecksumSHA256 = strings.Split(chkSums["SHA256"], "-")[0]
+		if len(chkSums) > 0 {
+			OA.Checksum = &objectAttributesChecksum{
+				ChecksumCRC32:  strings.Split(chkSums["CRC32"], "-")[0],
+				ChecksumCRC32C: strings.Split(chkSums["CRC32C"], "-")[0],
+				ChecksumSHA1:   strings.Split(chkSums["SHA1"], "-")[0],
+				ChecksumSHA256: strings.Split(chkSums["SHA256"], "-")[0],
+			}
 		}
-
 	}
 
 	if _, ok := opts.ObjectAttributes[xhttp.ETag]; ok {
@@ -1032,14 +1025,14 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 		// proxy HEAD to replication target if active-active replication configured on bucket
 		proxytgts := getProxyTargets(ctx, bucket, object, opts)
 		if !proxytgts.Empty() {
-			globalReplicationStats.incProxy(bucket, headObjectAPI, false)
+			globalReplicationStats.Load().incProxy(bucket, headObjectAPI, false)
 			var oi ObjectInfo
 			oi, proxy = proxyHeadToReplicationTarget(ctx, bucket, object, rs, opts, proxytgts)
 			if proxy.Proxy {
 				objInfo = oi
 			}
 			if proxy.Err != nil {
-				globalReplicationStats.incProxy(bucket, headObjectAPI, true)
+				globalReplicationStats.Load().incProxy(bucket, headObjectAPI, true)
 				writeErrorResponseHeadersOnly(w, toAPIError(ctx, proxy.Err))
 				return
 			}
@@ -2097,7 +2090,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		metadata[ReservedMetadataPrefixLower+ReplicaStatus] = replication.Replica.String()
 		metadata[ReservedMetadataPrefixLower+ReplicaTimestamp] = UTCNow().Format(time.RFC3339Nano)
-		defer globalReplicationStats.UpdateReplicaStat(bucket, size)
+		defer globalReplicationStats.Load().UpdateReplicaStat(bucket, size)
 	}
 
 	// Check if bucket encryption is enabled
@@ -3308,11 +3301,11 @@ func (api objectAPIHandlers) GetObjectTaggingHandler(w http.ResponseWriter, r *h
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			proxytgts := getProxyTargets(ctx, bucket, object, opts)
 			if !proxytgts.Empty() {
-				globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, false)
+				globalReplicationStats.Load().incProxy(bucket, getObjectTaggingAPI, false)
 				// proxy to replication target if site replication is in place.
 				tags, gerr := proxyGetTaggingToRepTarget(ctx, bucket, object, opts, proxytgts)
 				if gerr.Err != nil || tags == nil {
-					globalReplicationStats.incProxy(bucket, getObjectTaggingAPI, true)
+					globalReplicationStats.Load().incProxy(bucket, getObjectTaggingAPI, true)
 					writeErrorResponse(ctx, w, toAPIError(ctx, gerr.Err), r.URL)
 					return
 				} // overlay tags from peer site.
@@ -3411,11 +3404,11 @@ func (api objectAPIHandlers) PutObjectTaggingHandler(w http.ResponseWriter, r *h
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			proxytgts := getProxyTargets(ctx, bucket, object, opts)
 			if !proxytgts.Empty() {
-				globalReplicationStats.incProxy(bucket, putObjectTaggingAPI, false)
+				globalReplicationStats.Load().incProxy(bucket, putObjectTaggingAPI, false)
 				// proxy to replication target if site replication is in place.
 				perr := proxyTaggingToRepTarget(ctx, bucket, object, tags, opts, proxytgts)
 				if perr.Err != nil {
-					globalReplicationStats.incProxy(bucket, putObjectTaggingAPI, true)
+					globalReplicationStats.Load().incProxy(bucket, putObjectTaggingAPI, true)
 					writeErrorResponse(ctx, w, toAPIError(ctx, perr.Err), r.URL)
 					return
 				}
@@ -3508,11 +3501,11 @@ func (api objectAPIHandlers) DeleteObjectTaggingHandler(w http.ResponseWriter, r
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
 			proxytgts := getProxyTargets(ctx, bucket, object, opts)
 			if !proxytgts.Empty() {
-				globalReplicationStats.incProxy(bucket, removeObjectTaggingAPI, false)
+				globalReplicationStats.Load().incProxy(bucket, removeObjectTaggingAPI, false)
 				// proxy to replication target if active-active replication is in place.
 				perr := proxyTaggingToRepTarget(ctx, bucket, object, nil, opts, proxytgts)
 				if perr.Err != nil {
-					globalReplicationStats.incProxy(bucket, removeObjectTaggingAPI, true)
+					globalReplicationStats.Load().incProxy(bucket, removeObjectTaggingAPI, true)
 					writeErrorResponse(ctx, w, toAPIError(ctx, perr.Err), r.URL)
 					return
 				}

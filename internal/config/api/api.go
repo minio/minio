@@ -33,7 +33,6 @@ import (
 // API sub-system constants
 const (
 	apiRequestsMax             = "requests_max"
-	apiRequestsDeadline        = "requests_deadline"
 	apiClusterDeadline         = "cluster_deadline"
 	apiCorsAllowOrigin         = "cors_allow_origin"
 	apiRemoteTransportDeadline = "remote_transport_deadline"
@@ -81,6 +80,7 @@ const (
 // Deprecated key and ENVs
 const (
 	apiReadyDeadline            = "ready_deadline"
+	apiRequestsDeadline         = "requests_deadline"
 	apiReplicationWorkers       = "replication_workers"
 	apiReplicationFailedWorkers = "replication_failed_workers"
 )
@@ -91,10 +91,6 @@ var (
 		config.KV{
 			Key:   apiRequestsMax,
 			Value: "0",
-		},
-		config.KV{
-			Key:   apiRequestsDeadline,
-			Value: "10s",
 		},
 		config.KV{
 			Key:   apiClusterDeadline,
@@ -171,7 +167,6 @@ var (
 // Config storage class configuration
 type Config struct {
 	RequestsMax                 int           `json:"requests_max"`
-	RequestsDeadline            time.Duration `json:"requests_deadline"`
 	ClusterDeadline             time.Duration `json:"cluster_deadline"`
 	CorsAllowOrigin             []string      `json:"cors_allow_origin"`
 	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
@@ -205,6 +200,7 @@ func (sCfg *Config) UnmarshalJSON(data []byte) error {
 func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	deprecatedKeys := []string{
 		apiReadyDeadline,
+		apiRequestsDeadline,
 		"extend_list_cache_life",
 		apiReplicationWorkers,
 		apiReplicationFailedWorkers,
@@ -250,12 +246,6 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	if requestsMax < 0 {
 		return cfg, errors.New("invalid API max requests value")
 	}
-
-	requestsDeadline, err := time.ParseDuration(env.Get(EnvAPIRequestsDeadline, kvs.GetWithDefault(apiRequestsDeadline, DefaultKVS)))
-	if err != nil {
-		return cfg, err
-	}
-	cfg.RequestsDeadline = requestsDeadline
 
 	clusterDeadline, err := time.ParseDuration(env.Get(EnvAPIClusterDeadline, kvs.GetWithDefault(apiClusterDeadline, DefaultKVS)))
 	if err != nil {

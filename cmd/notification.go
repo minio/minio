@@ -84,6 +84,9 @@ func WithNPeersThrottled(nerrs, wks int) *NotificationGroup {
 	if nerrs <= 0 {
 		nerrs = 1
 	}
+	if wks > nerrs {
+		wks = nerrs
+	}
 	wk, _ := workers.New(wks)
 	return &NotificationGroup{errs: make([]NotificationPeerErr, nerrs), workers: wk, retryCount: 3}
 }
@@ -292,15 +295,15 @@ func (sys *NotificationSys) BackgroundHealStatus(ctx context.Context) ([]madmin.
 }
 
 // StartProfiling - start profiling on remote peers, by initiating a remote RPC.
-func (sys *NotificationSys) StartProfiling(profiler string) []NotificationPeerErr {
+func (sys *NotificationSys) StartProfiling(ctx context.Context, profiler string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
 		client := client
-		ng.Go(GlobalContext, func() error {
-			return client.StartProfiling(profiler)
+		ng.Go(ctx, func() error {
+			return client.StartProfiling(ctx, profiler)
 		}, idx, *client.host)
 	}
 	return ng.Wait()
@@ -313,28 +316,49 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 	zipWriter := zip.NewWriter(writer)
 	defer zipWriter.Close()
 
-	for _, client := range sys.peerClients {
+	// Start by embedding cluster info.
+	if b := getClusterMetaInfo(ctx); len(b) > 0 {
+		internalLogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b, 0o600))
+	}
+
+	// Profiles can be quite big, so we limit to max 16 concurrent downloads.
+	ng := WithNPeersThrottled(len(sys.peerClients), 16)
+	var writeMu sync.Mutex
+	for i, client := range sys.peerClients {
 		if client == nil {
 			continue
 		}
-		data, err := client.DownloadProfileData()
-		if err != nil {
-			reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
-			ctx := logger.SetReqInfo(ctx, reqInfo)
-			peersLogOnceIf(ctx, err, client.host.String())
-			continue
-		}
-
-		profilingDataFound = true
-
-		for typ, data := range data {
-			err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data, 0o600)
+		ng.Go(ctx, func() error {
+			// Give 15 seconds to each remote call.
+			// Errors are logged but not returned.
+			ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			data, err := client.DownloadProfileData(ctx)
 			if err != nil {
 				reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
 				ctx := logger.SetReqInfo(ctx, reqInfo)
 				peersLogOnceIf(ctx, err, client.host.String())
+				return nil
 			}
-		}
+
+			for typ, data := range data {
+				// zip writer only handles one concurrent write
+				writeMu.Lock()
+				profilingDataFound = true
+				err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", client.host.String(), typ), data, 0o600)
+				writeMu.Unlock()
+				if err != nil {
+					reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", client.host.String())
+					ctx := logger.SetReqInfo(ctx, reqInfo)
+					peersLogOnceIf(ctx, err, client.host.String())
+				}
+			}
+			return nil
+		}, i, *client.host)
+	}
+	ng.Wait()
+	if ctx.Err() != nil {
+		return false
 	}
 
 	// Local host
@@ -359,9 +383,6 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		err := embedFileInZip(zipWriter, fmt.Sprintf("profile-%s-%s", thisAddr, typ), data, 0o600)
 		internalLogIf(ctx, err)
 	}
-	if b := getClusterMetaInfo(ctx); len(b) > 0 {
-		internalLogIf(ctx, embedFileInZip(zipWriter, "cluster.info", b, 0o600))
-	}
 
 	return
 }
@@ -383,10 +404,6 @@ func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256
 	// further discussion advised. Remove this comment and remove the worker model
 	// for this function in future.
 	maxWorkers := runtime.GOMAXPROCS(0) / 2
-	if maxWorkers > len(sys.peerClients) {
-		maxWorkers = len(sys.peerClients)
-	}
-
 	ng := WithNPeersThrottled(len(sys.peerClients), maxWorkers)
 	for idx, client := range sys.peerClients {
 		if client == nil {
@@ -520,7 +537,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 
 // DeleteBucketMetadata - calls DeleteBucketMetadata call on all peers
 func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName string) {
-	globalReplicationStats.Delete(bucketName)
+	globalReplicationStats.Load().Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	globalBucketTargetSys.Delete(bucketName)
 	globalEventNotifier.RemoveNotification(bucketName)
@@ -574,7 +591,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 		}
 	}
 
-	replicationStatsList := globalReplicationStats.GetAll()
+	replicationStatsList := globalReplicationStats.Load().GetAll()
 	bucketStatsMap := BucketStatsMap{
 		Stats:     make(map[string]BucketStats, len(replicationStatsList)),
 		Timestamp: UTCNow(),
@@ -582,7 +599,7 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	for k, replicationStats := range replicationStatsList {
 		bucketStatsMap.Stats[k] = BucketStats{
 			ReplicationStats: replicationStats,
-			ProxyStats:       globalReplicationStats.getProxyStats(k),
+			ProxyStats:       globalReplicationStats.Load().getProxyStats(k),
 		}
 	}
 
@@ -615,11 +632,13 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
-	bucketStats = append(bucketStats, BucketStats{
-		ReplicationStats: globalReplicationStats.Get(bucketName),
-		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
-		ProxyStats:       globalReplicationStats.getProxyStats(bucketName),
-	})
+	if st := globalReplicationStats.Load(); st != nil {
+		bucketStats = append(bucketStats, BucketStats{
+			ReplicationStats: st.Get(bucketName),
+			QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{st.getNodeQueueStats(bucketName)}},
+			ProxyStats:       st.getProxyStats(bucketName),
+		})
+	}
 	return bucketStats
 }
 
@@ -648,7 +667,7 @@ func (sys *NotificationSys) GetClusterSiteMetrics(ctx context.Context) []SRMetri
 			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
 		}
 	}
-	siteStats = append(siteStats, globalReplicationStats.getSRMetricsForNode())
+	siteStats = append(siteStats, globalReplicationStats.Load().getSRMetricsForNode())
 	return siteStats
 }
 
@@ -1099,6 +1118,8 @@ func (sys *NotificationSys) ServerInfo(ctx context.Context, metrics bool) []madm
 		wg.Add(1)
 		go func(client *peerRESTClient, idx int) {
 			defer wg.Done()
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
 			info, err := client.ServerInfo(ctx, metrics)
 			if err != nil {
 				info.Endpoint = client.host.String()
@@ -1586,7 +1607,7 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 		if node != "all" && node != globalLocalNodeName {
 			return nil
 		}
-		mCh, err := globalReplicationPool.getMRF(ctx, bucket)
+		mCh, err := globalReplicationPool.Get().getMRF(ctx, bucket)
 		if err != nil {
 			return err
 		}

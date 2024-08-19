@@ -49,19 +49,19 @@ func ParsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 	for len(current) > 0 {
 		var pemBlock *pem.Block
 		if pemBlock, current = pem.Decode(current); pemBlock == nil {
-			return nil, ErrTLSUnexpectedData(nil).Msg("Could not read PEM block from file %s", certFile)
+			return nil, ErrTLSUnexpectedData(nil).Msgf("Could not read PEM block from file %s", certFile)
 		}
 
 		var x509Cert *x509.Certificate
 		if x509Cert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
-			return nil, ErrTLSUnexpectedData(nil).Msg("Failed to parse `%s`: %s", certFile, err.Error())
+			return nil, ErrTLSUnexpectedData(nil).Msgf("Failed to parse `%s`: %s", certFile, err.Error())
 		}
 
 		x509Certs = append(x509Certs, x509Cert)
 	}
 
 	if len(x509Certs) == 0 {
-		return nil, ErrTLSUnexpectedData(nil).Msg("Empty public certificate file %s", certFile)
+		return nil, ErrTLSUnexpectedData(nil).Msgf("Empty public certificate file %s", certFile)
 	}
 
 	return x509Certs, nil
@@ -73,18 +73,18 @@ func ParsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err er
 func LoadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	certPEMBlock, err := os.ReadFile(certFile)
 	if err != nil {
-		return tls.Certificate{}, ErrTLSReadError(nil).Msg("Unable to read the public key: %s", err)
+		return tls.Certificate{}, ErrTLSReadError(nil).Msgf("Unable to read the public key: %s", err)
 	}
 	keyPEMBlock, err := os.ReadFile(keyFile)
 	if err != nil {
-		return tls.Certificate{}, ErrTLSReadError(nil).Msg("Unable to read the private key: %s", err)
+		return tls.Certificate{}, ErrTLSReadError(nil).Msgf("Unable to read the private key: %s", err)
 	}
 	key, rest := pem.Decode(keyPEMBlock)
 	if len(rest) > 0 {
-		return tls.Certificate{}, ErrTLSUnexpectedData(nil).Msg("The private key contains additional data")
+		return tls.Certificate{}, ErrTLSUnexpectedData(nil).Msgf("The private key contains additional data")
 	}
 	if key == nil {
-		return tls.Certificate{}, ErrTLSUnexpectedData(nil).Msg("The private key is not readable")
+		return tls.Certificate{}, ErrTLSUnexpectedData(nil).Msgf("The private key is not readable")
 	}
 	if x509.IsEncryptedPEMBlock(key) {
 		password := env.Get(EnvCertPassword, "")

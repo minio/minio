@@ -178,7 +178,7 @@ func TestGetFileInfoVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to serialize xlmeta %v", err)
 	}
-	fivs, err := getFileInfoVersions(buf, basefi.Volume, basefi.Name, true, false)
+	fivs, err := getFileInfoVersions(buf, basefi.Volume, basefi.Name, false)
 	if err != nil {
 		t.Fatalf("getFileInfoVersions failed: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestGetFileInfoVersions(t *testing.T) {
 	// versions are stored in xl-meta sorted in descending order of their ModTime
 	slices.Reverse(allVersionIDs)
 
-	fivs, err = getFileInfoVersions(buf, basefi.Volume, basefi.Name, true, true)
+	fivs, err = getFileInfoVersions(buf, basefi.Volume, basefi.Name, true)
 	if err != nil {
 		t.Fatalf("getFileInfoVersions failed: %v", err)
 	}

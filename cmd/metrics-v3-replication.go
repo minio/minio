@@ -69,11 +69,12 @@ var (
 // loadClusterReplicationMetrics - `MetricsLoaderFn` for cluster replication metrics
 // such as transfer rate and objects queued.
 func loadClusterReplicationMetrics(ctx context.Context, m MetricValues, c *metricsCache) error {
-	if globalReplicationStats == nil {
+	st := globalReplicationStats.Load()
+	if st == nil {
 		return nil
 	}
 
-	qs := globalReplicationStats.getNodeQueueStatsSummary()
+	qs := st.getNodeQueueStatsSummary()
 
 	qt := qs.QStats
 	m.Set(replicationAverageQueuedBytes, float64(qt.Avg.Bytes))

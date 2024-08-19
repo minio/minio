@@ -2313,8 +2313,8 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		var ml []MetricV2
 		// common operational metrics for bucket replication and site replication - published
 		// at cluster level
-		if globalReplicationStats != nil {
-			qs := globalReplicationStats.getNodeQueueStatsSummary()
+		if rStats := globalReplicationStats.Load(); rStats != nil {
+			qs := rStats.getNodeQueueStatsSummary()
 			activeWorkersCount := MetricV2{
 				Description: getClusterReplActiveWorkersCountMD(),
 			}
@@ -3245,7 +3245,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 
 		var bucketReplStats map[string]BucketStats
 		if !globalSiteReplicationSys.isEnabled() {
-			bucketReplStats = globalReplicationStats.getAllLatest(dataUsageInfo.BucketsUsage)
+			bucketReplStats = globalReplicationStats.Load().getAllLatest(dataUsageInfo.BucketsUsage)
 		}
 		for bucket, usage := range dataUsageInfo.BucketsUsage {
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)

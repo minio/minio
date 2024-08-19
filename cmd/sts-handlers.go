@@ -241,11 +241,11 @@ func parseForm(r *http.Request) error {
 func getTokenSigningKey() (string, error) {
 	secret := globalActiveCred.SecretKey
 	if globalSiteReplicationSys.isEnabled() {
-		c, err := globalSiteReplicatorCred.Get(GlobalContext)
+		secretKey, err := globalSiteReplicatorCred.Get(GlobalContext)
 		if err != nil {
 			return "", err
 		}
-		return c.SecretKey, nil
+		return secretKey, nil
 	}
 	return secret, nil
 }
@@ -289,7 +289,7 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	if apiErrCode != ErrNone {
 		stsErr := apiToSTSError(apiErrCode)
 		// Borrow the description error from the API error code
-		writeSTSErrorResponse(ctx, w, stsErr, fmt.Errorf(errorCodes[apiErrCode].Description))
+		writeSTSErrorResponse(ctx, w, stsErr, errors.New(errorCodes[apiErrCode].Description))
 		return
 	}
 

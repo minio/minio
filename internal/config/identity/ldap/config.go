@@ -18,6 +18,7 @@
 package ldap
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"sort"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/fips"
 	"github.com/minio/pkg/v3/ldap"
 )
 
@@ -189,9 +191,15 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 		return l, nil
 	}
 	l.LDAP = ldap.Config{
-		RootCAs:       rootCAs,
 		ServerAddr:    ldapServer,
 		SRVRecordName: getCfgVal(SRVRecordName),
+		TLS: &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			NextProtos:         []string{"h2", "http/1.1"},
+			ClientSessionCache: tls.NewLRUClientSessionCache(100),
+			CipherSuites:       fips.TLSCiphersBackwardCompatible(), // Contains RSA key exchange
+			RootCAs:            rootCAs,
+		},
 	}
 
 	// Parse explicitly set enable=on/off flag.
@@ -220,7 +228,7 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 		}
 	}
 	if v := getCfgVal(TLSSkipVerify); v != "" {
-		l.LDAP.TLSSkipVerify, err = config.ParseBool(v)
+		l.LDAP.TLS.InsecureSkipVerify, err = config.ParseBool(v)
 		if err != nil {
 			return l, err
 		}

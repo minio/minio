@@ -113,6 +113,8 @@ type ObjectOptions struct {
 	// participating in a rebalance operation. Typically set for 'write' operations.
 	SkipRebalancing bool
 
+	SrcPoolIdx int // set by PutObject/CompleteMultipart operations due to rebalance; used to prevent rebalance src, dst pools to be the same
+
 	DataMovement bool // indicates an going decommisionning or rebalacing
 
 	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix

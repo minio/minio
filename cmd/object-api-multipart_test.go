@@ -79,7 +79,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 		case InvalidUploadID:
 			t.Fatalf("%s: New Multipart upload failed to create uuid file.", instanceType)
 		default:
-			t.Fatalf(err.Error())
+			t.Fatal(err.Error())
 		}
 	}
 }

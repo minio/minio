@@ -609,7 +609,6 @@ func TestGetActualSize(t *testing.T) {
 			objInfo: ObjectInfo{
 				UserDefined: map[string]string{
 					"X-Minio-Internal-compression": "klauspost/compress/s2",
-					"X-Minio-Internal-actual-size": "100000001",
 					"content-type":                 "application/octet-stream",
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2",
 				},
@@ -623,6 +622,7 @@ func TestGetActualSize(t *testing.T) {
 						ActualSize: 32891137,
 					},
 				},
+				Size: 100000001,
 			},
 			result: 100000001,
 		},
@@ -635,6 +635,7 @@ func TestGetActualSize(t *testing.T) {
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2",
 				},
 				Parts: []ObjectPartInfo{},
+				Size:  841,
 			},
 			result: 841,
 		},
@@ -646,6 +647,7 @@ func TestGetActualSize(t *testing.T) {
 					"etag":                         "b3ff3ef3789147152fbfbc50efba4bfd-2",
 				},
 				Parts: []ObjectPartInfo{},
+				Size:  100,
 			},
 			result: -1,
 		},

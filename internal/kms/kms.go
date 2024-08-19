@@ -213,13 +213,13 @@ func (k *KMS) CreateKey(ctx context.Context, req *CreateKeyRequest) error {
 	return err
 }
 
-// ListKeyNames returns a list of key names and a potential
+// ListKeys returns a list of keys with metadata and a potential
 // next name from where to continue a subsequent listing.
-func (k *KMS) ListKeyNames(ctx context.Context, req *ListRequest) ([]string, string, error) {
+func (k *KMS) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSKeyInfo, string, error) {
 	if req.Prefix == "*" {
 		req.Prefix = ""
 	}
-	return k.conn.ListKeyNames(ctx, req)
+	return k.conn.ListKeys(ctx, req)
 }
 
 // GenerateKey generates a new data key using the master key req.Name.
@@ -320,7 +320,7 @@ func (c *kmsConn) Status(ctx context.Context) (map[string]madmin.ItemState, erro
 	return stat, nil
 }
 
-func (c *kmsConn) ListKeyNames(ctx context.Context, req *ListRequest) ([]string, string, error) {
+func (c *kmsConn) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSKeyInfo, string, error) {
 	resp, err := c.client.ListKeys(ctx, &kms.ListRequest{
 		Enclave:    c.enclave,
 		Prefix:     req.Prefix,
@@ -331,11 +331,13 @@ func (c *kmsConn) ListKeyNames(ctx context.Context, req *ListRequest) ([]string,
 		return nil, "", errListingKeysFailed(err)
 	}
 
-	names := make([]string, 0, len(resp.Items))
-	for _, item := range resp.Items {
-		names = append(names, item.Name)
+	keyInfos := make([]madmin.KMSKeyInfo, len(resp.Items))
+	for i, v := range resp.Items {
+		keyInfos[i].Name = v.Name
+		keyInfos[i].CreatedAt = v.CreatedAt
+		keyInfos[i].CreatedBy = string(v.CreatedBy)
 	}
-	return names, resp.ContinueAt, nil
+	return keyInfos, resp.ContinueAt, nil
 }
 
 func (c *kmsConn) CreateKey(ctx context.Context, req *CreateKeyRequest) error {

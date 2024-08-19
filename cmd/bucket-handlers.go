@@ -1682,7 +1682,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	globalNotificationSys.DeleteBucketMetadata(ctx, bucket)
-	globalReplicationPool.deleteResyncMetadata(ctx, bucket)
+	globalReplicationPool.Get().deleteResyncMetadata(ctx, bucket)
 
 	// Call site replication hook.
 	replLogIf(ctx, globalSiteReplicationSys.DeleteBucketHook(ctx, bucket, forceDelete))

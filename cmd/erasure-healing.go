@@ -226,21 +226,28 @@ func (er *erasureObjects) auditHealObject(ctx context.Context, bucket, object, v
 	opts := AuditLogOptions{
 		Event:     "HealObject",
 		Bucket:    bucket,
-		Object:    object,
+		Object:    decodeDirObject(object),
 		VersionID: versionID,
 	}
 	if err != nil {
 		opts.Error = err.Error()
 	}
 
-	opts.Tags = map[string]interface{}{
-		"healResult": result,
-		"objectLocation": auditObjectOp{
-			Name:   decodeDirObject(object),
-			Pool:   er.poolIndex + 1,
-			Set:    er.setIndex + 1,
-			Drives: er.getEndpointStrings(),
-		},
+	b, a := result.GetCorruptedCounts()
+	if b == a {
+		opts.Error = fmt.Sprintf("unable to heal %d corrupted blocks on drives", b)
+	}
+	b, a = result.GetMissingCounts()
+	if b == a {
+		opts.Error = fmt.Sprintf("unable to heal %d missing blocks on drives", b)
+	}
+
+	opts.Tags = map[string]string{
+		"healObject": auditObjectOp{
+			Name: opts.Object,
+			Pool: er.poolIndex + 1,
+			Set:  er.setIndex + 1,
+		}.String(),
 	}
 
 	auditLogInternal(ctx, opts)

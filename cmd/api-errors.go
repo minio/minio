@@ -28,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Azure/azure-storage-blob-go/azblob"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/minio/minio/internal/ioutil"
 	"google.golang.org/api/googleapi"
 
@@ -1486,7 +1486,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrTooManyRequests: {
 		Code:           "TooManyRequests",
-		Description:    "Deadline exceeded while waiting in incoming queue, please reduce your request rate",
+		Description:    "Please reduce your request rate",
 		HTTPStatusCode: http.StatusTooManyRequests,
 	},
 	ErrUnsupportedMetadata: {
@@ -2549,11 +2549,11 @@ func toAPIError(ctx context.Context, err error) APIError {
 			if len(e.Errors) >= 1 {
 				apiErr.Code = e.Errors[0].Reason
 			}
-		case azblob.StorageError:
+		case *azcore.ResponseError:
 			apiErr = APIError{
-				Code:           string(e.ServiceCode()),
+				Code:           e.ErrorCode,
 				Description:    e.Error(),
-				HTTPStatusCode: e.Response().StatusCode,
+				HTTPStatusCode: e.StatusCode,
 			}
 			// Add more other SDK related errors here if any in future.
 		default:
@@ -2592,7 +2592,7 @@ func getAPIError(code APIErrorCode) APIError {
 	return errorCodes.ToAPIErr(ErrInternalError)
 }
 
-// getErrorResponse gets in standard error and resource value and
+// getAPIErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
 func getAPIErrorResponse(ctx context.Context, err APIError, resource, requestID, hostID string) APIErrorResponse {
 	reqInfo := logger.GetReqInfo(ctx)

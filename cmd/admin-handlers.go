@@ -1036,7 +1036,7 @@ func (a adminAPIHandlers) StartProfilingHandler(w http.ResponseWriter, r *http.R
 	// Start profiling on remote servers.
 	var hostErrs []NotificationPeerErr
 	for _, profiler := range profiles {
-		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(profiler)...)
+		hostErrs = append(hostErrs, globalNotificationSys.StartProfiling(ctx, profiler)...)
 
 		// Start profiling locally as well.
 		prof, err := startProfiler(profiler)
@@ -1117,7 +1117,11 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 
 	// Start profiling on remote servers.
 	for _, profiler := range profiles {
-		globalNotificationSys.StartProfiling(profiler)
+		// Limit start time to max 10s.
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		globalNotificationSys.StartProfiling(ctx, profiler)
+		// StartProfiling blocks, so we can cancel now.
+		cancel()
 
 		// Start profiling locally as well.
 		prof, err := startProfiler(profiler)
@@ -1132,6 +1136,10 @@ func (a adminAPIHandlers) ProfileHandler(w http.ResponseWriter, r *http.Request)
 	for {
 		select {
 		case <-ctx.Done():
+			// Stop remote profiles
+			go globalNotificationSys.DownloadProfilingData(GlobalContext, io.Discard)
+
+			// Stop local
 			globalProfilerMu.Lock()
 			defer globalProfilerMu.Unlock()
 			for k, v := range globalProfiler {
@@ -2331,6 +2339,7 @@ func getPoolsInfo(ctx context.Context, allDisks []madmin.Disk) (map[int]map[int]
 }
 
 func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) madmin.InfoMessage {
+	const operationTimeout = 10 * time.Second
 	ldap := madmin.LDAP{}
 	if globalIAMSys.LDAPConfig.Enabled() {
 		ldapConn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
@@ -2371,7 +2380,9 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 		mode = madmin.ItemOnline
 
 		// Load data usage
-		dataUsageInfo, err := loadDataUsageFromBackend(ctx, objectAPI)
+		ctx2, cancel := context.WithTimeout(ctx, operationTimeout)
+		dataUsageInfo, err := loadDataUsageFromBackend(ctx2, objectAPI)
+		cancel()
 		if err == nil {
 			buckets = madmin.Buckets{Count: dataUsageInfo.BucketsCount}
 			objects = madmin.Objects{Count: dataUsageInfo.ObjectsTotalCount}
@@ -2405,17 +2416,23 @@ func getServerInfo(ctx context.Context, pools, metrics bool, r *http.Request) ma
 		}
 
 		if pools {
-			poolsInfo, _ = getPoolsInfo(ctx, allDisks)
+			ctx2, cancel := context.WithTimeout(ctx, operationTimeout)
+			poolsInfo, _ = getPoolsInfo(ctx2, allDisks)
+			cancel()
 		}
 	}
 
 	domain := globalDomainNames
 	services := madmin.Services{
-		KMSStatus:     fetchKMSStatus(ctx),
 		LDAP:          ldap,
 		Logger:        log,
 		Audit:         audit,
 		Notifications: notifyTarget,
+	}
+	{
+		ctx2, cancel := context.WithTimeout(ctx, operationTimeout)
+		services.KMSStatus = fetchKMSStatus(ctx2)
+		cancel()
 	}
 
 	return madmin.InfoMessage{
@@ -3050,7 +3067,7 @@ func targetStatus(ctx context.Context, h logger.Target) madmin.Status {
 	return madmin.Status{Status: string(madmin.ItemOffline)}
 }
 
-// fetchLoggerDetails return log info
+// fetchLoggerInfo return log info
 func fetchLoggerInfo(ctx context.Context) ([]madmin.Logger, []madmin.Audit) {
 	var loggerInfo []madmin.Logger
 	var auditloggerInfo []madmin.Audit

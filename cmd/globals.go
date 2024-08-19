@@ -384,9 +384,7 @@ var (
 	globalBackgroundHealRoutine = newHealRoutine()
 	globalBackgroundHealState   = newHealState(GlobalContext, false)
 
-	globalMRFState = mrfState{
-		opCh: make(chan partialOperation, mrfOpsQueueSize),
-	}
+	globalMRFState = newMRFState()
 
 	// If writes to FS backend should be O_SYNC.
 	globalFSOSync bool

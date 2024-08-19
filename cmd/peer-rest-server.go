@@ -469,7 +469,7 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(mss *grid.MSS) (np grid.NoP
 		return np, grid.NewRemoteErr(errors.New("Bucket name is missing"))
 	}
 
-	globalReplicationStats.Delete(bucketName)
+	globalReplicationStats.Load().Delete(bucketName)
 	globalBucketMetadataSys.Remove(bucketName)
 	globalBucketTargetSys.Delete(bucketName)
 	globalEventNotifier.RemoveNotification(bucketName)
@@ -483,12 +483,12 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(mss *grid.MSS) (np grid.NoP
 
 // GetAllBucketStatsHandler - fetches bucket replication stats for all buckets from this peer.
 func (s *peerRESTServer) GetAllBucketStatsHandler(mss *grid.MSS) (*BucketStatsMap, *grid.RemoteErr) {
-	replicationStats := globalReplicationStats.GetAll()
+	replicationStats := globalReplicationStats.Load().GetAll()
 	bucketStatsMap := make(map[string]BucketStats, len(replicationStats))
 	for k, v := range replicationStats {
 		bucketStatsMap[k] = BucketStats{
 			ReplicationStats: v,
-			ProxyStats:       globalReplicationStats.getProxyStats(k),
+			ProxyStats:       globalReplicationStats.Load().getProxyStats(k),
 		}
 	}
 	return &BucketStatsMap{Stats: bucketStatsMap, Timestamp: time.Now()}, nil
@@ -501,11 +501,14 @@ func (s *peerRESTServer) GetBucketStatsHandler(vars *grid.MSS) (*BucketStats, *g
 	if bucketName == "" {
 		return nil, grid.NewRemoteErrString("Bucket name is missing")
 	}
-
+	st := globalReplicationStats.Load()
+	if st == nil {
+		return &BucketStats{}, nil
+	}
 	bs := BucketStats{
-		ReplicationStats: globalReplicationStats.Get(bucketName),
-		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{globalReplicationStats.getNodeQueueStats(bucketName)}},
-		ProxyStats:       globalReplicationStats.getProxyStats(bucketName),
+		ReplicationStats: st.Get(bucketName),
+		QueueStats:       ReplicationQueueStats{Nodes: []ReplQNodeStats{st.getNodeQueueStats(bucketName)}},
+		ProxyStats:       st.getProxyStats(bucketName),
 	}
 	return &bs, nil
 }
@@ -516,9 +519,11 @@ func (s *peerRESTServer) GetSRMetricsHandler(mss *grid.MSS) (*SRMetricsSummary, 
 	if objAPI == nil {
 		return nil, grid.NewRemoteErr(errServerNotInitialized)
 	}
-
-	sm := globalReplicationStats.getSRMetricsForNode()
-	return &sm, nil
+	if st := globalReplicationStats.Load(); st != nil {
+		sm := st.getSRMetricsForNode()
+		return &sm, nil
+	}
+	return &SRMetricsSummary{}, nil
 }
 
 // LoadBucketMetadataHandler - reloads in memory bucket metadata
@@ -1173,7 +1178,7 @@ func (s *peerRESTServer) GetReplicationMRFHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucketName := vars[peerRESTBucket]
 	ctx := newContext(r, w, "GetReplicationMRF")
-	re, err := globalReplicationPool.getMRF(ctx, bucketName)
+	re, err := globalReplicationPool.Get().getMRF(ctx, bucketName)
 	if err != nil {
 		s.writeErrorResponse(w, err)
 		return

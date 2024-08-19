@@ -48,7 +48,7 @@ type conn interface {
 	// CreateKey creates a new key at the KMS with the given key ID.
 	CreateKey(context.Context, *CreateKeyRequest) error
 
-	ListKeyNames(context.Context, *ListRequest) ([]string, string, error)
+	ListKeys(context.Context, *ListRequest) ([]madmin.KMSKeyInfo, string, error)
 
 	// GenerateKey generates a new data encryption key using the
 	// key referenced by the key ID.

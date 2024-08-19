@@ -1082,17 +1082,12 @@ func serverMain(ctx *cli.Context) {
 
 		// initialize replication resync state.
 		bootstrapTrace("initResync", func() {
-			globalReplicationPool.initResync(GlobalContext, buckets, newObject)
+			globalReplicationPool.Get().initResync(GlobalContext, buckets, newObject)
 		})
 
 		// Initialize site replication manager after bucket metadata
 		bootstrapTrace("globalSiteReplicationSys.Init", func() {
 			globalSiteReplicationSys.Init(GlobalContext, newObject)
-		})
-
-		// Initialize quota manager.
-		bootstrapTrace("globalBucketQuotaSys.Init", func() {
-			globalBucketQuotaSys.Init(newObject)
 		})
 
 		// Populate existing buckets to the etcd backend
