@@ -162,31 +162,32 @@ internalAuth:
 	}
 
 	if caPublicKey != nil && pass == nil {
-
 		err := validateKey(c, key)
 		if err != nil {
 			return nil, errAuthentication
 		}
-
 	} else {
-
 		// Temporary credentials are not allowed.
 		if ui.Credentials.IsTemp() {
 			return nil, errAuthentication
 		}
-
 		if subtle.ConstantTimeCompare([]byte(ui.Credentials.SecretKey), pass) != 1 {
 			return nil, errAuthentication
 		}
+
+	}
+
+	copts := map[string]string{
+		"AccessKey": ui.Credentials.AccessKey,
+		"SecretKey": ui.Credentials.SecretKey,
+	}
+	if ui.Credentials.IsTemp() {
+		copts["SessionToken"] = ui.Credentials.SessionToken
 	}
 
 	return &ssh.Permissions{
-		CriticalOptions: map[string]string{
-			"AccessKey":    ui.Credentials.AccessKey,
-			"SecretKey":    ui.Credentials.SecretKey,
-			"SessionToken": ui.Credentials.SessionToken,
-		},
-		Extensions: make(map[string]string),
+		CriticalOptions: copts,
+		Extensions:      make(map[string]string),
 	}, nil
 }
 
@@ -207,9 +208,8 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 
 			return &ssh.Permissions{
 				CriticalOptions: map[string]string{
-					"AccessKey":    sa.Credentials.AccessKey,
-					"SecretKey":    sa.Credentials.SecretKey,
-					"SessionToken": sa.Credentials.SessionToken,
+					"AccessKey": sa.Credentials.AccessKey,
+					"SecretKey": sa.Credentials.SecretKey,
 				},
 				Extensions: make(map[string]string),
 			}, nil
