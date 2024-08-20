@@ -230,8 +230,11 @@ func (s *erasureSets) connectDisks(log bool) {
 				}
 				return
 			}
-			if disk.IsLocal() && disk.Healing() != nil {
-				globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
+			if disk.IsLocal() {
+				h := disk.Healing()
+				if h != nil && !h.Finished {
+					globalBackgroundHealState.pushHealLocalDisks(disk.Endpoint())
+				}
 			}
 			s.erasureDisksMu.Lock()
 			setIndex, diskIndex, err := findDiskIndex(s.format, format)

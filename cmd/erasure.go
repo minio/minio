@@ -203,11 +203,9 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 			di.State = diskErrToDriveState(err)
 			di.FreeInodes = info.FreeInodes
 			di.UsedInodes = info.UsedInodes
-			if info.Healing {
-				if hi := disks[index].Healing(); hi != nil {
-					hd := hi.toHealingDisk()
-					di.HealInfo = &hd
-				}
+			if hi := disks[index].Healing(); hi != nil {
+				hd := hi.toHealingDisk()
+				di.HealInfo = &hd
 			}
 			di.Metrics = &madmin.DiskMetrics{
 				LastMinute:              make(map[string]madmin.TimedAction, len(info.Metrics.LastMinute)),
