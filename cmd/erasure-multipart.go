@@ -110,7 +110,7 @@ func (er erasureObjects) checkUploadIDExists(ctx context.Context, bucket, object
 	return fi, partsMetadata, err
 }
 
-// cleanMultipartPath removes all extraneous files and parts from the multipart folder, this is used per CompleteMultipart.
+// cleanupMultipartPath removes all extraneous files and parts from the multipart folder, this is used per CompleteMultipart.
 // do not use this function outside of completeMultipartUpload()
 func (er erasureObjects) cleanupMultipartPath(ctx context.Context, paths ...string) {
 	storageDisks := er.getDisks()

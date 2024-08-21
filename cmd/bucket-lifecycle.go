@@ -1003,7 +1003,7 @@ func ongoingRestoreObj() restoreObjStatus {
 	}
 }
 
-// completeRestoreObj constructs restoreObjStatus for a completed restore-object with given expiry.
+// completedRestoreObj constructs restoreObjStatus for a completed restore-object with given expiry.
 func completedRestoreObj(expiry time.Time) restoreObjStatus {
 	return restoreObjStatus{
 		ongoing: false,
