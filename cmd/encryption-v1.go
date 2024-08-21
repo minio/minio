@@ -1104,7 +1104,7 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 	}
 }
 
-// decryptChecksums will attempt to decode checksums and return it/them if set.
+// decryptPartsChecksums will attempt to decode checksums and return it/them if set.
 // if part > 0, and we have the checksum for the part that will be returned.
 func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 	data := o.Checksum
