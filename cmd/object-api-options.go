@@ -225,9 +225,11 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 
 func parseObjectAttributes(h http.Header) (attributes map[string]struct{}) {
 	attributes = make(map[string]struct{})
-	for _, v := range strings.Split(strings.TrimSpace(h.Get(xhttp.AmzObjectAttributes)), ",") {
-		if v != "" {
-			attributes[v] = struct{}{}
+	for _, headerVal := range h.Values(xhttp.AmzObjectAttributes) {
+		for _, v := range strings.Split(strings.TrimSpace(headerVal), ",") {
+			if v != "" {
+				attributes[v] = struct{}{}
+			}
 		}
 	}
 
