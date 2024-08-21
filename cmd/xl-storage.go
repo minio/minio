@@ -2079,14 +2079,6 @@ func (s *xlStorage) ReadFileStream(ctx context.Context, volume, path string, off
 	return &sendFileReader{Reader: io.LimitReader(file, length), Closer: file}, nil
 }
 
-// closeWrapper converts a function to an io.Closer
-type closeWrapper func() error
-
-// Close calls the wrapped function.
-func (c closeWrapper) Close() error {
-	return c()
-}
-
 // CreateFile - creates the file.
 func (s *xlStorage) CreateFile(ctx context.Context, origvolume, volume, path string, fileSize int64, r io.Reader) (err error) {
 	if origvolume != "" {
