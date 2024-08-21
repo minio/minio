@@ -279,24 +279,7 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 		}, index)
 	}
 
-	var recreate bool
-	errs := g.Wait()
-	for index, err := range errs {
-		if errors.Is(err, errVolumeNotEmpty) {
-			recreate = true
-		}
-		if err == nil && recreate {
-			// ignore any errors
-			localDrives[index].MakeVol(ctx, bucket)
-		}
-	}
-
-	// Since we recreated buckets and error was `not-empty`, return not-empty.
-	if recreate {
-		return errVolumeNotEmpty
-	} // for all other errors reduce by write quorum.
-
-	return reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, (len(localDrives)/2)+1)
+	return reduceWriteQuorumErrs(ctx, g.Wait(), bucketOpIgnoredErrs, (len(localDrives)/2)+1)
 }
 
 func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions) error {
