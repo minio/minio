@@ -1980,6 +1980,34 @@ func (z *erasureServerPools) DeleteBucket(ctx context.Context, bucket string, op
 		defer lk.Unlock(lkctx)
 	}
 
+	if !opts.Force {
+		results := make(chan itemOrErr[ObjectInfo])
+
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		err := z.Walk(ctx, bucket, "", results, WalkOptions{Limit: 1})
+		if err != nil {
+			s3LogIf(ctx, fmt.Errorf("unable to verify if the bucket %s is empty: %w", bucket, err))
+			return toObjectErr(err, bucket)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case r, found := <-results:
+			if found {
+				if r.Err != nil {
+					s3LogIf(ctx, fmt.Errorf("unable to verify if the bucket %s is empty: %w", bucket, r.Err))
+					return toObjectErr(r.Err, bucket)
+				}
+				return toObjectErr(errVolumeNotEmpty, bucket)
+			}
+		}
+
+		// Always pass force to the lower level
+		opts.Force = true
+	}
+
 	err := z.s3Peer.DeleteBucket(ctx, bucket, opts)
 	if err == nil || isErrBucketNotFound(err) {
 		// If site replication is configured, hold on to deleted bucket state until sites sync
@@ -2198,6 +2226,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 					filterPrefix:   filterPrefix,
 					recursive:      true,
 					forwardTo:      opts.Marker,
+					perDiskLimit:   opts.Limit,
 					minDisks:       listingQuorum,
 					reportNotFound: false,
 					agreed:         send,

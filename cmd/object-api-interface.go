@@ -145,6 +145,7 @@ type WalkOptions struct {
 	LatestOnly   bool                     // returns only latest versions for all matching objects
 	AskDisks     string                   // dictates how many disks are being listed
 	VersionsSort WalkVersionsSortOrder    // sort order for versions of the same object; default: Ascending order in ModTime
+	Limit        int                      // maximum number of items, 0 means no limit
 }
 
 // ExpirationOptions represents object options for object expiration at objectLayer.
