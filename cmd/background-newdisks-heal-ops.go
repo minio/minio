@@ -148,6 +148,26 @@ func initHealingTracker(disk StorageAPI, healID string) *healingTracker {
 	return h
 }
 
+func (h *healingTracker) resetHealing() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.ItemsHealed = 0
+	h.ItemsFailed = 0
+	h.BytesDone = 0
+	h.BytesFailed = 0
+	h.ResumeItemsHealed = 0
+	h.ResumeItemsFailed = 0
+	h.ResumeBytesDone = 0
+	h.ResumeBytesFailed = 0
+	h.ItemsSkipped = 0
+	h.BytesSkipped = 0
+
+	h.HealedBuckets = nil
+	h.Object = ""
+	h.Bucket = ""
+}
+
 func (h *healingTracker) getLastUpdate() time.Time {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -349,6 +369,7 @@ func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
 		Object:            h.Object,
 		QueuedBuckets:     h.QueuedBuckets,
 		HealedBuckets:     h.HealedBuckets,
+		RetryAttempts:     h.RetryAttempts,
 
 		ObjectsHealed: h.ItemsHealed, // Deprecated July 2021
 		ObjectsFailed: h.ItemsFailed, // Deprecated July 2021
@@ -482,16 +503,19 @@ func healFreshDisk(ctx context.Context, z *erasureServerPools, endpoint Endpoint
 	// if objects have failed healing, we attempt a retry to heal the drive upto 3 times before giving up.
 	if tracker.ItemsFailed > 0 && tracker.RetryAttempts < 4 {
 		tracker.RetryAttempts++
-		bugLogIf(ctx, tracker.update(ctx))
 
 		healingLogEvent(ctx, "Healing of drive '%s' is incomplete, retrying %s time (healed: %d, skipped: %d, failed: %d).", disk,
 			humanize.Ordinal(int(tracker.RetryAttempts)), tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
+
+		tracker.resetHealing()
+		bugLogIf(ctx, tracker.update(ctx))
+
 		return errRetryHealing
 	}
 
 	if tracker.ItemsFailed > 0 {
 		healingLogEvent(ctx, "Healing of drive '%s' is incomplete, retried %d times (healed: %d, skipped: %d, failed: %d).", disk,
-			tracker.RetryAttempts-1, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
+			tracker.RetryAttempts, tracker.ItemsHealed, tracker.ItemsSkipped, tracker.ItemsFailed)
 	} else {
 		if tracker.RetryAttempts > 0 {
 			healingLogEvent(ctx, "Healing of drive '%s' is complete, retried %d times (healed: %d, skipped: %d).", disk,
