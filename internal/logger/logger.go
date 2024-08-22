@@ -20,7 +20,6 @@ package logger
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"go/build"
@@ -422,9 +421,7 @@ func sendLog(ctx context.Context, entry log.Entry) {
 	for _, t := range systemTgts {
 		if err := t.Send(ctx, entry); err != nil {
 			if consoleTgt != nil { // Sending to the console never fails
-				b, _ := json.Marshal(entry)
-				entry.Trace.Message = fmt.Sprintf("sendLog: event %s was not sent to Logger target (%v): %v", string(b), t.String(), err.Error())
-				consoleTgt.Send(ctx, entry)
+				consoleTgt.Send(ctx, errToEntry(ctx, "logging", fmt.Errorf("unable to send log event to Logger target (%s): %v", t.String(), err), entry.Level))
 			}
 		}
 	}
