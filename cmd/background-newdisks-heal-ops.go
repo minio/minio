@@ -369,6 +369,7 @@ func (h *healingTracker) toHealingDisk() madmin.HealingDisk {
 		Object:            h.Object,
 		QueuedBuckets:     h.QueuedBuckets,
 		HealedBuckets:     h.HealedBuckets,
+		RetryAttempts:     h.RetryAttempts,
 
 		ObjectsHealed: h.ItemsHealed, // Deprecated July 2021
 		ObjectsFailed: h.ItemsFailed, // Deprecated July 2021
