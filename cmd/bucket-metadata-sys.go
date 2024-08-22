@@ -264,6 +264,21 @@ func (sys *BucketMetadataSys) GetVersioningConfig(bucket string) (*versioning.Ve
 	return meta.versioningConfig, meta.VersioningConfigUpdatedAt, nil
 }
 
+// GetBucketPolicy returns configured bucket policy
+func (sys *BucketMetadataSys) GetBucketPolicy(bucket string) (*policy.BucketPolicy, time.Time, error) {
+	meta, _, err := sys.GetConfig(GlobalContext, bucket)
+	if err != nil {
+		if errors.Is(err, errConfigNotFound) {
+			return nil, time.Time{}, BucketPolicyNotFound{Bucket: bucket}
+		}
+		return nil, time.Time{}, err
+	}
+	if meta.policyConfig == nil {
+		return nil, time.Time{}, BucketPolicyNotFound{Bucket: bucket}
+	}
+	return meta.policyConfig, meta.PolicyConfigUpdatedAt, nil
+}
+
 // GetTaggingConfig returns configured tagging config
 // The returned object may not be modified.
 func (sys *BucketMetadataSys) GetTaggingConfig(bucket string) (*tags.Tags, time.Time, error) {
