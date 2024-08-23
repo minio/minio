@@ -23,9 +23,10 @@ import (
 	"net/url"
 	"strings"
 
+	xnet "github.com/minio/pkg/v3/net"
+
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/logger"
-	xnet "github.com/minio/pkg/v3/net"
 )
 
 // generates format string depending on the string length and padding.
@@ -143,7 +144,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 // Prints startup message for Object API access, prints link to our SDK documentation.
 func printObjectAPIMsg() {
-	logger.Startup(color.Blue("\nDocs: ") + "https://min.io/docs/minio/linux/index.html")
+	logger.Startup(color.Blue("\nDocs: ") + "https://docs.min.io")
 }
 
 func printLambdaTargets() {
