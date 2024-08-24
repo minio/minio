@@ -578,8 +578,7 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 	return reader, nil
 }
 
-// DecryptBlocksRequestR - same as DecryptBlocksRequest but with a
-// reader
+// DecryptBlocksRequestR - same as DecryptBlocksRequest but with a reader
 func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint32, partStart int, oi ObjectInfo, copySource bool) (io.Reader, error) {
 	bucket, object := oi.Bucket, oi.Name
 	// Single part case
@@ -612,7 +611,30 @@ func DecryptBlocksRequestR(inputReader io.Reader, h http.Header, seqNumber uint3
 		object:            object,
 		customerKeyHeader: h.Get(xhttp.AmzServerSideEncryptionCustomerKey),
 		copySource:        copySource,
-		metadata:          cloneMSS(oi.UserDefined),
+	}
+
+	// Initialize the first decrypter; new decrypters will be
+	// initialized in Read() operation as needed.
+	var key []byte
+	var err error
+	if w.copySource {
+		if crypto.SSEC.IsEncrypted(oi.UserDefined) {
+			w.header.Set(xhttp.AmzServerSideEncryptionCopyCustomerKey, w.customerKeyHeader)
+			key, err = ParseSSECopyCustomerRequest(w.header, oi.UserDefined)
+		}
+	} else {
+		if crypto.SSEC.IsEncrypted(oi.UserDefined) {
+			w.header.Set(xhttp.AmzServerSideEncryptionCustomerKey, w.customerKeyHeader)
+			key, err = ParseSSECustomerHeader(w.header)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	w.oek, err = decryptObjectMeta(key, w.bucket, w.object, oi.UserDefined)
+	if err != nil {
+		return nil, err
 	}
 
 	if w.copySource {
@@ -641,7 +663,9 @@ type DecryptBlocksReader struct {
 	parts          []ObjectPartInfo
 	header         http.Header
 	bucket, object string
-	metadata       map[string]string
+	// object encryption key
+	// this is same for all parts
+	oek []byte
 
 	partDecRelOffset, partEncRelOffset int64
 
@@ -651,35 +675,10 @@ type DecryptBlocksReader struct {
 }
 
 func (d *DecryptBlocksReader) buildDecrypter(partID int) error {
-	m := cloneMSS(d.metadata)
-	// Initialize the first decrypter; new decrypters will be
-	// initialized in Read() operation as needed.
-	var key []byte
-	var err error
-	if d.copySource {
-		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.header.Set(xhttp.AmzServerSideEncryptionCopyCustomerKey, d.customerKeyHeader)
-			key, err = ParseSSECopyCustomerRequest(d.header, d.metadata)
-		}
-	} else {
-		if crypto.SSEC.IsEncrypted(d.metadata) {
-			d.header.Set(xhttp.AmzServerSideEncryptionCustomerKey, d.customerKeyHeader)
-			key, err = ParseSSECustomerHeader(d.header)
-		}
-	}
-	if err != nil {
-		return err
-	}
-
-	objectEncryptionKey, err := decryptObjectMeta(key, d.bucket, d.object, m)
-	if err != nil {
-		return err
-	}
-
 	var partIDbin [4]byte
 	binary.LittleEndian.PutUint32(partIDbin[:], uint32(partID)) // marshal part ID
 
-	mac := hmac.New(sha256.New, objectEncryptionKey) // derive part encryption key from part ID and object key
+	mac := hmac.New(sha256.New, d.oek) // derive part encryption key from part ID and object key
 	mac.Write(partIDbin[:])
 	partEncryptionKey := mac.Sum(nil)
 
