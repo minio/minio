@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -367,7 +368,7 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 // information in IAM (i.e sys.iam*Map) - this info is stored only in the STS
 // generated credentials. Thus we skip looking up group memberships, user map,
 // and group map and check the appropriate policy maps directly.
-func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([]string, time.Time, error) {
+func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool, policyPresent bool) ([]string, time.Time, error) {
 	if isGroup {
 		if store.getUsersSysType() == MinIOUsersSysType {
 			g, ok := c.iamGroupsMap[name]
@@ -392,105 +393,107 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 		if ok {
 			return policy.toSlice(), policy.UpdatedAt, nil
 		}
-		if err := store.loadMappedPolicyWithRetry(context.TODO(), name, regUser, true, c.iamGroupPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return nil, time.Time{}, err
-		}
-		policy, _ = c.iamGroupPolicyMap.Load(name)
-		return policy.toSlice(), policy.UpdatedAt, nil
-	}
-
-	// When looking for a user's policies, we also check if the user
-	// and the groups they are member of are enabled.
-	u, ok := c.iamUsersMap[name]
-	if ok {
-		if !u.Credentials.IsValid() {
-			return nil, time.Time{}, nil
-		}
-	}
-
-	// For internal IDP regular/service account user accounts, the policy
-	// mapping is iamUserPolicyMap. For STS accounts, the parent user would be
-	// passed here and we lookup the mapping in iamSTSPolicyMap.
-	mp, ok := c.iamUserPolicyMap.Load(name)
-	if !ok {
-		if err := store.loadMappedPolicyWithRetry(context.TODO(), name, regUser, false, c.iamUserPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return nil, time.Time{}, err
-		}
-
-		mp, ok = c.iamUserPolicyMap.Load(name)
-		if !ok {
-			// Since user "name" could be a parent user of an STS account, we look up
-			// mappings for those too.
-			mp, ok = c.iamSTSPolicyMap.Load(name)
-			if !ok {
-				// Attempt to load parent user mapping for STS accounts
-				if err := store.loadMappedPolicyWithRetry(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
-					return nil, time.Time{}, err
-				}
-				mp, _ = c.iamSTSPolicyMap.Load(name)
+		if !policyPresent {
+			if err := store.loadMappedPolicy(context.TODO(), name, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return nil, time.Time{}, err
 			}
+			policy, _ = c.iamGroupPolicyMap.Load(name)
+			return policy.toSlice(), policy.UpdatedAt, nil
 		}
+		return nil, time.Time{}, nil
 	}
 
 	// returned policy could be empty, we use set to de-duplicate.
-	policies := set.CreateStringSet(mp.toSlice()...)
+	var policies set.StringSet
+	var updatedAt time.Time
 
-	for _, group := range u.Credentials.Groups {
-		if store.getUsersSysType() == MinIOUsersSysType {
-			g, ok := c.iamGroupsMap[group]
-			if !ok {
-				if err := store.loadGroup(context.Background(), group, c.iamGroupsMap); err != nil {
-					return nil, time.Time{}, err
-				}
-				g, ok = c.iamGroupsMap[group]
-				if !ok {
-					return nil, time.Time{}, errNoSuchGroup
-				}
+	if store.getUsersSysType() == LDAPUsersSysType {
+		// For LDAP policy mapping is part of STS users, we only need to lookup
+		// those mappings.
+		mp, ok := c.iamSTSPolicyMap.Load(name)
+		if !ok {
+			// Attempt to load parent user mapping for STS accounts
+			if err := store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return nil, time.Time{}, err
 			}
-
-			// Group is disabled, so we return no policy - this
-			// ensures the request is denied.
-			if g.Status == statusDisabled {
+			mp, _ = c.iamSTSPolicyMap.Load(name)
+		}
+		policies = set.CreateStringSet(mp.toSlice()...)
+		updatedAt = mp.UpdatedAt
+	} else {
+		// When looking for a user's policies, we also check if the user
+		// and the groups they are member of are enabled.
+		u, ok := c.iamUsersMap[name]
+		if ok {
+			if !u.Credentials.IsValid() {
 				return nil, time.Time{}, nil
 			}
 		}
 
-		policy, ok := c.iamGroupPolicyMap.Load(group)
+		// For internal IDP regular/service account user accounts, the policy
+		// mapping is iamUserPolicyMap. For STS accounts, the parent user would be
+		// passed here and we lookup the mapping in iamSTSPolicyMap.
+		mp, ok := c.iamUserPolicyMap.Load(name)
 		if !ok {
-			if err := store.loadMappedPolicyWithRetry(context.TODO(), group, regUser, true, c.iamGroupPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
+			if err := store.loadMappedPolicy(context.TODO(), name, regUser, false, c.iamUserPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 				return nil, time.Time{}, err
 			}
-			policy, _ = c.iamGroupPolicyMap.Load(group)
+			mp, ok = c.iamUserPolicyMap.Load(name)
+			if !ok {
+				// Since user "name" could be a parent user of an STS account, we look up
+				// mappings for those too.
+				mp, ok = c.iamSTSPolicyMap.Load(name)
+				if !ok {
+					// Attempt to load parent user mapping for STS accounts
+					if err := store.loadMappedPolicy(context.TODO(), name, stsUser, false, c.iamSTSPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+						return nil, time.Time{}, err
+					}
+					mp, _ = c.iamSTSPolicyMap.Load(name)
+				}
+			}
 		}
+		policies = set.CreateStringSet(mp.toSlice()...)
 
-		for _, p := range policy.toSlice() {
-			policies.Add(p)
+		for _, group := range u.Credentials.Groups {
+			g, ok := c.iamGroupsMap[group]
+			if ok {
+				// Group is disabled, so we return no policy - this
+				// ensures the request is denied.
+				if g.Status == statusDisabled {
+					return nil, time.Time{}, nil
+				}
+			}
+
+			policy, ok := c.iamGroupPolicyMap.Load(group)
+			if !ok {
+				if err := store.loadMappedPolicy(context.TODO(), group, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+					return nil, time.Time{}, err
+				}
+				policy, _ = c.iamGroupPolicyMap.Load(group)
+			}
+
+			for _, p := range policy.toSlice() {
+				policies.Add(p)
+			}
 		}
+		updatedAt = mp.UpdatedAt
 	}
 
 	for _, group := range c.iamUserGroupMemberships[name].ToSlice() {
 		if store.getUsersSysType() == MinIOUsersSysType {
 			g, ok := c.iamGroupsMap[group]
-			if !ok {
-				if err := store.loadGroup(context.Background(), group, c.iamGroupsMap); err != nil {
-					return nil, time.Time{}, err
+			if ok {
+				// Group is disabled, so we return no policy - this
+				// ensures the request is denied.
+				if g.Status == statusDisabled {
+					return nil, time.Time{}, nil
 				}
-				g, ok = c.iamGroupsMap[group]
-				if !ok {
-					return nil, time.Time{}, errNoSuchGroup
-				}
-			}
-
-			// Group is disabled, so we return no policy - this
-			// ensures the request is denied.
-			if g.Status == statusDisabled {
-				return nil, time.Time{}, nil
 			}
 		}
 
 		policy, ok := c.iamGroupPolicyMap.Load(group)
 		if !ok {
-			if err := store.loadMappedPolicyWithRetry(context.TODO(), group, regUser, true, c.iamGroupPolicyMap, 3); err != nil && !errors.Is(err, errNoSuchPolicy) {
+			if err := store.loadMappedPolicy(context.TODO(), group, regUser, true, c.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 				return nil, time.Time{}, err
 			}
 			policy, _ = c.iamGroupPolicyMap.Load(group)
@@ -501,7 +504,7 @@ func (c *iamCache) policyDBGet(store *IAMStoreSys, name string, isGroup bool) ([
 		}
 	}
 
-	return policies.ToSlice(), mp.UpdatedAt, nil
+	return policies.ToSlice(), updatedAt, nil
 }
 
 func (c *iamCache) updateUserWithClaims(key string, u UserIdentity) error {
@@ -754,13 +757,14 @@ func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, 
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, _, err := cache.policyDBGet(store, name, false)
+	policies, _, err := cache.policyDBGet(store, name, false, false)
 	if err != nil {
 		return nil, err
 	}
 
+	userPolicyPresent := len(policies) > 0
 	for _, group := range groups {
-		ps, _, err := cache.policyDBGet(store, group, true)
+		ps, _, err := cache.policyDBGet(store, group, true, userPolicyPresent)
 		if err != nil {
 			return nil, err
 		}
@@ -945,7 +949,7 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	cache := store.rlock()
 	defer store.runlock()
 
-	ps, updatedAt, err := cache.policyDBGet(store, group, true)
+	ps, updatedAt, err := cache.policyDBGet(store, group, true, false)
 	if err != nil {
 		return gd, err
 	}
@@ -974,33 +978,45 @@ func (store *IAMStoreSys) GetGroupDescription(group string) (gd madmin.GroupDesc
 	}, nil
 }
 
+// updateGroups updates the group from the persistent store, and also related policy mapping if any.
 func (store *IAMStoreSys) updateGroups(ctx context.Context, cache *iamCache) (res []string, err error) {
-	if store.getUsersSysType() == MinIOUsersSysType {
-		m := map[string]GroupInfo{}
-		err = store.loadGroups(ctx, m)
+	if iamOS, ok := store.IAMStorageAPI.(*IAMObjectStore); ok {
+		listedConfigItems, err := iamOS.listAllIAMConfigItems(ctx)
 		if err != nil {
-			return
+			return nil, err
 		}
-		cache.iamGroupsMap = m
-		cache.updatedAt = time.Now()
-		for k := range cache.iamGroupsMap {
-			res = append(res, k)
+		if store.getUsersSysType() == MinIOUsersSysType {
+			groupsList := listedConfigItems[groupsListKey]
+			for _, item := range groupsList {
+				group := path.Dir(item)
+				if err = iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && !errors.Is(err, errNoSuchGroup) {
+					return nil, fmt.Errorf("unable to load the group: %w", err)
+				}
+				res = append(res, group)
+			}
 		}
+
+		groupPolicyMappingsList := listedConfigItems[policyDBGroupsListKey]
+		for _, item := range groupPolicyMappingsList {
+			group := strings.TrimSuffix(item, ".json")
+			if err = iamOS.loadMappedPolicy(ctx, group, regUser, true, cache.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return nil, fmt.Errorf("unable to load the policy mapping for the group: %w", err)
+			}
+			res = append(res, group)
+		}
+
+		return res, nil
 	}
 
-	if store.getUsersSysType() == LDAPUsersSysType {
-		m := xsync.NewMapOf[string, MappedPolicy]()
-		err = store.loadMappedPolicies(ctx, stsUser, true, m)
-		if err != nil {
-			return
-		}
-		cache.iamGroupPolicyMap = m
-		cache.updatedAt = time.Now()
-		cache.iamGroupPolicyMap.Range(func(k string, v MappedPolicy) bool {
-			res = append(res, k)
-			return true
-		})
+	// For etcd just return from cache.
+	for k := range cache.iamGroupsMap {
+		res = append(res, k)
 	}
+
+	cache.iamGroupPolicyMap.Range(func(k string, v MappedPolicy) bool {
+		res = append(res, k)
+		return true
+	})
 
 	return res, nil
 }
@@ -2800,14 +2816,8 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 		}
 
 		if groupLoad {
-			load := len(newCache.iamGroupsMap) == 0
-			if store.getUsersSysType() == LDAPUsersSysType && newCache.iamGroupPolicyMap.Size() == 0 {
-				load = true
-			}
-			if load {
-				// NOTE: we are not worried about loading errors from groups.
-				store.updateGroups(ctx, newCache)
-			}
+			// NOTE: we are not worried about loading errors from groups.
+			store.updateGroups(ctx, newCache)
 			newCache.buildUserGroupMemberships()
 		}
 
