@@ -268,6 +268,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
 	if ifNoneMatchETagHeader != "" {
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
+			// Do not care If-Modified-Since, if true also return 304 (not modified), other false walk to follow check return 304 (not modified)
 			// If the object ETag matches with the specified ETag.
 			writeHeadersPrecondition(w, objInfo)
 			w.WriteHeader(http.StatusNotModified)
@@ -298,6 +299,12 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			writeHeadersPrecondition(w, objInfo)
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 			return true
+		} else if !checkIfUnmodifiedSince(r, objInfo) {
+			// If both of the If-Match and If-Unmodified-Since headers are  present in the request as follows:
+			// 	If-Match condition evaluates to true , and;
+			// 	If-Unmodified-Since condition evaluates to false ;
+			// Then Amazon S3 returns 200 OK and the data requested.
+			return false
 		}
 	}
 
@@ -319,11 +326,23 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	return false
 }
 
+// checkIfUnmodifiedSince - return true if object was modified after(Including critical values) ifUnmodifiedSinceHeader time
+// return false if the header of If-Unmodified-Since was empty or object was modified before(Excluding critical values) ifUnmodifiedSinceHeader time
+func checkIfUnmodifiedSince(r *http.Request, objInfo ObjectInfo) bool {
+	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
+	if ifUnmodifiedSinceHeader != "" {
+		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
+			return !ifModifiedSince(objInfo.ModTime, givenTime)
+		}
+	}
+	return false
+}
+
 // returns true if object was modified after givenTime.
 func ifModifiedSince(objTime time.Time, givenTime time.Time) bool {
-	// The Date-Modified header truncates sub-second precision, so
-	// use mtime < t+1s instead of mtime <= t to check for unmodified.
-	return objTime.After(givenTime.Add(1 * time.Second))
+	// return true if givenTime < objTime (object has been modified since givenTime)
+	// return false if givenTime >= objTime (object has not been modified since givenTime)
+	return givenTime.Before(objTime)
 }
 
 // canonicalizeETag returns ETag with leading and trailing double-quotes removed,

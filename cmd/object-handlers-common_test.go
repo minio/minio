@@ -18,7 +18,14 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
+	xhttp "github.com/minio/minio/internal/http"
+	"github.com/stretchr/testify/assert"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // Tests - canonicalizeETag()
@@ -50,4 +57,57 @@ func TestCanonicalizeETag(t *testing.T) {
 			t.Fatalf("Expected %s , got %s", test.canonicalizedETag, etag)
 		}
 	}
+}
+
+// Tests - CheckPreconditions()
+func TestCheckPreconditions(t *testing.T) {
+	objModTime := time.Date(2024, 8, 26, 02, 01, 01, 0, time.UTC)
+	t.Run("If-None-Match", func(t *testing.T) {
+		testCases := []struct {
+			ifNoneMatch     string
+			ifModifiedSince string
+			objInfo         ObjectInfo
+			expectedFlag    bool
+			expectedCode    int
+		}{
+			// If-None-Match(false) and If-Modified-Since(true)
+			{ifNoneMatch: "aa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:00 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
+			// If-Modified-Since(false)
+			{ifNoneMatch: "aaa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
+			{ifNoneMatch: "aaa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
+		}
+		for _, tc := range testCases {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodHead, "/bucket/a", bytes.NewReader([]byte{}))
+			request.Header.Set(xhttp.IfNoneMatch, tc.ifNoneMatch)
+			request.Header.Set(xhttp.IfModifiedSince, tc.ifModifiedSince)
+			actualFlag := checkPreconditions(context.Background(), recorder, request, tc.objInfo, ObjectOptions{})
+			assert.Equal(t, tc.expectedFlag, actualFlag)
+			assert.Equal(t, tc.expectedCode, recorder.Code)
+		}
+	})
+	t.Run("If-Match", func(t *testing.T) {
+		testCases := []struct {
+			ifMatch           string
+			ifUnmodifiedSince string
+			objInfo           ObjectInfo
+			expectedFlag      bool
+			expectedCode      int
+		}{
+			// If-Match(true) and If-Unmodified-Since(false)
+			{ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:00 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
+			// If-Unmodified-Since(true)
+			{ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
+			{ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
+		}
+		for _, tc := range testCases {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodHead, "/bucket/a", bytes.NewReader([]byte{}))
+			request.Header.Set(xhttp.IfMatch, tc.ifMatch)
+			request.Header.Set(xhttp.IfUnmodifiedSince, tc.ifUnmodifiedSince)
+			actualFlag := checkPreconditions(context.Background(), recorder, request, tc.objInfo, ObjectOptions{})
+			assert.Equal(t, tc.expectedFlag, actualFlag)
+			assert.Equal(t, tc.expectedCode, recorder.Code)
+		}
+	})
 }
