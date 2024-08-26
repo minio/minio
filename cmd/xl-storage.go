@@ -94,6 +94,8 @@ func isValidVolname(volname string) bool {
 
 // xlStorage - implements StorageAPI interface.
 type xlStorage struct {
+	bgCancel context.CancelFunc // a function to cancel long running background routines
+
 	// Indicate of NSScanner is in progress in this disk
 	scanning int32
 
@@ -216,7 +218,11 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	if globalIsTesting || globalIsCICD {
 		immediatePurgeQueue = 1
 	}
+
+	bgCtxt, bgCancel := context.WithCancel(GlobalContext)
+
 	s = &xlStorage{
+		bgCancel:       bgCancel,
 		drivePath:      ep.Path,
 		endpoint:       ep,
 		globalSync:     globalFSOSync,
@@ -226,7 +232,7 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 
 	defer func() {
 		if err == nil {
-			go s.cleanupTrashImmediateCallers(GlobalContext)
+			go s.cleanupTrashImmediateCallers(bgCtxt)
 		}
 	}()
 
@@ -399,7 +405,8 @@ func (s *xlStorage) Endpoint() Endpoint {
 	return s.endpoint
 }
 
-func (*xlStorage) Close() error {
+func (s *xlStorage) Close() error {
+	s.bgCancel()
 	return nil
 }
 
