@@ -20,11 +20,12 @@ package cmd
 import (
 	"bytes"
 	"context"
-	xhttp "github.com/minio/minio/internal/http"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // Tests - canonicalizeETag()
@@ -60,7 +61,7 @@ func TestCanonicalizeETag(t *testing.T) {
 
 // Tests - CheckPreconditions()
 func TestCheckPreconditions(t *testing.T) {
-	objModTime := time.Date(2024, 8, 26, 02, 01, 01, 0, time.UTC)
+	objModTime := time.Date(2024, 8, 26, 0o2, 0o1, 0o1, 0, time.UTC)
 	testCases := []struct {
 		name              string
 		ifMatch           string
