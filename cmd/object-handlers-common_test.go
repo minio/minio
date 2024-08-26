@@ -21,7 +21,6 @@ import (
 	"bytes"
 	"context"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,14 +75,18 @@ func TestCheckPreconditions(t *testing.T) {
 			{ifNoneMatch: "aaa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
 			{ifNoneMatch: "aaa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
 		}
-		for _, tc := range testCases {
+		for i, tc := range testCases {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodHead, "/bucket/a", bytes.NewReader([]byte{}))
 			request.Header.Set(xhttp.IfNoneMatch, tc.ifNoneMatch)
 			request.Header.Set(xhttp.IfModifiedSince, tc.ifModifiedSince)
 			actualFlag := checkPreconditions(context.Background(), recorder, request, tc.objInfo, ObjectOptions{})
-			assert.Equal(t, tc.expectedFlag, actualFlag)
-			assert.Equal(t, tc.expectedCode, recorder.Code)
+			if tc.expectedFlag != actualFlag {
+				t.Errorf("Test Name:%s, test case:%d is fail", t.Name(), i+1)
+			}
+			if tc.expectedCode != recorder.Code {
+				t.Errorf("Test Name:%s, test case:%d is fail", t.Name(), i+1)
+			}
 		}
 	})
 	t.Run("If-Match", func(t *testing.T) {
@@ -100,14 +103,18 @@ func TestCheckPreconditions(t *testing.T) {
 			{ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
 			{ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
 		}
-		for _, tc := range testCases {
+		for i, tc := range testCases {
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodHead, "/bucket/a", bytes.NewReader([]byte{}))
 			request.Header.Set(xhttp.IfMatch, tc.ifMatch)
 			request.Header.Set(xhttp.IfUnmodifiedSince, tc.ifUnmodifiedSince)
 			actualFlag := checkPreconditions(context.Background(), recorder, request, tc.objInfo, ObjectOptions{})
-			assert.Equal(t, tc.expectedFlag, actualFlag)
-			assert.Equal(t, tc.expectedCode, recorder.Code)
+			if tc.expectedFlag != actualFlag {
+				t.Errorf("Test Name:%s, test case:%d is fail", t.Name(), i+1)
+			}
+			if tc.expectedCode != recorder.Code {
+				t.Errorf("Test Name:%s, test case:%d is fail", t.Name(), i+1)
+			}
 		}
 	})
 }
