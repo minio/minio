@@ -87,16 +87,16 @@ func (c *MultipartUploadCache) Set(key string, value MultipartUpload) {
 
 // Has returns true if cache contains the key
 func (c *MultipartUploadCache) Has(key string) bool {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	_, exists := c.data[key]
 	return exists
 }
 
 // Remove removes given entry from cache
 func (c *MultipartUploadCache) Remove(key string) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	delete(c.data, key)
 }
 
@@ -1772,6 +1772,8 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 
 	// if no prefix provided, return the list from cache
 	if prefix == "" {
+		z.multipartUploadsCache.mutex.Lock()
+		defer z.multipartUploadsCache.mutex.Unlock()
 		for _, entry := range z.multipartUploadsCache.data {
 			upload := MultipartInfo{
 				Bucket:   entry.Upload.Bucket,

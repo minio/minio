@@ -918,6 +918,9 @@ func (s *peerRESTServer) HandlerCleanupUploadIDCache(mss *grid.MSS) (np grid.NoP
 	}
 
 	uploadID := mss.Get(peerRESTCleanUploadID)
+	if uploadID == "" {
+		return np, grid.NewRemoteErr(errors.New("empty uploadID"))
+	}
 
 	pools.CleanupUploadIDCache(uploadID)
 	return
