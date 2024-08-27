@@ -377,7 +377,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	bootstrapTraceMsg("finishing IAM loading")
 
-	// Set the flag that IAM initialzied fine
+	// Set the flag that IAM initialized fine
 	globalIAMFullyInitialized = localIAMInitialized
 }
 
