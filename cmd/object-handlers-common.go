@@ -270,7 +270,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
 			// Do not care If-Modified-Since, Because:
 			// 1. If If-Modified-Since condition evaluates to true.
-			//  If both of  the  If-None-Match  and  If-Modified-Since  headers  are present in the request as follows:
+			//  If both of the If-None-Match and If-Modified-Since headers are present in the request as follows:
 			// 	If-None-Match condition evaluates to false , and;
 			//  If-Modified-Since condition evaluates to true ;
 			// 	Then Amazon S3 returns the 304 Not Modified response code.
@@ -307,7 +307,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 			return true
 		} else if !checkIfUnmodifiedSince(r, objInfo) {
-			// If both of the If-Match and If-Unmodified-Since headers are  present in the request as follows:
+			// If both of the If-Match and If-Unmodified-Since headers are present in the request as follows:
 			// 	If-Match condition evaluates to true , and;
 			// 	If-Unmodified-Since condition evaluates to false ;
 			// Then Amazon S3 returns 200 OK and the data requested.
@@ -333,8 +333,8 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	return false
 }
 
-// checkIfUnmodifiedSince - return true if object was modified after(Including critical values) ifUnmodifiedSinceHeader time
-// return false if the header of If-Unmodified-Since was empty or object was modified before(Excluding critical values) ifUnmodifiedSinceHeader time
+// checkIfUnmodifiedSince - return true if object was modified after ifUnmodifiedSinceHeader time
+// return false if the header of If-Unmodified-Since was empty or object was modified before ifUnmodifiedSinceHeader time
 func checkIfUnmodifiedSince(r *http.Request, objInfo ObjectInfo) bool {
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
 	if ifUnmodifiedSinceHeader != "" {
