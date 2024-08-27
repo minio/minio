@@ -20,6 +20,7 @@ package store
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -107,17 +108,18 @@ func (store *QueueStore[_]) Delete() error {
 
 // PutMultiple - puts an item to the store.
 func (store *QueueStore[I]) PutMultiple(item []I) error {
-	store.Lock()
-	defer store.Unlock()
-	if uint64(len(store.entries)) >= store.entryLimit {
-		return errLimitExceeded
-	}
 	// Generate a new UUID for the key.
 	key, err := uuid.NewRandom()
 	if err != nil {
 		return err
 	}
-	return store.multiWrite(key.String(), item)
+
+	store.Lock()
+	defer store.Unlock()
+	if uint64(len(store.entries)) >= store.entryLimit {
+		return errLimitExceeded
+	}
+	return store.multiWrite(fmt.Sprintf("%d:%s", len(item), key.String()), item)
 }
 
 // multiWrite - writes an item to the directory.
