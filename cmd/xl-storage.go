@@ -118,7 +118,8 @@ type xlStorage struct {
 	major, minor uint32
 	fsType       string
 
-	immediatePurge chan string
+	immediatePurge       chan string
+	immediatePurgeCancel context.CancelFunc
 
 	// mutex to prevent concurrent read operations overloading walks.
 	rotational bool
@@ -216,17 +217,21 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	if globalIsTesting || globalIsCICD {
 		immediatePurgeQueue = 1
 	}
+
+	ctx, cancel := context.WithCancel(GlobalContext)
+
 	s = &xlStorage{
-		drivePath:      ep.Path,
-		endpoint:       ep,
-		globalSync:     globalFSOSync,
-		diskInfoCache:  cachevalue.New[DiskInfo](),
-		immediatePurge: make(chan string, immediatePurgeQueue),
+		drivePath:            ep.Path,
+		endpoint:             ep,
+		globalSync:           globalFSOSync,
+		diskInfoCache:        cachevalue.New[DiskInfo](),
+		immediatePurge:       make(chan string, immediatePurgeQueue),
+		immediatePurgeCancel: cancel,
 	}
 
 	defer func() {
-		if err == nil {
-			go s.cleanupTrashImmediateCallers(GlobalContext)
+		if cleanUp && err == nil {
+			go s.cleanupTrashImmediateCallers(ctx)
 		}
 	}()
 
@@ -399,7 +404,8 @@ func (s *xlStorage) Endpoint() Endpoint {
 	return s.endpoint
 }
 
-func (*xlStorage) Close() error {
+func (s *xlStorage) Close() error {
+	s.immediatePurgeCancel()
 	return nil
 }
 
@@ -1202,7 +1208,12 @@ func (s *xlStorage) cleanupTrashImmediateCallers(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case entry := <-s.immediatePurge:
-			removeAll(entry)
+			// Add deadlines such that immediate purge is not
+			// perpetually hung here.
+			w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
+			w.Run(func() error {
+				return removeAll(entry)
+			})
 		}
 	}
 }
