@@ -975,6 +975,7 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
+	globalIAMFullyInitialized.Store(true)
 	go func() {
 		bootstrapTrace("globalIAMSys.Init", func() {
 			globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
@@ -987,9 +988,9 @@ func serverMain(ctx *cli.Context) {
 			for {
 				select {
 				case <-ticker.C:
-					if !globalIAMFullyInitialized {
+					if !globalIAMFullyInitialized.Load() {
 						globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
-						if globalIAMFullyInitialized && globalBrowserEnabled {
+						if globalIAMFullyInitialized.Load() && globalBrowserEnabled {
 							bootstrapTrace("initConsoleServer", func() {
 								srv, err := initConsoleServer()
 								if err != nil {

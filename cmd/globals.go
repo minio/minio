@@ -462,7 +462,7 @@ var (
 	// Add new variable global values here.
 
 	// We expect initially that all would go through
-	globalIAMFullyInitialized = true
+	globalIAMFullyInitialized atomic.Bool
 )
 
 var globalAuthPluginMutex sync.Mutex
