@@ -61,7 +61,8 @@ func TestCanonicalizeETag(t *testing.T) {
 
 // Tests - CheckPreconditions()
 func TestCheckPreconditions(t *testing.T) {
-	objModTime := time.Date(2024, 8, 26, 0o2, 0o1, 0o1, 0, time.UTC)
+	objModTime := time.Date(2024, time.August, 26, 0o2, 0o1, 0o1, 0, time.UTC)
+	objInfo := ObjectInfo{ETag: "aa", ModTime: objModTime}
 	t.Run("If-None-Match", func(t *testing.T) {
 		testCases := []struct {
 			name              string
@@ -74,10 +75,30 @@ func TestCheckPreconditions(t *testing.T) {
 			expectedCode      int
 		}{
 			// If-None-Match(false) and If-Modified-Since(true)
-			{name: "If-None-Match1", ifNoneMatch: "aa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:00 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
+			{
+				name:            "If-None-Match1",
+				ifNoneMatch:     "aa",
+				ifModifiedSince: "Sun, 26 Aug 2024 02:01:00 GMT",
+				objInfo:         objInfo,
+				expectedFlag:    true,
+				expectedCode:    304,
+			},
 			// If-Modified-Since(false)
-			{name: "If-None-Match2", ifNoneMatch: "aaa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
-			{name: "If-None-Match3", ifNoneMatch: "aaa", ifModifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: true, expectedCode: 304},
+			{
+				name:            "If-None-Match2",
+				ifNoneMatch:     "aaa",
+				ifModifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT",
+				objInfo:         objInfo,
+				expectedFlag:    true, expectedCode: 304,
+			},
+			{
+				name:            "If-None-Match3",
+				ifNoneMatch:     "aaa",
+				ifModifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT",
+				objInfo:         objInfo,
+				expectedFlag:    true,
+				expectedCode:    304,
+			},
 		}
 		for _, tc := range testCases {
 			recorder := httptest.NewRecorder()
@@ -107,12 +128,39 @@ func TestCheckPreconditions(t *testing.T) {
 			expectedCode      int
 		}{
 			// If-Match(true) and If-Unmodified-Since(false)
-			{name: "If-Match1", ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:00 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
+			{
+				name:              "If-Match1",
+				ifMatch:           "aa",
+				ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:00 GMT",
+				objInfo:           objInfo,
+				expectedFlag:      false,
+				expectedCode:      200,
+			},
 			// If-Unmodified-Since(true)
-			{name: "If-Match2", ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
-			{name: "If-Match3", ifMatch: "aa", ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
+			{
+				name:              "If-Match2",
+				ifMatch:           "aa",
+				ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:01 GMT",
+				objInfo:           objInfo,
+				expectedFlag:      false,
+				expectedCode:      200,
+			},
+			{
+				name:              "If-Match3",
+				ifMatch:           "aa",
+				ifUnmodifiedSince: "Sun, 26 Aug 2024 02:01:02 GMT",
+				objInfo:           objInfo,
+				expectedFlag:      false,
+				expectedCode:      200,
+			},
 			// If-Match(true)
-			{name: "If-Match4", ifMatch: "aa", objInfo: ObjectInfo{ETag: "aa", ModTime: objModTime}, expectedFlag: false, expectedCode: 200},
+			{
+				name:         "If-Match4",
+				ifMatch:      "aa",
+				objInfo:      objInfo,
+				expectedFlag: false,
+				expectedCode: 200,
+			},
 		}
 		for _, tc := range testCases {
 			recorder := httptest.NewRecorder()
