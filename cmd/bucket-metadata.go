@@ -81,14 +81,19 @@ type BucketMetadata struct {
 	ReplicationConfigXML        []byte
 	BucketTargetsConfigJSON     []byte
 	BucketTargetsConfigMetaJSON []byte
-	PolicyConfigUpdatedAt       time.Time
-	ObjectLockConfigUpdatedAt   time.Time
-	EncryptionConfigUpdatedAt   time.Time
-	TaggingConfigUpdatedAt      time.Time
-	QuotaConfigUpdatedAt        time.Time
-	ReplicationConfigUpdatedAt  time.Time
-	VersioningConfigUpdatedAt   time.Time
-	LifecycleConfigUpdatedAt    time.Time
+
+	PolicyConfigUpdatedAt            time.Time
+	ObjectLockConfigUpdatedAt        time.Time
+	EncryptionConfigUpdatedAt        time.Time
+	TaggingConfigUpdatedAt           time.Time
+	QuotaConfigUpdatedAt             time.Time
+	ReplicationConfigUpdatedAt       time.Time
+	VersioningConfigUpdatedAt        time.Time
+	LifecycleConfigUpdatedAt         time.Time
+	NotificationConfigUpdatedAt      time.Time
+	BucketTargetsConfigUpdatedAt     time.Time
+	BucketTargetsConfigMetaUpdatedAt time.Time
+	// Add a new UpdatedAt field and update lastUpdate function
 
 	// Unexported fields. Must be updated atomically.
 	policyConfig           *policy.BucketPolicy
@@ -118,6 +123,46 @@ func newBucketMetadata(name string) BucketMetadata {
 		bucketTargetConfig:     &madmin.BucketTargets{},
 		bucketTargetConfigMeta: make(map[string]string),
 	}
+}
+
+// Return the last update of this bucket metadata, which
+// means, the last update of any policy document.
+func (b BucketMetadata) lastUpdate() (t time.Time) {
+	if b.PolicyConfigUpdatedAt.After(t) {
+		t = b.PolicyConfigUpdatedAt
+	}
+	if b.ObjectLockConfigUpdatedAt.After(t) {
+		t = b.ObjectLockConfigUpdatedAt
+	}
+	if b.EncryptionConfigUpdatedAt.After(t) {
+		t = b.EncryptionConfigUpdatedAt
+	}
+	if b.TaggingConfigUpdatedAt.After(t) {
+		t = b.TaggingConfigUpdatedAt
+	}
+	if b.QuotaConfigUpdatedAt.After(t) {
+		t = b.QuotaConfigUpdatedAt
+	}
+	if b.ReplicationConfigUpdatedAt.After(t) {
+		t = b.ReplicationConfigUpdatedAt
+	}
+	if b.VersioningConfigUpdatedAt.After(t) {
+		t = b.VersioningConfigUpdatedAt
+	}
+	if b.LifecycleConfigUpdatedAt.After(t) {
+		t = b.LifecycleConfigUpdatedAt
+	}
+	if b.NotificationConfigUpdatedAt.After(t) {
+		t = b.NotificationConfigUpdatedAt
+	}
+	if b.BucketTargetsConfigUpdatedAt.After(t) {
+		t = b.BucketTargetsConfigUpdatedAt
+	}
+	if b.BucketTargetsConfigMetaUpdatedAt.After(t) {
+		t = b.BucketTargetsConfigMetaUpdatedAt
+	}
+
+	return
 }
 
 // Versioning returns true if versioning is enabled
@@ -439,6 +484,18 @@ func (b *BucketMetadata) defaultTimestamps() {
 
 	if b.LifecycleConfigUpdatedAt.IsZero() {
 		b.LifecycleConfigUpdatedAt = b.Created
+	}
+
+	if b.NotificationConfigUpdatedAt.IsZero() {
+		b.NotificationConfigUpdatedAt = b.Created
+	}
+
+	if b.BucketTargetsConfigUpdatedAt.IsZero() {
+		b.BucketTargetsConfigUpdatedAt = b.Created
+	}
+
+	if b.BucketTargetsConfigMetaUpdatedAt.IsZero() {
+		b.BucketTargetsConfigMetaUpdatedAt = b.Created
 	}
 }
 

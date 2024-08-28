@@ -124,6 +124,7 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		meta.PolicyConfigUpdatedAt = updatedAt
 	case bucketNotificationConfig:
 		meta.NotificationConfigXML = configData
+		meta.NotificationConfigUpdatedAt = updatedAt
 	case bucketLifecycleConfig:
 		meta.LifecycleConfigXML = configData
 		meta.LifecycleConfigUpdatedAt = updatedAt
@@ -153,6 +154,8 @@ func (sys *BucketMetadataSys) updateAndParse(ctx context.Context, bucket string,
 		if err != nil {
 			return updatedAt, fmt.Errorf("Error encrypting bucket target metadata %w", err)
 		}
+		meta.BucketTargetsConfigUpdatedAt = updatedAt
+		meta.BucketTargetsConfigMetaUpdatedAt = updatedAt
 	default:
 		return updatedAt, fmt.Errorf("Unknown bucket %s metadata update requested %s", bucket, configFile)
 	}
@@ -504,7 +507,7 @@ func (sys *BucketMetadataSys) Init(ctx context.Context, buckets []string, objAPI
 }
 
 // concurrently load bucket metadata to speed up loading bucket metadata.
-func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []string, failedBuckets map[string]struct{}) {
+func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []string) {
 	g := errgroup.WithNErrs(len(buckets))
 	bucketMetas := make([]BucketMetadata, len(buckets))
 	for index := range buckets {
@@ -545,10 +548,6 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []stri
 
 	for i, meta := range bucketMetas {
 		if errs[i] != nil {
-			if failedBuckets == nil {
-				failedBuckets = make(map[string]struct{})
-			}
-			failedBuckets[buckets[i]] = struct{}{}
 			continue
 		}
 		globalEventNotifier.set(buckets[i], meta)   // set notification targets
@@ -556,7 +555,7 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []stri
 	}
 }
 
-func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, failedBuckets map[string]struct{}) {
+func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context) {
 	const bucketMetadataRefresh = 15 * time.Minute
 
 	sleeper := newDynamicSleeper(2, 150*time.Millisecond, false)
@@ -586,7 +585,10 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 			for i := range buckets {
 				wait := sleeper.Timer(ctx)
 
-				meta, err := loadBucketMetadata(ctx, sys.objAPI, buckets[i].Name)
+				bucket := buckets[i].Name
+				updated := false
+
+				meta, err := loadBucketMetadata(ctx, sys.objAPI, bucket)
 				if err != nil {
 					internalLogIf(ctx, err, logger.WarningKind)
 					wait() // wait to proceed to next entry.
@@ -594,14 +596,16 @@ func (sys *BucketMetadataSys) refreshBucketsMetadataLoop(ctx context.Context, fa
 				}
 
 				sys.Lock()
-				sys.metadataMap[buckets[i].Name] = meta
+				// Update if the bucket metadata in the memory is older than on-disk one
+				if lu := sys.metadataMap[bucket].lastUpdate(); lu.Before(meta.lastUpdate()) {
+					updated = true
+					sys.metadataMap[bucket] = meta
+				}
 				sys.Unlock()
 
-				// Initialize the failed buckets
-				if _, ok := failedBuckets[buckets[i].Name]; ok {
-					globalEventNotifier.set(buckets[i].Name, meta)
-					globalBucketTargetSys.set(buckets[i].Name, meta)
-					delete(failedBuckets, buckets[i].Name)
+				if updated {
+					globalEventNotifier.set(bucket, meta)
+					globalBucketTargetSys.set(bucket, meta)
 				}
 
 				wait() // wait to proceed to next entry.
@@ -622,13 +626,12 @@ func (sys *BucketMetadataSys) Initialized() bool {
 // Loads bucket metadata for all buckets into BucketMetadataSys.
 func (sys *BucketMetadataSys) init(ctx context.Context, buckets []string) {
 	count := globalEndpoints.ESCount() * 10
-	failedBuckets := make(map[string]struct{})
 	for {
 		if len(buckets) < count {
-			sys.concurrentLoad(ctx, buckets, failedBuckets)
+			sys.concurrentLoad(ctx, buckets)
 			break
 		}
-		sys.concurrentLoad(ctx, buckets[:count], failedBuckets)
+		sys.concurrentLoad(ctx, buckets[:count])
 		buckets = buckets[count:]
 	}
 
@@ -637,7 +640,7 @@ func (sys *BucketMetadataSys) init(ctx context.Context, buckets []string) {
 	sys.Unlock()
 
 	if globalIsDistErasure {
-		go sys.refreshBucketsMetadataLoop(ctx, failedBuckets)
+		go sys.refreshBucketsMetadataLoop(ctx)
 	}
 }
 
