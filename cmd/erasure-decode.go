@@ -48,14 +48,14 @@ func newParallelReader(readers []io.ReaderAt, e Erasure, offset, totalLength int
 		r2b[i] = i
 	}
 	bufs := make([][]byte, len(readers))
-	// Fill buffers
-	b := globalBytePoolCap.Load().Get()
 	shardSize := int(e.ShardSize())
-	if cap(b) < len(readers)*shardSize {
-		// We should always have enough capacity, but older objects may be bigger.
-		globalBytePoolCap.Load().Put(b)
-		b = nil
-	} else {
+	var b []byte
+
+	// We should always have enough capacity, but older objects may be bigger
+	// we do not need stashbuffer for them.
+	if globalBytePoolCap.Load().WidthCap() >= len(readers)*shardSize {
+		// Fill buffers
+		b = globalBytePoolCap.Load().Get()
 		// Seed the buffers.
 		for i := range bufs {
 			bufs[i] = b[i*shardSize : (i+1)*shardSize]
