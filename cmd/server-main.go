@@ -975,7 +975,6 @@ func serverMain(ctx *cli.Context) {
 	}
 
 	// Initialize users credentials and policies in background right after config has initialized.
-	globalIAMFullyInitialized.Store(true)
 	go func() {
 		bootstrapTrace("globalIAMSys.Init", func() {
 			globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)

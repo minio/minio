@@ -371,7 +371,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 
 	refreshInterval := sys.iamRefreshInterval
 
-	go sys.periodicRoutines(ctx, refreshInterval)
+	if localIAMInitialized {
+		go sys.periodicRoutines(ctx, refreshInterval)
+	}
 
 	sys.printIAMRoles()
 
