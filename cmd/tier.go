@@ -248,7 +248,7 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig, ig
 }
 
 // Remove removes tier if it is empty.
-func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
+func (config *TierConfigMgr) Remove(ctx context.Context, tier string, force bool) error {
 	d, err := config.getDriver(ctx, tier)
 	if err != nil {
 		if errors.Is(err, errTierNotFound) {
@@ -256,10 +256,12 @@ func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
 		}
 		return err
 	}
-	if inuse, err := d.InUse(ctx); err != nil {
-		return err
-	} else if inuse {
-		return errTierBackendNotEmpty
+	if !force {
+		if inuse, err := d.InUse(ctx); err != nil {
+			return err
+		} else if inuse {
+			return errTierBackendNotEmpty
+		}
 	}
 	config.Lock()
 	delete(config.Tiers, tier)

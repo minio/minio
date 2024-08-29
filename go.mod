@@ -197,7 +197,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.8 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da // indirect
+	github.com/minio/mc v0.0.0-20240909075310-04c5116c9bdf // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/pkg/v2 v2.0.19 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
