@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -2243,8 +2244,9 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validations for LDAP enabled deployments.
+			var skippedAccessKeys []string
 			if globalIAMSys.LDAPConfig.Enabled() {
-				err := globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
+				skippedAccessKeys, err = globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, ""), r.URL)
 					return
@@ -2252,6 +2254,9 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for user, svcAcctReq := range serviceAcctReqs {
+				if slices.Contains(skippedAccessKeys, user) {
+					continue
+				}
 				var sp *policy.Policy
 				var err error
 				if len(svcAcctReq.SessionPolicy) > 0 {
@@ -2378,9 +2383,10 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validations for LDAP enabled deployments.
+			var skippedGroups []string
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
-				err := globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
+				skippedGroups, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, ""), r.URL)
 					return
@@ -2388,6 +2394,9 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for g, pm := range grpPolicyMap {
+				if slices.Contains(skippedGroups, g) {
+					continue
+				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
 					return
@@ -2418,15 +2427,19 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validations for LDAP enabled deployments.
+			var skippedUsers []string
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
-				err := globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
+				skippedUsers, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, ""), r.URL)
 					return
 				}
 			}
 			for u, pm := range userPolicyMap {
+				if slices.Contains(skippedUsers, u) {
+					continue
+				}
 				// disallow setting policy mapping if user is a temporary user
 				ok, _, err := globalIAMSys.IsTempUser(u)
 				if err != nil && err != errNoSuchUser {
