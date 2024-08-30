@@ -1046,7 +1046,7 @@ func (s *TestSuiteIAM) TestIAMImportAssetContent(c *check, content []byte) {
 	defer cancel()
 
 	dummyCloser := dummyCloser{bytes.NewReader(content)}
-	err := s.adm.ImportIAM(ctx, dummyCloser)
+	_, err := s.adm.ImportIAM(ctx, dummyCloser)
 	if err != nil {
 		c.Fatalf("Unable to import IAM: %v", err)
 	}
@@ -1105,7 +1105,7 @@ func (s *TestSuiteIAM) TestIAMImport(c *check, exportedContent []byte, caseNum i
 	defer cancel()
 
 	dummyCloser := dummyCloser{bytes.NewReader(exportedContent)}
-	err := s.adm.ImportIAM(ctx, dummyCloser)
+	_, err := s.adm.ImportIAM(ctx, dummyCloser)
 	if err != nil {
 		c.Fatalf("import %d: Unable to import IAM: %v", caseNum, err)
 	}
