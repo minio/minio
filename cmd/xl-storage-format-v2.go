@@ -276,7 +276,6 @@ func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) (ok boo
 }
 
 func (x xlMetaV2VersionHeader) matchesEC(o xlMetaV2VersionHeader) bool {
-	fmt.Println(x.hasEC(), o.hasEC())
 	if x.hasEC() && o.hasEC() {
 		return x.EcN == o.EcN && x.EcM == o.EcM
 	} // if no EC header this is an older object
