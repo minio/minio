@@ -267,13 +267,19 @@ func (x xlMetaV2VersionHeader) String() string {
 // matchesNotStrict returns whether x and o have both have non-zero version,
 // their versions match and their type match.
 // If they have zero version, modtime must match.
-func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) bool {
+func (x xlMetaV2VersionHeader) matchesNotStrict(o xlMetaV2VersionHeader) (ok bool) {
+	ok = x.VersionID == o.VersionID && x.Type == o.Type && x.matchesEC(o)
 	if x.VersionID == [16]byte{} {
-		return x.VersionID == o.VersionID &&
-			x.Type == o.Type && o.ModTime == x.ModTime
+		ok = ok && o.ModTime == x.ModTime
 	}
-	return x.VersionID == o.VersionID &&
-		x.Type == o.Type
+	return ok
+}
+
+func (x xlMetaV2VersionHeader) matchesEC(o xlMetaV2VersionHeader) bool {
+	if x.hasEC() && o.hasEC() {
+		return x.EcN == o.EcN && x.EcM == o.EcM
+	} // if no EC header this is an older object
+	return true
 }
 
 // hasEC will return true if the version has erasure coding information.
@@ -1967,6 +1973,11 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 							continue
 						}
 						if !strict {
+							// we must match EC, when we are not strict.
+							if !a.header.matchesEC(ver.header) {
+								continue
+							}
+
 							a.header.Signature = [4]byte{}
 						}
 						x[a.header]++
