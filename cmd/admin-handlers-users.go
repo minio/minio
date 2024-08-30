@@ -2071,6 +2071,10 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
 	}
+
+	var skippedAccessKeys []string
+	var skippedDN []string
+
 	// import policies first
 	{
 
@@ -2244,7 +2248,6 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validations for LDAP enabled deployments.
-			var skippedAccessKeys []string
 			if globalIAMSys.LDAPConfig.Enabled() {
 				skippedAccessKeys, err = globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
 				if err != nil {
@@ -2383,10 +2386,9 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// Validations for LDAP enabled deployments.
-			var skippedGroups []string
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
-				skippedGroups, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
+				skippedDN, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, ""), r.URL)
 					return
@@ -2394,7 +2396,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for g, pm := range grpPolicyMap {
-				if slices.Contains(skippedGroups, g) {
+				if slices.Contains(skippedDN, g) {
 					continue
 				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
@@ -2430,7 +2432,7 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			var skippedUsers []string
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
-				skippedUsers, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
+				skippedDN, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, ""), r.URL)
 					return
@@ -2458,6 +2460,19 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	skippedIAMEntities := madmin.SkippedIAMEntities{
+		SkippedAccessKeys: skippedAccessKeys,
+		SkippedDN:         skippedDN,
+	}
+
+	b, err := json.Marshal(skippedIAMEntities)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, b)
 }
 
 func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) error {

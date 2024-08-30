@@ -255,3 +255,8 @@ require (
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 )
+
+replace (
+	github.com/minio/madmin-go/v3 v3.0.64 => github.com/shtripat/madmin-go/v3 v3.0.0-20240830123000-a4425b736eb1
+	github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da => github.com/shtripat/mc v0.0.0-20240830124047-3bfe94447d81
+)
