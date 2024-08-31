@@ -1837,7 +1837,7 @@ func (s *TestSuiteCommon) TestListObjectsV2HadoopUAHandler(c *check) {
 	}
 }
 
-// TestListObjectVersionsHandler - checks the order of <Version>
+// TestListObjectVersionsOutputOrderHandler - checks the order of <Version>
 // and <DeleteMarker> XML tags in a version listing
 func (s *TestSuiteCommon) TestListObjectVersionsOutputOrderHandler(c *check) {
 	// generate a random bucket name.
@@ -2323,7 +2323,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *check) {
 	c.Assert(string(getContent), putContent[10485750:10485770])
 }
 
-// TestGetPartialObjectLarge11MiB - Test validates partial content request for a 10MiB object.
+// TestGetPartialObjectLarge10MiB - Test validates partial content request for a 10MiB object.
 func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *check) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()

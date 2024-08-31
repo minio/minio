@@ -507,7 +507,7 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 // where we keep old *Readers
 var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader{} }}
 
-// mspNewReader returns a *Reader that reads from the provided reader.
+// msgpNewReader returns a *Reader that reads from the provided reader.
 // The reader will be buffered.
 // Return with readMsgpReaderPoolPut when done.
 func msgpNewReader(r io.Reader) *msgp.Reader {

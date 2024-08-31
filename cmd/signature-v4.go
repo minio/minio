@@ -169,7 +169,7 @@ func compareSignatureV4(sig1, sig2 string) bool {
 	return subtle.ConstantTimeCompare([]byte(sig1), []byte(sig2)) == 1
 }
 
-// doesPolicySignatureMatch - Verify query headers with post policy
+// doesPolicySignatureV4Match - Verify query headers with post policy
 //   - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 //
 // returns ErrNone if the signature matches.
