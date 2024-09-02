@@ -2082,8 +2082,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 		return
 	}
 
-	var skippedAccessKeys []string
-	var skippedDN []string
+	var skipped, removed, added, failed []string
 
 	// import policies first
 	{
@@ -2259,7 +2258,8 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 
 			// Validations for LDAP enabled deployments.
 			if globalIAMSys.LDAPConfig.Enabled() {
-				skippedAccessKeys, err = globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
+				skippedAccessKeys, err := globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
+				skipped = append(skipped, skippedAccessKeys...)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, ""), r.URL)
 					return
@@ -2267,7 +2267,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			}
 
 			for user, svcAcctReq := range serviceAcctReqs {
-				if slices.Contains(skippedAccessKeys, user) {
+				if slices.Contains(skipped, user) {
 					continue
 				}
 				var sp *policy.Policy
@@ -2327,8 +2327,11 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 
 				if _, _, err = globalIAMSys.NewServiceAccount(ctx, svcAcctReq.Parent, svcAcctReq.Groups, opts); err != nil {
+					failed = append(failed, user)
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
 					return
+				} else {
+					added = append(added, user)
 				}
 
 			}
@@ -2398,7 +2401,8 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			// Validations for LDAP enabled deployments.
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
-				skippedDN, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
+				skippedDN, err := globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
+				skipped = append(skipped, skippedDN...)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, ""), r.URL)
 					return
@@ -2406,12 +2410,15 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			}
 
 			for g, pm := range grpPolicyMap {
-				if slices.Contains(skippedDN, g) {
+				if slices.Contains(skipped, g) {
 					continue
 				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
+					failed = append(failed, g)
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
 					return
+				} else {
+					added = append(added, g)
 				}
 			}
 		}
@@ -2441,14 +2448,15 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			// Validations for LDAP enabled deployments.
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
-				skippedDN, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
+				skippedDN, err := globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
+				skipped = append(skipped, skippedDN...)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, ""), r.URL)
 					return
 				}
 			}
 			for u, pm := range userPolicyMap {
-				if slices.Contains(skippedDN, u) {
+				if slices.Contains(skipped, u) {
 					continue
 				}
 				// disallow setting policy mapping if user is a temporary user
@@ -2463,20 +2471,25 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
+					failed = append(failed, u)
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
 					return
+				} else {
+					added = append(added, u)
 				}
 			}
 		}
 	}
 
 	if apiVer != "" && apiVer == "v2" {
-		skippedIAMEntities := madmin.SkippedIAMEntities{
-			SkippedAccessKeys: skippedAccessKeys,
-			SkippedDN:         skippedDN,
+		iamr := madmin.ImportIAMResult{
+			Skipped: skipped,
+			Removed: removed,
+			Added:   added,
+			Failed:  failed,
 		}
 
-		b, err := json.Marshal(skippedIAMEntities)
+		b, err := json.Marshal(iamr)
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 			return
