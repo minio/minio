@@ -2045,7 +2045,6 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 // ImportIAM - imports all IAM info into MinIO
 func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 	a.importIAM(w, r, "")
@@ -2472,7 +2471,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 		}
 	}
 
-	if (apiVer != "" && apiVer == "v2") {
+	if apiVer != "" && apiVer == "v2" {
 		skippedIAMEntities := madmin.SkippedIAMEntities{
 			SkippedAccessKeys: skippedAccessKeys,
 			SkippedDN:         skippedDN,
