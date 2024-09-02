@@ -2045,8 +2045,19 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
 // ImportIAM - imports all IAM info into MinIO
 func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
+	a.importIAM(w, r, "")
+}
+
+// ImportIAMV2 - imports all IAM info into MinIO
+func (a adminAPIHandlers) ImportIAMV2(w http.ResponseWriter, r *http.Request) {
+	a.importIAM(w, r, "v2")
+}
+
+// ImportIAM - imports all IAM info into MinIO
+func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiVer string) {
 	ctx := r.Context()
 
 	// Get current object layer instance.
@@ -2461,18 +2472,20 @@ func (a adminAPIHandlers) ImportIAM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	skippedIAMEntities := madmin.SkippedIAMEntities{
-		SkippedAccessKeys: skippedAccessKeys,
-		SkippedDN:         skippedDN,
-	}
+	if (apiVer != "" && apiVer == "v2") {
+		skippedIAMEntities := madmin.SkippedIAMEntities{
+			SkippedAccessKeys: skippedAccessKeys,
+			SkippedDN:         skippedDN,
+		}
 
-	b, err := json.Marshal(skippedIAMEntities)
-	if err != nil {
-		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
-		return
-	}
+		b, err := json.Marshal(skippedIAMEntities)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
 
-	writeSuccessResponseJSON(w, b)
+		writeSuccessResponseJSON(w, b)
+	}
 }
 
 func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) error {

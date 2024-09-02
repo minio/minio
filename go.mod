@@ -257,6 +257,6 @@ require (
 )
 
 replace (
-	github.com/minio/madmin-go/v3 v3.0.64 => github.com/shtripat/madmin-go/v3 v3.0.0-20240830123000-a4425b736eb1
-	github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da => github.com/shtripat/mc v0.0.0-20240830124047-3bfe94447d81
+	github.com/minio/madmin-go/v3 v3.0.64 => github.com/shtripat/madmin-go/v3 v3.0.0-20240902043928-7e4e90abcb55
+	github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da => github.com/shtripat/mc v0.0.0-20240902044208-4deae5bfec4e
 )
