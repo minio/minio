@@ -2439,7 +2439,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			}
 
 			// Validations for LDAP enabled deployments.
-			var skippedUsers []string
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
 				skippedDN, err = globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
@@ -2449,7 +2448,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 			}
 			for u, pm := range userPolicyMap {
-				if slices.Contains(skippedUsers, u) {
+				if slices.Contains(skippedDN, u) {
 					continue
 				}
 				// disallow setting policy mapping if user is a temporary user
