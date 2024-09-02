@@ -46,8 +46,9 @@ import (
 )
 
 const (
-	envMinisignPubKey = "MINIO_UPDATE_MINISIGN_PUBKEY"
-	updateTimeout     = 10 * time.Second
+	envMinisignPubKey       = "MINIO_UPDATE_MINISIGN_PUBKEY"
+	envKubernetesUpdatePath = "MINIO_UPDATE_KUBERNETES_PATH"
+	updateTimeout           = 10 * time.Second
 )
 
 // For windows our files have .exe additionally.
@@ -566,7 +567,10 @@ func verifyBinary(u *url.URL, sha256Sum []byte, releaseInfo, mode string, reader
 		Hash:     crypto.SHA256,
 		Checksum: sha256Sum,
 	}
-
+	// if minio runs on Kubernetes, we need to be able to write to the binary path
+	if IsKubernetes() {
+		opts.TargetPath = os.Getenv(envKubernetesUpdatePath)
+	}
 	if err := opts.CheckPermissions(); err != nil {
 		return AdminError{
 			Code:       AdminUpdateApplyFailure,
@@ -616,7 +620,10 @@ func commitBinary() (err error) {
 	defer updateInProgress.Store(0)
 
 	opts := selfupdate.Options{}
-
+	// if minio runs on Kubernetes, we need to be able to write to the binary path
+	if IsKubernetes() {
+		opts.TargetPath = os.Getenv(envKubernetesUpdatePath)
+	}
 	if err = selfupdate.CommitBinary(opts); err != nil {
 		if rerr := selfupdate.RollbackError(err); rerr != nil {
 			return AdminError{
