@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -17,7 +17,9 @@
 
 package bpool
 
-import "github.com/klauspost/reedsolomon"
+import (
+	"github.com/klauspost/reedsolomon"
+)
 
 // BytePoolCap implements a leaky pool of []byte in the form of a bounded channel.
 type BytePoolCap struct {
@@ -29,11 +31,14 @@ type BytePoolCap struct {
 // NewBytePoolCap creates a new BytePool bounded to the given maxSize, with new
 // byte arrays sized based on width.
 func NewBytePoolCap(maxSize uint64, width int, capwidth int) (bp *BytePoolCap) {
-	if capwidth > 0 && capwidth < 64 {
+	if capwidth <= 0 {
+		panic("total buffer capacity must be provided")
+	}
+	if capwidth < 64 {
 		panic("buffer capped with smaller than 64 bytes is not supported")
 	}
-	if capwidth > 0 && width > capwidth {
-		panic("buffer length cannot be > capacity of the buffer")
+	if width > capwidth {
+		panic("minimum buffer length cannot be > capacity of the buffer")
 	}
 	return &BytePoolCap{
 		c:    make(chan []byte, maxSize),
@@ -60,11 +65,7 @@ func (bp *BytePoolCap) Get() (b []byte) {
 		// reuse existing buffer
 	default:
 		// create new aligned buffer
-		if bp.wcap > 0 {
-			b = reedsolomon.AllocAligned(1, bp.wcap)[0][:bp.w]
-		} else {
-			b = reedsolomon.AllocAligned(1, bp.w)[0]
-		}
+		b = reedsolomon.AllocAligned(1, bp.wcap)[0][:bp.w]
 	}
 	return
 }
@@ -74,8 +75,17 @@ func (bp *BytePoolCap) Put(b []byte) {
 	if bp == nil {
 		return
 	}
+
+	if cap(b) != bp.wcap {
+		// someone tried to put back buffer which is not part of this buffer pool
+		// we simply don't put this back into pool, a modified buffer provided
+		// by this package is no more usable, callers make sure to not modify
+		// the capacity of the buffer.
+		return
+	}
+
 	select {
-	case bp.c <- b:
+	case bp.c <- b[:bp.w]:
 		// buffer went back into pool
 	default:
 		// buffer didn't go back into pool, just discard
@@ -96,4 +106,12 @@ func (bp *BytePoolCap) WidthCap() (n int) {
 		return 0
 	}
 	return bp.wcap
+}
+
+// CurrentSize returns current size of buffer pool
+func (bp *BytePoolCap) CurrentSize() int {
+	if bp == nil {
+		return 0
+	}
+	return len(bp.c) * bp.w
 }

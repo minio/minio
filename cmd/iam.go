@@ -417,7 +417,7 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 				took := time.Since(refreshStart).Seconds()
 				if took > maxDurationSecondsForLog {
 					// Log if we took a lot of time to load.
-					logger.Info("IAM refresh took (duration: %s)", took)
+					logger.Info("IAM refresh took (duration: %.2fs)", took)
 				}
 			}
 

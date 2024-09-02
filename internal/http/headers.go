@@ -259,5 +259,6 @@ const (
 // http headers sent to webhook targets
 const (
 	// Reports the version of MinIO server
-	MinIOVersion = "x-minio-version"
+	MinIOVersion             = "x-minio-version"
+	WebhookEventPayloadCount = "x-minio-webhook-payload-count"
 )
