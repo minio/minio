@@ -1200,6 +1200,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
+	opts.WantChecksum = checksum
 
 	fanOutOpts := fanOutOptions{Checksum: checksum}
 
