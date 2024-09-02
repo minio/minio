@@ -353,7 +353,7 @@ func (target *NATSTarget) SendFromStore(key store.Key) error {
 		return err
 	}
 
-	eventData, eErr := target.store.Get(key.Name)
+	eventData, eErr := target.store.Get(key)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -367,7 +367,7 @@ func (target *NATSTarget) SendFromStore(key store.Key) error {
 		return err
 	}
 
-	return target.store.Del(key.Name)
+	return target.store.Del(key)
 }
 
 // Close - closes underneath connections to NATS server.

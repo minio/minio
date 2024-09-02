@@ -344,7 +344,7 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 
 // SendFromStore - reads the log from store and sends it to kafka.
 func (h *Target) SendFromStore(key store.Key) (err error) {
-	auditEntry, err := h.store.Get(key.Name)
+	auditEntry, err := h.store.Get(key)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -358,7 +358,7 @@ func (h *Target) SendFromStore(key store.Key) (err error) {
 		return
 	}
 	// Delete the event from store.
-	return h.store.Del(key.Name)
+	return h.store.Del(key)
 }
 
 // Cancel - cancels the target

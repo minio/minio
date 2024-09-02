@@ -18,13 +18,17 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // ErrBatchFull indicates that the batch is full
 var ErrBatchFull = errors.New("batch is full")
+
+const defaultCommitTimeout = 30 * time.Second
 
 type key interface {
 	string | int | int64
@@ -35,8 +39,18 @@ type Batch[K key, T any] struct {
 	keys  []K
 	items map[K]T
 	limit uint32
+	store Store[T]
 
 	sync.Mutex
+}
+
+// BatchConfig represents the batch config
+type BatchConfig[I any] struct {
+	Limit         uint32
+	Store         Store[I]
+	CommitTimeout time.Duration
+	Log           logger
+	DoneCh        <-chan struct{}
 }
 
 // Add adds the item to the batch
@@ -45,7 +59,13 @@ func (b *Batch[K, T]) Add(key K, item T) error {
 	defer b.Unlock()
 
 	if b.isFull() {
-		return ErrBatchFull
+		if b.store == nil {
+			return ErrBatchFull
+		}
+		// commit batch to store
+		if err := b.commit(); err != nil {
+			return err
+		}
 	}
 
 	if _, ok := b.items[key]; !ok {
@@ -56,37 +76,6 @@ func (b *Batch[K, T]) Add(key K, item T) error {
 	return nil
 }
 
-// GetAll fetches the items and resets the batch
-// Returned items are not referenced by the batch
-func (b *Batch[K, T]) GetAll() (orderedKeys []K, orderedItems []T, err error) {
-	b.Lock()
-	defer b.Unlock()
-
-	orderedKeys = append([]K(nil), b.keys...)
-	for _, key := range orderedKeys {
-		item, ok := b.items[key]
-		if !ok {
-			err = fmt.Errorf("item not found for the key: %v; should not happen;", key)
-			return
-		}
-		orderedItems = append(orderedItems, item)
-		delete(b.items, key)
-	}
-
-	b.keys = b.keys[:0]
-
-	return
-}
-
-// GetByKey will get the batch item by the provided key
-func (b *Batch[K, T]) GetByKey(key K) (T, bool) {
-	b.Lock()
-	defer b.Unlock()
-
-	item, ok := b.items[key]
-	return item, ok
-}
-
 // Len returns the no of items in the batch
 func (b *Batch[K, T]) Len() int {
 	b.Lock()
@@ -95,23 +84,75 @@ func (b *Batch[K, T]) Len() int {
 	return len(b.keys)
 }
 
-// IsFull checks if the batch is full or not
-func (b *Batch[K, T]) IsFull() bool {
-	b.Lock()
-	defer b.Unlock()
-
-	return b.isFull()
-}
-
 func (b *Batch[K, T]) isFull() bool {
 	return len(b.items) >= int(b.limit)
 }
 
-// NewBatch creates a new batch
-func NewBatch[K key, T any](limit uint32) *Batch[K, T] {
-	return &Batch[K, T]{
-		keys:  make([]K, 0, limit),
-		items: make(map[K]T, limit),
-		limit: limit,
+func (b *Batch[K, T]) commit() error {
+	switch len(b.keys) {
+	case 0:
+		return nil
+	case 1:
+		item, ok := b.items[b.keys[0]]
+		if !ok {
+			return fmt.Errorf("item not found for the key: %v; should not happen;", b.keys[0])
+		}
+		return b.store.Put(item)
+	default:
 	}
+
+	orderedKeys := append([]K(nil), b.keys...)
+	var orderedItems []T
+	for _, key := range orderedKeys {
+		item, ok := b.items[key]
+		if !ok {
+			return fmt.Errorf("item not found for the key: %v; should not happen;", key)
+		}
+		orderedItems = append(orderedItems, item)
+	}
+	if err := b.store.PutMultiple(orderedItems); err != nil {
+		return err
+	}
+
+	b.keys = make([]K, 0, b.limit)
+	b.items = make(map[K]T, b.limit)
+
+	return nil
+}
+
+// NewBatch creates a new batch
+func NewBatch[K key, T any](config BatchConfig[T]) *Batch[K, T] {
+	if config.CommitTimeout == 0 {
+		config.CommitTimeout = defaultCommitTimeout
+	}
+	batch := &Batch[K, T]{
+		keys:  make([]K, 0, config.Limit),
+		items: make(map[K]T, config.Limit),
+		limit: config.Limit,
+		store: config.Store,
+	}
+	if batch.store != nil {
+		go func() {
+			var done bool
+			commitTicker := time.NewTicker(config.CommitTimeout)
+			defer commitTicker.Stop()
+			for {
+				select {
+				case <-commitTicker.C:
+				case <-config.DoneCh:
+					done = true
+				}
+				batch.Lock()
+				err := batch.commit()
+				batch.Unlock()
+				if err != nil {
+					config.Log(context.Background(), err, "")
+				}
+				if done {
+					return
+				}
+			}
+		}()
+	}
+	return batch
 }
