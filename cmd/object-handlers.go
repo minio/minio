@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"archive/tar"
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/xml"
@@ -36,7 +35,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/klauspost/compress/gzhttp"
@@ -50,7 +48,6 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/config/storageclass"
 	"github.com/minio/minio/internal/crypto"
@@ -65,7 +62,6 @@ import (
 	"github.com/minio/minio/internal/s3select"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v3/policy"
-	"github.com/valyala/bytebufferpool"
 )
 
 // supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
@@ -383,96 +379,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 	}
 
-	cachedResult := globalCacheConfig.Enabled() && opts.VersionID == ""
-	if _, ok := crypto.IsRequested(r.Header); ok {
-		// No need to check cache for encrypted objects.
-		cachedResult = false
-	}
-
-	var update bool
-	if cachedResult {
-		rc := &cache.CondCheck{}
-		h := r.Header.Clone()
-		if opts.PartNumber > 0 {
-			h.Set(xhttp.PartNumber, strconv.Itoa(opts.PartNumber))
-		}
-		rc.Init(bucket, object, h)
-
-		ci, err := globalCacheConfig.Get(rc)
-		if ci != nil {
-			tgs, ok := ci.Metadata[xhttp.AmzObjectTagging]
-			if ok {
-				// Set this such that authorization policies can be applied on the object tags.
-				r.Header.Set(xhttp.AmzObjectTagging, tgs)
-			}
-
-			if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
-				return
-			}
-
-			okSt := (ci.StatusCode == http.StatusOK || ci.StatusCode == http.StatusPartialContent ||
-				ci.StatusCode == http.StatusPreconditionFailed || ci.StatusCode == http.StatusNotModified)
-			if okSt {
-				ci.WriteHeaders(w, func() {
-					// set common headers
-					setCommonHeaders(w)
-				}, func() {
-					okSt := (ci.StatusCode == http.StatusOK || ci.StatusCode == http.StatusPartialContent)
-					if okSt && len(ci.Data) > 0 {
-						for k, v := range ci.Metadata {
-							w.Header().Set(k, v)
-						}
-
-						if opts.PartNumber > 0 && strings.Contains(ci.ETag, "-") {
-							w.Header()[xhttp.AmzMpPartsCount] = []string{
-								strings.TrimLeftFunc(ci.ETag, func(r rune) bool {
-									return !unicode.IsNumber(r)
-								}),
-							}
-						}
-
-						// For providing ranged content
-						start, rangeLen, err := rs.GetOffsetLength(ci.Size)
-						if err != nil {
-							start, rangeLen = 0, ci.Size
-						}
-
-						// Set content length.
-						w.Header().Set(xhttp.ContentLength, strconv.FormatInt(rangeLen, 10))
-						if rs != nil {
-							contentRange := fmt.Sprintf("bytes %d-%d/%d", start, start+rangeLen-1, ci.Size)
-							w.Header().Set(xhttp.ContentRange, contentRange)
-						}
-
-						io.Copy(w, bytes.NewReader(ci.Data))
-						return
-					}
-					if ci.StatusCode == http.StatusPreconditionFailed {
-						writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
-						return
-					} else if ci.StatusCode == http.StatusNotModified {
-						w.WriteHeader(ci.StatusCode)
-						return
-					}
-
-					// We did not satisfy any requirement from the cache, update the cache.
-					// this basically means that we do not have the Data for the object
-					// cached yet
-					update = true
-				})
-				if !update {
-					// No update is needed means we have written already to the client just return here.
-					return
-				}
-			}
-		}
-
-		if errors.Is(err, cache.ErrKeyMissing) {
-			update = true
-		}
-	}
-
 	// Validate pre-conditions if any.
 	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 		if _, err := DecryptObjectInfo(&oi, r); err != nil {
@@ -630,17 +536,8 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	setHeadGetRespHeaders(w, r.Form)
 
-	var buf *bytebufferpool.ByteBuffer
-	if update && globalCacheConfig.MatchesSize(objInfo.Size) {
-		buf = bytebufferpool.Get()
-		defer bytebufferpool.Put(buf)
-	}
-
 	var iw io.Writer
 	iw = w
-	if buf != nil {
-		iw = io.MultiWriter(w, buf)
-	}
 
 	statusCodeWritten := false
 	httpWriter := xioutil.WriteOnClose(iw)
@@ -666,31 +563,6 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 		}
 		return
 	}
-
-	defer func() {
-		var data []byte
-		if buf != nil {
-			data = buf.Bytes()
-		}
-
-		if len(data) == 0 {
-			return
-		}
-
-		globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
-			Range:        rangeHeader,
-			PartNumber:   opts.PartNumber,
-			Size:         int64(len(data)),
-			Data:         data,
-		})
-	}()
 
 	// Notify object accessed via a GET request.
 	sendEvent(eventArgs{
@@ -938,80 +810,6 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 			// request like Amazon S3.
 			if errors.Is(err, errInvalidRange) {
 				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(ErrInvalidRange))
-				return
-			}
-		}
-	}
-
-	cachedResult := globalCacheConfig.Enabled() && opts.VersionID == ""
-	if _, ok := crypto.IsRequested(r.Header); ok {
-		// No need to check cache for encrypted objects.
-		cachedResult = false
-	}
-	if cachedResult {
-		rc := &cache.CondCheck{}
-		h := r.Header.Clone()
-		if opts.PartNumber > 0 {
-			h.Set(xhttp.PartNumber, strconv.Itoa(opts.PartNumber))
-		}
-		rc.Init(bucket, object, h)
-
-		ci, _ := globalCacheConfig.Get(rc)
-		if ci != nil {
-			tgs, ok := ci.Metadata[xhttp.AmzObjectTagging]
-			if ok {
-				// Set this such that authorization policies can be applied on the object tags.
-				r.Header.Set(xhttp.AmzObjectTagging, tgs)
-			}
-
-			if s3Error := authorizeRequest(ctx, r, policy.GetObjectAction); s3Error != ErrNone {
-				writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
-				return
-			}
-
-			okSt := (ci.StatusCode == http.StatusOK || ci.StatusCode == http.StatusPartialContent ||
-				ci.StatusCode == http.StatusPreconditionFailed || ci.StatusCode == http.StatusNotModified)
-			if okSt {
-				ci.WriteHeaders(w, func() {
-					// set common headers
-					setCommonHeaders(w)
-				}, func() {
-					okSt := (ci.StatusCode == http.StatusOK || ci.StatusCode == http.StatusPartialContent)
-					if okSt {
-						for k, v := range ci.Metadata {
-							w.Header().Set(k, v)
-						}
-
-						// For providing ranged content
-						start, rangeLen, err := rs.GetOffsetLength(ci.Size)
-						if err != nil {
-							start, rangeLen = 0, ci.Size
-						}
-
-						if opts.PartNumber > 0 && strings.Contains(ci.ETag, "-") {
-							w.Header()[xhttp.AmzMpPartsCount] = []string{
-								strings.TrimLeftFunc(ci.ETag, func(r rune) bool {
-									return !unicode.IsNumber(r)
-								}),
-							}
-						}
-
-						// Set content length for the range.
-						w.Header().Set(xhttp.ContentLength, strconv.FormatInt(rangeLen, 10))
-						if rs != nil {
-							contentRange := fmt.Sprintf("bytes %d-%d/%d", start, start+rangeLen-1, ci.Size)
-							w.Header().Set(xhttp.ContentRange, contentRange)
-						}
-
-						return
-					}
-					if ci.StatusCode == http.StatusPreconditionFailed {
-						writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
-						return
-					}
-
-					w.WriteHeader(ci.StatusCode)
-				})
 				return
 			}
 		}
@@ -2099,18 +1897,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		AutoEncrypt: globalAutoEncryption,
 	})
 
-	var buf *bytebufferpool.ByteBuffer
-	// Disable cache for encrypted objects - headers are applied with sseConfig.Apply if auto encrypted.
-	if globalCacheConfig.MatchesSize(size) && !crypto.Requested(r.Header) {
-		buf = bytebufferpool.Get()
-		defer bytebufferpool.Put(buf)
-	}
-
 	var reader io.Reader
 	reader = rd
-	if buf != nil {
-		reader = io.TeeReader(rd, buf)
-	}
 
 	actualSize := size
 	var idxCb func() []byte
@@ -2309,29 +2097,6 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	setPutObjHeaders(w, objInfo, false, r.Header)
-
-	defer func() {
-		var data []byte
-		if buf != nil {
-			data = buf.Bytes()
-		}
-
-		if len(data) == 0 {
-			return
-		}
-
-		globalCacheConfig.Set(&cache.ObjectInfo{
-			Key:          objInfo.Name,
-			Bucket:       objInfo.Bucket,
-			ETag:         objInfo.ETag,
-			ModTime:      objInfo.ModTime,
-			Expires:      objInfo.ExpiresStr(),
-			CacheControl: objInfo.CacheControl,
-			Size:         int64(len(data)),
-			Metadata:     cleanReservedKeys(objInfo.UserDefined),
-			Data:         data,
-		})
-	}()
 
 	// Notify object created event.
 	evt := eventArgs{
@@ -2880,8 +2645,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeSuccessNoContent(w)
 		return
 	}
-
-	defer globalCacheConfig.Delete(bucket, object)
 
 	setPutObjHeaders(w, objInfo, true, r.Header)
 	writeSuccessNoContent(w)
