@@ -461,11 +461,7 @@ func handleCommonArgs(ctxt serverCtxt) {
 	certsDir := ctxt.CertsDir
 	certsSet := ctxt.certsDirSet
 
-	browserEnabled, e := config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
-	if e != nil {
-		logger.Fatal(config.ErrInvalidBrowserValue(e), "Invalid MINIO_BROWSER value in environment variable")
-	}
-	if browserEnabled {
+	if globalBrowserEnabled {
 		if consoleAddr == "" {
 			p, err := xnet.GetFreePort()
 			if err != nil {
@@ -498,7 +494,7 @@ func handleCommonArgs(ctxt serverCtxt) {
 		globalDynamicAPIPort = true
 	}
 
-	if browserEnabled {
+	if globalBrowserEnabled {
 		globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
 	}
 
@@ -704,12 +700,16 @@ func loadEnvVarsFromFiles() {
 	}
 }
 
-func serverHandleEnvVars() {
+func serverHandleEarlyEnvVars() {
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
+}
+
+func serverHandleEnvVars() {
+	var err error
 	if globalBrowserEnabled {
 		if redirectURL := env.Get(config.EnvBrowserRedirectURL, ""); redirectURL != "" {
 			u, err := xnet.ParseHTTPURL(redirectURL)
