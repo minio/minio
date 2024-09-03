@@ -306,19 +306,13 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			writeHeadersPrecondition(w, objInfo)
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 			return true
-		} else if !checkIfUnmodifiedSince(r, objInfo) {
-			// If both of the If-Match and If-Unmodified-Since headers are present in the request as follows:
-			// 	If-Match condition evaluates to true , and;
-			// 	If-Unmodified-Since condition evaluates to false ;
-			// Then Amazon S3 returns 200 OK and the data requested.
-			return false
 		}
 	}
 
 	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
 	// time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
-	if ifUnmodifiedSinceHeader != "" {
+	if ifUnmodifiedSinceHeader != "" && ifMatchETagHeader == "" {
 		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
@@ -330,18 +324,6 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	// Object content should be written to http.ResponseWriter
-	return false
-}
-
-// checkIfUnmodifiedSince - return true if object was modified after ifUnmodifiedSinceHeader time
-// return false if the header of If-Unmodified-Since was empty or object was modified before ifUnmodifiedSinceHeader time
-func checkIfUnmodifiedSince(r *http.Request, objInfo ObjectInfo) bool {
-	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
-	if ifUnmodifiedSinceHeader != "" {
-		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
-			return !ifModifiedSince(objInfo.ModTime, givenTime)
-		}
-	}
 	return false
 }
 
