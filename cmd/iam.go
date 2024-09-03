@@ -1602,8 +1602,6 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 			continue
 		}
 		if validatedParent == nil || !isUnderBaseDN {
-			err := fmt.Errorf("DN parent was not found in the LDAP directory for access-key: %s", ak)
-			iamLogIf(ctx, err)
 			skippedAccessKeys = append(skippedAccessKeys, ak)
 			continue
 		}
@@ -1713,8 +1711,6 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 			continue
 		}
 		if validatedDN == nil || !underBaseDN {
-			err := fmt.Errorf("DN was not found in the LDAP directory for: %s", k)
-			iamLogIf(ctx, err)
 			skipped = append(skipped, k)
 			continue
 		}

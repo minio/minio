@@ -29,6 +29,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -2082,7 +2083,8 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 		return
 	}
 
-	var skipped, removed, added, failed []string
+	var skipped, removed, added madmin.IAMEntities
+	var failed madmin.IAMErrEntities
 
 	// import policies first
 	{
@@ -2109,8 +2111,10 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			for policyName, policy := range allPolicies {
 				if policy.IsEmpty() {
 					err = globalIAMSys.DeletePolicy(ctx, policyName, true)
+					removed.Policies = append(removed.Policies, policyName)
 				} else {
 					_, err = globalIAMSys.SetPolicy(ctx, policyName, policy)
+					added.Policies = append(added.Policies, policyName)
 				}
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, allPoliciesFile, policyName), r.URL)
@@ -2189,8 +2193,9 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 					return
 				}
 				if _, err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
-					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, toAdminAPIErrCode(ctx, err), err, allUsersFile, accessKey), r.URL)
-					return
+					failed.Users = append(failed.Users, madmin.IAMErrEntity{Name: accessKey, Error: err})
+				} else {
+					added.Users = append(added.Users, accessKey)
 				}
 
 			}
@@ -2228,8 +2233,9 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 					}
 				}
 				if _, gerr := globalIAMSys.AddUsersToGroup(ctx, group, grpInfo.Members); gerr != nil {
-					writeErrorResponseJSON(ctx, w, importError(ctx, gerr, allGroupsFile, group), r.URL)
-					return
+					failed.Groups = append(failed.Groups, madmin.IAMErrEntity{Name: group, Error: err})
+				} else {
+					added.Groups = append(added.Groups, group)
 				}
 			}
 		}
@@ -2259,7 +2265,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			// Validations for LDAP enabled deployments.
 			if globalIAMSys.LDAPConfig.Enabled() {
 				skippedAccessKeys, err := globalIAMSys.NormalizeLDAPAccessKeypairs(ctx, serviceAcctReqs)
-				skipped = append(skipped, skippedAccessKeys...)
+				skipped.ServiceAccounts = append(skipped.ServiceAccounts, skippedAccessKeys...)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, ""), r.URL)
 					return
@@ -2267,7 +2273,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			}
 
 			for user, svcAcctReq := range serviceAcctReqs {
-				if slices.Contains(skipped, user) {
+				if slices.Contains(skipped.ServiceAccounts, user) {
 					continue
 				}
 				var sp *policy.Policy
@@ -2327,13 +2333,10 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 
 				if _, _, err = globalIAMSys.NewServiceAccount(ctx, svcAcctReq.Parent, svcAcctReq.Groups, opts); err != nil {
-					failed = append(failed, user)
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
-					return
+					failed.ServiceAccounts = append(failed.ServiceAccounts, madmin.IAMErrEntity{Name: user, Error: err})
 				} else {
-					added = append(added, user)
+					added.ServiceAccounts = append(added.ServiceAccounts, user)
 				}
-
 			}
 		}
 	}
@@ -2370,8 +2373,15 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 					return
 				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, regUser, false); err != nil {
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, userPolicyMappingsFile, u), r.URL)
-					return
+					failed.UserPolicies = append(
+						failed.UserPolicies,
+						madmin.IAMErrPolicyEntity{
+							Name:     u,
+							Policies: strings.Split(pm.Policies, ","),
+							Error:    err,
+						})
+				} else {
+					added.UserPolicies = append(added.UserPolicies, map[string][]string{u: strings.Split(pm.Policies, ",")})
 				}
 			}
 		}
@@ -2402,7 +2412,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
 				skippedDN, err := globalIAMSys.NormalizeLDAPMappingImport(ctx, isGroup, grpPolicyMap)
-				skipped = append(skipped, skippedDN...)
+				skipped.Groups = append(skipped.Groups, skippedDN...)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, ""), r.URL)
 					return
@@ -2410,15 +2420,19 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			}
 
 			for g, pm := range grpPolicyMap {
-				if slices.Contains(skipped, g) {
+				if slices.Contains(skipped.Groups, g) {
 					continue
 				}
 				if _, err := globalIAMSys.PolicyDBSet(ctx, g, pm.Policies, unknownIAMUserType, true); err != nil {
-					failed = append(failed, g)
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, groupPolicyMappingsFile, g), r.URL)
-					return
+					failed.GroupPolicies = append(
+						failed.GroupPolicies,
+						madmin.IAMErrPolicyEntity{
+							Name:     g,
+							Policies: strings.Split(pm.Policies, ","),
+							Error:    err,
+						})
 				} else {
-					added = append(added, g)
+					added.GroupPolicies = append(added.GroupPolicies, map[string][]string{g: strings.Split(pm.Policies, ",")})
 				}
 			}
 		}
@@ -2449,14 +2463,14 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 			if globalIAMSys.LDAPConfig.Enabled() {
 				isGroup := true
 				skippedDN, err := globalIAMSys.NormalizeLDAPMappingImport(ctx, !isGroup, userPolicyMap)
-				skipped = append(skipped, skippedDN...)
+				skipped.Users = append(skipped.Users, skippedDN...)
 				if err != nil {
 					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, ""), r.URL)
 					return
 				}
 			}
 			for u, pm := range userPolicyMap {
-				if slices.Contains(skipped, u) {
+				if slices.Contains(skipped.Users, u) {
 					continue
 				}
 				// disallow setting policy mapping if user is a temporary user
@@ -2471,11 +2485,15 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 
 				if _, err := globalIAMSys.PolicyDBSet(ctx, u, pm.Policies, stsUser, false); err != nil {
-					failed = append(failed, u)
-					writeErrorResponseJSON(ctx, w, importError(ctx, err, stsUserPolicyMappingsFile, u), r.URL)
-					return
+					failed.STSPolicies = append(
+						failed.STSPolicies,
+						madmin.IAMErrPolicyEntity{
+							Name:     u,
+							Policies: strings.Split(pm.Policies, ","),
+							Error:    err,
+						})
 				} else {
-					added = append(added, u)
+					added.STSPolicies = append(added.STSPolicies, map[string][]string{u: strings.Split(pm.Policies, ",")})
 				}
 			}
 		}
