@@ -1106,7 +1106,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	readQuorum := fi.ReadQuorum(er.defaultRQuorum())
 
 	// Read Part info for all parts
-	partPath := pathJoin(uploadIDPath, fi.DataDir) + "/"
+	partPath := pathJoin(uploadIDPath, fi.DataDir) + SlashSeparator
 	partMetaPaths := make([]string, len(parts))
 	partNumbers := make([]int, len(parts))
 	for idx, part := range parts {
