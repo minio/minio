@@ -146,7 +146,8 @@ func (target *WebhookTarget) isActive() (bool, error) {
 // which will be replayed when the webhook connection is active.
 func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err

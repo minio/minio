@@ -276,7 +276,8 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp091.Channel, confi
 // Save - saves the events to the store which will be replayed when the amqp connection is active.
 func (target *AMQPTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err

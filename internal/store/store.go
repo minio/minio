@@ -45,11 +45,12 @@ type Target interface {
 
 // Store - Used to persist items.
 type Store[I any] interface {
-	Put(item I) error
-	PutMultiple(item []I) error
+	Put(item I) (Key, error)
+	PutMultiple(item []I) (Key, error)
 	Get(key Key) (I, error)
 	GetMultiple(key Key) ([]I, error)
 	GetRaw(key Key) ([]byte, error)
+	PutRaw(b []byte) (Key, error)
 	Len() int
 	List() []Key
 	Del(key Key) error
@@ -65,6 +66,7 @@ type Key struct {
 	ItemCount int
 }
 
+// String returns the filepath name
 func (k Key) String() string {
 	keyStr := k.Name
 	if k.ItemCount > 1 {
@@ -76,11 +78,6 @@ func (k Key) String() string {
 		}
 		return ""
 	}()
-}
-
-// GetItemCount gets the item count
-func (k Key) GetItemCount() (count int, err error) {
-	return getItemCount(k.Name)
 }
 
 func getItemCount(k string) (count int, err error) {

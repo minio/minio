@@ -167,7 +167,7 @@ type KafkaTarget struct {
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      store.Store[event.Event]
-	batch      *store.Batch[string, event.Event]
+	batch      *store.Batch[event.Event]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -207,7 +207,11 @@ func (target *KafkaTarget) isActive() (bool, error) {
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		if target.batch != nil {
+			return target.batch.Add(eventData)
+		}
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
@@ -245,17 +249,14 @@ func (target *KafkaTarget) sendMultiple(events []event.Event) error {
 }
 
 // SendFromStore - reads an event from store and sends it to Kafka.
-func (target *KafkaTarget) SendFromStore(key store.Key) error {
-	if err := target.init(); err != nil {
-		return err
-	}
-	itemC, err := key.GetItemCount()
-	if err != nil {
+func (target *KafkaTarget) SendFromStore(key store.Key) (err error) {
+	if err = target.init(); err != nil {
 		return err
 	}
 	switch {
-	case itemC == 1:
-		event, err := target.store.Get(key)
+	case key.ItemCount == 1:
+		var event event.Event
+		event, err = target.store.Get(key)
 		if err != nil {
 			// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 			// Such events will not exist and wouldve been already been sent successfully.
@@ -265,8 +266,9 @@ func (target *KafkaTarget) SendFromStore(key store.Key) error {
 			return err
 		}
 		err = target.send(event)
-	case itemC > 1:
-		events, err := target.store.GetMultiple(key)
+	case key.ItemCount > 1:
+		var events []event.Event
+		events, err = target.store.GetMultiple(key)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
@@ -308,7 +310,18 @@ func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.Pro
 func (target *KafkaTarget) Close() error {
 	close(target.quitCh)
 
+	if target.batch != nil {
+		target.batch.Close()
+	}
+
 	if target.producer != nil {
+		if target.store != nil {
+			// It is safe to abort the current transaction if
+			// queue_dir is configured
+			target.producer.AbortTxn()
+		} else {
+			target.producer.CommitTxn()
+		}
 		target.producer.Close()
 		return target.client.Close()
 	}
@@ -433,11 +446,10 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 	}
 	if target.store != nil {
 		if args.BatchSize > 1 {
-			target.batch = store.NewBatch[string, event.Event](store.BatchConfig[event.Event]{
+			target.batch = store.NewBatch[event.Event](store.BatchConfig[event.Event]{
 				Limit:         args.BatchSize,
 				Log:           loggerOnce,
 				Store:         queueStore,
-				DoneCh:        target.quitCh,
 				CommitTimeout: args.BatchCommitTimeout,
 			})
 		}

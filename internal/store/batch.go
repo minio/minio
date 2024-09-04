@@ -20,7 +20,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -30,16 +29,12 @@ var ErrBatchFull = errors.New("batch is full")
 
 const defaultCommitTimeout = 30 * time.Second
 
-type key interface {
-	string | int | int64
-}
-
 // Batch represents an ordered batch
-type Batch[K key, T any] struct {
-	keys  []K
-	items map[K]T
-	limit uint32
-	store Store[T]
+type Batch[I any] struct {
+	items  []I
+	limit  uint32
+	store  Store[I]
+	quitCh chan struct{}
 
 	sync.Mutex
 }
@@ -50,11 +45,10 @@ type BatchConfig[I any] struct {
 	Store         Store[I]
 	CommitTimeout time.Duration
 	Log           logger
-	DoneCh        <-chan struct{}
 }
 
 // Add adds the item to the batch
-func (b *Batch[K, T]) Add(key K, item T) error {
+func (b *Batch[I]) Add(item I) error {
 	b.Lock()
 	defer b.Unlock()
 
@@ -68,88 +62,76 @@ func (b *Batch[K, T]) Add(key K, item T) error {
 		}
 	}
 
-	if _, ok := b.items[key]; !ok {
-		b.keys = append(b.keys, key)
-	}
-	b.items[key] = item
-
+	b.items = append(b.items, item)
 	return nil
 }
 
 // Len returns the no of items in the batch
-func (b *Batch[K, T]) Len() int {
+func (b *Batch[_]) Len() int {
 	b.Lock()
 	defer b.Unlock()
 
-	return len(b.keys)
+	return len(b.items)
 }
 
-func (b *Batch[K, T]) isFull() bool {
+func (b *Batch[_]) isFull() bool {
 	return len(b.items) >= int(b.limit)
 }
 
-func (b *Batch[K, T]) commit() error {
-	switch len(b.keys) {
+func (b *Batch[I]) commit() error {
+	switch len(b.items) {
 	case 0:
 		return nil
 	case 1:
-		item, ok := b.items[b.keys[0]]
-		if !ok {
-			return fmt.Errorf("item not found for the key: %v; should not happen;", b.keys[0])
-		}
-		return b.store.Put(item)
+		_, err := b.store.Put(b.items[0])
+		return err
 	default:
 	}
-
-	orderedKeys := append([]K(nil), b.keys...)
-	var orderedItems []T
-	for _, key := range orderedKeys {
-		item, ok := b.items[key]
-		if !ok {
-			return fmt.Errorf("item not found for the key: %v; should not happen;", key)
-		}
-		orderedItems = append(orderedItems, item)
-	}
-	if err := b.store.PutMultiple(orderedItems); err != nil {
+	if _, err := b.store.PutMultiple(b.items); err != nil {
 		return err
 	}
-
-	b.keys = make([]K, 0, b.limit)
-	b.items = make(map[K]T, b.limit)
-
+	b.items = make([]I, 0, b.limit)
 	return nil
 }
 
+// Close commits the pending items and quits the goroutines
+func (b *Batch[I]) Close() error {
+	defer func() {
+		close(b.quitCh)
+	}()
+
+	b.Lock()
+	defer b.Unlock()
+	return b.commit()
+}
+
 // NewBatch creates a new batch
-func NewBatch[K key, T any](config BatchConfig[T]) *Batch[K, T] {
+func NewBatch[I any](config BatchConfig[I]) *Batch[I] {
 	if config.CommitTimeout == 0 {
 		config.CommitTimeout = defaultCommitTimeout
 	}
-	batch := &Batch[K, T]{
-		keys:  make([]K, 0, config.Limit),
-		items: make(map[K]T, config.Limit),
-		limit: config.Limit,
-		store: config.Store,
+	quitCh := make(chan struct{})
+	batch := &Batch[I]{
+		items:  make([]I, 0, config.Limit),
+		limit:  config.Limit,
+		store:  config.Store,
+		quitCh: quitCh,
 	}
 	if batch.store != nil {
 		go func() {
-			var done bool
 			commitTicker := time.NewTicker(config.CommitTimeout)
 			defer commitTicker.Stop()
 			for {
 				select {
 				case <-commitTicker.C:
-				case <-config.DoneCh:
-					done = true
+				case <-batch.quitCh:
+					return
 				}
 				batch.Lock()
 				err := batch.commit()
 				batch.Unlock()
 				if err != nil {
 					config.Log(context.Background(), err, "")
-				}
-				if done {
-					return
 				}
 			}
 		}()

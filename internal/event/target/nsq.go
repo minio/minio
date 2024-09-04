@@ -147,7 +147,8 @@ func (target *NSQTarget) isActive() (bool, error) {
 // Save - saves the events to the store which will be replayed when the nsq connection is active.
 func (target *NSQTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 
 	if err := target.init(); err != nil {

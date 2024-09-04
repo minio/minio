@@ -299,7 +299,8 @@ func (target *NATSTarget) isActive() (bool, error) {
 // Save - saves the events to the store which will be replayed when the Nats connection is active.
 func (target *NATSTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 
 	if err := target.init(); err != nil {

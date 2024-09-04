@@ -420,7 +420,7 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 		if !isDirQueue {
 			err = h.send(ctx, buf.Bytes(), count, h.payloadType, webhookCallTimeout)
 		} else {
-			err = h.store.PutMultiple(entries)
+			_, err = h.store.PutMultiple(entries)
 		}
 
 		if err != nil {

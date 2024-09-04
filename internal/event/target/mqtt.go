@@ -202,7 +202,8 @@ func (target *MQTTTarget) SendFromStore(key store.Key) error {
 // be replayed when the mqtt connection is active.
 func (target *MQTTTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err

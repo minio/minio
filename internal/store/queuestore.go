@@ -84,11 +84,6 @@ func (store *QueueStore[_]) Open() error {
 		return err
 	}
 
-	// Truncate entries.
-	if uint64(len(files)) > store.entryLimit {
-		files = files[:store.entryLimit]
-	}
-
 	for _, file := range files {
 		if file.IsDir() {
 			continue
@@ -107,24 +102,25 @@ func (store *QueueStore[_]) Delete() error {
 }
 
 // PutMultiple - puts an item to the store.
-func (store *QueueStore[I]) PutMultiple(items []I) error {
+func (store *QueueStore[I]) PutMultiple(items []I) (Key, error) {
 	// Generate a new UUID for the key.
 	uid, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return Key{}, err
 	}
 
 	store.Lock()
 	defer store.Unlock()
 	if uint64(len(store.entries)) >= store.entryLimit {
-		return errLimitExceeded
+		return Key{}, errLimitExceeded
 	}
-	return store.multiWrite(Key{
+	key := Key{
 		Name:      uid.String(),
 		ItemCount: len(items),
 		Compress:  true,
 		Extension: store.fileExt,
-	}, items)
+	}
+	return key, store.multiWrite(key, items)
 }
 
 // multiWrite - writes an item to the directory.
@@ -165,41 +161,64 @@ func (store *QueueStore[I]) write(key Key, item I) error {
 	if err != nil {
 		return err
 	}
+	return store.writeBytes(key, eventData)
+}
 
+// writeBytes - writes bytes to the directory.
+func (store *QueueStore[I]) writeBytes(key Key, b []byte) (err error) {
 	path := filepath.Join(store.directory, key.String())
+
 	if key.Compress {
-		err = os.WriteFile(path, s2.Encode(nil, eventData), os.FileMode(0o770))
+		err = os.WriteFile(path, s2.Encode(nil, b), os.FileMode(0o770))
 	} else {
-		err = os.WriteFile(path, eventData, os.FileMode(0o770))
+		err = os.WriteFile(path, b, os.FileMode(0o770))
 	}
 
 	if err != nil {
 		return err
 	}
-
 	// Increment the item count.
 	store.entries[key.String()] = time.Now().UnixNano()
-
 	return nil
 }
 
 // Put - puts an item to the store.
-func (store *QueueStore[I]) Put(item I) error {
+func (store *QueueStore[I]) Put(item I) (Key, error) {
 	store.Lock()
 	defer store.Unlock()
 	if uint64(len(store.entries)) >= store.entryLimit {
-		return errLimitExceeded
+		return Key{}, errLimitExceeded
 	}
 	// Generate a new UUID for the key.
 	uid, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return Key{}, err
 	}
-	return store.write(Key{
+	key := Key{
 		Name:      uid.String(),
 		Extension: store.fileExt,
 		ItemCount: 1,
-	}, item)
+	}
+	return key, store.write(key, item)
+}
+
+// PutRaw - puts the raw bytes to the store
+func (store *QueueStore[I]) PutRaw(b []byte) (Key, error) {
+	store.Lock()
+	defer store.Unlock()
+	if uint64(len(store.entries)) >= store.entryLimit {
+		return Key{}, errLimitExceeded
+	}
+	// Generate a new UUID for the key.
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		return Key{}, err
+	}
+	key := Key{
+		Name:      uid.String(),
+		Extension: store.fileExt,
+	}
+	return key, store.writeBytes(key, b)
 }
 
 // GetRaw - gets an item from the store.
@@ -208,7 +227,7 @@ func (store *QueueStore[I]) GetRaw(key Key) (raw []byte, err error) {
 
 	defer func(store *QueueStore[I]) {
 		store.RUnlock()
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			// Upon error we remove the entry.
 			store.Del(key)
 		}
@@ -232,7 +251,7 @@ func (store *QueueStore[I]) Get(key Key) (item I, err error) {
 
 	defer func(store *QueueStore[I]) {
 		store.RUnlock()
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			// Upon error we remove the entry.
 			store.Del(key)
 		}
@@ -255,12 +274,13 @@ func (store *QueueStore[I]) Get(key Key) (item I, err error) {
 	return item, nil
 }
 
+// GetMultiple will read the multi payload file and fetch the items
 func (store *QueueStore[I]) GetMultiple(key Key) (items []I, err error) {
 	store.RLock()
 
 	defer func(store *QueueStore[I]) {
 		store.RUnlock()
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			// Upon error we remove the entry.
 			store.Del(key)
 		}

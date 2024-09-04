@@ -66,7 +66,7 @@ func TestQueueStorePut(t *testing.T) {
 	}
 	// Put 100 items.
 	for i := 0; i < 100; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
@@ -90,7 +90,7 @@ func TestQueueStoreGet(t *testing.T) {
 	}
 	// Put 10 items
 	for i := 0; i < 10; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
@@ -124,7 +124,7 @@ func TestQueueStoreDel(t *testing.T) {
 	}
 	// Put 20 items.
 	for i := 0; i < 20; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
@@ -160,12 +160,12 @@ func TestQueueStoreLimit(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	for i := 0; i < 5; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
 	// Should not allow 6th Put.
-	if err := store.Put(testItem); err == nil {
+	if _, err := store.Put(testItem); err == nil {
 		t.Fatalf("Expected to fail with %s, but passes", errLimitExceeded)
 	}
 }
@@ -182,7 +182,7 @@ func TestQueueStoreListN(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	for i := 0; i < 10; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
@@ -240,7 +240,7 @@ func TestMultiplePutGets(t *testing.T) {
 		})
 	}
 
-	if err := store.PutMultiple(items); err != nil {
+	if _, err := store.PutMultiple(items); err != nil {
 		t.Fatalf("failed to put multiple; %v", err)
 	}
 
@@ -295,7 +295,7 @@ func TestMixedPutGets(t *testing.T) {
 			Property: "property",
 		})
 	}
-	if err := store.PutMultiple(items); err != nil {
+	if _, err := store.PutMultiple(items); err != nil {
 		t.Fatalf("failed to put multiple; %v", err)
 	}
 
@@ -304,7 +304,7 @@ func TestMixedPutGets(t *testing.T) {
 			Name:     fmt.Sprintf("test-item-%d", i),
 			Property: "property",
 		}
-		if err := store.Put(item); err != nil {
+		if _, err := store.Put(item); err != nil {
 			t.Fatalf("unable to store.Put(); %v", err)
 		}
 		items = append(items, item)

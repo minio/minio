@@ -35,21 +35,20 @@ func TestBatchCommit(t *testing.T) {
 		t.Fatalf("Failed to create a queue store; %v", err)
 	}
 
-	ctx := context.Background()
 	var limit uint32 = 100
 
-	batch := NewBatch[int, TestItem](BatchConfig[TestItem]{
+	batch := NewBatch[TestItem](BatchConfig[TestItem]{
 		Limit:         limit,
 		Store:         store,
 		CommitTimeout: 5 * time.Minute,
-		DoneCh:        ctx.Done(),
 		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
 			t.Log(err)
 		},
 	})
+	defer batch.Close()
 
 	for i := 0; i < int(limit); i++ {
-		if err := batch.Add(i, testItem); err != nil {
+		if err := batch.Add(testItem); err != nil {
 			t.Fatalf("failed to add %v; %v", i, err)
 		}
 	}
@@ -63,7 +62,7 @@ func TestBatchCommit(t *testing.T) {
 	if len(keys) > 0 {
 		t.Fatalf("Expected empty store list but got len(list) %v", len(keys))
 	}
-	if err := batch.Add(101, testItem); err != nil {
+	if err := batch.Add(testItem); err != nil {
 		t.Fatalf("unable to add to the batch; %v", err)
 	}
 	batchLen = batch.Len()
@@ -103,25 +102,22 @@ func TestBatchCommitOnExit(t *testing.T) {
 
 	var limit uint32 = 100
 
-	exitCh := make(chan struct{})
-
-	batch := NewBatch[int, TestItem](BatchConfig[TestItem]{
+	batch := NewBatch[TestItem](BatchConfig[TestItem]{
 		Limit:         limit,
 		Store:         store,
 		CommitTimeout: 5 * time.Minute,
-		DoneCh:        exitCh,
 		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
-			t.Log(err)
+			t.Log([]any{err, id, errKind}...)
 		},
 	})
 
 	for i := 0; i < int(limit); i++ {
-		if err := batch.Add(i, testItem); err != nil {
+		if err := batch.Add(testItem); err != nil {
 			t.Fatalf("failed to add %v; %v", i, err)
 		}
 	}
 
-	exitCh <- struct{}{}
+	batch.Close()
 	time.Sleep(1 * time.Second)
 
 	batchLen := batch.Len()
@@ -161,25 +157,24 @@ func TestBatchWithConcurrency(t *testing.T) {
 		t.Fatalf("Failed to create a queue store; %v", err)
 	}
 
-	ctx := context.Background()
 	var limit uint32 = 100
 
-	batch := NewBatch[int, TestItem](BatchConfig[TestItem]{
+	batch := NewBatch[TestItem](BatchConfig[TestItem]{
 		Limit:         limit,
 		Store:         store,
 		CommitTimeout: 5 * time.Minute,
-		DoneCh:        ctx.Done(),
 		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
 			t.Log(err)
 		},
 	})
+	defer batch.Close()
 
 	var wg sync.WaitGroup
 	for i := 0; i < int(limit); i++ {
 		wg.Add(1)
 		go func(key int) {
 			defer wg.Done()
-			if err := batch.Add(key, testItem); err != nil {
+			if err := batch.Add(testItem); err != nil {
 				t.Errorf("failed to add item %v; %v", key, err)
 				return
 			}
@@ -196,7 +191,7 @@ func TestBatchWithConcurrency(t *testing.T) {
 	if len(keys) > 0 {
 		t.Fatalf("Expected empty store list but got len(list) %v", len(keys))
 	}
-	if err := batch.Add(101, testItem); err != nil {
+	if err := batch.Add(testItem); err != nil {
 		t.Fatalf("unable to add to the batch; %v", err)
 	}
 	batchLen = batch.Len()

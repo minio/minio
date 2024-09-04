@@ -315,7 +315,8 @@ func (h *Target) IsOnline(_ context.Context) bool {
 func (h *Target) Send(ctx context.Context, entry interface{}) error {
 	if h.store != nil {
 		// save the entry to the queue store which will be replayed to the target.
-		return h.store.Put(entry)
+		_, err := h.store.Put(entry)
+		return err
 	}
 	h.logChMu.RLock()
 	defer h.logChMu.RUnlock()

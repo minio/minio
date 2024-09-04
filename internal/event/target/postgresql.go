@@ -196,7 +196,8 @@ func (target *PostgreSQLTarget) isActive() (bool, error) {
 // Save - saves the events to the store if questore is configured, which will be replayed when the PostgreSQL connection is active.
 func (target *PostgreSQLTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 
 	if err := target.init(); err != nil {

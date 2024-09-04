@@ -173,7 +173,8 @@ func (target *RedisTarget) isActive() (bool, error) {
 // Save - saves the events to the store if questore is configured, which will be replayed when the redis connection is active.
 func (target *RedisTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
