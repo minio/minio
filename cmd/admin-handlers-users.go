@@ -1182,11 +1182,11 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	userList := r.Form["users"]
+	users := r.Form["users"]
 	isAll := r.Form.Get("all") == "true"
-	onlySelf := !isAll && len(userList) == 0
+	selfOnly := !isAll && len(users) == 0
 
-	if isAll && len(userList) > 0 {
+	if isAll && len(users) > 0 {
 		// This should be checked on client side, so return generic error
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
 		return
@@ -1205,9 +1205,9 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-	} else if len(userList) == 1 {
-		if userList[0] == cred.AccessKey || userList[0] == cred.ParentUser {
-			onlySelf = true
+	} else if len(users) == 1 {
+		if users[0] == cred.AccessKey || users[0] == cred.ParentUser {
+			selfOnly = true
 		}
 	}
 
@@ -1218,18 +1218,18 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
-		DenyOnly:        onlySelf,
+		DenyOnly:        selfOnly,
 	}) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 		return
 	}
 
-	if onlySelf && len(userList) == 0 {
+	if selfOnly && len(users) == 0 {
 		selfUser := cred.AccessKey
 		if cred.ParentUser != "" {
 			selfUser = cred.ParentUser
 		}
-		userList = append(userList, selfUser)
+		users = append(users, selfUser)
 	}
 
 	var checkedUserList []string
@@ -1243,7 +1243,7 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 			checkedUserList = append(checkedUserList, user)
 		}
 	} else {
-		for _, user := range userList {
+		for _, user := range users {
 			// Validate the user
 			_, ok := globalIAMSys.GetUser(ctx, user)
 			if !ok {
@@ -1284,10 +1284,9 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			for _, sts := range stsKeys {
-				expiryTime := sts.Expiration
 				accessKeys.STSKeys = append(accessKeys.STSKeys, madmin.ServiceAccountInfo{
 					AccessKey:  sts.AccessKey,
-					Expiration: &expiryTime,
+					Expiration: &sts.Expiration,
 				})
 			}
 			// if only STS keys, skip if user has no STS keys
@@ -1303,10 +1302,9 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 				return
 			}
 			for _, svc := range serviceAccounts {
-				expiryTime := svc.Expiration
 				accessKeys.ServiceAccounts = append(accessKeys.ServiceAccounts, madmin.ServiceAccountInfo{
 					AccessKey:  svc.AccessKey,
-					Expiration: &expiryTime,
+					Expiration: &svc.Expiration,
 				})
 			}
 			// if only service accounts, skip if user has no service accounts
