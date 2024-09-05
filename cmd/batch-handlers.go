@@ -1208,7 +1208,11 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		s3Type := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
 
 		go func() {
-			for _, prefix := range r.Source.Prefix.F() {
+			prefixes := r.Source.Prefix.F()
+			if len(prefixes) == 0 {
+				prefixes = []string{""}
+			}
+			for _, prefix := range prefixes {
 				prefixWalkCh := make(chan itemOrErr[ObjectInfo], 100)
 				if err := api.Walk(ctx, r.Source.Bucket, strings.TrimSpace(prefix), prefixWalkCh, WalkOptions{
 					Marker:   lastObject,
