@@ -1097,13 +1097,13 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 
 	var legacyJSON bool
 	buf, err := xioutil.WithDeadline[[]byte](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) ([]byte, error) {
-		buf, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
+		buf, _, err := s.readAllDataWithDMTime(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
 		if err != nil && !errors.Is(err, errFileNotFound) {
 			return nil, err
 		}
 
 		if errors.Is(err, errFileNotFound) && legacy {
-			buf, err = s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1))
+			buf, _, err = s.readAllDataWithDMTime(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1))
 			if err != nil {
 				return nil, err
 			}
@@ -3123,12 +3123,24 @@ func (s *xlStorage) ReadParts(ctx context.Context, volume string, partMetaPaths 
 	parts := make([]*ObjectPartInfo, len(partMetaPaths))
 	for idx, partMetaPath := range partMetaPaths {
 		var partNumber int
-		fmt.Sscanf(pathutil.Dir(partMetaPath), "part.%d.meta", &partNumber)
+		fmt.Sscanf(pathutil.Base(partMetaPath), "part.%d.meta", &partNumber)
 
 		if contextCanceled(ctx) {
-			parts[idx] = &ObjectPartInfo{Error: ctx.Err().Error(), Number: partNumber}
+			parts[idx] = &ObjectPartInfo{
+				Error:  ctx.Err().Error(),
+				Number: partNumber,
+			}
 			continue
 		}
+
+		if err := Access(pathJoin(volumeDir, pathutil.Dir(partMetaPath), fmt.Sprintf("part.%d", partNumber))); err != nil {
+			parts[idx] = &ObjectPartInfo{
+				Error:  err.Error(),
+				Number: partNumber,
+			}
+			continue
+		}
+
 		data, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, partMetaPath))
 		if err != nil {
 			parts[idx] = &ObjectPartInfo{
@@ -3137,11 +3149,16 @@ func (s *xlStorage) ReadParts(ctx context.Context, volume string, partMetaPaths 
 			}
 			continue
 		}
+
 		pinfo := &ObjectPartInfo{}
 		if _, err = pinfo.UnmarshalMsg(data); err != nil {
-			parts[idx] = &ObjectPartInfo{Error: err.Error(), Number: partNumber}
+			parts[idx] = &ObjectPartInfo{
+				Error:  err.Error(),
+				Number: partNumber,
+			}
 			continue
 		}
+
 		parts[idx] = pinfo
 	}
 	diskHealthCheckOK(ctx, nil)
