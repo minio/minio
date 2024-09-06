@@ -1047,7 +1047,7 @@ func readParts(ctx context.Context, disks []StorageAPI, bucket string, partMetaP
 	return partInfosInQuorum, nil
 }
 
-func objPartToPartErr(part *ObjectPartInfo) error {
+func objPartToPartErr(part ObjectPartInfo) error {
 	if strings.Contains(part.Error, "file not found") {
 		return InvalidPart{PartNumber: part.Number}
 	}

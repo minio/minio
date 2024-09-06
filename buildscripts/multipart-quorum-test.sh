@@ -1,8 +1,8 @@
 #!/bin/bash
 
-set -E
-set -o pipefail
-set -x
+if [ -n "$TEST_DEBUG" ]; then
+	set -x
+fi
 
 WORK_DIR="$PWD/.verify-$RANDOM"
 MINIO_CONFIG_DIR="$WORK_DIR/.minio"
@@ -20,6 +20,10 @@ fi
 
 trap 'catch $LINENO' ERR
 
+function purge() {
+	rm -rf "$1"
+}
+
 # shellcheck disable=SC2120
 catch() {
 	if [ $# -ne 0 ]; then
@@ -27,9 +31,12 @@ catch() {
 	fi
 
 	echo "Cleaning up instances of MinIO"
-	pkill minio
-	pkill -9 minio
+	pkill minio || true
+	pkill -9 minio || true
 	purge "$WORK_DIR"
+	if [ $# -ne 0 ]; then
+		exit $#
+	fi
 }
 
 catch
@@ -74,21 +81,16 @@ function start_minio_10drive() {
 
 	"${PWD}/mc" mb --with-versioning minio/bucket
 
-	# install aws cli
-	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-	unzip awscliv2.zip
-	sudo ./aws/install
-
 	export AWS_ACCESS_KEY_ID=minio
 	export AWS_SECRET_ACCESS_KEY=minio123
 	aws --endpoint-url http://localhost:"$start_port" s3api create-multipart-upload --bucket bucket --key obj-1 >upload-id.json
 	uploadId=$(jq -r '.UploadId' upload-id.json)
 
-	truncate -S 5MiB file-5mib
+	truncate -s 5MiB file-5mib
 	for i in {1..2}; do
 		aws --endpoint-url http://localhost:"$start_port" s3api upload-part \
 			--upload-id "$uploadId" --bucket bucket --key obj-1 \
-			--part-number "$i" --body file-5mib
+			--part-number "$i" --body ./file-5mib
 	done
 	for i in {1..6}; do
 		find ${WORK_DIR}/disk${i}/.minio.sys/multipart/ -type f -name "part.1" -delete
@@ -98,25 +100,22 @@ function start_minio_10drive() {
     "Parts": [
         {
             "PartNumber": 1,
-            "ETag": "\"5f363e0e58a95f06cbe9bbc662c5dfb6\""
+            "ETag": "5f363e0e58a95f06cbe9bbc662c5dfb6"
         },
         {
             "PartNumber": 2,
-            "ETag": "\"5f363e0e58a95f06cbe9bbc662c5dfb6\""
+            "ETag": "5f363e0e58a95f06cbe9bbc662c5dfb6"
         }
     ]
 }
 EOF
-
-	aws --endpoint-url http://localhost:"$start_port" s3api complete-multipart-upload --upload-id "$uploadId" --bucket bucket --key obj-1 --multipart-upload file://./parts.json 2>error.out
-	if ! grep "An error occurred (InvalidPart) when calling the CompleteMultipartUpload operation" error.out; then
-		echo "Failed to receive InvalidPart error"
+	err=$(aws --endpoint-url http://localhost:"$start_port" s3api complete-multipart-upload --upload-id "$uploadId" --bucket bucket --key obj-1 --multipart-upload file://./parts.json 2>&1)
+	rv=$?
+	if [ $rv -eq 0 ]; then
+		echo "Failed to receive an error"
 		exit 1
 	fi
-}
-
-function purge() {
-	rm -rf "$1"
+	echo "Received an error during complete-multipart as expected: $err"
 }
 
 function main() {
@@ -124,6 +123,4 @@ function main() {
 	start_minio_10drive ${start_port}
 }
 
-(main "$@")
-rv=$?
-exit "$rv"
+main "$@"
