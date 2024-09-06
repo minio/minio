@@ -148,7 +148,11 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		if !ok {
 			return nil, fmt.Errorf("Invalid kid value %v", jwtToken.Header["kid"])
 		}
-		return r.pubKeys.get(kid), nil
+		pubkey := r.pubKeys.get(kid)
+		if pubkey == nil {
+			return nil, fmt.Errorf("No public key found for kid %s", kid)
+		}
+		return pubkey, nil
 	}
 
 	pCfg, ok := r.arnProviderCfgsMap[arn]
