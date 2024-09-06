@@ -18,24 +18,25 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/klauspost/compress/s2"
 	"github.com/valyala/bytebufferpool"
 )
 
 const (
 	defaultLimit = 100000 // Default store limit.
 	defaultExt   = ".unknown"
+	compressExt  = ".snappy"
 )
 
 // errLimitExceeded error is sent when the maximum limit is reached.
@@ -83,18 +84,12 @@ func (store *QueueStore[_]) Open() error {
 		return err
 	}
 
-	// Truncate entries.
-	if uint64(len(files)) > store.entryLimit {
-		files = files[:store.entryLimit]
-	}
-
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
-		key := strings.TrimSuffix(file.Name(), store.fileExt)
 		if fi, err := file.Info(); err == nil {
-			store.entries[key] = fi.ModTime().UnixNano()
+			store.entries[file.Name()] = fi.ModTime().UnixNano()
 		}
 	}
 
@@ -107,96 +102,138 @@ func (store *QueueStore[_]) Delete() error {
 }
 
 // PutMultiple - puts an item to the store.
-func (store *QueueStore[I]) PutMultiple(item []I) error {
+func (store *QueueStore[I]) PutMultiple(items []I) (Key, error) {
 	// Generate a new UUID for the key.
-	key, err := uuid.NewRandom()
+	uid, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return Key{}, err
 	}
 
 	store.Lock()
 	defer store.Unlock()
 	if uint64(len(store.entries)) >= store.entryLimit {
-		return errLimitExceeded
+		return Key{}, errLimitExceeded
 	}
-	return store.multiWrite(fmt.Sprintf("%d:%s", len(item), key.String()), item)
+	key := Key{
+		Name:      uid.String(),
+		ItemCount: len(items),
+		Compress:  true,
+		Extension: store.fileExt,
+	}
+	return key, store.multiWrite(key, items)
 }
 
 // multiWrite - writes an item to the directory.
-func (store *QueueStore[I]) multiWrite(key string, item []I) error {
+func (store *QueueStore[I]) multiWrite(key Key, items []I) (err error) {
 	buf := bytebufferpool.Get()
 	defer bytebufferpool.Put(buf)
 
 	enc := jsoniter.ConfigCompatibleWithStandardLibrary.NewEncoder(buf)
 
-	for i := range item {
-		err := enc.Encode(item[i])
-		if err != nil {
+	for i := range items {
+		if err = enc.Encode(items[i]); err != nil {
 			return err
 		}
 	}
-	b := buf.Bytes()
 
-	path := filepath.Join(store.directory, key+store.fileExt)
-	err := os.WriteFile(path, b, os.FileMode(0o770))
+	path := filepath.Join(store.directory, key.String())
+	if key.Compress {
+		err = os.WriteFile(path, s2.Encode(nil, buf.Bytes()), os.FileMode(0o770))
+	} else {
+		err = os.WriteFile(path, buf.Bytes(), os.FileMode(0o770))
+	}
+
 	buf.Reset()
 	if err != nil {
 		return err
 	}
 
 	// Increment the item count.
-	store.entries[key] = time.Now().UnixNano()
+	store.entries[key.String()] = time.Now().UnixNano()
 
-	return nil
+	return
 }
 
 // write - writes an item to the directory.
-func (store *QueueStore[I]) write(key string, item I) error {
+func (store *QueueStore[I]) write(key Key, item I) error {
 	// Marshalls the item.
 	eventData, err := json.Marshal(item)
 	if err != nil {
 		return err
 	}
+	return store.writeBytes(key, eventData)
+}
 
-	path := filepath.Join(store.directory, key+store.fileExt)
-	if err := os.WriteFile(path, eventData, os.FileMode(0o770)); err != nil {
-		return err
+// writeBytes - writes bytes to the directory.
+func (store *QueueStore[I]) writeBytes(key Key, b []byte) (err error) {
+	path := filepath.Join(store.directory, key.String())
+
+	if key.Compress {
+		err = os.WriteFile(path, s2.Encode(nil, b), os.FileMode(0o770))
+	} else {
+		err = os.WriteFile(path, b, os.FileMode(0o770))
 	}
 
+	if err != nil {
+		return err
+	}
 	// Increment the item count.
-	store.entries[key] = time.Now().UnixNano()
-
+	store.entries[key.String()] = time.Now().UnixNano()
 	return nil
 }
 
 // Put - puts an item to the store.
-func (store *QueueStore[I]) Put(item I) error {
+func (store *QueueStore[I]) Put(item I) (Key, error) {
 	store.Lock()
 	defer store.Unlock()
 	if uint64(len(store.entries)) >= store.entryLimit {
-		return errLimitExceeded
+		return Key{}, errLimitExceeded
 	}
 	// Generate a new UUID for the key.
-	key, err := uuid.NewRandom()
+	uid, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return Key{}, err
 	}
-	return store.write(key.String(), item)
+	key := Key{
+		Name:      uid.String(),
+		Extension: store.fileExt,
+		ItemCount: 1,
+	}
+	return key, store.write(key, item)
+}
+
+// PutRaw - puts the raw bytes to the store
+func (store *QueueStore[I]) PutRaw(b []byte) (Key, error) {
+	store.Lock()
+	defer store.Unlock()
+	if uint64(len(store.entries)) >= store.entryLimit {
+		return Key{}, errLimitExceeded
+	}
+	// Generate a new UUID for the key.
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		return Key{}, err
+	}
+	key := Key{
+		Name:      uid.String(),
+		Extension: store.fileExt,
+	}
+	return key, store.writeBytes(key, b)
 }
 
 // GetRaw - gets an item from the store.
-func (store *QueueStore[I]) GetRaw(key string) (raw []byte, err error) {
+func (store *QueueStore[I]) GetRaw(key Key) (raw []byte, err error) {
 	store.RLock()
 
 	defer func(store *QueueStore[I]) {
 		store.RUnlock()
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			// Upon error we remove the entry.
 			store.Del(key)
 		}
 	}(store)
 
-	raw, err = os.ReadFile(filepath.Join(store.directory, key+store.fileExt))
+	raw, err = os.ReadFile(filepath.Join(store.directory, key.String()))
 	if err != nil {
 		return
 	}
@@ -209,19 +246,19 @@ func (store *QueueStore[I]) GetRaw(key string) (raw []byte, err error) {
 }
 
 // Get - gets an item from the store.
-func (store *QueueStore[I]) Get(key string) (item I, err error) {
+func (store *QueueStore[I]) Get(key Key) (item I, err error) {
 	store.RLock()
 
 	defer func(store *QueueStore[I]) {
 		store.RUnlock()
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			// Upon error we remove the entry.
 			store.Del(key)
 		}
 	}(store)
 
 	var eventData []byte
-	eventData, err = os.ReadFile(filepath.Join(store.directory, key+store.fileExt))
+	eventData, err = os.ReadFile(filepath.Join(store.directory, key.String()))
 	if err != nil {
 		return item, err
 	}
@@ -237,26 +274,50 @@ func (store *QueueStore[I]) Get(key string) (item I, err error) {
 	return item, nil
 }
 
+// GetMultiple will read the multi payload file and fetch the items
+func (store *QueueStore[I]) GetMultiple(key Key) (items []I, err error) {
+	store.RLock()
+
+	defer func(store *QueueStore[I]) {
+		store.RUnlock()
+		if err != nil && !os.IsNotExist(err) {
+			// Upon error we remove the entry.
+			store.Del(key)
+		}
+	}(store)
+
+	raw, err := os.ReadFile(filepath.Join(store.directory, key.String()))
+	if err != nil {
+		return
+	}
+
+	var decoder *jsoniter.Decoder
+	if key.Compress {
+		decodedBytes, err := s2.Decode(nil, raw)
+		if err != nil {
+			return nil, err
+		}
+		decoder = jsoniter.ConfigCompatibleWithStandardLibrary.NewDecoder(bytes.NewReader(decodedBytes))
+	} else {
+		decoder = jsoniter.ConfigCompatibleWithStandardLibrary.NewDecoder(bytes.NewReader(raw))
+	}
+
+	for decoder.More() {
+		var item I
+		if err := decoder.Decode(&item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	return
+}
+
 // Del - Deletes an entry from the store.
-func (store *QueueStore[_]) Del(key string) error {
+func (store *QueueStore[_]) Del(key Key) error {
 	store.Lock()
 	defer store.Unlock()
 	return store.del(key)
-}
-
-// DelList - Deletes a list of entries from the store.
-// Returns an error even if one key fails to be deleted.
-func (store *QueueStore[_]) DelList(keys []string) error {
-	store.Lock()
-	defer store.Unlock()
-
-	for _, key := range keys {
-		if err := store.del(key); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Len returns the entry count.
@@ -268,30 +329,35 @@ func (store *QueueStore[_]) Len() int {
 }
 
 // lockless call
-func (store *QueueStore[_]) del(key string) error {
-	err := os.Remove(filepath.Join(store.directory, key+store.fileExt))
+func (store *QueueStore[_]) del(key Key) error {
+	err := os.Remove(filepath.Join(store.directory, key.String()))
 
 	// Delete as entry no matter the result
-	delete(store.entries, key)
+	delete(store.entries, key.String())
 
 	return err
 }
 
 // List - lists all files registered in the store.
-func (store *QueueStore[_]) List() ([]string, error) {
+func (store *QueueStore[_]) List() (keys []Key) {
 	store.RLock()
-	l := make([]string, 0, len(store.entries))
-	for k := range store.entries {
-		l = append(l, k)
+	defer store.RUnlock()
+
+	entries := make([]string, 0, len(store.entries))
+	for entry := range store.entries {
+		entries = append(entries, entry)
 	}
 
 	// Sort entries...
-	sort.Slice(l, func(i, j int) bool {
-		return store.entries[l[i]] < store.entries[l[j]]
+	sort.Slice(entries, func(i, j int) bool {
+		return store.entries[entries[i]] < store.entries[entries[j]]
 	})
-	store.RUnlock()
 
-	return l, nil
+	for i := range entries {
+		keys = append(keys, parseKey(entries[i]))
+	}
+
+	return keys
 }
 
 // list will read all entries from disk.
@@ -317,10 +383,4 @@ func (store *QueueStore[_]) list() ([]os.DirEntry, error) {
 	})
 
 	return files, nil
-}
-
-// Extension will return the file extension used
-// for the items stored in the queue.
-func (store *QueueStore[_]) Extension() string {
-	return store.fileExt
 }

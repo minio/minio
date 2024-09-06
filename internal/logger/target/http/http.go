@@ -418,7 +418,7 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 		if !isDirQueue {
 			err = h.send(ctx, buf.Bytes(), count, h.payloadType, webhookCallTimeout)
 		} else {
-			err = h.store.PutMultiple(entries)
+			_, err = h.store.PutMultiple(entries)
 		}
 
 		if err != nil {
@@ -530,7 +530,7 @@ func New(config Config) (*Target, error) {
 // SendFromStore - reads the log from store and sends it to webhook.
 func (h *Target) SendFromStore(key store.Key) (err error) {
 	var eventData []byte
-	eventData, err = h.store.GetRaw(key.Name)
+	eventData, err = h.store.GetRaw(key)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -552,7 +552,7 @@ func (h *Target) SendFromStore(key store.Key) (err error) {
 	}
 
 	// Delete the event from store.
-	return h.store.Del(key.Name)
+	return h.store.Del(key)
 }
 
 // Send the log message 'entry' to the http target.

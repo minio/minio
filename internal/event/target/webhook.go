@@ -146,7 +146,8 @@ func (target *WebhookTarget) isActive() (bool, error) {
 // which will be replayed when the webhook connection is active.
 func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
@@ -213,7 +214,7 @@ func (target *WebhookTarget) SendFromStore(key store.Key) error {
 		return err
 	}
 
-	eventData, eErr := target.store.Get(key.Name)
+	eventData, eErr := target.store.Get(key)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and would've been already been sent successfully.
@@ -231,7 +232,7 @@ func (target *WebhookTarget) SendFromStore(key store.Key) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(key.Name)
+	return target.store.Del(key)
 }
 
 // Close - does nothing and available for interface compatibility.

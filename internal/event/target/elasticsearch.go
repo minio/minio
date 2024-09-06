@@ -202,7 +202,8 @@ func (target *ElasticsearchTarget) isActive() (bool, error) {
 // Save - saves the events to the store if queuestore is configured, which will be replayed when the elasticsearch connection is active.
 func (target *ElasticsearchTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
@@ -278,7 +279,7 @@ func (target *ElasticsearchTarget) SendFromStore(key store.Key) error {
 		return err
 	}
 
-	eventData, eErr := target.store.Get(key.Name)
+	eventData, eErr := target.store.Get(key)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -296,7 +297,7 @@ func (target *ElasticsearchTarget) SendFromStore(key store.Key) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(key.Name)
+	return target.store.Del(key)
 }
 
 // Close - does nothing and available for interface compatibility.
