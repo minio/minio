@@ -846,10 +846,6 @@ func (er erasureObjects) listParts(ctx context.Context, onlineDisks []StorageAPI
 		partNums = append(partNums, partNum)
 	}
 
-	if len(partNums) == 0 {
-		return nil, errErasureReadQuorum
-	}
-
 	sort.Ints(partNums)
 	return partNums, nil
 }
