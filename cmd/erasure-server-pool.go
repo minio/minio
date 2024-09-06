@@ -220,11 +220,7 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 }
 
 func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocker {
-	poolID := hashKey(z.distributionAlgo, "", len(z.serverPools), z.deploymentID)
-	if len(objects) >= 1 {
-		poolID = hashKey(z.distributionAlgo, objects[0], len(z.serverPools), z.deploymentID)
-	}
-	return z.serverPools[poolID].NewNSLock(bucket, objects...)
+	return z.serverPools[0].NewNSLock(bucket, objects...)
 }
 
 // GetDisksID will return disks by their ID.

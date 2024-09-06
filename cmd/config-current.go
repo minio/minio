@@ -34,7 +34,6 @@ import (
 	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/config/batch"
-	"github.com/minio/minio/internal/config/cache"
 	"github.com/minio/minio/internal/config/callhome"
 	"github.com/minio/minio/internal/config/compress"
 	"github.com/minio/minio/internal/config/dns"
@@ -80,7 +79,6 @@ func initHelp() {
 		config.CallhomeSubSys:       callhome.DefaultKVS,
 		config.DriveSubSys:          drive.DefaultKVS,
 		config.ILMSubSys:            ilm.DefaultKVS,
-		config.CacheSubSys:          cache.DefaultKVS,
 		config.BatchSubSys:          batch.DefaultKVS,
 		config.BrowserSubSys:        browser.DefaultKVS,
 	}
@@ -230,12 +228,6 @@ func initHelp() {
 			Description: "persist IAM assets externally to etcd",
 		},
 		config.HelpKV{
-			Key:         config.CacheSubSys,
-			Type:        "string",
-			Description: "enable cache plugin on MinIO for GET/HEAD requests",
-			Optional:    true,
-		},
-		config.HelpKV{
 			Key:         config.BrowserSubSys,
 			Description: "manage Browser HTTP specific features, such as Security headers, etc.",
 			Optional:    true,
@@ -291,7 +283,6 @@ func initHelp() {
 		config.SubnetSubSys:         subnet.HelpSubnet,
 		config.CallhomeSubSys:       callhome.HelpCallhome,
 		config.DriveSubSys:          drive.HelpDrive,
-		config.CacheSubSys:          cache.Help,
 		config.BrowserSubSys:        browser.Help,
 		config.ILMSubSys:            ilm.Help,
 	}
@@ -407,10 +398,6 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.DriveSubSys:
 		if _, err := drive.LookupConfig(s[config.DriveSubSys][config.Default]); err != nil {
-			return err
-		}
-	case config.CacheSubSys:
-		if _, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport); err != nil {
 			return err
 		}
 	case config.PolicyOPASubSys:
@@ -709,13 +696,6 @@ func applyDynamicConfigForSubSys(ctx context.Context, objAPI ObjectLayer, s conf
 			if err = globalDriveConfig.Update(driveConfig); err != nil {
 				configLogIf(ctx, fmt.Errorf("Unable to update drive config: %v", err))
 			}
-		}
-	case config.CacheSubSys:
-		cacheCfg, err := cache.LookupConfig(s[config.CacheSubSys][config.Default], globalRemoteTargetTransport)
-		if err != nil {
-			configLogIf(ctx, fmt.Errorf("Unable to load cache config: %w", err))
-		} else {
-			globalCacheConfig.Update(cacheCfg)
 		}
 	case config.BrowserSubSys:
 		browserCfg, err := browser.LookupConfig(s[config.BrowserSubSys][config.Default])

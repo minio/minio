@@ -133,6 +133,10 @@ test-site-replication-minio: install-race ## verify automatic site replication
 	@echo "Running tests for automatic site replication of SSE-C objects with compression enabled for site"
 	@(env bash $(PWD)/docs/site-replication/run-ssec-object-replication-with-compression.sh)
 
+test-multipart: install-race ## test multipart
+	@echo "Test multipart behavior when part files are missing"
+	@(env bash $(PWD)/buildscripts/multipart-quorum-test.sh)
+
 verify: install-race ## verify minio various setups
 	@echo "Verifying build with race"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)

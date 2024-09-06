@@ -20,6 +20,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -44,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
+	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
@@ -516,8 +518,16 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 		copy(objectEncryptionKey[:], key)
 
+		var nonce [12]byte
+		tmp := sha256.Sum256([]byte(fmt.Sprint(uploadID, partID)))
+		copy(nonce[:], tmp[:12])
+
 		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
-		encReader, err := sio.EncryptReader(reader, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
+		encReader, err := sio.EncryptReader(reader, sio.Config{
+			Key:          partEncryptionKey[:],
+			CipherSuites: fips.DARECiphers(),
+			Nonce:        &nonce,
+		})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
@@ -806,7 +816,16 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 				// We add a buffer on bigger files to reduce the number of syscalls upstream.
 				in = bufio.NewReaderSize(hashReader, encryptBufferSize)
 			}
-			reader, err = sio.EncryptReader(in, sio.Config{Key: partEncryptionKey[:], CipherSuites: fips.DARECiphers()})
+
+			var nonce [12]byte
+			tmp := sha256.Sum256([]byte(fmt.Sprint(uploadID, partID)))
+			copy(nonce[:], tmp[:12])
+
+			reader, err = sio.EncryptReader(in, sio.Config{
+				Key:          partEncryptionKey[:],
+				CipherSuites: fips.DARECiphers(),
+				Nonce:        &nonce,
+			})
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
