@@ -992,6 +992,7 @@ func (store *IAMStoreSys) updateGroups(ctx context.Context, cache *iamCache) (re
 				if err = iamOS.loadGroup(ctx, group, cache.iamGroupsMap); err != nil && !errors.Is(err, errNoSuchGroup) {
 					return nil, fmt.Errorf("unable to load the group: %w", err)
 				}
+				fmt.Println("listedConfigItems[groupsListKey] will append group:", group)
 				res = append(res, group)
 			}
 		}
@@ -1002,6 +1003,7 @@ func (store *IAMStoreSys) updateGroups(ctx context.Context, cache *iamCache) (re
 			if err = iamOS.loadMappedPolicy(ctx, group, regUser, true, cache.iamGroupPolicyMap); err != nil && !errors.Is(err, errNoSuchPolicy) {
 				return nil, fmt.Errorf("unable to load the policy mapping for the group: %w", err)
 			}
+			fmt.Println("groupPolicyMappingsList will append group:", group)
 			res = append(res, group)
 		}
 
