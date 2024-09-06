@@ -266,15 +266,13 @@ func (h *Target) send(ctx context.Context, payload []byte, payloadCount int, pay
 	// Drain any response.
 	xhttp.DrainBody(resp.Body)
 
-	switch resp.StatusCode {
-	case http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent:
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
 		// accepted HTTP status codes.
 		return nil
-	case http.StatusForbidden:
+	} else if resp.StatusCode == http.StatusForbidden {
 		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.Endpoint(), resp.Status)
-	default:
-		return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 	}
+	return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 }
 
 func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {

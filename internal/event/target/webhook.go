@@ -196,13 +196,15 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	if err != nil {
 		return err
 	}
-	defer xhttp.DrainBody(resp.Body)
+	xhttp.DrainBody(resp.Body)
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("sending event failed with %v", resp.Status)
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		// accepted HTTP status codes.
+		return nil
+	} else if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", target.args.Endpoint, resp.Status)
 	}
-
-	return nil
+	return fmt.Errorf("%s returned '%s', please check your endpoint configuration", target.args.Endpoint, resp.Status)
 }
 
 // SendFromStore - reads an event from store and sends it to webhook.
