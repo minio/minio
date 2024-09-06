@@ -225,6 +225,15 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 	return -1
 }
 
+func objectPartIndexNums(parts []int, partNumber int) int {
+	for i, part := range parts {
+		if part != 0 && partNumber == part {
+			return i
+		}
+	}
+	return -1
+}
+
 // AddObjectPart - add a new object part in order.
 func (fi *FileInfo) AddObjectPart(partNumber int, partETag string, partSize, actualSize int64, modTime time.Time, idx []byte, checksums map[string]string) {
 	partInfo := ObjectPartInfo{
