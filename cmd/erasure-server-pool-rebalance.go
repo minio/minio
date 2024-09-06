@@ -110,19 +110,14 @@ var errRebalanceNotStarted = errors.New("rebalance not started")
 
 func (z *erasureServerPools) loadRebalanceMeta(ctx context.Context) error {
 	r := &rebalanceMeta{}
-	err := r.load(ctx, z.serverPools[0])
-	if err != nil {
-		if errors.Is(err, errConfigNotFound) {
-			return nil
-		}
-		return err
+	if err := r.load(ctx, z.serverPools[0]); err == nil {
+		z.rebalMu.Lock()
+		z.rebalMeta = r
+		z.updateRebalanceStats(ctx)
+		z.rebalMu.Unlock()
+	} else if !errors.Is(err, errConfigNotFound) {
+		rebalanceLogIf(ctx, fmt.Errorf("failed to load rebalance metadata, continue to restart rebalance as needed: %w", err))
 	}
-
-	z.rebalMu.Lock()
-	z.rebalMeta = r
-	z.updateRebalanceStats(ctx)
-	z.rebalMu.Unlock()
-
 	return nil
 }
 
