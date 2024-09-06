@@ -773,6 +773,9 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	if !set.CreateStringSet(groups...).Contains(group) {
 		c.Fatalf("created group not present!")
 	}
+	if len(groups) != 1 {
+		c.Fatalf("expected only 1 group in listing, got: %v", groups)
+	}
 	groupInfo, err := s.adm.GetGroupDescription(ctx, group)
 	if err != nil {
 		c.Fatalf("group desc err: %v", err)
