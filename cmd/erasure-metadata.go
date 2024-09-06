@@ -216,6 +216,7 @@ func (fi FileInfo) ReplicationInfoEquals(ofi FileInfo) bool {
 }
 
 // objectPartIndex - returns the index of matching object part number.
+// Returns -1 if the part cannot be found.
 func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 	for i, part := range parts {
 		if partNumber == part.Number {
@@ -225,6 +226,8 @@ func objectPartIndex(parts []ObjectPartInfo, partNumber int) int {
 	return -1
 }
 
+// objectPartIndexNums returns the index of the specified part number.
+// Returns -1 if the part cannot be found.
 func objectPartIndexNums(parts []int, partNumber int) int {
 	for i, part := range parts {
 		if part != 0 && partNumber == part {

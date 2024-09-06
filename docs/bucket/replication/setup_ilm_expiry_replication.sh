@@ -24,6 +24,9 @@ catch() {
 	rm -rf /tmp/multisitec
 	rm -rf /tmp/multisited
 	rm -rf /tmp/data
+	if [ $# -ne 0 ]; then
+		exit $#
+	fi
 }
 
 catch
