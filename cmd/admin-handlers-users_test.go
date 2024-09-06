@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -770,11 +771,9 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	if err != nil {
 		c.Fatalf("group list err: %v", err)
 	}
-	if !set.CreateStringSet(groups...).Contains(group) {
-		c.Fatalf("created group not present!")
-	}
-	if len(groups) != 1 {
-		c.Fatalf("expected only 1 group in listing, got: %v", groups)
+	expected := []string{group}
+	if !slices.Equal(groups, expected) {
+		c.Fatalf("expected group listing: %v, got: %v", expected, groups)
 	}
 	groupInfo, err := s.adm.GetGroupDescription(ctx, group)
 	if err != nil {
