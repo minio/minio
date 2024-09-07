@@ -244,78 +244,141 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	s := globalServerConfig
 	globalServerConfigMu.RUnlock()
 
-	localIAMInitialized := true
+	sys.Lock()
+	sys.iamRefreshInterval = iamRefreshInterval
+	sys.Unlock()
 
-	openidConfig, err := openid.LookupConfig(s,
-		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
-	if err != nil {
-		iamLogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err), logger.WarningKind)
-		localIAMInitialized = false
-	}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// Initialize if LDAP is enabled
-	ldapConfig, err := xldap.Lookup(s, globalRootCAs)
-	if err != nil {
-		iamLogIf(ctx, fmt.Errorf("Unable to load LDAP configuration (LDAP configuration will be disabled!): %w", err), logger.WarningKind)
-		localIAMInitialized = false
-	}
+	var (
+		openidInit bool
+		ldapInit   bool
+		authNInit  bool
+		authZInit  bool
+	)
 
 	stsTLSConfig, err := xtls.Lookup(s[config.IdentityTLSSubSys][config.Default])
 	if err != nil {
 		iamLogIf(ctx, fmt.Errorf("Unable to initialize X.509/TLS STS API: %w", err), logger.WarningKind)
-		localIAMInitialized = false
-	}
-
-	if stsTLSConfig.InsecureSkipVerify {
-		iamLogIf(ctx, fmt.Errorf("Enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify), logger.WarningKind)
-	}
-
-	authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
-		NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
-	if err != nil {
-		iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err), logger.WarningKind)
-		localIAMInitialized = false
-	}
-
-	setGlobalAuthNPlugin(idplugin.New(GlobalContext, authNPluginCfg))
-
-	authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
-	if err != nil {
-		iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err), logger.WarningKind)
-		localIAMInitialized = false
-	}
-
-	if authZPluginCfg.URL == nil {
-		opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
-			NewHTTPTransport(), xhttp.DrainBody)
-		if err != nil {
-			iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
-			localIAMInitialized = false
-		} else {
-			authZPluginCfg.URL = opaCfg.URL
-			authZPluginCfg.AuthToken = opaCfg.AuthToken
-			authZPluginCfg.Transport = opaCfg.Transport
-			authZPluginCfg.CloseRespFn = opaCfg.CloseRespFn
+	} else {
+		if stsTLSConfig.InsecureSkipVerify {
+			iamLogIf(ctx, fmt.Errorf("Enabling %s is not recommended in a production environment", xtls.EnvIdentityTLSSkipVerify), logger.WarningKind)
 		}
+		sys.Lock()
+		sys.STSTLSConfig = stsTLSConfig
+		sys.Unlock()
 	}
 
-	setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
+	for {
+		if !openidInit {
+			openidConfig, err := openid.LookupConfig(s,
+				NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
+			if err != nil {
+				iamLogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err), logger.WarningKind)
+			} else {
+				openidInit = true
+				sys.Lock()
+				sys.OpenIDConfig = openidConfig
+				sys.Unlock()
+			}
+		}
 
-	sys.Lock()
-	sys.LDAPConfig = ldapConfig
-	sys.OpenIDConfig = openidConfig
-	sys.STSTLSConfig = stsTLSConfig
-	sys.iamRefreshInterval = iamRefreshInterval
+		if !ldapInit {
+			// Initialize if LDAP is enabled
+			ldapConfig, err := xldap.Lookup(s, globalRootCAs)
+			if err != nil {
+				iamLogIf(ctx, fmt.Errorf("Unable to load LDAP configuration (LDAP configuration will be disabled!): %w", err), logger.WarningKind)
+			} else {
+				ldapInit = true
+				sys.Lock()
+				sys.LDAPConfig = ldapConfig
+				sys.Unlock()
+			}
+		}
+
+		if !authNInit {
+			authNPluginCfg, err := idplugin.LookupConfig(s[config.IdentityPluginSubSys][config.Default],
+				NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
+			if err != nil {
+				iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthNPlugin: %w", err), logger.WarningKind)
+			} else {
+				authNInit = true
+				setGlobalAuthNPlugin(idplugin.New(GlobalContext, authNPluginCfg))
+			}
+		}
+
+		if !authZInit {
+			authZPluginCfg, err := polplugin.LookupConfig(s, GetDefaultConnSettings(), xhttp.DrainBody)
+			if err != nil {
+				iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin: %w", err), logger.WarningKind)
+			} else {
+				authZInit = true
+			}
+			if authZPluginCfg.URL == nil {
+				opaCfg, err := opa.LookupConfig(s[config.PolicyOPASubSys][config.Default],
+					NewHTTPTransport(), xhttp.DrainBody)
+				if err != nil {
+					iamLogIf(ctx, fmt.Errorf("Unable to initialize AuthZPlugin from legacy OPA config: %w", err))
+				} else {
+					authZPluginCfg.URL = opaCfg.URL
+					authZPluginCfg.AuthToken = opaCfg.AuthToken
+					authZPluginCfg.Transport = opaCfg.Transport
+					authZPluginCfg.CloseRespFn = opaCfg.CloseRespFn
+					authZInit = true
+				}
+			}
+			if authZInit {
+				setGlobalAuthZPlugin(polplugin.New(authZPluginCfg))
+			}
+		}
+
+		if !openidInit || !ldapInit || !authNInit || !authZInit {
+			retryInterval := time.Duration(r.Float64() * float64(3*time.Second))
+			if !openidInit {
+				logger.Info("Waiting for OpenID to be initialized.. (retrying in %s)", retryInterval)
+			}
+			if !ldapInit {
+				logger.Info("Waiting for LDAP to be initialized.. (retrying in %s)", retryInterval)
+			}
+			if !authNInit {
+				logger.Info("Waiting for AuthN to be initialized.. (retrying in %s)", retryInterval)
+			}
+			if !authZInit {
+				logger.Info("Waiting for AuthZ to be initialized.. (retrying in %s)", retryInterval)
+			}
+			time.Sleep(retryInterval)
+			continue
+		}
+
+		break
+	}
+
 	// Initialize IAM store
+	sys.Lock()
+
 	sys.initStore(objAPI, etcdClient)
+
+	// Initialize RoleARNs
+	sys.rolesMap = make(map[arn.ARN]string)
+
+	// From OpenID
+	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	// From AuthN plugin if enabled.
+	if authn := newGlobalAuthNPluginFn(); authn != nil {
+		riMap := authn.GetRoleInfo()
+		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+	}
+
+	sys.printIAMRoles()
 	sys.Unlock()
 
 	retryCtx, cancel := context.WithCancel(ctx)
 
 	// Indicate to our routine to exit cleanly upon return.
 	defer cancel()
-
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Migrate storage format if needed.
 	for {
@@ -338,20 +401,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	setDefaultCannedPolicies(cache.iamPolicyDocsMap)
 	sys.store.unlock()
 
-	// Load RoleARNs
-	sys.rolesMap = make(map[arn.ARN]string)
-
-	// From OpenID
-	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
-	// From AuthN plugin if enabled.
-	if authn := newGlobalAuthNPluginFn(); authn != nil {
-		riMap := authn.GetRoleInfo()
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
-
 	// Load IAM data from storage.
 	for {
 		if err := sys.Load(retryCtx, true); err != nil {
@@ -363,24 +412,15 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 			}
 			if err != nil {
 				iamLogIf(ctx, fmt.Errorf("Unable to initialize IAM sub-system, some users may not be available: %w", err), logger.WarningKind)
-				localIAMInitialized = false
 			}
 		}
 		break
 	}
 
 	refreshInterval := sys.iamRefreshInterval
-
-	if localIAMInitialized {
-		go sys.periodicRoutines(ctx, refreshInterval)
-	}
-
-	sys.printIAMRoles()
+	go sys.periodicRoutines(ctx, refreshInterval)
 
 	bootstrapTraceMsg("finishing IAM loading")
-
-	// Set the flag that IAM initialized fine
-	globalIAMFullyInitialized.Swap(localIAMInitialized)
 }
 
 const maxDurationSecondsForLog = 5
