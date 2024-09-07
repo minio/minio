@@ -100,8 +100,14 @@ func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
 	}
 	gzipped := lrw.Header().Get("Content-Encoding") == "gzip"
 	if !gzipped && ((lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody) {
-		// Always logging error responses.
-		lrw.body.Write(p)
+		// If body is > 10MB, drop it.
+		if lrw.body.Len()+len(p) > 10<<20 {
+			lrw.LogAllBody = false
+			lrw.body = bytes.Buffer{}
+		} else {
+			// Always logging error responses.
+			lrw.body.Write(p)
+		}
 	}
 	if err != nil {
 		return n, err
