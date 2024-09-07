@@ -103,7 +103,7 @@ func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
 
 	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
 		// If body is > 10MB, drop it.
-		if lrw.body.Len()+len(p) > 10<<20 {
+		if lrw.bytesWritten+len(p) > 10<<20 {
 			lrw.LogAllBody = false
 			lrw.body = bytes.Buffer{}
 		} else {
@@ -168,7 +168,9 @@ func (lrw *ResponseRecorder) WriteHeader(code int) {
 
 // Flush - Calls the underlying Flush.
 func (lrw *ResponseRecorder) Flush() {
-	lrw.ResponseWriter.(http.Flusher).Flush()
+	if flusher, ok := lrw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // Size - returns  the number of bytes written
