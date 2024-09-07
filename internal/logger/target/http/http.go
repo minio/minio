@@ -268,12 +268,10 @@ func (h *Target) send(ctx context.Context, payload []byte, payloadCount int, pay
 		// accepted HTTP status codes.
 		return nil
 	} else if resp.StatusCode == http.StatusForbidden {
-		h.FailedMessages.Add(int64(payloadCount))
+		h.failedMessages.Add(int64(payloadCount))
 		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.Endpoint(), resp.Status)
-	default:
-		h.FailedMessages.Add(int64(payloadCount))
-		return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 	}
+	h.failedMessages.Add(int64(payloadCount))
 	return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 }
 
