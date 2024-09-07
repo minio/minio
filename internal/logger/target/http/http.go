@@ -93,7 +93,7 @@ type Config struct {
 // is returned to the caller.
 type Target struct {
 	totalMessages  atomic.Int64
-	FailedMessages atomic.Int64
+	failedMessages atomic.Int64
 	status         atomic.Int32
 
 	// Worker control
@@ -170,7 +170,7 @@ func (h *Target) Stats() types.TargetStats {
 	h.logChMu.RUnlock()
 	stats := types.TargetStats{
 		TotalMessages:  h.totalMessages.Load(),
-		FailedMessages: h.FailedMessages.Load(),
+		FailedMessages: h.failedMessages.Load(),
 		QueueLength:    queueLength,
 	}
 
@@ -257,7 +257,7 @@ func (h *Target) send(ctx context.Context, payload []byte, payloadCount int, pay
 
 	resp, err := h.client.Do(req)
 	if err != nil {
-		h.FailedMessages.Add(int64(payloadCount))
+		h.failedMessages.Add(int64(payloadCount))
 		return fmt.Errorf("%s returned '%w', please check your endpoint configuration", h.Endpoint(), err)
 	}
 
@@ -270,6 +270,9 @@ func (h *Target) send(ctx context.Context, payload []byte, payloadCount int, pay
 	} else if resp.StatusCode == http.StatusForbidden {
 		h.FailedMessages.Add(int64(payloadCount))
 		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", h.Endpoint(), resp.Status)
+	default:
+		h.FailedMessages.Add(int64(payloadCount))
+		return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 	}
 	return fmt.Errorf("%s returned '%s', please check your endpoint configuration", h.Endpoint(), resp.Status)
 }
@@ -370,7 +373,7 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 						fmt.Errorf("unable to encode webhook log entry, err  '%w' entry: %v\n", err, entry),
 						h.Name(),
 					)
-					h.FailedMessages.Add(1)
+					h.failedMessages.Add(1)
 					continue
 				}
 				count++
@@ -583,7 +586,7 @@ func (h *Target) Send(ctx context.Context, entry interface{}) error {
 		return nil
 	default:
 		h.totalMessages.Add(1)
-		h.FailedMessages.Add(1)
+		h.failedMessages.Add(1)
 		return errors.New("log buffer full")
 	}
 
