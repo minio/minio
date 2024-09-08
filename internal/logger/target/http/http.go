@@ -340,6 +340,9 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 	globalBuffer := logChBuffers[name]
 	logChLock.Unlock()
 
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	var count int
 	for {
 		var (
@@ -348,7 +351,16 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 		)
 
 		if count < h.batchSize {
+			tickered := false
 			select {
+			case _ = <-ticker.C:
+				if len(h.logCh) > 0 || len(globalBuffer) > 0 {
+					// there is something in the log queue
+					// process it first, even if we tickered
+					// first.
+					continue
+				}
+				tickered = true
 			case entry, _ = <-globalBuffer:
 			case entry, ok = <-h.logCh:
 				if !ok {
@@ -358,31 +370,33 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 				return
 			}
 
-			h.totalMessages.Add(1)
-			if !isDirQueue {
-				if err := enc.Encode(&entry); err != nil {
-					h.config.LogOnceIf(
-						ctx,
-						fmt.Errorf("unable to encode webhook log entry, err  '%w' entry: %v\n", err, entry),
-						h.Name(),
-					)
-					h.failedMessages.Add(1)
+			if !tickered {
+				h.totalMessages.Add(1)
+				if !isDirQueue {
+					if err := enc.Encode(&entry); err != nil {
+						h.config.LogOnceIf(
+							ctx,
+							fmt.Errorf("unable to encode webhook log entry, err  '%w' entry: %v\n", err, entry),
+							h.Name(),
+						)
+						h.failedMessages.Add(1)
+						continue
+					}
+				} else {
+					entries = append(entries, entry)
+				}
+				count++
+
+				if len(h.logCh) > 0 || len(globalBuffer) > 0 {
 					continue
 				}
-			} else {
-				entries = append(entries, entry)
-			}
-			count++
 
-			if len(h.logCh) > 0 || len(globalBuffer) > 0 {
-				continue
-			}
-
-			// If we are doing batching, we should wait
-			// at least for a second, before sending.
-			// Even if there is nothing in the queue.
-			if h.batchSize > 1 && time.Since(lastBatchProcess) < time.Second {
-				continue
+				// If we are doing batching, we should wait
+				// at least for a second, before sending.
+				// Even if there is nothing in the queue.
+				if h.batchSize > 1 && time.Since(lastBatchProcess) < time.Second {
+					continue
+				}
 			}
 		} // if we have reached the count send at once or we have crossed last second before batch was processed.
 
