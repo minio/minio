@@ -354,12 +354,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 			tickered := false
 			select {
 			case _ = <-ticker.C:
-				if len(h.logCh) > 0 || len(globalBuffer) > 0 {
-					// there is something in the log queue
-					// process it first, even if we tickered
-					// first.
-					continue
-				}
 				tickered = true
 			case entry, _ = <-globalBuffer:
 			case entry, ok = <-h.logCh:
@@ -386,20 +380,26 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 					entries = append(entries, entry)
 				}
 				count++
-
-				if len(h.logCh) > 0 || len(globalBuffer) > 0 {
-					continue
-				}
-
-				// If we are doing batching, we should wait
-				// at least for a second, before sending.
-				// Even if there is nothing in the queue.
-				if h.batchSize > 1 && time.Since(lastBatchProcess) < time.Second {
-					continue
-				}
 			}
-		} // if we have reached the count send at once or we have crossed last second before batch was processed.
 
+			if len(h.logCh) > 0 || len(globalBuffer) > 0 || count == 0 {
+				// there is something in the log queue
+				// process it first, even if we tickered
+				// first, or we have not received any events
+				// yet, still wait on it.
+				continue
+			}
+
+			// If we are doing batching, we should wait
+			// at least for a second, before sending.
+			// Even if there is nothing in the queue.
+			if h.batchSize > 1 && time.Since(lastBatchProcess) < time.Second {
+				continue
+			}
+		}
+
+		// if we have reached the count send at once
+		// or we have crossed last second before batch was sent, send at once
 		lastBatchProcess = time.Now()
 
 		var retries int
