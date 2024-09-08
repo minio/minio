@@ -132,6 +132,18 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         MaxRetry,
+			Description: `maximum retry count before we start dropping upto batch_size events`,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         RetryInterval,
+			Description: `maximum retry sleeps between each retries`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,

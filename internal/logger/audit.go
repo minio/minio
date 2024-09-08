@@ -144,7 +144,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 	// Send audit logs only to http targets.
 	for _, t := range auditTgts {
 		if err := t.Send(ctx, entry); err != nil {
-			LogOnceIf(ctx, "logging", fmt.Errorf("Unable to send an audit event to the target `%v`: %v", t, err), "send-audit-event-failure")
+			LogOnceIf(ctx, "logging", fmt.Errorf("Unable to send audit event(s) to the target `%v`: %v", t, err), "send-audit-event-failure")
 		}
 	}
 }
