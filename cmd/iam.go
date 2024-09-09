@@ -1620,8 +1620,7 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 				continue
 			}
 			if validatedGroup == nil {
-				err := fmt.Errorf("DN group was not found in the LDAP directory for access-key: %s", ak)
-				iamLogIf(ctx, err)
+				// DN group was not found in the LDAP directory for access-key
 				continue
 			}
 
