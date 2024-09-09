@@ -18,10 +18,10 @@
 package store
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -66,17 +66,14 @@ func TestQueueStorePut(t *testing.T) {
 	}
 	// Put 100 items.
 	for i := 0; i < 100; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
 	// Count the items.
-	names, err := store.List()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(names) != 100 {
-		t.Fatalf("List() Expected: 100, got %d", len(names))
+	keys := store.List()
+	if len(keys) != 100 {
+		t.Fatalf("List() Expected: 100, got %d", len(keys))
 	}
 }
 
@@ -93,18 +90,15 @@ func TestQueueStoreGet(t *testing.T) {
 	}
 	// Put 10 items
 	for i := 0; i < 10; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	itemKeys, err := store.List()
-	if err != nil {
-		t.Fatal(err)
-	}
+	itemKeys := store.List()
 	// Get 10 items.
 	if len(itemKeys) == 10 {
 		for _, key := range itemKeys {
-			item, eErr := store.Get(strings.TrimSuffix(key, testItemExt))
+			item, eErr := store.Get(key)
 			if eErr != nil {
 				t.Fatal("Failed to Get the item from the queue store ", eErr)
 			}
@@ -130,18 +124,15 @@ func TestQueueStoreDel(t *testing.T) {
 	}
 	// Put 20 items.
 	for i := 0; i < 20; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
-	itemKeys, err := store.List()
-	if err != nil {
-		t.Fatal(err)
-	}
+	itemKeys := store.List()
 	// Remove all the items.
 	if len(itemKeys) == 20 {
 		for _, key := range itemKeys {
-			err := store.Del(strings.TrimSuffix(key, testItemExt))
+			err := store.Del(key)
 			if err != nil {
 				t.Fatal("queue store Del failed with ", err)
 			}
@@ -150,12 +141,9 @@ func TestQueueStoreDel(t *testing.T) {
 		t.Fatalf("List() Expected: 20, got %d", len(itemKeys))
 	}
 
-	names, err := store.List()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(names) != 0 {
-		t.Fatalf("List() Expected: 0, got %d", len(names))
+	keys := store.List()
+	if len(keys) != 0 {
+		t.Fatalf("List() Expected: 0, got %d", len(keys))
 	}
 }
 
@@ -172,12 +160,12 @@ func TestQueueStoreLimit(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	for i := 0; i < 5; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
 	// Should not allow 6th Put.
-	if err := store.Put(testItem); err == nil {
+	if _, err := store.Put(testItem); err == nil {
 		t.Fatalf("Expected to fail with %s, but passes", errLimitExceeded)
 	}
 }
@@ -194,18 +182,15 @@ func TestQueueStoreListN(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	for i := 0; i < 10; i++ {
-		if err := store.Put(testItem); err != nil {
+		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
 	}
 	// Should return all the item keys in the store.
-	names, err := store.List()
-	if err != nil {
-		t.Fatal(err)
-	}
+	keys := store.List()
 
-	if len(names) != 10 {
-		t.Fatalf("List() Expected: 10, got %d", len(names))
+	if len(keys) != 10 {
+		t.Fatalf("List() Expected: 10, got %d", len(keys))
 	}
 
 	// re-open
@@ -213,28 +198,154 @@ func TestQueueStoreListN(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
 	}
-	names, err = store.List()
-	if err != nil {
-		t.Fatal(err)
-	}
+	keys = store.List()
 
-	if len(names) != 10 {
-		t.Fatalf("List() Expected: 10, got %d", len(names))
+	if len(keys) != 10 {
+		t.Fatalf("List() Expected: 10, got %d", len(keys))
 	}
-	if len(names) != store.Len() {
-		t.Fatalf("List() Expected: 10, got %d", len(names))
+	if len(keys) != store.Len() {
+		t.Fatalf("List() Expected: 10, got %d", len(keys))
 	}
 
 	// Delete all
-	for _, key := range names {
+	for _, key := range keys {
 		err := store.Del(key)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 	// Re-list
-	lst, err := store.List()
-	if len(lst) > 0 || err != nil {
-		t.Fatalf("Expected List() to return empty list and no error, got %v err: %v", lst, err)
+	keys = store.List()
+	if len(keys) > 0 || err != nil {
+		t.Fatalf("Expected List() to return empty list and no error, got %v err: %v", keys, err)
+	}
+}
+
+func TestMultiplePutGets(t *testing.T) {
+	defer func() {
+		if err := tearDownQueueStore(); err != nil {
+			t.Fatalf("Failed to tear down store; %v", err)
+		}
+	}()
+	store, err := setUpQueueStore(queueDir, 10)
+	if err != nil {
+		t.Fatalf("Failed to create a queue store; %v", err)
+	}
+	// TestItem{Name: "test-item", Property: "property"}
+	var items []TestItem
+	for i := 0; i < 10; i++ {
+		items = append(items, TestItem{
+			Name:     fmt.Sprintf("test-item-%d", i),
+			Property: "property",
+		})
+	}
+
+	if _, err := store.PutMultiple(items); err != nil {
+		t.Fatalf("failed to put multiple; %v", err)
+	}
+
+	keys := store.List()
+	if len(keys) != 1 {
+		t.Fatalf("expected len(keys)=1, but found %d", len(keys))
+	}
+
+	key := keys[0]
+	if !key.Compress {
+		t.Fatal("expected the item to be compressed")
+	}
+	if key.ItemCount != 10 {
+		t.Fatalf("expected itemcount=10 but found %v", key.ItemCount)
+	}
+
+	resultItems, err := store.GetMultiple(key)
+	if err != nil {
+		t.Fatalf("unable to get multiple items; %v", err)
+	}
+
+	if !reflect.DeepEqual(resultItems, items) {
+		t.Fatalf("expected item list: %v; but got %v", items, resultItems)
+	}
+
+	if err := store.Del(key); err != nil {
+		t.Fatalf("unable to Del; %v", err)
+	}
+
+	// Re-list
+	keys = store.List()
+	if len(keys) > 0 || err != nil {
+		t.Fatalf("Expected List() to return empty list and no error, got %v err: %v", keys, err)
+	}
+}
+
+func TestMixedPutGets(t *testing.T) {
+	defer func() {
+		if err := tearDownQueueStore(); err != nil {
+			t.Fatalf("Failed to tear down store; %v", err)
+		}
+	}()
+	store, err := setUpQueueStore(queueDir, 10)
+	if err != nil {
+		t.Fatalf("Failed to create a queue store; %v", err)
+	}
+	// TestItem{Name: "test-item", Property: "property"}
+	var items []TestItem
+	for i := 0; i < 5; i++ {
+		items = append(items, TestItem{
+			Name:     fmt.Sprintf("test-item-%d", i),
+			Property: "property",
+		})
+	}
+	if _, err := store.PutMultiple(items); err != nil {
+		t.Fatalf("failed to put multiple; %v", err)
+	}
+
+	for i := 5; i < 10; i++ {
+		item := TestItem{
+			Name:     fmt.Sprintf("test-item-%d", i),
+			Property: "property",
+		}
+		if _, err := store.Put(item); err != nil {
+			t.Fatalf("unable to store.Put(); %v", err)
+		}
+		items = append(items, item)
+	}
+
+	keys := store.List()
+	if len(keys) != 6 {
+		// 1 multiple + 5 single PUTs
+		t.Fatalf("expected len(keys)=6, but found %d", len(keys))
+	}
+
+	var resultItems []TestItem
+	for _, key := range keys {
+		if key.ItemCount > 1 {
+			items, err := store.GetMultiple(key)
+			if err != nil {
+				t.Fatalf("unable to get multiple items; %v", err)
+			}
+			resultItems = append(resultItems, items...)
+			continue
+		}
+		item, err := store.Get(key)
+		if err != nil {
+			t.Fatalf("unable to get item; %v", err)
+		}
+		resultItems = append(resultItems, item)
+	}
+
+	if !reflect.DeepEqual(resultItems, items) {
+		t.Fatalf("expected item list: %v; but got %v", items, resultItems)
+	}
+
+	// Delete all
+	for _, key := range keys {
+		if err := store.Del(key); err != nil {
+			t.Fatalf("unable to Del; %v", err)
+		}
+	}
+	// Re-list
+	keys = store.List()
+	if len(keys) > 0 || err != nil {
+		t.Fatalf("Expected List() to return empty list and no error, got %v err: %v", keys, err)
 	}
 }

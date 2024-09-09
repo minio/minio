@@ -26,6 +26,9 @@ catch() {
 	rm -rf /tmp/multisitea
 	rm -rf /tmp/multisiteb
 	rm -rf /tmp/multisitec
+	if [ $# -ne 0 ]; then
+		exit $#
+	fi
 }
 
 catch

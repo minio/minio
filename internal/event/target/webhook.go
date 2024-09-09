@@ -146,7 +146,8 @@ func (target *WebhookTarget) isActive() (bool, error) {
 // which will be replayed when the webhook connection is active.
 func (target *WebhookTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
@@ -196,13 +197,15 @@ func (target *WebhookTarget) send(eventData event.Event) error {
 	if err != nil {
 		return err
 	}
-	defer xhttp.DrainBody(resp.Body)
+	xhttp.DrainBody(resp.Body)
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("sending event failed with %v", resp.Status)
+	if resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		// accepted HTTP status codes.
+		return nil
+	} else if resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("%s returned '%s', please check if your auth token is correctly set", target.args.Endpoint, resp.Status)
 	}
-
-	return nil
+	return fmt.Errorf("%s returned '%s', please check your endpoint configuration", target.args.Endpoint, resp.Status)
 }
 
 // SendFromStore - reads an event from store and sends it to webhook.
@@ -211,7 +214,7 @@ func (target *WebhookTarget) SendFromStore(key store.Key) error {
 		return err
 	}
 
-	eventData, eErr := target.store.Get(key.Name)
+	eventData, eErr := target.store.Get(key)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and would've been already been sent successfully.
@@ -229,7 +232,7 @@ func (target *WebhookTarget) SendFromStore(key store.Key) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(key.Name)
+	return target.store.Del(key)
 }
 
 // Close - does nothing and available for interface compatibility.

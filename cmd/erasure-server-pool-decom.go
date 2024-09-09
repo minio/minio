@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -490,13 +490,10 @@ const (
 // in 'pool.bin', this is eventually used for decommissioning the pool.
 func (z *erasureServerPools) Init(ctx context.Context) error {
 	// Load rebalance metadata if present
-	err := z.loadRebalanceMeta(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load rebalance data: %w", err)
+	if err := z.loadRebalanceMeta(ctx); err == nil {
+		// Start rebalance routine if we can reload rebalance metadata.
+		z.StartRebalance()
 	}
-
-	// Start rebalance routine
-	z.StartRebalance()
 
 	meta := poolMeta{}
 	if err := meta.load(ctx, z.serverPools[0], z.serverPools); err != nil {

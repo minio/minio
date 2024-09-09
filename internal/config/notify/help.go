@@ -274,6 +274,18 @@ var (
 			Optional:    true,
 			Type:        "number",
 		},
+		config.HelpKV{
+			Key:         target.KafkaBatchSize,
+			Description: "batch size of the events; used only when queue_dir is set",
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         target.KafkaBatchCommitTimeout,
+			Description: "commit timeout set for the batch; used only when batch_size > 1",
+			Optional:    true,
+			Type:        "duration",
+		},
 	}
 
 	HelpMQTT = config.HelpKVS{

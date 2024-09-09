@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,23 +45,64 @@ type Target interface {
 
 // Store - Used to persist items.
 type Store[I any] interface {
-	Put(item I) error
-	PutMultiple(item []I) error
-	Get(key string) (I, error)
-	GetRaw(key string) ([]byte, error)
+	Put(item I) (Key, error)
+	PutMultiple(item []I) (Key, error)
+	Get(key Key) (I, error)
+	GetMultiple(key Key) ([]I, error)
+	GetRaw(key Key) ([]byte, error)
+	PutRaw(b []byte) (Key, error)
 	Len() int
-	List() ([]string, error)
-	Del(key string) error
-	DelList(key []string) error
+	List() []Key
+	Del(key Key) error
 	Open() error
 	Delete() error
-	Extension() string
 }
 
 // Key denotes the key present in the store.
 type Key struct {
-	Name   string
-	IsLast bool
+	Name      string
+	Compress  bool
+	Extension string
+	ItemCount int
+}
+
+// String returns the filepath name
+func (k Key) String() string {
+	keyStr := k.Name
+	if k.ItemCount > 1 {
+		keyStr = fmt.Sprintf("%d:%s", k.ItemCount, k.Name)
+	}
+	return keyStr + k.Extension + func() string {
+		if k.Compress {
+			return compressExt
+		}
+		return ""
+	}()
+}
+
+func getItemCount(k string) (count int, err error) {
+	count = 1
+	v := strings.Split(k, ":")
+	if len(v) == 2 {
+		return strconv.Atoi(v[0])
+	}
+	return
+}
+
+func parseKey(k string) (key Key) {
+	key.Name = k
+	if strings.HasSuffix(k, compressExt) {
+		key.Compress = true
+		key.Name = strings.TrimSuffix(key.Name, compressExt)
+	}
+	if key.ItemCount, _ = getItemCount(k); key.ItemCount > 1 {
+		key.Name = strings.TrimPrefix(key.Name, fmt.Sprintf("%d:", key.ItemCount))
+	}
+	if vals := strings.Split(key.Name, "."); len(vals) == 2 {
+		key.Extension = "." + vals[1]
+		key.Name = strings.TrimSuffix(key.Name, key.Extension)
+	}
+	return
 }
 
 // replayItems - Reads the items from the store and replays.
@@ -74,18 +116,12 @@ func replayItems[I any](store Store[I], doneCh <-chan struct{}, log logger, id s
 		defer retryTicker.Stop()
 
 		for {
-			names, err := store.List()
-			if err != nil {
-				log(context.Background(), fmt.Errorf("store.List() failed with: %w", err), id)
-			} else {
-				keyCount := len(names)
-				for i, name := range names {
-					select {
-					case keyCh <- Key{strings.TrimSuffix(name, store.Extension()), keyCount == i+1}:
-					// Get next key.
-					case <-doneCh:
-						return
-					}
+			for _, key := range store.List() {
+				select {
+				case keyCh <- key:
+				// Get next key.
+				case <-doneCh:
+					return
 				}
 			}
 
@@ -114,7 +150,7 @@ func sendItems(target Target, keyCh <-chan Key, doneCh <-chan struct{}, logger l
 
 			logger(
 				context.Background(),
-				fmt.Errorf("unable to send webhook log entry to '%s' err '%w'", target.Name(), err),
+				fmt.Errorf("unable to send log entry to '%s' err '%w'", target.Name(), err),
 				target.Name(),
 			)
 

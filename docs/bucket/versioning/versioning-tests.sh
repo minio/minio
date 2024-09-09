@@ -20,6 +20,9 @@ catch() {
 	pkill minio
 	pkill -9 minio
 	rm -rf /tmp/multisitea
+	if [ $# -ne 0 ]; then
+		exit $#
+	fi
 }
 
 catch

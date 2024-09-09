@@ -198,7 +198,8 @@ func (target *MySQLTarget) isActive() (bool, error) {
 // Save - saves the events to the store which will be replayed when the SQL connection is active.
 func (target *MySQLTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
@@ -273,7 +274,7 @@ func (target *MySQLTarget) SendFromStore(key store.Key) error {
 		}
 	}
 
-	eventData, eErr := target.store.Get(key.Name)
+	eventData, eErr := target.store.Get(key)
 	if eErr != nil {
 		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
 		// Such events will not exist and wouldve been already been sent successfully.
@@ -291,7 +292,7 @@ func (target *MySQLTarget) SendFromStore(key store.Key) error {
 	}
 
 	// Delete the event from store.
-	return target.store.Del(key.Name)
+	return target.store.Del(key)
 }
 
 // Close - closes underneath connections to MySQL database.

@@ -26,6 +26,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/klauspost/compress/gzip"
 )
 
 // ResponseRecorder - is a wrapper to trap the http response
@@ -98,10 +100,16 @@ func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
 	if lrw.TimeToFirstByte == 0 {
 		lrw.TimeToFirstByte = time.Now().UTC().Sub(lrw.StartTime)
 	}
-	gzipped := lrw.Header().Get("Content-Encoding") == "gzip"
-	if !gzipped && ((lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody) {
-		// Always logging error responses.
-		lrw.body.Write(p)
+
+	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
+		// If body is > 10MB, drop it.
+		if lrw.bytesWritten+len(p) > 10<<20 {
+			lrw.LogAllBody = false
+			lrw.body = bytes.Buffer{}
+		} else {
+			// Always logging error responses.
+			lrw.body.Write(p)
+		}
 	}
 	if err != nil {
 		return n, err
@@ -128,8 +136,16 @@ var gzippedBody = []byte("<GZIP>")
 // Body - Return response body.
 func (lrw *ResponseRecorder) Body() []byte {
 	if lrw.Header().Get("Content-Encoding") == "gzip" {
-		// ... otherwise we return the <GZIP> place holder
-		return gzippedBody
+		if lrw.body.Len() > 1<<20 {
+			return gzippedBody
+		}
+		r, err := gzip.NewReader(&lrw.body)
+		if err != nil {
+			return gzippedBody
+		}
+		defer r.Close()
+		b, _ := io.ReadAll(io.LimitReader(r, 10<<20))
+		return b
 	}
 	// If there was an error response or body logging is enabled
 	// then we return the body contents
@@ -152,7 +168,9 @@ func (lrw *ResponseRecorder) WriteHeader(code int) {
 
 // Flush - Calls the underlying Flush.
 func (lrw *ResponseRecorder) Flush() {
-	lrw.ResponseWriter.(http.Flusher).Flush()
+	if flusher, ok := lrw.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 // Size - returns  the number of bytes written

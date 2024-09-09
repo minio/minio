@@ -1170,6 +1170,60 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						missing++
 					}
 				}
+				if missing == 0 && len(m.parityData) == 1 {
+					k := 0
+					var parityData map[int][]byte
+					for par, pdata := range m.parityData {
+						k = par
+						parityData = pdata
+					}
+					if k > 0 {
+						rs, err := reedsolomon.New(k, m.shards-k)
+						if err != nil {
+							return err
+						}
+
+						splitData, err := rs.Split(m.mapped)
+						if err != nil {
+							return err
+						}
+						// Do separate encode, verify we get the same result.
+						err = rs.Encode(splitData)
+						if err != nil {
+							return err
+						}
+						misMatches := 0
+						for idx, sh := range parityData {
+							calculated := splitData[idx]
+							if !bytes.Equal(calculated, sh) {
+								off := 0
+								for i, v := range sh {
+									if v != calculated[i] {
+										off = i
+										break
+									}
+								}
+								calculated := calculated[off:]
+								inFile := sh[off:]
+								extra := ""
+								if len(calculated) != len(inFile) {
+									fmt.Println("SIZE MISMATCH", len(calculated), len(inFile))
+								} else if len(calculated) > 10 {
+									calculated = calculated[:10]
+									inFile = inFile[:10]
+									extra = "..."
+								}
+								a := hex.EncodeToString(calculated) + extra
+								b := hex.EncodeToString(inFile) + extra
+								fmt.Println("MISMATCH in parity shard", idx+1, "at offset", off, "calculated:", a, "found:", b)
+								misMatches++
+							}
+						}
+						if misMatches == 0 {
+							fmt.Println(m.shards-k, "erasure code shards verified.")
+						}
+					}
+				}
 				if missing > 0 && len(m.parityData) > 0 {
 					fmt.Println("Attempting to reconstruct using parity sets:")
 					for k, v := range m.parityData {

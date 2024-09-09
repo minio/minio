@@ -18,109 +18,202 @@
 package store
 
 import (
-	"errors"
+	"context"
 	"sync"
 	"testing"
+	"time"
 )
 
-func TestBatch(t *testing.T) {
+func TestBatchCommit(t *testing.T) {
+	defer func() {
+		if err := tearDownQueueStore(); err != nil {
+			t.Fatalf("Failed to tear down store; %v", err)
+		}
+	}()
+	store, err := setUpQueueStore(queueDir, 100)
+	if err != nil {
+		t.Fatalf("Failed to create a queue store; %v", err)
+	}
+
 	var limit uint32 = 100
-	batch := NewBatch[int, int](limit)
+
+	batch := NewBatch[TestItem](BatchConfig[TestItem]{
+		Limit:         limit,
+		Store:         store,
+		CommitTimeout: 5 * time.Minute,
+		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
+			t.Log(err)
+		},
+	})
+	defer batch.Close()
+
 	for i := 0; i < int(limit); i++ {
-		if err := batch.Add(i, i); err != nil {
+		if err := batch.Add(testItem); err != nil {
 			t.Fatalf("failed to add %v; %v", i, err)
 		}
-		if _, ok := batch.GetByKey(i); !ok {
-			t.Fatalf("failed to get the item by key %v after adding", i)
-		}
 	}
-	err := batch.Add(101, 101)
-	if err == nil || !errors.Is(err, ErrBatchFull) {
-		t.Fatalf("Expected err %v but got %v", ErrBatchFull, err)
-	}
-	if !batch.IsFull() {
-		t.Fatal("Expected batch.IsFull to be true but got false")
-	}
+
 	batchLen := batch.Len()
 	if batchLen != int(limit) {
-		t.Fatalf("expected batch length to be %v but got %v", limit, batchLen)
+		t.Fatalf("Expected batch.Len() %v; but got %v", limit, batchLen)
 	}
-	keys, items, err := batch.GetAll()
-	if err != nil {
-		t.Fatalf("unable to get the items from the batch; %v", err)
+
+	keys := store.List()
+	if len(keys) > 0 {
+		t.Fatalf("Expected empty store list but got len(list) %v", len(keys))
 	}
-	if len(items) != int(limit) {
-		t.Fatalf("Expected length of the batch items to be %v but got %v", limit, len(items))
-	}
-	if len(keys) != int(limit) {
-		t.Fatalf("Expected length of the batch keys to be %v but got %v", limit, len(items))
+	if err := batch.Add(testItem); err != nil {
+		t.Fatalf("unable to add to the batch; %v", err)
 	}
 	batchLen = batch.Len()
-	if batchLen != 0 {
-		t.Fatalf("expected batch to be empty but still left with %d items", batchLen)
+	if batchLen != 1 {
+		t.Fatalf("expected batch length to be 1 but got %v", batchLen)
 	}
-	// Add duplicate entries
-	for i := 0; i < 10; i++ {
-		if err := batch.Add(99, 99); err != nil {
-			t.Fatalf("failed to add duplicate item %v to batch after Get; %v", i, err)
-		}
-	}
-	if _, ok := batch.GetByKey(99); !ok {
-		t.Fatal("failed to get the duplicxate item by key '99' after adding")
-	}
-	keys, items, err = batch.GetAll()
-	if err != nil {
-		t.Fatalf("unable to get the items from the batch; %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("Expected length of the batch items to be 1 but got %v", len(items))
-	}
+	keys = store.List()
 	if len(keys) != 1 {
-		t.Fatalf("Expected length of the batch keys to be 1 but got %v", len(items))
+		t.Fatalf("expected len(store.List())=1; but got %v", len(keys))
 	}
-	// try adding again after Get.
+	key := keys[0]
+	if !key.Compress {
+		t.Fatal("expected key.Compress=true; but got false")
+	}
+	if key.ItemCount != int(limit) {
+		t.Fatalf("expected key.ItemCount=%d; but got %v", limit, key.ItemCount)
+	}
+	items, err := store.GetMultiple(key)
+	if err != nil {
+		t.Fatalf("unable to read key %v; %v", key.String(), err)
+	}
+	if len(items) != int(limit) {
+		t.Fatalf("expected len(items)=%d; but got %v", limit, len(items))
+	}
+}
+
+func TestBatchCommitOnExit(t *testing.T) {
+	defer func() {
+		if err := tearDownQueueStore(); err != nil {
+			t.Fatalf("Failed to tear down store; %v", err)
+		}
+	}()
+	store, err := setUpQueueStore(queueDir, 100)
+	if err != nil {
+		t.Fatalf("Failed to create a queue store; %v", err)
+	}
+
+	var limit uint32 = 100
+
+	batch := NewBatch[TestItem](BatchConfig[TestItem]{
+		Limit:         limit,
+		Store:         store,
+		CommitTimeout: 5 * time.Minute,
+		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
+			t.Log([]any{err, id, errKind}...)
+		},
+	})
+
 	for i := 0; i < int(limit); i++ {
-		if err := batch.Add(i, i); err != nil {
-			t.Fatalf("failed to add item %v to batch after Get; %v", i, err)
+		if err := batch.Add(testItem); err != nil {
+			t.Fatalf("failed to add %v; %v", i, err)
 		}
-		if _, ok := batch.GetByKey(i); !ok {
-			t.Fatalf("failed to get the item by key %v after adding", i)
-		}
+	}
+
+	batch.Close()
+	time.Sleep(1 * time.Second)
+
+	batchLen := batch.Len()
+	if batchLen != 0 {
+		t.Fatalf("Expected batch.Len()=0; but got %v", batchLen)
+	}
+
+	keys := store.List()
+	if len(keys) != 1 {
+		t.Fatalf("expected len(store.List())=1; but got %v", len(keys))
+	}
+
+	key := keys[0]
+	if !key.Compress {
+		t.Fatal("expected key.Compress=true; but got false")
+	}
+	if key.ItemCount != int(limit) {
+		t.Fatalf("expected key.ItemCount=%d; but got %v", limit, key.ItemCount)
+	}
+	items, err := store.GetMultiple(key)
+	if err != nil {
+		t.Fatalf("unable to read key %v; %v", key.String(), err)
+	}
+	if len(items) != int(limit) {
+		t.Fatalf("expected len(items)=%d; but got %v", limit, len(items))
 	}
 }
 
 func TestBatchWithConcurrency(t *testing.T) {
+	defer func() {
+		if err := tearDownQueueStore(); err != nil {
+			t.Fatalf("Failed to tear down store; %v", err)
+		}
+	}()
+	store, err := setUpQueueStore(queueDir, 100)
+	if err != nil {
+		t.Fatalf("Failed to create a queue store; %v", err)
+	}
+
 	var limit uint32 = 100
-	batch := NewBatch[int, int](limit)
+
+	batch := NewBatch[TestItem](BatchConfig[TestItem]{
+		Limit:         limit,
+		Store:         store,
+		CommitTimeout: 5 * time.Minute,
+		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
+			t.Log(err)
+		},
+	})
+	defer batch.Close()
 
 	var wg sync.WaitGroup
 	for i := 0; i < int(limit); i++ {
 		wg.Add(1)
-		go func(item int) {
+		go func(key int) {
 			defer wg.Done()
-			if err := batch.Add(item, item); err != nil {
-				t.Errorf("failed to add item %v; %v", item, err)
+			if err := batch.Add(testItem); err != nil {
+				t.Errorf("failed to add item %v; %v", key, err)
 				return
-			}
-			if _, ok := batch.GetByKey(item); !ok {
-				t.Errorf("failed to get the item by key %v after adding", item)
 			}
 		}(i)
 	}
 	wg.Wait()
 
-	keys, items, err := batch.GetAll()
+	batchLen := batch.Len()
+	if batchLen != int(limit) {
+		t.Fatalf("Expected batch.Len() %v; but got %v", limit, batchLen)
+	}
+
+	keys := store.List()
+	if len(keys) > 0 {
+		t.Fatalf("Expected empty store list but got len(list) %v", len(keys))
+	}
+	if err := batch.Add(testItem); err != nil {
+		t.Fatalf("unable to add to the batch; %v", err)
+	}
+	batchLen = batch.Len()
+	if batchLen != 1 {
+		t.Fatalf("expected batch length to be 1 but got %v", batchLen)
+	}
+	keys = store.List()
+	if len(keys) != 1 {
+		t.Fatalf("expected len(store.List())=1; but got %v", len(keys))
+	}
+	key := keys[0]
+	if !key.Compress {
+		t.Fatal("expected key.Compress=true; but got false")
+	}
+	if key.ItemCount != int(limit) {
+		t.Fatalf("expected key.ItemCount=%d; but got %v", limit, key.ItemCount)
+	}
+	items, err := store.GetMultiple(key)
 	if err != nil {
-		t.Fatalf("unable to get the items from the batch; %v", err)
+		t.Fatalf("unable to read key %v; %v", key.String(), err)
 	}
 	if len(items) != int(limit) {
-		t.Fatalf("expected batch length %v but got %v", limit, len(items))
-	}
-	if len(keys) != int(limit) {
-		t.Fatalf("Expected length of the batch keys to be %v but got %v", limit, len(items))
-	}
-	batchLen := batch.Len()
-	if batchLen != 0 {
-		t.Fatalf("expected batch to be empty but still left with %d items", batchLen)
+		t.Fatalf("expected len(items)=%d; but got %v", limit, len(items))
 	}
 }

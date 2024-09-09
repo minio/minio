@@ -268,6 +268,14 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	ifNoneMatchETagHeader := r.Header.Get(xhttp.IfNoneMatch)
 	if ifNoneMatchETagHeader != "" {
 		if isETagEqual(objInfo.ETag, ifNoneMatchETagHeader) {
+			// Do not care If-Modified-Since, Because:
+			// 1. If If-Modified-Since condition evaluates to true.
+			//  If both of the If-None-Match and If-Modified-Since headers are present in the request as follows:
+			// 	If-None-Match condition evaluates to false , and;
+			//  If-Modified-Since condition evaluates to true ;
+			// 	Then Amazon S3 returns the 304 Not Modified response code.
+			// 2. If If-Modified-Since condition evaluates to false, The following `ifModifiedSinceHeader` judgment will also return 304
+
 			// If the object ETag matches with the specified ETag.
 			writeHeadersPrecondition(w, objInfo)
 			w.WriteHeader(http.StatusNotModified)
@@ -304,7 +312,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
 	// time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
-	if ifUnmodifiedSinceHeader != "" {
+	if ifUnmodifiedSinceHeader != "" && ifMatchETagHeader == "" {
 		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.

@@ -51,6 +51,8 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_UPDATE_MINISIGN_PUBKEY="RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav" \
     MINIO_CONFIG_ENV_FILE=config.env
 
+RUN chmod 1777 /usr/bin
+
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /go/bin/minio* /usr/bin/
 COPY --from=build /go/bin/mc* /usr/bin/

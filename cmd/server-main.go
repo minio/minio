@@ -773,6 +773,9 @@ func serverMain(ctx *cli.Context) {
 	// Always load ENV variables from files first.
 	loadEnvVarsFromFiles()
 
+	// Handle early server environment vars
+	serverHandleEarlyEnvVars()
+
 	// Handle all server command args and build the disks layout
 	bootstrapTrace("serverHandleCmdArgs", func() {
 		err := buildServerCtxt(ctx, &globalServerCtxt)

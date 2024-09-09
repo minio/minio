@@ -43,23 +43,24 @@ import (
 
 // Kafka input constants
 const (
-	KafkaBrokers          = "brokers"
-	KafkaTopic            = "topic"
-	KafkaQueueDir         = "queue_dir"
-	KafkaQueueLimit       = "queue_limit"
-	KafkaTLS              = "tls"
-	KafkaTLSSkipVerify    = "tls_skip_verify"
-	KafkaTLSClientAuth    = "tls_client_auth"
-	KafkaSASL             = "sasl"
-	KafkaSASLUsername     = "sasl_username"
-	KafkaSASLPassword     = "sasl_password"
-	KafkaSASLMechanism    = "sasl_mechanism"
-	KafkaClientTLSCert    = "client_tls_cert"
-	KafkaClientTLSKey     = "client_tls_key"
-	KafkaVersion          = "version"
-	KafkaBatchSize        = "batch_size"
-	KafkaCompressionCodec = "compression_codec"
-	KafkaCompressionLevel = "compression_level"
+	KafkaBrokers            = "brokers"
+	KafkaTopic              = "topic"
+	KafkaQueueDir           = "queue_dir"
+	KafkaQueueLimit         = "queue_limit"
+	KafkaTLS                = "tls"
+	KafkaTLSSkipVerify      = "tls_skip_verify"
+	KafkaTLSClientAuth      = "tls_client_auth"
+	KafkaSASL               = "sasl"
+	KafkaSASLUsername       = "sasl_username"
+	KafkaSASLPassword       = "sasl_password"
+	KafkaSASLMechanism      = "sasl_mechanism"
+	KafkaClientTLSCert      = "client_tls_cert"
+	KafkaClientTLSKey       = "client_tls_key"
+	KafkaVersion            = "version"
+	KafkaBatchSize          = "batch_size"
+	KafkaBatchCommitTimeout = "batch_commit_timeout"
+	KafkaCompressionCodec   = "compression_codec"
+	KafkaCompressionLevel   = "compression_level"
 
 	EnvKafkaEnable                   = "MINIO_NOTIFY_KAFKA_ENABLE"
 	EnvKafkaBrokers                  = "MINIO_NOTIFY_KAFKA_BROKERS"
@@ -77,6 +78,7 @@ const (
 	EnvKafkaClientTLSKey             = "MINIO_NOTIFY_KAFKA_CLIENT_TLS_KEY"
 	EnvKafkaVersion                  = "MINIO_NOTIFY_KAFKA_VERSION"
 	EnvKafkaBatchSize                = "MINIO_NOTIFY_KAFKA_BATCH_SIZE"
+	EnvKafkaBatchCommitTimeout       = "MINIO_NOTIFY_KAFKA_BATCH_COMMIT_TIMEOUT"
 	EnvKafkaProducerCompressionCodec = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_CODEC"
 	EnvKafkaProducerCompressionLevel = "MINIO_NOTIFY_KAFKA_PRODUCER_COMPRESSION_LEVEL"
 )
@@ -91,14 +93,15 @@ var codecs = map[string]sarama.CompressionCodec{
 
 // KafkaArgs - Kafka target arguments.
 type KafkaArgs struct {
-	Enable     bool        `json:"enable"`
-	Brokers    []xnet.Host `json:"brokers"`
-	Topic      string      `json:"topic"`
-	QueueDir   string      `json:"queueDir"`
-	QueueLimit uint64      `json:"queueLimit"`
-	Version    string      `json:"version"`
-	BatchSize  uint32      `json:"batchSize"`
-	TLS        struct {
+	Enable             bool          `json:"enable"`
+	Brokers            []xnet.Host   `json:"brokers"`
+	Topic              string        `json:"topic"`
+	QueueDir           string        `json:"queueDir"`
+	QueueLimit         uint64        `json:"queueLimit"`
+	Version            string        `json:"version"`
+	BatchSize          uint32        `json:"batchSize"`
+	BatchCommitTimeout time.Duration `json:"batchCommitTimeout"`
+	TLS                struct {
 		Enable        bool               `json:"enable"`
 		RootCAs       *x509.CertPool     `json:"-"`
 		SkipVerify    bool               `json:"skipVerify"`
@@ -146,6 +149,11 @@ func (k KafkaArgs) Validate() error {
 			return errors.New("batch should be enabled only if queue dir is enabled")
 		}
 	}
+	if k.BatchCommitTimeout > 0 {
+		if k.QueueDir == "" || k.BatchSize <= 1 {
+			return errors.New("batch commit timeout should be set only if queue dir is enabled and batch size > 1")
+		}
+	}
 	return nil
 }
 
@@ -159,7 +167,7 @@ type KafkaTarget struct {
 	producer   sarama.SyncProducer
 	config     *sarama.Config
 	store      store.Store[event.Event]
-	batch      *store.Batch[string, *sarama.ProducerMessage]
+	batch      *store.Batch[event.Event]
 	loggerOnce logger.LogOnce
 	quitCh     chan struct{}
 }
@@ -199,7 +207,11 @@ func (target *KafkaTarget) isActive() (bool, error) {
 // Save - saves the events to the store which will be replayed when the Kafka connection is active.
 func (target *KafkaTarget) Save(eventData event.Event) error {
 	if target.store != nil {
-		return target.store.Put(eventData)
+		if target.batch != nil {
+			return target.batch.Add(eventData)
+		}
+		_, err := target.store.Put(eventData)
+		return err
 	}
 	if err := target.init(); err != nil {
 		return err
@@ -220,80 +232,59 @@ func (target *KafkaTarget) send(eventData event.Event) error {
 	return err
 }
 
-// SendFromStore - reads an event from store and sends it to Kafka.
-func (target *KafkaTarget) SendFromStore(key store.Key) error {
-	if err := target.init(); err != nil {
-		return err
+// sendMultiple sends multiple messages to the kafka.
+func (target *KafkaTarget) sendMultiple(events []event.Event) error {
+	if target.producer == nil {
+		return store.ErrNotConnected
 	}
-
-	// If batch is enabled, the event will be batched in memory
-	// and will be committed once the batch is full.
-	if target.batch != nil {
-		return target.addToBatch(key)
-	}
-
-	eventData, eErr := target.store.Get(key.Name)
-	if eErr != nil {
-		// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
-		// Such events will not exist and wouldve been already been sent successfully.
-		if os.IsNotExist(eErr) {
-			return nil
-		}
-		return eErr
-	}
-
-	if err := target.send(eventData); err != nil {
-		if isKafkaConnErr(err) {
-			return store.ErrNotConnected
-		}
-		return err
-	}
-
-	// Delete the event from store.
-	return target.store.Del(key.Name)
-}
-
-func (target *KafkaTarget) addToBatch(key store.Key) error {
-	if target.batch.IsFull() {
-		if err := target.commitBatch(); err != nil {
+	var msgs []*sarama.ProducerMessage
+	for _, event := range events {
+		msg, err := target.toProducerMessage(event)
+		if err != nil {
 			return err
 		}
+		msgs = append(msgs, msg)
 	}
-	if _, ok := target.batch.GetByKey(key.Name); !ok {
-		eventData, err := target.store.Get(key.Name)
+	return target.producer.SendMessages(msgs)
+}
+
+// SendFromStore - reads an event from store and sends it to Kafka.
+func (target *KafkaTarget) SendFromStore(key store.Key) (err error) {
+	if err = target.init(); err != nil {
+		return err
+	}
+	switch {
+	case key.ItemCount == 1:
+		var event event.Event
+		event, err = target.store.Get(key)
+		if err != nil {
+			// The last event key in a successful batch will be sent in the channel atmost once by the replayEvents()
+			// Such events will not exist and wouldve been already been sent successfully.
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		err = target.send(event)
+	case key.ItemCount > 1:
+		var events []event.Event
+		events, err = target.store.GetMultiple(key)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil
 			}
 			return err
 		}
-		msg, err := target.toProducerMessage(eventData)
-		if err != nil {
-			return err
-		}
-		if err = target.batch.Add(key.Name, msg); err != nil {
-			return err
-		}
+		err = target.sendMultiple(events)
 	}
-	// commit the batch if the key is the last one present in the store.
-	if key.IsLast || target.batch.IsFull() {
-		return target.commitBatch()
-	}
-	return nil
-}
-
-func (target *KafkaTarget) commitBatch() error {
-	keys, msgs, err := target.batch.GetAll()
 	if err != nil {
-		return err
-	}
-	if err = target.producer.SendMessages(msgs); err != nil {
 		if isKafkaConnErr(err) {
 			return store.ErrNotConnected
 		}
 		return err
 	}
-	return target.store.DelList(keys)
+	// Delete the event from store.
+	return target.store.Del(key)
 }
 
 func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.ProducerMessage, error) {
@@ -319,7 +310,18 @@ func (target *KafkaTarget) toProducerMessage(eventData event.Event) (*sarama.Pro
 func (target *KafkaTarget) Close() error {
 	close(target.quitCh)
 
+	if target.batch != nil {
+		target.batch.Close()
+	}
+
 	if target.producer != nil {
+		if target.store != nil {
+			// It is safe to abort the current transaction if
+			// queue_dir is configured
+			target.producer.AbortTxn()
+		} else {
+			target.producer.CommitTxn()
+		}
 		target.producer.Close()
 		return target.client.Close()
 	}
@@ -442,10 +444,14 @@ func NewKafkaTarget(id string, args KafkaArgs, loggerOnce logger.LogOnce) (*Kafk
 		loggerOnce: loggerOnce,
 		quitCh:     make(chan struct{}),
 	}
-
 	if target.store != nil {
 		if args.BatchSize > 1 {
-			target.batch = store.NewBatch[string, *sarama.ProducerMessage](args.BatchSize)
+			target.batch = store.NewBatch[event.Event](store.BatchConfig[event.Event]{
+				Limit:         args.BatchSize,
+				Log:           loggerOnce,
+				Store:         queueStore,
+				CommitTimeout: args.BatchCommitTimeout,
+			})
 		}
 		store.StreamItems(target.store, target, target.quitCh, target.loggerOnce)
 	}

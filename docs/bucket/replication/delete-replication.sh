@@ -23,6 +23,9 @@ catch() {
 	pkill minio
 	pkill mc
 	rm -rf /tmp/xl/
+	if [ $# -ne 0 ]; then
+		exit $#
+	fi
 }
 
 catch
@@ -86,11 +89,11 @@ echo "=== myminio2"
 
 versionId="$(./mc ls --json --versions myminio1/testbucket/dir/ | tail -n1 | jq -r .versionId)"
 
-aws configure set aws_access_key_id minioadmin --profile minioadmin
-aws configure set aws_secret_access_key minioadmin --profile minioadmin
-aws configure set default.region us-east-1 --profile minioadmin
+export AWS_ACCESS_KEY_ID=minioadmin
+export AWS_SECRET_ACCESS_KEY=minioadmin
+export AWS_REGION=us-east-1
 
-aws s3api --endpoint-url http://localhost:9001 --profile minioadmin delete-object --bucket testbucket --key dir/file --version-id "$versionId"
+aws s3api --endpoint-url http://localhost:9001 delete-object --bucket testbucket --key dir/file --version-id "$versionId"
 
 ./mc ls -r --versions myminio1/testbucket >/tmp/myminio1.txt
 ./mc ls -r --versions myminio2/testbucket >/tmp/myminio2.txt
@@ -127,7 +130,7 @@ versionId="$(./mc ls --json --versions myminio1/foobucket/dir/ | jq -r .versionI
 
 kill ${pid2} && wait ${pid2} || true
 
-aws s3api --endpoint-url http://localhost:9001 --profile minioadmin delete-object --bucket foobucket --key dir/file --version-id "$versionId"
+aws s3api --endpoint-url http://localhost:9001 delete-object --bucket foobucket --key dir/file --version-id "$versionId"
 
 out="$(./mc ls myminio1/foobucket/dir/)"
 if [ "$out" != "" ]; then
