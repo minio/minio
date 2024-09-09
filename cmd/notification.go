@@ -691,6 +691,27 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 	}
 }
 
+// DeleteUploadID notifies all the MinIO nodes to remove the
+// given uploadID from cache
+func (sys *NotificationSys) DeleteUploadID(ctx context.Context, uploadID string) {
+	ng := WithNPeers(len(sys.peerClients))
+	for idx, client := range sys.peerClients {
+		if client == nil {
+			continue
+		}
+		client := client
+		ng.Go(ctx, func() error {
+			return client.DeleteUploadID(ctx, uploadID)
+		}, idx, *client.host)
+	}
+	for _, nErr := range ng.Wait() {
+		reqInfo := (&logger.ReqInfo{}).AppendTags("peerAddress", nErr.Host.String())
+		if nErr.Err != nil {
+			peersLogOnceIf(logger.SetReqInfo(ctx, reqInfo), nErr.Err, nErr.Host.String())
+		}
+	}
+}
+
 // StopRebalance notifies all MinIO nodes to signal any ongoing rebalance
 // goroutine to stop.
 func (sys *NotificationSys) StopRebalance(ctx context.Context) {

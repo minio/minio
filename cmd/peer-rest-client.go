@@ -467,6 +467,17 @@ func (client *peerRESTClient) ReloadPoolMeta(ctx context.Context) error {
 	return err
 }
 
+func (client *peerRESTClient) DeleteUploadID(ctx context.Context, uploadID string) error {
+	conn := client.gridConn()
+	if conn == nil {
+		return nil
+	}
+	_, err := cleanupUploadIDCacheMetaRPC.Call(ctx, conn, grid.NewMSSWith(map[string]string{
+		peerRESTUploadID: uploadID,
+	}))
+	return err
+}
+
 func (client *peerRESTClient) StopRebalance(ctx context.Context) error {
 	conn := client.gridConn()
 	if conn == nil {

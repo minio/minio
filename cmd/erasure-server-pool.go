@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/sync/errgroup"
 	"github.com/minio/pkg/v3/wildcard"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 type erasureServerPools struct {
@@ -63,6 +64,8 @@ type erasureServerPools struct {
 	decommissionCancelers []context.CancelFunc
 
 	s3Peer *S3PeerSys
+
+	mpCache *xsync.MapOf[string, MultipartInfo]
 }
 
 func (z *erasureServerPools) SinglePool() bool {
@@ -216,7 +219,35 @@ func newErasureServerPools(ctx context.Context, endpointServerPools EndpointServ
 		break
 	}
 
+	// initialize the incomplete uploads cache
+	z.mpCache = xsync.NewMapOf[string, MultipartInfo]()
+
+	go z.cleanupStaleMPCache(ctx)
+
 	return z, nil
+}
+
+func (z *erasureServerPools) cleanupStaleMPCache(ctx context.Context) {
+	timer := time.NewTimer(globalAPIConfig.getStaleUploadsCleanupInterval())
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			z.mpCache.Range(func(id string, info MultipartInfo) bool {
+				if time.Since(info.Initiated) >= globalAPIConfig.getStaleUploadsExpiry() {
+					z.mpCache.Delete(id)
+					// No need to notify to peers, each node will delete its own cache.
+				}
+				return true
+			})
+
+			// Reset for the next interval
+			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
+		}
+	}
 }
 
 func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocker {
@@ -1702,15 +1733,32 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		return ListMultipartsInfo{}, err
 	}
 
-	if z.SinglePool() {
-		return z.serverPools[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
-	}
-
 	poolResult := ListMultipartsInfo{}
 	poolResult.MaxUploads = maxUploads
 	poolResult.KeyMarker = keyMarker
 	poolResult.Prefix = prefix
 	poolResult.Delimiter = delimiter
+
+	// if no prefix provided, return the list from cache
+	if prefix == "" {
+		if _, err := z.GetBucketInfo(ctx, bucket, BucketOptions{}); err != nil {
+			return ListMultipartsInfo{}, toObjectErr(err, bucket)
+		}
+
+		z.mpCache.Range(func(_ string, mp MultipartInfo) bool {
+			poolResult.Uploads = append(poolResult.Uploads, mp)
+			return true
+		})
+		sort.Slice(poolResult.Uploads, func(i int, j int) bool {
+			return poolResult.Uploads[i].Initiated.Before(poolResult.Uploads[j].Initiated)
+		})
+		return poolResult, nil
+	}
+
+	if z.SinglePool() {
+		return z.serverPools[0].ListMultipartUploads(ctx, bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
+	}
+
 	for idx, pool := range z.serverPools {
 		if z.IsSuspended(idx) {
 			continue
@@ -1722,14 +1770,26 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		}
 		poolResult.Uploads = append(poolResult.Uploads, result.Uploads...)
 	}
+
 	return poolResult, nil
 }
 
 // Initiate a new multipart upload on a hashedSet based on object name.
-func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (*NewMultipartUploadResult, error) {
+func (z *erasureServerPools) NewMultipartUpload(ctx context.Context, bucket, object string, opts ObjectOptions) (mp *NewMultipartUploadResult, err error) {
 	if err := checkNewMultipartArgs(ctx, bucket, object); err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if err == nil && mp != nil {
+			z.mpCache.Store(mp.UploadID, MultipartInfo{
+				Bucket:    bucket,
+				Object:    object,
+				UploadID:  mp.UploadID,
+				Initiated: time.Now(),
+			})
+		}
+	}()
 
 	if z.SinglePool() {
 		return z.serverPools[0].NewMultipartUpload(ctx, bucket, object, opts)
@@ -1874,10 +1934,17 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 }
 
 // Aborts an in-progress multipart operation on hashedSet based on the object name.
-func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) error {
+func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, object, uploadID string, opts ObjectOptions) (err error) {
 	if err := checkAbortMultipartArgs(ctx, bucket, object, uploadID); err != nil {
 		return err
 	}
+
+	defer func() {
+		if err == nil {
+			z.mpCache.Delete(uploadID)
+			globalNotificationSys.DeleteUploadID(ctx, uploadID)
+		}
+	}()
 
 	if z.SinglePool() {
 		return z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
@@ -1909,6 +1976,13 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 	if err = checkCompleteMultipartArgs(ctx, bucket, object, uploadID); err != nil {
 		return objInfo, err
 	}
+
+	defer func() {
+		if err == nil {
+			z.mpCache.Delete(uploadID)
+			globalNotificationSys.DeleteUploadID(ctx, uploadID)
+		}
+	}()
 
 	if z.SinglePool() {
 		return z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
@@ -1950,6 +2024,12 @@ func (z *erasureServerPools) GetBucketInfo(ctx context.Context, bucket string, o
 		bucketInfo.ObjectLocking = meta.ObjectLocking()
 	}
 	return bucketInfo, nil
+}
+
+// ClearUploadID deletes given uploadID from cache
+func (z *erasureServerPools) ClearUploadID(uploadID string) error {
+	z.mpCache.Delete(uploadID)
+	return nil
 }
 
 // DeleteBucket - deletes a bucket on all serverPools simultaneously,
