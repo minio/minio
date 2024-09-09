@@ -675,8 +675,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			continue
 		}
 
-		defer globalCacheConfig.Delete(bucket, dobj.ObjectName)
-
 		if replicateDeletes && (dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending) {
 			// copy so we can re-add null ID.
 			dobj := dobj
@@ -1206,6 +1204,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponseHeadersOnly(w, toAPIError(ctx, err))
 		return
 	}
+	opts.WantChecksum = checksum
 
 	fanOutOpts := fanOutOptions{Checksum: checksum}
 

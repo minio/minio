@@ -103,7 +103,6 @@ const (
 	IdentityLDAPSubSys   = madmin.IdentityLDAPSubSys
 	IdentityTLSSubSys    = madmin.IdentityTLSSubSys
 	IdentityPluginSubSys = madmin.IdentityPluginSubSys
-	CacheSubSys          = madmin.CacheSubSys
 	SiteSubSys           = madmin.SiteSubSys
 	RegionSubSys         = madmin.RegionSubSys
 	EtcdSubSys           = madmin.EtcdSubSys
@@ -189,7 +188,6 @@ var SubSystemsDynamic = set.CreateStringSet(
 	AuditWebhookSubSys,
 	AuditKafkaSubSys,
 	StorageClassSubSys,
-	CacheSubSys,
 	ILMSubSys,
 	BatchSubSys,
 	BrowserSubSys,
@@ -200,7 +198,6 @@ var SubSystemsSingleTargets = set.CreateStringSet(
 	SiteSubSys,
 	RegionSubSys,
 	EtcdSubSys,
-	CacheSubSys,
 	APISubSys,
 	StorageClassSubSys,
 	CompressionSubSys,

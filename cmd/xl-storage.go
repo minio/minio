@@ -118,7 +118,8 @@ type xlStorage struct {
 	major, minor uint32
 	fsType       string
 
-	immediatePurge chan string
+	immediatePurge       chan string
+	immediatePurgeCancel context.CancelFunc
 
 	// mutex to prevent concurrent read operations overloading walks.
 	rotational bool
@@ -216,17 +217,21 @@ func newXLStorage(ep Endpoint, cleanUp bool) (s *xlStorage, err error) {
 	if globalIsTesting || globalIsCICD {
 		immediatePurgeQueue = 1
 	}
+
+	ctx, cancel := context.WithCancel(GlobalContext)
+
 	s = &xlStorage{
-		drivePath:      ep.Path,
-		endpoint:       ep,
-		globalSync:     globalFSOSync,
-		diskInfoCache:  cachevalue.New[DiskInfo](),
-		immediatePurge: make(chan string, immediatePurgeQueue),
+		drivePath:            ep.Path,
+		endpoint:             ep,
+		globalSync:           globalFSOSync,
+		diskInfoCache:        cachevalue.New[DiskInfo](),
+		immediatePurge:       make(chan string, immediatePurgeQueue),
+		immediatePurgeCancel: cancel,
 	}
 
 	defer func() {
-		if err == nil {
-			go s.cleanupTrashImmediateCallers(GlobalContext)
+		if cleanUp && err == nil {
+			go s.cleanupTrashImmediateCallers(ctx)
 		}
 	}()
 
@@ -399,7 +404,8 @@ func (s *xlStorage) Endpoint() Endpoint {
 	return s.endpoint
 }
 
-func (*xlStorage) Close() error {
+func (s *xlStorage) Close() error {
+	s.immediatePurgeCancel()
 	return nil
 }
 
@@ -1091,13 +1097,13 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 
 	var legacyJSON bool
 	buf, err := xioutil.WithDeadline[[]byte](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) ([]byte, error) {
-		buf, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
+		buf, _, err := s.readAllDataWithDMTime(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFile))
 		if err != nil && !errors.Is(err, errFileNotFound) {
 			return nil, err
 		}
 
 		if errors.Is(err, errFileNotFound) && legacy {
-			buf, err = s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1))
+			buf, _, err = s.readAllDataWithDMTime(ctx, volume, volumeDir, pathJoin(volumeDir, path, xlStorageFormatFileV1))
 			if err != nil {
 				return nil, err
 			}
@@ -1202,7 +1208,12 @@ func (s *xlStorage) cleanupTrashImmediateCallers(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case entry := <-s.immediatePurge:
-			removeAll(entry)
+			// Add deadlines such that immediate purge is not
+			// perpetually hung here.
+			w := xioutil.NewDeadlineWorker(globalDriveConfig.GetMaxTimeout())
+			w.Run(func() error {
+				return removeAll(entry)
+			})
 		}
 	}
 }
@@ -3112,12 +3123,24 @@ func (s *xlStorage) ReadParts(ctx context.Context, volume string, partMetaPaths 
 	parts := make([]*ObjectPartInfo, len(partMetaPaths))
 	for idx, partMetaPath := range partMetaPaths {
 		var partNumber int
-		fmt.Sscanf(pathutil.Dir(partMetaPath), "part.%d.meta", &partNumber)
+		fmt.Sscanf(pathutil.Base(partMetaPath), "part.%d.meta", &partNumber)
 
 		if contextCanceled(ctx) {
-			parts[idx] = &ObjectPartInfo{Error: ctx.Err().Error(), Number: partNumber}
+			parts[idx] = &ObjectPartInfo{
+				Error:  ctx.Err().Error(),
+				Number: partNumber,
+			}
 			continue
 		}
+
+		if err := Access(pathJoin(volumeDir, pathutil.Dir(partMetaPath), fmt.Sprintf("part.%d", partNumber))); err != nil {
+			parts[idx] = &ObjectPartInfo{
+				Error:  err.Error(),
+				Number: partNumber,
+			}
+			continue
+		}
+
 		data, err := s.readAllData(ctx, volume, volumeDir, pathJoin(volumeDir, partMetaPath))
 		if err != nil {
 			parts[idx] = &ObjectPartInfo{
@@ -3126,11 +3149,16 @@ func (s *xlStorage) ReadParts(ctx context.Context, volume string, partMetaPaths 
 			}
 			continue
 		}
+
 		pinfo := &ObjectPartInfo{}
 		if _, err = pinfo.UnmarshalMsg(data); err != nil {
-			parts[idx] = &ObjectPartInfo{Error: err.Error(), Number: partNumber}
+			parts[idx] = &ObjectPartInfo{
+				Error:  err.Error(),
+				Number: partNumber,
+			}
 			continue
 		}
+
 		parts[idx] = pinfo
 	}
 	diskHealthCheckOK(ctx, nil)

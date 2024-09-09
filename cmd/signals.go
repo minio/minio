@@ -81,8 +81,10 @@ func handleSignals() {
 			shutdownLogIf(context.Background(), objAPI.Shutdown(context.Background()))
 		}
 
-		if srv := newConsoleServerFn(); srv != nil {
-			shutdownLogIf(context.Background(), srv.Shutdown())
+		if globalBrowserEnabled {
+			if srv := newConsoleServerFn(); srv != nil {
+				shutdownLogIf(context.Background(), srv.Shutdown())
+			}
 		}
 
 		if globalEventNotifier != nil {

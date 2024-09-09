@@ -461,25 +461,27 @@ func handleCommonArgs(ctxt serverCtxt) {
 	certsDir := ctxt.CertsDir
 	certsSet := ctxt.certsDirSet
 
-	if consoleAddr == "" {
-		p, err := xnet.GetFreePort()
-		if err != nil {
-			logger.FatalIf(err, "Unable to get free port for Console UI on the host")
+	if globalBrowserEnabled {
+		if consoleAddr == "" {
+			p, err := xnet.GetFreePort()
+			if err != nil {
+				logger.FatalIf(err, "Unable to get free port for Console UI on the host")
+			}
+			// hold the port
+			l, err := net.Listen("TCP", fmt.Sprintf(":%s", p.String()))
+			if err == nil {
+				defer l.Close()
+			}
+			consoleAddr = net.JoinHostPort("", p.String())
 		}
-		// hold the port
-		l, err := net.Listen("TCP", fmt.Sprintf(":%s", p.String()))
-		if err == nil {
-			defer l.Close()
+
+		if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
+			logger.FatalIf(err, "Unable to start listening on console port")
 		}
-		consoleAddr = net.JoinHostPort("", p.String())
-	}
 
-	if _, _, err := net.SplitHostPort(consoleAddr); err != nil {
-		logger.FatalIf(err, "Unable to start listening on console port")
-	}
-
-	if consoleAddr == addr {
-		logger.FatalIf(errors.New("--console-address cannot be same as --address"), "Unable to start the server")
+		if consoleAddr == addr {
+			logger.FatalIf(errors.New("--console-address cannot be same as --address"), "Unable to start the server")
+		}
 	}
 
 	globalMinioHost, globalMinioPort = mustSplitHostPort(addr)
@@ -492,7 +494,9 @@ func handleCommonArgs(ctxt serverCtxt) {
 		globalDynamicAPIPort = true
 	}
 
-	globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
+	if globalBrowserEnabled {
+		globalMinioConsoleHost, globalMinioConsolePort = mustSplitHostPort(consoleAddr)
+	}
 
 	if globalMinioPort == globalMinioConsolePort {
 		logger.FatalIf(errors.New("--console-address port cannot be same as --address port"), "Unable to start the server")
@@ -696,12 +700,16 @@ func loadEnvVarsFromFiles() {
 	}
 }
 
-func serverHandleEnvVars() {
+func serverHandleEarlyEnvVars() {
 	var err error
 	globalBrowserEnabled, err = config.ParseBool(env.Get(config.EnvBrowser, config.EnableOn))
 	if err != nil {
 		logger.Fatal(config.ErrInvalidBrowserValue(err), "Invalid MINIO_BROWSER value in environment variable")
 	}
+}
+
+func serverHandleEnvVars() {
+	var err error
 	if globalBrowserEnabled {
 		if redirectURL := env.Get(config.EnvBrowserRedirectURL, ""); redirectURL != "" {
 			u, err := xnet.ParseHTTPURL(redirectURL)

@@ -93,14 +93,18 @@ func testDeleteObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			md5Bytes := md5.Sum([]byte(object.content))
 			oi, err := obj.PutObject(context.Background(), testCase.bucketName, object.name, mustGetPutObjReader(t, strings.NewReader(object.content),
 				int64(len(object.content)), hex.EncodeToString(md5Bytes[:]), ""), ObjectOptions{})
-			t.Log(oi)
 			if err != nil {
+				t.Log(oi)
 				t.Fatalf("%s : %s", instanceType, err.Error())
 			}
 		}
 
 		oi, err := obj.DeleteObject(context.Background(), testCase.bucketName, testCase.pathToDelete, ObjectOptions{})
-		t.Log(oi, err)
+		if err != nil && !isErrObjectNotFound(err) {
+			t.Log(oi)
+			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err)
+			continue
+		}
 
 		result, err := obj.ListObjects(context.Background(), testCase.bucketName, "", "", "", 1000)
 		if err != nil {

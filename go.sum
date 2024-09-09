@@ -446,8 +446,8 @@ github.com/minio/selfupdate v0.6.0/go.mod h1:bO02GTIPCMQFTEvE5h4DjYB58bCoZ35XLeB
 github.com/minio/sha256-simd v0.1.1/go.mod h1:B5e1o+1/KgNmWrSQK08Y6Z1Vb5pwIktudl0J58iy0KM=
 github.com/minio/simdjson-go v0.4.5 h1:r4IQwjRGmWCQ2VeMc7fGiilu1z5du0gJ/I/FsKwgo5A=
 github.com/minio/simdjson-go v0.4.5/go.mod h1:eoNz0DcLQRyEDeaPr4Ru6JpjlZPzbA0IodxVJk8lO8E=
-github.com/minio/sio v0.4.0 h1:u4SWVEm5lXSqU42ZWawV0D9I5AZ5YMmo2RXpEQ/kRhc=
-github.com/minio/sio v0.4.0/go.mod h1:oBSjJeGbBdRMZZwna07sX9EFzZy+ywu5aofRiV1g79I=
+github.com/minio/sio v0.4.1 h1:EMe3YBC1nf+sRQia65Rutxi+Z554XPV0dt8BIBA+a/0=
+github.com/minio/sio v0.4.1/go.mod h1:oBSjJeGbBdRMZZwna07sX9EFzZy+ywu5aofRiV1g79I=
 github.com/minio/websocket v1.6.0 h1:CPvnQvNvlVaQmvw5gtJNyYQhg4+xRmrPNhBbv8BdpAE=
 github.com/minio/websocket v1.6.0/go.mod h1:COH1CePZfHT9Ec1O7vZjTlX5uEPpyYnrifPNbu665DM=
 github.com/minio/xxml v0.0.3 h1:ZIpPQpfyG5uZQnqqC0LZuWtPk/WT8G/qkxvO6jb7zMU=

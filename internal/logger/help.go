@@ -77,6 +77,18 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         MaxRetry,
+			Description: `maximum retry count before we start dropping logged event(s)`,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         RetryInterval,
+			Description: `sleep between each retries, allowed maximum value is '1m' e.g. '10s'`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
@@ -130,6 +142,18 @@ var (
 			Description: `staging dir for undelivered audit messages e.g. '/home/audit-events'`,
 			Optional:    true,
 			Type:        "string",
+		},
+		config.HelpKV{
+			Key:         MaxRetry,
+			Description: `maximum retry count before we start dropping audit event(s)`,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         RetryInterval,
+			Description: `sleep between each retries, allowed maximum value is '1m' e.g. '10s'`,
+			Optional:    true,
+			Type:        "duration",
 		},
 		config.HelpKV{
 			Key:         config.Comment,

@@ -811,6 +811,7 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			}
 
 			bucketMap[bucket].NotificationConfigXML = configData
+			bucketMap[bucket].NotificationConfigUpdatedAt = updatedAt
 			rpt.SetStatus(bucket, fileName, nil)
 		case bucketPolicyConfig:
 			// Error out if Content-Length is beyond allowed size.
