@@ -2499,7 +2499,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 		}
 	}
 
-	if apiVer != "" && apiVer == "v2" {
+	if apiVer == "v2" {
 		iamr := madmin.ImportIAMResult{
 			Skipped: skipped,
 			Removed: removed,
