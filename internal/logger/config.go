@@ -494,6 +494,9 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if err != nil {
 			return cfg, err
 		}
+		if retryInterval > time.Minute {
+			return cfg, fmt.Errorf("maximum allowed value for retry interval is '1m': %s", retryIntervalCfgVal)
+		}
 		cfg.HTTP[k] = http.Config{
 			Enabled:    true,
 			Endpoint:   url,
@@ -570,6 +573,9 @@ func lookupAuditWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		retryInterval, err := time.ParseDuration(retryIntervalCfgVal)
 		if err != nil {
 			return cfg, err
+		}
+		if retryInterval > time.Minute {
+			return cfg, fmt.Errorf("maximum allowed value for retry interval is '1m': %s", retryIntervalCfgVal)
 		}
 		cfg.AuditWebhook[k] = http.Config{
 			Enabled:    true,

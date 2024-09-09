@@ -77,6 +77,18 @@ var (
 			Type:        "string",
 		},
 		config.HelpKV{
+			Key:         MaxRetry,
+			Description: `maximum retry count before we start dropping logged event(s)`,
+			Optional:    true,
+			Type:        "number",
+		},
+		config.HelpKV{
+			Key:         RetryInterval,
+			Description: `sleep between each retries, allowed maximum value is '1m' e.g. '10s'`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
@@ -133,13 +145,13 @@ var (
 		},
 		config.HelpKV{
 			Key:         MaxRetry,
-			Description: `maximum retry count before we start dropping upto batch_size events`,
+			Description: `maximum retry count before we start dropping audit event(s)`,
 			Optional:    true,
 			Type:        "number",
 		},
 		config.HelpKV{
 			Key:         RetryInterval,
-			Description: `maximum retry sleeps between each retries`,
+			Description: `sleep between each retries, allowed maximum value is '1m' e.g. '10s'`,
 			Optional:    true,
 			Type:        "duration",
 		},
