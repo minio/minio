@@ -1333,16 +1333,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Check if either the source is encrypted or the destination will be encrypted.
-	objectEncryption := crypto.Requested(r.Header)
-	objectEncryption = objectEncryption || crypto.IsSourceEncrypted(srcInfo.UserDefined)
-
 	var compressMetadata map[string]string
 	// No need to compress for remote etcd calls
 	// Pass the decompressed stream to such calls.
 	isDstCompressed := isCompressible(r.Header, dstObject) &&
 		length > minCompressibleSize &&
-		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI) && !objectEncryption
+		!isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI)
 	if isDstCompressed {
 		compressMetadata = make(map[string]string, 2)
 		// Preserving the compression metadata.
@@ -1625,7 +1621,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// if encryption is enabled we do not need explicit "REPLACE" metadata to
 	// be enabled as well - this is to allow for key-rotation.
 	if !isDirectiveReplace(r.Header.Get(xhttp.AmzMetadataDirective)) && !isDirectiveReplace(r.Header.Get(xhttp.AmzTagDirective)) &&
-		srcInfo.metadataOnly && srcOpts.VersionID == "" && !objectEncryption {
+		srcInfo.metadataOnly && srcOpts.VersionID == "" &&
+		!crypto.Requested(r.Header) &&
+		!crypto.IsSourceEncrypted(srcInfo.UserDefined) {
+
 		// If x-amz-metadata-directive is not set to REPLACE then we need
 		// to error out if source and destination are same.
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidCopyDest), r.URL)
