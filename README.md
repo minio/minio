@@ -8,6 +8,12 @@ MinIO is a High Performance Object Storage released under GNU Affero General Pub
 
 This README provides quickstart instructions on running MinIO on bare metal hardware, including container-based installations. For Kubernetes environments, use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md).
 
+## Self-Hosted Deployment Options
+### Elestio
+You can deploy Minio on Elestio using one-click deployment.
+
+[![Deploy on Elestio](https://elest.io/images/logos/deploy-to-elestio-btn.png)](https://elest.io/open-source/minio)
+
 ## Container Installation
 
 Use the following commands to run a standalone MinIO server as a container.
