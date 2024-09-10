@@ -350,8 +350,6 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 			continue
 		}
 
-		// Set the global for IAM initilaized
-		globalIAMFullyInitialized = true
 		break
 	}
 

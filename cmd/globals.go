@@ -460,7 +460,6 @@ var (
 	globalDynamicAPIPort bool
 
 	// Add new variable global values here.
-	globalIAMFullyInitialized bool
 )
 
 var globalAuthPluginMutex sync.Mutex
