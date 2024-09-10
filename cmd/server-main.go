@@ -976,12 +976,12 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize users credentials and policies in background right after config has initialized.
 	go func() {
-		bootstrapTrace("globalIAMSys.Init", func() {
-			globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
-		})
-
 		// Initialize Console UI
 		if globalBrowserEnabled {
+			// Initialize IAM store
+			globalIAMSys.Lock()
+			globalIAMSys.initStore(newObject, globalEtcdClient)
+			globalIAMSys.Unlock()
 			bootstrapTrace("initConsoleServer", func() {
 				srv, err := initConsoleServer()
 				if err != nil {
@@ -995,6 +995,31 @@ func serverMain(ctx *cli.Context) {
 				}()
 			})
 		}
+
+		bootstrapTrace("globalIAMSys.Init", func() {
+			globalIAMSys.Init(GlobalContext, newObject, globalEtcdClient, globalRefreshIAMInterval)
+		})
+
+		// Start a thread to keep checking IAM initialized and init console server
+		go func() {
+			ticker := time.NewTicker(10 * time.Second) // Check every 10 seconds
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if globalIAMFullyInitialized && globalBrowserEnabled {
+						bootstrapTrace("initConsoleServer", func() {
+							srv, err := initConsoleServer()
+							if err != nil {
+								logger.FatalIf(err, "Unable to initialize console service")
+							}
+							setConsoleSrv(srv)
+						})
+						return
+					}
+				}
+			}
+		}()
 
 		// if we see FTP args, start FTP if possible
 		if len(globalServerCtxt.FTP) > 0 {
