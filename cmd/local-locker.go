@@ -52,37 +52,50 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 //
 //msgp:ignore localLocker
 type localLocker struct {
-	mutex   sync.Mutex
-	lockMap map[string][]lockRequesterInfo
-	lockUID map[string]string // UUID -> resource map.
+	mutex     sync.Mutex
+	ownerName string
+	lockMap   map[string][]lockRequesterInfo
+	lockUID   map[string]string // UUID -> resource map.
+}
+
+func (l *localLocker) OwnerName() string {
+	return l.ownerName
 }
 
 func (l *localLocker) String() string {
 	return globalEndpoints.Localhost()
 }
 
-func (l *localLocker) canTakeLock(resources ...string) bool {
+// Return if all resources do not have any held lock.
+// If the number of passed resources is one and it is held,
+// return the uid and the owner of the lock.
+func (l *localLocker) canTakeLock(resources ...string) (ok bool, uid, owner string) {
 	for _, resource := range resources {
-		_, lockTaken := l.lockMap[resource]
+		lockInfo, lockTaken := l.lockMap[resource]
 		if lockTaken {
-			return false
+			if len(lockInfo) == 1 {
+				// First lock info always holds what this node thinks who is the owner of the lock
+				uid = lockInfo[0].UID
+				owner = lockInfo[0].Owner
+			}
+			return
 		}
 	}
-	return true
+	return true, "", ""
 }
 
-func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool, uid, owner string, err error) {
 	if len(args.Resources) > maxDeleteList {
-		return false, fmt.Errorf("internal error: localLocker.Lock called with more than %d resources", maxDeleteList)
+		return false, "", "", fmt.Errorf("internal error: localLocker.Lock called with more than %d resources", maxDeleteList)
 	}
 
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	if !l.canTakeLock(args.Resources...) {
+	if yes, uid, owner := l.canTakeLock(args.Resources...); !yes {
 		// Not all locks can be taken on resources,
 		// reject it completely.
-		return false, nil
+		return false, uid, owner, nil
 	}
 
 	// No locks held on the all resources, so claim write
@@ -105,7 +118,7 @@ func (l *localLocker) Lock(ctx context.Context, args dsync.LockArgs) (reply bool
 		}
 		l.lockUID[formatUUID(args.UID, i)] = resource
 	}
-	return true, nil
+	return true, "", "", nil
 }
 
 func formatUUID(s string, idx int) string {
@@ -160,9 +173,9 @@ func (l *localLocker) removeEntry(name string, args dsync.LockArgs, lri *[]lockR
 	return false
 }
 
-func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, uid, owner string, err error) {
 	if len(args.Resources) != 1 {
-		return false, fmt.Errorf("internal error: localLocker.RLock called with more than one resource")
+		return false, "", "", fmt.Errorf("internal error: localLocker.RLock called with more than one resource")
 	}
 
 	l.mutex.Lock()
@@ -192,7 +205,13 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 		l.lockUID[formatUUID(args.UID, 0)] = resource
 		reply = true
 	}
-	return reply, nil
+
+	if ok && !reply {
+		uid = lri[0].UID
+		owner = lri[0].Owner
+	}
+
+	return
 }
 
 func (l *localLocker) RUnlock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
@@ -405,7 +424,8 @@ func (l *localLocker) expireOldLocks(interval time.Duration) {
 
 func newLocker() *localLocker {
 	return &localLocker{
-		lockMap: make(map[string][]lockRequesterInfo, 1000),
-		lockUID: make(map[string]string, 1000),
+		lockMap:   make(map[string][]lockRequesterInfo, 1000),
+		lockUID:   make(map[string]string, 1000),
+		ownerName: globalLocalNodeName,
 	}
 }

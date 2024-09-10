@@ -316,6 +316,18 @@ func (z *LockResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Code = ResponseCode(zb0002)
 			}
+		case "UID":
+			z.UID, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "UID")
+				return
+			}
+		case "Owner":
+			z.Owner, err = dc.ReadString()
+			if err != nil {
+				err = msgp.WrapError(err, "Owner")
+				return
+			}
 		case "Err":
 			z.Err, err = dc.ReadString()
 			if err != nil {
@@ -334,16 +346,36 @@ func (z *LockResp) DecodeMsg(dc *msgp.Reader) (err error) {
 }
 
 // EncodeMsg implements msgp.Encodable
-func (z LockResp) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 2
+func (z *LockResp) EncodeMsg(en *msgp.Writer) (err error) {
+	// map header, size 4
 	// write "Code"
-	err = en.Append(0x82, 0xa4, 0x43, 0x6f, 0x64, 0x65)
+	err = en.Append(0x84, 0xa4, 0x43, 0x6f, 0x64, 0x65)
 	if err != nil {
 		return
 	}
 	err = en.WriteUint8(uint8(z.Code))
 	if err != nil {
 		err = msgp.WrapError(err, "Code")
+		return
+	}
+	// write "UID"
+	err = en.Append(0xa3, 0x55, 0x49, 0x44)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.UID)
+	if err != nil {
+		err = msgp.WrapError(err, "UID")
+		return
+	}
+	// write "Owner"
+	err = en.Append(0xa5, 0x4f, 0x77, 0x6e, 0x65, 0x72)
+	if err != nil {
+		return
+	}
+	err = en.WriteString(z.Owner)
+	if err != nil {
+		err = msgp.WrapError(err, "Owner")
 		return
 	}
 	// write "Err"
@@ -360,12 +392,18 @@ func (z LockResp) EncodeMsg(en *msgp.Writer) (err error) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z LockResp) MarshalMsg(b []byte) (o []byte, err error) {
+func (z *LockResp) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 4
 	// string "Code"
-	o = append(o, 0x82, 0xa4, 0x43, 0x6f, 0x64, 0x65)
+	o = append(o, 0x84, 0xa4, 0x43, 0x6f, 0x64, 0x65)
 	o = msgp.AppendUint8(o, uint8(z.Code))
+	// string "UID"
+	o = append(o, 0xa3, 0x55, 0x49, 0x44)
+	o = msgp.AppendString(o, z.UID)
+	// string "Owner"
+	o = append(o, 0xa5, 0x4f, 0x77, 0x6e, 0x65, 0x72)
+	o = msgp.AppendString(o, z.Owner)
 	// string "Err"
 	o = append(o, 0xa3, 0x45, 0x72, 0x72)
 	o = msgp.AppendString(o, z.Err)
@@ -400,6 +438,18 @@ func (z *LockResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Code = ResponseCode(zb0002)
 			}
+		case "UID":
+			z.UID, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "UID")
+				return
+			}
+		case "Owner":
+			z.Owner, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Owner")
+				return
+			}
 		case "Err":
 			z.Err, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -419,8 +469,8 @@ func (z *LockResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z LockResp) Msgsize() (s int) {
-	s = 1 + 5 + msgp.Uint8Size + 4 + msgp.StringPrefixSize + len(z.Err)
+func (z *LockResp) Msgsize() (s int) {
+	s = 1 + 5 + msgp.Uint8Size + 4 + msgp.StringPrefixSize + len(z.UID) + 6 + msgp.StringPrefixSize + len(z.Owner) + 4 + msgp.StringPrefixSize + len(z.Err)
 	return
 }
 

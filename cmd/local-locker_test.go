@@ -43,7 +43,7 @@ func TestLocalLockerExpire(t *testing.T) {
 			Owner:     "owner",
 			Quorum:    &quorum,
 		}
-		ok, err := l.Lock(ctx, arg)
+		ok, _, _, err := l.Lock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -61,7 +61,7 @@ func TestLocalLockerExpire(t *testing.T) {
 			Owner:     "owner",
 			Quorum:    &quorum,
 		}
-		ok, err := l.RLock(ctx, arg)
+		ok, _, _, err := l.RLock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestLocalLockerExpire(t *testing.T) {
 			t.Fatal("did not get read lock")
 		}
 		// RLock twice
-		ok, err = l.RLock(ctx, arg)
+		ok, _, _, err = l.RLock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,7 +127,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Owner:     "owner",
 			Quorum:    &quorum,
 		}
-		ok, err := l.Lock(ctx, arg)
+		ok, _, _, err := l.Lock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +148,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 			Owner:     "owner",
 			Quorum:    &quorum,
 		}
-		ok, err := l.RLock(ctx, arg)
+		ok, _, _, err := l.RLock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,7 +160,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 		// RLock twice, different uid
 		uid = mustGetUUID()
 		arg.UID = uid
-		ok, err = l.RLock(ctx, arg)
+		ok, _, _, err = l.RLock(ctx, arg)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -288,7 +288,7 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 
 						for i := 0; i < readers; i++ {
 							rng.Read(tmp[:])
-							ok, err := l.RLock(context.Background(), dsync.LockArgs{
+							ok, _, _, err := l.RLock(context.Background(), dsync.LockArgs{
 								UID:       uuid.NewString(),
 								Resources: res,
 								Source:    hex.EncodeToString(tmp[:8]),
@@ -375,7 +375,7 @@ func Test_localLocker_RUnlock(t *testing.T) {
 
 						for i := 0; i < readers; i++ {
 							rng.Read(tmp[:])
-							ok, err := l.RLock(context.Background(), dsync.LockArgs{
+							ok, _, _, err := l.RLock(context.Background(), dsync.LockArgs{
 								UID:       uuid.NewString(),
 								Resources: res,
 								Source:    hex.EncodeToString(tmp[:8]),

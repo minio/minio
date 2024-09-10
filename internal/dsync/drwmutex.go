@@ -123,12 +123,16 @@ type DRWMutex struct {
 
 // Granted - represents a structure of a granted lock.
 type Granted struct {
-	index   int
-	lockUID string // Locked if set with UID string, unlocked if empty
+	index    int
+	nodeName string
+	valid    bool
+	locked   bool
+	owner    string
+	lockUID  string // Locked if set with UID string, unlocked if empty
 }
 
 func (g *Granted) isLocked() bool {
-	return isLocked(g.lockUID)
+	return g.locked
 }
 
 func isLocked(uid string) bool {
@@ -416,6 +420,37 @@ func refreshLock(ctx context.Context, ds *Dsync, id, source string, quorum int) 
 	return noQuorum, nil
 }
 
+type lockResp struct {
+	valid      bool
+	uid, owner string
+	nodeName   string
+}
+
+func quorumLock(locksResp []lockResp) (uid, owner string) {
+	type lockInfo struct {
+		uid, owner string
+	}
+	occMap := make(map[lockInfo]int, len(locksResp)) // occurrence of lock info
+	for _, lr := range locksResp {
+		if !lr.valid {
+			continue
+		}
+		occMap[lockInfo{uid: lr.uid, owner: lr.owner}]++
+	}
+	var maxOcc int
+	var quorumLockInfo lockInfo
+	for li, count := range occMap {
+		if count > maxOcc {
+			maxOcc = count
+			quorumLockInfo = li
+		}
+	}
+	if maxOcc > len(locksResp)/2 {
+		return quorumLockInfo.uid, quorumLockInfo.owner
+	}
+	return "", ""
+}
+
 // lock tries to acquire the distributed lock, returning true or false.
 func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, isReadLock bool, tolerance, quorum int, names ...string) bool {
 	for i := range *locks {
@@ -461,19 +496,30 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				return
 			}
 
+			g.nodeName = c.OwnerName()
+
 			var locked bool
+			var owner string
+			var uid string
 			var err error
 			if isReadLock {
-				if locked, err = c.RLock(netLockCtx, args); err != nil {
+				if locked, uid, owner, err = c.RLock(netLockCtx, args); err != nil {
 					log("dsync: Unable to call RLock failed with %s for %#v at %s\n", err, args, c)
 				}
 			} else {
-				if locked, err = c.Lock(netLockCtx, args); err != nil {
+				if locked, uid, owner, err = c.Lock(netLockCtx, args); err != nil {
 					log("dsync: Unable to call Lock failed with %s for %#v at %s\n", err, args, c)
 				}
 			}
-			if locked {
-				g.lockUID = args.UID
+			if err == nil {
+				g.valid = true
+				if locked {
+					g.locked = true
+					g.lockUID = args.UID
+				} else {
+					g.owner = owner
+					g.lockUID = uid
+				}
 			}
 			ch <- g
 		}(index, isReadLock, c)
@@ -485,16 +531,28 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	// b) received too many 'non-'locks for quorum to be still possible
 	// c) timed out
 	//
-	i, locksFailed := 0, 0
+	i, locksFailed, contention := 0, 0, 0
 	done := false
+
+	locksResp := make([]lockResp, len(restClnts))
 
 	for ; i < len(restClnts); i++ { // Loop until we acquired all locks
 		select {
 		case grant := <-ch:
+			locksResp[grant.index] = lockResp{
+				valid:    grant.valid,
+				uid:      grant.lockUID,
+				owner:    grant.owner,
+				nodeName: grant.nodeName,
+			}
+
 			if grant.isLocked() {
 				// Mark that this node has acquired the lock
 				(*locks)[grant.index] = grant.lockUID
 			} else {
+				if grant.valid {
+					contention++
+				}
 				locksFailed++
 				if locksFailed > tolerance {
 					// We know that we are not going to get the lock anymore,
@@ -511,7 +569,6 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				done = true
 			}
 		}
-
 		if done {
 			break
 		}
@@ -519,9 +576,21 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 
 	quorumLocked := checkQuorumLocked(locks, quorum) && locksFailed <= tolerance
 	if !quorumLocked {
+		if contention > len(restClnts)/2 && contention < len(restClnts) {
+			// Check if the quorum held lock owner is aware about
+			// its own lock, force release it otherwise
+			uid, owner := quorumLock(locksResp)
+			if uid != "" {
+				for _, li := range locksResp {
+					if li.nodeName == owner && li.uid != uid {
+						forceUnlock(ctx, ds, uid)
+					}
+				}
+			}
+		}
 		log("dsync: Unable to acquire lock in quorum %#v\n", args)
 		// Release all acquired locks without quorum.
-		if !releaseAll(ctx, ds, tolerance, owner, locks, isReadLock, restClnts, names...) {
+		if !releaseAll(ctx, ds, tolerance, locks, isReadLock, restClnts, names...) {
 			log("Unable to release acquired locks, these locks will expire automatically %#v\n", args)
 		}
 	}
@@ -535,7 +604,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 				// release abandoned lock
 				log("Releasing abandoned lock\n")
 				sendRelease(ctx, ds, restClnts[grantToBeReleased.index],
-					owner, grantToBeReleased.lockUID, isReadLock, names...)
+					grantToBeReleased.lockUID, isReadLock, names...)
 			}
 		}
 	}()
@@ -583,13 +652,13 @@ func checkQuorumLocked(locks *[]string, quorum int) bool {
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(ctx context.Context, ds *Dsync, tolerance int, owner string, locks *[]string, isReadLock bool, restClnts []NetLocker, names ...string) bool {
+func releaseAll(ctx context.Context, ds *Dsync, tolerance int, locks *[]string, isReadLock bool, restClnts []NetLocker, names ...string) bool {
 	var wg sync.WaitGroup
 	for lockID := range restClnts {
 		wg.Add(1)
 		go func(lockID int) {
 			defer wg.Done()
-			if sendRelease(ctx, ds, restClnts[lockID], owner, (*locks)[lockID], isReadLock, names...) {
+			if sendRelease(ctx, ds, restClnts[lockID], (*locks)[lockID], isReadLock, names...) {
 				(*locks)[lockID] = ""
 			}
 		}(lockID)
@@ -611,7 +680,7 @@ func (dm *DRWMutex) Unlock(ctx context.Context) {
 	dm.cancelRefresh()
 	dm.m.Unlock()
 
-	restClnts, owner := dm.clnt.GetLockers()
+	restClnts, _ := dm.clnt.GetLockers()
 	// create temp array on stack
 	locks := make([]string, len(restClnts))
 
@@ -645,7 +714,7 @@ func (dm *DRWMutex) Unlock(ctx context.Context) {
 	go func() {
 		ctx, done := context.WithTimeout(ctx, drwMutexUnlockCallTimeout)
 		defer done()
-		for !releaseAll(ctx, dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
+		for !releaseAll(ctx, dm.clnt, tolerance, &locks, isReadLock, restClnts, dm.Names...) {
 			time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryMinInterval)))
 			if time.Since(started) > dm.clnt.Timeouts.UnlockCall {
 				return
@@ -662,7 +731,7 @@ func (dm *DRWMutex) RUnlock(ctx context.Context) {
 	dm.cancelRefresh()
 	dm.m.Unlock()
 
-	restClnts, owner := dm.clnt.GetLockers()
+	restClnts, _ := dm.clnt.GetLockers()
 	// create temp array on stack
 	locks := make([]string, len(restClnts))
 
@@ -693,7 +762,7 @@ func (dm *DRWMutex) RUnlock(ctx context.Context) {
 	// Do async unlocking.
 	// This means unlock will no longer block on the network or missing quorum.
 	go func() {
-		for !releaseAll(ctx, dm.clnt, tolerance, owner, &locks, isReadLock, restClnts, dm.Names...) {
+		for !releaseAll(ctx, dm.clnt, tolerance, &locks, isReadLock, restClnts, dm.Names...) {
 			time.Sleep(time.Duration(dm.rng.Float64() * float64(dm.lockRetryMinInterval)))
 			// If we have been waiting for more than the force unlock timeout, return
 			// Remotes will have canceled due to the missing refreshes anyway.
@@ -705,7 +774,7 @@ func (dm *DRWMutex) RUnlock(ctx context.Context) {
 }
 
 // sendRelease sends a release message to a node that previously granted a lock
-func sendRelease(ctx context.Context, ds *Dsync, c NetLocker, owner string, uid string, isReadLock bool, names ...string) bool {
+func sendRelease(ctx context.Context, ds *Dsync, c NetLocker, uid string, isReadLock bool, names ...string) bool {
 	if c == nil {
 		log("Unable to call RUnlock failed with %s\n", errors.New("netLocker is offline"))
 		return false
@@ -716,7 +785,6 @@ func sendRelease(ctx context.Context, ds *Dsync, c NetLocker, owner string, uid 
 	}
 
 	args := LockArgs{
-		Owner:     owner,
 		UID:       uid,
 		Resources: names,
 	}

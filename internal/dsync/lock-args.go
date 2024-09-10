@@ -53,6 +53,8 @@ const (
 
 // LockResp is a locking request response.
 type LockResp struct {
-	Code ResponseCode
-	Err  string
+	Code  ResponseCode
+	UID   string
+	Owner string
+	Err   string
 }

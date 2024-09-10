@@ -23,13 +23,15 @@ import "context"
 type NetLocker interface {
 	// Do read lock for given LockArgs.  It should return
 	// * a boolean to indicate success/failure of the operation
+	// * if the lock is held, it will returns the lock UID and the owner
 	// * an error on failure of lock request operation.
-	RLock(ctx context.Context, args LockArgs) (bool, error)
+	RLock(ctx context.Context, args LockArgs) (bool, string, string, error)
 
 	// Do write lock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
+	// * if the lock is held, it will returns the lock UID and the owner
 	// * an error on failure of lock request operation.
-	Lock(ctx context.Context, args LockArgs) (bool, error)
+	Lock(ctx context.Context, args LockArgs) (bool, string, string, error)
 
 	// Do read unlock for given LockArgs. It should return
 	// * a boolean to indicate success/failure of the operation
@@ -64,4 +66,8 @@ type NetLocker interface {
 
 	// Is the underlying locker local to this server?
 	IsLocal() bool
+
+	// Returns the owner name of the local node - the Owner string
+	// that is set to a lock when this local node acquires it
+	OwnerName() string
 }

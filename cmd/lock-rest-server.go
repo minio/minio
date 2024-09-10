@@ -36,22 +36,22 @@ func (l *lockRESTServer) RefreshHandler(args *dsync.LockArgs) (*dsync.LockResp, 
 	resp := lockRPCRefresh.NewResponse()
 	refreshed, err := l.ll.Refresh(context.Background(), *args)
 	if err != nil {
-		return l.makeResp(resp, err)
+		return l.makeResp(resp, "", "", err)
 	}
 	if !refreshed {
-		return l.makeResp(resp, errLockNotFound)
+		return l.makeResp(resp, "", "", errLockNotFound)
 	}
-	return l.makeResp(resp, err)
+	return l.makeResp(resp, "", "", err)
 }
 
 // LockHandler - Acquires a lock.
 func (l *lockRESTServer) LockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
 	resp := lockRPCLock.NewResponse()
-	success, err := l.ll.Lock(context.Background(), *args)
+	success, uid, owner, err := l.ll.Lock(context.Background(), *args)
 	if err == nil && !success {
-		return l.makeResp(resp, errLockConflict)
+		return l.makeResp(resp, uid, owner, errLockConflict)
 	}
-	return l.makeResp(resp, err)
+	return l.makeResp(resp, "", "", err)
 }
 
 // UnlockHandler - releases the acquired lock.
@@ -60,17 +60,17 @@ func (l *lockRESTServer) UnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, *
 	_, err := l.ll.Unlock(context.Background(), *args)
 	// Ignore the Unlock() "reply" return value because if err == nil, "reply" is always true
 	// Consequently, if err != nil, reply is always false
-	return l.makeResp(resp, err)
+	return l.makeResp(resp, "", "", err)
 }
 
 // RLockHandler - Acquires an RLock.
 func (l *lockRESTServer) RLockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
 	resp := lockRPCRLock.NewResponse()
-	success, err := l.ll.RLock(context.Background(), *args)
+	success, uid, owner, err := l.ll.RLock(context.Background(), *args)
 	if err == nil && !success {
 		err = errLockConflict
 	}
-	return l.makeResp(resp, err)
+	return l.makeResp(resp, uid, owner, err)
 }
 
 // RUnlockHandler - releases the acquired read lock.
@@ -80,7 +80,7 @@ func (l *lockRESTServer) RUnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, 
 	// Ignore the RUnlock() "reply" return value because if err == nil, "reply" is always true.
 	// Consequently, if err != nil, reply is always false
 	_, err := l.ll.RUnlock(context.Background(), *args)
-	return l.makeResp(resp, err)
+	return l.makeResp(resp, "", "", err)
 }
 
 // ForceUnlockHandler - query expired lock status.
@@ -88,7 +88,7 @@ func (l *lockRESTServer) ForceUnlockHandler(args *dsync.LockArgs) (*dsync.LockRe
 	resp := lockRPCForceUnlock.NewResponse()
 
 	_, err := l.ll.ForceUnlock(context.Background(), *args)
-	return l.makeResp(resp, err)
+	return l.makeResp(resp, "", "", err)
 }
 
 var (
@@ -128,7 +128,7 @@ func registerLockRESTHandlers(gm *grid.Manager) {
 	go lockMaintenance(GlobalContext)
 }
 
-func (l *lockRESTServer) makeResp(dst *dsync.LockResp, err error) (*dsync.LockResp, *grid.RemoteErr) {
+func (l *lockRESTServer) makeResp(dst *dsync.LockResp, uid, owner string, err error) (*dsync.LockResp, *grid.RemoteErr) {
 	*dst = dsync.LockResp{Code: dsync.RespOK}
 	switch err {
 	case nil:
@@ -136,6 +136,8 @@ func (l *lockRESTServer) makeResp(dst *dsync.LockResp, err error) (*dsync.LockRe
 		dst.Code = dsync.RespLockNotInitialized
 	case errLockConflict:
 		dst.Code = dsync.RespLockConflict
+		dst.Owner = owner
+		dst.UID = uid
 	case errLockNotFound:
 		dst.Code = dsync.RespLockNotFound
 	default:

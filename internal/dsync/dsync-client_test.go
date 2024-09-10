@@ -120,12 +120,14 @@ func (restClient *ReconnectRESTClient) Call(method string, args LockArgs) (statu
 	}
 }
 
-func (restClient *ReconnectRESTClient) RLock(ctx context.Context, args LockArgs) (status bool, err error) {
-	return restClient.Call("/v1/rlock", args)
+func (restClient *ReconnectRESTClient) RLock(ctx context.Context, args LockArgs) (status bool, _, _ string, err error) {
+	status, err = restClient.Call("/v1/rlock", args)
+	return
 }
 
-func (restClient *ReconnectRESTClient) Lock(ctx context.Context, args LockArgs) (status bool, err error) {
-	return restClient.Call("/v1/lock", args)
+func (restClient *ReconnectRESTClient) Lock(ctx context.Context, args LockArgs) (status bool, _, _ string, err error) {
+	status, err = restClient.Call("/v1/lock", args)
+	return
 }
 
 func (restClient *ReconnectRESTClient) RUnlock(ctx context.Context, args LockArgs) (status bool, err error) {
@@ -146,4 +148,8 @@ func (restClient *ReconnectRESTClient) ForceUnlock(ctx context.Context, args Loc
 
 func (restClient *ReconnectRESTClient) String() string {
 	return restClient.u.String()
+}
+
+func (restClient *ReconnectRESTClient) OwnerName() string {
+	return "reconnect-test-owner"
 }
