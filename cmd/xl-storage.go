@@ -45,6 +45,8 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/tmpfile"
+
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -1404,7 +1406,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+		return s.writeAllMeta(ctx, volume, pathJoin(path, xlStorageFormatFile), buf, true)
 	}
 
 	if opts.UndoWrite && opts.OldDataDir != "" {
@@ -1459,7 +1461,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 	}
 	defer metaDataPoolPut(wbuf)
 
-	return s.writeAll(ctx, volume, pathJoin(path, xlStorageFormatFile), wbuf, !opts.NoPersistence, volumeDir)
+	return s.writeAllMeta(ctx, volume, pathJoin(path, xlStorageFormatFile), wbuf, !opts.NoPersistence)
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
@@ -2208,6 +2210,65 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	// Failing to check the return value when closing a file may lead to silent loss of data.
 	// This can especially be observed with NFS and with disk quota.
 	return w.Close()
+}
+
+// writeAllMeta - writes all metadata to a temp file and then links it to the final destination.
+func (s *xlStorage) writeAllMeta(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return err
+	}
+
+	flags := os.O_WRONLY
+
+	var w *os.File
+	if sync {
+		flags = os.O_SYNC
+	}
+	w, remove, err := tmpfile.TempFile(volumeDir, flags)
+	if err != nil {
+		return err
+	}
+	if remove {
+		defer os.Remove(w.Name()) // clean up
+	}
+	defer w.Close()
+
+	n, err := w.Write(b)
+	if err != nil {
+		w.Close()
+		return err
+	}
+
+	if n != len(b) {
+		w.Close()
+		return io.ErrShortWrite
+	}
+
+	if err := tmpfile.Link(w, filePath); err != nil {
+		return err
+	}
+	// Dealing with error returns from close() - 'man 2 close'
+	//
+	// A careful programmer will check the return value of close(), since it is quite possible that
+	// errors on a previous write(2) operation are reported only on the final close() that releases
+	// the open file descriptor.
+	//
+	// Failing to check the return value when closing a file may lead to silent loss of data.
+	// This can especially be observed with NFS and with disk quota.
+	if err = w.Close(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool, skipParent string) (err error) {
