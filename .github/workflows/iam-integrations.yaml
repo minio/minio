@@ -141,4 +141,4 @@ jobs:
           path: minio-iam-testing
       - name: Test import of IAM artifacts when in fresh cluster there are missing groups etc
         run: |
-          ${GITHUB_WORKSPACE}/docs/distributed/iam-import-with-missing-entities.sh
+          make test-iam-import-with-missing-entities
