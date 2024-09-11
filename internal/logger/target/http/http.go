@@ -43,8 +43,6 @@ import (
 )
 
 const (
-	// Timeout for the webhook http call
-	webhookCallTimeout = 5 * time.Second
 
 	// maxWorkers is the maximum number of concurrent http loggers
 	maxWorkers = 16
@@ -69,20 +67,21 @@ var (
 
 // Config http logger target
 type Config struct {
-	Enabled    bool              `json:"enabled"`
-	Name       string            `json:"name"`
-	UserAgent  string            `json:"userAgent"`
-	Endpoint   *xnet.URL         `json:"endpoint"`
-	AuthToken  string            `json:"authToken"`
-	ClientCert string            `json:"clientCert"`
-	ClientKey  string            `json:"clientKey"`
-	BatchSize  int               `json:"batchSize"`
-	QueueSize  int               `json:"queueSize"`
-	QueueDir   string            `json:"queueDir"`
-	MaxRetry   int               `json:"maxRetry"`
-	RetryIntvl time.Duration     `json:"retryInterval"`
-	Proxy      string            `json:"string"`
-	Transport  http.RoundTripper `json:"-"`
+	Enabled     bool              `json:"enabled"`
+	Name        string            `json:"name"`
+	UserAgent   string            `json:"userAgent"`
+	Endpoint    *xnet.URL         `json:"endpoint"`
+	AuthToken   string            `json:"authToken"`
+	ClientCert  string            `json:"clientCert"`
+	ClientKey   string            `json:"clientKey"`
+	BatchSize   int               `json:"batchSize"`
+	QueueSize   int               `json:"queueSize"`
+	QueueDir    string            `json:"queueDir"`
+	MaxRetry    int               `json:"maxRetry"`
+	RetryIntvl  time.Duration     `json:"retryInterval"`
+	Proxy       string            `json:"string"`
+	Transport   http.RoundTripper `json:"-"`
+	HTTPTimeout time.Duration     `json:"httpTimeout"`
 
 	// Custom logger
 	LogOnceIf func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
@@ -137,8 +136,9 @@ type Target struct {
 
 	initQueueOnce once.Init
 
-	config Config
-	client *http.Client
+	config      Config
+	client      *http.Client
+	httpTimeout time.Duration
 }
 
 // Name returns the name of the target
@@ -429,7 +429,7 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 
 		var err error
 		if !isDirQueue {
-			err = h.send(ctx, buf.Bytes(), count, h.payloadType, webhookCallTimeout)
+			err = h.send(ctx, buf.Bytes(), count, h.payloadType, h.httpTimeout)
 		} else {
 			_, err = h.store.PutMultiple(entries)
 		}
@@ -520,10 +520,11 @@ func New(config Config) (*Target, error) {
 	}
 
 	h := &Target{
-		logCh:      make(chan interface{}, config.QueueSize),
-		config:     config,
-		batchSize:  config.BatchSize,
-		maxWorkers: int64(maxWorkers),
+		logCh:       make(chan interface{}, config.QueueSize),
+		config:      config,
+		batchSize:   config.BatchSize,
+		maxWorkers:  int64(maxWorkers),
+		httpTimeout: config.HTTPTimeout,
 	}
 	h.status.Store(statusOffline)
 
@@ -566,7 +567,7 @@ func (h *Target) SendFromStore(key store.Key) (err error) {
 		}
 	}
 
-	if err := h.send(context.Background(), eventData, count, h.payloadType, webhookCallTimeout); err != nil {
+	if err := h.send(context.Background(), eventData, count, h.payloadType, h.httpTimeout); err != nil {
 		return err
 	}
 
