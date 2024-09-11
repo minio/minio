@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/storageclass"
+	"github.com/minio/minio/internal/crypto"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/sync/errgroup"
@@ -1077,6 +1078,53 @@ func (z *erasureServerPools) GetObjectInfo(ctx context.Context, bucket, object s
 
 	objInfo, _, err = z.getLatestObjectInfoWithIdx(ctx, bucket, object, opts)
 	return objInfo, err
+}
+
+// PostUploadObject - writes an object to least used erasure pool, uses multipart API
+// underneath to provide conflict resolution.
+func (z *erasureServerPools) PostUploadObject(ctx context.Context, bucket string, object string, data *PutObjReader, opts ObjectOptions) (ObjectInfo, error) {
+	result, err := z.NewMultipartUpload(ctx, bucket, object, opts)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	partInfo, err := z.PutObjectPart(ctx, bucket, object, result.UploadID, 1, data, opts)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	// figure out the right etag for complete multipart so that it doesn't error out.
+	etag := partInfo.ETag
+	switch opts.CryptoKind {
+	case crypto.S3KMS:
+		if len(etag) >= 32 && strings.Count(etag, "-") != 1 {
+			etag = etag[len(etag)-32:]
+		}
+	case crypto.S3:
+		etag, _ = DecryptETag(opts.ObjectEncryptionKey, ObjectInfo{ETag: etag})
+	case crypto.SSEC:
+		if len(etag) >= 32 && strings.Count(etag, "-") != 1 {
+			etag = etag[len(etag)-32:]
+		}
+	}
+
+	parts := []CompletePart{
+		{
+			PartNumber:     partInfo.PartNumber,
+			ETag:           etag,
+			ChecksumCRC32:  partInfo.ChecksumCRC32,
+			ChecksumCRC32C: partInfo.ChecksumCRC32C,
+			ChecksumSHA1:   partInfo.ChecksumSHA1,
+			ChecksumSHA256: partInfo.ChecksumSHA256,
+		},
+	}
+
+	// Save the final etag as the same as part etag, since its only one part.
+	// and representation of the object is not multipart object as per the
+	// API.
+	opts.UserDefined["etag"] = etag
+
+	return z.CompleteMultipartUpload(ctx, bucket, object, result.UploadID, parts, opts)
 }
 
 // PutObject - writes an object to least used erasure pool.

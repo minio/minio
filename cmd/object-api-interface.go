@@ -26,6 +26,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 
 	"github.com/minio/minio/internal/bucket/replication"
@@ -133,6 +134,8 @@ type ObjectOptions struct {
 
 	MetadataChg           bool                  // is true if it is a metadata update operation.
 	EvalRetentionBypassFn EvalRetentionBypassFn // only set for enforcing retention bypass on DeleteObject.
+	ObjectEncryptionKey   crypto.ObjectKey      // object encryption key
+	CryptoKind            crypto.Type           // kind of crypto request
 
 	FastGetObjInfo bool // Only for S3 Head/Get Object calls for now
 	NoAuditLog     bool // Only set for decom, rebalance, to avoid double audits.
@@ -279,6 +282,7 @@ type ObjectLayer interface {
 	DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error)
 	TransitionObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
 	RestoreTransitionedObject(ctx context.Context, bucket, object string, opts ObjectOptions) error
+	PostUploadObject(ctx context.Context, bucket, object string, data *PutObjReader, opts ObjectOptions) (objInfo ObjectInfo, err error)
 
 	// Multipart operations.
 	ListMultipartUploads(ctx context.Context, bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error)
