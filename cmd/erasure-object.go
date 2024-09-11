@@ -32,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/klauspost/readahead"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -1379,30 +1378,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 
-	shardFileSize := erasure.ShardFileSize(data.Size())
-	inlineBlock := globalStorageClass.InlineBlock()
-	if inlineBlock <= 0 {
-		inlineBlock = 128 * humanize.KiByte
+	var inlineBuffers []*bytes.Buffer
+	if globalStorageClass.ShouldInline(erasure.ShardFileSize(data.ActualSize()), opts.Versioned) {
+		inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 	}
 
+	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
-	var inlineBuffers []*bytes.Buffer
-	if shardFileSize >= 0 {
-		if !opts.Versioned && shardFileSize <= inlineBlock {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		} else if shardFileSize < inlineBlock/8 {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		}
-	} else {
-		// If compressed, use actual size to determine.
-		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
-			if !opts.Versioned && sz <= inlineBlock {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			} else if sz < inlineBlock/8 {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			}
-		}
-	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
 			continue
@@ -1469,13 +1451,15 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		modTime = UTCNow()
 	}
 
+	kind, encrypted := crypto.IsEncrypted(userDefined)
 	actualSize := data.ActualSize()
 	if actualSize < 0 {
-		_, encrypted := crypto.IsEncrypted(fi.Metadata)
 		compressed := fi.IsCompressed()
 		switch {
 		case compressed:
 			// ... nothing changes for compressed stream.
+			// if actualSize is -1 we have no known way to
+			// determine what is the actualSize.
 		case encrypted:
 			decSize, err := sio.DecryptedSize(uint64(n))
 			if err == nil {
@@ -1502,7 +1486,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	userDefined["etag"] = r.MD5CurrentHexString()
-	kind, _ := crypto.IsEncrypted(userDefined)
 	if opts.PreserveETag != "" {
 		if !opts.ReplicationRequest {
 			userDefined["etag"] = opts.PreserveETag
