@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/mimedb"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/sio"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -590,19 +591,6 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
 
-	// Write lock for this part ID, only hold it if we are planning to read from the
-	// streamto avoid any concurrent updates.
-	//
-	// Must be held throughout this call.
-	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
-	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-
-	ctx = plkctx.Context()
-	defer partIDLock.Unlock(plkctx)
-
 	onlineDisks := er.getDisks()
 	writeQuorum := fi.WriteQuorum(er.defaultWQuorum())
 
@@ -716,11 +704,28 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		index = opts.IndexCB()
 	}
 
+	actualSize := data.ActualSize()
+	if actualSize < 0 {
+		_, encrypted := crypto.IsEncrypted(fi.Metadata)
+		compressed := fi.IsCompressed()
+		switch {
+		case compressed:
+			// ... nothing changes for compressed stream.
+		case encrypted:
+			decSize, err := sio.DecryptedSize(uint64(n))
+			if err == nil {
+				actualSize = int64(decSize)
+			}
+		default:
+			actualSize = n
+		}
+	}
+
 	partInfo := ObjectPartInfo{
 		Number:     partID,
 		ETag:       md5hex,
 		Size:       n,
-		ActualSize: data.ActualSize(),
+		ActualSize: actualSize,
 		ModTime:    UTCNow(),
 		Index:      index,
 		Checksums:  r.ContentCRC(),
@@ -730,6 +735,19 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
+
+	// Write lock for this part ID, only hold it if we are planning to read from the
+	// stream avoid any concurrent updates.
+	//
+	// Must be held throughout this call.
+	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
+	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+
+	ctx = plkctx.Context()
+	defer partIDLock.Unlock(plkctx)
 
 	onlineDisks, err = er.renamePart(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, partFI, writeQuorum)
 	if err != nil {
@@ -1154,7 +1172,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// However, in case of encryption, the persisted part ETags don't match
 	// what we have sent to the client during PutObjectPart. The reason is
 	// that ETags are encrypted. Hence, the client will send a list of complete
-	// part ETags of which non can match the ETag of any part. For example
+	// part ETags of which may not match the ETag of any part. For example
 	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
 	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
 	//

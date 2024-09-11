@@ -49,6 +49,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/mimedb"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/sio"
 )
 
 // list all errors which can be ignored in object operations.
@@ -1468,6 +1469,23 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		modTime = UTCNow()
 	}
 
+	actualSize := data.ActualSize()
+	if actualSize < 0 {
+		_, encrypted := crypto.IsEncrypted(fi.Metadata)
+		compressed := fi.IsCompressed()
+		switch {
+		case compressed:
+			// ... nothing changes for compressed stream.
+		case encrypted:
+			decSize, err := sio.DecryptedSize(uint64(n))
+			if err == nil {
+				actualSize = int64(decSize)
+			}
+		default:
+			actualSize = n
+		}
+	}
+
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1479,7 +1497,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			partsMetadata[i].Data = nil
 		}
 		// No need to add checksum to part. We already have it on the object.
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil)
+		partsMetadata[i].AddObjectPart(1, "", n, actualSize, modTime, compIndex, nil)
 		partsMetadata[i].Versioned = opts.Versioned || opts.VersionSuspended
 	}
 
