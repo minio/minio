@@ -24,15 +24,17 @@ make docker-images
 make docker-run
 cd -
 
+export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:22000"
+export MC_HOST_myminio1="http://minioadmin:minioadmin@localhost:24000"
+
 # Start MinIO instance
 export CI=true
 (minio server --address :22000 --console-address :10000 http://localhost:22000/tmp/ldap{1...4} 2>&1 >/dev/null) &
 sleep 30
 ./mc ready myminio
-./mc alias set myminio http://localhost:22000 minioadmin minioadmin
 
 ./mc idp ldap add myminio server_addr=localhost:1389 server_insecure=on lookup_bind_dn=cn=admin,dc=min,dc=io lookup_bind_password=admin user_dn_search_base_dn=dc=min,dc=io user_dn_search_filter="(uid=%s)" group_search_base_dn=ou=swengg,dc=min,dc=io group_search_filter="(&(objectclass=groupOfNames)(member=%d))"
-./mc admin service restart myminio --quiet --disable-pager
+./mc admin service restart myminio --json
 ./mc ready myminio
 ./mc admin cluster iam import myminio docs/distributed/samples/myminio-iam-info.zip
 sleep 10
@@ -73,10 +75,9 @@ cd -
 (minio server --address ":24000" --console-address :10000 http://localhost:24000/tmp/ldap1{1...4} 2>&1 >/dev/null) &
 sleep 30
 ./mc ready myminio1
-./mc alias set myminio1 http://localhost:24000 minioadmin minioadmin
 
 ./mc idp ldap add myminio1 server_addr=localhost:1389 server_insecure=on lookup_bind_dn=cn=admin,dc=min,dc=io lookup_bind_password=admin user_dn_search_base_dn=dc=min,dc=io user_dn_search_filter="(uid=%s)" group_search_base_dn=ou=hwengg,dc=min,dc=io group_search_filter="(&(objectclass=groupOfNames)(member=%d))"
-./mc admin service restart myminio1 --quiet --disable-pager
+./mc admin service restart myminio1 --json
 ./mc ready myminio1
 ./mc admin cluster iam import myminio1 docs/distributed/samples/myminio-iam-info.zip
 sleep 10
