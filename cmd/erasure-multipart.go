@@ -711,6 +711,8 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		switch {
 		case compressed:
 			// ... nothing changes for compressed stream.
+			// if actualSize is -1 we have no known way to
+			// determine what is the actualSize.
 		case encrypted:
 			decSize, err := sio.DecryptedSize(uint64(n))
 			if err == nil {
