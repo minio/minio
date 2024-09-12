@@ -1,0 +1,123 @@
+# Create hardware engg org unit
+dn: ou=hwengg,dc=min,dc=io
+objectClass: organizationalUnit
+ou: hwengg
+
+# Create people sub-org
+dn: ou=people,ou=hwengg,dc=min,dc=io
+objectClass: organizationalUnit
+ou: people
+
+# Create Alice, Bob and Cody in hwengg
+dn: uid=alice1,ou=people,ou=hwengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Alice Smith
+sn: Smith
+uid: alice1
+mail: alice@example.io
+userPassword: {SSHA}Yeh2/IV/q/HjG2yzN3YdE9CAF3EJFCLu
+
+dn: uid=bobfisher,ou=people,ou=hwengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Robert Fisher
+sn: Fisher
+uid: bobfisher
+mail: bob@example.io
+userPassword: {SSHA}LktfbhK5oXSdDWCNzauJ9JA+Poxinl3y
+
+dn: uid=cody3,ou=people,ou=hwengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Cody Thomas
+sn: Thomas
+uid: cody3
+mail: cody@example.io
+userPassword: {SSHA}H8B0gaOd4bRklK3fXj9ltHvJXWQFXW5Q
+
+# Create groups ou for hwengg
+dn: ou=groups,ou=hwengg,dc=min,dc=io
+objectclass: organizationalUnit
+ou: groups
+description: groups branch
+
+# Create project groups
+
+dn: cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io
+objectclass: groupofnames
+cn: projectx
+description: Project X group members
+member: uid=alice1,ou=people,ou=hwengg,dc=min,dc=io
+member: uid=bobfisher,ou=people,ou=hwengg,dc=min,dc=io
+
+dn: cn=projecty,ou=groups,ou=hwengg,dc=min,dc=io
+objectclass: groupofnames
+cn: projecty
+description: Project Y group members
+member: uid=bobfisher,ou=people,ou=hwengg,dc=min,dc=io
+member: uid=cody3,ou=people,ou=hwengg,dc=min,dc=io
+
+# Create software engg org unit
+dn: ou=swengg,dc=min,dc=io
+objectClass: organizationalUnit
+ou: swengg
+
+# Create people sub-org
+dn: ou=people,ou=swengg,dc=min,dc=io
+objectClass: organizationalUnit
+ou: people
+
+# Create Dillon, Elizabeth and Fahim in swengg
+dn: uid=dillon,ou=people,ou=swengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Dillon Harper
+sn: Harper
+uid: dillon
+mail: dillon@example.io
+userPassword: {SSHA}UH+LmoEhWWW6s9rjgdpqHPI0qCMouY8+
+
+dn: uid=liza,ou=people,ou=swengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Elizabeth Jones
+sn: Jones
+uid: liza
+mail: ejones@example.io
+userPassword: {SSHA}feVkKkafHtsu2Io7n0tQP4Cnh8/Oy1PK
+
+dn: uid=fahim,ou=people,ou=swengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Fahim Ahmed
+sn: Ahmed
+uid: fahim
+mail: fahmed@example.io
+userPassword: {SSHA}lRNH+PHooRaruiEb+CBEA21EZLMkAmcc
+
+# Add a user with special chars. The password = example here.
+dn: uid=Пользователь,OU=people,OU=swengg,DC=min,DC=io
+objectClass: inetOrgPerson
+cn: Special Charsman
+sn: Charsman
+uid: Пользователь
+mail: scharsman@example.io
+userPassword: {SSHA}XQSZqLPvYgm30wR7pk67a1GW+q+DDvSj
+
+# Creates groups ou for swengg
+dn: ou=groups,ou=swengg,dc=min,dc=io
+objectclass: organizationalUnit
+ou: groups
+description: groups branch
+
+# Create project groups
+
+dn: cn=projecta,ou=groups,ou=swengg,dc=min,dc=io
+objectclass: groupofnames
+cn: projecta
+description: Project A group members
+member: uid=dillon,ou=people,ou=swengg,dc=min,dc=io
+
+dn: cn=projectb,ou=groups,ou=swengg,dc=min,dc=io
+objectclass: groupofnames
+cn: projectb
+description: Project B group members
+member: uid=dillon,ou=people,ou=swengg,dc=min,dc=io
+member: uid=liza,ou=people,ou=swengg,dc=min,dc=io
+member: uid=fahim,ou=people,ou=swengg,dc=min,dc=io
+member: uid=Пользователь,OU=people,OU=swengg,DC=min,DC=io
