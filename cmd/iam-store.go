@@ -1961,8 +1961,27 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	cache := store.lock()
 	defer store.unlock()
 
-	var deleted bool
 	usersToDelete := set.CreateStringSet(users...)
+	predicate := func(ui UserIdentity) bool {
+		return usersToDelete.Contains(ui.Credentials.AccessKey) || usersToDelete.Contains(ui.Credentials.ParentUser)
+	}
+
+	store.deleteMatchingUsers(ctx, cache, predicate)
+
+	return nil
+}
+
+// DeleteMatchingUsersWithLoad - reloads specified user types then deletes users that match the given predicate.
+func (store *IAMStoreSys) DeleteMatchingUsers(ctx context.Context, predicate func(UserIdentity) bool) {
+	cache := store.lock()
+	defer store.unlock()
+
+	store.deleteMatchingUsers(ctx, cache, predicate)
+}
+
+// Assumes store is locked by caller.
+func (store *IAMStoreSys) deleteMatchingUsers(ctx context.Context, cache *iamCache, predicate func(UserIdentity) bool) {
+	var deleted bool
 	for user, ui := range cache.iamUsersMap {
 		userType := regUser
 		cred := ui.Credentials
@@ -1973,7 +1992,7 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 			userType = stsUser
 		}
 
-		if usersToDelete.Contains(user) || usersToDelete.Contains(cred.ParentUser) {
+		if predicate(ui) {
 			// Delete this user account and its policy mapping
 			store.deleteMappedPolicy(ctx, user, userType, false)
 			cache.iamUserPolicyMap.Delete(user)
@@ -1996,8 +2015,6 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	if deleted {
 		cache.updatedAt = time.Now()
 	}
-
-	return nil
 }
 
 // ParentUserInfo contains extra info about a the parent user.

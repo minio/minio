@@ -360,6 +360,10 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 		break
 	}
 
+	if !sys.LDAPConfig.Configured() {
+		sys.purgeLDAPAccessKeys(ctx)
+	}
+
 	refreshInterval := sys.iamRefreshInterval
 
 	go sys.periodicRoutines(ctx, refreshInterval)
@@ -1564,6 +1568,19 @@ func (sys *IAMSys) updateGroupMembershipsForLDAP(ctx context.Context) {
 	}
 }
 
+// purgeLDAPAccessKeys - purges all LDAP access keys when LDAP config is deleted.
+func (sys *IAMSys) purgeLDAPAccessKeys(ctx context.Context) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	waitTime := time.Duration(r.Float64() * float64(time.Second) * 5)
+	time.Sleep(waitTime)
+
+	predicate := func(ui UserIdentity) bool {
+		_, ok := ui.Credentials.Claims[ldapUser]
+		return ok
+	}
+	sys.store.DeleteMatchingUsers(ctx, predicate)
+}
+
 // NormalizeLDAPAccessKeypairs - normalize the access key pairs (service
 // accounts) for LDAP users. This normalizes the parent user and the group names
 // whenever the parent user parses validly as a DN.
@@ -1820,6 +1837,11 @@ func (sys *IAMSys) CheckKey(ctx context.Context, accessKey string) (u UserIdenti
 
 		// return 503 to application
 		return u, false, errIAMNotInitialized
+	}
+
+	// Do not allow access to LDAP access keys if LDAP is disabled.
+	if _, isLDAP := u.Credentials.Claims[ldapUser]; isLDAP && !sys.LDAPConfig.Enabled() {
+		ok = false
 	}
 
 	return u, ok && u.Credentials.IsValid(), nil

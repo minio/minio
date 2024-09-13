@@ -166,6 +166,9 @@ func checkKeyValid(r *http.Request, accessKey string) (auth.Credentials, bool, A
 			if u.Credentials.Status == auth.AccountOff {
 				return cred, false, ErrAccessKeyDisabled
 			}
+			if _, isLDAP := u.Credentials.Claims[ldapUser]; !isLDAP && !globalIAMSys.LDAPConfig.Enabled() {
+				return cred, false, ErrAccessKeyDisabled
+			}
 			return cred, false, ErrInvalidAccessKeyID
 		}
 		cred = u.Credentials
