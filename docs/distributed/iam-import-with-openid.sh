@@ -9,6 +9,7 @@ docker rm -f $(docker ps -aq)
 rm -rf /tmp/openid{1..4}
 
 export MC_HOST_myminio="http://minioadmin:minioadmin@localhost:22000"
+# The service account used below is already present in iam configuration getting imported
 export MC_HOST_myminio1="http://dillon-svcacct-1:dillon-svcacct-1@localhost:22000"
 
 # Start MinIO instance
