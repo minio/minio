@@ -101,6 +101,10 @@ test-iam-import-with-missing-entities: install-race ## test import of external i
 	@echo "Test IAM import configurations with missing entities"
 	@env bash $(PWD)/docs/distributed/iam-import-with-missing-entities.sh
 
+test-iam-import-with-openid: install-race
+	@echo "Test IAM import configurations with openid"
+	@env bash $(PWD)/docs/distributed/iam-import-with-openid.sh
+
 test-sio-error:
 	@(env bash $(PWD)/docs/bucket/replication/sio-error.sh)
 
