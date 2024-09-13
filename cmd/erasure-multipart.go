@@ -455,8 +455,11 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 	fi.DataDir = mustGetUUID()
 
-	if userDefined[ReplicationSsecChecksumHeader] != "" {
-		fi.Checksum, _ = base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader])
+	if ckSum := userDefined[ReplicationSsecChecksumHeader]; ckSum != "" {
+		v, err := base64.StdEncoding.DecodeString(ckSum)
+		if err == nil {
+			fi.Checksum = v
+		}
 		delete(userDefined, ReplicationSsecChecksumHeader)
 	}
 
@@ -1331,16 +1334,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	if !opts.NoLock {
-		lk := er.NewNSLock(bucket, object)
-		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx)
-	}
-
 	// Accept encrypted checksum from incoming request.
 	if opts.UserDefined[ReplicationSsecChecksumHeader] != "" {
 		if v, err := base64.StdEncoding.DecodeString(opts.UserDefined[ReplicationSsecChecksumHeader]); err == nil {
@@ -1417,6 +1410,16 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			// N.B. 1st part is not present. This part should be removed from the storage.
 			paths = append(paths, pathJoin(uploadIDPath, currentFI.DataDir, fmt.Sprintf("part.%d", curpart.Number)))
 		}
+	}
+
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
 
 	er.cleanupMultipartPath(ctx, paths...) // cleanup all part.N.meta, and skipped part.N's before final rename().

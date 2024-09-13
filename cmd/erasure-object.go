@@ -1333,12 +1333,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.EncryptFn != nil {
 		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 	}
-	if userDefined[ReplicationSsecChecksumHeader] != "" {
-		if v, err := base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader]); err == nil {
+	if ckSum := userDefined[ReplicationSsecChecksumHeader]; ckSum != "" {
+		if v, err := base64.StdEncoding.DecodeString(ckSum); err == nil {
 			fi.Checksum = v
 		}
+		delete(userDefined, ReplicationSsecChecksumHeader)
 	}
-	delete(userDefined, ReplicationSsecChecksumHeader)
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -1436,15 +1436,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.IndexCB != nil {
 		compIndex = opts.IndexCB()
 	}
-	if !opts.NoLock {
-		lk := er.NewNSLock(bucket, object)
-		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx)
-	}
 
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
@@ -1519,6 +1510,16 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if opts.DataMovement {
 			partsMetadata[index].SetDataMov()
 		}
+	}
+
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
 
 	// Rename the successfully written temporary object to final location.

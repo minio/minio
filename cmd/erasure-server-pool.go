@@ -1091,18 +1091,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
-	if !opts.NoLock {
-		ns := z.NewNSLock(bucket, object)
-		lkctx, err := ns.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		ctx = lkctx.Context()
-		defer ns.Unlock(lkctx)
-		opts.NoLock = true
-	}
-
-	idx, err := z.getPoolIdxNoLock(ctx, bucket, object, data.Size())
+	idx, err := z.getPoolIdx(ctx, bucket, object, data.Size())
 	if err != nil {
 		return ObjectInfo{}, err
 	}
@@ -1115,7 +1104,7 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 			Err:       errDataMovementSrcDstPoolSame,
 		}
 	}
-	// Overwrite the object at the right pool
+
 	return z.serverPools[idx].PutObject(ctx, bucket, object, data, opts)
 }
 
