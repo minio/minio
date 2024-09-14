@@ -29,10 +29,13 @@ import (
 	"net/url"
 	"path"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/exp/maps"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/madmin-go/v3"
@@ -53,8 +56,6 @@ import (
 	"github.com/minio/minio/internal/once"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/zeebo/xxh3"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 const (

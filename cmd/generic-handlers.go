@@ -24,24 +24,24 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/exp/maps"
+
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
 	"github.com/minio/minio-go/v7/pkg/set"
-	"github.com/minio/minio/internal/grid"
-	xnet "github.com/minio/pkg/v3/net"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
-
 	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/config/dns"
 	"github.com/minio/minio/internal/crypto"
+	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/mcontext"
+	xnet "github.com/minio/pkg/v3/net"
 )
 
 const (

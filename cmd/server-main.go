@@ -31,6 +31,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -53,7 +54,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
-	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )
 
