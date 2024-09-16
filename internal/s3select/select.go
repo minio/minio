@@ -442,6 +442,7 @@ func (s3Select *S3Select) Open(rsc io.ReadSeekCloser) error {
 				s3Select.recordReader = json.NewPReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 			}
 		} else {
+			// Document mode.
 			s3Select.recordReader = json.NewReader(s3Select.progressReader, &s3Select.Input.JSONArgs)
 		}
 
