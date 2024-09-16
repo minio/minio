@@ -556,7 +556,7 @@ func (z *erasureServerPools) getPoolInfoExistingWithOpts(ctx context.Context, bu
 			return pinfo, z.poolsWithObject(poolObjInfos, opts), nil
 		}
 		defPool = pinfo
-		if !isErrObjectNotFound(pinfo.Err) {
+		if !isErrObjectNotFound(pinfo.Err) && !isErrVersionNotFound(pinfo.Err) {
 			return pinfo, noReadQuorumPools, pinfo.Err
 		}
 
@@ -1166,13 +1166,34 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		}
 	}
 
+	if opts.DataMovement {
+		objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
+		objInfo.Name = decodeDirObject(object)
+		return objInfo, err
+	}
+
 	// Delete concurrently in all server pools with read quorum error for unversioned objects.
 	if len(noReadQuorumPools) > 0 && !opts.Versioned && !opts.VersionSuspended {
 		return z.deleteObjectFromAllPools(ctx, bucket, object, opts, noReadQuorumPools)
 	}
-	objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
+
+	for _, pool := range z.serverPools {
+		objInfo, err := pool.DeleteObject(ctx, bucket, object, opts)
+		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
+			objInfo.Name = decodeDirObject(object)
+			return objInfo, err
+		}
+		if err == nil {
+			objInfo.Name = decodeDirObject(object)
+			return objInfo, nil
+		}
+	}
+
 	objInfo.Name = decodeDirObject(object)
-	return objInfo, err
+	if opts.VersionID != "" {
+		return objInfo, VersionNotFound{Bucket: bucket, Object: object, VersionID: opts.VersionID}
+	}
+	return objInfo, ObjectNotFound{Bucket: bucket, Object: object}
 }
 
 func (z *erasureServerPools) deleteObjectFromAllPools(ctx context.Context, bucket string, object string, opts ObjectOptions, poolIndices []poolErrs) (objInfo ObjectInfo, err error) {
@@ -1291,19 +1312,20 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 			go func(idx int, pool *erasureSets) {
 				defer wg.Done()
 				objs := poolObjIdxMap[idx]
-				if len(objs) > 0 {
-					orgIndexes := origIndexMap[idx]
-					deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
-					mu.Lock()
-					for i, derr := range errs {
-						if derr != nil {
-							derrs[orgIndexes[i]] = derr
-						}
-						deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
-						dobjects[orgIndexes[i]] = deletedObjects[i]
-					}
-					mu.Unlock()
+				if len(objs) == 0 {
+					return
 				}
+				orgIndexes := origIndexMap[idx]
+				deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
+				mu.Lock()
+				for i, derr := range errs {
+					if derr != nil {
+						derrs[orgIndexes[i]] = derr
+					}
+					deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
+					dobjects[orgIndexes[i]] = deletedObjects[i]
+				}
+				mu.Unlock()
 			}(idx, pool)
 		}
 		wg.Wait()
