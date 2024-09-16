@@ -1412,6 +1412,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	logger.FatalIf(signalServiceRPC.Register(gm, server.SignalServiceHandler), "unable to register handler")
 	logger.FatalIf(stopRebalanceRPC.Register(gm, server.StopRebalanceHandler), "unable to register handler")
 	logger.FatalIf(updateMetacacheListingRPC.Register(gm, server.UpdateMetacacheListingHandler), "unable to register handler")
+	logger.FatalIf(cleanupUploadIDCacheMetaRPC.Register(gm, server.HandlerClearUploadID), "unable to register handler")
 
 	logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerTrace, grid.StreamHandler{
 		Handle:      server.TraceHandler,

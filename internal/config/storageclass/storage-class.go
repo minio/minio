@@ -272,6 +272,27 @@ func (sCfg *Config) GetParityForSC(sc string) (parity int) {
 	}
 }
 
+// ShouldInline returns true if the shardSize is worthy of inline
+// if versioned is true then we chosen 1/8th inline block size
+// to satisfy the same constraints.
+func (sCfg *Config) ShouldInline(shardSize int64, versioned bool) bool {
+	if shardSize < 0 {
+		return false
+	}
+
+	ConfigLock.RLock()
+	inlineBlock := int64(128 * humanize.KiByte)
+	if sCfg.initialized {
+		inlineBlock = sCfg.inlineBlock
+	}
+	ConfigLock.RUnlock()
+
+	if versioned {
+		return shardSize <= inlineBlock/8
+	}
+	return shardSize <= inlineBlock
+}
+
 // InlineBlock indicates the size of the block which will be used to inline
 // an erasure shard and written along with xl.meta on the drive, on a versioned
 // bucket this value is automatically chosen to 1/8th of the this value, make

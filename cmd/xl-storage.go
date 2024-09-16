@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/config/storageclass"
+
 	"github.com/minio/minio/internal/disk"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
@@ -1404,7 +1405,7 @@ func (s *xlStorage) DeleteVersion(ctx context.Context, volume, path string, fi F
 			return err
 		}
 
-		return s.WriteAll(ctx, volume, pathJoin(path, xlStorageFormatFile), buf)
+		return s.writeAllMeta(ctx, volume, pathJoin(path, xlStorageFormatFile), buf, true)
 	}
 
 	if opts.UndoWrite && opts.OldDataDir != "" {
@@ -1459,7 +1460,7 @@ func (s *xlStorage) UpdateMetadata(ctx context.Context, volume, path string, fi 
 	}
 	defer metaDataPoolPut(wbuf)
 
-	return s.writeAll(ctx, volume, pathJoin(path, xlStorageFormatFile), wbuf, !opts.NoPersistence, volumeDir)
+	return s.writeAllMeta(ctx, volume, pathJoin(path, xlStorageFormatFile), wbuf, !opts.NoPersistence)
 }
 
 // WriteMetadata - writes FileInfo metadata for path at `xl.meta`
@@ -2210,7 +2211,8 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	return w.Close()
 }
 
-func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool, skipParent string) (err error) {
+// writeAllMeta - writes all metadata to a temp file and then links it to the final destination.
+func (s *xlStorage) writeAllMeta(ctx context.Context, volume string, path string, b []byte, sync bool) (err error) {
 	if contextCanceled(ctx) {
 		return ctx.Err()
 	}
@@ -2225,6 +2227,26 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 		return err
 	}
 
+	tmpVolumeDir, err := s.getVolDir(minioMetaTmpBucket)
+	if err != nil {
+		return err
+	}
+
+	tmpFilePath := pathJoin(tmpVolumeDir, mustGetUUID())
+	defer func() {
+		if err != nil {
+			Remove(tmpFilePath)
+		}
+	}()
+
+	if err = s.writeAllInternal(ctx, tmpFilePath, b, sync, tmpVolumeDir); err != nil {
+		return err
+	}
+
+	return renameAll(tmpFilePath, filePath, volumeDir)
+}
+
+func (s *xlStorage) writeAllInternal(ctx context.Context, filePath string, b []byte, sync bool, skipParent string) (err error) {
 	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
 	var w *os.File
@@ -2267,6 +2289,24 @@ func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b 
 	// Failing to check the return value when closing a file may lead to silent loss of data.
 	// This can especially be observed with NFS and with disk quota.
 	return w.Close()
+}
+
+func (s *xlStorage) writeAll(ctx context.Context, volume string, path string, b []byte, sync bool, skipParent string) (err error) {
+	if contextCanceled(ctx) {
+		return ctx.Err()
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return err
+	}
+
+	return s.writeAllInternal(ctx, filePath, b, sync, skipParent)
 }
 
 func (s *xlStorage) WriteAll(ctx context.Context, volume string, path string, b []byte) (err error) {

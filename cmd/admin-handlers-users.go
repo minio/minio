@@ -637,7 +637,7 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 
 // AddServiceAccount - PUT /minio/admin/v3/add-service-account
 func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Request) {
-	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r)
+	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r, false)
 	if APIError.Code != "" {
 		writeErrorResponseJSON(ctx, w, APIError, r.URL)
 		return
@@ -2529,7 +2529,7 @@ func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) e
 	return nil
 }
 
-func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
+func commonAddServiceAccount(r *http.Request, ldap bool) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
 	ctx := r.Context()
 
 	// Get current object layer instance.
@@ -2596,6 +2596,14 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", toAdminAPIErr(ctx, err)
 	}
 
+	denyOnly := (targetUser == cred.AccessKey || targetUser == cred.ParentUser)
+	if ldap && !denyOnly {
+		res, _ := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(targetUser)
+		if res.NormDN == cred.ParentUser {
+			denyOnly = true
+		}
+	}
+
 	// Check if action is allowed if creating access key for another user
 	// Check if action is explicitly denied if for self
 	if !globalIAMSys.IsAllowed(policy.Args{
@@ -2605,7 +2613,7 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 		ConditionValues: condValues,
 		IsOwner:         owner,
 		Claims:          cred.Claims,
-		DenyOnly:        (targetUser == cred.AccessKey || targetUser == cred.ParentUser),
+		DenyOnly:        denyOnly,
 	}) {
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAccessDenied)
 	}
