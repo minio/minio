@@ -92,6 +92,7 @@ const (
 	ErrInternalError
 	ErrInvalidAccessKeyID
 	ErrAccessKeyDisabled
+	ErrLDAPAccessKeyDisabled
 	ErrInvalidArgument
 	ErrInvalidBucketName
 	ErrInvalidDigest
@@ -584,6 +585,11 @@ var errorCodes = errorCodeMap{
 	ErrAccessKeyDisabled: {
 		Code:           "InvalidAccessKeyId",
 		Description:    "Your account is disabled; please contact your administrator.",
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrLDAPAccessKeyDisabled: {
+		Code:           "InvalidAccessKeyId",
+		Description:    "Accounts with LDAP parent users are disabled; please contact your administrator.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrInvalidArgument: {
