@@ -39,7 +39,7 @@ require (
 	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.6
 	github.com/klauspost/readahead v1.4.0
-	github.com/klauspost/reedsolomon v1.12.3
+	github.com/klauspost/reedsolomon v1.12.4
 	github.com/lib/pq v1.10.9
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.62
@@ -51,7 +51,7 @@ require (
 	github.com/minio/highwayhash v1.0.3
 	github.com/minio/kms-go/kes v0.3.0
 	github.com/minio/kms-go/kms v0.4.0
-	github.com/minio/madmin-go/v3 v3.0.64
+	github.com/minio/madmin-go/v3 v3.0.66
 	github.com/minio/minio-go/v7 v7.0.76
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v3 v3.0.13
@@ -94,7 +94,7 @@ require (
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	golang.org/x/oauth2 v0.22.0
 	golang.org/x/sync v0.8.0
-	golang.org/x/sys v0.24.0
+	golang.org/x/sys v0.25.0
 	golang.org/x/term v0.23.0
 	golang.org/x/time v0.6.0
 	google.golang.org/api v0.194.0
@@ -197,7 +197,7 @@ require (
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.8 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da // indirect
+	github.com/minio/mc v0.0.0-20240909075310-04c5116c9bdf // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/pkg/v2 v2.0.19 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
@@ -254,4 +254,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240823204242-4ba0660f739c // indirect
 	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
+
 )

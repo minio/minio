@@ -115,6 +115,7 @@ var (
 	signalServiceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerSignalService, grid.NewMSS, grid.NewNoPayload)
 	stopRebalanceRPC               = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerStopRebalance, grid.NewMSS, grid.NewNoPayload)
 	updateMetacacheListingRPC      = grid.NewSingleHandler[*metacache, *metacache](grid.HandlerUpdateMetacacheListing, func() *metacache { return &metacache{} }, func() *metacache { return &metacache{} })
+	cleanupUploadIDCacheMetaRPC    = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerClearUploadID, grid.NewMSS, grid.NewNoPayload)
 
 	// STREAMS
 	// Set an output capacity of 100 for consoleLog and listenRPC
@@ -905,6 +906,26 @@ func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload
 	return
 }
 
+func (s *peerRESTServer) HandlerClearUploadID(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+	objAPI := newObjectLayerFn()
+	if objAPI == nil {
+		return np, grid.NewRemoteErr(errServerNotInitialized)
+	}
+
+	pools, ok := objAPI.(*erasureServerPools)
+	if !ok {
+		return
+	}
+
+	// No need to return errors, this is not a highly strict operation.
+	uploadID := mss.Get(peerRESTUploadID)
+	if uploadID != "" {
+		pools.ClearUploadID(uploadID)
+	}
+
+	return
+}
+
 func (s *peerRESTServer) StopRebalanceHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
 	objAPI := newObjectLayerFn()
 	if objAPI == nil {
@@ -1391,6 +1412,7 @@ func registerPeerRESTHandlers(router *mux.Router, gm *grid.Manager) {
 	logger.FatalIf(signalServiceRPC.Register(gm, server.SignalServiceHandler), "unable to register handler")
 	logger.FatalIf(stopRebalanceRPC.Register(gm, server.StopRebalanceHandler), "unable to register handler")
 	logger.FatalIf(updateMetacacheListingRPC.Register(gm, server.UpdateMetacacheListingHandler), "unable to register handler")
+	logger.FatalIf(cleanupUploadIDCacheMetaRPC.Register(gm, server.HandlerClearUploadID), "unable to register handler")
 
 	logger.FatalIf(gm.RegisterStreamingHandler(grid.HandlerTrace, grid.StreamHandler{
 		Handle:      server.TraceHandler,

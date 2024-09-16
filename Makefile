@@ -97,6 +97,10 @@ test-iam-ldap-upgrade-import: install-race ## verify IAM (external LDAP IDP)
 	@echo "Running upgrade tests for IAM (LDAP backend)"
 	@env bash $(PWD)/buildscripts/minio-iam-ldap-upgrade-import-test.sh
 
+test-iam-import-with-missing-entities: install-race ## test import of external iam config withg missing entities
+	@echo "Test IAM import configurations with missing entities"
+	@env bash $(PWD)/docs/distributed/iam-import-with-missing-entities.sh
+
 test-sio-error:
 	@(env bash $(PWD)/docs/bucket/replication/sio-error.sh)
 

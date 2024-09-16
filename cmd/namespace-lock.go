@@ -185,7 +185,7 @@ func (di *distLockInstance) Unlock(lc LockContext) {
 	if lc.cancel != nil {
 		lc.cancel()
 	}
-	di.rwMutex.Unlock(lc.ctx)
+	di.rwMutex.Unlock(context.Background())
 }
 
 // RLock - block until read lock is taken or timeout has occurred.

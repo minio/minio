@@ -32,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/klauspost/readahead"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -49,6 +48,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/mimedb"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/sio"
 )
 
 // list all errors which can be ignored in object operations.
@@ -1333,12 +1333,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.EncryptFn != nil {
 		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 	}
-	if userDefined[ReplicationSsecChecksumHeader] != "" {
-		if v, err := base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader]); err == nil {
+	if ckSum := userDefined[ReplicationSsecChecksumHeader]; ckSum != "" {
+		if v, err := base64.StdEncoding.DecodeString(ckSum); err == nil {
 			fi.Checksum = v
 		}
+		delete(userDefined, ReplicationSsecChecksumHeader)
 	}
-	delete(userDefined, ReplicationSsecChecksumHeader)
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -1378,30 +1378,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 
-	shardFileSize := erasure.ShardFileSize(data.Size())
-	inlineBlock := globalStorageClass.InlineBlock()
-	if inlineBlock <= 0 {
-		inlineBlock = 128 * humanize.KiByte
+	var inlineBuffers []*bytes.Buffer
+	if globalStorageClass.ShouldInline(erasure.ShardFileSize(data.ActualSize()), opts.Versioned) {
+		inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 	}
 
+	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
-	var inlineBuffers []*bytes.Buffer
-	if shardFileSize >= 0 {
-		if !opts.Versioned && shardFileSize <= inlineBlock {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		} else if shardFileSize < inlineBlock/8 {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		}
-	} else {
-		// If compressed, use actual size to determine.
-		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
-			if !opts.Versioned && sz <= inlineBlock {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			} else if sz < inlineBlock/8 {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			}
-		}
-	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
 			continue
@@ -1453,19 +1436,29 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.IndexCB != nil {
 		compIndex = opts.IndexCB()
 	}
-	if !opts.NoLock {
-		lk := er.NewNSLock(bucket, object)
-		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx)
-	}
 
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
+	}
+
+	kind, encrypted := crypto.IsEncrypted(userDefined)
+	actualSize := data.ActualSize()
+	if actualSize < 0 {
+		compressed := fi.IsCompressed()
+		switch {
+		case compressed:
+			// ... nothing changes for compressed stream.
+			// if actualSize is -1 we have no known way to
+			// determine what is the actualSize.
+		case encrypted:
+			decSize, err := sio.DecryptedSize(uint64(n))
+			if err == nil {
+				actualSize = int64(decSize)
+			}
+		default:
+			actualSize = n
+		}
 	}
 
 	for i, w := range writers {
@@ -1479,12 +1472,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			partsMetadata[i].Data = nil
 		}
 		// No need to add checksum to part. We already have it on the object.
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil)
+		partsMetadata[i].AddObjectPart(1, "", n, actualSize, modTime, compIndex, nil)
 		partsMetadata[i].Versioned = opts.Versioned || opts.VersionSuspended
 	}
 
 	userDefined["etag"] = r.MD5CurrentHexString()
-	kind, _ := crypto.IsEncrypted(userDefined)
 	if opts.PreserveETag != "" {
 		if !opts.ReplicationRequest {
 			userDefined["etag"] = opts.PreserveETag
@@ -1518,6 +1510,16 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if opts.DataMovement {
 			partsMetadata[index].SetDataMov()
 		}
+	}
+
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
 
 	// Rename the successfully written temporary object to final location.
