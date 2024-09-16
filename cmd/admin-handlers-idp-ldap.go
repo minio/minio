@@ -190,7 +190,7 @@ func (a adminAPIHandlers) AttachDetachPolicyLDAP(w http.ResponseWriter, r *http.
 //
 // PUT /minio/admin/v3/idp/ldap/add-service-account
 func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.Request) {
-	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r)
+	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r, true)
 	if APIError.Code != "" {
 		writeErrorResponseJSON(ctx, w, APIError, r.URL)
 		return
