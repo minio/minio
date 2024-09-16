@@ -26,6 +26,10 @@ import (
 	"github.com/bcicen/jstream"
 )
 
+// Limit single document size to 10MiB, 10x the AWS limit:
+// https://docs.aws.amazon.com/AmazonS3/latest/userguide/selecting-content-from-objects.html
+const maxDocumentSize = 10 << 20
+
 // Reader - JSON record reader for S3Select.
 type Reader struct {
 	args       *ReaderArgs
@@ -80,7 +84,7 @@ func (r *Reader) Close() error {
 // NewReader - creates new JSON reader using readCloser.
 func NewReader(readCloser io.ReadCloser, args *ReaderArgs) *Reader {
 	readCloser = &syncReadCloser{rc: readCloser}
-	d := jstream.NewDecoder(readCloser, 0).ObjectAsKVS()
+	d := jstream.NewDecoder(io.LimitReader(readCloser, maxDocumentSize), 0).ObjectAsKVS()
 	return &Reader{
 		args:       args,
 		decoder:    d,
