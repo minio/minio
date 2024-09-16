@@ -426,6 +426,8 @@ github.com/minio/kms-go/kes v0.3.0 h1:SU8VGVM/Hk9w1OiSby3OatkcojooUqIdDHl6dtM6Nk
 github.com/minio/kms-go/kes v0.3.0/go.mod h1:w6DeVT878qEOU3nUrYVy1WOT5H1Ig9hbDIh698NYJKY=
 github.com/minio/kms-go/kms v0.4.0 h1:cLPZceEp+05xHotVBaeFJrgL7JcXM4lBy6PU0idkE7I=
 github.com/minio/kms-go/kms v0.4.0/go.mod h1:q12CehiIy2qgBnDKq6Q7wmPi2PHSyRVug5DKp0HAVeE=
+github.com/minio/madmin-go/v3 v3.0.64 h1:Btwgs3CrgSciVaCWv/3clOxuDdUzylo/oTQp0M8GkwE=
+github.com/minio/madmin-go/v3 v3.0.64/go.mod h1:IFAwr0XMrdsLovxAdCcuq/eoL4nRuMVQQv0iubJANQw=
 github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da h1:/JNoAwFPhCG0hUkc9k/wUlzMUO7tA9WLIoWgqQjYph4=
 github.com/minio/mc v0.0.0-20240826104958-a55d9a8d17da/go.mod h1:g/LyYpzVUVY+ZxfIDtzigg+L3NjAn88EBsLAkFvo+M0=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
@@ -603,8 +605,6 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsTg=
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.com/taran-p/madmin-go/v3 v3.0.55-0.20240904170033-eadd24d6609c h1:4jjglyaHyVoJyslbFYHszgv5+G2u/F3LUeyf3QeUW2c=
-github.com/taran-p/madmin-go/v3 v3.0.55-0.20240904170033-eadd24d6609c/go.mod h1:IFAwr0XMrdsLovxAdCcuq/eoL4nRuMVQQv0iubJANQw=
 github.com/tidwall/gjson v1.17.3 h1:bwWLZU7icoKRG+C+0PNwIKC6FCJO/Q3p2pZvuP0jN94=
 github.com/tidwall/gjson v1.17.3/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/match v1.1.1 h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=
