@@ -1971,7 +1971,7 @@ func (store *IAMStoreSys) DeleteUsers(ctx context.Context, users []string) error
 	return nil
 }
 
-// DeleteMatchingUsersWithLoad - reloads specified user types then deletes users that match the given predicate.
+// DeleteMatchingUsers - deletes users that match the given predicate.
 func (store *IAMStoreSys) DeleteMatchingUsers(ctx context.Context, predicate func(UserIdentity) bool) {
 	cache := store.lock()
 	defer store.unlock()
