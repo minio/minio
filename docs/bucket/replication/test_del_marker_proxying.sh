@@ -65,6 +65,7 @@ while true; do
 	RESULT=$({ ./mc stat sitea/bucket/obj$loop_count; } 2>&1)
 	if [[ ${RESULT} != *"Object does not exist"* ]]; then
 		echo "BUG: stat should fail. succeeded."
+		echo "BUG:   found: |${RESULT}|"
 		exit_1
 	fi
 	loop_count=$((loop_count + 1))

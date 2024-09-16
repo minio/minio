@@ -532,7 +532,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		opts := ObjectOptions{
 			VersionID:        object.VersionID,
 			Versioned:        vc.PrefixEnabled(object.ObjectName),
-			VersionSuspended: vc.Suspended(),
+			VersionSuspended: vc.PrefixSuspended(object.ObjectName),
 		}
 
 		if replicateDeletes || object.VersionID != "" && hasLockEnabled || !globalTierConfigMgr.Empty() {
@@ -603,8 +603,8 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	deleteList := toNames(objectsToDelete)
 	dObjects, errs := deleteObjectsFn(ctx, bucket, deleteList, ObjectOptions{
-		PrefixEnabledFn:  vc.PrefixEnabled,
-		VersionSuspended: vc.Suspended(),
+		PrefixEnabledFn:   vc.PrefixEnabled,
+		PrefixSuspendedFn: vc.PrefixSuspended,
 	})
 
 	// Are all objects saying bucket not found?

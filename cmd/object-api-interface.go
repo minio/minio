@@ -117,7 +117,8 @@ type ObjectOptions struct {
 
 	DataMovement bool // indicates an going decommisionning or rebalacing
 
-	PrefixEnabledFn func(prefix string) bool // function which returns true if versioning is enabled on prefix
+	PrefixEnabledFn   func(prefix string) bool // function which returns true if versioning is enabled on prefix
+	PrefixSuspendedFn func(prefix string) bool // function which returns true if versioning is suspended on prefix
 
 	// IndexCB will return any index created but the compression.
 	// Object must have been read at this point.

@@ -339,8 +339,8 @@ func (r BatchJobExpire) Notify(ctx context.Context, body io.Reader) error {
 // Expire expires object versions which have already matched supplied filter conditions
 func (r *BatchJobExpire) Expire(ctx context.Context, api ObjectLayer, vc *versioning.Versioning, objsToDel []ObjectToDelete) []error {
 	opts := ObjectOptions{
-		PrefixEnabledFn:  vc.PrefixEnabled,
-		VersionSuspended: vc.Suspended(),
+		PrefixEnabledFn:   vc.PrefixEnabled,
+		PrefixSuspendedFn: vc.PrefixSuspended,
 	}
 
 	allErrs := make([]error, 0, len(objsToDel))

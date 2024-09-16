@@ -387,8 +387,8 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 		}
 		vc, _ := globalBucketVersioningSys.Get(bucket)
 		deletedObjs, errs := o.DeleteObjects(ctx, bucket, toDel, ObjectOptions{
-			PrefixEnabledFn:  vc.PrefixEnabled,
-			VersionSuspended: vc.Suspended(),
+			PrefixEnabledFn:   vc.PrefixEnabled,
+			PrefixSuspendedFn: vc.PrefixSuspended,
 		})
 
 		for i, dobj := range deletedObjs {
