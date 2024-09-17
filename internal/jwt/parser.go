@@ -245,7 +245,7 @@ func NewMapClaims() *MapClaims {
 	return &MapClaims{MapClaims: jwtgo.MapClaims{}}
 }
 
-// Add new arbitrary claim keys and values.
+// Set Adds new arbitrary claim keys and values.
 func (c *MapClaims) Set(key string, val interface{}) {
 	if c == nil {
 		return
