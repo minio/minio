@@ -1294,10 +1294,6 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 		return nil, errServerNotInitialized
 	}
 
-	if sys.usersSysType != LDAPUsersSysType {
-		return nil, nil
-	}
-
 	sa, ok := sys.store.GetUser(accessKey)
 	if !ok || !sa.Credentials.IsServiceAccount() {
 		return nil, errNoSuchServiceAccount
@@ -2179,7 +2175,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args policy.Args, parentUser string) 
 			return false
 		}
 		svcPolicies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
-
 	default:
 		// Check policy for parent user of service account.
 		svcPolicies, err = sys.PolicyDBGet(parentUser, args.Groups...)
