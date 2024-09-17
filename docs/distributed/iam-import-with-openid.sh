@@ -58,21 +58,21 @@ if [ "${BKT_COUNT}" -ne 1 ]; then
 	exit 1
 fi
 
-BKT_NAME=$(./mc ls myminio1/ --json | jq '.key')
-if [ "${BKT_NAME}" != "test-bucket" ]; then
+BKT_NAME=$(./mc ls myminio1/ --json | jq '.key' | sed 's/"//g' | sed 's\/\\g')
+if [[ "${BKT_NAME}" != "test-bucket" ]]; then
 	echo "BUG: Expected bucket: test-bucket, Found: ${BKT_NAME}"
 	exit 1
 fi
 
 ./mc ls myminio1/test-bucket
-OBJ_COUNT=$(./mc ls myminio1/test-bucket | jq '.key' | wc -l)
+OBJ_COUNT=$(./mc ls myminio1/test-bucket --json | jq '.key' | wc -l)
 if [ "${OBJ_COUNT}" -ne 1 ]; then
 	echo "BUG: Expected no of objects: 1, Found: ${OBJ_COUNT}"
 	exit 1
 fi
 
-OBJ_NAME=$(./mc ls myminio1/test-bucket | jq '.key')
-if [ "${OBJ_NAME}" != "hosts" ]; then
+OBJ_NAME=$(./mc ls myminio1/test-bucket --json | jq '.key' | sed 's/"//g')
+if [[ "${OBJ_NAME}" != "hosts" ]]; then
 	echo "BUG: Expected object: hosts, Found: ${BKT_NAME}"
 	exit 1
 fi
