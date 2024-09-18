@@ -195,7 +195,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 
 		// signal that cleanup interval has changed
 		if staleUploadsCleanupIntervalChangedCh != nil {
-			staleUploadsCleanupIntervalChangedCh <- true
+			staleUploadsCleanupIntervalChangedCh <- struct{}{}
 		}
 	}
 }

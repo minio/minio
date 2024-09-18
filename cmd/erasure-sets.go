@@ -86,7 +86,7 @@ type erasureSets struct {
 	lastConnectDisksOpTime time.Time
 }
 
-var staleUploadsCleanupIntervalChangedCh = make(chan bool)
+var staleUploadsCleanupIntervalChangedCh = make(chan struct{})
 
 func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 	diskMap := make(map[Endpoint]StorageAPI)
