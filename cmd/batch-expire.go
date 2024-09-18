@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -389,9 +388,12 @@ func (oiCache objInfoCache) Get(toDel ObjectToDelete) (*ObjectInfo, bool) {
 
 func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo, job BatchJobRequest, api ObjectLayer, wk *workers.Workers, expireCh <-chan []expireObjInfo) {
 	vc, _ := globalBucketVersioningSys.Get(r.Bucket)
-	retryAttempts := r.Retry.Attempts
+	retryAttempts := job.Expire.Retry.Attempts
+	if retryAttempts <= 0 {
+		retryAttempts = batchExpireJobDefaultRetries
+	}
 	delay := job.Expire.Retry.Delay
-	if delay == 0 {
+	if delay <= 0 {
 		delay = batchExpireJobDefaultRetryDelay
 	}
 
@@ -557,9 +559,13 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 
 	results := make(chan itemOrErr[ObjectInfo], workerSize)
 	go func() {
-		for _, prefix := range r.Prefix.F() {
+		prefixes := r.Prefix.F()
+		if len(prefixes) == 0 {
+			prefixes = []string{""}
+		}
+		for _, prefix := range prefixes {
 			prefixResultCh := make(chan itemOrErr[ObjectInfo], workerSize)
-			err := api.Walk(ctx, r.Bucket, strings.TrimSpace(prefix), prefixResultCh, WalkOptions{
+			err := api.Walk(ctx, r.Bucket, prefix, prefixResultCh, WalkOptions{
 				Marker:       lastObject,
 				LatestOnly:   false, // we need to visit all versions of the object to implement purge: retainVersions
 				VersionsSort: WalkVersionsSortDesc,
