@@ -361,7 +361,7 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	}
 
 	if !sys.LDAPConfig.Configured() {
-		sys.purgeLDAPAccessKeys(ctx)
+		go sys.purgeLDAPAccessKeys(ctx)
 	}
 
 	refreshInterval := sys.iamRefreshInterval
