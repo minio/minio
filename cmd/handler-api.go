@@ -194,8 +194,9 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 		t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
 
 		// signal that cleanup interval has changed
-		if staleUploadsCleanupIntervalChangedCh != nil {
-			staleUploadsCleanupIntervalChangedCh <- struct{}{}
+		select {
+		case staleUploadsCleanupIntervalChangedCh <- struct{}{}:
+		default: // in case the channel is blocked...
 		}
 	}
 }
