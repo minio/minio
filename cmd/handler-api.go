@@ -183,13 +183,21 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	t.transitionWorkers = cfg.TransitionWorkers
 
 	t.staleUploadsExpiry = cfg.StaleUploadsExpiry
-	t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
 	t.deleteCleanupInterval = cfg.DeleteCleanupInterval
 	t.enableODirect = cfg.EnableODirect
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
 	t.objectMaxVersions = cfg.ObjectMaxVersions
+
+	if t.staleUploadsCleanupInterval != cfg.StaleUploadsCleanupInterval {
+		t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
+
+		// signal that cleanup interval has changed
+		if staleUploadsCleanupIntervalChangedCh != nil {
+			staleUploadsCleanupIntervalChangedCh <- true
+		}
+	}
 }
 
 func (t *apiConfig) odirectEnabled() bool {
