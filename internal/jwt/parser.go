@@ -245,6 +245,22 @@ func NewMapClaims() *MapClaims {
 	return &MapClaims{MapClaims: jwtgo.MapClaims{}}
 }
 
+// Set Adds new arbitrary claim keys and values.
+func (c *MapClaims) Set(key string, val interface{}) {
+	if c == nil {
+		return
+	}
+	c.MapClaims[key] = val
+}
+
+// Delete deletes a key named key.
+func (c *MapClaims) Delete(key string) {
+	if c == nil {
+		return
+	}
+	delete(c.MapClaims, key)
+}
+
 // Lookup returns the value and if the key is found.
 func (c *MapClaims) Lookup(key string) (value string, ok bool) {
 	if c == nil {

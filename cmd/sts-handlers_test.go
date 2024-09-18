@@ -1997,7 +1997,7 @@ func (s *TestSuiteIAM) TestLDAPCyrillicUser(c *check) {
 		}
 
 		// Validate claims.
-		dnClaim := claims[ldapActualUser].(string)
+		dnClaim := claims.MapClaims[ldapActualUser].(string)
 		if dnClaim != testCase.dn {
 			c.Fatalf("Test %d: unexpected dn claim: %s", i+1, dnClaim)
 		}
@@ -2079,11 +2079,11 @@ func (s *TestSuiteIAM) TestLDAPAttributesLookup(c *check) {
 		}
 
 		// Validate claims. Check if the sshPublicKey claim is present.
-		dnClaim := claims[ldapActualUser].(string)
+		dnClaim := claims.MapClaims[ldapActualUser].(string)
 		if dnClaim != testCase.dn {
 			c.Fatalf("Test %d: unexpected dn claim: %s", i+1, dnClaim)
 		}
-		sshPublicKeyClaim := claims[ldapAttribPrefix+"sshPublicKey"].([]interface{})[0].(string)
+		sshPublicKeyClaim := claims.MapClaims[ldapAttribPrefix+"sshPublicKey"].([]interface{})[0].(string)
 		if sshPublicKeyClaim == "" {
 			c.Fatalf("Test %d: expected sshPublicKey claim to be present", i+1)
 		}
