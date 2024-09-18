@@ -36,8 +36,10 @@ func genLDFlags(version string) string {
 	ldflagsStr += " -X github.com/minio/minio/cmd.Version=" + version
 	ldflagsStr += " -X github.com/minio/minio/cmd.CopyrightYear=" + copyrightYear
 	ldflagsStr += " -X github.com/minio/minio/cmd.ReleaseTag=" + releaseTag
-	ldflagsStr += " -X github.com/minio/minio/cmd.CommitID=" + commitID()
-	ldflagsStr += " -X github.com/minio/minio/cmd.ShortCommitID=" + commitID()[:12]
+	if existGit() {
+		ldflagsStr += " -X github.com/minio/minio/cmd.CommitID=" + commitID()
+		ldflagsStr += " -X github.com/minio/minio/cmd.ShortCommitID=" + commitID()[:12]
+	}
 	ldflagsStr += " -X github.com/minio/minio/cmd.GOPATH=" + os.Getenv("GOPATH")
 	ldflagsStr += " -X github.com/minio/minio/cmd.GOROOT=" + os.Getenv("GOROOT")
 	return ldflagsStr
@@ -68,6 +70,20 @@ func releaseTag(version string) (string, time.Time) {
 	}
 
 	return relTag, t
+}
+
+// existGit check if .git exist
+func existGit() bool {
+	var (
+		err error
+	)
+	cmdName := "git"
+	cmdArgs := []string{"status"}
+	if _, err = exec.Command(cmdName, cmdArgs...).Output(); err != nil {
+		fmt.Fprintln(os.Stderr, "No .git folder, continue without commit ID")
+		return false
+	}
+	return true
 }
 
 // commitID returns the abbreviated commit-id hash of the last commit.
@@ -113,6 +129,8 @@ func main() {
 	var version string
 	if len(os.Args) > 1 {
 		version = os.Args[1]
+	} else if v := os.Getenv("MINIO_VERSION"); v != "" {
+		version = os.Getenv("MINIO_VERSION")
 	} else {
 		version = commitTime().Format(time.RFC3339)
 	}
