@@ -1329,10 +1329,6 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
-	fi.Checksum = opts.WantChecksum.AppendTo(nil, nil)
-	if opts.EncryptFn != nil {
-		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
-	}
 	if ckSum := userDefined[ReplicationSsecChecksumHeader]; ckSum != "" {
 		if v, err := base64.StdEncoding.DecodeString(ckSum); err == nil {
 			fi.Checksum = v
@@ -1460,7 +1456,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			actualSize = n
 		}
 	}
-
+	if fi.Checksum == nil {
+		// Trailing headers checksums should now be filled.
+		fi.Checksum = opts.WantChecksum.AppendTo(nil, nil)
+		if opts.EncryptFn != nil {
+			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+		}
+	}
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1474,6 +1476,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		// No need to add checksum to part. We already have it on the object.
 		partsMetadata[i].AddObjectPart(1, "", n, actualSize, modTime, compIndex, nil)
 		partsMetadata[i].Versioned = opts.Versioned || opts.VersionSuspended
+		partsMetadata[i].Checksum = fi.Checksum
 	}
 
 	userDefined["etag"] = r.MD5CurrentHexString()
