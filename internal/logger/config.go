@@ -211,6 +211,10 @@ var (
 			Key:   RetryInterval,
 			Value: "3s",
 		},
+		config.KV{
+			Key:   httpTimeout,
+			Value: "5s",
+		},
 	}
 
 	DefaultAuditKafkaKVS = config.KVS{
