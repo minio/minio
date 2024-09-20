@@ -44,7 +44,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.62
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v1.7.1-0.20240817215248-0b07cb38850f
+	github.com/minio/console v1.7.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.5.3
@@ -73,7 +73,7 @@ require (
 	github.com/pkg/xattr v0.4.10
 	github.com/prometheus/client_golang v1.20.2
 	github.com/prometheus/client_model v0.6.1
-	github.com/prometheus/common v0.55.0
+	github.com/prometheus/common v0.58.0
 	github.com/prometheus/procfs v0.15.1
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
 	github.com/rabbitmq/amqp091-go v1.10.0
@@ -221,7 +221,7 @@ require (
 	github.com/posener/complete v1.2.3 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/prom2json v1.4.0 // indirect
-	github.com/prometheus/prometheus v0.54.0 // indirect
+	github.com/prometheus/prometheus v0.54.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/rs/xid v1.6.0 // indirect
