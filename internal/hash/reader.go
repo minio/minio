@@ -366,6 +366,14 @@ func (r *Reader) ContentCRC() map[string]string {
 	return map[string]string{r.contentHash.Type.String(): r.contentHash.Encoded}
 }
 
+// Checksum returns the content checksum if set.
+func (r *Reader) Checksum() *Checksum {
+	if !r.contentHash.Type.IsSet() || !r.contentHash.Valid() {
+		return nil
+	}
+	return &r.contentHash
+}
+
 var _ io.Closer = (*Reader)(nil) // compiler check
 
 // Close and release resources.

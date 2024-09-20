@@ -142,3 +142,20 @@ jobs:
       - name: Test import of IAM artifacts when in fresh cluster there are missing groups etc
         run: |
           make test-iam-import-with-missing-entities
+  iam-import-with-openid:
+    name: Test IAM import in new cluster with opendid configurations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          check-latest: true
+      - name: Checkout minio-iam-testing
+        uses: actions/checkout@v4
+        with:
+          repository: minio/minio-iam-testing
+          path: minio-iam-testing
+      - name: Test import of IAM artifacts when in fresh cluster with openid configurations
+        run: |
+          make test-iam-import-with-openid

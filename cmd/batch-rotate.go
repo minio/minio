@@ -267,8 +267,12 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	globalBatchJobsMetrics.save(job.ID, ri)
 	lastObject := ri.Object
 
+	retryAttempts := job.KeyRotate.Flags.Retry.Attempts
+	if retryAttempts <= 0 {
+		retryAttempts = batchKeyRotateJobDefaultRetries
+	}
 	delay := job.KeyRotate.Flags.Retry.Delay
-	if delay == 0 {
+	if delay <= 0 {
 		delay = batchKeyRotateJobDefaultRetryDelay
 	}
 
@@ -354,7 +358,6 @@ func (r *BatchJobKeyRotateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		return err
 	}
 
-	retryAttempts := ri.RetryAttempts
 	ctx, cancel := context.WithCancel(ctx)
 
 	results := make(chan itemOrErr[ObjectInfo], 100)

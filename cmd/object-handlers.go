@@ -1960,6 +1960,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	opts.IndexCB = idxCb
+	opts.WantChecksum = hashReader.Checksum()
 
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
