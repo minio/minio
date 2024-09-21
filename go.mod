@@ -44,7 +44,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.62
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v1.7.1-0.20240817215248-0b07cb38850f
+	github.com/minio/console v1.7.1
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.5.3
