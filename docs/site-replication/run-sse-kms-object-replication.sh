@@ -139,46 +139,46 @@ fi
 
 # Stat the objects from source site
 echo "Stat minio1/test-bucket/encrypted"
-./mc stat minio1/test-bucket/encrypted --insecure --json
-stat_out1=$(./mc stat minio1/test-bucket/encrypted --insecure --json)
+./mc stat --no-list minio1/test-bucket/encrypted --insecure --json
+stat_out1=$(./mc stat --no-list minio1/test-bucket/encrypted --insecure --json)
 src_obj1_algo=$(echo "${stat_out1}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 src_obj1_keyid=$(echo "${stat_out1}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio1/test-bucket/defpartsize"
-./mc stat minio1/test-bucket/defpartsize --insecure --json
-stat_out2=$(./mc stat minio1/test-bucket/defpartsize --insecure --json)
+./mc stat --no-list minio1/test-bucket/defpartsize --insecure --json
+stat_out2=$(./mc stat --no-list minio1/test-bucket/defpartsize --insecure --json)
 src_obj2_algo=$(echo "${stat_out2}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 src_obj2_keyid=$(echo "${stat_out2}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio1/test-bucket/custpartsize"
-./mc stat minio1/test-bucket/custpartsize --insecure --json
-stat_out3=$(./mc stat minio1/test-bucket/custpartsize --insecure --json)
+./mc stat --no-list minio1/test-bucket/custpartsize --insecure --json
+stat_out3=$(./mc stat --no-list minio1/test-bucket/custpartsize --insecure --json)
 src_obj3_algo=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 src_obj3_keyid=$(echo "${stat_out3}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio1/test-bucket/mpartobj"
-./mc stat minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json
-stat_out4=$(./mc stat minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json)
+./mc stat --no-list minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json
+stat_out4=$(./mc stat --no-list minio1/test-bucket/mpartobj --enc-c "minio1/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json)
 src_obj4_etag=$(echo "${stat_out4}" | jq '.etag')
 src_obj4_size=$(echo "${stat_out4}" | jq '.size')
 src_obj4_md5=$(echo "${stat_out4}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
 
 # Stat the objects from replicated site
 echo "Stat minio2/test-bucket/encrypted"
-./mc stat minio2/test-bucket/encrypted --insecure --json
-stat_out1_rep=$(./mc stat minio2/test-bucket/encrypted --insecure --json)
+./mc stat --no-list minio2/test-bucket/encrypted --insecure --json
+stat_out1_rep=$(./mc stat --no-list minio2/test-bucket/encrypted --insecure --json)
 rep_obj1_algo=$(echo "${stat_out1_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 rep_obj1_keyid=$(echo "${stat_out1_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio2/test-bucket/defpartsize"
-./mc stat minio2/test-bucket/defpartsize --insecure --json
-stat_out2_rep=$(./mc stat minio2/test-bucket/defpartsize --insecure --json)
+./mc stat --no-list minio2/test-bucket/defpartsize --insecure --json
+stat_out2_rep=$(./mc stat --no-list minio2/test-bucket/defpartsize --insecure --json)
 rep_obj2_algo=$(echo "${stat_out2_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 rep_obj2_keyid=$(echo "${stat_out2_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio2/test-bucket/custpartsize"
-./mc stat minio2/test-bucket/custpartsize --insecure --json
-stat_out3_rep=$(./mc stat minio2/test-bucket/custpartsize --insecure --json)
+./mc stat --no-list minio2/test-bucket/custpartsize --insecure --json
+stat_out3_rep=$(./mc stat --no-list minio2/test-bucket/custpartsize --insecure --json)
 rep_obj3_algo=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption"')
 rep_obj3_keyid=$(echo "${stat_out3_rep}" | jq '.metadata."X-Amz-Server-Side-Encryption-Aws-Kms-Key-Id"')
 echo "Stat minio2/test-bucket/mpartobj"
-./mc stat minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json
-stat_out4_rep=$(./mc stat minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json)
+./mc stat --no-list minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json
+stat_out4_rep=$(./mc stat --no-list minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure --json)
 rep_obj4_etag=$(echo "${stat_out4}" | jq '.etag')
 rep_obj4_size=$(echo "${stat_out4}" | jq '.size')
 rep_obj4_md5=$(echo "${stat_out4}" | jq '.metadata."X-Amz-Server-Side-Encryption-Customer-Key-Md5"')
