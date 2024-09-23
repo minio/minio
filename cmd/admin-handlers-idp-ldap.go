@@ -499,7 +499,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 
 	dnList := r.Form["userDNs"]
 	isAll := r.Form.Get("all") == "true"
-	onlySelf := !isAll && len(dnList) == 0
+	selfOnly := !isAll && len(dnList) == 0
 
 	if isAll && len(dnList) > 0 {
 		// This should be checked on client side, so return generic error
@@ -527,7 +527,7 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			dn = foundResult.NormDN
 		}
 		if dn == cred.ParentUser || dnList[0] == cred.ParentUser {
-			onlySelf = true
+			selfOnly = true
 		}
 	}
 
@@ -538,13 +538,13 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 		ConditionValues: getConditionValues(r, "", cred),
 		IsOwner:         owner,
 		Claims:          cred.Claims,
-		DenyOnly:        onlySelf,
+		DenyOnly:        selfOnly,
 	}) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 		return
 	}
 
-	if onlySelf && len(dnList) == 0 {
+	if selfOnly && len(dnList) == 0 {
 		selfDN := cred.AccessKey
 		if cred.ParentUser != "" {
 			selfDN = cred.ParentUser
@@ -609,10 +609,9 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 				return
 			}
 			for _, sts := range stsKeys {
-				expiryTime := sts.Expiration
 				accessKeys.STSKeys = append(accessKeys.STSKeys, madmin.ServiceAccountInfo{
 					AccessKey:  sts.AccessKey,
-					Expiration: &expiryTime,
+					Expiration: &sts.Expiration,
 				})
 			}
 			// if only STS keys, skip if user has no STS keys
@@ -628,10 +627,9 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 				return
 			}
 			for _, svc := range serviceAccounts {
-				expiryTime := svc.Expiration
 				accessKeys.ServiceAccounts = append(accessKeys.ServiceAccounts, madmin.ServiceAccountInfo{
 					AccessKey:  svc.AccessKey,
-					Expiration: &expiryTime,
+					Expiration: &svc.Expiration,
 				})
 			}
 			// if only service accounts, skip if user has no service accounts

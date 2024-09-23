@@ -1167,6 +1167,171 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	writeSuccessNoContent(w)
 }
 
+// ListAccessKeysBulk - GET /minio/admin/v3/list-access-keys-bulk
+func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	users := r.Form["users"]
+	isAll := r.Form.Get("all") == "true"
+	selfOnly := !isAll && len(users) == 0
+
+	if isAll && len(users) > 0 {
+		// This should be checked on client side, so return generic error
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	// Empty user list and not self, list access keys for all users
+	if isAll {
+		if !globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.ListUsersAdminAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	} else if len(users) == 1 {
+		if users[0] == cred.AccessKey || users[0] == cred.ParentUser {
+			selfOnly = true
+		}
+	}
+
+	if !globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.ListServiceAccountsAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+		DenyOnly:        selfOnly,
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
+	if selfOnly && len(users) == 0 {
+		selfUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			selfUser = cred.ParentUser
+		}
+		users = append(users, selfUser)
+	}
+
+	var checkedUserList []string
+	if isAll {
+		users, err := globalIAMSys.ListUsers(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		for user := range users {
+			checkedUserList = append(checkedUserList, user)
+		}
+	} else {
+		for _, user := range users {
+			// Validate the user
+			_, ok := globalIAMSys.GetUser(ctx, user)
+			if !ok {
+				continue
+			}
+			checkedUserList = append(checkedUserList, user)
+		}
+	}
+
+	listType := r.Form.Get("listType")
+	var listSTSKeys, listServiceAccounts bool
+	switch listType {
+	case madmin.AccessKeyListUsersOnly:
+		listSTSKeys = false
+		listServiceAccounts = false
+	case madmin.AccessKeyListSTSOnly:
+		listSTSKeys = true
+		listServiceAccounts = false
+	case madmin.AccessKeyListSvcaccOnly:
+		listSTSKeys = false
+		listServiceAccounts = true
+	case madmin.AccessKeyListAll:
+		listSTSKeys = true
+		listServiceAccounts = true
+	default:
+		err := errors.New("invalid list type")
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
+		return
+	}
+
+	accessKeyMap := make(map[string]madmin.ListAccessKeysResp)
+	for _, user := range checkedUserList {
+		accessKeys := madmin.ListAccessKeysResp{}
+		if listSTSKeys {
+			stsKeys, err := globalIAMSys.ListSTSAccounts(ctx, user)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, sts := range stsKeys {
+				accessKeys.STSKeys = append(accessKeys.STSKeys, madmin.ServiceAccountInfo{
+					AccessKey:  sts.AccessKey,
+					Expiration: &sts.Expiration,
+				})
+			}
+			// if only STS keys, skip if user has no STS keys
+			if !listServiceAccounts && len(stsKeys) == 0 {
+				continue
+			}
+		}
+
+		if listServiceAccounts {
+			serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, user)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, svc := range serviceAccounts {
+				accessKeys.ServiceAccounts = append(accessKeys.ServiceAccounts, madmin.ServiceAccountInfo{
+					AccessKey:  svc.AccessKey,
+					Expiration: &svc.Expiration,
+				})
+			}
+			// if only service accounts, skip if user has no service accounts
+			if !listSTSKeys && len(serviceAccounts) == 0 {
+				continue
+			}
+		}
+		accessKeyMap[user] = accessKeys
+	}
+
+	data, err := json.Marshal(accessKeyMap)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+}
+
 // AccountInfoHandler returns usage, permissions and other bucket metadata for incoming us
 func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()

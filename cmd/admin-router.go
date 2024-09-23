@@ -244,6 +244,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// STS accounts ops
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/temporary-account-info").HandlerFunc(adminMiddleware(adminAPI.TemporaryAccountInfo)).Queries("accessKey", "{accessKey:.*}")
 
+		// Access key (service account/STS) operations
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-access-keys-bulk").HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysBulk)).Queries("listType", "{listType:.*}")
+
 		// Info policy IAM latest
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(adminMiddleware(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
 		// List policies latest
