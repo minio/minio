@@ -18,7 +18,7 @@ func (s *scratch) bytes() []byte { return s.data[0:s.fill] }
 // grow scratch buffer
 func (s *scratch) grow() {
 	ndata := make([]byte, cap(s.data)*2)
-	copy(ndata, s.data[:])
+	copy(ndata, s.data)
 	s.data = ndata
 }
 

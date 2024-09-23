@@ -14,6 +14,7 @@ var (
 
 type errPos [2]int // line number, byte offset where error occurred
 
+// DecoderError contains a detailed decoding error.
 type DecoderError struct {
 	msg       string // description of error
 	context   string // additional error context
@@ -22,8 +23,10 @@ type DecoderError struct {
 	readerErr error // underlying reader error, if any
 }
 
+// ReaderErr returns the underlying error.
 func (e DecoderError) ReaderErr() error { return e.readerErr }
 
+// Error returns a string representation of the error.
 func (e DecoderError) Error() string {
 	loc := fmt.Sprintf("%s [%d,%d]", quoteChar(e.atChar), e.pos[0], e.pos[1])
 	s := fmt.Sprintf("%s %s: %s", e.msg, e.context, loc)

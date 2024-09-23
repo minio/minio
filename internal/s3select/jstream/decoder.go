@@ -200,7 +200,7 @@ func (d *Decoder) any() (interface{}, ValueType, error) {
 		i, err := d.number()
 		return i, Number, err
 	case '-':
-		if c = d.next(); c < '0' && c > '9' {
+		if c = d.next(); c < '0' || c > '9' {
 			return nil, Unknown, d.mkError(ErrSyntax, "in negative numeric literal")
 		}
 		n, err := d.number()
@@ -212,6 +212,7 @@ func (d *Decoder) any() (interface{}, ValueType, error) {
 		if d.remaining() < 4 {
 			return nil, Unknown, d.mkError(ErrUnexpectedEOF)
 		}
+		//nolint:gocritic
 		if d.next() == 'a' && d.next() == 'l' && d.next() == 's' && d.next() == 'e' {
 			return false, Boolean, nil
 		}
@@ -220,6 +221,7 @@ func (d *Decoder) any() (interface{}, ValueType, error) {
 		if d.remaining() < 3 {
 			return nil, Unknown, d.mkError(ErrUnexpectedEOF)
 		}
+		//nolint:gocritic
 		if d.next() == 'r' && d.next() == 'u' && d.next() == 'e' {
 			return true, Boolean, nil
 		}
@@ -228,6 +230,7 @@ func (d *Decoder) any() (interface{}, ValueType, error) {
 		if d.remaining() < 3 {
 			return nil, Unknown, d.mkError(ErrUnexpectedEOF)
 		}
+		//nolint:gocritic
 		if d.next() == 'u' && d.next() == 'l' && d.next() == 'l' {
 			return nil, Null, nil
 		}
@@ -252,8 +255,7 @@ func (d *Decoder) any() (interface{}, ValueType, error) {
 // string called by `any` or `object`(for map keys) after reading `"`
 func (d *Decoder) string() (string, error) {
 	d.scratch.reset()
-
-	var c = d.next()
+	c := d.next()
 
 scan:
 	for {
@@ -374,7 +376,7 @@ func (d *Decoder) number() (float64, error) {
 		d.scratch.add(c)
 
 		// first char following must be digit
-		if c = d.next(); c < '0' && c > '9' {
+		if c = d.next(); c < '0' || c > '9' {
 			return 0, d.mkError(ErrSyntax, "after decimal point in numeric literal")
 		}
 		d.scratch.add(c)
