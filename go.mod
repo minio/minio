@@ -9,7 +9,6 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.4.0
 	github.com/IBM/sarama v1.43.3
 	github.com/alecthomas/participle v0.7.1
-	github.com/bcicen/jstream v1.0.1
 	github.com/beevik/ntp v1.4.3
 	github.com/buger/jsonparser v1.1.1
 	github.com/cespare/xxhash/v2 v2.3.0

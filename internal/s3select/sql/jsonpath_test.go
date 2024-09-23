@@ -27,11 +27,11 @@ import (
 	"testing"
 
 	"github.com/alecthomas/participle"
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/internal/s3select/jstream"
 )
 
 func getJSONStructs(b []byte) ([]interface{}, error) {
-	dec := jstream.NewDecoder(bytes.NewBuffer(b), 0).ObjectAsKVS()
+	dec := jstream.NewDecoder(bytes.NewBuffer(b), 0).ObjectAsKVS().MaxDepth(100)
 	var result []interface{}
 	for parsedVal := range dec.Stream() {
 		result = append(result, parsedVal.Value)
