@@ -526,6 +526,14 @@ func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object 
 
 // renamePart - renames multipart part to its relevant location under uploadID.
 func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, optsMeta []byte, writeQuorum int) ([]StorageAPI, error) {
+	paths := []string{
+		dstEntry,
+		dstEntry + ".meta",
+	}
+
+	// cleanup existing paths first across all drives.
+	er.cleanupMultipartPath(ctx, paths...)
+
 	g := errgroup.WithNErrs(len(disks))
 
 	// Rename file on all underlying storage disks.
@@ -541,11 +549,6 @@ func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, src
 
 	// Wait for all renames to finish.
 	errs := g.Wait()
-
-	paths := []string{
-		dstEntry,
-		dstEntry + ".meta",
-	}
 
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if err != nil {
