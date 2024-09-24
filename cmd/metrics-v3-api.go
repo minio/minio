@@ -129,7 +129,7 @@ func loadAPIRequestsHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsC
 // This is a `MetricsLoaderFn`.
 func loadAPIRequestsTTFBMetrics(ctx context.Context, m MetricValues, _ *metricsCache) error {
 	renameLabels := map[string]string{"api": "name"}
-	labelsFilter := map[string]set.StringSet{"api": set.CreateStringSet("GetObject")}
+	labelsFilter := map[string]set.StringSet{}
 	m.SetHistogram(apiRequestsTTFBSecondsDistribution, httpRequestsDuration, labelsFilter, renameLabels, nil,
 		"type", "s3")
 	return nil
@@ -217,7 +217,7 @@ func loadBucketAPIHTTPMetrics(ctx context.Context, m MetricValues, _ *metricsCac
 // This is a `MetricsLoaderFn`.
 func loadBucketAPITTFBMetrics(ctx context.Context, m MetricValues, _ *metricsCache, buckets []string) error {
 	renameLabels := map[string]string{"api": "name"}
-	labelsFilter := map[string]set.StringSet{"api": set.CreateStringSet("GetObject")}
+	labelsFilter := map[string]set.StringSet{}
 	m.SetHistogram(apiRequestsTTFBSecondsDistribution, bucketHTTPRequestsDuration, labelsFilter, renameLabels,
 		buckets, "type", "s3")
 	return nil

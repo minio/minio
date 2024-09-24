@@ -100,7 +100,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			outputBytes = int64(tc.ResponseRecorder.Size())
 			headerBytes = int64(tc.ResponseRecorder.HeaderSize())
 			timeToResponse = time.Now().UTC().Sub(tc.ResponseRecorder.StartTime)
-			timeToFirstByte = tc.ResponseRecorder.TimeToFirstByte
+			timeToFirstByte = tc.ResponseRecorder.TTFB()
 		}
 
 		entry.AccessKey = reqInfo.Cred.AccessKey
