@@ -223,19 +223,19 @@ expected_checksum=$(cat ./lrgfile | md5sum)
 ./mc cp ./lrgfile minio1/newbucket
 
 sleep 5
-./mc stat minio2/newbucket
+./mc stat --no-list minio2/newbucket
 if [ $? -ne 0 ]; then
 	echo "expecting bucket to be present. exiting.."
 	exit_1
 fi
 
-./mc stat minio3/newbucket
+./mc stat --no-list minio3/newbucket
 if [ $? -ne 0 ]; then
 	echo "expecting bucket to be present. exiting.."
 	exit_1
 fi
 
-err_minio2=$(./mc stat minio2/newbucket/xxx --json | jq -r .error.cause.message)
+err_minio2=$(./mc stat --no-list minio2/newbucket/xxx --json | jq -r .error.cause.message)
 if [ $? -ne 0 ]; then
 	echo "expecting object to be missing. exiting.."
 	exit_1
@@ -249,20 +249,20 @@ fi
 ./mc cp README.md minio2/newbucket/
 
 sleep 5
-./mc stat minio1/newbucket/README.md
+./mc stat --no-list minio1/newbucket/README.md
 if [ $? -ne 0 ]; then
 	echo "expecting object to be present. exiting.."
 	exit_1
 fi
 
-./mc stat minio3/newbucket/README.md
+./mc stat --no-list minio3/newbucket/README.md
 if [ $? -ne 0 ]; then
 	echo "expecting object to be present. exiting.."
 	exit_1
 fi
 
 sleep 10
-./mc stat minio3/newbucket/lrgfile
+./mc stat --no-list minio3/newbucket/lrgfile
 if [ $? -ne 0 ]; then
 	echo "expected object to be present, exiting.."
 	exit_1
@@ -282,13 +282,13 @@ if [ $? -ne 0 ]; then
 fi
 
 sleep 5
-./mc stat minio1/newbucket/lrgfile
+./mc stat --no-list minio1/newbucket/lrgfile
 if [ $? -eq 0 ]; then
 	echo "expected object to be deleted permanently after replication, exiting.."
 	exit_1
 fi
 
-vID=$(./mc stat minio2/newbucket/README.md --json | jq .versionID)
+vID=$(./mc stat --no-list minio2/newbucket/README.md --json | jq .versionID)
 if [ $? -ne 0 ]; then
 	echo "expecting object to be present. exiting.."
 	exit_1
@@ -311,7 +311,7 @@ if [ $? -ne 0 ]; then
 fi
 sleep 5
 
-replStatus_minio2=$(./mc stat minio2/newbucket/README.md --json | jq -r .replicationStatus)
+replStatus_minio2=$(./mc stat --no-list minio2/newbucket/README.md --json | jq -r .replicationStatus)
 if [ $? -ne 0 ]; then
 	echo "expecting object to be present. exiting.."
 	exit_1
@@ -325,13 +325,13 @@ fi
 ./mc rm minio3/newbucket/README.md
 sleep 5
 
-./mc stat minio2/newbucket/README.md
+./mc stat --no-list minio2/newbucket/README.md
 if [ $? -eq 0 ]; then
 	echo "expected file to be deleted, exiting.."
 	exit_1
 fi
 
-./mc stat minio1/newbucket/README.md
+./mc stat --no-list minio1/newbucket/README.md
 if [ $? -eq 0 ]; then
 	echo "expected file to be deleted, exiting.."
 	exit_1
@@ -339,6 +339,8 @@ fi
 
 ./mc mb --with-lock minio3/newbucket-olock
 sleep 5
+
+set -x
 
 enabled_minio2=$(./mc stat --json minio2/newbucket-olock | jq -r .ObjectLock.enabled)
 if [ $? -ne 0 ]; then
@@ -361,6 +363,8 @@ if [ "${enabled_minio1}" != "Enabled" ]; then
 	echo "expected bucket to be mirrored with object-lock enabled, exiting..."
 	exit_1
 fi
+
+set +x
 
 # "Test if most recent tag update is replicated"
 ./mc tag set minio2/newbucket "key=val1"
