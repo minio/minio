@@ -1989,7 +1989,6 @@ func (j *BatchJobPool) AddWorker() {
 					}
 				}
 			}
-			job.delete(j.ctx, j.objLayer)
 			j.canceler(job.ID, false)
 		case <-j.workerKillCh:
 			return
@@ -2176,9 +2175,40 @@ func (m *batchJobMetrics) purgeJobMetrics() {
 			m.RUnlock()
 			for _, jobID := range toDeleteJobMetrics {
 				m.delete(jobID)
+				j := BatchJobRequest{
+					ID: jobID,
+				}
+				j.delete(GlobalContext, newObjectLayerFn())
 			}
 		}
 	}
+}
+
+// load metrics from disk on startup
+func (m *batchJobMetrics) init(ctx context.Context, objectAPI ObjectLayer) error {
+	resultCh := make(chan itemOrErr[ObjectInfo])
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if err := objectAPI.Walk(ctx, minioMetaBucket, batchJobReportsPrefix, resultCh, WalkOptions{}); err != nil {
+		return err
+	}
+
+	for result := range resultCh {
+		if result.Err != nil {
+			return result.Err
+		}
+		ri := &batchJobInfo{}
+		if err := ri.loadByPath(ctx, objectAPI, result.Item.Name); err != nil {
+			if !errors.Is(err, errNoSuchJob) {
+				batchLogIf(ctx, err)
+			}
+			continue
+		}
+		m.metrics[ri.JobID] = ri
+	}
+	return nil
 }
 
 func (m *batchJobMetrics) delete(jobID string) {
