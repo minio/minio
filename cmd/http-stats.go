@@ -133,7 +133,7 @@ func (bh *bucketHTTPStats) updateHTTPStats(bucket, api string, w *xhttp.Response
 		bucketHTTPRequestsDuration.With(prometheus.Labels{
 			"api":    api,
 			"bucket": bucket,
-		}).Observe(w.TimeToFirstByte.Seconds())
+		}).Observe(w.TTFB().Seconds())
 	}
 
 	bh.Lock()
@@ -433,7 +433,7 @@ func (st *HTTPStats) updateStats(api string, w *xhttp.ResponseRecorder) {
 	st.totalS3Requests.Inc(api)
 
 	// Increment the prometheus http request response histogram with appropriate label
-	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TimeToFirstByte.Seconds())
+	httpRequestsDuration.With(prometheus.Labels{"api": api}).Observe(w.TTFB().Seconds())
 
 	code := w.StatusCode
 

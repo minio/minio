@@ -164,7 +164,7 @@ func httpTracerMiddleware(h http.Handler) http.Handler {
 					Latency:         reqEndTime.Sub(respRecorder.StartTime),
 					InputBytes:      inputBytes,
 					OutputBytes:     respRecorder.Size(),
-					TimeToFirstByte: respRecorder.TimeToFirstByte,
+					TimeToFirstByte: respRecorder.TTFB(),
 				},
 			},
 		}
