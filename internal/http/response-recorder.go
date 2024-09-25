@@ -41,8 +41,10 @@ type ResponseRecorder struct {
 	// Log body of all responses
 	LogAllBody bool
 
-	TimeToFirstByte time.Duration
-	StartTime       time.Time
+	ttfbHeader time.Duration
+	ttfbBody   time.Duration
+
+	StartTime time.Time
 	// number of bytes written
 	bytesWritten int
 	// number of bytes of response headers written
@@ -61,6 +63,15 @@ func (lrw *ResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return nil, nil, fmt.Errorf("response writer does not support hijacking. Type is %T", lrw.ResponseWriter)
 	}
 	return hj.Hijack()
+}
+
+// TTFB of the request - this function needs to be called
+// when the request is finished to provide accurate data
+func (lrw *ResponseRecorder) TTFB() time.Duration {
+	if lrw.ttfbBody != 0 {
+		return lrw.ttfbBody
+	}
+	return lrw.ttfbHeader
 }
 
 // NewResponseRecorder - returns a wrapped response writer to trap
@@ -97,8 +108,8 @@ func (lrw *ResponseRecorder) Write(p []byte) (int, error) {
 	}
 	n, err := lrw.ResponseWriter.Write(p)
 	lrw.bytesWritten += n
-	if lrw.TimeToFirstByte == 0 {
-		lrw.TimeToFirstByte = time.Now().UTC().Sub(lrw.StartTime)
+	if lrw.ttfbBody == 0 {
+		lrw.ttfbBody = time.Now().UTC().Sub(lrw.StartTime)
 	}
 
 	if (lrw.LogErrBody && lrw.StatusCode >= http.StatusBadRequest) || lrw.LogAllBody {
@@ -159,6 +170,7 @@ func (lrw *ResponseRecorder) Body() []byte {
 // WriteHeader - writes http status code
 func (lrw *ResponseRecorder) WriteHeader(code int) {
 	if !lrw.headersLogged {
+		lrw.ttfbHeader = time.Now().UTC().Sub(lrw.StartTime)
 		lrw.StatusCode = code
 		lrw.writeHeaders(&lrw.headers, code, lrw.ResponseWriter.Header())
 		lrw.headersLogged = true

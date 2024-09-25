@@ -91,9 +91,6 @@ func init() {
 	logger.Init(GOPATH, GOROOT)
 	logger.RegisterError(config.FmtError)
 
-	globalBatchJobsMetrics = batchJobMetrics{metrics: make(map[string]*batchJobInfo)}
-	go globalBatchJobsMetrics.purgeJobMetrics()
-
 	t, _ := minioVersionToReleaseTime(Version)
 	if !t.IsZero() {
 		globalVersionUnix = uint64(t.Unix())
@@ -137,6 +134,9 @@ func minioConfigToConsoleFeatures() {
 	}
 	if value := env.Get(config.EnvBrowserRedirectURL, ""); value != "" {
 		os.Setenv("CONSOLE_BROWSER_REDIRECT_URL", value)
+	}
+	if value := env.Get(config.EnvConsoleDebugLogLevel, ""); value != "" {
+		os.Setenv("CONSOLE_DEBUG_LOGLEVEL", value)
 	}
 	// pass the console subpath configuration
 	if globalBrowserRedirectURL != nil {

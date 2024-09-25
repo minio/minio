@@ -174,20 +174,20 @@ echo "Copying data to source sitea/olockbucket"
 sleep 1
 
 echo "Verifying the metadata difference between source and target"
-if diff -pruN <(./mc stat --json sitea/bucket/hosts | jq .) <(./mc stat --json siteb/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+if diff -pruN <(./mc stat --no-list --json sitea/bucket/hosts | jq .) <(./mc stat --no-list --json siteb/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
 	echo "verified sitea-> COMPLETED, siteb-> REPLICA"
 fi
 
-if diff -pruN <(./mc stat --json sitea/bucket/hosts | jq .) <(./mc stat --json sitec/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+if diff -pruN <(./mc stat --no-list --json sitea/bucket/hosts | jq .) <(./mc stat --no-list --json sitec/bucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
 	echo "verified sitea-> COMPLETED, sitec-> REPLICA"
 fi
 
 echo "Verifying the metadata difference between source and target"
-if diff -pruN <(./mc stat --json sitea/olockbucket/hosts | jq .) <(./mc stat --json siteb/olockbucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+if diff -pruN <(./mc stat --no-list --json sitea/olockbucket/hosts | jq .) <(./mc stat --no-list --json siteb/olockbucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
 	echo "verified sitea-> COMPLETED, siteb-> REPLICA"
 fi
 
-if diff -pruN <(./mc stat --json sitea/olockbucket/hosts | jq .) <(./mc stat --json sitec/olockbucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
+if diff -pruN <(./mc stat --no-list --json sitea/olockbucket/hosts | jq .) <(./mc stat --no-list --json sitec/olockbucket/hosts | jq .) | grep -q 'COMPLETED\|REPLICA'; then
 	echo "verified sitea-> COMPLETED, sitec-> REPLICA"
 fi
 
@@ -233,9 +233,9 @@ multipart-debug --endpoint 127.0.0.1:9002 --accesskey minio --secretkey minio123
 
 sleep 10
 
-./mc stat sitea/bucket/new-test-encrypted-object
-./mc stat siteb/bucket/new-test-encrypted-object
-./mc stat sitec/bucket/new-test-encrypted-object
+./mc stat --no-list sitea/bucket/new-test-encrypted-object
+./mc stat --no-list siteb/bucket/new-test-encrypted-object
+./mc stat --no-list sitec/bucket/new-test-encrypted-object
 
 ./mc ls -r sitea/bucket/
 ./mc ls -r siteb/bucket/

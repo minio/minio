@@ -24,7 +24,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/internal/s3select/jstream"
 	"github.com/minio/minio/internal/s3select/sql"
 )
 
@@ -185,7 +185,7 @@ func (r *PReader) startReaders() {
 					dst = make([]jstream.KVS, 0, 1000)
 				}
 
-				d := jstream.NewDecoder(bytes.NewBuffer(in.input), 0).ObjectAsKVS()
+				d := jstream.NewDecoder(bytes.NewBuffer(in.input), 0).ObjectAsKVS().MaxDepth(100)
 				stream := d.Stream()
 				all := dst[:0]
 				for mv := range stream {

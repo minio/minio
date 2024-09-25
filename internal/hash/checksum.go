@@ -335,6 +335,10 @@ func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 	var tmp [binary.MaxVarintLen32]byte
 	n := binary.PutUvarint(tmp[:], uint64(c.Type))
 	crc := c.Raw
+	if c.Type.Trailing() {
+		// When we serialize we don't care if it was trailing.
+		c.Type ^= ChecksumTrailing
+	}
 	if len(crc) != c.Type.RawByteLen() {
 		return b
 	}

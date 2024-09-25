@@ -2921,7 +2921,8 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 	return res, nil
 }
 
-// RenamePart - rename part path  to destination path atomically.
+// RenamePart - rename part path to destination path atomically, this is meant to be used
+// only with multipart API
 func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string, meta []byte) (err error) {
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
@@ -2952,45 +2953,22 @@ func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolum
 			return err
 		}
 	}
+
 	srcIsDir := HasSuffix(srcPath, SlashSeparator)
 	dstIsDir := HasSuffix(dstPath, SlashSeparator)
-	// Either src and dst have to be directories or files, else return error.
-	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
+	// either source or destination is a directory return error.
+	if srcIsDir || dstIsDir {
 		return errFileAccessDenied
 	}
+
 	srcFilePath := pathutil.Join(srcVolumeDir, srcPath)
 	if err = checkPathLength(srcFilePath); err != nil {
 		return err
 	}
+
 	dstFilePath := pathutil.Join(dstVolumeDir, dstPath)
 	if err = checkPathLength(dstFilePath); err != nil {
 		return err
-	}
-	if srcIsDir {
-		// If source is a directory, we expect the destination to be non-existent but we
-		// we still need to allow overwriting an empty directory since it represents
-		// an object empty directory.
-		dirInfo, err := Lstat(dstFilePath)
-		if isSysErrIO(err) {
-			return errFaultyDisk
-		}
-		if err != nil {
-			if !osIsNotExist(err) {
-				return err
-			}
-		} else {
-			if !dirInfo.IsDir() {
-				return errFileAccessDenied
-			}
-			if err = Remove(dstFilePath); err != nil {
-				if isSysErrNotEmpty(err) || isSysErrNotDir(err) {
-					return errFileAccessDenied
-				} else if isSysErrIO(err) {
-					return errFaultyDisk
-				}
-				return err
-			}
-		}
 	}
 
 	if err = renameAll(srcFilePath, dstFilePath, dstVolumeDir); err != nil {

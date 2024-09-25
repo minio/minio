@@ -62,7 +62,7 @@ while true; do
 	fi
 	echo "Hello World" | ./mc pipe sitea/bucket/obj$loop_count
 	./mc rm sitea/bucket/obj$loop_count
-	RESULT=$({ ./mc stat sitea/bucket/obj$loop_count; } 2>&1)
+	RESULT=$({ ./mc stat --no-list sitea/bucket/obj$loop_count; } 2>&1)
 	if [[ ${RESULT} != *"Object does not exist"* ]]; then
 		echo "BUG: stat should fail. succeeded."
 		exit_1

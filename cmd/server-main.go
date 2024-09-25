@@ -1104,6 +1104,11 @@ func serverMain(ctx *cli.Context) {
 		// Initialize batch job pool.
 		bootstrapTrace("newBatchJobPool", func() {
 			globalBatchJobPool = newBatchJobPool(GlobalContext, newObject, 100)
+			globalBatchJobsMetrics = batchJobMetrics{
+				metrics: make(map[string]*batchJobInfo),
+			}
+			go globalBatchJobsMetrics.init(GlobalContext, newObject)
+			go globalBatchJobsMetrics.purgeJobMetrics()
 		})
 
 		// Prints the formatted startup message, if err is not nil then it prints additional information as well.
