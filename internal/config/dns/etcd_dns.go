@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2021 MinIO, Inc.
+// Copyright (c) 2015-2024 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/minio/minio-go/v7/pkg/set"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -60,7 +59,7 @@ func (c *CoreDNS) Close() error {
 func (c *CoreDNS) List() (map[string][]SrvRecord, error) {
 	srvRecords := map[string][]SrvRecord{}
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.", domainName), c.prefixPath)
+		key := msgPath(fmt.Sprintf("%s.", domainName), c.prefixPath)
 		records, err := c.list(key+etcdPathSeparator, true)
 		if err != nil {
 			return srvRecords, err
@@ -79,7 +78,7 @@ func (c *CoreDNS) List() (map[string][]SrvRecord, error) {
 func (c *CoreDNS) Get(bucket string) ([]SrvRecord, error) {
 	var srvRecords []SrvRecord
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
+		key := msgPath(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
 		records, err := c.list(key, false)
 		if err != nil {
 			return nil, err
@@ -100,15 +99,6 @@ func (c *CoreDNS) Get(bucket string) ([]SrvRecord, error) {
 		return nil, ErrNoEntriesFound
 	}
 	return srvRecords, nil
-}
-
-// msgUnPath converts a etcd path to domainname.
-func msgUnPath(s string) string {
-	ks := strings.Split(strings.Trim(s, etcdPathSeparator), etcdPathSeparator)
-	for i, j := 0, len(ks)-1; i < j; i, j = i+1, j-1 {
-		ks[i], ks[j] = ks[j], ks[i]
-	}
-	return strings.Join(ks, ".")
 }
 
 // Retrieves list of entries under the key passed.
@@ -172,7 +162,7 @@ func (c *CoreDNS) Put(bucket string) error {
 			return err
 		}
 		for _, domainName := range c.domainNames {
-			key := msg.Path(fmt.Sprintf("%s.%s", bucket, domainName), c.prefixPath)
+			key := msgPath(fmt.Sprintf("%s.%s", bucket, domainName), c.prefixPath)
 			key = key + etcdPathSeparator + ip
 			ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 			_, err = c.etcdClient.Put(ctx, key, string(bucketMsg))
@@ -191,7 +181,7 @@ func (c *CoreDNS) Put(bucket string) error {
 // Delete - Removes DNS entries added in Put().
 func (c *CoreDNS) Delete(bucket string) error {
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
+		key := msgPath(fmt.Sprintf("%s.%s.", bucket, domainName), c.prefixPath)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 		_, err := c.etcdClient.Delete(ctx, key+etcdPathSeparator, clientv3.WithPrefix())
 		cancel()
@@ -205,7 +195,7 @@ func (c *CoreDNS) Delete(bucket string) error {
 // DeleteRecord - Removes a specific DNS entry
 func (c *CoreDNS) DeleteRecord(record SrvRecord) error {
 	for _, domainName := range c.domainNames {
-		key := msg.Path(fmt.Sprintf("%s.%s.", record.Key, domainName), c.prefixPath)
+		key := msgPath(fmt.Sprintf("%s.%s.", record.Key, domainName), c.prefixPath)
 
 		ctx, cancel := context.WithTimeout(context.Background(), defaultContextTimeout)
 		_, err := c.etcdClient.Delete(ctx, key+etcdPathSeparator+record.Host)
