@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/shirou/gopsutil/v3/mem"
 
 	"github.com/minio/minio/internal/config/api"
@@ -61,7 +62,6 @@ type apiConfig struct {
 const (
 	cgroupV1MemLimitFile = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
 	cgroupV2MemLimitFile = "/sys/fs/cgroup/memory.max"
-	cgroupMemNoLimit     = 9223372036854771712
 )
 
 func cgroupMemLimit() (limit uint64) {
@@ -78,10 +78,8 @@ func cgroupMemLimit() (limit uint64) {
 		// but still, no need to interpret more
 		return 0
 	}
-	if limit == cgroupMemNoLimit {
-		// No limit set, It's the highest positive signed 64-bit
-		// integer (2^63-1), rounded down to multiples of 4096 (2^12),
-		// the most common page size on x86 systems - for cgroup_limits.
+	if limit >= 100*humanize.TiByte {
+		// No limit set, or unreasonably high. Ignore
 		return 0
 	}
 	return limit
