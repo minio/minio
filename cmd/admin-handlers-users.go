@@ -1441,7 +1441,12 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	var buf []byte
 	switch {
-	case accountName == globalActiveCred.AccessKey:
+	case accountName == globalActiveCred.AccessKey || newGlobalAuthZPluginFn() != nil:
+		// For owner account and when plugin authZ is configured always set
+		// effective policy as `consoleAdmin`.
+		//
+		// In the latter case, we let the UI render everything, but individual
+		// actions would fail if not permitted by the external authZ service.
 		for _, policy := range policy.DefaultPolicies {
 			if policy.Name == "consoleAdmin" {
 				effectivePolicy = policy.Definition
