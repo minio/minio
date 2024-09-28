@@ -31,8 +31,16 @@ export MINIO_ROOT_PASSWORD="minio123"
 
 # Start MinIO instances
 echo -n "Starting MinIO instances ..."
-minio server --address ":9001" --console-address ":10000" /tmp/sitea/{1...4}/disk{1...4} /tmp/sitea/{5...8}/disk{1...4} >/tmp/sitea_1.log 2>&1 &
-minio server --address ":9002" --console-address ":11000" /tmp/siteb/{1...4}/disk{1...4} /tmp/siteb/{5...8}/disk{1...4} >/tmp/siteb_1.log 2>&1 &
+minio server --address 127.0.0.1:9001 --console-address ":10000" "http://127.0.0.1:9001/tmp/sitea/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9002/tmp/sitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
+minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/sitea/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9002/tmp/sitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+
+minio server --address 127.0.0.1:9003 --console-address ":10001" "http://127.0.0.1:9003/tmp/siteb/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9004/tmp/siteb/data/disterasure/xl{5...8}" >/tmp/siteb_1.log 2>&1 &
+minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/siteb/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9004/tmp/siteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
+
 echo "done"
 
 if [ ! -f ./mc ]; then
@@ -41,7 +49,7 @@ if [ ! -f ./mc ]; then
 fi
 
 export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
-export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9002
+export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
 
 ./mc ready sitea
 ./mc ready siteb
