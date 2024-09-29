@@ -1858,6 +1858,16 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		return PartInfo{}, err
 	}
 
+	// Read lock for upload id.
+	// Only held while reading the upload metadata.
+	uploadIDRLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
+	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+	ctx = rlkctx.Context()
+	defer uploadIDRLock.RUnlock(rlkctx)
+
 	if z.SinglePool() {
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
@@ -1890,9 +1900,18 @@ func (z *erasureServerPools) GetMultipartInfo(ctx context.Context, bucket, objec
 		return MultipartInfo{}, err
 	}
 
+	uploadIDLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
+	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return MultipartInfo{}, err
+	}
+	ctx = lkctx.Context()
+	defer uploadIDLock.RUnlock(lkctx)
+
 	if z.SinglePool() {
 		return z.serverPools[0].GetMultipartInfo(ctx, bucket, object, uploadID, opts)
 	}
+
 	for idx, pool := range z.serverPools {
 		if z.IsSuspended(idx) {
 			continue
@@ -1908,6 +1927,7 @@ func (z *erasureServerPools) GetMultipartInfo(ctx context.Context, bucket, objec
 		// any other unhandled error return right here.
 		return MultipartInfo{}, err
 	}
+
 	return MultipartInfo{}, InvalidUploadID{
 		Bucket:   bucket,
 		Object:   object,
@@ -1921,9 +1941,18 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 		return ListPartsInfo{}, err
 	}
 
+	uploadIDLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
+	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return ListPartsInfo{}, err
+	}
+	ctx = lkctx.Context()
+	defer uploadIDLock.RUnlock(lkctx)
+
 	if z.SinglePool() {
 		return z.serverPools[0].ListObjectParts(ctx, bucket, object, uploadID, partNumberMarker, maxParts, opts)
 	}
+
 	for idx, pool := range z.serverPools {
 		if z.IsSuspended(idx) {
 			continue
@@ -1937,6 +1966,7 @@ func (z *erasureServerPools) ListObjectParts(ctx context.Context, bucket, object
 		}
 		return ListPartsInfo{}, err
 	}
+
 	return ListPartsInfo{}, InvalidUploadID{
 		Bucket:   bucket,
 		Object:   object,
@@ -1956,6 +1986,14 @@ func (z *erasureServerPools) AbortMultipartUpload(ctx context.Context, bucket, o
 			globalNotificationSys.DeleteUploadID(ctx, uploadID)
 		}
 	}()
+
+	lk := z.NewNSLock(bucket, pathJoin(object, uploadID))
+	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return err
+	}
+	ctx = lkctx.Context()
+	defer lk.Unlock(lkctx)
 
 	if z.SinglePool() {
 		return z.serverPools[0].AbortMultipartUpload(ctx, bucket, object, uploadID, opts)
@@ -1994,6 +2032,16 @@ func (z *erasureServerPools) CompleteMultipartUpload(ctx context.Context, bucket
 			globalNotificationSys.DeleteUploadID(ctx, uploadID)
 		}
 	}()
+
+	// Hold write locks to verify uploaded parts, also disallows any
+	// parallel PutObjectPart() requests.
+	uploadIDLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
+	wlkctx, err := uploadIDLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return objInfo, err
+	}
+	ctx = wlkctx.Context()
+	defer uploadIDLock.Unlock(wlkctx)
 
 	if z.SinglePool() {
 		return z.serverPools[0].CompleteMultipartUpload(ctx, bucket, object, uploadID, uploadedParts, opts)
@@ -2774,7 +2822,19 @@ func (z *erasureServerPools) PutObjectMetadata(ctx context.Context, bucket, obje
 		return z.serverPools[0].PutObjectMetadata(ctx, bucket, object, opts)
 	}
 
+	if !opts.NoLock {
+		// Lock the object before updating metadata.
+		lk := z.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
+	}
+
 	opts.MetadataChg = true
+	opts.NoLock = true
 	// We don't know the size here set 1GiB at least.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
@@ -2791,7 +2851,19 @@ func (z *erasureServerPools) PutObjectTags(ctx context.Context, bucket, object s
 		return z.serverPools[0].PutObjectTags(ctx, bucket, object, tags, opts)
 	}
 
+	if !opts.NoLock {
+		// Lock the object before updating tags.
+		lk := z.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
+	}
+
 	opts.MetadataChg = true
+	opts.NoLock = true
 
 	// We don't know the size here set 1GiB at least.
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
@@ -2809,8 +2881,19 @@ func (z *erasureServerPools) DeleteObjectTags(ctx context.Context, bucket, objec
 		return z.serverPools[0].DeleteObjectTags(ctx, bucket, object, opts)
 	}
 
-	opts.MetadataChg = true
+	if !opts.NoLock {
+		// Lock the object before deleting tags.
+		lk := z.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
+	}
 
+	opts.MetadataChg = true
+	opts.NoLock = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return ObjectInfo{}, err
@@ -2841,8 +2924,20 @@ func (z *erasureServerPools) TransitionObject(ctx context.Context, bucket, objec
 		return z.serverPools[0].TransitionObject(ctx, bucket, object, opts)
 	}
 
+	if !opts.NoLock {
+		// Acquire write lock before starting to transition the object.
+		lk := z.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
+	}
+
 	// Avoid transitioning an object from a pool being decommissioned.
 	opts.SkipDecommissioned = true
+	opts.NoLock = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
@@ -2858,8 +2953,20 @@ func (z *erasureServerPools) RestoreTransitionedObject(ctx context.Context, buck
 		return z.serverPools[0].RestoreTransitionedObject(ctx, bucket, object, opts)
 	}
 
+	if !opts.NoLock {
+		// Acquire write lock before restoring transitioned object
+		lk := z.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
+	}
+
 	// Avoid restoring object from a pool being decommissioned.
 	opts.SkipDecommissioned = true
+	opts.NoLock = true
 	idx, err := z.getPoolIdxExistingWithOpts(ctx, bucket, object, opts)
 	if err != nil {
 		return err
