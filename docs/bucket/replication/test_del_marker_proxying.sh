@@ -26,8 +26,8 @@ cleanup
 
 export MINIO_CI_CD=1
 export MINIO_BROWSER=off
-export MINIO_ROOT_USER="minio"
-export MINIO_ROOT_PASSWORD="minio123"
+
+make install-race
 
 # Start MinIO instances
 echo -n "Starting MinIO instances ..."
@@ -48,8 +48,8 @@ if [ ! -f ./mc ]; then
 		chmod +x mc
 fi
 
-export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
-export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
+export MC_HOST_sitea=http://minioadmin:minioadmin@127.0.0.1:9001
+export MC_HOST_siteb=http://minioadmin:minioadmin@127.0.0.1:9004
 
 ./mc ready sitea
 ./mc ready siteb
@@ -65,7 +65,7 @@ export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9004
 # Run the test to make sure proxying of DEL marker doesn't happen
 loop_count=0
 while true; do
-	if [ $loop_count -eq 100 ]; then
+	if [ $loop_count -eq 1000 ]; then
 		break
 	fi
 	echo "Hello World" | ./mc pipe sitea/bucket/obj$loop_count
