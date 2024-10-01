@@ -26,7 +26,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -184,7 +183,7 @@ var binaryChecksum = getBinaryChecksum()
 
 func getBinaryChecksum() string {
 	mw := md5.New()
-	binPath, err := filepath.Abs(os.Args[0])
+	binPath, err := os.Executable()
 	if err != nil {
 		logger.Error("Calculating checksum failed: %s", err)
 		return "00000000000000000000000000000000"
