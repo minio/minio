@@ -673,9 +673,8 @@ func (d *dataUsageCache) reduceChildrenOf(path dataUsageHash, limit int, compact
 	leaves := make([]struct {
 		objects uint64
 		path    dataUsageHash
-	}, total)
+	}, 0, total)
 	// Collect current leaves that have children.
-	leaves = leaves[:0]
 	remove := total - limit
 	var add func(path dataUsageHash)
 	add = func(path dataUsageHash) {
