@@ -32,7 +32,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/inconshreveable/mousetrap v1.1.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.17.9
+	github.com/klauspost/compress v1.17.10
 	github.com/klauspost/cpuid/v2 v2.2.8
 	github.com/klauspost/filepathx v1.1.1
 	github.com/klauspost/pgzip v1.2.6
@@ -49,8 +49,8 @@ require (
 	github.com/minio/highwayhash v1.0.3
 	github.com/minio/kms-go/kes v0.3.0
 	github.com/minio/kms-go/kms v0.4.0
-	github.com/minio/madmin-go/v3 v3.0.68
-	github.com/minio/minio-go/v7 v7.0.76
+	github.com/minio/madmin-go/v3 v3.0.70
+	github.com/minio/minio-go/v7 v7.0.77
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v3 v3.0.20
 	github.com/minio/selfupdate v0.6.0
@@ -64,7 +64,7 @@ require (
 	github.com/nats-io/stan.go v0.10.4
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.1.0
-	github.com/philhofer/fwd v1.1.3-0.20240612014219-fbbf4953d986
+	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.6
@@ -76,10 +76,10 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.4.0
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
-	github.com/rs/cors v1.11.0
+	github.com/rs/cors v1.11.1
 	github.com/secure-io/sio-go v0.3.1
 	github.com/shirou/gopsutil/v3 v3.24.5
-	github.com/tinylib/msgp v1.2.1
+	github.com/tinylib/msgp v1.2.2
 	github.com/valyala/bytebufferpool v1.0.0
 	github.com/xdg/scram v1.0.5
 	github.com/zeebo/xxh3 v1.0.2
