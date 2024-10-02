@@ -234,7 +234,7 @@ func (er *erasureObjects) auditHealObject(ctx context.Context, bucket, object, v
 	}
 
 	b, a := result.GetCorruptedCounts()
-	if b > 0 && a > 0 && b == a {
+	if b > 0 && b == a {
 		opts.Error = fmt.Sprintf("unable to heal %d corrupted blocks on drives", b)
 	}
 
