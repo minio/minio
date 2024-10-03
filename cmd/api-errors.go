@@ -978,7 +978,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationNoExistingObjects: {
 		Code:           "XMinioReplicationNoExistingObjects",
-		Description:    "No matching ExistingsObjects rule enabled",
+		Description:    "No matching ExistingObjects rule enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrRemoteTargetDenyAddError: {

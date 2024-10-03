@@ -289,7 +289,7 @@ func hasPartErr(partErrs []int) bool {
 //   - slice of errors about the state of data files on disk - can have
 //     a not-found error or a hash-mismatch error.
 func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetadata []FileInfo,
-	errs []error, latestMeta FileInfo, bucket, object string,
+	errs []error, latestMeta FileInfo, filterByETag bool, bucket, object string,
 	scanMode madmin.HealScanMode,
 ) (availableDisks []StorageAPI, dataErrsByDisk map[int][]int, dataErrsByPart map[int][]int) {
 	availableDisks = make([]StorageAPI, len(onlineDisks))
@@ -345,7 +345,14 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 		}
 
 		meta := partsMetadata[i]
-		if !meta.ModTime.Equal(latestMeta.ModTime) || meta.DataDir != latestMeta.DataDir {
+		corrupted := false
+		if filterByETag {
+			corrupted = meta.Metadata["etag"] != latestMeta.Metadata["etag"]
+		} else {
+			corrupted = !meta.ModTime.Equal(latestMeta.ModTime) || meta.DataDir != latestMeta.DataDir
+		}
+
+		if corrupted {
 			metaErrs[i] = errFileCorrupt
 			partsMetadata[i] = FileInfo{}
 			continue
@@ -408,7 +415,6 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 			verifyResp *CheckPartsResp
 		)
 
-		meta.DataDir = latestMeta.DataDir
 		switch scanMode {
 		case madmin.HealDeepScan:
 			// disk has a valid xl.meta but may not have all the

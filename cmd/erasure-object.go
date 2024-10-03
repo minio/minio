@@ -2192,14 +2192,16 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 // PutObjectTags - replace or add tags to an existing object
 func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
-	// Lock the object before updating tags.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return ObjectInfo{}, err
+	if !opts.NoLock {
+		// Lock the object before updating tags.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	disks := er.getDisks()
 
@@ -2310,14 +2312,16 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return err
 	}
 
-	// Acquire write lock before starting to transition the object.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
-	if err != nil {
-		return err
+	if !opts.NoLock {
+		// Acquire write lock before starting to transition the object.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {

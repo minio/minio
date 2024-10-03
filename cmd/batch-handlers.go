@@ -1577,9 +1577,6 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	}
 
 	jobType := r.Form.Get("jobType")
-	if jobType == "" {
-		jobType = string(madmin.BatchJobReplicate)
-	}
 
 	resultCh := make(chan itemOrErr[ObjectInfo])
 
@@ -1608,7 +1605,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
-		if jobType == string(req.Type()) {
+		if jobType == string(req.Type()) || jobType == "" {
 			listResult.Jobs = append(listResult.Jobs, madmin.BatchJobResult{
 				ID:      req.ID,
 				Type:    req.Type(),
@@ -2049,7 +2046,9 @@ func (j *BatchJobPool) canceler(jobID string, cancel bool) error {
 			canceler()
 		}
 	}
-	delete(j.jobCancelers, jobID)
+	if cancel {
+		delete(j.jobCancelers, jobID)
+	}
 	return nil
 }
 
