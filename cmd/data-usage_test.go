@@ -587,17 +587,6 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := want.find("abucket/dir2")
-	e.ReplicationStats = &replicationAllStats{
-		Targets: map[string]replicationStats{
-			"arn": {
-				PendingSize:    1,
-				ReplicatedSize: 2,
-				FailedSize:     3,
-				FailedCount:    5,
-				PendingCount:   6,
-			},
-		},
-	}
 	want.replace("abucket/dir2", "", *e)
 	var buf bytes.Buffer
 	err = want.serializeTo(&buf)
