@@ -93,8 +93,15 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if globalInplaceUpdateDisabled || currentReleaseTime.IsZero() {
+	if globalInplaceUpdateDisabled {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	if currentReleaseTime.IsZero() || currentReleaseTime.Equal(timeSentinel) {
+		apiErr := errorCodes.ToAPIErr(ErrMethodNotAllowed)
+		apiErr.Description = fmt.Sprintf("unable to perform in-place update, release time is unrecognized: %s", currentReleaseTime)
+		writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -108,6 +115,11 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		if runtime.GOOS == globalWindowsOSName {
 			updateURL = minioReleaseWindowsInfoURL
 		}
+	}
+
+	local := globalLocalNodeName
+	if local == "" {
+		local = "127.0.0.1"
 	}
 
 	u, err := url.Parse(updateURL)
@@ -128,6 +140,39 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	updateStatus := madmin.ServerUpdateStatusV2{
+		DryRun:  dryRun,
+		Results: make([]madmin.ServerPeerUpdateStatus, 0, len(globalNotificationSys.allPeerClients)),
+	}
+	peerResults := make(map[string]madmin.ServerPeerUpdateStatus, len(globalNotificationSys.allPeerClients))
+	failedClients := make(map[int]bool, len(globalNotificationSys.allPeerClients))
+
+	if lrTime.Sub(currentReleaseTime) <= 0 {
+		updateStatus.Results = append(updateStatus.Results, madmin.ServerPeerUpdateStatus{
+			Host:           local,
+			Err:            fmt.Sprintf("server is running the latest version: %s", Version),
+			CurrentVersion: Version,
+		})
+
+		for _, client := range globalNotificationSys.peerClients {
+			updateStatus.Results = append(updateStatus.Results, madmin.ServerPeerUpdateStatus{
+				Host:           client.String(),
+				Err:            fmt.Sprintf("server is running the latest version: %s", Version),
+				CurrentVersion: Version,
+			})
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(updateStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+		return
+	}
+
 	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
 	// Download Binary Once
 	binC, bin, err := downloadBinary(u, mode)
@@ -136,16 +181,6 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	updateStatus := madmin.ServerUpdateStatusV2{DryRun: dryRun}
-	peerResults := make(map[string]madmin.ServerPeerUpdateStatus)
-
-	local := globalLocalNodeName
-	if local == "" {
-		local = "127.0.0.1"
-	}
-
-	failedClients := make(map[int]struct{})
 
 	if globalIsDistErasure {
 		// Push binary to other servers
@@ -156,7 +191,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 					Err:            nerr.Err.Error(),
 					CurrentVersion: Version,
 				}
-				failedClients[idx] = struct{}{}
+				failedClients[idx] = true
 			} else {
 				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
 					Host:           nerr.Host.String(),
@@ -167,25 +202,17 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	if lrTime.Sub(currentReleaseTime) > 0 {
-		if err = verifyBinary(u, sha256Sum, releaseInfo, mode, bytes.NewReader(bin)); err != nil {
-			peerResults[local] = madmin.ServerPeerUpdateStatus{
-				Host:           local,
-				Err:            err.Error(),
-				CurrentVersion: Version,
-			}
-		} else {
-			peerResults[local] = madmin.ServerPeerUpdateStatus{
-				Host:           local,
-				CurrentVersion: Version,
-				UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
-			}
+	if err = verifyBinary(u, sha256Sum, releaseInfo, mode, bytes.NewReader(bin)); err != nil {
+		peerResults[local] = madmin.ServerPeerUpdateStatus{
+			Host:           local,
+			Err:            err.Error(),
+			CurrentVersion: Version,
 		}
 	} else {
 		peerResults[local] = madmin.ServerPeerUpdateStatus{
 			Host:           local,
-			Err:            fmt.Sprintf("server is already running the latest version: %s", Version),
 			CurrentVersion: Version,
+			UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 		}
 	}
 
@@ -193,8 +220,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		if globalIsDistErasure {
 			ng := WithNPeers(len(globalNotificationSys.peerClients))
 			for idx, client := range globalNotificationSys.peerClients {
-				_, ok := failedClients[idx]
-				if ok {
+				if failedClients[idx] {
 					continue
 				}
 				client := client
@@ -240,14 +266,14 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		startTime := time.Now().Add(restartUpdateDelay)
 		ng := WithNPeers(len(globalNotificationSys.peerClients))
 		for idx, client := range globalNotificationSys.peerClients {
-			_, ok := failedClients[idx]
-			if ok {
+			if failedClients[idx] {
 				continue
 			}
 			client := client
 			ng.Go(ctx, func() error {
 				prs, ok := peerResults[client.String()]
-				if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
+				// We restart only on success, not for any failures.
+				if ok && prs.Err == "" {
 					return client.SignalService(serviceRestart, "", dryRun, &startTime)
 				}
 				return nil
@@ -284,7 +310,9 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 	writeSuccessResponseJSON(w, jsonBytes)
 
 	if !dryRun {
-		if lrTime.Sub(currentReleaseTime) > 0 {
+		prs, ok := peerResults[local]
+		// We restart only on success, not for any failures.
+		if ok && prs.Err == "" {
 			globalServiceSignalCh <- serviceRestart
 		}
 	}
