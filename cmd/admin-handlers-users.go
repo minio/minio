@@ -1244,6 +1244,7 @@ func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Requ
 		for user := range users {
 			checkedUserList = append(checkedUserList, user)
 		}
+		checkedUserList = append(checkedUserList, globalActiveCred.AccessKey)
 	} else {
 		for _, user := range users {
 			// Validate the user
