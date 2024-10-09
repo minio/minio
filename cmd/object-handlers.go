@@ -1522,7 +1522,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if !srcTimestamp.IsZero() {
 				ondiskTimestamp, err := time.Parse(time.RFC3339Nano, lastTaggingTimestamp)
 				// update tagging metadata only if replica  timestamp is newer than what's on disk
-				if err != nil || (err == nil && ondiskTimestamp.Before(srcTimestamp)) {
+				if err != nil || (err == nil && !ondiskTimestamp.After(srcTimestamp)) {
 					srcInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp] = srcTimestamp.UTC().Format(time.RFC3339Nano)
 					srcInfo.UserDefined[xhttp.AmzObjectTagging] = objTags
 				}
