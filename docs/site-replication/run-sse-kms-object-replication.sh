@@ -8,7 +8,10 @@ exit_1() {
 	cat /tmp/minio1_1.log
 	echo "minio2 ============"
 	cat /tmp/minio2_1.log
-
+	echo "minio3 ============"
+	cat /tmp/minio3_1.log
+	echo "minio4 ============"
+	cat /tmp/minio4_1.log
 	exit 1
 }
 
@@ -17,7 +20,7 @@ cleanup() {
 	pkill -9 minio || sudo pkill -9 minio
 	pkill -9 kes || sudo pkill -9 kes
 	rm -rf ${PWD}/keys
-	rm -rf /tmp/minio{1,2}
+	rm -rf /tmp/minio{1,2,3,4}
 	echo "done"
 }
 
@@ -228,5 +231,26 @@ fi
 ./mc cat minio2/test-bucket/mpartobj --enc-c "minio2/test-bucket/mpartobj=${TEST_MINIO_ENC_KEY}" --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/defpartsize --insecure >/dev/null || exit_1
 ./mc cat minio2/test-bucket/custpartsize --insecure >/dev/null || exit_1
+
+echo -n "Starting MinIO instances with different kms key ..."
+CI=on MINIO_KMS_SECRET_KEY=minio3-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --certs-dir /tmp/certs --address ":9003" --console-address ":10000" /tmp/minio3/disk{1...4} >/tmp/minio3_1.log 2>&1 &
+CI=on MINIO_KMS_SECRET_KEY=minio4-default-key:IyqsU3kMFloCNup4BsZtf/rmfHVcTgznO2F25CkEH1g= MINIO_ROOT_USER=minio MINIO_ROOT_PASSWORD=minio123 minio server --certs-dir /tmp/certs --address ":9004" --console-address ":11000" /tmp/minio4/disk{1...4} >/tmp/minio4_1.log 2>&1 &
+echo "done"
+
+export MC_HOST_minio3=https://minio:minio123@localhost:9003
+export MC_HOST_minio4=https://minio:minio123@localhost:9004
+
+./mc ready minio3 --insecure
+./mc ready minio4 --insecure
+
+./mc admin replicate add minio3 minio4 --insecure
+./mc mb minio3/bucket --insecure
+./mc cp --insecure --enc-kms minio3/bucket=minio3-default-key /tmp/data/encrypted minio3/bucket/x
+sleep 10
+st=$(./mc stat --json --no-list --insecure minio3/bucket/x | jq -r .replicationStatus)
+if [ "${st}" != "FAILED" ]; then
+	echo "BUG: Replication succeeded when kms key is different"
+	exit_1
+fi
 
 cleanup
