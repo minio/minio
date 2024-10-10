@@ -275,6 +275,8 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   fsGroupChangePolicy: "OnRootMismatch"
+
+containerSecurityContext:
   readOnlyRootFilesystem: false
 
 # Additational pod annotations

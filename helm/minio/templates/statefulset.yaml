@@ -83,12 +83,7 @@ spec:
       {{- end }}
       {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
       securityContext:
-        runAsUser: {{ .Values.securityContext.runAsUser }}
-        runAsGroup: {{ .Values.securityContext.runAsGroup }}
-        fsGroup: {{ .Values.securityContext.fsGroup }}
-        {{- if and (ge .Capabilities.KubeVersion.Major "1") (ge .Capabilities.KubeVersion.Minor "20") }}
-        fsGroupChangePolicy: {{ .Values.securityContext.fsGroupChangePolicy }}
-        {{- end }}
+        {{- omit .Values.securityContext "enabled" | toYaml | nindent 8 }}
       {{- end }}
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
@@ -192,8 +187,9 @@ spec:
             {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
           {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
-          securityContext:
-            readOnlyRootFilesystem: {{ .Values.securityContext.readOnlyRootFilesystem | default false }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12}}
+          {{- end }}
           {{- end }}
         {{- with .Values.extraContainers }}
           {{- if eq (typeOf .) "string" }}
