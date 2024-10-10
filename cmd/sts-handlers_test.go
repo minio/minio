@@ -771,6 +771,7 @@ func TestIAMWithLDAPNonNormalizedBaseDNConfigServerSuite(t *testing.T) {
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
 				suite.TestLDAPSTSServiceAccountsWithGroups(c)
+				suite.TestLDAPSlashDN(c)
 				suite.TearDownSuite(c)
 			},
 		)
