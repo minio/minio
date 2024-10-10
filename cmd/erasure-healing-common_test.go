@@ -314,7 +314,7 @@ func TestListOnlineDisks(t *testing.T) {
 					test.expectedTime, modTime)
 			}
 			availableDisks, _, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
-				test.errs, fi, bucket, object, madmin.HealDeepScan)
+				test.errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
@@ -496,7 +496,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 			}
 
 			availableDisks, _, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
-				test.errs, fi, bucket, object, madmin.HealDeepScan)
+				test.errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 			if test._tamperBackend != noTamper {
 				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
@@ -558,7 +558,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	erasureDisks, _, _ = listOnlineDisks(erasureDisks, partsMetadata, errs, readQuorum)
 
 	filteredDisks, _, dataErrsPerDisk := disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
 		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
@@ -580,7 +580,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	errs = make([]error, len(erasureDisks))
 	filteredDisks, _, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
 		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
@@ -601,7 +601,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	errs = make([]error, len(erasureDisks))
 	filteredDisks, _, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
 		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
@@ -638,7 +638,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	errs = make([]error, len(erasureDisks))
 	filteredDisks, dataErrsPerDisk, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 	if len(filteredDisks) != len(erasureDisks) {
 		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))

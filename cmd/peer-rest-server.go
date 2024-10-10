@@ -636,7 +636,7 @@ func (s *peerRESTServer) VerifyBinaryHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	if lrTime.Sub(currentReleaseTime) <= 0 {
-		s.writeErrorResponse(w, fmt.Errorf("server is already running the latest version: %s", Version))
+		s.writeErrorResponse(w, fmt.Errorf("server is running the latest version: %s", Version))
 		return
 	}
 

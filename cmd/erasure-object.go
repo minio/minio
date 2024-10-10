@@ -102,7 +102,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(srcBucket, minioMetaBucket) {
+		if shouldCheckForDangling(err, errs, srcBucket) {
 			_, derr := er.deleteIfDangling(context.Background(), srcBucket, srcObject, metaArr, errs, nil, srcOpts)
 			if derr == nil {
 				if srcOpts.VersionID != "" {
@@ -690,13 +690,9 @@ func shouldCheckForDangling(err error, errs []error, bucket string) bool {
 	// Check if we have a read quorum issue
 	case errors.Is(err, errErasureReadQuorum):
 		return true
-	// Check if the object is inexistent in most disks but not all of them
-	case errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound):
-		for i := range errs {
-			if errs[i] == nil {
-				return true
-			}
-		}
+	// Check if the object is non-existent on most disks but not all of them
+	case (errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound)) && (countErrs(errs, nil) > 0):
+		return true
 	}
 	return false
 }
@@ -919,6 +915,16 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				} else {
 					err = errFileNotFound
 				}
+			}
+		}
+		// when we have insufficient read quorum and inconsistent metadata return
+		// file not found, since we can't possibly have a way to recover this object
+		// anyway.
+		if v, ok := err.(InsufficientReadQuorum); ok && v.Type == RQInconsistentMeta {
+			if opts.VersionID != "" {
+				err = errFileVersionNotFound
+			} else {
+				err = errFileNotFound
 			}
 		}
 		return fi, nil, nil, toObjectErr(err, bucket, object)
@@ -2138,7 +2144,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
+		if shouldCheckForDangling(err, errs, bucket) {
 			_, derr := er.deleteIfDangling(context.Background(), bucket, object, metaArr, errs, nil, opts)
 			if derr == nil {
 				if opts.VersionID != "" {
@@ -2192,14 +2198,16 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 // PutObjectTags - replace or add tags to an existing object
 func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
-	// Lock the object before updating tags.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return ObjectInfo{}, err
+	if !opts.NoLock {
+		// Lock the object before updating tags.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	disks := er.getDisks()
 
@@ -2215,7 +2223,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
+		if shouldCheckForDangling(err, errs, bucket) {
 			_, derr := er.deleteIfDangling(context.Background(), bucket, object, metaArr, errs, nil, opts)
 			if derr == nil {
 				if opts.VersionID != "" {
@@ -2310,14 +2318,16 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return err
 	}
 
-	// Acquire write lock before starting to transition the object.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
-	if err != nil {
-		return err
+	if !opts.NoLock {
+		// Acquire write lock before starting to transition the object.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {

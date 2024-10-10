@@ -39,10 +39,7 @@ spec:
       tolerations: {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- if .Values.postJob.securityContext.enabled }}
-      securityContext:
-        runAsUser: {{ .Values.postJob.securityContext.runAsUser }}
-        runAsGroup: {{ .Values.postJob.securityContext.runAsGroup }}
-        fsGroup: {{ .Values.postJob.securityContext.fsGroup }}
+      securityContext: {{ omit .Values.postJob.securityContext "enabled" | toYaml | nindent 12 }}
       {{- end }}
       volumes:
         - name: etc-path
@@ -82,6 +79,9 @@ spec:
               - key: {{ .Values.tls.publicCrt }}
                 path: CAs/public.crt
         {{- end }}
+        {{- if .Values.customCommandJob.extraVolumes }}
+          {{- toYaml .Values.customCommandJob.extraVolumes | nindent 8 }}
+        {{- end }}
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
@@ -90,9 +90,9 @@ spec:
         - name: minio-make-policy
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
           {{- if .Values.makePolicyJob.securityContext.enabled }}
-          securityContext:
-            runAsUser: {{ .Values.makePolicyJob.securityContext.runAsUser }}
-            runAsGroup: {{ .Values.makePolicyJob.securityContext.runAsGroup }}
+          {{- with .Values.makePolicyJob.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makePolicyJob.exitCommand }}
@@ -124,9 +124,9 @@ spec:
         - name: minio-make-bucket
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
           {{- if .Values.makeBucketJob.securityContext.enabled }}
-          securityContext:
-            runAsUser: {{ .Values.makeBucketJob.securityContext.runAsUser }}
-            runAsGroup: {{ .Values.makeBucketJob.securityContext.runAsGroup }}
+          {{- with .Values.makeBucketJob.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makeBucketJob.exitCommand }}
@@ -157,9 +157,9 @@ spec:
         - name: minio-make-user
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
           {{- if .Values.makeUserJob.securityContext.enabled }}
-          securityContext:
-            runAsUser: {{ .Values.makeUserJob.securityContext.runAsUser }}
-            runAsGroup: {{ .Values.makeUserJob.securityContext.runAsGroup }}
+          {{- with .Values.makeUserJob.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makeUserJob.exitCommand }}
@@ -190,9 +190,9 @@ spec:
         - name: minio-custom-command
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
           {{- if .Values.customCommandJob.securityContext.enabled }}
-          securityContext:
-            runAsUser: {{ .Values.customCommandJob.securityContext.runAsUser }}
-            runAsGroup: {{ .Values.customCommandJob.securityContext.runAsGroup }}
+          {{- with .Values.customCommandJob.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.customCommandJob.exitCommand }}
@@ -217,15 +217,18 @@ spec:
             - name: cert-secret-volume-mc
               mountPath: {{ .Values.configPathmc }}certs
             {{- end }}
+            {{- if .Values.customCommandJob.extraVolumeMounts }}
+              {{- toYaml .Values.customCommandJob.extraVolumeMounts | nindent 12 }}
+            {{- end }}
           resources: {{- toYaml .Values.customCommandJob.resources | nindent 12 }}
         {{- end }}
         {{- if .Values.svcaccts }}
         - name: minio-make-svcacct
           image: "{{ .Values.mcImage.repository }}:{{ .Values.mcImage.tag }}"
           {{- if .Values.makeServiceAccountJob.securityContext.enabled }}
-          securityContext:
-            runAsUser: {{ .Values.makeServiceAccountJob.securityContext.runAsUser }}
-            runAsGroup: {{ .Values.makeServiceAccountJob.securityContext.runAsGroup }}
+          {{- with .Values.makeServiceAccountJob.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
           {{- end }}
           imagePullPolicy: {{ .Values.mcImage.pullPolicy }}
           {{- if .Values.makeServiceAccountJob.exitCommand }}

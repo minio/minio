@@ -570,10 +570,7 @@ func auditObjectErasureSet(ctx context.Context, api, object string, set *erasure
 
 // NewNSLock - initialize a new namespace RWLocker instance.
 func (s *erasureSets) NewNSLock(bucket string, objects ...string) RWLocker {
-	if len(objects) == 1 {
-		return s.getHashedSet(objects[0]).NewNSLock(bucket, objects...)
-	}
-	return s.getHashedSet("").NewNSLock(bucket, objects...)
+	return s.sets[0].NewNSLock(bucket, objects...)
 }
 
 // SetDriveCount returns the current drives per set.

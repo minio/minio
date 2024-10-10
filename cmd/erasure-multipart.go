@@ -577,19 +577,9 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return pi, toObjectErr(errInvalidArgument)
 	}
 
-	// Read lock for upload id.
-	// Only held while reading the upload metadata.
-	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	rctx := rlkctx.Context()
-	defer uploadIDRLock.RUnlock(rlkctx)
-
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 	// Validates if upload ID exists.
-	fi, _, err := er.checkUploadIDExists(rctx, bucket, object, uploadID, true)
+	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, true)
 	if err != nil {
 		if errors.Is(err, errVolumeNotFound) {
 			return pi, toObjectErr(err, bucket)
@@ -744,10 +734,7 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
-	// Write lock for this part ID, only hold it if we are planning to read from the
-	// stream avoid any concurrent updates.
-	//
-	// Must be held throughout this call.
+	// Serialize concurrent part uploads.
 	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
 	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
 	if err != nil {
@@ -800,14 +787,6 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		Object:   object,
 		UploadID: uploadID,
 	}
-
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return MultipartInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer uploadIDLock.RUnlock(lkctx)
 
 	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, false)
 	if err != nil {
@@ -887,14 +866,6 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	if !opts.NoAuditLog {
 		auditObjectErasureSet(ctx, "ListObjectParts", object, &er)
 	}
-
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return ListPartsInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer uploadIDLock.RUnlock(lkctx)
 
 	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, false)
 	if err != nil {
@@ -1117,16 +1088,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			return ObjectInfo{}, err
 		}
 	}
-
-	// Hold write locks to verify uploaded parts, also disallows any
-	// parallel PutObjectPart() requests.
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	wlkctx, err := uploadIDLock.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return oi, err
-	}
-	ctx = wlkctx.Context()
-	defer uploadIDLock.Unlock(wlkctx)
 
 	fi, partsMetadata, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, true)
 	if err != nil {
@@ -1493,14 +1454,6 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	if !opts.NoAuditLog {
 		auditObjectErasureSet(ctx, "AbortMultipartUpload", object, &er)
 	}
-
-	lk := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return err
-	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	// Validates if upload ID exists.
 	if _, _, err = er.checkUploadIDExists(ctx, bucket, object, uploadID, false); err != nil {
