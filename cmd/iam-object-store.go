@@ -481,12 +481,24 @@ var (
 	policyDBGroupsListKey   = "policydb/groups/"
 )
 
+func findSecondIndex(s string, substr string) int {
+	first := strings.Index(s, substr)
+	if first == -1 {
+		return -1
+	}
+	second := strings.Index(s[first+1:], substr)
+	if second == -1 {
+		return -1
+	}
+	return first + second + 1
+}
+
 // splitPath splits a path into a top-level directory and a child item. The
 // parent directory retains the trailing slash.
-func splitPath(s string, lastIndex bool) (string, string) {
+func splitPath(s string, secondIndex bool) (string, string) {
 	var i int
-	if lastIndex {
-		i = strings.LastIndex(s, "/")
+	if secondIndex {
+		i = findSecondIndex(s, "/")
 	} else {
 		i = strings.Index(s, "/")
 	}
@@ -506,8 +518,8 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (res map
 			return nil, item.Err
 		}
 
-		lastIndex := strings.HasPrefix(item.Item, policyDBPrefix)
-		listKey, trimmedItem := splitPath(item.Item, lastIndex)
+		secondIndex := strings.HasPrefix(item.Item, policyDBPrefix)
+		listKey, trimmedItem := splitPath(item.Item, secondIndex)
 		if listKey == iamFormatFile {
 			continue
 		}
