@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -842,12 +841,16 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 		return nil, toStorageErr(err)
 	}
 
-	verifyResp := &CheckPartsResp{}
-	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
+	dec := msgpNewReader(respReader)
+	defer readMsgpReaderPoolPut(dec)
+
+	verifyResp := CheckPartsResp{}
+	err = verifyResp.DecodeMsg(dec)
+	if err != nil {
 		return nil, toStorageErr(err)
 	}
 
-	return verifyResp, nil
+	return &verifyResp, nil
 }
 
 func (client *storageRESTClient) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
