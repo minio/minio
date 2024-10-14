@@ -145,6 +145,10 @@ test-multipart: install-race ## test multipart
 	@echo "Test multipart behavior when part files are missing"
 	@(env bash $(PWD)/buildscripts/multipart-quorum-test.sh)
 
+test-resiliency:
+	@echo "Running resiliency tests"
+	@(DOCKER_COMPOSE_FILE=$(PWD)/docs/orchestration/docker-compose/docker-compose.yaml env bash $(PWD)/docs/resiliency/resiliency-tests.sh)
+
 verify: install-race ## verify minio various setups
 	@echo "Verifying build with race"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
