@@ -2009,7 +2009,8 @@ type ParentUserInfo struct {
 // GetAllParentUsers - returns all distinct "parent-users" associated with STS
 // or service credentials, mapped to all distinct roleARNs associated with the
 // parent user. The dummy role ARN is associated with parent users from
-// policy-claim based OpenID providers.
+// policy-claim based OpenID providers. The root credential as a parent
+// user is not included in the result.
 func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 	cache := store.rlock()
 	defer store.runlock()
@@ -2048,7 +2049,7 @@ func (store *IAMStoreSys) getParentUsers(cache *iamCache) map[string]ParentUserI
 		if err != nil {
 			continue
 		}
-		if cred.ParentUser == "" {
+		if cred.ParentUser == "" || cred.ParentUser == globalActiveCred.AccessKey {
 			continue
 		}
 
