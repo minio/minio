@@ -43,6 +43,7 @@ import (
 	"github.com/minio/minio/internal/config/storageclass"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/sync/errgroup"
 	"github.com/minio/pkg/v3/wildcard"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -1615,7 +1616,7 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		return false
 	}
 
-	if hadoop && delimiter == SlashSeparator && maxKeys == 2 && marker == "" {
+	if hadoop && delimiter == SlashSeparator && (maxKeys == 2 || maxKeys == 5000) && marker == "" {
 		// Optimization for Spark/Hadoop workload where spark sends a garbage
 		// request of this kind
 		//
@@ -1680,29 +1681,36 @@ func (z *erasureServerPools) listObjectsGeneric(ctx context.Context, bucket, pre
 		// and throw a 404 exception. This is especially a problem for spark jobs overwriting the same partition
 		// repeatedly. This workaround recursively lists the top 3 entries including delete markers to reflect the
 		// correct state of the directory in the list results.
-		if strings.HasSuffix(opts.Prefix, SlashSeparator) {
-			li, err := listFn(ctx, opts, maxKeys)
-			if err != nil {
-				return loi, err
-			}
-			if len(li.Objects) == 0 {
-				prefixes := li.Prefixes[:0]
-				for _, prefix := range li.Prefixes {
-					objInfo, _ := z.GetObjectInfo(ctx, bucket, pathJoin(prefix, "_SUCCESS"), ObjectOptions{NoLock: true})
-					if objInfo.IsLatest && objInfo.DeleteMarker {
-						continue
-					}
-					prefixes = append(prefixes, prefix)
+		sparkRecursiveList := strings.ToLower(env.Get("_MINIO_SPARK_RECURSIVE_LIST", "off")) == "on"
+		if sparkRecursiveList {
+			opts.Recursive = true
+			opts.Limit = maxObjectList
+			opts.Separator = ""
+
+			for {
+				li, err := listFn(ctx, opts, opts.Limit)
+				if err != nil {
+					return loi, err
 				}
-				if len(prefixes) > 0 {
-					objInfo, _ := z.GetObjectInfo(ctx, bucket, pathJoin(opts.Prefix, "_SUCCESS"), ObjectOptions{NoLock: true})
-					if objInfo.IsLatest && objInfo.DeleteMarker {
-						return loi, nil
+				loi.Objects = append(loi.Objects, li.Objects...)
+				loi.Prefixes = append(loi.Prefixes, li.Prefixes...)
+				if !li.IsTruncated || len(loi.Objects) >= maxKeys {
+					var nextMarker string
+					if len(loi.Objects) > maxKeys {
+						nextMarker = loi.Objects[maxKeys].Name
 					}
+					loi.IsTruncated = len(loi.Objects) > maxKeys
+					if len(loi.Prefixes) > maxKeys {
+						loi.Prefixes = loi.Prefixes[:maxKeys]
+					}
+					if len(loi.Objects) > maxKeys {
+						loi.Objects = loi.Objects[:maxKeys]
+					}
+					loi.NextMarker = nextMarker
+					return loi, nil
 				}
-				li.Prefixes = prefixes
+				opts.Marker = li.NextMarker
 			}
-			return li, nil
 		}
 	}
 
