@@ -55,6 +55,8 @@ func isXLMetaErasureInfoValid(data, parity int) bool {
 	return ((data >= parity) && (data > 0) && (parity >= 0))
 }
 
+//msgp:clearomitted
+
 //go:generate msgp -file=$GOFILE -unexported
 
 // A xlMetaV1Object represents `xl.meta` metadata header.

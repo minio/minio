@@ -746,6 +746,8 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -801,12 +803,19 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "OldDataDir")
 				return
 			}
+			zb0001Mask |= 0x1
 		default:
 			err = dc.Skip()
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.OldDataDir = ""
 		}
 	}
 	return
@@ -934,6 +943,8 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -989,12 +1000,19 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "OldDataDir")
 				return
 			}
+			zb0001Mask |= 0x1
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.OldDataDir = ""
 		}
 	}
 	o = bts
@@ -2453,6 +2471,9 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 			err = msgp.WrapError(err, "Data")
 			return
 		}
+		if z.Data == nil {
+			z.Data = make([]byte, 0)
+		}
 	}
 	z.NumVersions, err = dc.ReadInt()
 	if err != nil {
@@ -2486,6 +2507,9 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		if err != nil {
 			err = msgp.WrapError(err, "Checksum")
 			return
+		}
+		if z.Checksum == nil {
+			z.Checksum = make([]byte, 0)
 		}
 	}
 	z.Versioned, err = dc.ReadBool()
@@ -2907,6 +2931,9 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Data")
 			return
 		}
+		if z.Data == nil {
+			z.Data = make([]byte, 0)
+		}
 	}
 	z.NumVersions, bts, err = msgp.ReadIntBytes(bts)
 	if err != nil {
@@ -2936,6 +2963,9 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err, "Checksum")
 			return
+		}
+		if z.Checksum == nil {
+			z.Checksum = make([]byte, 0)
 		}
 	}
 	z.Versioned, bts, err = msgp.ReadBoolBytes(bts)
@@ -3961,6 +3991,9 @@ func (z *RawFileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 					err = msgp.WrapError(err, "Buf")
 					return
 				}
+				if z.Buf == nil {
+					z.Buf = make([]byte, 0)
+				}
 			}
 		default:
 			err = dc.Skip()
@@ -4037,6 +4070,9 @@ func (z *RawFileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if err != nil {
 					err = msgp.WrapError(err, "Buf")
 					return
+				}
+				if z.Buf == nil {
+					z.Buf = make([]byte, 0)
 				}
 			}
 		default:
@@ -4220,6 +4256,8 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -4240,6 +4278,7 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			var zb0002 uint32
 			zb0002, err = dc.ReadArrayHeader()
@@ -4289,6 +4328,12 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Prefix = ""
 		}
 	}
 	return
@@ -4449,6 +4494,8 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -4469,6 +4516,7 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -4520,6 +4568,12 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Prefix = ""
+		}
+	}
 	o = bts
 	return
 }
@@ -4544,6 +4598,8 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -4564,6 +4620,7 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			z.File, err = dc.ReadString()
 			if err != nil {
@@ -4582,6 +4639,7 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Error")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "d":
 			z.Data, err = dc.ReadBytes(z.Data)
 			if err != nil {
@@ -4600,6 +4658,15 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x3 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Prefix = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Error = ""
 		}
 	}
 	return
@@ -4762,6 +4829,8 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -4782,6 +4851,7 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			z.File, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -4800,6 +4870,7 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Error")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "d":
 			z.Data, bts, err = msgp.ReadBytesBytes(bts, z.Data)
 			if err != nil {
@@ -4818,6 +4889,15 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x3 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Prefix = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Error = ""
 		}
 	}
 	o = bts
