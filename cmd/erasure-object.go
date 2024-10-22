@@ -2365,6 +2365,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 
 	destObj, err := genTransitionObjName(bucket)
 	if err != nil {
+		traceFn(ILMTransition, nil, err)
 		return err
 	}
 
@@ -2378,6 +2379,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	rv, err = tgtClient.Put(ctx, destObj, pr, fi.Size)
 	pr.CloseWithError(err)
 	if err != nil {
+		traceFn(ILMTransition, nil, err)
 		return err
 	}
 	fi.TransitionStatus = lifecycle.TransitionComplete
