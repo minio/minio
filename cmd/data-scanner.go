@@ -1325,10 +1325,13 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, encodeDirObject(obj.Name), opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			traceFn(ILMExpiry, nil, nil)
 			return false
 		}
 		// Assume it is still there.
-		ilmLogOnceIf(ctx, fmt.Errorf("DeleteObject(%s, %s): %w", obj.Bucket, obj.Name, err), "non-transition-expiry"+obj.Name)
+		err := fmt.Errorf("DeleteObject(%s, %s): %w", obj.Bucket, obj.Name, err)
+		ilmLogOnceIf(ctx, err, "non-transition-expiry"+obj.Name)
+		traceFn(ILMExpiry, nil, err)
 		return false
 	}
 	if dobj.Name == "" {
@@ -1549,7 +1552,7 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]string, traceFn func(event string, metadata map[string]string)) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]string, traceFn func(event string, metadata map[string]string, err error)) {
 	var apiName string
 	switch event {
 	case ILMExpiry:
@@ -1567,5 +1570,5 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags ma
 		VersionID: oi.VersionID,
 		Tags:      tags,
 	})
-	traceFn(event, tags)
+	traceFn(event, tags, nil)
 }
