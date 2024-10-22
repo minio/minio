@@ -1633,6 +1633,8 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -1725,6 +1727,7 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+			zb0001Mask |= 0x1
 		case "c":
 			z.Compacted, err = dc.ReadBool()
 			if err != nil {
@@ -1737,6 +1740,12 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AllTierStats = nil
 		}
 	}
 	return
@@ -1952,6 +1961,8 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -2043,6 +2054,7 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0001Mask |= 0x1
 		case "c":
 			z.Compacted, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
@@ -2055,6 +2067,12 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AllTierStats = nil
 		}
 	}
 	o = bts
@@ -2628,6 +2646,8 @@ func (z *dataUsageEntryV7) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -2720,6 +2740,7 @@ func (z *dataUsageEntryV7) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+			zb0001Mask |= 0x1
 		case "c":
 			z.Compacted, err = dc.ReadBool()
 			if err != nil {
@@ -2732,6 +2753,12 @@ func (z *dataUsageEntryV7) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AllTierStats = nil
 		}
 	}
 	return
@@ -2747,6 +2774,8 @@ func (z *dataUsageEntryV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -2838,6 +2867,7 @@ func (z *dataUsageEntryV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+			zb0001Mask |= 0x1
 		case "c":
 			z.Compacted, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
@@ -2850,6 +2880,12 @@ func (z *dataUsageEntryV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x1 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.AllTierStats = nil
 		}
 	}
 	o = bts

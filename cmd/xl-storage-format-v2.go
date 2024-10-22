@@ -47,6 +47,8 @@ var (
 	xlVersionCurrent [4]byte
 )
 
+//msgp:clearomitted
+
 //go:generate msgp -file=$GOFILE -unexported
 //go:generate stringer -type VersionType,ErasureAlgo -output=xl-storage-format-v2_string.go $GOFILE
 

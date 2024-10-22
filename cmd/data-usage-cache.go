@@ -39,6 +39,8 @@ import (
 	"github.com/valyala/bytebufferpool"
 )
 
+//msgp:clearomitted
+
 //go:generate msgp -file $GOFILE -unexported
 
 // dataUsageHash is the hash type used.
