@@ -509,9 +509,7 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	}
 	defer done(0, &err)
 
-	return xioutil.WithDeadline[*CheckPartsResp](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (res *CheckPartsResp, err error) {
-		return p.storage.CheckParts(ctx, volume, path, fi)
-	})
+	return p.storage.CheckParts(ctx, volume, path, fi)
 }
 
 func (p *xlStorageDiskIDCheck) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
