@@ -23,24 +23,24 @@ import (
 	"testing"
 )
 
-func TestDelMarkerExpParseAndValidate(t *testing.T) {
+func TestDelObjExpParseAndValidate(t *testing.T) {
 	tests := []struct {
 		xml string
 		err error
 	}{
 		{
-			xml: `<DelMarkerExpiration> <Days> 1 </Days> </DelMarkerExpiration>`,
+			xml: `<DeletedObjectExpiration> <Days> 1 </Days> </DeletedObjectExpiration>`,
 			err: nil,
 		},
 		{
-			xml: `<DelMarkerExpiration> <Days> -1 </Days> </DelMarkerExpiration>`,
-			err: errInvalidDaysDelMarkerExpiration,
+			xml: `<DeletedObjectExpiration> <Days> -1 </Days> </DeletedObjectExpiration>`,
+			err: errInvalidDaysDeletedObjExpiration,
 		},
 	}
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("TestDelMarker-%d", i), func(t *testing.T) {
-			var dexp DelMarkerExpiration
+			var dexp DeletedObjectExpiration
 			var fail bool
 			err := xml.Unmarshal([]byte(test.xml), &dexp)
 			if test.err == nil {
