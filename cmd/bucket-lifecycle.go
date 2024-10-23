@@ -352,7 +352,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				traceFn := globalLifecycleSys.trace(oi)
 				if !oi.TransitionedObject.FreeVersion {
 					// nothing to be done
-					return
+					continue
 				}
 
 				ignoreNotFoundErr := func(err error) error {
@@ -367,7 +367,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				if ignoreNotFoundErr(err) != nil {
 					transitionLogIf(es.ctx, err)
 					traceFn(ILMFreeVersionDelete, nil, err)
-					return
+					continue
 				}
 
 				// Remove this free version
