@@ -593,8 +593,9 @@ func generateListVersionsResponse(ctx context.Context, bucket, prefix, marker, v
 			for k, v := range cleanReservedKeys(object.UserDefined) {
 				content.UserMetadata.Set(k, v)
 			}
-
-			content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
+			if !object.Expires.IsZero() {
+				content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
+			}
 			content.Internal = &ObjectInternalInfo{
 				K: object.DataBlocks,
 				M: object.ParityBlocks,
@@ -729,7 +730,9 @@ func generateListObjectsV2Response(ctx context.Context, bucket, prefix, token, n
 				for k, v := range cleanReservedKeys(object.UserDefined) {
 					content.UserMetadata.Set(k, v)
 				}
-				content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
+				if !object.Expires.IsZero() {
+					content.UserMetadata.Set("expires", object.Expires.Format(http.TimeFormat))
+				}
 				content.Internal = &ObjectInternalInfo{
 					K: object.DataBlocks,
 					M: object.ParityBlocks,
