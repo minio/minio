@@ -2275,6 +2275,7 @@ func (s *xlStorage) writeAllInternal(ctx context.Context, filePath string, b []b
 
 	_, err = w.Write(b)
 	if err != nil {
+		w.Truncate(0) // to indicate that we did partial write.
 		w.Close()
 		return err
 	}
