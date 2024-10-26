@@ -432,15 +432,19 @@ func (s *xlStorage) Healing() *healingTracker {
 		bucketMetaPrefix, healingTrackerFilename)
 	b, err := os.ReadFile(healingFile)
 	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			internalLogIf(GlobalContext, fmt.Errorf("unable to read %s: %w", healingFile, err))
+		}
 		return nil
 	}
 	if len(b) == 0 {
+		internalLogIf(GlobalContext, fmt.Errorf("%s is empty", healingFile))
 		// 'healing.bin' might be truncated
 		return nil
 	}
 	h := newHealingTracker()
 	_, err = h.UnmarshalMsg(b)
-	bugLogIf(GlobalContext, err)
+	internalLogIf(GlobalContext, err)
 	return h
 }
 
@@ -2246,6 +2250,7 @@ func (s *xlStorage) writeAllMeta(ctx context.Context, volume string, path string
 	return renameAll(tmpFilePath, filePath, volumeDir)
 }
 
+// Create or truncate an existing file before writing
 func (s *xlStorage) writeAllInternal(ctx context.Context, filePath string, b []byte, sync bool, skipParent string) (err error) {
 	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
@@ -2268,16 +2273,11 @@ func (s *xlStorage) writeAllInternal(ctx context.Context, filePath string, b []b
 		return err
 	}
 
-	n, err := w.Write(b)
+	_, err = w.Write(b)
 	if err != nil {
-		w.Close()
-		return err
-	}
-
-	if n != len(b) {
 		w.Truncate(0) // to indicate that we did partial write.
 		w.Close()
-		return io.ErrShortWrite
+		return err
 	}
 
 	// Dealing with error returns from close() - 'man 2 close'
