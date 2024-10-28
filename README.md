@@ -93,7 +93,6 @@ The following table lists supported architectures. Replace the `wget` URL with t
 | 64-bit Intel/AMD               | <https://dl.min.io/server/minio/release/linux-amd64/minio>   |
 | 64-bit ARM                     | <https://dl.min.io/server/minio/release/linux-arm64/minio>   |
 | 64-bit PowerPC LE (ppc64le)    | <https://dl.min.io/server/minio/release/linux-ppc64le/minio> |
-| IBM Z-Series (S390X)           | <https://dl.min.io/server/minio/release/linux-s390x/minio>   |
 
 The MinIO deployment starts using default root credentials `minioadmin:minioadmin`. You can test the deployment using the MinIO Console, an embedded web-based object browser built into MinIO Server. Point a web browser running on the host machine to <http://127.0.0.1:9000> and log in with the root credentials. You can use the Browser to create buckets, upload objects, and browse the contents of the MinIO server.
 

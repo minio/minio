@@ -24,7 +24,7 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_DIR)
-	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.1.10-0.20240227114326-6d6f813fff1b
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.2.3-0.20241022140105-4558fbf3a223
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
 crosscompile: ## cross compile minio

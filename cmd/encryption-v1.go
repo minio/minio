@@ -1099,7 +1099,9 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
 		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
 		if err != nil {
-			encLogIf(GlobalContext, err)
+			if !errors.Is(err, crypto.ErrSecretKeyMismatch) {
+				encLogIf(GlobalContext, err)
+			}
 			return
 		}
 		data = decrypted

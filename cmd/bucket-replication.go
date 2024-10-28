@@ -889,6 +889,14 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	if crypto.S3.IsEncrypted(objInfo.UserDefined) {
 		putOpts.ServerSideEncryption = encrypt.NewSSE()
 	}
+
+	if crypto.S3KMS.IsEncrypted(objInfo.UserDefined) {
+		sseEnc, err := encrypt.NewSSEKMS(objInfo.KMSKeyID(), nil)
+		if err != nil {
+			return putOpts, err
+		}
+		putOpts.ServerSideEncryption = sseEnc
+	}
 	return
 }
 

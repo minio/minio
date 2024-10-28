@@ -561,6 +561,8 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 3 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -605,6 +607,7 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Index")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "crc":
 			var zb0002 uint32
 			zb0002, err = dc.ReadMapHeader()
@@ -635,18 +638,32 @@ func (z *ObjectPartInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 				}
 				z.Checksums[za0001] = za0002
 			}
+			zb0001Mask |= 0x2
 		case "err":
 			z.Error, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err, "Error")
 				return
 			}
+			zb0001Mask |= 0x4
 		default:
 			err = dc.Skip()
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x7 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Index = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Checksums = nil
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.Error = ""
 		}
 	}
 	return
@@ -850,6 +867,8 @@ func (z *ObjectPartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 3 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -894,6 +913,7 @@ func (z *ObjectPartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Index")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "crc":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
@@ -924,18 +944,32 @@ func (z *ObjectPartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Checksums[za0001] = za0002
 			}
+			zb0001Mask |= 0x2
 		case "err":
 			z.Error, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Error")
 				return
 			}
+			zb0001Mask |= 0x4
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x7 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Index = nil
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Checksums = nil
+		}
+		if (zb0001Mask & 0x4) == 0 {
+			z.Error = ""
 		}
 	}
 	o = bts

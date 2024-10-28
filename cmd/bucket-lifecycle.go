@@ -71,7 +71,7 @@ func NewLifecycleSys() *LifecycleSys {
 	return &LifecycleSys{}
 }
 
-func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string, metadata map[string]string) madmin.TraceInfo {
+func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event string, metadata map[string]string, err string) madmin.TraceInfo {
 	sz, _ := oi.GetActualSize()
 	return madmin.TraceInfo{
 		TraceType: madmin.TraceILM,
@@ -81,18 +81,22 @@ func ilmTrace(startTime time.Time, duration time.Duration, oi ObjectInfo, event 
 		Duration:  duration,
 		Path:      pathJoin(oi.Bucket, oi.Name),
 		Bytes:     sz,
-		Error:     "",
+		Error:     err,
 		Message:   getSource(4),
 		Custom:    metadata,
 	}
 }
 
-func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string, metadata map[string]string) {
+func (sys *LifecycleSys) trace(oi ObjectInfo) func(event string, metadata map[string]string, err error) {
 	startTime := time.Now()
-	return func(event string, metadata map[string]string) {
+	return func(event string, metadata map[string]string, err error) {
 		duration := time.Since(startTime)
 		if globalTrace.NumSubscribers(madmin.TraceILM) > 0 {
-			globalTrace.Publish(ilmTrace(startTime, duration, oi, event, metadata))
+			e := ""
+			if err != nil {
+				e = err.Error()
+			}
+			globalTrace.Publish(ilmTrace(startTime, duration, oi, event, metadata, e))
 		}
 	}
 }
@@ -348,7 +352,7 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				traceFn := globalLifecycleSys.trace(oi)
 				if !oi.TransitionedObject.FreeVersion {
 					// nothing to be done
-					return
+					continue
 				}
 
 				ignoreNotFoundErr := func(err error) error {
@@ -362,7 +366,8 @@ func (es *expiryState) Worker(input <-chan expiryOp) {
 				err := deleteObjectFromRemoteTier(es.ctx, oi.TransitionedObject.Name, oi.TransitionedObject.VersionID, oi.TransitionedObject.Tier)
 				if ignoreNotFoundErr(err) != nil {
 					transitionLogIf(es.ctx, err)
-					return
+					traceFn(ILMFreeVersionDelete, nil, err)
+					continue
 				}
 
 				// Remove this free version
