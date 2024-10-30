@@ -418,6 +418,11 @@ func (m metaCacheEntries) resolve(r *metadataResolutionParams) (selected *metaCa
 
 	// If all objects agree.
 	if selected != nil && objsAgree == objsValid {
+		if r.objQuorum > 1 && selected.cached != nil {
+			for i := range selected.cached.versions {
+				selected.cached.versions[i].quorum = objsAgree
+			}
+		}
 		return selected, true
 	}
 
