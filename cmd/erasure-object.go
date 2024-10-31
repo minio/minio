@@ -2376,7 +2376,11 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	}()
 
 	var rv remoteVersionID
-	rv, err = tgtClient.Put(ctx, destObj, pr, fi.Size)
+	rv, err = tgtClient.PutWithMeta(ctx, destObj, pr, fi.Size, map[string]string{
+		"name": object, // preserve the original name of the object on the remote tier object metadata.
+		// this is just for future reverse lookup() purposes (applies only for new objects)
+		// does not apply retro-actively on already transitioned objects.
+	})
 	pr.CloseWithError(err)
 	if err != nil {
 		traceFn(ILMTransition, nil, err)
