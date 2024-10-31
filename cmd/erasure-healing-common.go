@@ -442,7 +442,7 @@ func disksWithAllParts(ctx context.Context, onlineDisks []StorageAPI, partsMetad
 	}
 
 	for i, onlineDisk := range onlineDisks {
-		if metaErrs[i] == nil && !hasPartErr(dataErrsByDisk[i]) {
+		if metaErrs[i] == nil && (!hasPartErr(dataErrsByDisk[i]) || partsMetadata[i].IsRemote() || partsMetadata[i].Deleted) {
 			// All parts verified, mark it as all data available.
 			availableDisks[i] = onlineDisk
 		} else {
