@@ -60,6 +60,10 @@ test-ilm: install-race
 	@echo "Running ILM tests"
 	@env bash $(PWD)/docs/bucket/replication/setup_ilm_expiry_replication.sh
 
+test-ilm-transition: install-race
+	@echo "Running ILM tiering tests with healing"
+	@env bash $(PWD)/docs/bucket/lifecycle/setup_ilm_transition.sh
+
 test-pbac: install-race
 	@echo "Running bucket policies tests"
 	@env bash $(PWD)/docs/iam/policies/pbac-tests.sh
