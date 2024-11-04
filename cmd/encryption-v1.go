@@ -109,7 +109,7 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 // be AWS S3 compliant.
 //
 // DecryptETags uses a KMS bulk decryption API, if available, which
-// is more efficient than decrypting ETags sequentually.
+// is more efficient than decrypting ETags sequentially.
 func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 	const BatchSize = 250 // We process the objects in batches - 250 is a reasonable default.
 	var (
