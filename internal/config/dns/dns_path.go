@@ -37,6 +37,9 @@ func msgPath(s, prefix string) string {
 // dnsJoin joins labels to form a fully qualified domain name. If the last label is
 // the root label it is ignored. Not other syntax checks are performed.
 func dnsJoin(labels ...string) string {
+	if len(labels) == 0 {
+		return ""
+	}
 	ll := len(labels)
 	if labels[ll-1] == "." {
 		return strings.Join(labels[:ll-1], ".") + "."
@@ -49,6 +52,9 @@ func msgUnPath(s string) string {
 	l := strings.Split(s, etcdPathSeparator)
 	if l[len(l)-1] == "" {
 		l = l[:len(l)-1]
+	}
+	if len(l) < 2 {
+		return s
 	}
 	// start with 1, to strip /skydns
 	for i, j := 1, len(l)-1; i < j; i, j = i+1, j-1 {
