@@ -242,6 +242,10 @@ func (store *QueueStore[I]) GetRaw(key Key) (raw []byte, err error) {
 		return raw, os.ErrNotExist
 	}
 
+	if key.Compress {
+		raw, err = s2.Decode(nil, raw)
+	}
+
 	return
 }
 
