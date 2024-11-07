@@ -251,61 +251,21 @@ func (store *QueueStore[I]) GetRaw(key Key) (raw []byte, err error) {
 
 // Get - gets an item from the store.
 func (store *QueueStore[I]) Get(key Key) (item I, err error) {
-	store.RLock()
-
-	defer func(store *QueueStore[I]) {
-		store.RUnlock()
-		if err != nil && !os.IsNotExist(err) {
-			// Upon error we remove the entry.
-			store.Del(key)
-		}
-	}(store)
-
-	var eventData []byte
-	eventData, err = os.ReadFile(filepath.Join(store.directory, key.String()))
+	items, err := store.GetMultiple(key)
 	if err != nil {
 		return item, err
 	}
-
-	if len(eventData) == 0 {
-		return item, os.ErrNotExist
-	}
-
-	if err = json.Unmarshal(eventData, &item); err != nil {
-		return item, err
-	}
-
-	return item, nil
+	return items[0], nil
 }
 
 // GetMultiple will read the multi payload file and fetch the items
 func (store *QueueStore[I]) GetMultiple(key Key) (items []I, err error) {
-	store.RLock()
-
-	defer func(store *QueueStore[I]) {
-		store.RUnlock()
-		if err != nil && !os.IsNotExist(err) {
-			// Upon error we remove the entry.
-			store.Del(key)
-		}
-	}(store)
-
-	raw, err := os.ReadFile(filepath.Join(store.directory, key.String()))
+	raw, err := store.GetRaw(key)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	var decoder *jsoniter.Decoder
-	if key.Compress {
-		decodedBytes, err := s2.Decode(nil, raw)
-		if err != nil {
-			return nil, err
-		}
-		decoder = jsoniter.ConfigCompatibleWithStandardLibrary.NewDecoder(bytes.NewReader(decodedBytes))
-	} else {
-		decoder = jsoniter.ConfigCompatibleWithStandardLibrary.NewDecoder(bytes.NewReader(raw))
-	}
-
+	decoder := jsoniter.ConfigCompatibleWithStandardLibrary.NewDecoder(bytes.NewReader(raw))
 	for decoder.More() {
 		var item I
 		if err := decoder.Decode(&item); err != nil {
