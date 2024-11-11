@@ -19,6 +19,7 @@ package deadlineconn
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -114,4 +115,78 @@ func TestBuffConnReadTimeout(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+// Test deadlineconn handles read timeout properly by reading two messages beyond deadline.
+func TestBuffConnReadCheckTimeout(t *testing.T) {
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("unable to create listener. %v", err)
+	}
+	defer l.Close()
+	serverAddr := l.Addr().String()
+
+	tcpListener, ok := l.(*net.TCPListener)
+	if !ok {
+		t.Fatalf("failed to assert to net.TCPListener")
+	}
+	var cerr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		tcpConn, terr := tcpListener.AcceptTCP()
+		if terr != nil {
+			cerr = fmt.Errorf("failed to accept new connection. %v", terr)
+			return
+		}
+		deadlineconn := New(tcpConn)
+		deadlineconn.WithReadDeadline(time.Second)
+		deadlineconn.WithWriteDeadline(time.Second)
+		defer deadlineconn.Close()
+
+		// Read a line
+		b := make([]byte, 12)
+		_, terr = deadlineconn.Read(b)
+		if terr != nil {
+			cerr = fmt.Errorf("failed to read from client. %v", terr)
+			return
+		}
+		received := string(b)
+		if received != "message one\n" {
+			cerr = fmt.Errorf(`server: expected: "message one\n", got: %v`, received)
+			return
+		}
+
+		// Set a deadline in the past to indicate we want the next read to fail.
+		// Ensure we don't override it on read.
+		deadlineconn.SetReadDeadline(time.Unix(1, 0))
+
+		// Be sure to exceed update interval
+		time.Sleep(updateInterval * 2)
+
+		_, terr = deadlineconn.Read(b)
+		if terr == nil {
+			cerr = fmt.Errorf("could read from client, expected error, got %v", terr)
+			return
+		}
+	}()
+
+	c, err := net.Dial("tcp", serverAddr)
+	if err != nil {
+		t.Fatalf("unable to connect to server. %v", err)
+	}
+	defer c.Close()
+
+	_, err = io.WriteString(c, "message one\n")
+	if err != nil {
+		t.Fatalf("failed to write to server. %v", err)
+	}
+	_, _ = io.WriteString(c, "message two\n")
+
+	wg.Wait()
+	if cerr != nil {
+		t.Fatal(cerr)
+	}
 }
