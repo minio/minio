@@ -79,10 +79,10 @@ func (eDate *ExpirationDate) UnmarshalXML(d *xml.Decoder, startElement xml.Start
 		return errLifecycleInvalidDate
 	}
 	// Allow only date timestamp specifying midnight GMT
-	hr, min, sec := expDate.Clock()
+	hr, m, sec := expDate.Clock()
 	nsec := expDate.Nanosecond()
 	loc := expDate.Location()
-	if !(hr == 0 && min == 0 && sec == 0 && nsec == 0 && loc.String() == time.UTC.String()) {
+	if !(hr == 0 && m == 0 && sec == 0 && nsec == 0 && loc.String() == time.UTC.String()) {
 		return errLifecycleDateNotMidnight
 	}
 

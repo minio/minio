@@ -117,12 +117,12 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 // adjust changes the value of the dynamic timeout based on the
 // previous results
 func (dt *dynamicTimeout) adjust(entries [dynamicTimeoutLogSize]time.Duration) {
-	failures, max := 0, time.Duration(0)
+	failures, maxDur := 0, time.Duration(0)
 	for _, dur := range entries[:] {
 		if dur == maxDuration {
 			failures++
-		} else if dur > max {
-			max = dur
+		} else if dur > maxDur {
+			maxDur = dur
 		}
 	}
 
@@ -144,12 +144,12 @@ func (dt *dynamicTimeout) adjust(entries [dynamicTimeoutLogSize]time.Duration) {
 	} else if failPct < dynamicTimeoutDecreaseThresholdPct {
 		// We are hitting the timeout relatively few times,
 		// so decrease the timeout towards 25 % of maximum time spent.
-		max = max * 125 / 100
+		maxDur = maxDur * 125 / 100
 
 		timeout := atomic.LoadInt64(&dt.timeout)
-		if max < time.Duration(timeout) {
+		if maxDur < time.Duration(timeout) {
 			// Move 50% toward the max.
-			timeout = (int64(max) + timeout) / 2
+			timeout = (int64(maxDur) + timeout) / 2
 		}
 		if timeout < dt.minimum {
 			timeout = dt.minimum
