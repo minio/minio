@@ -378,11 +378,11 @@ func (x *xlMetaInlineData) remove(keys ...string) bool {
 // xlMetaV2TrimData will trim any data from the metadata without unmarshalling it.
 // If any error occurs the unmodified data is returned.
 func xlMetaV2TrimData(buf []byte) []byte {
-	metaBuf, min, maj, err := checkXL2V1(buf)
+	metaBuf, maj, minor, err := checkXL2V1(buf)
 	if err != nil {
 		return buf
 	}
-	if maj == 1 && min < 1 {
+	if maj == 1 && minor < 1 {
 		// First version to carry data.
 		return buf
 	}
@@ -393,7 +393,7 @@ func xlMetaV2TrimData(buf []byte) []byte {
 		return buf
 	}
 	// Skip CRC
-	if maj > 1 || min >= 2 {
+	if maj > 1 || minor >= 2 {
 		_, metaBuf, err = msgp.ReadUint32Bytes(metaBuf)
 		storageLogIf(GlobalContext, err)
 	}

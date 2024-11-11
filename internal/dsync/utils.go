@@ -22,16 +22,16 @@ import (
 	"time"
 )
 
-func backoffWait(min, unit, cap time.Duration) func(*rand.Rand, uint) time.Duration {
+func backoffWait(minSleep, unit, maxSleep time.Duration) func(*rand.Rand, uint) time.Duration {
 	if unit > time.Hour {
 		// Protect against integer overflow
 		panic("unit cannot exceed one hour")
 	}
 	return func(r *rand.Rand, attempt uint) time.Duration {
-		sleep := min
+		sleep := minSleep
 		sleep += unit * time.Duration(attempt)
-		if sleep > cap {
-			sleep = cap
+		if sleep > maxSleep {
+			sleep = maxSleep
 		}
 		sleep -= time.Duration(r.Float64() * float64(sleep))
 		return sleep

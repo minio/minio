@@ -52,15 +52,15 @@ func reduceCommonVersions(diskVersions [][]byte, writeQuorum int) (versions []by
 	}
 
 	var commonVersions uint64
-	max := 0
+	maxCnt := 0
 	for versions, count := range diskVersionsCount {
-		if max < count {
-			max = count
+		if maxCnt < count {
+			maxCnt = count
 			commonVersions = versions
 		}
 	}
 
-	if max >= writeQuorum {
+	if maxCnt >= writeQuorum {
 		for _, versions := range diskVersions {
 			if binary.BigEndian.Uint64(versions) == commonVersions {
 				return versions
@@ -80,15 +80,15 @@ func reduceCommonDataDir(dataDirs []string, writeQuorum int) (dataDir string) {
 		dataDirsCount[ddir]++
 	}
 
-	max := 0
+	maxCnt := 0
 	for ddir, count := range dataDirsCount {
-		if max < count {
-			max = count
+		if maxCnt < count {
+			maxCnt = count
 			dataDir = ddir
 		}
 	}
 
-	if max >= writeQuorum {
+	if maxCnt >= writeQuorum {
 		return dataDir
 	}
 
@@ -115,20 +115,20 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 		errorCounts[err]++
 	}
 
-	max := 0
+	maxCnt := 0
 	for err, count := range errorCounts {
 		switch {
-		case max < count:
-			max = count
+		case maxCnt < count:
+			maxCnt = count
 			maxErr = err
 
 		// Prefer `nil` over other error values with the same
 		// number of occurrences.
-		case max == count && err == nil:
+		case maxCnt == count && err == nil:
 			maxErr = err
 		}
 	}
-	return max, maxErr
+	return maxCnt, maxErr
 }
 
 // reduceQuorumErrs behaves like reduceErrs by only for returning
