@@ -357,7 +357,7 @@ func (p serverPoolsAvailableSpace) TotalAvailable() uint64 {
 
 // FilterMaxUsed will filter out any pools that has used percent bigger than max,
 // unless all have that, in which case all are preserved.
-func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
+func (p serverPoolsAvailableSpace) FilterMaxUsed(maxUsed int) {
 	// We aren't modifying p, only entries in it, so we don't need to receive a pointer.
 	if len(p) <= 1 {
 		// Nothing to do.
@@ -365,7 +365,7 @@ func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
 	}
 	var ok bool
 	for _, z := range p {
-		if z.Available > 0 && z.MaxUsedPct < max {
+		if z.Available > 0 && z.MaxUsedPct < maxUsed {
 			ok = true
 			break
 		}
@@ -378,7 +378,7 @@ func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
 
 	// Remove entries that are above.
 	for i, z := range p {
-		if z.Available > 0 && z.MaxUsedPct < max {
+		if z.Available > 0 && z.MaxUsedPct < maxUsed {
 			continue
 		}
 		p[i].Available = 0

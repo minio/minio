@@ -50,10 +50,10 @@ func (tDate *TransitionDate) UnmarshalXML(d *xml.Decoder, startElement xml.Start
 		return errTransitionInvalidDate
 	}
 	// Allow only date timestamp specifying midnight GMT
-	hr, min, sec := trnDate.Clock()
+	hr, m, sec := trnDate.Clock()
 	nsec := trnDate.Nanosecond()
 	loc := trnDate.Location()
-	if !(hr == 0 && min == 0 && sec == 0 && nsec == 0 && loc.String() == time.UTC.String()) {
+	if !(hr == 0 && m == 0 && sec == 0 && nsec == 0 && loc.String() == time.UTC.String()) {
 		return errTransitionDateNotMidnight
 	}
 

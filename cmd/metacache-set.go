@@ -626,18 +626,18 @@ func calcCommonWritesDeletes(infos []DiskInfo, readQuorum int) (commonWrite, com
 	}
 
 	filter := func(list []uint64) (commonCount uint64) {
-		max := 0
+		maxCnt := 0
 		signatureMap := map[uint64]int{}
 		for _, v := range list {
 			signatureMap[v]++
 		}
 		for ops, count := range signatureMap {
-			if max < count && commonCount < ops {
-				max = count
+			if maxCnt < count && commonCount < ops {
+				maxCnt = count
 				commonCount = ops
 			}
 		}
-		if max < readQuorum {
+		if maxCnt < readQuorum {
 			return 0
 		}
 		return commonCount
@@ -650,7 +650,7 @@ func calcCommonWritesDeletes(infos []DiskInfo, readQuorum int) (commonWrite, com
 
 func calcCommonCounter(infos []DiskInfo, readQuorum int) (commonCount uint64) {
 	filter := func() (commonCount uint64) {
-		max := 0
+		maxCnt := 0
 		signatureMap := map[uint64]int{}
 		for _, info := range infos {
 			if info.Error != "" {
@@ -660,12 +660,12 @@ func calcCommonCounter(infos []DiskInfo, readQuorum int) (commonCount uint64) {
 			signatureMap[mutations]++
 		}
 		for ops, count := range signatureMap {
-			if max < count && commonCount < ops {
-				max = count
+			if maxCnt < count && commonCount < ops {
+				maxCnt = count
 				commonCount = ops
 			}
 		}
-		if max < readQuorum {
+		if maxCnt < readQuorum {
 			return 0
 		}
 		return commonCount
