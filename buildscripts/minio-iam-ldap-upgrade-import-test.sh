@@ -8,7 +8,7 @@
 #
 # This script assumes that LDAP server is at:
 #
-#   `localhost:1389`
+#   `localhost:389`
 #
 # if this is not the case, set the environment variable
 # `_MINIO_LDAP_TEST_SERVER`.
@@ -41,7 +41,7 @@ __init__() {
 	fi
 
 	if [ -z "$_MINIO_LDAP_TEST_SERVER" ]; then
-		export _MINIO_LDAP_TEST_SERVER=localhost:1389
+		export _MINIO_LDAP_TEST_SERVER=localhost:389
 		echo "Using default LDAP endpoint: $_MINIO_LDAP_TEST_SERVER"
 	fi
 
@@ -58,7 +58,7 @@ create_iam_content_in_old_minio() {
 	mc alias set old-minio http://localhost:9000 minioadmin minioadmin
 	mc ready old-minio
 	mc idp ldap add old-minio \
-		server_addr=localhost:1389 \
+		server_addr=localhost:389 \
 		server_insecure=on \
 		lookup_bind_dn=cn=admin,dc=min,dc=io \
 		lookup_bind_password=admin \
