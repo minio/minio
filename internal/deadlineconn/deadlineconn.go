@@ -41,6 +41,15 @@ type DeadlineConn struct {
 	mu                      sync.Mutex
 }
 
+// Unwrap will unwrap the connection and remove the deadline if applied.
+// If not a *DeadlineConn, the unmodified net.Conn is returned.
+func Unwrap(c net.Conn) net.Conn {
+	if dc, ok := c.(*DeadlineConn); ok {
+		return dc.Conn
+	}
+	return c
+}
+
 // Sets read deadline
 func (c *DeadlineConn) setReadDeadline() {
 	// Do not set a Read deadline, if upstream wants to cancel all reads.

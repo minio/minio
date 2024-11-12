@@ -167,9 +167,21 @@ func (srv *Server) UseIdleTimeout(d time.Duration) *Server {
 	return srv
 }
 
+// UseReadTimeout configure connection request read timeout.
+func (srv *Server) UseReadTimeout(d time.Duration) *Server {
+	srv.ReadTimeout = d
+	return srv
+}
+
 // UseReadHeaderTimeout configure read header timeout
 func (srv *Server) UseReadHeaderTimeout(d time.Duration) *Server {
 	srv.ReadHeaderTimeout = d
+	return srv
+}
+
+// UseWriteTimeout configure connection response write timeout.
+func (srv *Server) UseWriteTimeout(d time.Duration) *Server {
+	srv.WriteTimeout = d
 	return srv
 }
 
