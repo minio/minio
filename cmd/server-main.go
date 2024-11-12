@@ -421,6 +421,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 		Interface:   ctxt.Interface,
 		SendBufSize: ctxt.SendBufSize,
 		RecvBufSize: ctxt.RecvBufSize,
+		IdleTimeout: ctxt.IdleTimeout,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -878,6 +879,8 @@ func serverMain(ctx *cli.Context) {
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 			UseTLSConfig(newTLSConfig(getCert)).
 			UseIdleTimeout(globalServerCtxt.IdleTimeout).
+			UseReadTimeout(24 * time.Hour).  // (overridden by listener.config.IdleTimeout on requests)
+			UseWriteTimeout(24 * time.Hour). // (overridden by listener.config.IdleTimeout on requests)
 			UseReadHeaderTimeout(globalServerCtxt.ReadHeaderTimeout).
 			UseBaseContext(GlobalContext).
 			UseCustomLogger(log.New(io.Discard, "", 0)). // Turn-off random logging by Go stdlib
