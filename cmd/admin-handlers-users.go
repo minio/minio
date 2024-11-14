@@ -37,6 +37,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	xldap "github.com/minio/pkg/v3/ldap"
 	"github.com/minio/pkg/v3/policy"
@@ -1568,6 +1569,7 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errTooManyPolicies), r.URL)
 		return
 	}
+	setReqInfoPolicyName(ctx, name)
 
 	policyDoc, err := globalIAMSys.InfoPolicy(name)
 	if err != nil {
@@ -1671,6 +1673,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 
 	vars := mux.Vars(r)
 	policyName := vars["name"]
+	setReqInfoPolicyName(ctx, policyName)
 
 	if err := globalIAMSys.DeletePolicy(ctx, policyName, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1703,6 +1706,7 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
 		return
 	}
+	setReqInfoPolicyName(ctx, policyName)
 
 	// Error out if Content-Length is missing.
 	if r.ContentLength <= 0 {
@@ -1768,6 +1772,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	policyName := vars["policyName"]
 	entityName := vars["userOrGroup"]
 	isGroup := vars["isGroup"] == "true"
+	setReqInfoPolicyName(ctx, policyName)
 
 	if !isGroup {
 		ok, _, err := globalIAMSys.IsTempUser(entityName)
@@ -1853,7 +1858,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}))
 }
 
-// ListPolicyMappingEntities - GET /minio/admin/v3/idp/builtin/polciy-entities?policy=xxx&user=xxx&group=xxx
+// ListPolicyMappingEntities - GET /minio/admin/v3/idp/builtin/policy-entities?policy=xxx&user=xxx&group=xxx
 func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1955,6 +1960,7 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+	setReqInfoPolicyName(ctx, strings.Join(addedOrRemoved, ","))
 
 	respBody := madmin.PolicyAssociationResp{
 		UpdatedAt: updatedAt,
@@ -2800,4 +2806,11 @@ func commonAddServiceAccount(r *http.Request, ldap bool) (context.Context, auth.
 	opts.sessionPolicy = sp
 
 	return ctx, cred, opts, createReq, targetUser, APIError{}
+}
+
+// setReqInfoPolicyName will set the given policyName as a tag on the context's request info,
+// so that it appears in audit logs.
+func setReqInfoPolicyName(ctx context.Context, policyName string) {
+	reqInfo := logger.GetReqInfo(ctx)
+	reqInfo.SetTags("policyName", policyName)
 }
