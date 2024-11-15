@@ -2899,6 +2899,8 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
+	reqInfo := logger.GetReqInfo(ctx)
+	reqInfo.SetTags("retention", objRetention.String())
 
 	opts, err := getOpts(ctx, r, bucket, object)
 	if err != nil {

@@ -368,6 +368,10 @@ type ObjectRetention struct {
 	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
 }
 
+func (o ObjectRetention) String() string {
+	return fmt.Sprintf("Mode: %s, RetainUntilDate: %s", o.Mode, o.RetainUntilDate.Time)
+}
+
 // Maximum 4KiB size per object retention config.
 const maxObjectRetentionSize = 1 << 12
 
