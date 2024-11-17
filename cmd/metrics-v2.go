@@ -1881,7 +1881,7 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 		metrics = append(metrics, MetricV2{
 			Description:    desc,
 			VariableLabels: labels1,
-			Value:          dtoMetric.Counter.GetValue(),
+			Value:          float64(dtoMetric.Histogram.GetSampleCount()),
 		})
 	}
 	return metrics
