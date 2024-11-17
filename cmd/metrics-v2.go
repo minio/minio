@@ -1875,7 +1875,11 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 		// add metrics with +Inf label
 		labels1 := make(map[string]string)
 		for _, lp := range dtoMetric.GetLabel() {
-			labels1[*lp.Name] = *lp.Value
+			if *lp.Name == "api" && toLowerAPILabels {
+				labels1[*lp.Name] = strings.ToLower(*lp.Value)
+			} else {
+				labels1[*lp.Name] = *lp.Value
+			}
 		}
 		labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
 		metrics = append(metrics, MetricV2{
