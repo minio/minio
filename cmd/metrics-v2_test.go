@@ -151,8 +151,8 @@ func TestGetHistogramMetrics_Values(t *testing.T) {
 			capitalPutObjects = append(capitalPutObjects, metric)
 		}
 	}
-	if expMetricsPerApi := len(histBuckets) + 1; expMetricsPerApi != len(capitalPutObjects) {
-		t.Fatalf("Expected %d api=PutObject metrics but got %d", expMetricsPerApi, len(capitalPutObjects))
+	if expMetricsPerAPI := len(histBuckets) + 1; expMetricsPerAPI != len(capitalPutObjects) {
+		t.Fatalf("Expected %d api=PutObject metrics but got %d", expMetricsPerAPI, len(capitalPutObjects))
 	}
 
 	// Deterministic ordering
@@ -188,8 +188,8 @@ func TestGetHistogramMetrics_Values(t *testing.T) {
 			lowerCopyObjects = append(lowerCopyObjects, metric)
 		}
 	}
-	if expMetricsPerApi := len(histBuckets) + 1; expMetricsPerApi != len(lowerCopyObjects) {
-		t.Fatalf("Expected %d api=copyobject metrics but got %d", expMetricsPerApi, len(lowerCopyObjects))
+	if expMetricsPerAPI := len(histBuckets) + 1; expMetricsPerAPI != len(lowerCopyObjects) {
+		t.Fatalf("Expected %d api=copyobject metrics but got %d", expMetricsPerAPI, len(lowerCopyObjects))
 	}
 
 	// Deterministic ordering
