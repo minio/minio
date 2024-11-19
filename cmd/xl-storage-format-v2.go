@@ -1260,6 +1260,15 @@ func (x *xlMetaV2) findVersion(key [16]byte) (idx int, ver *xlMetaV2Version, err
 	return -1, nil, errFileVersionNotFound
 }
 
+// latestType returns the latest version type.
+// returns invalidVersionType if no versions exist.
+func (x *xlMetaV2) latestType() VersionType {
+	if x == nil || len(x.versions) == 0 {
+		return invalidVersionType
+	}
+	return x.versions[0].header.Type
+}
+
 func (x *xlMetaV2) getIdx(idx int) (ver *xlMetaV2Version, err error) {
 	if idx < 0 || idx >= len(x.versions) {
 		return nil, errFileNotFound
