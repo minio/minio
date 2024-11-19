@@ -733,7 +733,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Expected versions 1, got %d", fileInfoPreHeal.NumVersions)
 	}
 
-	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Recursive: true, Remove: true},
 		func(bucket, object, vid string, scanMode madmin.HealScanMode) error {
 			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{ScanMode: scanMode, Remove: true})
 			return err
@@ -780,7 +780,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Expected versions 1, got %d", fileInfoPreHeal.NumVersions)
 	}
 
-	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Recursive: true, Remove: true},
 		func(bucket, object, vid string, scanMode madmin.HealScanMode) error {
 			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{ScanMode: scanMode, Remove: true})
 			return err
@@ -829,7 +829,7 @@ func TestHealingDanglingObject(t *testing.T) {
 		t.Fatalf("Expected versions 3, got %d", fileInfoPreHeal.NumVersions)
 	}
 
-	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Remove: true},
+	if err = objLayer.HealObjects(ctx, bucket, "", madmin.HealOpts{Recursive: true, Remove: true},
 		func(bucket, object, vid string, scanMode madmin.HealScanMode) error {
 			_, err := objLayer.HealObject(ctx, bucket, object, vid, madmin.HealOpts{ScanMode: scanMode, Remove: true})
 			return err
