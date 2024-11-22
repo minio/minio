@@ -65,6 +65,17 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// This API only supports removal of internal users not service accounts.
+	ok, _, err = globalIAMSys.IsServiceAccount(accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+		return
+	}
+
 	// When the user is root credential you are not allowed to
 	// remove the root user. Also you cannot delete yourself.
 	if accessKey == globalActiveCred.AccessKey || accessKey == cred.AccessKey {
