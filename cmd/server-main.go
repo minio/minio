@@ -34,6 +34,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"slices"
 
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/dustin/go-humanize"
@@ -53,7 +54,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
-	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )
 
