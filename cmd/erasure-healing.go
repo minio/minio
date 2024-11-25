@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,7 +33,6 @@ import (
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/sync/errgroup"
-	"golang.org/x/exp/slices"
 )
 
 //go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE

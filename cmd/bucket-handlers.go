@@ -1809,6 +1809,10 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		return
 	}
 
+	// Audit log tags.
+	reqInfo := logger.GetReqInfo(ctx)
+	reqInfo.SetTags("retention", config.String())
+
 	configData, err := xml.Marshal(config)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
