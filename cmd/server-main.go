@@ -31,10 +31,10 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
-	"slices"
 
 	"github.com/coreos/go-systemd/v22/daemon"
 	"github.com/dustin/go-humanize"

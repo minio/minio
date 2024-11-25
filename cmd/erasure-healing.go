@@ -23,11 +23,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"slices"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
