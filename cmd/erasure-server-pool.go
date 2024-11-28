@@ -2593,15 +2593,22 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		}
 	}
 
+	hr := madmin.HealResultItem{
+		Type:      madmin.HealItemObject,
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+	}
+
 	// At this stage, all errors are 'not found'
 	if versionID != "" {
-		return madmin.HealResultItem{}, VersionNotFound{
+		return hr, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: versionID,
 		}
 	}
-	return madmin.HealResultItem{}, ObjectNotFound{
+	return hr, ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
 	}
