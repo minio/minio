@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -45,6 +46,7 @@ const ftpMaxWriteOffset = 100 << 20
 type sftpDriver struct {
 	permissions *ssh.Permissions
 	endpoint    string
+	remoteIP    string
 }
 
 //msgp:ignore sftpMetrics
@@ -89,8 +91,12 @@ func (m *sftpMetrics) log(s *sftp.Request, user string) func(sz int64, err error
 // - sftp.Filewrite
 // - sftp.Filelist
 // - sftp.Filecmd
-func NewSFTPDriver(perms *ssh.Permissions) sftp.Handlers {
-	handler := &sftpDriver{endpoint: fmt.Sprintf("127.0.0.1:%s", globalMinioPort), permissions: perms}
+func NewSFTPDriver(perms *ssh.Permissions, remoteIP string) sftp.Handlers {
+	handler := &sftpDriver{
+		endpoint:    fmt.Sprintf("127.0.0.1:%s", globalMinioPort),
+		permissions: perms,
+		remoteIP:    remoteIP,
+	}
 	return sftp.Handlers{
 		FileGet:  handler,
 		FilePut:  handler,
@@ -99,16 +105,31 @@ func NewSFTPDriver(perms *ssh.Permissions) sftp.Handlers {
 	}
 }
 
+type forwardForTransport struct {
+	tr  http.RoundTripper
+	fwd string
+}
+
+func (f forwardForTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	r.Header.Set("X-Forwarded-For", f.fwd)
+	return f.tr.RoundTrip(r)
+}
+
 func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 	mcreds := credentials.NewStaticV4(
 		f.permissions.CriticalOptions["AccessKey"],
 		f.permissions.CriticalOptions["SecretKey"],
 		f.permissions.CriticalOptions["SessionToken"],
 	)
+	// Set X-Forwarded-For on all requests.
+	tr := http.RoundTripper(globalRemoteFTPClientTransport)
+	if f.remoteIP != "" {
+		tr = forwardForTransport{tr: tr, fwd: f.remoteIP}
+	}
 	return minio.New(f.endpoint, &minio.Options{
 		Creds:     mcreds,
 		Secure:    globalIsTLS,
-		Transport: globalRemoteFTPClientTransport,
+		Transport: tr,
 	})
 }
 
