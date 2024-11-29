@@ -879,8 +879,8 @@ func serverMain(ctx *cli.Context) {
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 			UseTLSConfig(newTLSConfig(getCert)).
 			UseIdleTimeout(globalServerCtxt.IdleTimeout).
-			UseReadTimeout(24 * time.Hour).  // (overridden by listener.config.IdleTimeout on requests)
-			UseWriteTimeout(24 * time.Hour). // (overridden by listener.config.IdleTimeout on requests)
+			UseReadTimeout(globalServerCtxt.IdleTimeout).
+			UseWriteTimeout(globalServerCtxt.IdleTimeout).
 			UseReadHeaderTimeout(globalServerCtxt.ReadHeaderTimeout).
 			UseBaseContext(GlobalContext).
 			UseCustomLogger(log.New(io.Discard, "", 0)). // Turn-off random logging by Go stdlib
