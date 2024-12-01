@@ -264,5 +264,3 @@ require (
 	google.golang.org/protobuf v1.35.1 // indirect
 
 )
-
-replace github.com/minio/minio-go/v7 => github.com/marktheunissen/minio-go/v7 v7.0.0-20241121022745-728929652a43
