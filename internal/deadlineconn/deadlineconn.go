@@ -114,8 +114,8 @@ func (c *DeadlineConn) SetDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.readSetAt = time.Now()
-	c.writeSetAt = time.Now()
+	c.readSetAt = time.Time{}
+	c.writeSetAt = time.Time{}
 	c.abortReads.Store(!t.IsZero() && time.Until(t) < 0)
 	c.abortWrites.Store(!t.IsZero() && time.Until(t) < 0)
 	c.infReads.Store(t.IsZero())
@@ -131,7 +131,7 @@ func (c *DeadlineConn) SetReadDeadline(t time.Time) error {
 	defer c.mu.Unlock()
 	c.abortReads.Store(!t.IsZero() && time.Until(t) < 0)
 	c.infReads.Store(t.IsZero())
-	c.readSetAt = time.Now()
+	c.readSetAt = time.Time{}
 	return c.Conn.SetReadDeadline(t)
 }
 
@@ -145,7 +145,7 @@ func (c *DeadlineConn) SetWriteDeadline(t time.Time) error {
 	defer c.mu.Unlock()
 	c.abortWrites.Store(!t.IsZero() && time.Until(t) < 0)
 	c.infWrites.Store(t.IsZero())
-	c.writeSetAt = time.Now()
+	c.writeSetAt = time.Time{}
 	return c.Conn.SetWriteDeadline(t)
 }
 
