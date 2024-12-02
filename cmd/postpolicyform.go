@@ -288,7 +288,7 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 	// mustFindInPolicy is a map to list all the keys that we must find in the policy as
 	// we process it below. At the end of checkPostPolicy function, if any key is left in
 	// this map, that's an error.
-	mustFindInPolicy := map[string][]string{}
+	mustFindInPolicy := make(map[string][]string, len(formvalues))
 	for key, values := range formValues {
 		if keyInPolicyExceptions[key] || strings.HasPrefix(key, "X-Ignore-") {
 			continue
