@@ -279,6 +279,7 @@ var keyInPolicyExceptions = map[string]bool{
 
 // checkPostPolicy - apply policy conditions and validate input values.
 // Note that content-length-range is checked in the API handler function PostPolicyBucketHandler.
+// formValues is the already-canonicalized form values from the POST request.
 func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) error {
 	// Check if policy document expiry date is still not reached
 	if !postPolicyForm.Expiration.After(UTCNow()) {
