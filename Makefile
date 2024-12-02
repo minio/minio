@@ -149,6 +149,10 @@ test-multipart: install-race ## test multipart
 	@echo "Test multipart behavior when part files are missing"
 	@(env bash $(PWD)/buildscripts/multipart-quorum-test.sh)
 
+test-timeout: install-race ## test multipart
+	@echo "Test server timeout"
+	@(env bash $(PWD)/buildscripts/test-timeout.sh)
+
 verify: install-race ## verify minio various setups
 	@echo "Verifying build with race"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
