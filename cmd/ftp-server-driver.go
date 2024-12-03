@@ -24,6 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -286,6 +288,10 @@ func (driver *ftpDriver) CheckPasswd(c *ftp.Context, username, password string) 
 }
 
 func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error) {
+	tr := http.RoundTripper(globalRemoteFTPClientTransport)
+	if host, _, err := net.SplitHostPort(ctx.Sess.RemoteAddr().String()); err == nil {
+		tr = forwardForTransport{tr: tr, fwd: host}
+	}
 	ui, ok := globalIAMSys.GetUser(context.Background(), ctx.Sess.LoginUser())
 	if !ok && !globalIAMSys.LDAPConfig.Enabled() {
 		return nil, errNoSuchUser
@@ -363,7 +369,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		return minio.New(driver.endpoint, &minio.Options{
 			Creds:     mcreds,
 			Secure:    globalIsTLS,
-			Transport: globalRemoteFTPClientTransport,
+			Transport: tr,
 		})
 	}
 
@@ -377,7 +383,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 	return minio.New(driver.endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(ui.Credentials.AccessKey, ui.Credentials.SecretKey, ""),
 		Secure:    globalIsTLS,
-		Transport: globalRemoteFTPClientTransport,
+		Transport: tr,
 	})
 }
 

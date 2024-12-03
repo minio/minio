@@ -84,10 +84,21 @@ func (r Rule) validateNoncurrentExpiration() error {
 }
 
 func (r Rule) validatePrefixAndFilter() error {
-	if !r.Prefix.set && r.Filter.IsEmpty() || r.Prefix.set && !r.Filter.IsEmpty() {
+	// In the now deprecated PutBucketLifecycle API, Rule had a mandatory Prefix element and there existed no Filter field.
+	// See https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLifecycle.html
+	// In the newer PutBucketLifecycleConfiguration API, Rule has a prefix field that is deprecated, and there exists an optional
+	// Filter field, and within it, an optional Prefix field.
+	// See https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutBucketLifecycleConfiguration.html
+	// A valid rule could be a pre-existing one created using the now deprecated PutBucketLifecycle.
+	// Or, a valid rule could also be either a pre-existing or a new rule that is created using PutBucketLifecycleConfiguration.
+	// Prefix validation below may check that either Rule.Prefix or Rule.Filter.Prefix exist but not both.
+	// Here, we assume the pre-existing rule created using PutBucketLifecycle API is already valid and won't fail the validation if Rule.Prefix is empty.
+
+	if r.Prefix.set && !r.Filter.IsEmpty() && r.Filter.Prefix.set {
 		return errXMLNotWellFormed
 	}
-	if !r.Prefix.set {
+
+	if r.Filter.set {
 		return r.Filter.Validate()
 	}
 	return nil

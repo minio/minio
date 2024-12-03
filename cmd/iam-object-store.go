@@ -793,7 +793,10 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range listedConfigItems[stsListKey] {
 		userName := path.Dir(item)
 		// loadUser() will delete expired user during the load.
-		iamLogIf(ctx, iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore))
+		err := iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore)
+		if err != nil && !errors.Is(err, errNoSuchUser) {
+			iamLogIf(ctx, err)
+		}
 		// No need to return errors for failed expiration of STS users
 	}
 
@@ -801,7 +804,10 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	// (removed during loadUser() in the loop above) are removed from memory.
 	for _, item := range listedConfigItems[policyDBSTSUsersListKey] {
 		stsName := strings.TrimSuffix(item, ".json")
-		iamLogIf(ctx, iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore))
+		err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore)
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
+			iamLogIf(ctx, err)
+		}
 		// No need to return errors for failed expiration of STS users
 	}
 

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"sync/atomic"
@@ -29,7 +30,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/pkg/v3/sync/errgroup"
-	"golang.org/x/exp/slices"
 )
 
 var errPeerOffline = errors.New("peer is offline")

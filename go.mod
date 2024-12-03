@@ -42,7 +42,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/miekg/dns v1.1.62
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v1.7.3
+	github.com/minio/console v1.7.4
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.6.0
@@ -50,7 +50,7 @@ require (
 	github.com/minio/kms-go/kes v0.3.0
 	github.com/minio/kms-go/kms v0.4.0
 	github.com/minio/madmin-go/v3 v3.0.77
-	github.com/minio/minio-go/v7 v7.0.80
+	github.com/minio/minio-go/v7 v7.0.81-0.20241125171916-a563333c01ef
 	github.com/minio/mux v1.9.0
 	github.com/minio/pkg/v3 v3.0.22
 	github.com/minio/selfupdate v0.6.0
@@ -89,7 +89,6 @@ require (
 	go.uber.org/zap v1.27.0
 	goftp.io/server/v2 v2.0.1
 	golang.org/x/crypto v0.29.0
-	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	golang.org/x/oauth2 v0.24.0
 	golang.org/x/sync v0.9.0
 	golang.org/x/sys v0.27.0
