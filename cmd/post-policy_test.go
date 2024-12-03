@@ -56,7 +56,7 @@ func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey stri
 	credentialConditionStr := fmt.Sprintf(`["eq", "$x-amz-credential", "%s"]`, credential)
 	// Add the meta-uuid string, set to 1234
 	uuidConditionStr := fmt.Sprintf(`["eq", "$x-amz-meta-uuid", "%s"]`, "1234")
-	// Add the content-encoding string, set to gzip
+	// Add the content-encoding string, set to gzip.
 	contentEncodingConditionStr := fmt.Sprintf(`["eq", "$content-encoding", "%s"]`, "gzip")
 
 	// Combine all conditions into one string.
