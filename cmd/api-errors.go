@@ -213,6 +213,7 @@ const (
 	ErrPolicyAlreadyAttached
 	ErrPolicyNotAttached
 	ErrExcessData
+	ErrPolicyInvalidName
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -559,6 +560,11 @@ var errorCodes = errorCodeMap{
 	ErrExcessData: {
 		Code:           "ExcessData",
 		Description:    "More data provided than indicated content length",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPolicyInvalidName: {
+		Code:           "PolicyInvalidName",
+		Description:    "Policy name may not contain comma",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrPolicyTooLarge: {
