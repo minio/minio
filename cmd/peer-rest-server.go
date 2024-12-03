@@ -56,6 +56,7 @@ var (
 	aoBucketInfo           = grid.NewArrayOf[*BucketInfo](func() *BucketInfo { return &BucketInfo{} })
 	aoMetricsGroup         = grid.NewArrayOf[*MetricV2](func() *MetricV2 { return &MetricV2{} })
 	madminBgHealState      = grid.NewJSONPool[madmin.BgHealState]()
+	madminHealResultItem   = grid.NewJSONPool[madmin.HealResultItem]()
 	madminCPUs             = grid.NewJSONPool[madmin.CPUs]()
 	madminMemInfo          = grid.NewJSONPool[madmin.MemInfo]()
 	madminNetInfo          = grid.NewJSONPool[madmin.NetInfo]()
@@ -97,7 +98,7 @@ var (
 	getSysErrorsRPC                = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysErrors]](grid.HandlerGetSysErrors, grid.NewMSS, madminSysErrors.NewJSON)
 	getSysServicesRPC              = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.SysServices]](grid.HandlerGetSysServices, grid.NewMSS, madminSysServices.NewJSON)
 	headBucketRPC                  = grid.NewSingleHandler[*grid.MSS, *VolInfo](grid.HandlerHeadBucket, grid.NewMSS, func() *VolInfo { return &VolInfo{} })
-	healBucketRPC                  = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerHealBucket, grid.NewMSS, grid.NewNoPayload)
+	healBucketRPC                  = grid.NewSingleHandler[*grid.MSS, *grid.JSON[madmin.HealResultItem]](grid.HandlerHealBucket, grid.NewMSS, madminHealResultItem.NewJSON)
 	listBucketsRPC                 = grid.NewSingleHandler[*BucketOptions, *grid.Array[*BucketInfo]](grid.HandlerListBuckets, func() *BucketOptions { return &BucketOptions{} }, aoBucketInfo.New)
 	loadBucketMetadataRPC          = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadBucketMetadata, grid.NewMSS, grid.NewNoPayload).IgnoreNilConn()
 	loadGroupRPC                   = grid.NewSingleHandler[*grid.MSS, grid.NoPayload](grid.HandlerLoadGroup, grid.NewMSS, grid.NewNoPayload)
@@ -1258,21 +1259,21 @@ func (s *peerRESTServer) NetSpeedTestHandler(w http.ResponseWriter, r *http.Requ
 	peersLogIf(r.Context(), gob.NewEncoder(w).Encode(result))
 }
 
-func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
+func (s *peerRESTServer) HealBucketHandler(mss *grid.MSS) (np *grid.JSON[madmin.HealResultItem], nerr *grid.RemoteErr) {
 	bucket := mss.Get(peerS3Bucket)
 	if isMinioMetaBucket(bucket) {
 		return np, grid.NewRemoteErr(errInvalidArgument)
 	}
 
 	bucketDeleted := mss.Get(peerS3BucketDeleted) == "true"
-	_, err := healBucketLocal(context.Background(), bucket, madmin.HealOpts{
+	res, err := healBucketLocal(context.Background(), bucket, madmin.HealOpts{
 		Remove: bucketDeleted,
 	})
 	if err != nil {
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return np, nil
+	return madminHealResultItem.NewJSONWith(&res), nil
 }
 
 func (s *peerRESTServer) ListBucketsHandler(opts *BucketOptions) (*grid.Array[*BucketInfo], *grid.RemoteErr) {
