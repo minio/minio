@@ -2478,6 +2478,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 // HealObjectFn closure function heals the object.
 type HealObjectFn func(bucket, object, versionID string, scanMode madmin.HealScanMode) error
 
+// List a prefix or a single object versions and heal
 func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObjectFn HealObjectFn) error {
 	healEntry := func(bucket string, entry metaCacheEntry, scanMode madmin.HealScanMode) error {
 		if entry.isDir() {
@@ -2541,7 +2542,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
 
-				errs[idx] = set.listAndHeal(ctx, bucket, prefix, opts.ScanMode, healEntry)
+				errs[idx] = set.listAndHeal(ctx, bucket, prefix, opts.Recursive, opts.ScanMode, healEntry)
 			}(idx, set)
 		}
 		wg.Wait()
