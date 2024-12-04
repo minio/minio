@@ -177,6 +177,10 @@ const (
 	AmzChecksumSHA256 = "x-amz-checksum-sha256"
 	AmzChecksumMode   = "x-amz-checksum-mode"
 
+	// Post Policy related
+	AmzMetaUUID = "X-Amz-Meta-Uuid"
+	AmzMetaName = "X-Amz-Meta-Name"
+
 	// Delete special flag to force delete a bucket or a prefix
 	MinIOForceDelete = "x-minio-force-delete"
 
