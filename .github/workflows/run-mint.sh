@@ -15,6 +15,9 @@ docker volume rm $(docker volume ls -f dangling=true) || true
 ## change working directory
 cd .github/workflows/mint
 
+## always pull latest
+docker pull docker.io/minio/mint:edge
+
 docker-compose -f minio-${MODE}.yaml up -d
 sleep 1m
 
