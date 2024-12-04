@@ -44,7 +44,8 @@ const (
 	healingMetricCheckAbandonedParts
 )
 
-func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
+// List a prefix or a single object versions and heal
+func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string, recursive bool, scanMode madmin.HealScanMode, healEntry func(string, metaCacheEntry, madmin.HealScanMode) error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -77,11 +78,14 @@ func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string,
 		bucket:         bucket,
 		path:           path,
 		filterPrefix:   filterPrefix,
-		recursive:      true,
+		recursive:      recursive,
 		forwardTo:      "",
 		minDisks:       1,
 		reportNotFound: false,
 		agreed: func(entry metaCacheEntry) {
+			if !recursive && prefix != entry.name {
+				return
+			}
 			if err := healEntry(bucket, entry, scanMode); err != nil {
 				cancel()
 			}
@@ -93,7 +97,9 @@ func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string,
 				// proceed to heal nonetheless.
 				entry, _ = entries.firstFound()
 			}
-
+			if !recursive && prefix != entry.name {
+				return
+			}
 			if err := healEntry(bucket, *entry, scanMode); err != nil {
 				cancel()
 				return

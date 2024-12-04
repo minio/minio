@@ -101,7 +101,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	for i := range beforeState {
 		res.Before.Drives = append(res.Before.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: localDrives[i].String(),
+			Endpoint: localDrives[i].Endpoint().String(),
 			State:    beforeState[i],
 		})
 	}
@@ -149,7 +149,7 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	for i := range afterState {
 		res.After.Drives = append(res.After.Drives, madmin.HealDriveInfo{
 			UUID:     "",
-			Endpoint: localDrives[i].String(),
+			Endpoint: localDrives[i].Endpoint().String(),
 			State:    afterState[i],
 		})
 	}
