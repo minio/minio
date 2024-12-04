@@ -1719,6 +1719,12 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	}
 	setReqInfoPolicyName(ctx, policyName)
 
+	// Reject policy names with commas.
+	if strings.Contains(policyName, ",") {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyInvalidName), r.URL)
+		return
+	}
+
 	// Error out if Content-Length is missing.
 	if r.ContentLength <= 0 {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMissingContentLength), r.URL)
