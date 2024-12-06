@@ -178,13 +178,18 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	}
 
 	if etcdClient == nil {
-		var group *singleflight.Group
+		var (
+			group  *singleflight.Group
+			policy *singleflight.Group
+		)
 		if env.Get("_MINIO_IAM_SINGLE_FLIGHT", config.EnableOn) == config.EnableOn {
 			group = &singleflight.Group{}
+			policy = &singleflight.Group{}
 		}
 		sys.store = &IAMStoreSys{
 			IAMStorageAPI: newIAMObjectStore(objAPI, sys.usersSysType),
 			group:         group,
+			policy:        policy,
 		}
 	} else {
 		sys.store = &IAMStoreSys{IAMStorageAPI: newIAMEtcdStore(etcdClient, sys.usersSysType)}
