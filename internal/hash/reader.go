@@ -260,7 +260,9 @@ func (r *Reader) Read(p []byte) (int, error) {
 	// If we have reached our expected size,
 	// do one more read to ensure we are at EOF
 	// and that any trailers have been read.
-	if r.size >= 0 && r.bytesRead >= r.size {
+	attempts := 0
+	for err == nil && r.size >= 0 && r.bytesRead >= r.size {
+		attempts++
 		if r.bytesRead > r.size {
 			return 0, SizeTooLarge{Want: r.size, Got: r.bytesRead}
 		}
@@ -270,8 +272,8 @@ func (r *Reader) Read(p []byte) (int, error) {
 		if n2 > 0 {
 			return 0, SizeTooLarge{Want: r.size, Got: r.bytesRead}
 		}
-		if err != nil && err != io.EOF {
-			return n, err
+		if attempts == 100 {
+			return 0, io.ErrNoProgress
 		}
 	}
 
