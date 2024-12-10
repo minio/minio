@@ -1899,6 +1899,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	var reader io.Reader
 	reader = rd
 
+	var opts ObjectOptions
+	opts, err = putOptsFromReq(ctx, r, bucket, object, metadata)
+	if err != nil {
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+		return
+	}
+
 	actualSize := size
 	var idxCb func() []byte
 	if isCompressible(r.Header, object) && size > minCompressibleSize {
@@ -1915,6 +1922,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
 			return
 		}
+		opts.WantChecksum = actualReader.Checksum()
+
 		// Set compression metrics.
 		var s2c io.ReadCloser
 		wantEncryption := crypto.Requested(r.Header)
@@ -1945,22 +1954,17 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if err := hashReader.AddChecksum(r, size < 0); err != nil {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
-		return
+	if size >= 0 {
+		if err := hashReader.AddChecksum(r, false); err != nil {
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidChecksum), r.URL)
+			return
+		}
+		opts.WantChecksum = hashReader.Checksum()
 	}
 
 	rawReader := hashReader
 	pReader := NewPutObjReader(rawReader)
-
-	var opts ObjectOptions
-	opts, err = putOptsFromReq(ctx, r, bucket, object, metadata)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
-	}
 	opts.IndexCB = idxCb
-	opts.WantChecksum = hashReader.Checksum()
 
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||

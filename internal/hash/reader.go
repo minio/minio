@@ -257,6 +257,26 @@ func (r *Reader) Read(p []byte) (int, error) {
 		r.contentHasher.Write(p[:n])
 	}
 
+	// If we have reached our expected size,
+	// do one more read to ensure we are at EOF
+	// and that any trailers have been read.
+	attempts := 0
+	for err == nil && r.size >= 0 && r.bytesRead >= r.size {
+		attempts++
+		if r.bytesRead > r.size {
+			return 0, SizeTooLarge{Want: r.size, Got: r.bytesRead}
+		}
+		var tmp [1]byte
+		var n2 int
+		n2, err = r.src.Read(tmp[:])
+		if n2 > 0 {
+			return 0, SizeTooLarge{Want: r.size, Got: r.bytesRead}
+		}
+		if attempts == 100 {
+			return 0, io.ErrNoProgress
+		}
+	}
+
 	if err == io.EOF { // Verify content SHA256, if set.
 		if r.expectedMin > 0 {
 			if r.bytesRead < r.expectedMin {
