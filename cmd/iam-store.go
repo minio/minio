@@ -26,6 +26,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -37,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/sync/errgroup"
 	"github.com/puzpuzpuz/xsync/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -355,6 +357,68 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 		groups.Remove(group)
 		c.iamUserGroupMemberships[member] = groups
 	}
+}
+
+func (c *iamCache) policyDBGetGroups(store *IAMStoreSys, userPolicyPresent bool, groups ...string) ([]string, error) {
+	var policies []string
+	for _, group := range groups {
+		if store.getUsersSysType() == MinIOUsersSysType {
+			g, ok := c.iamGroupsMap[group]
+			if !ok {
+				continue
+			}
+
+			// Group is disabled, so we return no policy - this
+			// ensures the request is denied.
+			if g.Status == statusDisabled {
+				continue
+			}
+		}
+
+		policy, ok := c.iamGroupPolicyMap.Load(group)
+		if !ok {
+			continue
+		}
+
+		policies = append(policies, policy.toSlice()...)
+	}
+
+	found := len(policies) > 0
+	if found {
+		return policies, nil
+	}
+
+	if userPolicyPresent {
+		// if user mapping present and no group policies found
+		// rely on user policy for access, instead of fallback.
+		return nil, nil
+	}
+
+	var mu sync.Mutex
+
+	// no mappings found, fallback for all groups.
+	g := errgroup.WithNErrs(len(groups)).WithConcurrency(10) // load like 10 groups at a time.
+
+	for index := range groups {
+		index := index
+		g.Go(func() error {
+			err := store.loadMappedPolicy(context.TODO(), groups[index], regUser, true, c.iamGroupPolicyMap)
+			if err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return err
+			}
+			if errors.Is(err, errNoSuchPolicy) {
+				return nil
+			}
+			policy, _ := c.iamGroupPolicyMap.Load(groups[index])
+			mu.Lock()
+			policies = append(policies, policy.toSlice()...)
+			mu.Unlock()
+			return nil
+		}, index)
+	}
+
+	err := errors.Join(g.Wait()...)
+	return policies, err
 }
 
 // policyDBGet - lower-level helper; does not take locks.
@@ -676,7 +740,8 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 type IAMStoreSys struct {
 	IAMStorageAPI
 
-	group *singleflight.Group
+	group  *singleflight.Group
+	policy *singleflight.Group
 }
 
 // HasWatcher - returns if the storage system has a watcher.
@@ -757,21 +822,32 @@ func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, 
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, _, err := cache.policyDBGet(store, name, false, false)
-	if err != nil {
-		return nil, err
-	}
-
-	userPolicyPresent := len(policies) > 0
-	for _, group := range groups {
-		ps, _, err := cache.policyDBGet(store, group, true, userPolicyPresent)
+	getPolicies := func() ([]string, error) {
+		policies, _, err := cache.policyDBGet(store, name, false, false)
 		if err != nil {
 			return nil, err
 		}
-		policies = append(policies, ps...)
-	}
 
-	return policies, nil
+		userPolicyPresent := len(policies) > 0
+
+		groupPolicies, err := cache.policyDBGetGroups(store, userPolicyPresent, groups...)
+		if err != nil {
+			return nil, err
+		}
+
+		policies = append(policies, groupPolicies...)
+		return policies, nil
+	}
+	if store.policy != nil {
+		val, err, _ := store.policy.Do(name, func() (interface{}, error) {
+			return getPolicies()
+		})
+		if err != nil {
+			return nil, err
+		}
+		return val.([]string), nil
+	}
+	return getPolicies()
 }
 
 // AddUsersToGroup - adds users to group, creating the group if needed.
