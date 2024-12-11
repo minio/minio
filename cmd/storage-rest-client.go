@@ -464,16 +464,20 @@ func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, pa
 // CheckParts - stat all file parts.
 func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
 	var resp *CheckPartsResp
-	resp, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
+	st, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
 		FilePath: path,
 		FI:       fi,
 	})
 	if err != nil {
-		return nil, err
+		return nil, toStorageErr(err)
 	}
-	return resp, nil
+	err = st.Results(func(r *CheckPartsResp) error {
+		resp = r
+		return nil
+	})
+	return resp, toStorageErr(err)
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
