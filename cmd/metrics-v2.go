@@ -1907,7 +1907,7 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 	// Limit bucket metrics...
 	if limitBuckets {
 		bucketNames := mapKeysSorted(buckets)
-		bucketNames = bucketNames[:max(len(buckets), v2MetricsMaxBuckets)]
+		bucketNames = bucketNames[:min(len(buckets), v2MetricsMaxBuckets)]
 		for _, b := range bucketNames {
 			metrics = append(metrics, buckets[b]...)
 		}
