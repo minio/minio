@@ -56,7 +56,7 @@ type storageRESTServer struct {
 }
 
 var (
-	storageCheckPartsRPC       = grid.NewSingleHandler[*CheckPartsHandlerParams, *CheckPartsResp](grid.HandlerCheckParts2, func() *CheckPartsHandlerParams { return &CheckPartsHandlerParams{} }, func() *CheckPartsResp { return &CheckPartsResp{} })
+	storageCheckPartsRPC       = grid.NewStream[*CheckPartsHandlerParams, grid.NoPayload, *CheckPartsResp](grid.HandlerCheckParts3, func() *CheckPartsHandlerParams { return &CheckPartsHandlerParams{} }, nil, func() *CheckPartsResp { return &CheckPartsResp{} })
 	storageDeleteFileRPC       = grid.NewSingleHandler[*DeleteFileHandlerParams, grid.NoPayload](grid.HandlerDeleteFile, func() *DeleteFileHandlerParams { return &DeleteFileHandlerParams{} }, grid.NewNoPayload).AllowCallRequestPool(true)
 	storageDeleteVersionRPC    = grid.NewSingleHandler[*DeleteVersionHandlerParams, grid.NoPayload](grid.HandlerDeleteVersion, func() *DeleteVersionHandlerParams { return &DeleteVersionHandlerParams{} }, grid.NewNoPayload)
 	storageDiskInfoRPC         = grid.NewSingleHandler[*DiskInfoOptions, *DiskInfo](grid.HandlerDiskInfo, func() *DiskInfoOptions { return &DiskInfoOptions{} }, func() *DiskInfo { return &DiskInfo{} }).WithSharedResponse().AllowCallRequestPool(true)
@@ -456,16 +456,20 @@ func (s *storageRESTServer) UpdateMetadataHandler(p *MetadataHandlerParams) (gri
 	return grid.NewNPErr(s.getStorage().UpdateMetadata(context.Background(), volume, filePath, p.FI, p.UpdateOpts))
 }
 
-// CheckPartsHandler - check if a file metadata exists.
-func (s *storageRESTServer) CheckPartsHandler(p *CheckPartsHandlerParams) (*CheckPartsResp, *grid.RemoteErr) {
+// CheckPartsHandler - check if a file parts exists.
+func (s *storageRESTServer) CheckPartsHandler(ctx context.Context, p *CheckPartsHandlerParams, out chan<- *CheckPartsResp) *grid.RemoteErr {
 	if !s.checkID(p.DiskID) {
-		return nil, grid.NewRemoteErr(errDiskNotFound)
+		return grid.NewRemoteErr(errDiskNotFound)
 	}
 	volume := p.Volume
 	filePath := p.FilePath
 
-	resp, err := s.getStorage().CheckParts(context.Background(), volume, filePath, p.FI)
-	return resp, grid.NewRemoteErr(err)
+	resp, err := s.getStorage().CheckParts(ctx, volume, filePath, p.FI)
+	if err != nil {
+		return grid.NewRemoteErr(err)
+	}
+	out <- resp
+	return grid.NewRemoteErr(err)
 }
 
 func (s *storageRESTServer) WriteAllHandler(p *WriteAllHandlerParams) (grid.NoPayload, *grid.RemoteErr) {
@@ -1382,7 +1386,7 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 			logger.FatalIf(storageRenameDataRPC.Register(gm, server.RenameDataHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageRenameDataInlineRPC.Register(gm, server.RenameDataInlineHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageDeleteFileRPC.Register(gm, server.DeleteFileHandler, endpoint.Path), "unable to register handler")
-			logger.FatalIf(storageCheckPartsRPC.Register(gm, server.CheckPartsHandler, endpoint.Path), "unable to register handler")
+			logger.FatalIf(storageCheckPartsRPC.RegisterNoInput(gm, server.CheckPartsHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageReadVersionRPC.Register(gm, server.ReadVersionHandlerWS, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageWriteMetadataRPC.Register(gm, server.WriteMetadataHandler, endpoint.Path), "unable to register handler")
 			logger.FatalIf(storageUpdateMetadataRPC.Register(gm, server.UpdateMetadataHandler, endpoint.Path), "unable to register handler")
