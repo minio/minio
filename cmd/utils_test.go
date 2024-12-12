@@ -314,7 +314,7 @@ func TestCeilFrac(t *testing.T) {
 
 // Test if isErrIgnored works correctly.
 func TestIsErrIgnored(t *testing.T) {
-	errIgnored := fmt.Errorf("ignored error")
+	errIgnored := errors.New("ignored error")
 	testCases := []struct {
 		err     error
 		ignored bool
