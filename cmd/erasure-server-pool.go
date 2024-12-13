@@ -1858,16 +1858,6 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		return PartInfo{}, err
 	}
 
-	// Read lock for upload id.
-	// Only held while reading the upload metadata.
-	uploadIDRLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
-	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	ctx = rlkctx.Context()
-	defer uploadIDRLock.RUnlock(rlkctx)
-
 	if z.SinglePool() {
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}

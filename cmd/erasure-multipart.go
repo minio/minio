@@ -744,6 +744,15 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	ctx = plkctx.Context()
 	defer partIDLock.Unlock(plkctx)
 
+	// Read lock for upload id, only held while reading the upload metadata.
+	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
+	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+	ctx = rlkctx.Context()
+	defer uploadIDRLock.RUnlock(rlkctx)
+
 	onlineDisks, err = er.renamePart(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, partFI, writeQuorum)
 	if err != nil {
 		if errors.Is(err, errFileNotFound) {
