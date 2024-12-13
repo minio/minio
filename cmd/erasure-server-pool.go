@@ -256,7 +256,7 @@ func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocke
 
 // GetDisksID will return disks by their ID.
 func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
-	idMap := make(map[string]struct{})
+	idMap := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		idMap[id] = struct{}{}
 	}
