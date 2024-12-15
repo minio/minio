@@ -1721,10 +1721,92 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 				if z.AllTierStats == nil {
 					z.AllTierStats = new(allTierStats)
 				}
-				err = z.AllTierStats.DecodeMsg(dc)
+				var zb0004 uint32
+				zb0004, err = dc.ReadMapHeader()
 				if err != nil {
 					err = msgp.WrapError(err, "AllTierStats")
 					return
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ts":
+						var zb0005 uint32
+						zb0005, err = dc.ReadMapHeader()
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats", "Tiers")
+							return
+						}
+						if z.AllTierStats.Tiers == nil {
+							z.AllTierStats.Tiers = make(map[string]tierStats, zb0005)
+						} else if len(z.AllTierStats.Tiers) > 0 {
+							for key := range z.AllTierStats.Tiers {
+								delete(z.AllTierStats.Tiers, key)
+							}
+						}
+						for zb0005 > 0 {
+							zb0005--
+							var za0003 string
+							var za0004 tierStats
+							za0003, err = dc.ReadString()
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers")
+								return
+							}
+							var zb0006 uint32
+							zb0006, err = dc.ReadMapHeader()
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+								return
+							}
+							for zb0006 > 0 {
+								zb0006--
+								field, err = dc.ReadMapKeyPtr()
+								if err != nil {
+									err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+									return
+								}
+								switch msgp.UnsafeString(field) {
+								case "ts":
+									za0004.TotalSize, err = dc.ReadUint64()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "TotalSize")
+										return
+									}
+								case "nv":
+									za0004.NumVersions, err = dc.ReadInt()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumVersions")
+										return
+									}
+								case "no":
+									za0004.NumObjects, err = dc.ReadInt()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumObjects")
+										return
+									}
+								default:
+									err = dc.Skip()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+										return
+									}
+								}
+							}
+							z.AllTierStats.Tiers[za0003] = za0004
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats")
+							return
+						}
+					}
 				}
 			}
 			zb0001Mask |= 0x1
@@ -1743,11 +1825,10 @@ func (z *dataUsageEntry) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1 {
-		if (zb0001Mask & 0x1) == 0 {
-			z.AllTierStats = nil
-		}
+	if (zb0001Mask & 0x1) == 0 {
+		z.AllTierStats = nil
 	}
+
 	return
 }
 
@@ -1766,121 +1847,166 @@ func (z *dataUsageEntry) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if zb0001Len == 0 {
-		return
-	}
-	// write "ch"
-	err = en.Append(0xa2, 0x63, 0x68)
-	if err != nil {
-		return
-	}
-	err = z.Children.EncodeMsg(en)
-	if err != nil {
-		err = msgp.WrapError(err, "Children")
-		return
-	}
-	// write "sz"
-	err = en.Append(0xa2, 0x73, 0x7a)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.Size)
-	if err != nil {
-		err = msgp.WrapError(err, "Size")
-		return
-	}
-	// write "os"
-	err = en.Append(0xa2, 0x6f, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.Objects)
-	if err != nil {
-		err = msgp.WrapError(err, "Objects")
-		return
-	}
-	// write "vs"
-	err = en.Append(0xa2, 0x76, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.Versions)
-	if err != nil {
-		err = msgp.WrapError(err, "Versions")
-		return
-	}
-	// write "dms"
-	err = en.Append(0xa3, 0x64, 0x6d, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteUint64(z.DeleteMarkers)
-	if err != nil {
-		err = msgp.WrapError(err, "DeleteMarkers")
-		return
-	}
-	// write "szs"
-	err = en.Append(0xa3, 0x73, 0x7a, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(dataUsageBucketLen))
-	if err != nil {
-		err = msgp.WrapError(err, "ObjSizes")
-		return
-	}
-	for za0001 := range z.ObjSizes {
-		err = en.WriteUint64(z.ObjSizes[za0001])
-		if err != nil {
-			err = msgp.WrapError(err, "ObjSizes", za0001)
-			return
-		}
-	}
-	// write "vh"
-	err = en.Append(0xa2, 0x76, 0x68)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(dataUsageVersionLen))
-	if err != nil {
-		err = msgp.WrapError(err, "ObjVersions")
-		return
-	}
-	for za0002 := range z.ObjVersions {
-		err = en.WriteUint64(z.ObjVersions[za0002])
-		if err != nil {
-			err = msgp.WrapError(err, "ObjVersions", za0002)
-			return
-		}
-	}
-	if (zb0001Mask & 0x80) == 0 { // if not omitted
-		// write "ats"
-		err = en.Append(0xa3, 0x61, 0x74, 0x73)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// write "ch"
+		err = en.Append(0xa2, 0x63, 0x68)
 		if err != nil {
 			return
 		}
-		if z.AllTierStats == nil {
-			err = en.WriteNil()
+		err = z.Children.EncodeMsg(en)
+		if err != nil {
+			err = msgp.WrapError(err, "Children")
+			return
+		}
+		// write "sz"
+		err = en.Append(0xa2, 0x73, 0x7a)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.Size)
+		if err != nil {
+			err = msgp.WrapError(err, "Size")
+			return
+		}
+		// write "os"
+		err = en.Append(0xa2, 0x6f, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.Objects)
+		if err != nil {
+			err = msgp.WrapError(err, "Objects")
+			return
+		}
+		// write "vs"
+		err = en.Append(0xa2, 0x76, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.Versions)
+		if err != nil {
+			err = msgp.WrapError(err, "Versions")
+			return
+		}
+		// write "dms"
+		err = en.Append(0xa3, 0x64, 0x6d, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteUint64(z.DeleteMarkers)
+		if err != nil {
+			err = msgp.WrapError(err, "DeleteMarkers")
+			return
+		}
+		// write "szs"
+		err = en.Append(0xa3, 0x73, 0x7a, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteArrayHeader(uint32(dataUsageBucketLen))
+		if err != nil {
+			err = msgp.WrapError(err, "ObjSizes")
+			return
+		}
+		for za0001 := range z.ObjSizes {
+			err = en.WriteUint64(z.ObjSizes[za0001])
 			if err != nil {
-				return
-			}
-		} else {
-			err = z.AllTierStats.EncodeMsg(en)
-			if err != nil {
-				err = msgp.WrapError(err, "AllTierStats")
+				err = msgp.WrapError(err, "ObjSizes", za0001)
 				return
 			}
 		}
-	}
-	// write "c"
-	err = en.Append(0xa1, 0x63)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.Compacted)
-	if err != nil {
-		err = msgp.WrapError(err, "Compacted")
-		return
+		// write "vh"
+		err = en.Append(0xa2, 0x76, 0x68)
+		if err != nil {
+			return
+		}
+		err = en.WriteArrayHeader(uint32(dataUsageVersionLen))
+		if err != nil {
+			err = msgp.WrapError(err, "ObjVersions")
+			return
+		}
+		for za0002 := range z.ObjVersions {
+			err = en.WriteUint64(z.ObjVersions[za0002])
+			if err != nil {
+				err = msgp.WrapError(err, "ObjVersions", za0002)
+				return
+			}
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not omitted
+			// write "ats"
+			err = en.Append(0xa3, 0x61, 0x74, 0x73)
+			if err != nil {
+				return
+			}
+			if z.AllTierStats == nil {
+				err = en.WriteNil()
+				if err != nil {
+					return
+				}
+			} else {
+				// map header, size 1
+				// write "ts"
+				err = en.Append(0x81, 0xa2, 0x74, 0x73)
+				if err != nil {
+					return
+				}
+				err = en.WriteMapHeader(uint32(len(z.AllTierStats.Tiers)))
+				if err != nil {
+					err = msgp.WrapError(err, "AllTierStats", "Tiers")
+					return
+				}
+				for za0003, za0004 := range z.AllTierStats.Tiers {
+					err = en.WriteString(za0003)
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats", "Tiers")
+						return
+					}
+					// map header, size 3
+					// write "ts"
+					err = en.Append(0x83, 0xa2, 0x74, 0x73)
+					if err != nil {
+						return
+					}
+					err = en.WriteUint64(za0004.TotalSize)
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "TotalSize")
+						return
+					}
+					// write "nv"
+					err = en.Append(0xa2, 0x6e, 0x76)
+					if err != nil {
+						return
+					}
+					err = en.WriteInt(za0004.NumVersions)
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumVersions")
+						return
+					}
+					// write "no"
+					err = en.Append(0xa2, 0x6e, 0x6f)
+					if err != nil {
+						return
+					}
+					err = en.WriteInt(za0004.NumObjects)
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumObjects")
+						return
+					}
+				}
+			}
+		}
+		// write "c"
+		err = en.Append(0xa1, 0x63)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.Compacted)
+		if err != nil {
+			err = msgp.WrapError(err, "Compacted")
+			return
+		}
 	}
 	return
 }
@@ -1898,56 +2024,69 @@ func (z *dataUsageEntry) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	// string "ch"
-	o = append(o, 0xa2, 0x63, 0x68)
-	o, err = z.Children.MarshalMsg(o)
-	if err != nil {
-		err = msgp.WrapError(err, "Children")
-		return
-	}
-	// string "sz"
-	o = append(o, 0xa2, 0x73, 0x7a)
-	o = msgp.AppendInt64(o, z.Size)
-	// string "os"
-	o = append(o, 0xa2, 0x6f, 0x73)
-	o = msgp.AppendUint64(o, z.Objects)
-	// string "vs"
-	o = append(o, 0xa2, 0x76, 0x73)
-	o = msgp.AppendUint64(o, z.Versions)
-	// string "dms"
-	o = append(o, 0xa3, 0x64, 0x6d, 0x73)
-	o = msgp.AppendUint64(o, z.DeleteMarkers)
-	// string "szs"
-	o = append(o, 0xa3, 0x73, 0x7a, 0x73)
-	o = msgp.AppendArrayHeader(o, uint32(dataUsageBucketLen))
-	for za0001 := range z.ObjSizes {
-		o = msgp.AppendUint64(o, z.ObjSizes[za0001])
-	}
-	// string "vh"
-	o = append(o, 0xa2, 0x76, 0x68)
-	o = msgp.AppendArrayHeader(o, uint32(dataUsageVersionLen))
-	for za0002 := range z.ObjVersions {
-		o = msgp.AppendUint64(o, z.ObjVersions[za0002])
-	}
-	if (zb0001Mask & 0x80) == 0 { // if not omitted
-		// string "ats"
-		o = append(o, 0xa3, 0x61, 0x74, 0x73)
-		if z.AllTierStats == nil {
-			o = msgp.AppendNil(o)
-		} else {
-			o, err = z.AllTierStats.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "AllTierStats")
-				return
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// string "ch"
+		o = append(o, 0xa2, 0x63, 0x68)
+		o, err = z.Children.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "Children")
+			return
+		}
+		// string "sz"
+		o = append(o, 0xa2, 0x73, 0x7a)
+		o = msgp.AppendInt64(o, z.Size)
+		// string "os"
+		o = append(o, 0xa2, 0x6f, 0x73)
+		o = msgp.AppendUint64(o, z.Objects)
+		// string "vs"
+		o = append(o, 0xa2, 0x76, 0x73)
+		o = msgp.AppendUint64(o, z.Versions)
+		// string "dms"
+		o = append(o, 0xa3, 0x64, 0x6d, 0x73)
+		o = msgp.AppendUint64(o, z.DeleteMarkers)
+		// string "szs"
+		o = append(o, 0xa3, 0x73, 0x7a, 0x73)
+		o = msgp.AppendArrayHeader(o, uint32(dataUsageBucketLen))
+		for za0001 := range z.ObjSizes {
+			o = msgp.AppendUint64(o, z.ObjSizes[za0001])
+		}
+		// string "vh"
+		o = append(o, 0xa2, 0x76, 0x68)
+		o = msgp.AppendArrayHeader(o, uint32(dataUsageVersionLen))
+		for za0002 := range z.ObjVersions {
+			o = msgp.AppendUint64(o, z.ObjVersions[za0002])
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not omitted
+			// string "ats"
+			o = append(o, 0xa3, 0x61, 0x74, 0x73)
+			if z.AllTierStats == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				// map header, size 1
+				// string "ts"
+				o = append(o, 0x81, 0xa2, 0x74, 0x73)
+				o = msgp.AppendMapHeader(o, uint32(len(z.AllTierStats.Tiers)))
+				for za0003, za0004 := range z.AllTierStats.Tiers {
+					o = msgp.AppendString(o, za0003)
+					// map header, size 3
+					// string "ts"
+					o = append(o, 0x83, 0xa2, 0x74, 0x73)
+					o = msgp.AppendUint64(o, za0004.TotalSize)
+					// string "nv"
+					o = append(o, 0xa2, 0x6e, 0x76)
+					o = msgp.AppendInt(o, za0004.NumVersions)
+					// string "no"
+					o = append(o, 0xa2, 0x6e, 0x6f)
+					o = msgp.AppendInt(o, za0004.NumObjects)
+				}
 			}
 		}
+		// string "c"
+		o = append(o, 0xa1, 0x63)
+		o = msgp.AppendBool(o, z.Compacted)
 	}
-	// string "c"
-	o = append(o, 0xa1, 0x63)
-	o = msgp.AppendBool(o, z.Compacted)
 	return
 }
 
@@ -2048,10 +2187,92 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if z.AllTierStats == nil {
 					z.AllTierStats = new(allTierStats)
 				}
-				bts, err = z.AllTierStats.UnmarshalMsg(bts)
+				var zb0004 uint32
+				zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AllTierStats")
 					return
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ts":
+						var zb0005 uint32
+						zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats", "Tiers")
+							return
+						}
+						if z.AllTierStats.Tiers == nil {
+							z.AllTierStats.Tiers = make(map[string]tierStats, zb0005)
+						} else if len(z.AllTierStats.Tiers) > 0 {
+							for key := range z.AllTierStats.Tiers {
+								delete(z.AllTierStats.Tiers, key)
+							}
+						}
+						for zb0005 > 0 {
+							var za0003 string
+							var za0004 tierStats
+							zb0005--
+							za0003, bts, err = msgp.ReadStringBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers")
+								return
+							}
+							var zb0006 uint32
+							zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+								return
+							}
+							for zb0006 > 0 {
+								zb0006--
+								field, bts, err = msgp.ReadMapKeyZC(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+									return
+								}
+								switch msgp.UnsafeString(field) {
+								case "ts":
+									za0004.TotalSize, bts, err = msgp.ReadUint64Bytes(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "TotalSize")
+										return
+									}
+								case "nv":
+									za0004.NumVersions, bts, err = msgp.ReadIntBytes(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumVersions")
+										return
+									}
+								case "no":
+									za0004.NumObjects, bts, err = msgp.ReadIntBytes(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumObjects")
+										return
+									}
+								default:
+									bts, err = msgp.Skip(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+										return
+									}
+								}
+							}
+							z.AllTierStats.Tiers[za0003] = za0004
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats")
+							return
+						}
+					}
 				}
 			}
 			zb0001Mask |= 0x1
@@ -2070,11 +2291,10 @@ func (z *dataUsageEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1 {
-		if (zb0001Mask & 0x1) == 0 {
-			z.AllTierStats = nil
-		}
+	if (zb0001Mask & 0x1) == 0 {
+		z.AllTierStats = nil
 	}
+
 	o = bts
 	return
 }
@@ -2085,7 +2305,13 @@ func (z *dataUsageEntry) Msgsize() (s int) {
 	if z.AllTierStats == nil {
 		s += msgp.NilSize
 	} else {
-		s += z.AllTierStats.Msgsize()
+		s += 1 + 3 + msgp.MapHeaderSize
+		if z.AllTierStats.Tiers != nil {
+			for za0003, za0004 := range z.AllTierStats.Tiers {
+				_ = za0004
+				s += msgp.StringPrefixSize + len(za0003) + 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize + 3 + msgp.IntSize
+			}
+		}
 	}
 	s += 2 + msgp.BoolSize
 	return
@@ -2734,10 +2960,92 @@ func (z *dataUsageEntryV7) DecodeMsg(dc *msgp.Reader) (err error) {
 				if z.AllTierStats == nil {
 					z.AllTierStats = new(allTierStats)
 				}
-				err = z.AllTierStats.DecodeMsg(dc)
+				var zb0004 uint32
+				zb0004, err = dc.ReadMapHeader()
 				if err != nil {
 					err = msgp.WrapError(err, "AllTierStats")
 					return
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, err = dc.ReadMapKeyPtr()
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ts":
+						var zb0005 uint32
+						zb0005, err = dc.ReadMapHeader()
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats", "Tiers")
+							return
+						}
+						if z.AllTierStats.Tiers == nil {
+							z.AllTierStats.Tiers = make(map[string]tierStats, zb0005)
+						} else if len(z.AllTierStats.Tiers) > 0 {
+							for key := range z.AllTierStats.Tiers {
+								delete(z.AllTierStats.Tiers, key)
+							}
+						}
+						for zb0005 > 0 {
+							zb0005--
+							var za0003 string
+							var za0004 tierStats
+							za0003, err = dc.ReadString()
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers")
+								return
+							}
+							var zb0006 uint32
+							zb0006, err = dc.ReadMapHeader()
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+								return
+							}
+							for zb0006 > 0 {
+								zb0006--
+								field, err = dc.ReadMapKeyPtr()
+								if err != nil {
+									err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+									return
+								}
+								switch msgp.UnsafeString(field) {
+								case "ts":
+									za0004.TotalSize, err = dc.ReadUint64()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "TotalSize")
+										return
+									}
+								case "nv":
+									za0004.NumVersions, err = dc.ReadInt()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumVersions")
+										return
+									}
+								case "no":
+									za0004.NumObjects, err = dc.ReadInt()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumObjects")
+										return
+									}
+								default:
+									err = dc.Skip()
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+										return
+									}
+								}
+							}
+							z.AllTierStats.Tiers[za0003] = za0004
+						}
+					default:
+						err = dc.Skip()
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats")
+							return
+						}
+					}
 				}
 			}
 			zb0001Mask |= 0x1
@@ -2756,11 +3064,10 @@ func (z *dataUsageEntryV7) DecodeMsg(dc *msgp.Reader) (err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1 {
-		if (zb0001Mask & 0x1) == 0 {
-			z.AllTierStats = nil
-		}
+	if (zb0001Mask & 0x1) == 0 {
+		z.AllTierStats = nil
 	}
+
 	return
 }
 
@@ -2861,10 +3168,92 @@ func (z *dataUsageEntryV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if z.AllTierStats == nil {
 					z.AllTierStats = new(allTierStats)
 				}
-				bts, err = z.AllTierStats.UnmarshalMsg(bts)
+				var zb0004 uint32
+				zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "AllTierStats")
 					return
+				}
+				for zb0004 > 0 {
+					zb0004--
+					field, bts, err = msgp.ReadMapKeyZC(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "AllTierStats")
+						return
+					}
+					switch msgp.UnsafeString(field) {
+					case "ts":
+						var zb0005 uint32
+						zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats", "Tiers")
+							return
+						}
+						if z.AllTierStats.Tiers == nil {
+							z.AllTierStats.Tiers = make(map[string]tierStats, zb0005)
+						} else if len(z.AllTierStats.Tiers) > 0 {
+							for key := range z.AllTierStats.Tiers {
+								delete(z.AllTierStats.Tiers, key)
+							}
+						}
+						for zb0005 > 0 {
+							var za0003 string
+							var za0004 tierStats
+							zb0005--
+							za0003, bts, err = msgp.ReadStringBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers")
+								return
+							}
+							var zb0006 uint32
+							zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
+							if err != nil {
+								err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+								return
+							}
+							for zb0006 > 0 {
+								zb0006--
+								field, bts, err = msgp.ReadMapKeyZC(bts)
+								if err != nil {
+									err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+									return
+								}
+								switch msgp.UnsafeString(field) {
+								case "ts":
+									za0004.TotalSize, bts, err = msgp.ReadUint64Bytes(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "TotalSize")
+										return
+									}
+								case "nv":
+									za0004.NumVersions, bts, err = msgp.ReadIntBytes(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumVersions")
+										return
+									}
+								case "no":
+									za0004.NumObjects, bts, err = msgp.ReadIntBytes(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003, "NumObjects")
+										return
+									}
+								default:
+									bts, err = msgp.Skip(bts)
+									if err != nil {
+										err = msgp.WrapError(err, "AllTierStats", "Tiers", za0003)
+										return
+									}
+								}
+							}
+							z.AllTierStats.Tiers[za0003] = za0004
+						}
+					default:
+						bts, err = msgp.Skip(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "AllTierStats")
+							return
+						}
+					}
 				}
 			}
 			zb0001Mask |= 0x1
@@ -2883,11 +3272,10 @@ func (z *dataUsageEntryV7) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 	}
 	// Clear omitted fields.
-	if zb0001Mask != 0x1 {
-		if (zb0001Mask & 0x1) == 0 {
-			z.AllTierStats = nil
-		}
+	if (zb0001Mask & 0x1) == 0 {
+		z.AllTierStats = nil
 	}
+
 	o = bts
 	return
 }
@@ -2898,7 +3286,13 @@ func (z *dataUsageEntryV7) Msgsize() (s int) {
 	if z.AllTierStats == nil {
 		s += msgp.NilSize
 	} else {
-		s += z.AllTierStats.Msgsize()
+		s += 1 + 3 + msgp.MapHeaderSize
+		if z.AllTierStats.Tiers != nil {
+			for za0003, za0004 := range z.AllTierStats.Tiers {
+				_ = za0004
+				s += msgp.StringPrefixSize + len(za0003) + 1 + 3 + msgp.Uint64Size + 3 + msgp.IntSize + 3 + msgp.IntSize
+			}
+		}
 	}
 	s += 2 + msgp.BoolSize
 	return
