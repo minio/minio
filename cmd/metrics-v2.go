@@ -1836,8 +1836,8 @@ func getGoMetrics() *MetricsGroupV2 {
 // getHistogramMetrics fetches histogram metrics and returns it in a []Metric
 // Note: Typically used in MetricGroup.RegisterRead
 //
-// The last parameter is added for compatibility - if true it lowercases the
-// `api` label values.
+// The toLowerAPILabels parameter is added for compatibility,
+// if set, it lowercases the `api` label values.
 func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, toLowerAPILabels, limitBuckets bool) []MetricV2 {
 	ch := make(chan prometheus.Metric)
 	go func() {
@@ -3281,7 +3281,12 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		if !globalSiteReplicationSys.isEnabled() {
 			bucketReplStats = globalReplicationStats.Load().getAllLatest(dataUsageInfo.BucketsUsage)
 		}
-		for bucket, usage := range dataUsageInfo.BucketsUsage {
+		buckets := mapKeysSorted(dataUsageInfo.BucketsUsage)
+		if len(buckets) > v2MetricsMaxBuckets {
+			buckets = buckets[:v2MetricsMaxBuckets]
+		}
+		for _, bucket := range buckets {
+			usage := dataUsageInfo.BucketsUsage[bucket]
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
 			metrics = append(metrics, MetricV2{
