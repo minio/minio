@@ -256,7 +256,7 @@ func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocke
 
 // GetDisksID will return disks by their ID.
 func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
-	idMap := make(map[string]struct{})
+	idMap := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		idMap[id] = struct{}{}
 	}
@@ -1857,16 +1857,6 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 	if err := checkPutObjectPartArgs(ctx, bucket, object, uploadID); err != nil {
 		return PartInfo{}, err
 	}
-
-	// Read lock for upload id.
-	// Only held while reading the upload metadata.
-	uploadIDRLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
-	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	ctx = rlkctx.Context()
-	defer uploadIDRLock.RUnlock(rlkctx)
 
 	if z.SinglePool() {
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)

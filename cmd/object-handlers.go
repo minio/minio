@@ -1191,6 +1191,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Sanitize the source object name similar to NewMultipart and PutObject API
+	srcObject = trimLeadingSlash(srcObject)
+
 	if vid != "" && vid != nullVersionID {
 		_, err := uuid.Parse(vid)
 		if err != nil {
