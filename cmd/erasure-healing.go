@@ -161,33 +161,33 @@ var (
 
 // Only heal on disks where we are sure that healing is needed. We can expand
 // this list as and when we figure out more errors can be added to this list safely.
-func shouldHealObjectOnDisk(erErr error, partsErrs []int, meta FileInfo, latestMeta FileInfo) (bool, error) {
+func shouldHealObjectOnDisk(erErr error, partsErrs []int, meta FileInfo, latestMeta FileInfo) (bool, bool, error) {
 	if errors.Is(erErr, errFileNotFound) || errors.Is(erErr, errFileVersionNotFound) || errors.Is(erErr, errFileCorrupt) {
-		return true, erErr
+		return true, true, erErr
 	}
 	if erErr == nil {
 		if meta.XLV1 {
 			// Legacy means heal always
 			// always check first.
-			return true, errLegacyXLMeta
+			return true, true, errLegacyXLMeta
 		}
 		if !latestMeta.Equals(meta) {
-			return true, errOutdatedXLMeta
+			return true, true, errOutdatedXLMeta
 		}
 		if !meta.Deleted && !meta.IsRemote() {
 			// If xl.meta was read fine but there may be problem with the part.N files.
 			for _, partErr := range partsErrs {
 				if partErr == checkPartFileNotFound {
-					return true, errPartMissing
+					return true, false, errPartMissing
 				}
 				if partErr == checkPartFileCorrupt {
-					return true, errPartCorrupt
+					return true, false, errPartCorrupt
 				}
 			}
 		}
-		return false, nil
+		return false, false, nil
 	}
-	return false, erErr
+	return false, false, erErr
 }
 
 const (
@@ -363,16 +363,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	// No modtime quorum
 	filterDisksByETag := quorumETag != ""
 
-	// List of disks having all parts as per latest metadata.
-	// NOTE: do not pass in latestDisks to diskWithAllParts since
-	// the diskWithAllParts needs to reach the drive to ensure
-	// validity of the metadata content, we should make sure that
-	// we pass in disks as is for it to be verified. Once verified
-	// the disksWithAllParts() returns the actual disks that can be
-	// used here for reconstruction. This is done to ensure that
-	// we do not skip drives that have inconsistent metadata to be
-	// skipped from purging when they are stale.
-	availableDisks, dataErrsByDisk, dataErrsByPart := disksWithAllParts(ctx, onlineDisks, partsMetadata,
+	dataErrsByDisk, dataErrsByPart := checkObjectWithAllParts(ctx, onlineDisks, partsMetadata,
 		errs, latestMeta, filterDisksByETag, bucket, object, scanMode)
 
 	var erasure Erasure
@@ -394,12 +385,15 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	// data state and a list of outdated disks on which data needs
 	// to be healed.
 	outDatedDisks := make([]StorageAPI, len(storageDisks))
-	disksToHealCount := 0
-	for i := range availableDisks {
-		yes, reason := shouldHealObjectOnDisk(errs[i], dataErrsByDisk[i], partsMetadata[i], latestMeta)
+	disksToHealCount, xlMetaToHealCount := 0, 0
+	for i := range onlineDisks {
+		yes, isMeta, reason := shouldHealObjectOnDisk(errs[i], dataErrsByDisk[i], partsMetadata[i], latestMeta)
 		if yes {
 			outDatedDisks[i] = storageDisks[i]
 			disksToHealCount++
+			if isMeta {
+				xlMetaToHealCount++
+			}
 		}
 
 		driveState := objectErrToDriveState(reason)
@@ -416,16 +410,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		})
 	}
 
-	if isAllNotFound(errs) {
-		// File is fully gone, fileInfo is empty.
-		err := errFileNotFound
-		if versionID != "" {
-			err = errFileVersionNotFound
-		}
-		return er.defaultHealResult(FileInfo{}, storageDisks, storageEndpoints, errs,
-			bucket, object, versionID), err
-	}
-
 	if disksToHealCount == 0 {
 		// Nothing to heal!
 		return result, nil
@@ -437,11 +421,21 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 		return result, nil
 	}
 
-	cannotHeal := !latestMeta.XLV1 && !latestMeta.Deleted && disksToHealCount > latestMeta.Erasure.ParityBlocks
+	cannotHeal := !latestMeta.XLV1 && !latestMeta.Deleted && xlMetaToHealCount > latestMeta.Erasure.ParityBlocks
 	if cannotHeal && quorumETag != "" {
 		// This is an object that is supposed to be removed by the dangling code
 		// but we noticed that ETag is the same for all objects, let's give it a shot
 		cannotHeal = false
+	}
+
+	if !latestMeta.Deleted && !latestMeta.IsRemote() {
+		// check if there is a part that lost its quorum
+		for _, partErrs := range dataErrsByPart {
+			if countPartNotSuccess(partErrs) > latestMeta.Erasure.ParityBlocks {
+				cannotHeal = true
+				break
+			}
+		}
 	}
 
 	if cannotHeal {
@@ -482,16 +476,15 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 	tmpID := mustGetUUID()
 	migrateDataDir := mustGetUUID()
 
-	// Reorder so that we have data disks first and parity disks next.
-	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(availableDisks) {
-		err := fmt.Errorf("unexpected file distribution (%v) from available disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
-			latestMeta.Erasure.Distribution, availableDisks, bucket, object, versionID)
-		healingLogOnceIf(ctx, err, "heal-object-available-disks")
+	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(onlineDisks) {
+		err := fmt.Errorf("unexpected file distribution (%v) from online disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
+			latestMeta.Erasure.Distribution, onlineDisks, bucket, object, versionID)
+		healingLogOnceIf(ctx, err, "heal-object-online-disks")
 		return er.defaultHealResult(latestMeta, storageDisks, storageEndpoints, errs,
 			bucket, object, versionID), err
 	}
 
-	latestDisks := shuffleDisks(availableDisks, latestMeta.Erasure.Distribution)
+	latestDisks := shuffleDisks(onlineDisks, latestMeta.Erasure.Distribution)
 
 	if !latestMeta.Deleted && len(latestMeta.Erasure.Distribution) != len(outDatedDisks) {
 		err := fmt.Errorf("unexpected file distribution (%v) from outdated disks (%v), looks like backend disks have been manually modified refusing to heal %s/%s(%s)",
@@ -560,6 +553,10 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			checksumAlgo := erasureInfo.GetChecksumInfo(partNumber).Algorithm
 			for i, disk := range latestDisks {
 				if disk == OfflineDisk {
+					continue
+				}
+				thisPartErrs := shuffleCheckParts(dataErrsByPart[partIndex], latestMeta.Erasure.Distribution)
+				if thisPartErrs[i] != checkPartSuccess {
 					continue
 				}
 				checksumInfo := copyPartsMetadata[i].Erasure.GetChecksumInfo(partNumber)
