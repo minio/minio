@@ -1204,6 +1204,10 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 			listPartsInfo.Parts[i].ETag = tryDecryptETag(objectEncryptionKey, p.ETag, kind == crypto.S3)
 			listPartsInfo.Parts[i].Size = p.ActualSize
 		}
+	} else if _, ok := listPartsInfo.UserDefined[ReservedMetadataPrefix+"compression"]; ok {
+		for i, p := range listPartsInfo.Parts {
+			listPartsInfo.Parts[i].Size = p.ActualSize
+		}
 	}
 
 	response := generateListPartsResponse(listPartsInfo, encodingType)
