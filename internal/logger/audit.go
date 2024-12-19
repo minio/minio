@@ -52,6 +52,7 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 		r = &audit.Entry{
 			Version:      internalAudit.Version,
 			DeploymentID: xhttp.GlobalDeploymentID,
+			SiteName:     xhttp.GlobalSiteName,
 			Time:         time.Now().UTC(),
 		}
 		return r

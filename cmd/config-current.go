@@ -528,6 +528,7 @@ func lookupConfigs(s config.Config, objAPI ObjectLayer) {
 		configLogIf(ctx, fmt.Errorf("Invalid site configuration: %w", err))
 	}
 	globalSite.Update(siteCfg)
+	xhttp.SetSiteName(globalSite.Name())
 
 	globalAutoEncryption = crypto.LookupAutoEncryption() // Enable auto-encryption if enabled
 	if globalAutoEncryption && GlobalKMS == nil {
