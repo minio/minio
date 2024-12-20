@@ -107,28 +107,28 @@ func TestInvalidRules(t *testing.T) {
 		},
 		{
 			inputXML: `<Rule>
-				<ID>Rule with a tag and DelMarkerExpiration</ID>
+				<ID>Rule with a tag and DeletedObjectExpiration</ID>
 				<Filter><Tag><Key>k1</Key><Value>v1</Value></Tag></Filter>
-				<DelMarkerExpiration>
+				<DeletedObjectExpiration>
 					<Days>365</Days>
-				</DelMarkerExpiration>
+				</DeletedObjectExpiration>
                             <Status>Enabled</Status>
 	                    </Rule>`,
-			expectedErr: errInvalidRuleDelMarkerExpiration,
+			expectedErr: errInvalidRuleDelObjExpiration,
 		},
 		{
 			inputXML: `<Rule>
-				<ID>Rule with multiple tags and DelMarkerExpiration</ID>
+				<ID>Rule with multiple tags and DeletedObjectExpiration</ID>
 				<Filter><And>
 				<Tag><Key>k1</Key><Value>v1</Value></Tag>
 				<Tag><Key>k2</Key><Value>v2</Value></Tag>
 				</And></Filter>
-				<DelMarkerExpiration>
+				<DeletedObjectExpiration>
 					<Days>365</Days>
-				</DelMarkerExpiration>
+				</DeletedObjectExpiration>
                             <Status>Enabled</Status>
 	                    </Rule>`,
-			expectedErr: errInvalidRuleDelMarkerExpiration,
+			expectedErr: errInvalidRuleDelObjExpiration,
 		},
 	}
 

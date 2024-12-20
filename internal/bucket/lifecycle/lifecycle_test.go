@@ -172,14 +172,14 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 		},
 		// Lifecycle with delmarker expiration
 		{
-			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DelMarkerExpiration><Days>5</Days></DelMarkerExpiration></Rule></LifecycleConfiguration>`,
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DeletedObjectExpiration><Days>5</Days></DeletedObjectExpiration></Rule></LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
 			expectedValidationErr: nil,
 		},
 		// Lifecycle with empty delmarker expiration
 		{
-			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DelMarkerExpiration><Days></Days></DelMarkerExpiration></Rule></LifecycleConfiguration>`,
-			expectedParsingErr:    errInvalidDaysDelMarkerExpiration,
+			inputConfig:           `<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>rule</ID><Status>Enabled</Status><Filter></Filter><DeletedObjectExpiration><Days></Days></DeletedObjectExpiration></Rule></LifecycleConfiguration>`,
+			expectedParsingErr:    errInvalidDaysDeletedObjExpiration,
 			expectedValidationErr: nil,
 		},
 	}
@@ -660,15 +660,15 @@ func TestEval(t *testing.T) {
 			expectedAction:         DeleteVersionAction,
 		},
 		{
-			// DelMarkerExpiration is preferred since object age is past both transition and expiration days.
+			// DeletedObjectExpiration is preferred since object age is past both transition and expiration days.
 			inputConfig: `<LifecycleConfiguration>
                             <Rule>
-                              <ID>DelMarkerExpiration with Transition</ID>
+                              <ID>DeletedObjectExpiration with Transition</ID>
                               <Filter></Filter>
                               <Status>Enabled</Status>
-                              <DelMarkerExpiration>
+                              <DeletedObjectExpiration>
                                 <Days>60</Days>
-                              </DelMarkerExpiration>
+                              </DeletedObjectExpiration>
 	                      <Transition>
                                 <StorageClass>WARM-1</StorageClass>
                                 <Days>30</Days>
@@ -681,16 +681,16 @@ func TestEval(t *testing.T) {
 			expectedAction: DelMarkerDeleteAllVersionsAction,
 		},
 		{
-			// NoneAction since object doesn't qualify for DelMarkerExpiration yet.
+			// NoneAction since object doesn't qualify for DeletedObjectExpiration yet.
 			// Note: TransitionAction doesn't apply to DEL marker
 			inputConfig: `<LifecycleConfiguration>
                             <Rule>
-                              <ID>DelMarkerExpiration with Transition</ID>
+                              <ID>DeletedObjectExpiration with Transition</ID>
                               <Filter></Filter>
                               <Status>Enabled</Status>
-                              <DelMarkerExpiration>
+                              <DeletedObjectExpiration>
                                 <Days>60</Days>
-                              </DelMarkerExpiration>
+                              </DeletedObjectExpiration>
 	                      <Transition>
                                 <StorageClass>WARM-1</StorageClass>
                                 <Days>30</Days>
@@ -705,12 +705,12 @@ func TestEval(t *testing.T) {
 		{
 			inputConfig: `<LifecycleConfiguration>
                             <Rule>
-                              <ID>DelMarkerExpiration with non DEL-marker object</ID>
+                              <ID>DeletedObjectExpiration with non DEL-marker object</ID>
                               <Filter></Filter>
                               <Status>Enabled</Status>
-                              <DelMarkerExpiration>
+                              <DeletedObjectExpiration>
                                 <Days>60</Days>
-                              </DelMarkerExpiration>
+                              </DeletedObjectExpiration>
                              </Rule>
                        </LifecycleConfiguration>`,
 			objectName:     "obj-1",
@@ -720,12 +720,12 @@ func TestEval(t *testing.T) {
 		{
 			inputConfig: `<LifecycleConfiguration>
                             <Rule>
-                              <ID>DelMarkerExpiration with noncurrent DEL-marker</ID>
+                              <ID>DeletedObjectExpiration with noncurrent DEL-marker</ID>
                               <Filter></Filter>
                               <Status>Enabled</Status>
-                              <DelMarkerExpiration>
+                              <DeletedObjectExpiration>
                                 <Days>60</Days>
-                              </DelMarkerExpiration>
+                              </DeletedObjectExpiration>
                              </Rule>
                        </LifecycleConfiguration>`,
 			objectName:             "obj-1",
@@ -1432,7 +1432,7 @@ func TestFilterRules(t *testing.T) {
 
 // TestDeleteAllVersions tests ordering among events, especially ones which
 // expire all versions like ExpiredObjectDeleteAllVersions and
-// DelMarkerExpiration
+// DeletedObjectExpiration
 func TestDeleteAllVersions(t *testing.T) {
 	// ExpiredObjectDeleteAllVersions
 	lc := Lifecycle{
@@ -1475,20 +1475,20 @@ func TestDeleteAllVersions(t *testing.T) {
 		t.Fatalf("Expected due %v but got %v, ruleID=%v", exp, event.Due, event.RuleID)
 	}
 
-	// DelMarkerExpiration
+	// DeletedObjectExpiration
 	lc = Lifecycle{
 		Rules: []Rule{
 			{
 				ID:     "delmarker-exp-20",
 				Status: "Enabled",
-				DelMarkerExpiration: DelMarkerExpiration{
+				DeletedObjectExpiration: DeletedObjectExpiration{
 					Days: 20,
 				},
 			},
 			{
 				ID:     "delmarker-exp-10",
 				Status: "Enabled",
-				DelMarkerExpiration: DelMarkerExpiration{
+				DeletedObjectExpiration: DeletedObjectExpiration{
 					Days: 10,
 				},
 			},
