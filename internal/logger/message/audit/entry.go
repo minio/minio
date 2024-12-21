@@ -36,6 +36,7 @@ func NewEntry(deploymentID string) audit.Entry {
 	return audit.Entry{
 		Version:      Version,
 		DeploymentID: deploymentID,
+		SiteName:     xhttp.GlobalSiteName,
 		Time:         time.Now().UTC(),
 	}
 }
