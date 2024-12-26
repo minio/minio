@@ -241,7 +241,7 @@ spec:
         resources:
           requests:
             storage: {{ $psize }}
-        {{- include "minio.persistence.storageClass" ( dict "persistence" .Values.persistence "global" $.Values.global) | nindent 8 }}
+        {{- include "minio.persistence.storageClass" ( dict "persistence" $.Values.persistence "global" $.Values.global) | nindent 8 }}
     {{- end }}
     {{- else }}
     - apiVersion: v1
