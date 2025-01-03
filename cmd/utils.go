@@ -411,7 +411,12 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		stop := fgprof.Start(f, fgprof.FormatPprof)
+		startedAt := time.Now()
 		prof.stopFn = func() ([]byte, error) {
+			if elapsed := time.Since(startedAt); elapsed < 100*time.Millisecond {
+				// Light hack around https://github.com/felixge/fgprof/pull/34
+				time.Sleep(100*time.Millisecond - elapsed)
+			}
 			err := stop()
 			if err != nil {
 				return nil, err
