@@ -245,7 +245,7 @@ func parseRequestToken(token string) (subToken string, nodeIndex int) {
 
 func proxyRequestByToken(ctx context.Context, w http.ResponseWriter, r *http.Request, token string) (string, bool) {
 	subToken, nodeIndex := parseRequestToken(token)
-	if nodeIndex > 0 {
+	if nodeIndex >= 0 {
 		return subToken, proxyRequestByNodeIndex(ctx, w, r, nodeIndex)
 	}
 	return subToken, false

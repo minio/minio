@@ -256,7 +256,7 @@ func (z *erasureServerPools) NewNSLock(bucket string, objects ...string) RWLocke
 
 // GetDisksID will return disks by their ID.
 func (z *erasureServerPools) GetDisksID(ids ...string) []StorageAPI {
-	idMap := make(map[string]struct{})
+	idMap := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
 		idMap[id] = struct{}{}
 	}
@@ -357,7 +357,7 @@ func (p serverPoolsAvailableSpace) TotalAvailable() uint64 {
 
 // FilterMaxUsed will filter out any pools that has used percent bigger than max,
 // unless all have that, in which case all are preserved.
-func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
+func (p serverPoolsAvailableSpace) FilterMaxUsed(maxUsed int) {
 	// We aren't modifying p, only entries in it, so we don't need to receive a pointer.
 	if len(p) <= 1 {
 		// Nothing to do.
@@ -365,7 +365,7 @@ func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
 	}
 	var ok bool
 	for _, z := range p {
-		if z.Available > 0 && z.MaxUsedPct < max {
+		if z.Available > 0 && z.MaxUsedPct < maxUsed {
 			ok = true
 			break
 		}
@@ -378,7 +378,7 @@ func (p serverPoolsAvailableSpace) FilterMaxUsed(max int) {
 
 	// Remove entries that are above.
 	for i, z := range p {
-		if z.Available > 0 && z.MaxUsedPct < max {
+		if z.Available > 0 && z.MaxUsedPct < maxUsed {
 			continue
 		}
 		p[i].Available = 0
@@ -1858,16 +1858,6 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 		return PartInfo{}, err
 	}
 
-	// Read lock for upload id.
-	// Only held while reading the upload metadata.
-	uploadIDRLock := z.NewNSLock(bucket, pathJoin(object, uploadID))
-	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	ctx = rlkctx.Context()
-	defer uploadIDRLock.RUnlock(rlkctx)
-
 	if z.SinglePool() {
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
@@ -2478,6 +2468,7 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 // HealObjectFn closure function heals the object.
 type HealObjectFn func(bucket, object, versionID string, scanMode madmin.HealScanMode) error
 
+// List a prefix or a single object versions and heal
 func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix string, opts madmin.HealOpts, healObjectFn HealObjectFn) error {
 	healEntry := func(bucket string, entry metaCacheEntry, scanMode madmin.HealScanMode) error {
 		if entry.isDir() {
@@ -2541,7 +2532,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			go func(idx int, set *erasureObjects) {
 				defer wg.Done()
 
-				errs[idx] = set.listAndHeal(ctx, bucket, prefix, opts.ScanMode, healEntry)
+				errs[idx] = set.listAndHeal(ctx, bucket, prefix, opts.Recursive, opts.ScanMode, healEntry)
 			}(idx, set)
 		}
 		wg.Wait()
@@ -2593,15 +2584,22 @@ func (z *erasureServerPools) HealObject(ctx context.Context, bucket, object, ver
 		}
 	}
 
+	hr := madmin.HealResultItem{
+		Type:      madmin.HealItemObject,
+		Bucket:    bucket,
+		Object:    object,
+		VersionID: versionID,
+	}
+
 	// At this stage, all errors are 'not found'
 	if versionID != "" {
-		return madmin.HealResultItem{}, VersionNotFound{
+		return hr, VersionNotFound{
 			Bucket:    bucket,
 			Object:    object,
 			VersionID: versionID,
 		}
 	}
-	return madmin.HealResultItem{}, ObjectNotFound{
+	return hr, ObjectNotFound{
 		Bucket: bucket,
 		Object: object,
 	}

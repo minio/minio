@@ -63,11 +63,9 @@ type Config struct {
 }
 
 // BitrotScanCycle returns the configured cycle for the scanner healing
-// -1 for not enabled
-//
-//	0 for contiunous bitrot scanning
-//
-// >0 interval duration between cycles
+// - '-1' for not enabled
+// - '0' for continuous bitrot scanning
+// - '> 0' interval duration between cycles
 func (opts Config) BitrotScanCycle() (d time.Duration) {
 	configMutex.RLock()
 	defer configMutex.RUnlock()

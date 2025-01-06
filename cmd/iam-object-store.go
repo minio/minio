@@ -481,12 +481,24 @@ var (
 	policyDBGroupsListKey   = "policydb/groups/"
 )
 
+func findSecondIndex(s string, substr string) int {
+	first := strings.Index(s, substr)
+	if first == -1 {
+		return -1
+	}
+	second := strings.Index(s[first+1:], substr)
+	if second == -1 {
+		return -1
+	}
+	return first + second + 1
+}
+
 // splitPath splits a path into a top-level directory and a child item. The
 // parent directory retains the trailing slash.
-func splitPath(s string, lastIndex bool) (string, string) {
+func splitPath(s string, secondIndex bool) (string, string) {
 	var i int
-	if lastIndex {
-		i = strings.LastIndex(s, "/")
+	if secondIndex {
+		i = findSecondIndex(s, "/")
 	} else {
 		i = strings.Index(s, "/")
 	}
@@ -506,8 +518,8 @@ func (iamOS *IAMObjectStore) listAllIAMConfigItems(ctx context.Context) (res map
 			return nil, item.Err
 		}
 
-		lastIndex := strings.HasPrefix(item.Item, policyDBPrefix)
-		listKey, trimmedItem := splitPath(item.Item, lastIndex)
+		secondIndex := strings.HasPrefix(item.Item, policyDBPrefix)
+		listKey, trimmedItem := splitPath(item.Item, secondIndex)
 		if listKey == iamFormatFile {
 			continue
 		}
@@ -781,7 +793,10 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	for _, item := range listedConfigItems[stsListKey] {
 		userName := path.Dir(item)
 		// loadUser() will delete expired user during the load.
-		iamLogIf(ctx, iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore))
+		err := iamOS.loadUser(ctx, userName, stsUser, stsAccountsFromStore)
+		if err != nil && !errors.Is(err, errNoSuchUser) {
+			iamLogIf(ctx, err)
+		}
 		// No need to return errors for failed expiration of STS users
 	}
 
@@ -789,7 +804,10 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	// (removed during loadUser() in the loop above) are removed from memory.
 	for _, item := range listedConfigItems[policyDBSTSUsersListKey] {
 		stsName := strings.TrimSuffix(item, ".json")
-		iamLogIf(ctx, iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore))
+		err := iamOS.loadMappedPolicy(ctx, stsName, stsUser, false, stsAccPoliciesFromStore)
+		if err != nil && !errors.Is(err, errNoSuchPolicy) {
+			iamLogIf(ctx, err)
+		}
 		// No need to return errors for failed expiration of STS users
 	}
 

@@ -79,6 +79,7 @@ const (
 	EnvLoggerWebhookQueueDir      = "MINIO_LOGGER_WEBHOOK_QUEUE_DIR"
 	EnvLoggerWebhookMaxRetry      = "MINIO_LOGGER_WEBHOOK_MAX_RETRY"
 	EnvLoggerWebhookRetryInterval = "MINIO_LOGGER_WEBHOOK_RETRY_INTERVAL"
+	EnvLoggerWebhookHTTPTimeout   = "MINIO_LOGGER_WEBHOOK_HTTP_TIMEOUT"
 
 	EnvAuditWebhookEnable        = "MINIO_AUDIT_WEBHOOK_ENABLE"
 	EnvAuditWebhookEndpoint      = "MINIO_AUDIT_WEBHOOK_ENDPOINT"
@@ -507,19 +508,30 @@ func lookupLoggerWebhookConfig(scfg config.Config, cfg Config) (Config, error) {
 		if retryInterval > time.Minute {
 			return cfg, fmt.Errorf("maximum allowed value for retry interval is '1m': %s", retryIntervalCfgVal)
 		}
+
+		httpTimeoutCfgVal := getCfgVal(EnvLoggerWebhookHTTPTimeout, k, kv.Get(httpTimeout))
+		httpTimeout, err := time.ParseDuration(httpTimeoutCfgVal)
+		if err != nil {
+			return cfg, err
+		}
+		if httpTimeout < time.Second {
+			return cfg, fmt.Errorf("minimum value allowed for http_timeout is '1s': %s", httpTimeout)
+		}
+
 		cfg.HTTP[k] = http.Config{
-			Enabled:    true,
-			Endpoint:   url,
-			AuthToken:  getCfgVal(EnvLoggerWebhookAuthToken, k, kv.Get(AuthToken)),
-			ClientCert: clientCert,
-			ClientKey:  clientKey,
-			Proxy:      getCfgVal(EnvLoggerWebhookProxy, k, kv.Get(Proxy)),
-			BatchSize:  batchSize,
-			QueueSize:  queueSize,
-			QueueDir:   getCfgVal(EnvLoggerWebhookQueueDir, k, kv.Get(QueueDir)),
-			MaxRetry:   maxRetry,
-			RetryIntvl: retryInterval,
-			Name:       loggerTargetNamePrefix + k,
+			HTTPTimeout: httpTimeout,
+			Enabled:     true,
+			Endpoint:    url,
+			AuthToken:   getCfgVal(EnvLoggerWebhookAuthToken, k, kv.Get(AuthToken)),
+			ClientCert:  clientCert,
+			ClientKey:   clientKey,
+			Proxy:       getCfgVal(EnvLoggerWebhookProxy, k, kv.Get(Proxy)),
+			BatchSize:   batchSize,
+			QueueSize:   queueSize,
+			QueueDir:    getCfgVal(EnvLoggerWebhookQueueDir, k, kv.Get(QueueDir)),
+			MaxRetry:    maxRetry,
+			RetryIntvl:  retryInterval,
+			Name:        loggerTargetNamePrefix + k,
 		}
 	}
 	return cfg, nil

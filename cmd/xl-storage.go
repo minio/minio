@@ -432,15 +432,19 @@ func (s *xlStorage) Healing() *healingTracker {
 		bucketMetaPrefix, healingTrackerFilename)
 	b, err := os.ReadFile(healingFile)
 	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			internalLogIf(GlobalContext, fmt.Errorf("unable to read %s: %w", healingFile, err))
+		}
 		return nil
 	}
 	if len(b) == 0 {
+		internalLogIf(GlobalContext, fmt.Errorf("%s is empty", healingFile))
 		// 'healing.bin' might be truncated
 		return nil
 	}
 	h := newHealingTracker()
 	_, err = h.UnmarshalMsg(b)
-	bugLogIf(GlobalContext, err)
+	internalLogIf(GlobalContext, err)
 	return h
 }
 
@@ -2246,6 +2250,7 @@ func (s *xlStorage) writeAllMeta(ctx context.Context, volume string, path string
 	return renameAll(tmpFilePath, filePath, volumeDir)
 }
 
+// Create or truncate an existing file before writing
 func (s *xlStorage) writeAllInternal(ctx context.Context, filePath string, b []byte, sync bool, skipParent string) (err error) {
 	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 
@@ -2268,16 +2273,11 @@ func (s *xlStorage) writeAllInternal(ctx context.Context, filePath string, b []b
 		return err
 	}
 
-	n, err := w.Write(b)
+	_, err = w.Write(b)
 	if err != nil {
-		w.Close()
-		return err
-	}
-
-	if n != len(b) {
 		w.Truncate(0) // to indicate that we did partial write.
 		w.Close()
-		return io.ErrShortWrite
+		return err
 	}
 
 	// Dealing with error returns from close() - 'man 2 close'
@@ -2367,6 +2367,41 @@ func (s *xlStorage) AppendFile(ctx context.Context, volume string, path string, 
 	return nil
 }
 
+// checkPart is a light check of an existing and size of a part, without doing a bitrot operation
+// For any unexpected error, return checkPartUnknown (zero)
+func (s *xlStorage) checkPart(volumeDir, path, dataDir string, partNum int, expectedSize int64, skipAccessCheck bool) (resp int) {
+	partPath := pathJoin(path, dataDir, fmt.Sprintf("part.%d", partNum))
+	filePath := pathJoin(volumeDir, partPath)
+	st, err := Lstat(filePath)
+	if err != nil {
+		if osIsNotExist(err) {
+			if !skipAccessCheck {
+				// Stat a volume entry.
+				if verr := Access(volumeDir); verr != nil {
+					if osIsNotExist(verr) {
+						resp = checkPartVolumeNotFound
+					}
+					return
+				}
+			}
+		}
+		if osErrToFileErr(err) == errFileNotFound {
+			resp = checkPartFileNotFound
+		}
+		return
+	}
+	if st.Mode().IsDir() {
+		resp = checkPartFileNotFound
+		return
+	}
+	// Check if shard is truncated.
+	if st.Size() < expectedSize {
+		resp = checkPartFileCorrupt
+		return
+	}
+	return checkPartSuccess
+}
+
 // CheckParts check if path has necessary parts available.
 func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
 	volumeDir, err := s.getVolDir(volume)
@@ -2385,36 +2420,12 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 	}
 
 	for i, part := range fi.Parts {
-		partPath := pathJoin(path, fi.DataDir, fmt.Sprintf("part.%d", part.Number))
-		filePath := pathJoin(volumeDir, partPath)
-		st, err := Lstat(filePath)
+		resp.Results[i], err = xioutil.WithDeadline[int](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (int, error) {
+			return s.checkPart(volumeDir, path, fi.DataDir, part.Number, fi.Erasure.ShardFileSize(part.Size), skipAccessChecks(volume)), nil
+		})
 		if err != nil {
-			if osIsNotExist(err) {
-				if !skipAccessChecks(volume) {
-					// Stat a volume entry.
-					if verr := Access(volumeDir); verr != nil {
-						if osIsNotExist(verr) {
-							resp.Results[i] = checkPartVolumeNotFound
-						}
-						continue
-					}
-				}
-			}
-			if osErrToFileErr(err) == errFileNotFound {
-				resp.Results[i] = checkPartFileNotFound
-			}
-			continue
+			return nil, err
 		}
-		if st.Mode().IsDir() {
-			resp.Results[i] = checkPartFileNotFound
-			continue
-		}
-		// Check if shard is truncated.
-		if st.Size() < fi.Erasure.ShardFileSize(part.Size) {
-			resp.Results[i] = checkPartFileCorrupt
-			continue
-		}
-		resp.Results[i] = checkPartSuccess
 	}
 
 	return &resp, nil
@@ -2546,17 +2557,7 @@ func (s *xlStorage) Delete(ctx context.Context, volume string, path string, dele
 }
 
 func skipAccessChecks(volume string) (ok bool) {
-	for _, prefix := range []string{
-		minioMetaTmpDeletedBucket,
-		minioMetaTmpBucket,
-		minioMetaMultipartBucket,
-		minioMetaBucket,
-	} {
-		if strings.HasPrefix(volume, prefix) {
-			return true
-		}
-	}
-	return ok
+	return strings.HasPrefix(volume, minioMetaBucket)
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data directory.

@@ -178,13 +178,18 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	}
 
 	if etcdClient == nil {
-		var group *singleflight.Group
+		var (
+			group  *singleflight.Group
+			policy *singleflight.Group
+		)
 		if env.Get("_MINIO_IAM_SINGLE_FLIGHT", config.EnableOn) == config.EnableOn {
 			group = &singleflight.Group{}
+			policy = &singleflight.Group{}
 		}
 		sys.store = &IAMStoreSys{
 			IAMStorageAPI: newIAMObjectStore(objAPI, sys.usersSysType),
 			group:         group,
+			policy:        policy,
 		}
 	} else {
 		sys.store = &IAMStoreSys{IAMStorageAPI: newIAMEtcdStore(etcdClient, sys.usersSysType)}
@@ -406,6 +411,7 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 	timer := time.NewTimer(waitInterval())
 	defer timer.Stop()
 
+	lastPurgeHour := -1
 	for {
 		select {
 		case <-timer.C:
@@ -421,9 +427,9 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 				}
 			}
 
-			// The following actions are performed about once in 4 times that
-			// IAM is refreshed:
-			if r.Intn(4) == 0 {
+			// Run purge routines once in each hour.
+			if refreshStart.Hour() != lastPurgeHour {
+				lastPurgeHour = refreshStart.Hour()
 				// Poll and remove accounts for those users who were removed
 				// from LDAP/OpenID.
 				if sys.LDAPConfig.Enabled() {

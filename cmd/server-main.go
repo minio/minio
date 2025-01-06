@@ -31,6 +31,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -53,7 +54,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
-	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v2"
 )
 
@@ -421,6 +421,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 		Interface:   ctxt.Interface,
 		SendBufSize: ctxt.SendBufSize,
 		RecvBufSize: ctxt.RecvBufSize,
+		IdleTimeout: ctxt.IdleTimeout,
 	}
 
 	// allow transport to be HTTP/1.1 for proxying.
@@ -878,6 +879,8 @@ func serverMain(ctx *cli.Context) {
 			UseHandler(setCriticalErrorHandler(corsHandler(handler))).
 			UseTLSConfig(newTLSConfig(getCert)).
 			UseIdleTimeout(globalServerCtxt.IdleTimeout).
+			UseReadTimeout(globalServerCtxt.IdleTimeout).
+			UseWriteTimeout(globalServerCtxt.IdleTimeout).
 			UseReadHeaderTimeout(globalServerCtxt.ReadHeaderTimeout).
 			UseBaseContext(GlobalContext).
 			UseCustomLogger(log.New(io.Discard, "", 0)). // Turn-off random logging by Go stdlib

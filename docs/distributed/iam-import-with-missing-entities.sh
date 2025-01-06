@@ -33,7 +33,11 @@ export CI=true
 sleep 30
 ./mc ready myminio
 
-./mc idp ldap add myminio server_addr=localhost:1389 server_insecure=on lookup_bind_dn=cn=admin,dc=min,dc=io lookup_bind_password=admin user_dn_search_base_dn=dc=min,dc=io user_dn_search_filter="(uid=%s)" group_search_base_dn=ou=swengg,dc=min,dc=io group_search_filter="(&(objectclass=groupOfNames)(member=%d))"
+./mc idp ldap add myminio server_addr=localhost:389 server_insecure=on \
+	lookup_bind_dn=cn=admin,dc=min,dc=io lookup_bind_password=admin \
+	user_dn_search_base_dn=dc=min,dc=io user_dn_search_filter="(uid=%s)" \
+	group_search_base_dn=ou=swengg,dc=min,dc=io group_search_filter="(&(objectclass=groupOfNames)(member=%d))"
+
 ./mc admin service restart myminio --json
 ./mc ready myminio
 ./mc admin cluster iam import myminio docs/distributed/samples/myminio-iam-info.zip
@@ -76,7 +80,11 @@ cd -
 sleep 30
 ./mc ready myminio1
 
-./mc idp ldap add myminio1 server_addr=localhost:1389 server_insecure=on lookup_bind_dn=cn=admin,dc=min,dc=io lookup_bind_password=admin user_dn_search_base_dn=dc=min,dc=io user_dn_search_filter="(uid=%s)" group_search_base_dn=ou=hwengg,dc=min,dc=io group_search_filter="(&(objectclass=groupOfNames)(member=%d))"
+./mc idp ldap add myminio1 server_addr=localhost:389 server_insecure=on \
+	lookup_bind_dn=cn=admin,dc=min,dc=io lookup_bind_password=admin \
+	user_dn_search_base_dn=dc=min,dc=io user_dn_search_filter="(uid=%s)" \
+	group_search_base_dn=ou=hwengg,dc=min,dc=io group_search_filter="(&(objectclass=groupOfNames)(member=%d))"
+
 ./mc admin service restart myminio1 --json
 ./mc ready myminio1
 ./mc admin cluster iam import myminio1 docs/distributed/samples/myminio-iam-info.zip

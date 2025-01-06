@@ -25,6 +25,8 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
+//msgp:clearomitted
+
 //go:generate msgp -file=$GOFILE
 
 // DeleteOptions represents the disk level delete options available for the APIs

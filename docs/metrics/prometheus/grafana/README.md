@@ -19,11 +19,11 @@ Node level Replication metrics can be viewed in the Grafana dashboard using [jso
 
 ![Grafana](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/replication/grafana-replication-node.png)
 
-CLuster level Replication metrics can be viewed in the Grafana dashboard using [json file here](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/replication/minio-replication-cluster.json)
+Cluster level Replication metrics can be viewed in the Grafana dashboard using [json file here](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/replication/minio-replication-cluster.json)
 
 ![Grafana](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/replication/grafana-replication-cluster.png)
 
-Bucket metrics can be viewed in the Grafana dashboard using [json file here](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/bubcket/minio-bucket.json)
+Bucket metrics can be viewed in the Grafana dashboard using [json file here](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/bucket/minio-bucket.json)
 
 ![Grafana](https://raw.githubusercontent.com/minio/minio/master/docs/metrics/prometheus/grafana/bucket/grafana-bucket.png)
 

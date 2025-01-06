@@ -53,18 +53,6 @@ var startsWithConds = map[string]bool{
 	"$x-amz-date":              false,
 }
 
-var postPolicyIgnoreKeys = map[string]bool{
-	"Policy":              true,
-	xhttp.AmzSignature:    true,
-	xhttp.ContentEncoding: true,
-	http.CanonicalHeaderKey(xhttp.AmzChecksumAlgo):   true,
-	http.CanonicalHeaderKey(xhttp.AmzChecksumCRC32):  true,
-	http.CanonicalHeaderKey(xhttp.AmzChecksumCRC32C): true,
-	http.CanonicalHeaderKey(xhttp.AmzChecksumSHA1):   true,
-	http.CanonicalHeaderKey(xhttp.AmzChecksumSHA256): true,
-	http.CanonicalHeaderKey(xhttp.AmzChecksumMode):   true,
-}
-
 // Add policy conditionals.
 const (
 	policyCondEqual         = "eq"
@@ -232,19 +220,19 @@ func parsePostPolicyForm(r io.Reader) (PostPolicyForm, error) {
 					operator, matchType, value,
 				})
 			case policyCondContentLength:
-				min, err := toInteger(condt[1])
+				minLen, err := toInteger(condt[1])
 				if err != nil {
 					return parsedPolicy, err
 				}
 
-				max, err := toInteger(condt[2])
+				maxLen, err := toInteger(condt[2])
 				if err != nil {
 					return parsedPolicy, err
 				}
 
 				parsedPolicy.Conditions.ContentLengthRange = contentLengthRange{
-					Min:   min,
-					Max:   max,
+					Min:   minLen,
+					Max:   maxLen,
 					Valid: true,
 				}
 			default:
@@ -272,60 +260,57 @@ func checkPolicyCond(op string, input1, input2 string) bool {
 	return false
 }
 
+// S3 docs: "Each form field that you specify in a form (except x-amz-signature, file, policy, and field names
+// that have an x-ignore- prefix) must appear in the list of conditions."
+// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
+// keyInPolicyExceptions - list of keys that, when present in the form, can be missing in the conditions of the policy.
+var keyInPolicyExceptions = map[string]bool{
+	xhttp.AmzSignature: true,
+	"File":             true,
+	"Policy":           true,
+
+	// MinIO specific exceptions to the general S3 rule above.
+	encrypt.SseKmsKeyID:          true,
+	encrypt.SseEncryptionContext: true,
+	encrypt.SseCustomerAlgorithm: true,
+	encrypt.SseCustomerKey:       true,
+	encrypt.SseCustomerKeyMD5:    true,
+}
+
 // checkPostPolicy - apply policy conditions and validate input values.
-// (http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html)
+// Note that content-length-range is checked in the API handler function PostPolicyBucketHandler.
+// formValues is the already-canonicalized form values from the POST request.
 func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) error {
 	// Check if policy document expiry date is still not reached
 	if !postPolicyForm.Expiration.After(UTCNow()) {
 		return fmt.Errorf("Invalid according to Policy: Policy expired")
 	}
-	// check all formValues appear in postPolicyForm or return error. #https://github.com/minio/minio/issues/17391
-	checkHeader := map[string][]string{}
-	ignoreKeys := map[string]bool{}
-	for key, value := range formValues {
-		switch {
-		case ignoreKeys[key], postPolicyIgnoreKeys[key], strings.HasPrefix(key, encrypt.SseGenericHeader):
-			continue
-		case strings.HasPrefix(key, "X-Amz-Ignore-"):
-			ignoreKey := strings.Replace(key, "X-Amz-Ignore-", "", 1)
-			ignoreKeys[ignoreKey] = true
-			// if it have already
-			delete(checkHeader, ignoreKey)
-		default:
-			checkHeader[key] = value
-		}
-	}
-	// map to store the metadata
-	metaMap := make(map[string]string)
-	for _, policy := range postPolicyForm.Conditions.Policies {
-		if strings.HasPrefix(policy.Key, "$x-amz-meta-") {
-			formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(policy.Key, "$"))
-			metaMap[formCanonicalName] = policy.Value
-		}
-	}
-	// Check if any extra metadata field is passed as input
-	for key := range formValues {
-		if strings.HasPrefix(key, "X-Amz-Meta-") {
-			if _, ok := metaMap[key]; !ok {
-				return fmt.Errorf("Invalid according to Policy: Extra input fields: %s", key)
-			}
-		}
-	}
 
-	// Flag to indicate if all policies conditions are satisfied
-	var condPassed bool
+	// mustFindInPolicy is a map to list all the keys that we must find in the policy as
+	// we process it below. At the end of checkPostPolicy function, if any key is left in
+	// this map, that's an error.
+	mustFindInPolicy := make(map[string][]string, len(formValues))
+	for key, values := range formValues {
+		if keyInPolicyExceptions[key] || strings.HasPrefix(key, "X-Ignore-") {
+			continue
+		}
+		mustFindInPolicy[key] = values
+	}
 
 	// Iterate over policy conditions and check them against received form fields
 	for _, policy := range postPolicyForm.Conditions.Policies {
 		// Form fields names are in canonical format, convert conditions names
 		// to canonical for simplification purpose, so `$key` will become `Key`
 		formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(policy.Key, "$"))
+
 		// Operator for the current policy condition
 		op := policy.Operator
-		// Multiple values should not occur
-		if len(checkHeader[formCanonicalName]) >= 2 {
-			return fmt.Errorf("Invalid according to Policy: Policy Condition failed: [%s, %s, %s]. FormValues have multiple values: [%s]", op, policy.Key, policy.Value, strings.Join(checkHeader[formCanonicalName], ", "))
+
+		// Multiple values are not allowed for a single form field
+		if len(mustFindInPolicy[formCanonicalName]) >= 2 {
+			return fmt.Errorf("Invalid according to Policy: Policy Condition failed: [%s, %s, %s]. FormValues have multiple values: [%s]", op, policy.Key, policy.Value, strings.Join(mustFindInPolicy[formCanonicalName], ", "))
 		}
+
 		// If the current policy condition is known
 		if startsWithSupported, condFound := startsWithConds[policy.Key]; condFound {
 			// Check if the current condition supports starts-with operator
@@ -333,35 +318,35 @@ func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) erro
 				return fmt.Errorf("Invalid according to Policy: Policy Condition failed")
 			}
 			// Check if current policy condition is satisfied
-			condPassed = checkPolicyCond(op, formValues.Get(formCanonicalName), policy.Value)
-			if !condPassed {
+			if !checkPolicyCond(op, formValues.Get(formCanonicalName), policy.Value) {
 				return fmt.Errorf("Invalid according to Policy: Policy Condition failed")
 			}
 		} else if strings.HasPrefix(policy.Key, "$x-amz-meta-") || strings.HasPrefix(policy.Key, "$x-amz-") {
 			// This covers all conditions X-Amz-Meta-* and X-Amz-*
 			// Check if policy condition is satisfied
-			condPassed = checkPolicyCond(op, formValues.Get(formCanonicalName), policy.Value)
-			if !condPassed {
+			if !checkPolicyCond(op, formValues.Get(formCanonicalName), policy.Value) {
 				return fmt.Errorf("Invalid according to Policy: Policy Condition failed: [%s, %s, %s]", op, policy.Key, policy.Value)
 			}
 		}
-		delete(checkHeader, formCanonicalName)
+		delete(mustFindInPolicy, formCanonicalName)
 	}
-	// For SignV2 - Signature/AWSAccessKeyId field will be ignored.
+
+	// For SignV2 - Signature/AWSAccessKeyId fields do not need to be in the policy
 	if _, ok := formValues[xhttp.AmzSignatureV2]; ok {
-		delete(checkHeader, xhttp.AmzSignatureV2)
-		for k := range checkHeader {
+		delete(mustFindInPolicy, xhttp.AmzSignatureV2)
+		for k := range mustFindInPolicy {
 			// case-insensitivity for AWSAccessKeyId
 			if strings.EqualFold(k, xhttp.AmzAccessKeyID) {
-				delete(checkHeader, k)
+				delete(mustFindInPolicy, k)
 				break
 			}
 		}
 	}
 
-	if len(checkHeader) != 0 {
-		logKeys := make([]string, 0, len(checkHeader))
-		for key := range checkHeader {
+	// Check mustFindInPolicy to see if any key is left, if so, it was not found in policy and we return an error.
+	if len(mustFindInPolicy) != 0 {
+		logKeys := make([]string, 0, len(mustFindInPolicy))
+		for key := range mustFindInPolicy {
 			logKeys = append(logKeys, key)
 		}
 		return fmt.Errorf("Each form field that you specify in a form must appear in the list of policy conditions. %q not specified in the policy.", strings.Join(logKeys, ", "))

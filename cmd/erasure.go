@@ -551,9 +551,6 @@ func (er erasureObjects) nsScanner(ctx context.Context, buckets []BucketInfo, wa
 				var root dataUsageEntry
 				if r := cache.root(); r != nil {
 					root = cache.flatten(*r)
-					if root.ReplicationStats.empty() {
-						root.ReplicationStats = nil
-					}
 				}
 				select {
 				case <-ctx.Done():

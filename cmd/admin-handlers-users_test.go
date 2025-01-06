@@ -716,6 +716,12 @@ func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
 		c.Fatalf("policy info err: %v", err)
 	}
 
+	// Check that policy with comma is rejected.
+	err = s.adm.AddCannedPolicy(ctx, "invalid,policy", policyBytes)
+	if err == nil {
+		c.Fatalf("invalid policy created successfully")
+	}
+
 	infoStr := string(info)
 	if !strings.Contains(infoStr, `"s3:PutObject"`) || !strings.Contains(infoStr, ":"+bucket+"/") {
 		c.Fatalf("policy contains unexpected content!")

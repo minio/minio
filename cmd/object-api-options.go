@@ -404,12 +404,7 @@ func putOptsFromHeaders(ctx context.Context, hdr http.Header, metadata map[strin
 		metadata = make(map[string]string)
 	}
 
-	wantCRC, err := hash.GetContentChecksum(hdr)
-	if err != nil {
-		return opts, fmt.Errorf("invalid/unknown checksum sent: %v", err)
-	}
 	etag := strings.TrimSpace(hdr.Get(xhttp.MinIOSourceETag))
-
 	if crypto.S3KMS.IsRequested(hdr) {
 		keyID, context, err := crypto.S3KMS.ParseHTTP(hdr)
 		if err != nil {
@@ -423,7 +418,6 @@ func putOptsFromHeaders(ctx context.Context, hdr http.Header, metadata map[strin
 			ServerSideEncryption: sseKms,
 			UserDefined:          metadata,
 			MTime:                mtime,
-			WantChecksum:         wantCRC,
 			PreserveETag:         etag,
 		}, nil
 	}
@@ -438,7 +432,6 @@ func putOptsFromHeaders(ctx context.Context, hdr http.Header, metadata map[strin
 	opts.ReplicationSourceRetentionTimestamp = retaintimestmp
 	opts.ReplicationSourceTaggingTimestamp = taggingtimestmp
 	opts.PreserveETag = etag
-	opts.WantChecksum = wantCRC
 
 	return opts, nil
 }

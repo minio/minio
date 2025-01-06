@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"sync/atomic"
@@ -29,7 +30,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/pkg/v3/sync/errgroup"
-	"golang.org/x/exp/slices"
 )
 
 var errPeerOffline = errors.New("peer is offline")
@@ -178,13 +178,24 @@ func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin
 		}
 	}
 
+	if healBucketErr := reduceWriteQuorumErrs(ctx, errs, bucketOpIgnoredErrs, len(errs)/2+1); healBucketErr != nil {
+		return madmin.HealResultItem{}, toObjectErr(healBucketErr, bucket)
+	}
+
+	res := madmin.HealResultItem{
+		Type:     madmin.HealItemBucket,
+		Bucket:   bucket,
+		SetCount: -1, // explicitly set an invalid value -1, for bucket heal scenario
+	}
+
 	for i, err := range errs {
 		if err == nil {
-			return healBucketResults[i], nil
+			res.Before.Drives = append(res.Before.Drives, healBucketResults[i].Before.Drives...)
+			res.After.Drives = append(res.After.Drives, healBucketResults[i].After.Drives...)
 		}
 	}
 
-	return madmin.HealResultItem{}, toObjectErr(errVolumeNotFound, bucket)
+	return res, nil
 }
 
 // ListBuckets lists buckets across all nodes and returns a consistent view:
@@ -355,14 +366,8 @@ func (client *remotePeerS3Client) HealBucket(ctx context.Context, bucket string,
 	ctx, cancel := context.WithTimeout(ctx, globalDriveConfig.GetMaxTimeout())
 	defer cancel()
 
-	_, err := healBucketRPC.Call(ctx, conn, mss)
-
-	// Initialize heal result info
-	return madmin.HealResultItem{
-		Type:     madmin.HealItemBucket,
-		Bucket:   bucket,
-		SetCount: -1, // explicitly set an invalid value -1, for bucket heal scenario
-	}, toStorageErr(err)
+	resp, err := healBucketRPC.Call(ctx, conn, mss)
+	return resp.ValueOrZero(), toStorageErr(err)
 }
 
 // GetBucketInfo returns bucket stat info from a peer

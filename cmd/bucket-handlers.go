@@ -1338,6 +1338,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					return
 				}
 			}
+			opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1808,6 +1809,10 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
+
+	// Audit log tags.
+	reqInfo := logger.GetReqInfo(ctx)
+	reqInfo.SetTags("retention", config.String())
 
 	configData, err := xml.Marshal(config)
 	if err != nil {

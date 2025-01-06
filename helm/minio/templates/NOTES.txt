@@ -1,6 +1,6 @@
 {{- if eq .Values.service.type "ClusterIP" "NodePort" }}
 MinIO can be accessed via port {{ .Values.service.port }} on the following DNS name from within your cluster:
-{{ template "minio.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+{{ template "minio.fullname" . }}.{{ .Release.Namespace }}.{{ .Values.clusterDomain }}
 
 To access MinIO from localhost, run the below commands:
 

@@ -38,6 +38,7 @@ type WarmBackendGetOpts struct {
 // WarmBackend provides interface to be implemented by remote tier backends
 type WarmBackend interface {
 	Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error)
+	PutWithMeta(ctx context.Context, object string, r io.Reader, length int64, meta map[string]string) (remoteVersionID, error)
 	Get(ctx context.Context, object string, rv remoteVersionID, opts WarmBackendGetOpts) (io.ReadCloser, error)
 	Remove(ctx context.Context, object string, rv remoteVersionID) error
 	InUse(ctx context.Context) (bool, error)

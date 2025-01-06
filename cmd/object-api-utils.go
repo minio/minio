@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"path"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,7 +53,6 @@ import (
 	"github.com/minio/pkg/v3/trie"
 	"github.com/minio/pkg/v3/wildcard"
 	"github.com/valyala/bytebufferpool"
-	"golang.org/x/exp/slices"
 )
 
 const (

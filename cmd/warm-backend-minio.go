@@ -78,7 +78,7 @@ func optimalPartSize(objectSize int64) (partSize int64, err error) {
 	return partSize, nil
 }
 
-func (m *warmBackendMinIO) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
+func (m *warmBackendMinIO) PutWithMeta(ctx context.Context, object string, r io.Reader, length int64, meta map[string]string) (remoteVersionID, error) {
 	partSize, err := optimalPartSize(length)
 	if err != nil {
 		return remoteVersionID(""), err
@@ -87,8 +87,13 @@ func (m *warmBackendMinIO) Put(ctx context.Context, object string, r io.Reader, 
 		StorageClass:         m.StorageClass,
 		PartSize:             uint64(partSize),
 		DisableContentSha256: true,
+		UserMetadata:         meta,
 	})
 	return remoteVersionID(res.VersionID), m.ToObjectError(err, object)
+}
+
+func (m *warmBackendMinIO) Put(ctx context.Context, object string, r io.Reader, length int64) (remoteVersionID, error) {
+	return m.PutWithMeta(ctx, object, r, length, map[string]string{})
 }
 
 func newWarmBackendMinIO(conf madmin.TierMinIO, tier string) (*warmBackendMinIO, error) {
