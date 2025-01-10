@@ -685,6 +685,16 @@ func getUsageLastScanActivityMD() MetricDescription {
 	}
 }
 
+func getBucketUsageLastScanActivityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      lastActivityTime,
+		Help:      "Time elapsed (in nano seconds) since last scan activity",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketUsageQuotaTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -3243,7 +3253,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		}
 
 		metrics = append(metrics, MetricV2{
-			Description: getUsageLastScanActivityMD(),
+			Description: getBucketUsageLastScanActivityMD(),
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
