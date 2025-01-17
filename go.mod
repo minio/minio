@@ -47,7 +47,7 @@ require (
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.6.0
 	github.com/minio/highwayhash v1.0.3
-	github.com/minio/kms-go/kes v0.3.0
+	github.com/minio/kms-go/kes v0.3.1
 	github.com/minio/kms-go/kms v0.4.0
 	github.com/minio/madmin-go/v3 v3.0.78
 	github.com/minio/minio-go/v7 v7.0.82
