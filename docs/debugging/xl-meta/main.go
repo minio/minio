@@ -664,7 +664,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 
 const (
 	xlHeaderVersion = 3
-	xlMetaVersion   = 2
+	xlMetaVersion   = 3
 )
 
 type xlHeaders struct {

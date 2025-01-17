@@ -462,7 +462,7 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string, allParts bool) (fi Fil
 
 const (
 	xlHeaderVersion = 3
-	xlMetaVersion   = 2
+	xlMetaVersion   = 3
 )
 
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
@@ -968,6 +968,50 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 			return err
 		}
 		ver.meta = meta
+
+		// Fix inconsistent compression index due to https://github.com/minio/minio/pull/20575
+		// First search marshaled content for encoded values.
+		// We have bumped metaV to make this check cheaper.
+		if metaV < 3 && ver.header.Type == ObjectType && bytes.Contains(meta, []byte("\xa7PartIdx")) &&
+			bytes.Contains(meta, []byte("\xbcX-Minio-Internal-compression\xc4\x15klauspost/compress/s2")) {
+			// Likely candidate...
+			version, err := x.getIdx(i)
+			if err == nil {
+				// Check write date...
+				// RELEASE.2023-12-02T10-51-33Z -> RELEASE.2024-10-29T16-01-48Z
+				const dateStart = 1701471618
+				const dateEnd = 1730156418
+				if version.WrittenByVersion > dateStart && version.WrittenByVersion < dateEnd &&
+					version.ObjectV2 != nil && len(version.ObjectV2.PartIndices) > 0 {
+					var changed bool
+					clearField := true
+					for i, sz := range version.ObjectV2.PartActualSizes {
+						if len(version.ObjectV2.PartIndices) > i {
+							// 8<<20 is current 'compMinIndexSize', but we detach it in case it should change in the future.
+							if sz <= 8<<20 && len(version.ObjectV2.PartIndices[i]) > 0 {
+								changed = true
+								version.ObjectV2.PartIndices[i] = nil
+							}
+							clearField = clearField && len(version.ObjectV2.PartIndices[i]) == 0
+						}
+					}
+					if changed {
+						// All empty, clear.
+						if clearField {
+							version.ObjectV2.PartIndices = nil
+						}
+
+						// Reindex since it was changed.
+						meta, err := version.MarshalMsg(make([]byte, 0, len(ver.meta)+10))
+						if err == nil {
+							// Override both if fine.
+							ver.header = version.header()
+							ver.meta = meta
+						}
+					}
+				}
+			}
+		}
 
 		// Fix inconsistent x-minio-internal-replication-timestamp by loading and reindexing.
 		if metaV < 2 && ver.header.Type == DeleteType {
@@ -1631,7 +1675,7 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			}
 			ventry.ObjectV2.PartNumbers[i] = fi.Parts[i].Number
 			ventry.ObjectV2.PartActualSizes[i] = fi.Parts[i].ActualSize
-			if len(ventry.ObjectV2.PartIndices) > 0 {
+			if len(ventry.ObjectV2.PartIndices) > i {
 				ventry.ObjectV2.PartIndices[i] = fi.Parts[i].Index
 			}
 		}
