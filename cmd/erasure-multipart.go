@@ -626,17 +626,13 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
-	case size == -1:
-		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
-			// Account for padding and forced compression overhead and encryption.
-			buffer = make([]byte, data.ActualSize()+256+32+32, data.ActualSize()*2+512)
+	case size >= fi.Erasure.BlockSize || size == -1:
+		if int64(globalBytePoolCap.Load().Width()) < fi.Erasure.BlockSize {
+			buffer = make([]byte, fi.Erasure.BlockSize, 2*fi.Erasure.BlockSize)
 		} else {
 			buffer = globalBytePoolCap.Load().Get()
 			defer globalBytePoolCap.Load().Put(buffer)
 		}
-	case size >= fi.Erasure.BlockSize:
-		buffer = globalBytePoolCap.Load().Get()
-		defer globalBytePoolCap.Load().Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully fi.Erasure.BlockSize buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
