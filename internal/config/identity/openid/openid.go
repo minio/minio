@@ -50,6 +50,7 @@ const (
 	ClaimUserinfo = "claim_userinfo"
 	RolePolicy    = "role_policy"
 	DisplayName   = "display_name"
+	DisplayClaim  = "display_claim"
 
 	Scopes             = "scopes"
 	RedirectURI        = "redirect_uri"
@@ -128,6 +129,10 @@ var (
 		},
 		config.KV{
 			Key:   KeyCloakAdminURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   DisplayClaim,
 			Value: "",
 		},
 	}
