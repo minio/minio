@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/console"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // setsDsyncLockers is encapsulated type for Close()
@@ -701,9 +702,8 @@ func (s *erasureSets) getHashedSet(input string) (set *erasureObjects) {
 }
 
 // listDeletedBuckets lists deleted buckets from all disks.
-func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBuckets map[string]VolInfo, readQuorum int) error {
+func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBuckets *xsync.MapOf[string, VolInfo], readQuorum int) error {
 	g := errgroup.WithNErrs(len(storageDisks))
-	var mu sync.Mutex
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
@@ -722,11 +722,7 @@ func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBucke
 				vi, err := storageDisks[index].StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, volName))
 				if err == nil {
 					vi.Name = strings.TrimSuffix(volName, SlashSeparator)
-					mu.Lock()
-					if _, ok := delBuckets[volName]; !ok {
-						delBuckets[volName] = vi
-					}
-					mu.Unlock()
+					delBuckets.Store(volName, vi)
 				}
 			}
 			return nil

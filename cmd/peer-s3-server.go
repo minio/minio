@@ -23,6 +23,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 const (
@@ -164,7 +165,7 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 	quorum := (len(localDrives) / 2)
 
 	buckets = make([]BucketInfo, 0, 32)
-	healBuckets := map[string]VolInfo{}
+	healBuckets := xsync.NewMapOf[string, VolInfo]()
 
 	// lists all unique buckets across drives.
 	if err := listAllBuckets(ctx, localDrives, healBuckets, quorum); err != nil {
@@ -172,7 +173,7 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 	}
 
 	// include deleted buckets in listBuckets output
-	deletedBuckets := map[string]VolInfo{}
+	deletedBuckets := xsync.NewMapOf[string, VolInfo]()
 
 	if opts.Deleted {
 		// lists all deleted buckets across drives.
@@ -181,25 +182,27 @@ func listBucketsLocal(ctx context.Context, opts BucketOptions) (buckets []Bucket
 		}
 	}
 
-	for _, v := range healBuckets {
+	healBuckets.Range(func(_ string, volInfo VolInfo) bool {
 		bi := BucketInfo{
-			Name:    v.Name,
-			Created: v.Created,
+			Name:    volInfo.Name,
+			Created: volInfo.Created,
 		}
-		if vi, ok := deletedBuckets[v.Name]; ok {
+		if vi, ok := deletedBuckets.Load(volInfo.Name); ok {
 			bi.Deleted = vi.Created
 		}
 		buckets = append(buckets, bi)
-	}
+		return true
+	})
 
-	for _, v := range deletedBuckets {
-		if _, ok := healBuckets[v.Name]; !ok {
+	deletedBuckets.Range(func(_ string, v VolInfo) bool {
+		if _, ok := healBuckets.Load(v.Name); !ok {
 			buckets = append(buckets, BucketInfo{
 				Name:    v.Name,
 				Deleted: v.Created,
 			})
 		}
-	}
+		return true
+	})
 
 	return buckets, nil
 }
