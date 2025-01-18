@@ -1732,12 +1732,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					continue
 				}
 				for _, v := range dedupVersions[i].Versions {
-					if err == errFileNotFound || err == errFileVersionNotFound {
-						if !dobjects[v.Idx].DeleteMarker {
-							// Not delete marker, if not found, ok.
-							continue
-						}
-					}
 					delObjErrs[index][v.Idx] = err
 				}
 			}
@@ -1757,6 +1751,13 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			}
 		}
 		err := reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
+		if err == nil {
+			dobjects[objIndex].found = true
+		} else if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
+			if !dobjects[objIndex].DeleteMarker {
+				err = nil
+			}
+		}
 		if objects[objIndex].VersionID != "" {
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName, objects[objIndex].VersionID)
 		} else {

@@ -1090,6 +1090,7 @@ func (s *xlStorage) ListDir(ctx context.Context, origvolume, volume, dirPath str
 	return entries, nil
 }
 
+// Delete multiple versions of a single object - no support of replication logic
 func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis ...FileInfo) error {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1140,7 +1141,17 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return err
 	}
 
+	latestV, err := xlMeta.getIdx(0)
+	if err != nil {
+		return err
+	}
+
 	for _, fi := range fis {
+		if fi.Deleted && latestV.Type == DeleteType {
+			// Do not add a new delete marker when we already
+			// have one delete marker on top
+			continue
+		}
 		dataDir, err := xlMeta.DeleteVersion(fi)
 		if err != nil {
 			if !fi.Deleted && (err == errFileNotFound || err == errFileVersionNotFound) {
