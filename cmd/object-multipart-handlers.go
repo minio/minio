@@ -214,7 +214,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	checksumType := hash.NewChecksumType(r.Header.Get(xhttp.AmzChecksumAlgo))
+	checksumType := hash.NewChecksumHeader(r.Header)
 	if checksumType.Is(hash.ChecksumInvalid) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequestParameter), r.URL)
 		return
@@ -233,6 +233,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	response := generateInitiateMultipartUploadResponse(bucket, object, res.UploadID)
 	if res.ChecksumAlgo != "" {
 		w.Header().Set(xhttp.AmzChecksumAlgo, res.ChecksumAlgo)
+		if res.ChecksumType != "" {
+			w.Header().Set(xhttp.AmzChecksumType, res.ChecksumType)
+		}
 	}
 	encodedSuccessResponse := encodeResponse(response)
 

@@ -629,7 +629,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrMissingContentMD5: {
 		Code:           "MissingContentMD5",
-		Description:    "Missing required header for this request: Content-Md5.",
+		Description:    "Missing or invalid required header for this request: Content-Md5 or Amz-Content-Checksum",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingSecurityHeader: {

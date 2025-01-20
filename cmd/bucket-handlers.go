@@ -429,7 +429,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Content-Md5 is required should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
+	if !validateLengthAndChecksum(r) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL)
 		return
 	}

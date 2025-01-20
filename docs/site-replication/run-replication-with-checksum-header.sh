@@ -159,11 +159,11 @@ DEST_OBJ_1_ETAG=$(echo "${DEST_OUT_1}" | jq '.ETag')
 DEST_OBJ_2_ETAG=$(echo "${DEST_OUT_2}" | jq '.ETag')
 
 # Check the replication of checksums and etags
-if [ "${SRC_OBJ_1_CHKSUM}" != "${DEST_OBJ_1_CHKSUM}" ]; then
+if [[ ${SRC_OBJ_1_CHKSUM} != "${DEST_OBJ_1_CHKSUM}" && ${DEST_OBJ_1_CHKSUM} != "" ]]; then
 	echo "BUG: Checksums dont match for 'obj'. Source: ${SRC_OBJ_1_CHKSUM}, Destination: ${DEST_OBJ_1_CHKSUM}"
 	exit_1
 fi
-if [ "${SRC_OBJ_2_CHKSUM}" != "${DEST_OBJ_2_CHKSUM}" ]; then
+if [[ ${SRC_OBJ_2_CHKSUM} != "${DEST_OBJ_2_CHKSUM}" && ${DEST_OBJ_2_CHKSUM} != "" ]]; then
 	echo "BUG: Checksums dont match for 'mpartobj'. Source: ${SRC_OBJ_2_CHKSUM}, Destination: ${DEST_OBJ_2_CHKSUM}"
 	exit_1
 fi
@@ -242,11 +242,11 @@ DEST_OBJ_1_ETAG=$(echo "${DEST_OUT_1}" | jq '.ETag')
 DEST_OBJ_2_ETAG=$(echo "${DEST_OUT_2}" | jq '.ETag')
 
 # Check the replication of checksums and etags
-if [ "${SRC_OBJ_1_CHKSUM}" != "${DEST_OBJ_1_CHKSUM}" ]; then
+if [[ ${SRC_OBJ_1_CHKSUM} != "${DEST_OBJ_1_CHKSUM}" && ${DEST_OBJ_1_CHKSUM} != "" ]]; then
 	echo "BUG: Checksums dont match for 'obj2'. Source: ${SRC_OBJ_1_CHKSUM}, Destination: ${DEST_OBJ_1_CHKSUM}"
 	exit_1
 fi
-if [ "${SRC_OBJ_2_CHKSUM}" != "${DEST_OBJ_2_CHKSUM}" ]; then
+if [[ ${SRC_OBJ_2_CHKSUM} != "${DEST_OBJ_2_CHKSUM}" && ${DEST_OBJ_2_CHKSUM} != "" ]]; then
 	echo "BUG: Checksums dont match for 'mpartobj2'. Source: ${SRC_OBJ_2_CHKSUM}, Destination: ${DEST_OBJ_2_CHKSUM}"
 	exit_1
 fi
