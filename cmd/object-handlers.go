@@ -636,10 +636,11 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		// AWS does not appear to append part number on this API call.
 		if len(chkSums) > 0 {
 			OA.Checksum = &objectAttributesChecksum{
-				ChecksumCRC32:  strings.Split(chkSums["CRC32"], "-")[0],
-				ChecksumCRC32C: strings.Split(chkSums["CRC32C"], "-")[0],
-				ChecksumSHA1:   strings.Split(chkSums["SHA1"], "-")[0],
-				ChecksumSHA256: strings.Split(chkSums["SHA256"], "-")[0],
+				ChecksumCRC32:     strings.Split(chkSums["CRC32"], "-")[0],
+				ChecksumCRC32C:    strings.Split(chkSums["CRC32C"], "-")[0],
+				ChecksumSHA1:      strings.Split(chkSums["SHA1"], "-")[0],
+				ChecksumSHA256:    strings.Split(chkSums["SHA256"], "-")[0],
+				ChecksumCRC64NVME: strings.Split(chkSums["CRC64NVME"], "-")[0],
 			}
 		}
 	}
@@ -678,12 +679,13 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 
 				OA.ObjectParts.NextPartNumberMarker = v.Number
 				OA.ObjectParts.Parts = append(OA.ObjectParts.Parts, &objectAttributesPart{
-					ChecksumSHA1:   objInfo.Parts[i].Checksums["SHA1"],
-					ChecksumSHA256: objInfo.Parts[i].Checksums["SHA256"],
-					ChecksumCRC32:  objInfo.Parts[i].Checksums["CRC32"],
-					ChecksumCRC32C: objInfo.Parts[i].Checksums["CRC32C"],
-					PartNumber:     objInfo.Parts[i].Number,
-					Size:           objInfo.Parts[i].Size,
+					ChecksumSHA1:      objInfo.Parts[i].Checksums["SHA1"],
+					ChecksumSHA256:    objInfo.Parts[i].Checksums["SHA256"],
+					ChecksumCRC32:     objInfo.Parts[i].Checksums["CRC32"],
+					ChecksumCRC32C:    objInfo.Parts[i].Checksums["CRC32C"],
+					ChecksumCRC64NVME: objInfo.Parts[i].Checksums["CRC64NVME"],
+					PartNumber:        objInfo.Parts[i].Number,
+					Size:              objInfo.Parts[i].Size,
 				})
 			}
 		}
@@ -2731,7 +2733,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return
 	}
-	if !hasContentMD5(r.Header) {
+	if !validateLengthAndChecksum(r) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL)
 		return
 	}
@@ -2741,7 +2743,7 @@ func (api objectAPIHandlers) PutObjectLegalHoldHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	legalHold, err := objectlock.ParseObjectLegalHold(io.LimitReader(r.Body, r.ContentLength))
+	legalHold, err := objectlock.ParseObjectLegalHold(r.Body)
 	if err != nil {
 		apiErr := errorCodes.ToAPIErr(ErrMalformedXML)
 		apiErr.Description = err.Error()
@@ -2889,7 +2891,7 @@ func (api objectAPIHandlers) PutObjectRetentionHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	if !hasContentMD5(r.Header) {
+	if !validateLengthAndChecksum(r) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL)
 		return
 	}

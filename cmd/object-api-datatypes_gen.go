@@ -201,13 +201,16 @@ func (z *CompleteMultipartUpload) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *CompletePart) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 6
+	// map header, size 8
 	// string "PartNumber"
-	o = append(o, 0x86, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x4e, 0x75, 0x6d, 0x62, 0x65, 0x72)
+	o = append(o, 0x88, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x4e, 0x75, 0x6d, 0x62, 0x65, 0x72)
 	o = msgp.AppendInt(o, z.PartNumber)
 	// string "ETag"
 	o = append(o, 0xa4, 0x45, 0x54, 0x61, 0x67)
 	o = msgp.AppendString(o, z.ETag)
+	// string "Size"
+	o = append(o, 0xa4, 0x53, 0x69, 0x7a, 0x65)
+	o = msgp.AppendInt64(o, z.Size)
 	// string "ChecksumCRC32"
 	o = append(o, 0xad, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x43, 0x52, 0x43, 0x33, 0x32)
 	o = msgp.AppendString(o, z.ChecksumCRC32)
@@ -220,6 +223,9 @@ func (z *CompletePart) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "ChecksumSHA256"
 	o = append(o, 0xae, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x53, 0x48, 0x41, 0x32, 0x35, 0x36)
 	o = msgp.AppendString(o, z.ChecksumSHA256)
+	// string "ChecksumCRC64NVME"
+	o = append(o, 0xb1, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x43, 0x52, 0x43, 0x36, 0x34, 0x4e, 0x56, 0x4d, 0x45)
+	o = msgp.AppendString(o, z.ChecksumCRC64NVME)
 	return
 }
 
@@ -253,6 +259,12 @@ func (z *CompletePart) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ETag")
 				return
 			}
+		case "Size":
+			z.Size, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Size")
+				return
+			}
 		case "ChecksumCRC32":
 			z.ChecksumCRC32, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -277,6 +289,12 @@ func (z *CompletePart) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ChecksumSHA256")
 				return
 			}
+		case "ChecksumCRC64NVME":
+			z.ChecksumCRC64NVME, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ChecksumCRC64NVME")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -291,7 +309,7 @@ func (z *CompletePart) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CompletePart) Msgsize() (s int) {
-	s = 1 + 11 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.ETag) + 14 + msgp.StringPrefixSize + len(z.ChecksumCRC32) + 15 + msgp.StringPrefixSize + len(z.ChecksumCRC32C) + 13 + msgp.StringPrefixSize + len(z.ChecksumSHA1) + 15 + msgp.StringPrefixSize + len(z.ChecksumSHA256)
+	s = 1 + 11 + msgp.IntSize + 5 + msgp.StringPrefixSize + len(z.ETag) + 5 + msgp.Int64Size + 14 + msgp.StringPrefixSize + len(z.ChecksumCRC32) + 15 + msgp.StringPrefixSize + len(z.ChecksumCRC32C) + 13 + msgp.StringPrefixSize + len(z.ChecksumSHA1) + 15 + msgp.StringPrefixSize + len(z.ChecksumSHA256) + 18 + msgp.StringPrefixSize + len(z.ChecksumCRC64NVME)
 	return
 }
 
@@ -956,9 +974,9 @@ func (z *ListObjectsV2Info) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *ListPartsInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 11
+	// map header, size 12
 	// string "Bucket"
-	o = append(o, 0x8b, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
+	o = append(o, 0x8c, 0xa6, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74)
 	o = msgp.AppendString(o, z.Bucket)
 	// string "Object"
 	o = append(o, 0xa6, 0x4f, 0x62, 0x6a, 0x65, 0x63, 0x74)
@@ -1001,6 +1019,9 @@ func (z *ListPartsInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "ChecksumAlgorithm"
 	o = append(o, 0xb1, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x41, 0x6c, 0x67, 0x6f, 0x72, 0x69, 0x74, 0x68, 0x6d)
 	o = msgp.AppendString(o, z.ChecksumAlgorithm)
+	// string "ChecksumType"
+	o = append(o, 0xac, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x54, 0x79, 0x70, 0x65)
+	o = msgp.AppendString(o, z.ChecksumType)
 	return
 }
 
@@ -1125,6 +1146,12 @@ func (z *ListPartsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ChecksumAlgorithm")
 				return
 			}
+		case "ChecksumType":
+			z.ChecksumType, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ChecksumType")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1150,7 +1177,7 @@ func (z *ListPartsInfo) Msgsize() (s int) {
 			s += msgp.StringPrefixSize + len(za0002) + msgp.StringPrefixSize + len(za0003)
 		}
 	}
-	s += 18 + msgp.StringPrefixSize + len(z.ChecksumAlgorithm)
+	s += 18 + msgp.StringPrefixSize + len(z.ChecksumAlgorithm) + 13 + msgp.StringPrefixSize + len(z.ChecksumType)
 	return
 }
 
@@ -1279,13 +1306,16 @@ func (z *MultipartInfo) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z NewMultipartUploadResult) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 2
+	// map header, size 3
 	// string "UploadID"
-	o = append(o, 0x82, 0xa8, 0x55, 0x70, 0x6c, 0x6f, 0x61, 0x64, 0x49, 0x44)
+	o = append(o, 0x83, 0xa8, 0x55, 0x70, 0x6c, 0x6f, 0x61, 0x64, 0x49, 0x44)
 	o = msgp.AppendString(o, z.UploadID)
 	// string "ChecksumAlgo"
 	o = append(o, 0xac, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x41, 0x6c, 0x67, 0x6f)
 	o = msgp.AppendString(o, z.ChecksumAlgo)
+	// string "ChecksumType"
+	o = append(o, 0xac, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x54, 0x79, 0x70, 0x65)
+	o = msgp.AppendString(o, z.ChecksumType)
 	return
 }
 
@@ -1319,6 +1349,12 @@ func (z *NewMultipartUploadResult) UnmarshalMsg(bts []byte) (o []byte, err error
 				err = msgp.WrapError(err, "ChecksumAlgo")
 				return
 			}
+		case "ChecksumType":
+			z.ChecksumType, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ChecksumType")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1333,7 +1369,7 @@ func (z *NewMultipartUploadResult) UnmarshalMsg(bts []byte) (o []byte, err error
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z NewMultipartUploadResult) Msgsize() (s int) {
-	s = 1 + 9 + msgp.StringPrefixSize + len(z.UploadID) + 13 + msgp.StringPrefixSize + len(z.ChecksumAlgo)
+	s = 1 + 9 + msgp.StringPrefixSize + len(z.UploadID) + 13 + msgp.StringPrefixSize + len(z.ChecksumAlgo) + 13 + msgp.StringPrefixSize + len(z.ChecksumType)
 	return
 }
 
@@ -1772,9 +1808,9 @@ func (z *ObjectInfo) Msgsize() (s int) {
 // MarshalMsg implements msgp.Marshaler
 func (z *PartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 9
+	// map header, size 10
 	// string "PartNumber"
-	o = append(o, 0x89, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x4e, 0x75, 0x6d, 0x62, 0x65, 0x72)
+	o = append(o, 0x8a, 0xaa, 0x50, 0x61, 0x72, 0x74, 0x4e, 0x75, 0x6d, 0x62, 0x65, 0x72)
 	o = msgp.AppendInt(o, z.PartNumber)
 	// string "LastModified"
 	o = append(o, 0xac, 0x4c, 0x61, 0x73, 0x74, 0x4d, 0x6f, 0x64, 0x69, 0x66, 0x69, 0x65, 0x64)
@@ -1800,6 +1836,9 @@ func (z *PartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "ChecksumSHA256"
 	o = append(o, 0xae, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x53, 0x48, 0x41, 0x32, 0x35, 0x36)
 	o = msgp.AppendString(o, z.ChecksumSHA256)
+	// string "ChecksumCRC64NVME"
+	o = append(o, 0xb1, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x73, 0x75, 0x6d, 0x43, 0x52, 0x43, 0x36, 0x34, 0x4e, 0x56, 0x4d, 0x45)
+	o = msgp.AppendString(o, z.ChecksumCRC64NVME)
 	return
 }
 
@@ -1875,6 +1914,12 @@ func (z *PartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "ChecksumSHA256")
 				return
 			}
+		case "ChecksumCRC64NVME":
+			z.ChecksumCRC64NVME, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "ChecksumCRC64NVME")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -1889,7 +1934,7 @@ func (z *PartInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *PartInfo) Msgsize() (s int) {
-	s = 1 + 11 + msgp.IntSize + 13 + msgp.TimeSize + 5 + msgp.StringPrefixSize + len(z.ETag) + 5 + msgp.Int64Size + 11 + msgp.Int64Size + 14 + msgp.StringPrefixSize + len(z.ChecksumCRC32) + 15 + msgp.StringPrefixSize + len(z.ChecksumCRC32C) + 13 + msgp.StringPrefixSize + len(z.ChecksumSHA1) + 15 + msgp.StringPrefixSize + len(z.ChecksumSHA256)
+	s = 1 + 11 + msgp.IntSize + 13 + msgp.TimeSize + 5 + msgp.StringPrefixSize + len(z.ETag) + 5 + msgp.Int64Size + 11 + msgp.Int64Size + 14 + msgp.StringPrefixSize + len(z.ChecksumCRC32) + 15 + msgp.StringPrefixSize + len(z.ChecksumCRC32C) + 13 + msgp.StringPrefixSize + len(z.ChecksumSHA1) + 15 + msgp.StringPrefixSize + len(z.ChecksumSHA256) + 18 + msgp.StringPrefixSize + len(z.ChecksumCRC64NVME)
 	return
 }
 

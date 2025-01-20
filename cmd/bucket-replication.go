@@ -794,17 +794,22 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 			meta[k] = v
 		}
 	}
-
 	if len(objInfo.Checksum) > 0 {
 		// Add encrypted CRC to metadata for SSE-C objects.
 		if isSSEC {
 			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
 		} else {
-			for _, pi := range objInfo.Parts {
-				if pi.Number == partNum {
-					for k, v := range pi.Checksums {
-						meta[k] = v
+			if objInfo.isMultipart() && partNum > 0 {
+				for _, pi := range objInfo.Parts {
+					if pi.Number == partNum {
+						for k, v := range pi.Checksums { // for PutObjectPart
+							meta[k] = v
+						}
 					}
+				}
+			} else {
+				for k, v := range getCRCMeta(objInfo, 0, nil) { // for PutObject/NewMultipartUpload
+					meta[k] = v
 				}
 			}
 		}
@@ -1666,7 +1671,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		if !isSSEC {
-			for k, v := range partInfo.Checksums {
+			for k, v := range getCRCMeta(objInfo, partInfo.Number, nil) {
 				cHeader.Add(k, v)
 			}
 		}
@@ -1690,12 +1695,13 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			return fmt.Errorf("ssec(%t): Part size mismatch: got %d, want %d", isSSEC, pInfo.Size, size)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
-			PartNumber:     pInfo.PartNumber,
-			ETag:           pInfo.ETag,
-			ChecksumCRC32:  pInfo.ChecksumCRC32,
-			ChecksumCRC32C: pInfo.ChecksumCRC32C,
-			ChecksumSHA1:   pInfo.ChecksumSHA1,
-			ChecksumSHA256: pInfo.ChecksumSHA256,
+			PartNumber:        pInfo.PartNumber,
+			ETag:              pInfo.ETag,
+			ChecksumCRC32:     pInfo.ChecksumCRC32,
+			ChecksumCRC32C:    pInfo.ChecksumCRC32C,
+			ChecksumSHA1:      pInfo.ChecksumSHA1,
+			ChecksumSHA256:    pInfo.ChecksumSHA256,
+			ChecksumCRC64NVME: pInfo.ChecksumCRC64NVME,
 		})
 	}
 	userMeta := map[string]string{
@@ -1708,6 +1714,12 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	// really big value but its okay on heavily loaded systems. This is just tail end timeout.
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
+
+	if len(objInfo.Checksum) > 0 {
+		for k, v := range getCRCMeta(objInfo, 0, nil) {
+			userMeta[k] = v
+		}
+	}
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
 		UserMetadata: userMeta,
 		Internal: minio.AdvancedPutOptions{
@@ -3752,4 +3764,20 @@ type validateReplicationDestinationOptions struct {
 	CheckReady        bool
 
 	checkReadyErr sync.Map
+}
+
+func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) map[string]string {
+	meta := make(map[string]string)
+	cs := oi.decryptChecksums(partNum, h)
+	for k, v := range cs {
+		cksum := hash.NewChecksumString(k, v)
+		if cksum == nil {
+			continue
+		}
+		if cksum.Valid() {
+			meta[cksum.Type.Key()] = v
+		}
+		meta[xhttp.AmzChecksumType] = cksum.Type.ObjType()
+	}
+	return meta
 }

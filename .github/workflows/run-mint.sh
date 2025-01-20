@@ -7,7 +7,6 @@ export ACCESS_KEY="$2"
 export SECRET_KEY="$3"
 export JOB_NAME="$4"
 export MINT_MODE="full"
-export MINT_NO_FULL_OBJECT="true"
 
 docker system prune -f || true
 docker volume prune -f || true
@@ -39,7 +38,6 @@ docker run --rm --net=mint_default \
 	-e ACCESS_KEY="${ACCESS_KEY}" \
 	-e SECRET_KEY="${SECRET_KEY}" \
 	-e ENABLE_HTTPS=0 \
-	-e MINT_NO_FULL_OBJECT="${MINT_NO_FULL_OBJECT}" \
 	-e MINT_MODE="${MINT_MODE}" \
 	docker.io/minio/mint:edge
 
