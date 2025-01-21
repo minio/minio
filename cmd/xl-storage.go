@@ -85,7 +85,7 @@ func isValidVolname(volname string) bool {
 		return false
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		// Volname shouldn't have reserved characters in Windows.
 		return !strings.ContainsAny(volname, `\:*?\"<>|`)
 	}
@@ -131,13 +131,14 @@ type xlStorage struct {
 // checkPathLength - returns error if given path name length more than 255
 func checkPathLength(pathName string) error {
 	// Apple OS X path length is limited to 1016
-	if runtime.GOOS == "darwin" && len(pathName) > 1016 {
+	if runtime.GOOS == globalMacOSName && len(pathName) > 1016 {
 		return errFileNameTooLong
 	}
 
-	// Disallow more than 1024 characters on windows, there
+	// Disallow more than 32,767 characters on windows, there
 	// are no known name_max limits on Windows.
-	if runtime.GOOS == "windows" && len(pathName) > 1024 {
+	// Refer: https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry
+	if runtime.GOOS == globalWindowsOSName && len(pathName) > 32767 {
 		return errFileNameTooLong
 	}
 
@@ -157,12 +158,14 @@ func checkPathLength(pathName string) error {
 		case '\\':
 			if runtime.GOOS == globalWindowsOSName {
 				count = 0
+			} else {
+				count++
 			}
 		default:
 			count++
-			if count > 255 {
-				return errFileNameTooLong
-			}
+		}
+		if count > 255 {
+			return errFileNameTooLong
 		}
 	} // Success.
 	return nil
