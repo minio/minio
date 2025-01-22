@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"hash"
 	"io"
 	"sync"
@@ -37,11 +38,21 @@ type streamingBitrotWriter struct {
 	shardSize    int64
 	canClose     *sync.WaitGroup
 	byteBuf      []byte
+	finished     bool
 }
 
 func (b *streamingBitrotWriter) Write(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
+	}
+	if b.finished {
+		return 0, errors.New("bitrot write not allowed")
+	}
+	if int64(len(p)) > b.shardSize {
+		return 0, errors.New("unexpected bitrot buffer size")
+	}
+	if int64(len(p)) < b.shardSize {
+		b.finished = true
 	}
 	b.h.Reset()
 	b.h.Write(p)

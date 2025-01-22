@@ -419,6 +419,9 @@ type ListPartsInfo struct {
 
 	// ChecksumAlgorithm if set
 	ChecksumAlgorithm string
+
+	// ChecksumType if set
+	ChecksumType string
 }
 
 // Lookup - returns if uploadID is valid
@@ -597,10 +600,11 @@ type PartInfo struct {
 	ActualSize int64
 
 	// Checksum values
-	ChecksumCRC32  string
-	ChecksumCRC32C string
-	ChecksumSHA1   string
-	ChecksumSHA256 string
+	ChecksumCRC32     string
+	ChecksumCRC32C    string
+	ChecksumSHA1      string
+	ChecksumSHA256    string
+	ChecksumCRC64NVME string
 }
 
 // CompletePart - represents the part that was completed, this is sent by the client
@@ -613,11 +617,14 @@ type CompletePart struct {
 	// Entity tag returned when the part was uploaded.
 	ETag string
 
+	Size int64
+
 	// Checksum values. Optional.
-	ChecksumCRC32  string
-	ChecksumCRC32C string
-	ChecksumSHA1   string
-	ChecksumSHA256 string
+	ChecksumCRC32     string
+	ChecksumCRC32C    string
+	ChecksumSHA1      string
+	ChecksumSHA256    string
+	ChecksumCRC64NVME string
 }
 
 // CompleteMultipartUpload - represents list of parts which are completed, this is sent by the
@@ -630,6 +637,7 @@ type CompleteMultipartUpload struct {
 type NewMultipartUploadResult struct {
 	UploadID     string
 	ChecksumAlgo string
+	ChecksumType string
 }
 
 type getObjectAttributesResponse struct {
@@ -641,10 +649,11 @@ type getObjectAttributesResponse struct {
 }
 
 type objectAttributesChecksum struct {
-	ChecksumCRC32  string `xml:",omitempty"`
-	ChecksumCRC32C string `xml:",omitempty"`
-	ChecksumSHA1   string `xml:",omitempty"`
-	ChecksumSHA256 string `xml:",omitempty"`
+	ChecksumCRC32     string `xml:",omitempty"`
+	ChecksumCRC32C    string `xml:",omitempty"`
+	ChecksumSHA1      string `xml:",omitempty"`
+	ChecksumSHA256    string `xml:",omitempty"`
+	ChecksumCRC64NVME string `xml:",omitempty"`
 }
 
 type objectAttributesParts struct {
@@ -657,12 +666,13 @@ type objectAttributesParts struct {
 }
 
 type objectAttributesPart struct {
-	PartNumber     int
-	Size           int64
-	ChecksumCRC32  string `xml:",omitempty"`
-	ChecksumCRC32C string `xml:",omitempty"`
-	ChecksumSHA1   string `xml:",omitempty"`
-	ChecksumSHA256 string `xml:",omitempty"`
+	PartNumber        int
+	Size              int64
+	ChecksumCRC32     string `xml:",omitempty"`
+	ChecksumCRC32C    string `xml:",omitempty"`
+	ChecksumSHA1      string `xml:",omitempty"`
+	ChecksumSHA256    string `xml:",omitempty"`
+	ChecksumCRC64NVME string `xml:",omitempty"`
 }
 
 type objectAttributesErrorResponse struct {

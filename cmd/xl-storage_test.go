@@ -759,7 +759,7 @@ func TestXLStorageListVols(t *testing.T) {
 	if volInfos, err = xlStorage.ListVols(context.Background()); err != nil {
 		t.Fatalf("expected: <nil>, got: %s", err)
 	} else if len(volInfos) != 1 {
-		t.Fatalf("expected: one entry, got: %s", volInfos)
+		t.Fatalf("expected: one entry, got: %v", volInfos)
 	}
 
 	// TestXLStorage non-empty list vols.
