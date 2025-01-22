@@ -2731,6 +2731,23 @@ func (store *IAMStoreSys) ListSTSAccounts(ctx context.Context, accessKey string)
 	return stsAccounts, nil
 }
 
+// ListAccessKeysOpenID - lists all access keys for given/all OpenID user/s.
+func (store *IAMStoreSys) ListAccessKeysOpenID(ctx context.Context) ([]auth.Credentials, error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	var accessKeys []auth.Credentials
+	for _, u := range cache.iamUsersMap {
+		v := u.Credentials
+
+		if _, ok := v.Claims[subClaim]; ok && (v.IsServiceAccount() || v.IsTemp()) {
+			accessKeys = append(accessKeys, v)
+		}
+	}
+
+	return accessKeys, nil
+}
+
 // AddUser - adds/updates long term user account to storage.
 func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (updatedAt time.Time, err error) {
 	cache := store.lock()

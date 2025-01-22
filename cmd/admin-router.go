@@ -312,6 +312,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(adminMiddleware(adminAPI.ListLDAPPolicyMappingEntities))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/ldap/policy/{operation}").HandlerFunc(adminMiddleware(adminAPI.AttachDetachPolicyLDAP))
+
+		// OpenID specific service accounts ops
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/openid/list-access-keys-bulk").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysOpenIDBulk)).Queries("listType", "{listType:.*}")
+
 		// -- END IAM APIs --
 
 		// GetBucketQuotaConfig

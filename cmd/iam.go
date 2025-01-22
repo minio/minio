@@ -1183,6 +1183,20 @@ func (sys *IAMSys) ListSTSAccounts(ctx context.Context, accessKey string) ([]aut
 	}
 }
 
+// ListAccessKeysOpenID - lists all STS/service accounts associated with specified OpenID users
+func (sys *IAMSys) ListAccessKeysOpenID(ctx context.Context) ([]auth.Credentials, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListAccessKeysOpenID(ctx)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // GetServiceAccount - wrapper method to get information about a service account
 func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *policy.Policy, error) {
 	sa, embeddedPolicy, err := sys.getServiceAccount(ctx, accessKey)
