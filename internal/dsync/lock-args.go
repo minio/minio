@@ -37,6 +37,10 @@ type LockArgs struct {
 
 	// Quorum represents the expected quorum for this lock type.
 	Quorum *int `msgp:"omitempty"`
+
+	// TimeoutMillis is the timeout for acquiring the lock in milliseconds.
+	// A value less than or equal to 0 indicates no timeout.
+	TimeoutMillis int64 `msgp:"omitempty"`
 }
 
 // ResponseCode is the response code for a locking request.

@@ -241,6 +241,69 @@ func hammerRWMutex(t *testing.T, gomaxprocs, numReaders, numIterations int) {
 	})
 }
 
+func TestSlowLockServer(t *testing.T) {
+	cases := []struct {
+		name            string
+		lockServerDelay time.Duration
+		acquireSuccess  bool
+	}{
+		{
+			name:            "lock delay lower than acquire timeout",
+			lockServerDelay: 100 * time.Millisecond,
+			acquireSuccess:  true,
+		},
+		{
+			name:            "lock delay higher than acquire timeout",
+			lockServerDelay: 600 * time.Millisecond,
+			acquireSuccess:  false,
+		},
+	}
+
+	const resourceName = "xyz"
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Add delay to lock server responses to ensure that acquiring the lock takes
+			// longer than the client timeout.
+			for i := range lockServers {
+				lockServers[i].setResponseDelay(tc.lockServerDelay)
+				defer lockServers[i].setResponseDelay(0)
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			dm := NewDRWMutex(ds, resourceName)
+			acquired := dm.GetRLock(ctx, nil, id, source, Options{Timeout: 500 * time.Millisecond})
+			if acquired != tc.acquireSuccess {
+				t.Fatalf("GetLock() result should be %t", acquired)
+			}
+
+			if tc.acquireSuccess {
+				asserNumLocks(t, 1)
+				for _, s := range lockServers {
+					if ok, err := s.RUnlock(&LockArgs{
+						UID:       id,
+						Source:    source,
+						Resources: []string{resourceName},
+					}); err != nil || !ok {
+						t.Fatal("Failed to remove lock")
+					}
+				}
+			} else {
+				asserNumLocks(t, 0)
+			}
+		})
+	}
+}
+
+func asserNumLocks(t *testing.T, n int) {
+	for _, srv := range lockServers {
+		if len(srv.lockMap) != n {
+			t.Fatalf("lockServer should have %d resource locks", n)
+		}
+	}
+}
+
 // Borrowed from rwmutex_test.go
 func TestRWMutex(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(-1))

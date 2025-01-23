@@ -429,11 +429,12 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	var wg sync.WaitGroup
 
 	args := LockArgs{
-		Owner:     owner,
-		UID:       id,
-		Resources: names,
-		Source:    source,
-		Quorum:    &quorum,
+		Owner:         owner,
+		UID:           id,
+		Resources:     names,
+		Source:        source,
+		Quorum:        &quorum,
+		TimeoutMillis: ds.Timeouts.Acquire.Milliseconds(),
 	}
 
 	// Combined timeout for the lock attempt.

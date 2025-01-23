@@ -79,6 +79,12 @@ func (z *LockArgs) DecodeMsg(dc *msgp.Reader) (err error) {
 					return
 				}
 			}
+		case "TimeoutMillis":
+			z.TimeoutMillis, err = dc.ReadInt64()
+			if err != nil {
+				err = msgp.WrapError(err, "TimeoutMillis")
+				return
+			}
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -92,9 +98,9 @@ func (z *LockArgs) DecodeMsg(dc *msgp.Reader) (err error) {
 
 // EncodeMsg implements msgp.Encodable
 func (z *LockArgs) EncodeMsg(en *msgp.Writer) (err error) {
-	// map header, size 5
+	// map header, size 6
 	// write "UID"
-	err = en.Append(0x85, 0xa3, 0x55, 0x49, 0x44)
+	err = en.Append(0x86, 0xa3, 0x55, 0x49, 0x44)
 	if err != nil {
 		return
 	}
@@ -157,15 +163,25 @@ func (z *LockArgs) EncodeMsg(en *msgp.Writer) (err error) {
 			return
 		}
 	}
+	// write "TimeoutMillis"
+	err = en.Append(0xad, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x4d, 0x69, 0x6c, 0x6c, 0x69, 0x73)
+	if err != nil {
+		return
+	}
+	err = en.WriteInt64(z.TimeoutMillis)
+	if err != nil {
+		err = msgp.WrapError(err, "TimeoutMillis")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z *LockArgs) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "UID"
-	o = append(o, 0x85, 0xa3, 0x55, 0x49, 0x44)
+	o = append(o, 0x86, 0xa3, 0x55, 0x49, 0x44)
 	o = msgp.AppendString(o, z.UID)
 	// string "Resources"
 	o = append(o, 0xa9, 0x52, 0x65, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x73)
@@ -186,6 +202,9 @@ func (z *LockArgs) MarshalMsg(b []byte) (o []byte, err error) {
 	} else {
 		o = msgp.AppendInt(o, *z.Quorum)
 	}
+	// string "TimeoutMillis"
+	o = append(o, 0xad, 0x54, 0x69, 0x6d, 0x65, 0x6f, 0x75, 0x74, 0x4d, 0x69, 0x6c, 0x6c, 0x69, 0x73)
+	o = msgp.AppendInt64(o, z.TimeoutMillis)
 	return
 }
 
@@ -261,6 +280,12 @@ func (z *LockArgs) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			}
+		case "TimeoutMillis":
+			z.TimeoutMillis, bts, err = msgp.ReadInt64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "TimeoutMillis")
+				return
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -285,6 +310,7 @@ func (z *LockArgs) Msgsize() (s int) {
 	} else {
 		s += msgp.IntSize
 	}
+	s += 14 + msgp.Int64Size
 	return
 }
 

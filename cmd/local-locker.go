@@ -164,9 +164,19 @@ func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply boo
 	if len(args.Resources) != 1 {
 		return false, fmt.Errorf("internal error: localLocker.RLock called with more than one resource")
 	}
+	if args.TimeoutMillis > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(args.TimeoutMillis)*time.Millisecond)
+		defer cancel()
+	}
 
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
+
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
 	resource := args.Resources[0]
 	now := UTCNow()
 	lrInfo := lockRequesterInfo{
