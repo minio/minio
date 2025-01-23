@@ -27,6 +27,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
+	"github.com/minio/minio/internal/config/identity/openid"
 	xldap "github.com/minio/pkg/v3/ldap"
 	"github.com/minio/pkg/v3/policy"
 )
@@ -200,6 +201,8 @@ func (a adminAPIHandlers) AddServiceAccountOpenID(w http.ResponseWriter, r *http
 	}
 }
 
+const dummyRoleARN = "dummy-arn"
+
 // ListAccessKeysOpenIDBulk - GET /minio/admin/v3/idp/openid/list-access-keys-bulk
 func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -220,7 +223,7 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 	userList := r.Form["users"]
 	isAll := r.Form.Get("all") == "true"
 	selfOnly := !isAll && len(userList) == 0
-	cfgName := r.Form.Get("config")
+	cfgName := r.Form.Get("configName")
 
 	if isAll && len(userList) > 0 {
 		// This should be checked on client side, so return generic error
@@ -241,7 +244,6 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
 			return
 		}
-		userList = append(userList, "")
 	} else if len(userList) == 1 && userList[0] == cred.ParentUser {
 		selfOnly = true
 	}
@@ -273,42 +275,45 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		userList = append(userList, selfDN)
 	}
 
-	// listType := r.Form.Get("listType")
-	// var listSTSKeys, listServiceAccounts bool
-	// switch listType {
-	// case madmin.AccessKeyListUsersOnly:
-	// 	listSTSKeys = false
-	// 	listServiceAccounts = false
-	// case madmin.AccessKeyListSTSOnly:
-	// 	listSTSKeys = true
-	// 	listServiceAccounts = false
-	// case madmin.AccessKeyListSvcaccOnly:
-	// 	listSTSKeys = false
-	// 	listServiceAccounts = true
-	// case madmin.AccessKeyListAll:
-	// 	listSTSKeys = true
-	// 	listServiceAccounts = true
-	// default:
-	// 	err := errors.New("invalid list type")
-	// 	writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
-	// 	return
-	// }
+	listType := r.Form.Get("listType")
+	var listSTSKeys, listServiceAccounts bool
+	switch listType {
+	case madmin.AccessKeyListUsersOnly:
+		listSTSKeys = false
+		listServiceAccounts = false
+	case madmin.AccessKeyListSTSOnly:
+		listSTSKeys = true
+		listServiceAccounts = false
+	case madmin.AccessKeyListSvcaccOnly:
+		listSTSKeys = false
+		listServiceAccounts = true
+	case madmin.AccessKeyListAll:
+		listSTSKeys = true
+		listServiceAccounts = true
+	default:
+		err := errors.New("invalid list type")
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
+		return
+	}
 
 	s := globalServerConfig.Clone()
 	roleArnMap := make(map[string]string)
+	cfgToUsersMap := make(map[string]madmin.ListAccessKeysOpenIDResp)
 	if cfgName != "" {
 		// TODO: Is this the right way to do this?
 		config, err := globalIAMSys.OpenIDConfig.GetConfigInfo(s, cfgName)
-		if err != nil {
-			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		if errors.Is(err, openid.ErrProviderConfigNotFound) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
 			return
 		}
 		for _, info := range config {
-			if info.Key == "RoleARN" {
+			if info.Key == "roleARN" {
 				roleArnMap[info.Value] = cfgName
 				break
 			}
 		}
+		newResp := make(madmin.ListAccessKeysOpenIDResp)
+		cfgToUsersMap[cfgName] = newResp
 	} else {
 		configs, err := globalIAMSys.OpenIDConfig.GetConfigList(s)
 		if err != nil {
@@ -316,11 +321,13 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 			return
 		}
 		for _, config := range configs {
-			arn := "dummy-arn"
+			arn := dummyRoleARN
 			if config.RoleARN != "" {
 				arn = config.RoleARN
 			}
 			roleArnMap[arn] = config.Name
+			newResp := make(madmin.ListAccessKeysOpenIDResp)
+			cfgToUsersMap[config.Name] = newResp
 		}
 	}
 
@@ -331,9 +338,12 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		return
 	}
 
-	accessKeyMap := make(map[string]madmin.ListAccessKeysOpenIDResp)
 	for _, accessKey := range accessKeys {
-		if !userSet.Contains(accessKey.ParentUser) {
+		// Filter out any disqualifying access keys
+		if (!listSTSKeys && accessKey.IsTemp()) || (!listServiceAccounts && accessKey.IsServiceAccount()) {
+			continue
+		}
+		if !userSet.IsEmpty() && !userSet.Contains(accessKey.ParentUser) {
 			continue
 		}
 		arn, ok := accessKey.Claims[roleArnClaim].(string)
@@ -344,32 +354,39 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		if !ok {
 			continue
 		}
-		if _, ok := accessKeyMap[matchingCfgName]; !ok {
-			newResp := make(madmin.ListAccessKeysOpenIDResp)
-			newResp[accessKey.ParentUser] = madmin.OpenIDUserAccessKeys{
-				Sub:          accessKey.Claims[subClaim].(string),
-				ReadableName: accessKey.Claims["email"].(string),
+		openIDUserAccessKeys, ok := cfgToUsersMap[matchingCfgName][accessKey.ParentUser]
+		if !ok {
+			sub, ok := accessKey.Claims[subClaim].(string)
+			if !ok {
+				continue
 			}
-			accessKeyMap[matchingCfgName] = newResp
+			readableClaimName := globalIAMSys.OpenIDConfig.GetReadableClaimName(matchingCfgName)
+			var readableClaim string
+			if readableClaimName != "" {
+				readableClaim, _ = accessKey.Claims[readableClaimName].(string)
+			}
+			openIDUserAccessKeys = madmin.OpenIDUserAccessKeys{
+				Sub:          sub,
+				ReadableName: readableClaim,
+			}
 		}
-		userInfo := accessKeyMap[matchingCfgName][accessKey.ParentUser]
+		svcAccInfo := madmin.ServiceAccountInfo{
+			AccessKey:  accessKey.AccessKey,
+			Expiration: &accessKey.Expiration,
+		}
 		if accessKey.IsServiceAccount() {
-			userInfo.ServiceAccounts = append(userInfo.ServiceAccounts, madmin.ServiceAccountInfo{
-				AccessKey:  accessKey.AccessKey,
-				Expiration: &accessKey.Expiration,
-			})
+			openIDUserAccessKeys.ServiceAccounts = append(openIDUserAccessKeys.ServiceAccounts, svcAccInfo)
 		} else if accessKey.IsTemp() {
-			userInfo.STSKeys = append(userInfo.STSKeys, madmin.ServiceAccountInfo{
-				AccessKey:  accessKey.AccessKey,
-				Expiration: &accessKey.Expiration,
-			})
+			openIDUserAccessKeys.STSKeys = append(openIDUserAccessKeys.STSKeys, svcAccInfo)
 		} else {
 			err := fmt.Errorf("expected service account or STS key, got neither")
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		}
+
+		cfgToUsersMap[matchingCfgName][accessKey.ParentUser] = openIDUserAccessKeys
 	}
 
-	data, err := json.Marshal(accessKeyMap)
+	data, err := json.Marshal(cfgToUsersMap)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

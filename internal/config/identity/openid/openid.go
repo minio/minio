@@ -634,3 +634,11 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 
 	return defaultExpiryDuration, nil
 }
+
+func (r Config) GetReadableClaimName(cfgName string) string {
+	pCfg, ok := r.ProviderCfgs[cfgName]
+	if ok {
+		return pCfg.DisplayClaim
+	}
+	return ""
+}
