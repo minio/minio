@@ -195,6 +195,14 @@ type lockServer struct {
 	responseDelay int64
 }
 
+func (l *lockServer) reset() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.lockNotFound = false
+	l.responseDelay = 0
+	clear(l.lockMap)
+}
+
 func (l *lockServer) setRefreshReply(refreshed bool) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()

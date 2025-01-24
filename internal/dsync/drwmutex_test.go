@@ -259,6 +259,10 @@ func TestSlowLockServer(t *testing.T) {
 		},
 	}
 
+	for _, srv := range lockServers {
+		srv.reset()
+	}
+
 	const resourceName = "xyz"
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -299,7 +303,7 @@ func TestSlowLockServer(t *testing.T) {
 func asserNumLocks(t *testing.T, n int) {
 	for _, srv := range lockServers {
 		if len(srv.lockMap) != n {
-			t.Fatalf("lockServer should have %d resource locks", n)
+			t.Fatalf("lockServer should have %d resource locks, has %d", n, len(srv.lockMap))
 		}
 	}
 }
