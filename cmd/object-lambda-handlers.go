@@ -93,8 +93,8 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 		},
 		UserIdentity: levent.Identity{
 			Type:        "IAMUser",
-			PrincipalID: cred.AccessKey,
-			AccessKeyID: cred.SecretKey,
+			PrincipalID: cred.ParentUser,
+			AccessKeyID: cred.AccessKey,
 		},
 	}
 	return eventData, nil
