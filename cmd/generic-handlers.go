@@ -293,12 +293,6 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	return time.Time{}, ErrMissingDateHeader
 }
 
-// Bad path components to be rejected by the path validity handler.
-const (
-	dotdotComponent = ".."
-	dotComponent    = "."
-)
-
 func hasBadHost(host string) error {
 	if globalIsCICD && strings.TrimSpace(host) == "" {
 		// under CI/CD test setups ignore empty hosts as invalid hosts
