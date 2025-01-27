@@ -160,21 +160,18 @@ func (l *localLocker) removeEntry(name string, args dsync.LockArgs, lri *[]lockR
 	return false
 }
 
-func (l *localLocker) RLock(ctx context.Context, args dsync.LockArgs) (reply bool, err error) {
+func (l *localLocker) RLock(_ context.Context, args dsync.LockArgs) (reply bool, err error) {
 	if len(args.Resources) != 1 {
 		return false, fmt.Errorf("internal error: localLocker.RLock called with more than one resource")
 	}
-	if args.TimeoutMillis > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(args.TimeoutMillis)*time.Millisecond)
-		defer cancel()
-	}
+
+	lockStart := UTCNow()
 
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	if ctx.Err() != nil {
-		return false, ctx.Err()
+	if time.Since(lockStart) > time.Duration(args.TimeoutMillis)*time.Millisecond {
+		return false, fmt.Errorf("internal error: localLocker.RLock timed out")
 	}
 
 	resource := args.Resources[0]
