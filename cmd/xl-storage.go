@@ -30,7 +30,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1091,7 +1090,6 @@ func (s *xlStorage) ListDir(ctx context.Context, origvolume, volume, dirPath str
 	return entries, nil
 }
 
-// Delete multiple versions of a single object - no support of replication logic
 func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis ...FileInfo) error {
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
@@ -1142,17 +1140,7 @@ func (s *xlStorage) deleteVersions(ctx context.Context, volume, path string, fis
 		return err
 	}
 
-	// Add any delete marker last.
-	sort.SliceStable(fis, func(i, j int) bool {
-		return !fis[i].Deleted
-	})
-
 	for _, fi := range fis {
-		if fi.Deleted && xlMeta.latestType() == DeleteType {
-			// Avoid adding a new delete-marker if
-			// there is one already on top.
-			continue
-		}
 		dataDir, err := xlMeta.DeleteVersion(fi)
 		if err != nil {
 			if !fi.Deleted && (err == errFileNotFound || err == errFileVersionNotFound) {

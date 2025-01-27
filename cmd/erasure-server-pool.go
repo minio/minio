@@ -1231,6 +1231,7 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	objSets := set.NewStringSet()
 	for i := range derrs {
 		objects[i].ObjectName = encodeDirObject(objects[i].ObjectName)
+
 		derrs[i] = checkDelObjArgs(ctx, bucket, objects[i].ObjectName)
 		objSets.Add(objects[i].ObjectName)
 	}
