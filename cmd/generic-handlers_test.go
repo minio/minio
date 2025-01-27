@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/minio/minio/internal/crypto"
@@ -182,5 +183,29 @@ func TestSSETLSHandler(t *testing.T) {
 		case !test.ShouldFail && w.Code != http.StatusOK:
 			t.Errorf("Test %d: should not fail but status code is HTTP %d and not 200 OK", i, w.Code)
 		}
+	}
+}
+
+func Benchmark_hasBadPathComponent(t *testing.B) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{name: "empty", input: "", want: false},
+		{name: "backslashes", input: `\a\a\ \\  \\\\\\\`, want: false},
+		{name: "long", input: strings.Repeat("a/", 2000), want: false},
+		{name: "long-fail", input: strings.Repeat("a/", 2000) + "../..", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(b *testing.B) {
+			b.SetBytes(int64(len(tt.input)))
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				if got := hasBadPathComponent(tt.input); got != tt.want {
+					t.Fatalf("hasBadPathComponent() = %v, want %v", got, tt.want)
+				}
+			}
+		})
 	}
 }
