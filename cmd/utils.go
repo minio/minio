@@ -271,10 +271,12 @@ func validateLengthAndChecksum(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	if !cs.Type.IsSet() {
+	if cs == nil || !cs.Type.IsSet() {
 		return false
 	}
-	r.Body = hash.NewChecker(r.Body, cs.Type.Hasher(), cs.Raw, r.ContentLength)
+	if cs.Valid() && !cs.Type.Trailing() {
+		r.Body = hash.NewChecker(r.Body, cs.Type.Hasher(), cs.Raw, r.ContentLength)
+	}
 	return true
 }
 
