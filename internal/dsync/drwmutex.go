@@ -440,9 +440,10 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	ctx, cancel := context.WithTimeout(ctx, ds.Timeouts.Acquire)
 	defer cancel()
 
-	// Special context for NetLockers - do not use timeouts.
-	// Also, pass the trace context info if found for debugging
-	netLockCtx := context.Background()
+	// Special context for NetLockers - do not pass upstream cancel.
+	// Also, pass the trace context info if found for debugging.
+	netLockCtx, cancel2 := context.WithTimeout(context.Background(), ds.Timeouts.Acquire)
+	defer cancel2()
 	tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 	if ok {
 		netLockCtx = context.WithValue(netLockCtx, mcontext.ContextTraceKey, tc)
