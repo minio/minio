@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"path"
 	"runtime"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1706,8 +1708,21 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	}
 
 	dedupVersions := make([]FileInfoVersions, 0, len(versionsMap))
-	for _, version := range versionsMap {
-		dedupVersions = append(dedupVersions, version)
+	for _, fivs := range versionsMap {
+		// Removal of existing versions and adding a delete marker in the same
+		// request is supported. At the same time, we cannot allow adding
+		// two delete markers on top of any object. To avoid this situation,
+		// we will sort deletions to execute existing deletion first,
+		// then add only one delete marker if requested
+		sort.SliceStable(fivs.Versions, func(i, j int) bool {
+			return !fivs.Versions[i].Deleted
+		})
+		if idx := slices.IndexFunc(fivs.Versions, func(fi FileInfo) bool {
+			return fi.Deleted
+		}); idx > -1 {
+			fivs.Versions = fivs.Versions[:idx+1]
+		}
+		dedupVersions = append(dedupVersions, fivs)
 	}
 
 	// Initialize list of errors.
@@ -1732,12 +1747,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					continue
 				}
 				for _, v := range dedupVersions[i].Versions {
-					if err == errFileNotFound || err == errFileVersionNotFound {
-						if !dobjects[v.Idx].DeleteMarker {
-							// Not delete marker, if not found, ok.
-							continue
-						}
-					}
 					delObjErrs[index][v.Idx] = err
 				}
 			}
@@ -1757,6 +1766,13 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			}
 		}
 		err := reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
+		if err == nil {
+			dobjects[objIndex].found = true
+		} else if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
+			if !dobjects[objIndex].DeleteMarker {
+				err = nil
+			}
+		}
 		if objects[objIndex].VersionID != "" {
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName, objects[objIndex].VersionID)
 		} else {

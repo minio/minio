@@ -1248,89 +1248,42 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 	ctx = lkctx.Context()
 	defer multiDeleteLock.Unlock(lkctx)
 
-	// Fetch location of up to 10 objects concurrently.
-	poolObjIdxMap := map[int][]ObjectToDelete{}
-	origIndexMap := map[int][]int{}
+	dObjectsByPool := make([][]DeletedObject, len(z.serverPools))
+	dErrsByPool := make([][]error, len(z.serverPools))
 
-	// Always perform 1/10th of the number of objects per delete
-	concurrent := len(objects) / 10
-	if concurrent <= 10 {
-		// if we cannot get 1/10th then choose the number of
-		// objects as concurrent.
-		concurrent = len(objects)
-	}
-
-	var mu sync.Mutex
-	eg := errgroup.WithNErrs(len(objects)).WithConcurrency(concurrent)
-	for j, obj := range objects {
-		j := j
-		obj := obj
+	eg := errgroup.WithNErrs(len(z.serverPools)).WithConcurrency(len(z.serverPools))
+	for i, pool := range z.serverPools {
+		i := i
+		pool := pool
 		eg.Go(func() error {
-			pinfo, _, err := z.getPoolInfoExistingWithOpts(ctx, bucket, obj.ObjectName, ObjectOptions{
-				NoLock: true,
-			})
-			if err != nil {
-				if !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
-					derrs[j] = err
-				}
-				dobjects[j] = DeletedObject{
-					ObjectName: decodeDirObject(obj.ObjectName),
-					VersionID:  obj.VersionID,
-				}
-				return nil
-			}
-
-			// Delete marker already present we are not going to create new delete markers.
-			if pinfo.ObjInfo.DeleteMarker && obj.VersionID == "" {
-				dobjects[j] = DeletedObject{
-					DeleteMarker:          pinfo.ObjInfo.DeleteMarker,
-					DeleteMarkerVersionID: pinfo.ObjInfo.VersionID,
-					DeleteMarkerMTime:     DeleteMarkerMTime{pinfo.ObjInfo.ModTime},
-					ObjectName:            decodeDirObject(pinfo.ObjInfo.Name),
-				}
-				return nil
-			}
-
-			idx := pinfo.Index
-
-			mu.Lock()
-			defer mu.Unlock()
-
-			poolObjIdxMap[idx] = append(poolObjIdxMap[idx], obj)
-			origIndexMap[idx] = append(origIndexMap[idx], j)
+			dObjectsByPool[i], dErrsByPool[i] = pool.DeleteObjects(ctx, bucket, objects, opts)
 			return nil
-		}, j)
+		}, i)
 	}
-
 	eg.Wait() // wait to check all the pools.
 
-	if len(poolObjIdxMap) > 0 {
-		// Delete concurrently in all server pools.
-		var wg sync.WaitGroup
-		wg.Add(len(z.serverPools))
-		for idx, pool := range z.serverPools {
-			go func(idx int, pool *erasureSets) {
-				defer wg.Done()
-				objs := poolObjIdxMap[idx]
-				if len(objs) == 0 {
-					return
-				}
-				orgIndexes := origIndexMap[idx]
-				deletedObjects, errs := pool.DeleteObjects(ctx, bucket, objs, opts)
-				mu.Lock()
-				for i, derr := range errs {
-					if derr != nil {
-						derrs[orgIndexes[i]] = derr
-					}
-					deletedObjects[i].ObjectName = decodeDirObject(deletedObjects[i].ObjectName)
-					dobjects[orgIndexes[i]] = deletedObjects[i]
-				}
-				mu.Unlock()
-			}(idx, pool)
+	for i := range dobjects {
+		// Iterate over pools
+		for pool := range z.serverPools {
+			if dErrsByPool[pool][i] == nil && dObjectsByPool[pool][i].found {
+				// A fast exit when the object is found and removed
+				dobjects[i] = dObjectsByPool[pool][i]
+				derrs[i] = nil
+				break
+			}
+			if derrs[i] == nil {
+				// No error related to this object is found, assign this pool result
+				// whether it is nil because there is no object found or because of
+				// some other errors such erasure quorum errors.
+				dobjects[i] = dObjectsByPool[pool][i]
+				derrs[i] = dErrsByPool[pool][i]
+			}
 		}
-		wg.Wait()
 	}
 
+	for i := range dobjects {
+		dobjects[i].ObjectName = decodeDirObject(dobjects[i].ObjectName)
+	}
 	return dobjects, derrs
 }
 
