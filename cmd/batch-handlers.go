@@ -97,17 +97,7 @@ func (b *BatchJobReplicateV1) RedactSensitive() {
 }
 
 // RedactSensitive will redact any sensitive information in b.
-func (b *BatchJobKeyRotateV1) RedactSensitive() {}
-
-// RedactSensitive will redact any sensitive information in b.
-func (b *BatchJobExpire) RedactSensitive() {
-	if b == nil {
-		return
-	}
-	if b.NotificationCfg.Token != "" {
-		b.NotificationCfg.Token = redactedText
-	}
-}
+func (r *BatchJobKeyRotateV1) RedactSensitive() {}
 
 func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token string) error {
 	if endpoint == "" {
