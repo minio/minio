@@ -111,6 +111,9 @@ type VolInfo struct {
 
 	// total VolInfo counts
 	count int
+
+	// Date and time when the volume was deleted, if Deleted
+	Deleted time.Time
 }
 
 // FilesInfo represent a list of files, additionally

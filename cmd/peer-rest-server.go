@@ -1308,6 +1308,7 @@ func (s *peerRESTServer) HeadBucketHandler(mss *grid.MSS) (info *VolInfo, nerr *
 	return &VolInfo{
 		Name:    bucketInfo.Name,
 		Created: bucketInfo.Created,
+		Deleted: bucketInfo.Deleted, // needed for site replication
 	}, nil
 }
 

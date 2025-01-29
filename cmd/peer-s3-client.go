@@ -393,6 +393,7 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 	return BucketInfo{
 		Name:    volInfo.Name,
 		Created: volInfo.Created,
+		Deleted: volInfo.Deleted,
 	}, nil
 }
 
