@@ -971,7 +971,7 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 // Note: to be used only with batch jobs that affect multiple versions through
 // a single action. e.g batch-expire has an option to expire all versions of an
 // object which matches the given filters.
-func (ri *batchJobInfo) trackMultipleObjectVersions(bucket string, info ObjectInfo, success bool) {
+func (ri *batchJobInfo) trackMultipleObjectVersions(info ObjectInfo, success bool) {
 	if success {
 		ri.Objects += int64(info.NumVersions)
 	} else {
@@ -1802,7 +1802,7 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if _, success := proxyRequestByToken(ctx, w, r, jobID); success {
+	if _, proxied, _ := proxyRequestByToken(ctx, w, r, jobID, true); proxied {
 		return
 	}
 

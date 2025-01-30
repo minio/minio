@@ -435,14 +435,14 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 				oiCache.Add(od, &exp.ObjectInfo)
 			}
 
-			var done bool
 			// DeleteObject(deletePrefix: true) to expire all versions of an object
 			for _, exp := range toExpireAll {
 				var success bool
 				for attempts := 1; attempts <= retryAttempts; attempts++ {
 					select {
 					case <-ctx.Done():
-						done = true
+						ri.trackMultipleObjectVersions(exp, success)
+						return
 					default:
 					}
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
@@ -459,14 +459,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 						break
 					}
 				}
-				ri.trackMultipleObjectVersions(r.Bucket, exp, success)
-				if done {
-					break
-				}
-			}
-
-			if done {
-				return
+				ri.trackMultipleObjectVersions(exp, success)
 			}
 
 			// DeleteMultiple objects
