@@ -2347,7 +2347,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 
 		if r.Header.Get(xhttp.AmzBucketReplicationStatus) == replication.Replica.String() {
 			if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.ReplicateObjectAction); s3Err != ErrNone {
-				return err
+				return errors.New(errorCodes.ToAPIErr(s3Err).Code)
 			}
 			metadata[ReservedMetadataPrefixLower+ReplicaStatus] = replication.Replica.String()
 			metadata[ReservedMetadataPrefixLower+ReplicaTimestamp] = UTCNow().Format(time.RFC3339Nano)
