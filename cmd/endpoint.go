@@ -1194,7 +1194,7 @@ func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
 }
 
 // GetProxyEndpoints - get all endpoints that can be used to proxy list request.
-func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint {
+func GetProxyEndpoints(endpointServerPools EndpointServerPools, transport http.RoundTripper) []ProxyEndpoint {
 	var proxyEps []ProxyEndpoint
 
 	proxyEpSet := set.NewStringSet()
@@ -1213,7 +1213,7 @@ func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint 
 
 			proxyEps = append(proxyEps, ProxyEndpoint{
 				Endpoint:  endpoint,
-				Transport: globalRemoteTargetTransport,
+				Transport: transport,
 			})
 		}
 	}
