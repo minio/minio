@@ -290,12 +290,12 @@ type BatchJobExpire struct {
 var _ yaml.Unmarshaler = &BatchJobExpire{}
 
 // RedactSensitive will redact any sensitive information in b.
-func (b *BatchJobExpire) RedactSensitive() {
-	if b == nil {
+func (r *BatchJobExpire) RedactSensitive() {
+	if r == nil {
 		return
 	}
-	if b.NotificationCfg.Token != "" {
-		b.NotificationCfg.Token = redactedText
+	if r.NotificationCfg.Token != "" {
+		r.NotificationCfg.Token = redactedText
 	}
 }
 

@@ -77,22 +77,22 @@ type BatchJobRequest struct {
 }
 
 // RedactSensitive will redact any sensitive information in b.
-func (b *BatchJobRequest) RedactSensitive() {
-	b.Replicate.RedactSensitive()
-	b.Expire.RedactSensitive()
-	b.KeyRotate.RedactSensitive()
+func (j *BatchJobRequest) RedactSensitive() {
+	j.Replicate.RedactSensitive()
+	j.Expire.RedactSensitive()
+	j.KeyRotate.RedactSensitive()
 }
 
 // RedactSensitive will redact any sensitive information in b.
-func (b *BatchJobReplicateV1) RedactSensitive() {
-	if b == nil {
+func (r *BatchJobReplicateV1) RedactSensitive() {
+	if r == nil {
 		return
 	}
-	if b.Target.Creds.SecretKey != "" {
-		b.Target.Creds.SecretKey = redactedText
+	if r.Target.Creds.SecretKey != "" {
+		r.Target.Creds.SecretKey = redactedText
 	}
-	if b.Target.Creds.SessionToken != "" {
-		b.Target.Creds.SessionToken = redactedText
+	if r.Target.Creds.SessionToken != "" {
+		r.Target.Creds.SessionToken = redactedText
 	}
 }
 
