@@ -289,6 +289,16 @@ type BatchJobExpire struct {
 
 var _ yaml.Unmarshaler = &BatchJobExpire{}
 
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobExpire) RedactSensitive() {
+	if r == nil {
+		return
+	}
+	if r.NotificationCfg.Token != "" {
+		r.NotificationCfg.Token = redactedText
+	}
+}
+
 // UnmarshalYAML - BatchJobExpire extends default unmarshal to extract line, col information.
 func (r *BatchJobExpire) UnmarshalYAML(val *yaml.Node) error {
 	type expireJob BatchJobExpire

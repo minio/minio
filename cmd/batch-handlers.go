@@ -61,6 +61,8 @@ var globalBatchConfig batch.Config
 const (
 	// Keep the completed/failed job stats 3 days before removing it
 	oldJobsExpiration = 3 * 24 * time.Hour
+
+	redactedText = "**REDACTED**"
 )
 
 // BatchJobRequest this is an internal data structure not for external consumption.
@@ -73,6 +75,29 @@ type BatchJobRequest struct {
 	Expire    *BatchJobExpire      `yaml:"expire" json:"expire"`
 	ctx       context.Context      `msg:"-"`
 }
+
+// RedactSensitive will redact any sensitive information in b.
+func (j *BatchJobRequest) RedactSensitive() {
+	j.Replicate.RedactSensitive()
+	j.Expire.RedactSensitive()
+	j.KeyRotate.RedactSensitive()
+}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobReplicateV1) RedactSensitive() {
+	if r == nil {
+		return
+	}
+	if r.Target.Creds.SecretKey != "" {
+		r.Target.Creds.SecretKey = redactedText
+	}
+	if r.Target.Creds.SessionToken != "" {
+		r.Target.Creds.SessionToken = redactedText
+	}
+}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobKeyRotateV1) RedactSensitive() {}
 
 func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token string) error {
 	if endpoint == "" {
@@ -1695,6 +1720,8 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Remove sensitive fields.
+	req.RedactSensitive()
 	buf, err := yaml.Marshal(req)
 	if err != nil {
 		batchLogIf(ctx, err)
