@@ -622,7 +622,7 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 				},
 			}
 
-			opts, err, _ := batchReplicationOpts(ctx, "", gr.ObjInfo)
+			opts, _, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
 			if err != nil {
 				batchLogIf(ctx, err)
 				continue
@@ -712,7 +712,7 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 		return err
 	}
 
-	putOpts, err, isMP := batchReplicationOpts(ctx, "", objInfo)
+	putOpts, isMP, err := batchReplicationOpts(ctx, "", objInfo)
 	if err != nil {
 		return err
 	}
@@ -1576,11 +1576,11 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 	return err
 }
 
-func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error, isMP bool) {
+func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, isMP bool, err error) {
 	// TODO: support custom storage class for remote replication
 	putOpts, isMP, err = putReplicationOpts(ctx, "", objInfo)
 	if err != nil {
-		return putOpts, err, isMP
+		return putOpts, isMP, err
 	}
 	putOpts.Internal = miniogo.AdvancedPutOptions{
 		SourceVersionID:    objInfo.VersionID,
@@ -1588,7 +1588,7 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 		SourceETag:         objInfo.ETag,
 		ReplicationRequest: true,
 	}
-	return putOpts, nil, isMP
+	return putOpts, isMP, nil
 }
 
 // ListBatchJobs - lists all currently active batch jobs, optionally takes {jobType}
