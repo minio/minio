@@ -18,15 +18,16 @@ func _() {
 	_ = x[ErrSTSMalformedPolicyDocument-7]
 	_ = x[ErrSTSInsecureConnection-8]
 	_ = x[ErrSTSInvalidClientCertificate-9]
-	_ = x[ErrSTSNotInitialized-10]
-	_ = x[ErrSTSIAMNotInitialized-11]
-	_ = x[ErrSTSUpstreamError-12]
-	_ = x[ErrSTSInternalError-13]
+	_ = x[ErrSTSTooManyIntermediateCAs-10]
+	_ = x[ErrSTSNotInitialized-11]
+	_ = x[ErrSTSIAMNotInitialized-12]
+	_ = x[ErrSTSUpstreamError-13]
+	_ = x[ErrSTSInternalError-14]
 }
 
-const _STSErrorCode_name = "STSNoneSTSAccessDeniedSTSMissingParameterSTSInvalidParameterValueSTSWebIdentityExpiredTokenSTSClientGrantsExpiredTokenSTSInvalidClientGrantsTokenSTSMalformedPolicyDocumentSTSInsecureConnectionSTSInvalidClientCertificateSTSNotInitializedSTSIAMNotInitializedSTSUpstreamErrorSTSInternalError"
+const _STSErrorCode_name = "STSNoneSTSAccessDeniedSTSMissingParameterSTSInvalidParameterValueSTSWebIdentityExpiredTokenSTSClientGrantsExpiredTokenSTSInvalidClientGrantsTokenSTSMalformedPolicyDocumentSTSInsecureConnectionSTSInvalidClientCertificateSTSTooManyIntermediateCAsSTSNotInitializedSTSIAMNotInitializedSTSUpstreamErrorSTSInternalError"
 
-var _STSErrorCode_index = [...]uint16{0, 7, 22, 41, 65, 91, 118, 145, 171, 192, 219, 236, 256, 272, 288}
+var _STSErrorCode_index = [...]uint16{0, 7, 22, 41, 65, 91, 118, 145, 171, 192, 219, 244, 261, 281, 297, 313}
 
 func (i STSErrorCode) String() string {
 	if i < 0 || i >= STSErrorCode(len(_STSErrorCode_index)-1) {
