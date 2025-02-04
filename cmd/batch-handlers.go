@@ -622,12 +622,12 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 				},
 			}
 
-			opts, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
+			opts, err, _ := batchReplicationOpts(ctx, "", gr.ObjInfo)
 			if err != nil {
 				batchLogIf(ctx, err)
 				continue
 			}
-
+			// TODO: I am not sure we read it back, but we aren't sending whether checksums are single/multipart.
 			for k, vals := range opts.Header() {
 				for _, v := range vals {
 					snowballObj.Headers.Add(k, v)
@@ -712,14 +712,14 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 		return err
 	}
 
-	putOpts, err := batchReplicationOpts(ctx, "", objInfo)
+	putOpts, err, isMP := batchReplicationOpts(ctx, "", objInfo)
 	if err != nil {
 		return err
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		putOpts.Internal = miniogo.AdvancedPutOptions{}
 	}
-	if objInfo.isMultipart() {
+	if isMP {
 		if err := replicateObjectWithMultipart(ctx, c, tgtBucket, pathJoin(tgtPrefix, objInfo.Name), rd, objInfo, putOpts); err != nil {
 			return err
 		}
@@ -1576,11 +1576,11 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 	return err
 }
 
-func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
+func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error, isMP bool) {
 	// TODO: support custom storage class for remote replication
-	putOpts, err = putReplicationOpts(ctx, "", objInfo, 0)
+	putOpts, isMP, err = putReplicationOpts(ctx, "", objInfo)
 	if err != nil {
-		return putOpts, err
+		return putOpts, err, isMP
 	}
 	putOpts.Internal = miniogo.AdvancedPutOptions{
 		SourceVersionID:    objInfo.VersionID,
@@ -1588,7 +1588,7 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 		SourceETag:         objInfo.ETag,
 		ReplicationRequest: true,
 	}
-	return putOpts, nil
+	return putOpts, nil, isMP
 }
 
 // ListBatchJobs - lists all currently active batch jobs, optionally takes {jobType}

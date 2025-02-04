@@ -791,7 +791,7 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 
 // generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
 func generateCompleteMultipartUploadResponse(bucket, key, location string, oi ObjectInfo, h http.Header) CompleteMultipartUploadResponse {
-	cs := oi.decryptChecksums(0, h)
+	cs, _ := oi.decryptChecksums(0, h)
 	c := CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
