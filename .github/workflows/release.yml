@@ -3,7 +3,7 @@ name: Go
 on:
   push:
     tags:
-      - 'RELEASE.*'
+      - "RELEASE.*"
 
 permissions:
   contents: write
@@ -26,8 +26,8 @@ jobs:
         run: |
           make crosscompile
       - name: Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: bin/*
-          draft: true
-          fail_on_unmatched_files: true
+        run: |
+          gh release create ${{ github.ref_name }} -t ${{ github.ref_name }} -d
+          echo 'Uploading files in bin/*:'
+          ls  bin/*
+          gh release upload ${{ github.ref_name }} bin/*
