@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/minio/madmin-go/v3"
@@ -298,9 +299,9 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 
 	s := globalServerConfig.Clone()
 	roleArnMap := make(map[string]string)
-	cfgToUsersMap := make(map[string]madmin.ListAccessKeysOpenIDResp)
+	// Map of configs to a map of users to their access keys
+	cfgToUsersMap := make(map[string]map[string]madmin.OpenIDUserAccessKeys)
 	if cfgName != "" {
-		// TODO: Is this the right way to do this?
 		config, err := globalIAMSys.OpenIDConfig.GetConfigInfo(s, cfgName)
 		if errors.Is(err, openid.ErrProviderConfigNotFound) {
 			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchConfigTarget), r.URL)
@@ -312,7 +313,7 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 				break
 			}
 		}
-		newResp := make(madmin.ListAccessKeysOpenIDResp)
+		newResp := make(map[string]madmin.OpenIDUserAccessKeys)
 		cfgToUsersMap[cfgName] = newResp
 	} else {
 		configs, err := globalIAMSys.OpenIDConfig.GetConfigList(s)
@@ -326,13 +327,13 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 				arn = config.RoleARN
 			}
 			roleArnMap[arn] = config.Name
-			newResp := make(madmin.ListAccessKeysOpenIDResp)
+			newResp := make(map[string]madmin.OpenIDUserAccessKeys)
 			cfgToUsersMap[config.Name] = newResp
 		}
 	}
 
 	userSet := set.CreateStringSet(userList...)
-	accessKeys, err := globalIAMSys.ListAccessKeysOpenID(ctx)
+	accessKeys, err := globalIAMSys.ListAllAccessKeys(ctx)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -340,23 +341,29 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 
 	for _, accessKey := range accessKeys {
 		// Filter out any disqualifying access keys
+		sub, ok := accessKey.Claims[subClaim]
+		if !ok {
+			continue // OpenID access keys must have a sub claim
+		}
 		if (!listSTSKeys && accessKey.IsTemp()) || (!listServiceAccounts && accessKey.IsServiceAccount()) {
-			continue
+			continue // skip if not the type we want
 		}
 		if !userSet.IsEmpty() && !userSet.Contains(accessKey.ParentUser) {
-			continue
+			continue // skip if not in the user list
 		}
 		arn, ok := accessKey.Claims[roleArnClaim].(string)
 		if !ok {
-			continue
+			continue // TODO: allow claim based OpenID access keys
 		}
 		matchingCfgName, ok := roleArnMap[arn]
 		if !ok {
-			continue
+			continue // skip if not part of the target config
 		}
 		openIDUserAccessKeys, ok := cfgToUsersMap[matchingCfgName][accessKey.ParentUser]
+
+		// Add new user to map if not already present
 		if !ok {
-			sub, ok := accessKey.Claims[subClaim].(string)
+			subStr, ok := sub.(string)
 			if !ok {
 				continue
 			}
@@ -366,7 +373,8 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 				readableClaim, _ = accessKey.Claims[readableClaimName].(string)
 			}
 			openIDUserAccessKeys = madmin.OpenIDUserAccessKeys{
-				Sub:          sub,
+				UserID:       accessKey.ParentUser,
+				Sub:          subStr,
 				ReadableName: readableClaim,
 			}
 		}
@@ -386,7 +394,26 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		cfgToUsersMap[matchingCfgName][accessKey.ParentUser] = openIDUserAccessKeys
 	}
 
-	data, err := json.Marshal(cfgToUsersMap)
+	// Convert map to slice and sort
+	resp := make([]madmin.ListAccessKeysOpenIDResp, 0, len(cfgToUsersMap))
+	for cfgName, usersMap := range cfgToUsersMap {
+		users := make([]madmin.OpenIDUserAccessKeys, 0, len(usersMap))
+		for _, user := range usersMap {
+			users = append(users, user)
+		}
+		sort.Slice(users, func(i, j int) bool {
+			return users[i].UserID < users[j].UserID
+		})
+		resp = append(resp, madmin.ListAccessKeysOpenIDResp{
+			ConfigName: cfgName,
+			Users:      users,
+		})
+	}
+	sort.Slice(resp, func(i, j int) bool {
+		return resp[i].ConfigName < resp[j].ConfigName
+	})
+
+	data, err := json.Marshal(resp)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return

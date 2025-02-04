@@ -1183,15 +1183,15 @@ func (sys *IAMSys) ListSTSAccounts(ctx context.Context, accessKey string) ([]aut
 	}
 }
 
-// ListAccessKeysOpenID - lists all STS/service accounts associated with specified OpenID users
-func (sys *IAMSys) ListAccessKeysOpenID(ctx context.Context) ([]auth.Credentials, error) {
+// ListAllAccessKeys - lists all access keys (sts/service accounts)
+func (sys *IAMSys) ListAllAccessKeys(ctx context.Context) ([]auth.Credentials, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
 
 	select {
 	case <-sys.configLoaded:
-		return sys.store.ListAccessKeysOpenID(ctx)
+		return sys.store.ListAccessKeys(ctx)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

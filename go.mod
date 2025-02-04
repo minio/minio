@@ -1,6 +1,8 @@
 module github.com/minio/minio
 
-go 1.23
+go 1.23.0
+
+replace github.com/minio/madmin-go/v3 => /home/taran/work/madmin-go
 
 require (
 	cloud.google.com/go/storage v1.46.0
