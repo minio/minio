@@ -958,7 +958,11 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	}
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
-	if (oi2.UserTagCount > 0 && !reflect.DeepEqual(oi2.UserTags, t.ToMap())) || (oi2.UserTagCount != len(t.ToMap())) {
+	oi2Map := make(map[string]string)
+	for k, v := range oi2.UserTags {
+		oi2Map[k] = v
+	}
+	if (oi2.UserTagCount > 0 && !reflect.DeepEqual(oi2Map, t.ToMap())) || (oi2.UserTagCount != len(t.ToMap())) {
 		return replicateMetadata
 	}
 
@@ -1447,13 +1451,14 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 		rinfo.Duration = time.Since(startTime)
 	}()
-
-	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, minio.StatObjectOptions{
+	sOpts := minio.StatObjectOptions{
 		VersionID: objInfo.VersionID,
 		Internal: minio.AdvancedGetOptions{
 			ReplicationProxyRequest: "false",
 		},
-	})
+	}
+	sOpts.Set(xhttp.AmzTagDirective, "ACCESS")
+	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, sOpts)
 	if cerr == nil {
 		rAction = getReplicationAction(objInfo, oi, ri.OpType)
 		rinfo.ReplicationStatus = replication.Completed
@@ -1538,19 +1543,30 @@ applyAction:
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
 			},
 		}
-		if tagTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp]; ok {
+		// default timestamps to ModTime unless present in metadata
+		lkMap := caseInsensitiveMap(objInfo.UserDefined)
+		if _, ok := lkMap.Lookup(xhttp.AmzObjectLockLegalHold); ok {
+			dstOpts.Internal.LegalholdTimestamp = objInfo.ModTime
+		}
+		if _, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
+			dstOpts.Internal.RetentionTimestamp = objInfo.ModTime
+		}
+		if objInfo.UserTags != "" {
+			dstOpts.Internal.TaggingTimestamp = objInfo.ModTime
+		}
+		if tagTmStr, ok := lkMap.Lookup(ReservedMetadataPrefixLower + TaggingTimestamp); ok {
 			ondiskTimestamp, err := time.Parse(time.RFC3339, tagTmStr)
 			if err == nil {
 				dstOpts.Internal.TaggingTimestamp = ondiskTimestamp
 			}
 		}
-		if retTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp]; ok {
+		if retTmStr, ok := lkMap.Lookup(ReservedMetadataPrefixLower + ObjectLockRetentionTimestamp); ok {
 			ondiskTimestamp, err := time.Parse(time.RFC3339, retTmStr)
 			if err == nil {
 				dstOpts.Internal.RetentionTimestamp = ondiskTimestamp
 			}
 		}
-		if lholdTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp]; ok {
+		if lholdTmStr, ok := lkMap.Lookup(ReservedMetadataPrefixLower + ObjectLockLegalHoldTimestamp); ok {
 			ondiskTimestamp, err := time.Parse(time.RFC3339, lholdTmStr)
 			if err == nil {
 				dstOpts.Internal.LegalholdTimestamp = ondiskTimestamp
