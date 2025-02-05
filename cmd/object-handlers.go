@@ -2238,7 +2238,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 	if opts.prefixAll != "" {
 		opts.prefixAll = trimLeadingSlash(pathJoin(opts.prefixAll, slashSeparator))
 	}
-	// Check if put is allow for empty or Snowball prefix see #https://github.com/minio/minio/issues/20883
+	// Check if put is allow for specified prefix.
 	if s3Err = isPutActionAllowed(ctx, rAuthType, bucket, opts.prefixAll, r, policy.PutObjectAction); s3Err != ErrNone {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 		return
@@ -2307,7 +2307,6 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 
 	putObjectTar := func(reader io.Reader, info os.FileInfo, object string) error {
 		size := info.Size()
-		// Check for every object if put is allowed. See #https://github.com/minio/minio/issues/20883
 		if s3Err = isPutActionAllowed(ctx, getRequestAuthType(r), bucket, object, r, policy.PutObjectAction); s3Err != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
 			return errors.New(errorCodes.ToAPIErr(s3Err).Code)
