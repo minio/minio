@@ -289,6 +289,7 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 		oi, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
 			ContentType:          mimedb.TypeByExtension(path.Ext(object)),
 			DisableContentSha256: true,
+			Checksum:             minio.ChecksumFullObjectCRC32C,
 		})
 		stopFn(oi.Size, err)
 		pr.CloseWithError(err)
