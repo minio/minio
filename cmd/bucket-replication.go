@@ -1733,7 +1733,7 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	if len(objInfo.Checksum) > 0 {
 		cs, _ := getCRCMeta(objInfo, 0, nil)
 		for k, v := range cs {
-			userMeta[k] = v
+			userMeta[k] = strings.Split(v, "-")[0]
 		}
 	}
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
@@ -3793,7 +3793,10 @@ func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) (cs map[string]string
 		if cksum.Valid() {
 			meta[cksum.Type.Key()] = v
 		}
-		meta[xhttp.AmzChecksumType] = cksum.Type.ObjType()
+		if isMP && partNum == 0 {
+			meta[xhttp.AmzChecksumType] = cksum.Type.ObjType()
+			meta[xhttp.AmzChecksumAlgo] = cksum.Type.String()
+		}
 	}
 	return meta, isMP
 }
