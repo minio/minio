@@ -25,10 +25,10 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/disk"
 )
 
@@ -42,12 +42,12 @@ const (
 // AlignedBytePool is a pool of fixed size aligned blocks
 type AlignedBytePool struct {
 	size int
-	p    sync.Pool
+	p    bpool.Pool[*[]byte]
 }
 
 // NewAlignedBytePool creates a new pool with the specified size.
 func NewAlignedBytePool(sz int) *AlignedBytePool {
-	return &AlignedBytePool{size: sz, p: sync.Pool{New: func() interface{} {
+	return &AlignedBytePool{size: sz, p: bpool.Pool[*[]byte]{New: func() *[]byte {
 		b := disk.AlignedBlock(sz)
 		return &b
 	}}}
@@ -62,11 +62,7 @@ var (
 
 // Get a block.
 func (p *AlignedBytePool) Get() *[]byte {
-	if b, ok := p.p.Get().(*[]byte); ok {
-		return b
-	}
-	b := disk.AlignedBlock(p.size)
-	return &b
+	return p.p.Get()
 }
 
 // Put a block.
@@ -265,15 +261,6 @@ func NopCloser(w io.Writer) io.WriteCloser {
 	return nopCloser{w}
 }
 
-const copyBufferSize = 32 * 1024
-
-var copyBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, copyBufferSize)
-		return &b
-	},
-}
-
 // SkipReader skips a given number of bytes and then returns all
 // remaining data.
 type SkipReader struct {
@@ -289,12 +276,11 @@ func (s *SkipReader) Read(p []byte) (int, error) {
 	}
 	if s.skipCount > 0 {
 		tmp := p
-		if s.skipCount > l && l < copyBufferSize {
+		if s.skipCount > l && l < SmallBlock {
 			// We may get a very small buffer, so we grab a temporary buffer.
-			bufp := copyBufPool.Get().(*[]byte)
-			buf := *bufp
-			tmp = buf[:copyBufferSize]
-			defer copyBufPool.Put(bufp)
+			bufp := ODirectPoolSmall.Get()
+			tmp = *bufp
+			defer ODirectPoolSmall.Put(bufp)
 			l = int64(len(tmp))
 		}
 		for s.skipCount > 0 {

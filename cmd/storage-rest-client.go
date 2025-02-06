@@ -29,11 +29,11 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
@@ -508,13 +508,13 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 }
 
 // where we keep old *Readers
-var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader{} }}
+var readMsgpReaderPool = bpool.Pool[*msgp.Reader]{New: func() *msgp.Reader { return &msgp.Reader{} }}
 
 // mspNewReader returns a *Reader that reads from the provided reader.
 // The reader will be buffered.
 // Return with readMsgpReaderPoolPut when done.
 func msgpNewReader(r io.Reader) *msgp.Reader {
-	p := readMsgpReaderPool.Get().(*msgp.Reader)
+	p := readMsgpReaderPool.Get()
 	if p.R == nil {
 		p.R = xbufio.NewReaderSize(r, 32<<10)
 	} else {

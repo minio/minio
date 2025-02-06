@@ -34,6 +34,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/grid"
 	"github.com/tinylib/msgp/msgp"
 
@@ -1051,17 +1052,10 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 	return &h
 }
 
-var poolBuf8k = sync.Pool{
-	New: func() interface{} {
+var poolBuf8k = bpool.Pool[*[]byte]{
+	New: func() *[]byte {
 		b := make([]byte, 8192)
 		return &b
-	},
-}
-
-var poolBuf128k = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, 128<<10)
-		return b
 	},
 }
 
@@ -1071,9 +1065,10 @@ var poolBuf128k = sync.Pool{
 func waitForHTTPStream(respBody io.ReadCloser, w io.Writer) error {
 	var tmp [1]byte
 	// 8K copy buffer, reused for less allocs...
-	bufp := poolBuf8k.Get().(*[]byte)
+	bufp := poolBuf8k.Get()
 	buf := *bufp
 	defer poolBuf8k.Put(bufp)
+
 	for {
 		_, err := io.ReadFull(respBody, tmp[:])
 		if err != nil {
