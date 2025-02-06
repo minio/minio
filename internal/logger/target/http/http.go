@@ -538,9 +538,11 @@ func New(config Config) (*Target, error) {
 	if h.config.Proxy != "" {
 		proxyURL, _ := url.Parse(h.config.Proxy)
 		transport := h.config.Transport
-		ctransport := transport.(*http.Transport).Clone()
-		ctransport.Proxy = http.ProxyURL(proxyURL)
-		h.config.Transport = ctransport
+		if tr, ok := transport.(*http.Transport); ok {
+			ctransport := tr.Clone()
+			ctransport.Proxy = http.ProxyURL(proxyURL)
+			h.config.Transport = ctransport
+		}
 	}
 
 	h.client = &http.Client{Transport: h.config.Transport}

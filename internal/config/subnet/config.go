@@ -142,9 +142,11 @@ func LookupConfig(kvs config.KVS, transport http.RoundTripper) (cfg Config, err 
 
 	// Make sure to clone the transport before editing the ProxyURL
 	if proxyURL != nil {
-		ctransport := transport.(*http.Transport).Clone()
-		ctransport.Proxy = http.ProxyURL((*url.URL)(proxyURL))
-		cfg.transport = ctransport
+		if tr, ok := transport.(*http.Transport); ok {
+			ctransport := tr.Clone()
+			ctransport.Proxy = http.ProxyURL((*url.URL)(proxyURL))
+			cfg.transport = ctransport
+		}
 	} else {
 		cfg.transport = transport
 	}

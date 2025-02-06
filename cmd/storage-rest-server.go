@@ -831,7 +831,7 @@ func keepHTTPReqResponseAlive(w http.ResponseWriter, r *http.Request) (resp func
 				// Response not ready, write a filler byte.
 				write([]byte{32})
 				if canWrite {
-					w.(http.Flusher).Flush()
+					xhttp.Flush(w)
 				}
 			case err := <-doneCh:
 				if err != nil {
@@ -905,7 +905,7 @@ func keepHTTPResponseAlive(w http.ResponseWriter) func(error) {
 				// Response not ready, write a filler byte.
 				write([]byte{32})
 				if canWrite {
-					w.(http.Flusher).Flush()
+					xhttp.Flush(w)
 				}
 			case err := <-doneCh:
 				if err != nil {
@@ -1025,7 +1025,7 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				// Response not ready, write a filler byte.
 				write([]byte{32})
 				if canWrite {
-					w.(http.Flusher).Flush()
+					xhttp.Flush(w)
 				}
 			case err := <-doneCh:
 				if err != nil {
@@ -1043,7 +1043,7 @@ func streamHTTPResponse(w http.ResponseWriter) *httpStreamResponse {
 				write(tmp[:])
 				write(block)
 				if canWrite {
-					w.(http.Flusher).Flush()
+					xhttp.Flush(w)
 				}
 			}
 		}
