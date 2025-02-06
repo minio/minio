@@ -45,6 +45,7 @@ type AlignedBytePool struct {
 	p    sync.Pool
 }
 
+// NewAlignedBytePool creates a new pool with the specified size.
 func NewAlignedBytePool(sz int) *AlignedBytePool {
 	return &AlignedBytePool{size: sz, p: sync.Pool{New: func() interface{} {
 		b := disk.AlignedBlock(sz)

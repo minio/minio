@@ -253,7 +253,10 @@ type metacacheReader struct {
 // newMetacacheReader creates a new cache reader.
 // Nothing will be read from the stream yet.
 func newMetacacheReader(r io.Reader) *metacacheReader {
-	dec := s2DecPool.Get().(*s2.Reader)
+	dec, ok := s2DecPool.Get().(*s2.Reader)
+	if !ok {
+		dec = s2.NewReader(nil, s2.ReaderAllocBlock(16<<10))
+	}
 	dec.Reset(r)
 	mr := msgpNewReader(dec)
 	return &metacacheReader{

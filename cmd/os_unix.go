@@ -187,7 +187,11 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 	}
 	defer syscall.Close(fd)
 
-	bufp := direntPool.Get().(*[]byte)
+	bufp, ok := direntPool.Get().(*[]byte)
+	if !ok {
+		b := make([]byte, blockSize*128)
+		bufp = &b
+	}
 	defer direntPool.Put(bufp)
 	buf := *bufp
 
@@ -273,11 +277,19 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 	}
 	defer syscall.Close(fd)
 
-	bufp := direntPool.Get().(*[]byte)
+	bufp, ok := direntPool.Get().(*[]byte)
+	if !ok {
+		b := make([]byte, blockSize*128)
+		bufp = &b
+	}
 	defer direntPool.Put(bufp)
 	buf := *bufp
 
 	nameTmp := direntNamePool.Get().(*[]byte)
+	if !ok {
+		b := make([]byte, blockSize)
+		nameTmp = &b
+	}
 	defer direntNamePool.Put(nameTmp)
 	tmp := *nameTmp
 

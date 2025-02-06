@@ -2921,7 +2921,10 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 		return err
 	}
 
-	newCache := val.(*iamCache)
+	newCache, ok := val.(*iamCache)
+	if !ok {
+		return nil
+	}
 
 	cache := store.lock()
 	defer store.unlock()
