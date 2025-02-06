@@ -39,27 +39,41 @@ const (
 	LargeBlock  = 1 * humanize.MiByte   // Default r/w block size for normal objects.
 )
 
+// AlignedBytePool is a pool of fixed size aligned blocks
+type AlignedBytePool struct {
+	size int
+	p    sync.Pool
+}
+
+func NewAlignedBytePool(sz int) *AlignedBytePool {
+	return &AlignedBytePool{size: sz, p: sync.Pool{New: func() interface{} {
+		b := disk.AlignedBlock(sz)
+		return &b
+	}}}
+}
+
 // aligned sync.Pool's
 var (
-	ODirectPoolLarge = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(LargeBlock)
-			return &b
-		},
-	}
-	ODirectPoolMedium = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(MediumBlock)
-			return &b
-		},
-	}
-	ODirectPoolSmall = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(SmallBlock)
-			return &b
-		},
-	}
+	ODirectPoolLarge  = NewAlignedBytePool(LargeBlock)
+	ODirectPoolMedium = NewAlignedBytePool(MediumBlock)
+	ODirectPoolSmall  = NewAlignedBytePool(SmallBlock)
 )
+
+// Get a block.
+func (p *AlignedBytePool) Get() *[]byte {
+	if b, ok := p.p.Get().(*[]byte); ok {
+		return b
+	}
+	b := disk.AlignedBlock(p.size)
+	return &b
+}
+
+// Put a block.
+func (p *AlignedBytePool) Put(pb *[]byte) {
+	if pb != nil && len(*pb) == p.size {
+		p.p.Put(pb)
+	}
+}
 
 // WriteOnCloser implements io.WriteCloser and always
 // executes at least one write operation if it is closed.
@@ -309,7 +323,7 @@ type writerOnly struct {
 
 // Copy is exactly like io.Copy but with reusable buffers.
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
-	bufp := ODirectPoolMedium.Get().(*[]byte)
+	bufp := ODirectPoolMedium.Get()
 	defer ODirectPoolMedium.Put(bufp)
 	buf := *bufp
 

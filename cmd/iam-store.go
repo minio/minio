@@ -845,7 +845,11 @@ func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		return val.([]string), nil
+		res, ok := val.([]string)
+		if !ok {
+			return nil, errors.New("unexpected policy type")
+		}
+		return res, nil
 	}
 	return getPolicies()
 }

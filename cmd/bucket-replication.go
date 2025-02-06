@@ -145,7 +145,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 				if errInt == nil {
 					err = nil
 				} else {
-					err = errInt.(error)
+					err, _ = errInt.(error)
 				}
 			}
 			switch err.(type) {
