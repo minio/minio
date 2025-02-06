@@ -436,9 +436,7 @@ func recycleFunc[RT RoundTripper](newRT func() RT) (newFn func() RT, recycle fun
 			return newRT()
 		},
 	}
-	return func() RT {
-			return pool.Get()
-		},
+	return pool.Get,
 		func(r RT) {
 			if r != rZero {
 				//nolint:staticcheck // SA6002 IT IS A GENERIC VALUE!
