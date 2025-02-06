@@ -521,7 +521,8 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
 		// AWS S3 silently drops checksums on range requests.
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber, r.Header))
+		cs, _ := objInfo.decryptChecksums(opts.PartNumber, r.Header)
+		hash.AddChecksumHeader(w, cs)
 	}
 
 	if err = setObjectHeaders(ctx, w, objInfo, rs, opts); err != nil {
@@ -632,7 +633,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 	w.Header().Del(xhttp.ContentType)
 
 	if _, ok := opts.ObjectAttributes[xhttp.Checksum]; ok {
-		chkSums := objInfo.decryptChecksums(0, r.Header)
+		chkSums, _ := objInfo.decryptChecksums(0, r.Header)
 		// AWS does not appear to append part number on this API call.
 		if len(chkSums) > 0 {
 			OA.Checksum = &objectAttributesChecksum{
@@ -945,7 +946,8 @@ func (api objectAPIHandlers) headObjectHandler(ctx context.Context, objectAPI Ob
 
 	if r.Header.Get(xhttp.AmzChecksumMode) == "ENABLED" && rs == nil {
 		// AWS S3 silently drops checksums on range requests.
-		hash.AddChecksumHeader(w, objInfo.decryptChecksums(opts.PartNumber, r.Header))
+		cs, _ := objInfo.decryptChecksums(opts.PartNumber, r.Header)
+		hash.AddChecksumHeader(w, cs)
 	}
 
 	// Set standard object headers.
