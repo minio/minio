@@ -25,6 +25,7 @@ linters:
     - typecheck
     - unconvert
     - unused
+    - forcetypeassert
 
 issues:
   exclude-use-default: false
