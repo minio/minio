@@ -170,12 +170,20 @@ const (
 	MinIOServerStatus = "x-minio-server-status"
 
 	// Content Checksums
-	AmzChecksumAlgo   = "x-amz-checksum-algorithm"
-	AmzChecksumCRC32  = "x-amz-checksum-crc32"
-	AmzChecksumCRC32C = "x-amz-checksum-crc32c"
-	AmzChecksumSHA1   = "x-amz-checksum-sha1"
-	AmzChecksumSHA256 = "x-amz-checksum-sha256"
-	AmzChecksumMode   = "x-amz-checksum-mode"
+	AmzChecksumAlgo           = "x-amz-checksum-algorithm"
+	AmzChecksumCRC32          = "x-amz-checksum-crc32"
+	AmzChecksumCRC32C         = "x-amz-checksum-crc32c"
+	AmzChecksumSHA1           = "x-amz-checksum-sha1"
+	AmzChecksumSHA256         = "x-amz-checksum-sha256"
+	AmzChecksumCRC64NVME      = "x-amz-checksum-crc64nvme"
+	AmzChecksumMode           = "x-amz-checksum-mode"
+	AmzChecksumType           = "x-amz-checksum-type"
+	AmzChecksumTypeFullObject = "FULL_OBJECT"
+	AmzChecksumTypeComposite  = "COMPOSITE"
+
+	// Post Policy related
+	AmzMetaUUID = "X-Amz-Meta-Uuid"
+	AmzMetaName = "X-Amz-Meta-Name"
 
 	// Delete special flag to force delete a bucket or a prefix
 	MinIOForceDelete = "x-minio-force-delete"

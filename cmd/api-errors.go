@@ -213,6 +213,7 @@ const (
 	ErrPolicyAlreadyAttached
 	ErrPolicyNotAttached
 	ErrExcessData
+	ErrPolicyInvalidName
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -561,6 +562,11 @@ var errorCodes = errorCodeMap{
 		Description:    "More data provided than indicated content length",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPolicyInvalidName: {
+		Code:           "PolicyInvalidName",
+		Description:    "Policy name may not contain comma",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrPolicyTooLarge: {
 		Code:           "PolicyTooLarge",
 		Description:    "Policy exceeds the maximum allowed document size.",
@@ -623,7 +629,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrMissingContentMD5: {
 		Code:           "MissingContentMD5",
-		Description:    "Missing required header for this request: Content-Md5.",
+		Description:    "Missing or invalid required header for this request: Content-Md5 or Amz-Content-Checksum",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingSecurityHeader: {

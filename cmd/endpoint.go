@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -38,7 +39,6 @@ import (
 	"github.com/minio/minio/internal/mountinfo"
 	"github.com/minio/pkg/v3/env"
 	xnet "github.com/minio/pkg/v3/net"
-	"golang.org/x/exp/slices"
 )
 
 // EndpointType - enum for endpoint type.
@@ -1194,7 +1194,7 @@ func GetProxyEndpointLocalIndex(proxyEps []ProxyEndpoint) int {
 }
 
 // GetProxyEndpoints - get all endpoints that can be used to proxy list request.
-func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint {
+func GetProxyEndpoints(endpointServerPools EndpointServerPools, transport http.RoundTripper) []ProxyEndpoint {
 	var proxyEps []ProxyEndpoint
 
 	proxyEpSet := set.NewStringSet()
@@ -1213,7 +1213,7 @@ func GetProxyEndpoints(endpointServerPools EndpointServerPools) []ProxyEndpoint 
 
 			proxyEps = append(proxyEps, ProxyEndpoint{
 				Endpoint:  endpoint,
-				Transport: globalRemoteTargetTransport,
+				Transport: transport,
 			})
 		}
 	}

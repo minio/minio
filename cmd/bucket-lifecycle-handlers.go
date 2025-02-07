@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"encoding/xml"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -53,7 +52,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 	bucket := vars["bucket"]
 
 	// PutBucketLifecycle always needs a Content-Md5
-	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
+	if !validateLengthAndChecksum(r) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL)
 		return
 	}
@@ -70,7 +69,7 @@ func (api objectAPIHandlers) PutBucketLifecycleHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	bucketLifecycle, err := lifecycle.ParseLifecycleConfigWithID(io.LimitReader(r.Body, r.ContentLength))
+	bucketLifecycle, err := lifecycle.ParseLifecycleConfigWithID(r.Body)
 	if err != nil {
 		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return

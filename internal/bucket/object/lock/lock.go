@@ -237,6 +237,25 @@ type Config struct {
 	} `xml:"Rule,omitempty"`
 }
 
+// String returns the human readable format of object lock configuration, used in audit logs.
+func (config Config) String() string {
+	parts := []string{
+		fmt.Sprintf("Enabled: %v", config.Enabled()),
+	}
+	if config.Rule != nil {
+		if config.Rule.DefaultRetention.Mode != "" {
+			parts = append(parts, fmt.Sprintf("Mode: %s", config.Rule.DefaultRetention.Mode))
+		}
+		if config.Rule.DefaultRetention.Days != nil {
+			parts = append(parts, fmt.Sprintf("Days: %d", *config.Rule.DefaultRetention.Days))
+		}
+		if config.Rule.DefaultRetention.Years != nil {
+			parts = append(parts, fmt.Sprintf("Years: %d", *config.Rule.DefaultRetention.Years))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 // Enabled returns true if config.ObjectLockEnabled is set to Enabled
 func (config *Config) Enabled() bool {
 	return config.ObjectLockEnabled == Enabled
@@ -347,6 +366,10 @@ type ObjectRetention struct {
 	XMLName         xml.Name      `xml:"Retention"`
 	Mode            RetMode       `xml:"Mode,omitempty"`
 	RetainUntilDate RetentionDate `xml:"RetainUntilDate,omitempty"`
+}
+
+func (o ObjectRetention) String() string {
+	return fmt.Sprintf("Mode: %s, RetainUntilDate: %s", o.Mode, o.RetainUntilDate.Time)
 }
 
 // Maximum 4KiB size per object retention config.

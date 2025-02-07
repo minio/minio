@@ -60,7 +60,7 @@ const (
 // getCanonicalHeaders generate a list of request headers with their values
 func getCanonicalHeaders(signedHeaders http.Header) string {
 	var headers []string
-	vals := make(http.Header)
+	vals := make(http.Header, len(signedHeaders))
 	for k, vv := range signedHeaders {
 		k = strings.ToLower(k)
 		headers = append(headers, k)

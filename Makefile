@@ -24,7 +24,7 @@ help: ## print this help
 getdeps: ## fetch necessary dependencies
 	@mkdir -p ${GOPATH}/bin
 	@echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_DIR)
-	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.2.3-0.20241022140105-4558fbf3a223
+	@echo "Installing msgp" && go install -v github.com/tinylib/msgp@v1.2.5
 	@echo "Installing stringer" && go install -v golang.org/x/tools/cmd/stringer@latest
 
 crosscompile: ## cross compile minio
@@ -149,6 +149,10 @@ test-multipart: install-race ## test multipart
 	@echo "Test multipart behavior when part files are missing"
 	@(env bash $(PWD)/buildscripts/multipart-quorum-test.sh)
 
+test-timeout: install-race ## test multipart
+	@echo "Test server timeout"
+	@(env bash $(PWD)/buildscripts/test-timeout.sh)
+
 verify: install-race ## verify minio various setups
 	@echo "Verifying build with race"
 	@(env bash $(PWD)/buildscripts/verify-build.sh)
@@ -212,6 +216,10 @@ docker-hotfix: hotfix-push checks ## builds minio docker container with hotfix t
 docker: build ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
+
+test-resiliency: build
+	@echo "Running resiliency tests"
+	@(DOCKER_COMPOSE_FILE=$(PWD)/docs/resiliency/docker-compose.yaml env bash $(PWD)/docs/resiliency/resiliency-tests.sh)
 
 install-race: checks build-debugging ## builds minio to $(PWD)
 	@echo "Building minio binary with -race to './minio'"

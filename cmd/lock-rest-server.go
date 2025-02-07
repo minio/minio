@@ -33,8 +33,12 @@ type lockRESTServer struct {
 
 // RefreshHandler - refresh the current lock
 func (l *lockRESTServer) RefreshHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
+	// Add a timeout similar to what we expect upstream.
+	ctx, cancel := context.WithTimeout(context.Background(), dsync.DefaultTimeouts.RefreshCall)
+	defer cancel()
+
 	resp := lockRPCRefresh.NewResponse()
-	refreshed, err := l.ll.Refresh(context.Background(), *args)
+	refreshed, err := l.ll.Refresh(ctx, *args)
 	if err != nil {
 		return l.makeResp(resp, err)
 	}
@@ -46,8 +50,11 @@ func (l *lockRESTServer) RefreshHandler(args *dsync.LockArgs) (*dsync.LockResp, 
 
 // LockHandler - Acquires a lock.
 func (l *lockRESTServer) LockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
+	// Add a timeout similar to what we expect upstream.
+	ctx, cancel := context.WithTimeout(context.Background(), dsync.DefaultTimeouts.Acquire)
+	defer cancel()
 	resp := lockRPCLock.NewResponse()
-	success, err := l.ll.Lock(context.Background(), *args)
+	success, err := l.ll.Lock(ctx, *args)
 	if err == nil && !success {
 		return l.makeResp(resp, errLockConflict)
 	}
@@ -65,8 +72,11 @@ func (l *lockRESTServer) UnlockHandler(args *dsync.LockArgs) (*dsync.LockResp, *
 
 // RLockHandler - Acquires an RLock.
 func (l *lockRESTServer) RLockHandler(args *dsync.LockArgs) (*dsync.LockResp, *grid.RemoteErr) {
+	// Add a timeout similar to what we expect upstream.
+	ctx, cancel := context.WithTimeout(context.Background(), dsync.DefaultTimeouts.Acquire)
+	defer cancel()
 	resp := lockRPCRLock.NewResponse()
-	success, err := l.ll.RLock(context.Background(), *args)
+	success, err := l.ll.RLock(ctx, *args)
 	if err == nil && !success {
 		err = errLockConflict
 	}

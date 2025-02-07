@@ -692,105 +692,106 @@ func (z *ObjectPartInfo) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if zb0001Len == 0 {
-		return
-	}
-	// write "e"
-	err = en.Append(0xa1, 0x65)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.ETag)
-	if err != nil {
-		err = msgp.WrapError(err, "ETag")
-		return
-	}
-	// write "n"
-	err = en.Append(0xa1, 0x6e)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt(z.Number)
-	if err != nil {
-		err = msgp.WrapError(err, "Number")
-		return
-	}
-	// write "s"
-	err = en.Append(0xa1, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.Size)
-	if err != nil {
-		err = msgp.WrapError(err, "Size")
-		return
-	}
-	// write "as"
-	err = en.Append(0xa2, 0x61, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.ActualSize)
-	if err != nil {
-		err = msgp.WrapError(err, "ActualSize")
-		return
-	}
-	// write "mt"
-	err = en.Append(0xa2, 0x6d, 0x74)
-	if err != nil {
-		return
-	}
-	err = en.WriteTime(z.ModTime)
-	if err != nil {
-		err = msgp.WrapError(err, "ModTime")
-		return
-	}
-	if (zb0001Mask & 0x20) == 0 { // if not omitted
-		// write "i"
-		err = en.Append(0xa1, 0x69)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// write "e"
+		err = en.Append(0xa1, 0x65)
 		if err != nil {
 			return
 		}
-		err = en.WriteBytes(z.Index)
+		err = en.WriteString(z.ETag)
 		if err != nil {
-			err = msgp.WrapError(err, "Index")
+			err = msgp.WrapError(err, "ETag")
 			return
 		}
-	}
-	if (zb0001Mask & 0x40) == 0 { // if not omitted
-		// write "crc"
-		err = en.Append(0xa3, 0x63, 0x72, 0x63)
+		// write "n"
+		err = en.Append(0xa1, 0x6e)
 		if err != nil {
 			return
 		}
-		err = en.WriteMapHeader(uint32(len(z.Checksums)))
+		err = en.WriteInt(z.Number)
 		if err != nil {
-			err = msgp.WrapError(err, "Checksums")
+			err = msgp.WrapError(err, "Number")
 			return
 		}
-		for za0001, za0002 := range z.Checksums {
-			err = en.WriteString(za0001)
+		// write "s"
+		err = en.Append(0xa1, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.Size)
+		if err != nil {
+			err = msgp.WrapError(err, "Size")
+			return
+		}
+		// write "as"
+		err = en.Append(0xa2, 0x61, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.ActualSize)
+		if err != nil {
+			err = msgp.WrapError(err, "ActualSize")
+			return
+		}
+		// write "mt"
+		err = en.Append(0xa2, 0x6d, 0x74)
+		if err != nil {
+			return
+		}
+		err = en.WriteTime(z.ModTime)
+		if err != nil {
+			err = msgp.WrapError(err, "ModTime")
+			return
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// write "i"
+			err = en.Append(0xa1, 0x69)
+			if err != nil {
+				return
+			}
+			err = en.WriteBytes(z.Index)
+			if err != nil {
+				err = msgp.WrapError(err, "Index")
+				return
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// write "crc"
+			err = en.Append(0xa3, 0x63, 0x72, 0x63)
+			if err != nil {
+				return
+			}
+			err = en.WriteMapHeader(uint32(len(z.Checksums)))
 			if err != nil {
 				err = msgp.WrapError(err, "Checksums")
 				return
 			}
-			err = en.WriteString(za0002)
-			if err != nil {
-				err = msgp.WrapError(err, "Checksums", za0001)
-				return
+			for za0001, za0002 := range z.Checksums {
+				err = en.WriteString(za0001)
+				if err != nil {
+					err = msgp.WrapError(err, "Checksums")
+					return
+				}
+				err = en.WriteString(za0002)
+				if err != nil {
+					err = msgp.WrapError(err, "Checksums", za0001)
+					return
+				}
 			}
 		}
-	}
-	if (zb0001Mask & 0x80) == 0 { // if not omitted
-		// write "err"
-		err = en.Append(0xa3, 0x65, 0x72, 0x72)
-		if err != nil {
-			return
-		}
-		err = en.WriteString(z.Error)
-		if err != nil {
-			err = msgp.WrapError(err, "Error")
-			return
+		if (zb0001Mask & 0x80) == 0 { // if not omitted
+			// write "err"
+			err = en.Append(0xa3, 0x65, 0x72, 0x72)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.Error)
+			if err != nil {
+				err = msgp.WrapError(err, "Error")
+				return
+			}
 		}
 	}
 	return
@@ -817,42 +818,43 @@ func (z *ObjectPartInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	// string "e"
-	o = append(o, 0xa1, 0x65)
-	o = msgp.AppendString(o, z.ETag)
-	// string "n"
-	o = append(o, 0xa1, 0x6e)
-	o = msgp.AppendInt(o, z.Number)
-	// string "s"
-	o = append(o, 0xa1, 0x73)
-	o = msgp.AppendInt64(o, z.Size)
-	// string "as"
-	o = append(o, 0xa2, 0x61, 0x73)
-	o = msgp.AppendInt64(o, z.ActualSize)
-	// string "mt"
-	o = append(o, 0xa2, 0x6d, 0x74)
-	o = msgp.AppendTime(o, z.ModTime)
-	if (zb0001Mask & 0x20) == 0 { // if not omitted
-		// string "i"
-		o = append(o, 0xa1, 0x69)
-		o = msgp.AppendBytes(o, z.Index)
-	}
-	if (zb0001Mask & 0x40) == 0 { // if not omitted
-		// string "crc"
-		o = append(o, 0xa3, 0x63, 0x72, 0x63)
-		o = msgp.AppendMapHeader(o, uint32(len(z.Checksums)))
-		for za0001, za0002 := range z.Checksums {
-			o = msgp.AppendString(o, za0001)
-			o = msgp.AppendString(o, za0002)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// string "e"
+		o = append(o, 0xa1, 0x65)
+		o = msgp.AppendString(o, z.ETag)
+		// string "n"
+		o = append(o, 0xa1, 0x6e)
+		o = msgp.AppendInt(o, z.Number)
+		// string "s"
+		o = append(o, 0xa1, 0x73)
+		o = msgp.AppendInt64(o, z.Size)
+		// string "as"
+		o = append(o, 0xa2, 0x61, 0x73)
+		o = msgp.AppendInt64(o, z.ActualSize)
+		// string "mt"
+		o = append(o, 0xa2, 0x6d, 0x74)
+		o = msgp.AppendTime(o, z.ModTime)
+		if (zb0001Mask & 0x20) == 0 { // if not omitted
+			// string "i"
+			o = append(o, 0xa1, 0x69)
+			o = msgp.AppendBytes(o, z.Index)
 		}
-	}
-	if (zb0001Mask & 0x80) == 0 { // if not omitted
-		// string "err"
-		o = append(o, 0xa3, 0x65, 0x72, 0x72)
-		o = msgp.AppendString(o, z.Error)
+		if (zb0001Mask & 0x40) == 0 { // if not omitted
+			// string "crc"
+			o = append(o, 0xa3, 0x63, 0x72, 0x63)
+			o = msgp.AppendMapHeader(o, uint32(len(z.Checksums)))
+			for za0001, za0002 := range z.Checksums {
+				o = msgp.AppendString(o, za0001)
+				o = msgp.AppendString(o, za0002)
+			}
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not omitted
+			// string "err"
+			o = append(o, 0xa3, 0x65, 0x72, 0x72)
+			o = msgp.AppendString(o, z.Error)
+		}
 	}
 	return
 }

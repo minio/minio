@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,6 @@ import (
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/pkg/v3/ldap"
-	"golang.org/x/exp/slices"
 )
 
 func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {

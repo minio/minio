@@ -259,7 +259,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
 		for nodeIdx, proxyEp := range globalProxyEndpoints {
 			if proxyEp.Endpoint.Host == ep.Host {
-				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+				if proxied, success := proxyRequestByNodeIndex(ctx, w, r, nodeIdx, false); proxied && success {
 					return
 				}
 			}
@@ -330,7 +330,7 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
 		for nodeIdx, proxyEp := range globalProxyEndpoints {
 			if proxyEp.Endpoint.Host == ep.Host {
-				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+				if proxied, success := proxyRequestByNodeIndex(ctx, w, r, nodeIdx, false); proxied && success {
 					return
 				}
 			}
@@ -384,7 +384,7 @@ func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w h
 	}
 	for nodeIdx, proxyEp := range globalProxyEndpoints {
 		if proxyEp.Endpoint.Host == host && !proxyEp.IsLocal {
-			if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+			if proxied, success := proxyRequestByNodeIndex(ctx, w, r, nodeIdx, false); proxied && success {
 				return true
 			}
 		}

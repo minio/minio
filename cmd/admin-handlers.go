@@ -1320,7 +1320,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Analyze the heal token and route the request accordingly
-	token, success := proxyRequestByToken(ctx, w, r, hip.clientToken)
+	token, _, success := proxyRequestByToken(ctx, w, r, hip.clientToken, false)
 	if success {
 		return
 	}

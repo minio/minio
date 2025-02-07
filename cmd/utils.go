@@ -20,7 +20,9 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -254,10 +256,28 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 	return err
 }
 
-// hasContentMD5 returns true if Content-MD5 header is set.
-func hasContentMD5(h http.Header) bool {
-	_, ok := h[xhttp.ContentMD5]
-	return ok
+// validateLengthAndChecksum returns if a content checksum is set,
+// and will replace r.Body with a reader that checks the provided checksum
+func validateLengthAndChecksum(r *http.Request) bool {
+	if mdFive := r.Header.Get(xhttp.ContentMD5); mdFive != "" {
+		want, err := base64.StdEncoding.DecodeString(mdFive)
+		if err != nil {
+			return false
+		}
+		r.Body = hash.NewChecker(r.Body, md5.New(), want, r.ContentLength)
+		return true
+	}
+	cs, err := hash.GetContentChecksum(r.Header)
+	if err != nil {
+		return false
+	}
+	if cs == nil || !cs.Type.IsSet() {
+		return false
+	}
+	if cs.Valid() && !cs.Type.Trailing() {
+		r.Body = hash.NewChecker(r.Body, cs.Type.Hasher(), cs.Raw, r.ContentLength)
+	}
+	return true
 }
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
@@ -411,7 +431,12 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		stop := fgprof.Start(f, fgprof.FormatPprof)
+		startedAt := time.Now()
 		prof.stopFn = func() ([]byte, error) {
+			if elapsed := time.Since(startedAt); elapsed < 100*time.Millisecond {
+				// Light hack around https://github.com/felixge/fgprof/pull/34
+				time.Sleep(100*time.Millisecond - elapsed)
+			}
 			err := stop()
 			if err != nil {
 				return nil, err

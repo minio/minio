@@ -429,7 +429,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	// Content-Md5 is required should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-	if _, ok := r.Header[xhttp.ContentMD5]; !ok {
+	if !validateLengthAndChecksum(r) {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrMissingContentMD5), r.URL)
 		return
 	}
@@ -1338,6 +1338,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 					return
 				}
 			}
+			opts.EncryptFn = metadataEncrypter(objectEncryptionKey)
 			pReader, err = pReader.WithEncryption(hashReader, &objectEncryptionKey)
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -1808,6 +1809,10 @@ func (api objectAPIHandlers) PutBucketObjectLockConfigHandler(w http.ResponseWri
 		writeErrorResponse(ctx, w, apiErr, r.URL)
 		return
 	}
+
+	// Audit log tags.
+	reqInfo := logger.GetReqInfo(ctx)
+	reqInfo.SetTags("retention", config.String())
 
 	configData, err := xml.Marshal(config)
 	if err != nil {

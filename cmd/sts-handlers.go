@@ -780,12 +780,26 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	// policy mapping would be ambiguous.
 	// However, we can filter all CA certificates and only check
 	// whether they client has sent exactly one (non-CA) leaf certificate.
-	peerCertificates := make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
+	const MaxIntermediateCAs = 10
+	var (
+		peerCertificates = make([]*x509.Certificate, 0, len(r.TLS.PeerCertificates))
+		intermediates    *x509.CertPool
+		numIntermediates int
+	)
 	for _, cert := range r.TLS.PeerCertificates {
 		if cert.IsCA {
-			continue
+			numIntermediates++
+			if numIntermediates > MaxIntermediateCAs {
+				writeSTSErrorResponse(ctx, w, ErrSTSTooManyIntermediateCAs, fmt.Errorf("client certificate contains more than %d intermediate CAs", MaxIntermediateCAs))
+				return
+			}
+			if intermediates == nil {
+				intermediates = x509.NewCertPool()
+			}
+			intermediates.AddCert(cert)
+		} else {
+			peerCertificates = append(peerCertificates, cert)
 		}
-		peerCertificates = append(peerCertificates, cert)
 	}
 	r.TLS.PeerCertificates = peerCertificates
 
@@ -806,7 +820,8 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			KeyUsages: []x509.ExtKeyUsage{
 				x509.ExtKeyUsageClientAuth,
 			},
-			Roots: globalRootCAs,
+			Intermediates: intermediates,
+			Roots:         globalRootCAs,
 		})
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidClientCertificate, err)

@@ -685,6 +685,16 @@ func getUsageLastScanActivityMD() MetricDescription {
 	}
 }
 
+func getBucketUsageLastScanActivityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      lastActivityTime,
+		Help:      "Time elapsed (in nano seconds) since last scan activity",
+		Type:      gaugeMetric,
+	}
+}
+
 func getBucketUsageQuotaTotalBytesMD() MetricDescription {
 	return MetricDescription{
 		Namespace: bucketMetricNamespace,
@@ -1875,13 +1885,17 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 		// add metrics with +Inf label
 		labels1 := make(map[string]string)
 		for _, lp := range dtoMetric.GetLabel() {
-			labels1[*lp.Name] = *lp.Value
+			if *lp.Name == "api" && toLowerAPILabels {
+				labels1[*lp.Name] = strings.ToLower(*lp.Value)
+			} else {
+				labels1[*lp.Name] = *lp.Value
+			}
 		}
 		labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
 		metrics = append(metrics, MetricV2{
 			Description:    desc,
 			VariableLabels: labels1,
-			Value:          dtoMetric.Counter.GetValue(),
+			Value:          float64(dtoMetric.Histogram.GetSampleCount()),
 		})
 	}
 	return metrics
@@ -3239,7 +3253,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		}
 
 		metrics = append(metrics, MetricV2{
-			Description: getUsageLastScanActivityMD(),
+			Description: getBucketUsageLastScanActivityMD(),
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 

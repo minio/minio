@@ -443,6 +443,7 @@ func lock(ctx context.Context, ds *Dsync, locks *[]string, id, source string, is
 	// Special context for NetLockers - do not use timeouts.
 	// Also, pass the trace context info if found for debugging
 	netLockCtx := context.Background()
+
 	tc, ok := ctx.Value(mcontext.ContextTraceKey).(*mcontext.TraceCtxt)
 	if ok {
 		netLockCtx = context.WithValue(netLockCtx, mcontext.ContextTraceKey, tc)
