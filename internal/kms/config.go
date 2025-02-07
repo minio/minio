@@ -28,6 +28,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -64,9 +65,31 @@ const (
 	EnvKMSSecretKeyFile = "MINIO_KMS_SECRET_KEY_FILE" // Path to a file to read the static KMS key from
 )
 
+// EnvKMSReplicateKeyID is an env. variable that controls whether MinIO
+// replicates the KMS key ID. By default, KMS key ID replication is enabled
+// but can be turned off.
+const EnvKMSReplicateKeyID = "MINIO_KMS_REPLICATE_KEYID"
+
 const (
 	tlsClientSessionCacheSize = 100
 )
+
+var replicateKeyID = sync.OnceValue(func() bool {
+	if v, ok := os.LookupEnv(EnvKMSReplicateKeyID); ok && strings.ToLower(v) == "off" {
+		return false
+	}
+	return true // by default, replicating KMS key IDs is enabled
+})
+
+// ReplicateKeyID reports whether KMS key IDs should be included when
+// replicating objects. It's enabled by default. To disable it, set:
+//
+//	MINIO_KMS_REPLICATE_KEYID=off
+//
+// Some deployments use different KMS clusters with destinct keys on
+// each site. Trying to replicate the KMS key ID can cause requests
+// to fail in such setups.
+func ReplicateKeyID() bool { return replicateKeyID() }
 
 // ConnectionOptions is a structure containing options for connecting
 // to a KMS.
