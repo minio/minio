@@ -127,9 +127,10 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		tr = forwardForTransport{tr: tr, fwd: f.remoteIP}
 	}
 	return minio.New(f.endpoint, &minio.Options{
-		Creds:     mcreds,
-		Secure:    globalIsTLS,
-		Transport: tr,
+		TrailingHeaders: true,
+		Creds:           mcreds,
+		Secure:          globalIsTLS,
+		Transport:       tr,
 	})
 }
 

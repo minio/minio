@@ -367,9 +367,10 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 		}
 
 		return minio.New(driver.endpoint, &minio.Options{
-			Creds:     mcreds,
-			Secure:    globalIsTLS,
-			Transport: tr,
+			Creds:           mcreds,
+			Secure:          globalIsTLS,
+			Transport:       tr,
+			TrailingHeaders: true,
 		})
 	}
 
