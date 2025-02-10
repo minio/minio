@@ -1441,7 +1441,7 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 			if foundGroupDN, underBaseDN, err = globalIAMSys.LDAPConfig.GetValidatedGroupDN(nil, entityName); err != nil {
 				iamLogIf(ctx, err)
 			} else if foundGroupDN == nil || !underBaseDN {
-				err = errNoSuchGroup
+				return wrapSRErr(errNoSuchGroup)
 			}
 			entityName = foundGroupDN.NormDN
 		} else {
@@ -1449,7 +1449,7 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
 				iamLogIf(ctx, err)
 			} else if foundUserDN == nil {
-				err = errNoSuchUser
+				return wrapSRErr(errNoSuchUser)
 			}
 			entityName = foundUserDN.NormDN
 		}
