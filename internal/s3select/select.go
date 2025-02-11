@@ -32,6 +32,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/config"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/s3select/csv"
@@ -81,15 +82,15 @@ func init() {
 	parquetSupport = env.Get("MINIO_API_SELECT_PARQUET", config.EnableOff) == config.EnableOn
 }
 
-var bufPool = sync.Pool{
-	New: func() interface{} {
+var bufPool = bpool.Pool[*bytes.Buffer]{
+	New: func() *bytes.Buffer {
 		// make a buffer with a reasonable capacity.
 		return bytes.NewBuffer(make([]byte, 0, maxRecordSize))
 	},
 }
 
-var bufioWriterPool = sync.Pool{
-	New: func() interface{} {
+var bufioWriterPool = bpool.Pool[*bufio.Writer]{
+	New: func() *bufio.Writer {
 		// io.Discard is just used to create the writer. Actual destination
 		// writer is set later by Reset() before using it.
 		return bufio.NewWriter(xioutil.Discard)
@@ -468,7 +469,7 @@ func (s3Select *S3Select) marshal(buf *bytes.Buffer, record sql.Record) error {
 	switch s3Select.Output.format {
 	case csvFormat:
 		// Use bufio Writer to prevent csv.Writer from allocating a new buffer.
-		bufioWriter := bufioWriterPool.Get().(*bufio.Writer)
+		bufioWriter := bufioWriterPool.Get()
 		defer func() {
 			bufioWriter.Reset(xioutil.Discard)
 			bufioWriterPool.Put(bufioWriter)
@@ -530,7 +531,7 @@ func (s3Select *S3Select) Evaluate(w http.ResponseWriter) {
 	}
 	var err error
 	sendRecord := func() bool {
-		buf := bufPool.Get().(*bytes.Buffer)
+		buf := bufPool.Get()
 		buf.Reset()
 
 		for _, outputRecord := range outputQueue {

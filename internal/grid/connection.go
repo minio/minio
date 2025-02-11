@@ -1748,20 +1748,20 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 	case debugSetConnPingDuration:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
-		c.connPingInterval = args[0].(time.Duration)
+		c.connPingInterval, _ = args[0].(time.Duration)
 		if c.connPingInterval < time.Second {
 			panic("CONN ping interval too low")
 		}
 	case debugSetClientPingDuration:
 		c.connMu.Lock()
 		defer c.connMu.Unlock()
-		c.clientPingInterval = args[0].(time.Duration)
+		c.clientPingInterval, _ = args[0].(time.Duration)
 	case debugAddToDeadline:
-		c.addDeadline = args[0].(time.Duration)
+		c.addDeadline, _ = args[0].(time.Duration)
 	case debugIsOutgoingClosed:
 		// params: muxID uint64, isClosed func(bool)
-		muxID := args[0].(uint64)
-		resp := args[1].(func(b bool))
+		muxID, _ := args[0].(uint64)
+		resp, _ := args[1].(func(b bool))
 		mid, ok := c.outgoing.Load(muxID)
 		if !ok || mid == nil {
 			resp(true)
@@ -1772,7 +1772,8 @@ func (c *Connection) debugMsg(d debugMsg, args ...any) {
 		mid.respMu.Unlock()
 	case debugBlockInboundMessages:
 		c.connMu.Lock()
-		block := (<-chan struct{})(args[0].(chan struct{}))
+		a, _ := args[0].(chan struct{})
+		block := (<-chan struct{})(a)
 		c.blockMessages.Store(&block)
 		c.connMu.Unlock()
 	}

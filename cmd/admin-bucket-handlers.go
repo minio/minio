@@ -38,6 +38,7 @@ import (
 	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/event"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v3/policy"
@@ -1039,7 +1040,7 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 			}
 			if len(diffCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-keepAliveTicker.C:
 			if len(diffCh) > 0 {
@@ -1048,7 +1049,7 @@ func (a adminAPIHandlers) ReplicationDiffHandler(w http.ResponseWriter, r *http.
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}
@@ -1098,7 +1099,7 @@ func (a adminAPIHandlers) ReplicationMRFHandler(w http.ResponseWriter, r *http.R
 			}
 			if len(mrfCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-keepAliveTicker.C:
 			if len(mrfCh) > 0 {
@@ -1107,7 +1108,7 @@ func (a adminAPIHandlers) ReplicationMRFHandler(w http.ResponseWriter, r *http.R
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}

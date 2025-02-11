@@ -463,8 +463,7 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 	indices, ok := v["indices"].([]interface{})
 	if ok {
 		for _, index := range indices {
-			name := index.(map[string]interface{})["name"]
-			if name == args.Index {
+			if name, ok := index.(map[string]interface{}); ok && name["name"] == args.Index {
 				found = true
 				break
 			}

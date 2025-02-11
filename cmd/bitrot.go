@@ -178,7 +178,7 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 		return errFileCorrupt
 	}
 
-	bufp := xioutil.ODirectPoolSmall.Get().(*[]byte)
+	bufp := xioutil.ODirectPoolSmall.Get()
 	defer xioutil.ODirectPoolSmall.Put(bufp)
 
 	for left > 0 {

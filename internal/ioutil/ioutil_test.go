@@ -202,7 +202,7 @@ func TestCopyAligned(t *testing.T) {
 
 	r := strings.NewReader("hello world")
 
-	bufp := ODirectPoolSmall.Get().(*[]byte)
+	bufp := ODirectPoolSmall.Get()
 	defer ODirectPoolSmall.Put(bufp)
 
 	written, err := CopyAligned(f, io.LimitReader(r, 5), *bufp, r.Size(), f)

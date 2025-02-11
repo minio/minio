@@ -100,13 +100,15 @@ func (listener *httpListener) Addr() (addr net.Addr) {
 		return addr
 	}
 
-	tcpAddr := addr.(*net.TCPAddr)
-	if ip := net.ParseIP("0.0.0.0"); ip != nil {
-		tcpAddr.IP = ip
-	}
+	if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+		if ip := net.ParseIP("0.0.0.0"); ip != nil {
+			tcpAddr.IP = ip
+		}
 
-	addr = tcpAddr
-	return addr
+		addr = tcpAddr
+		return addr
+	}
+	panic("unknown address type on listener")
 }
 
 // Addrs - returns all address information of TCP listeners.

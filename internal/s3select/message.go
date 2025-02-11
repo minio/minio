@@ -26,6 +26,8 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // A message is in the format specified in
@@ -262,7 +264,7 @@ func (writer *messageWriter) write(data []byte) bool {
 		return false
 	}
 
-	writer.writer.(http.Flusher).Flush()
+	xhttp.Flush(writer.writer)
 	return true
 }
 

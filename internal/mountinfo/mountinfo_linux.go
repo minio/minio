@@ -56,13 +56,13 @@ func IsLikelyMountPoint(path string) bool {
 	}
 
 	// If the directory has a different device as parent, then it is a mountpoint.
-	if s1.Sys().(*syscall.Stat_t).Dev != s2.Sys().(*syscall.Stat_t).Dev {
-		//  path/.. on a different device as path
-		return true
-	}
-
-	// path/.. is the same i-node as path - this check is for bind mounts.
-	return s1.Sys().(*syscall.Stat_t).Ino == s2.Sys().(*syscall.Stat_t).Ino
+	ss1, ok1 := s1.Sys().(*syscall.Stat_t)
+	ss2, ok2 := s2.Sys().(*syscall.Stat_t)
+	return ok1 && ok2 &&
+		// path/.. on a different device as path
+		(ss1.Dev != ss2.Dev ||
+			// path/.. is the same i-node as path - this check is for bind mounts.
+			ss1.Ino == ss2.Ino)
 }
 
 // CheckCrossDevice - check if any list of paths has any sub-mounts at /proc/mounts.

@@ -663,8 +663,13 @@ func inferTypeForArithOp(a *Value) error {
 		a.setFloat(f)
 		return nil
 	}
-
-	err := fmt.Errorf("Could not convert %q to a number", string(a.value.([]byte)))
+	var s string
+	if v, ok := a.value.([]byte); ok {
+		s = string(v)
+	} else {
+		s = fmt.Sprint(a.value)
+	}
+	err := fmt.Errorf("Could not convert %q to a number", s)
 	return errInvalidDataType(err)
 }
 

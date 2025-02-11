@@ -51,7 +51,7 @@ func (r *Reader) Read(dst sql.Record) (sql.Record, error) {
 	if v.ValueType == jstream.Object {
 		// This is a JSON object type (that preserves key
 		// order)
-		kvs = v.Value.(jstream.KVS)
+		kvs, _ = v.Value.(jstream.KVS)
 	} else {
 		// To be AWS S3 compatible Select for JSON needs to
 		// output non-object JSON as single column value

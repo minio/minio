@@ -131,16 +131,17 @@ func sanitizePolicy(r io.Reader) (io.Reader, error) {
 	d := jstream.NewDecoder(r, 0).ObjectAsKVS().MaxDepth(10)
 	sset := set.NewStringSet()
 	for mv := range d.Stream() {
-		var kvs jstream.KVS
 		if mv.ValueType == jstream.Object {
 			// This is a JSON object type (that preserves key order)
-			kvs = mv.Value.(jstream.KVS)
-			for _, kv := range kvs {
-				if sset.Contains(kv.Key) {
-					// Reject duplicate conditions or expiration.
-					return nil, fmt.Errorf("input policy has multiple %s, please fix your client code", kv.Key)
+			kvs, ok := mv.Value.(jstream.KVS)
+			if ok {
+				for _, kv := range kvs {
+					if sset.Contains(kv.Key) {
+						// Reject duplicate conditions or expiration.
+						return nil, fmt.Errorf("input policy has multiple %s, please fix your client code", kv.Key)
+					}
+					sset.Add(kv.Key)
 				}
-				sset.Add(kv.Key)
 			}
 			e.Encode(kvs)
 		}
