@@ -82,13 +82,13 @@ func TestGetHistogramMetrics_BucketCount(t *testing.T) {
 		}
 	}
 
-	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), false)
+	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), false, false)
 	// additional labels for +Inf for all histogram metrics
 	if expPoints := len(labels) * (len(histBuckets) + 1); expPoints != len(metrics) {
 		t.Fatalf("Expected %v data points when toLowerAPILabels=false but got %v", expPoints, len(metrics))
 	}
 
-	metrics = getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), true)
+	metrics = getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), true, false)
 	// additional labels for +Inf for all histogram metrics
 	if expPoints := len(labels) * (len(histBuckets) + 1); expPoints != len(metrics) {
 		t.Fatalf("Expected %v data points when toLowerAPILabels=true but got %v", expPoints, len(metrics))
@@ -144,7 +144,7 @@ func TestGetHistogramMetrics_Values(t *testing.T) {
 	}
 
 	// Accumulate regular-cased API label metrics for 'PutObject' for deeper verification
-	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), false)
+	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), false, false)
 	capitalPutObjects := make([]MetricV2, 0, len(histBuckets)+1)
 	for _, metric := range metrics {
 		if value := metric.VariableLabels["api"]; value == "PutObject" {
@@ -181,7 +181,7 @@ func TestGetHistogramMetrics_Values(t *testing.T) {
 	}
 
 	// Accumulate lower-cased API label metrics for 'copyobject' for deeper verification
-	metrics = getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), true)
+	metrics = getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), true, false)
 	lowerCopyObjects := make([]MetricV2, 0, len(histBuckets)+1)
 	for _, metric := range metrics {
 		if value := metric.VariableLabels["api"]; value == "copyobject" {
