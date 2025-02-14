@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/minio/madmin-go/v3/estream"
 )
@@ -30,18 +33,18 @@ type keepFileErr struct {
 	error
 }
 
-func extractInspectV2(pk []byte, r io.Reader, w io.Writer, okMsg string) error {
-	privKey, err := bytesToPrivateKey(pk)
-	if err != nil {
-		return fmt.Errorf("decoding key returned: %w", err)
-	}
-
+func extractInspectV2(pks [][]byte, r io.Reader, extractDir string) error {
 	sr, err := estream.NewReader(r)
 	if err != nil {
 		return err
 	}
-
-	sr.SetPrivateKey(privKey)
+	for _, pk := range pks {
+		privKey, err := bytesToPrivateKey(pk)
+		if err != nil {
+			return fmt.Errorf("decoding key returned: %w", err)
+		}
+		sr.SetPrivateKey(privKey)
+	}
 	sr.ReturnNonDecryptable(true)
 
 	// Debug corrupted streams.
@@ -60,33 +63,29 @@ func extractInspectV2(pk []byte, r io.Reader, w io.Writer, okMsg string) error {
 				return errors.New("no data found on stream")
 			}
 			if errors.Is(err, estream.ErrNoKey) {
-				if stream.Name == "inspect.zip" {
-					return errors.New("incorrect private key")
-				}
+				fmt.Println("Skipping", stream.Name, "no private key")
 				if err := stream.Skip(); err != nil {
 					return fmt.Errorf("stream skip: %w", err)
 				}
 				continue
 			}
-			if extracted {
-				return keepFileErr{fmt.Errorf("next stream: %w", err)}
-			}
 			return fmt.Errorf("next stream: %w", err)
 		}
-		if stream.Name == "inspect.zip" {
-			if extracted {
-				return keepFileErr{errors.New("multiple inspect.zip streams found")}
-			}
-			_, err := io.Copy(w, stream)
-			if err != nil {
-				return fmt.Errorf("reading inspect stream: %w", err)
-			}
-			fmt.Println(okMsg)
-			extracted = true
-			continue
+		if strings.Contains(stream.Name, "..") || !utf8.ValidString(stream.Name) {
+			return fmt.Errorf("invalid stream name: %q", stream.Name)
 		}
-		if err := stream.Skip(); err != nil {
-			return fmt.Errorf("stream skip: %w", err)
+
+		dst := filepath.Join(extractDir, stream.Name)
+		os.Mkdir(extractDir, 0o755)
+		w, err := os.Create(dst)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
 		}
+		_, err = io.Copy(w, stream)
+		if err != nil {
+			return fmt.Errorf("reading inspect stream: %w", err)
+		}
+		fmt.Printf("Extracted: %s\n", dst)
+		extracted = true
 	}
 }
