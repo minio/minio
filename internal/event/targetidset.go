@@ -22,7 +22,7 @@ type TargetIDSet map[TargetID]struct{}
 
 // IsEmpty returns true if the set is empty.
 func (set TargetIDSet) IsEmpty() bool {
-	return len(set) != 0
+	return len(set) == 0
 }
 
 // Clone - returns copy of this set.
