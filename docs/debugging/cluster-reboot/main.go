@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -46,11 +50,11 @@ func main() {
 	flag.BoolVar(&secure, "secure", true, "Toggle SSL on/off")
 	flag.Parse()
 
-	fmt.Println("secure:", secure)
 	creds := credentials.NewStaticV4(miniokey, miniosecret, "")
 	mclient, err := madmin.NewWithOptions(endpoint, &madmin.Options{
-		Creds:  creds,
-		Secure: secure,
+		Creds:     creds,
+		Secure:    secure,
+		Transport: DefaultTransport(secure),
 	})
 	if err != nil {
 		panic(err)
@@ -132,4 +136,30 @@ func main() {
 	}
 	f.Write(bb)
 	f.Close()
+}
+
+var DefaultTransport = func(secure bool) http.RoundTripper {
+	tr := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:       5 * time.Second,
+			KeepAlive:     15 * time.Second,
+			FallbackDelay: 100 * time.Millisecond,
+		}).DialContext,
+		MaxIdleConns:          1024,
+		MaxIdleConnsPerHost:   1024,
+		ResponseHeaderTimeout: 60 * time.Second,
+		IdleConnTimeout:       60 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DisableCompression:    true,
+	}
+
+	if secure {
+		tr.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: true,
+			MinVersion:         tls.VersionTLS12,
+		}
+	}
+	return tr
 }
