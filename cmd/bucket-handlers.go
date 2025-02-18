@@ -344,11 +344,9 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 				Created: dnsRecords[0].CreationDate,
 			})
 		}
-
 		sort.Slice(bucketsInfo, func(i, j int) bool {
 			return bucketsInfo[i].Name < bucketsInfo[j].Name
 		})
-
 	} else {
 		// Invoke the list buckets.
 		var err error
@@ -841,7 +839,6 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 			}
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return
-
 		}
 		apiErr := ErrBucketAlreadyExists
 		if !globalDomainIPs.Intersection(set.CreateStringSet(getHostsSlice(sr)...)).IsEmpty() {

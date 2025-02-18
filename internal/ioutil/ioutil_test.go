@@ -102,7 +102,7 @@ func TestCloseOnWriter(t *testing.T) {
 
 // Test for AppendFile.
 func TestAppendFile(t *testing.T) {
-	f, err := os.CreateTemp("", "")
+	f, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestAppendFile(t *testing.T) {
 	f.WriteString("aaaaaaaaaa")
 	f.Close()
 
-	f, err = os.CreateTemp("", "")
+	f, err = os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestSkipReader(t *testing.T) {
 }
 
 func TestSameFile(t *testing.T) {
-	f, err := os.CreateTemp("", "")
+	f, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Errorf("Error creating tmp file: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestSameFile(t *testing.T) {
 }
 
 func TestCopyAligned(t *testing.T) {
-	f, err := os.CreateTemp("", "")
+	f, err := os.CreateTemp(t.TempDir(), "")
 	if err != nil {
 		t.Errorf("Error creating tmp file: %v", err)
 	}

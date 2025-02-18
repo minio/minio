@@ -64,7 +64,6 @@ func (r *MonitoredReader) Read(buf []byte) (n int, err error) {
 			r.opts.HeaderSize = 0
 			need = int(math.Min(float64(b-hdr), float64(need))) // use remaining tokens towards payload
 			tokens = need + hdr
-
 		} else { // part of header can be accommodated
 			r.opts.HeaderSize -= b - 1
 			need = 1 // to ensure we read at least one byte for every Read

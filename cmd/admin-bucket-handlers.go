@@ -981,7 +981,6 @@ func (a adminAPIHandlers) ImportBucketMetadataHandler(w http.ResponseWriter, r *
 			rpt.SetStatus(bucket, "", err)
 			continue
 		}
-
 	}
 
 	rptData, err := json.Marshal(rpt.BucketMetaImportErrs)

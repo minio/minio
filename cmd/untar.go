@@ -183,7 +183,6 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 
 		header, err := tarReader.Next()
 		switch {
-
 		// if no more files are found return
 		case err == io.EOF:
 			wg.Wait()

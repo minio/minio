@@ -1611,7 +1611,6 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 		if err != nil || ctx.Err() != nil || totalRx > 100*humanize.GiByte {
 			break
 		}
-
 	}
 	w.WriteHeader(http.StatusOK)
 }

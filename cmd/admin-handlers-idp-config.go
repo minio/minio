@@ -125,7 +125,6 @@ func addOrUpdateIDPHandler(ctx context.Context, w http.ResponseWriter, r *http.R
 	}
 
 	if err = validateConfig(ctx, cfg, subSys); err != nil {
-
 		var validationErr ldap.Validation
 		if errors.As(err, &validationErr) {
 			// If we got an LDAP validation error, we need to send appropriate
@@ -416,7 +415,6 @@ func (a adminAPIHandlers) DeleteIdentityProviderCfg(w http.ResponseWriter, r *ht
 		return
 	}
 	if err = validateConfig(ctx, cfg, subSys); err != nil {
-
 		var validationErr ldap.Validation
 		if errors.As(err, &validationErr) {
 			// If we got an LDAP validation error, we need to send appropriate

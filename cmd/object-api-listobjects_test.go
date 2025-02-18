@@ -389,7 +389,6 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
-
 	}
 
 	// Formulating the result data set to be expected from ListObjects call inside the tests,
@@ -1014,7 +1013,6 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 						t.Errorf("Test %d: %s: Expected NextMarker to be empty since listing is not truncated, but instead found `%v`", i+1, instanceType, result.NextMarker)
 					}
 				}
-
 			}
 		})
 	}
@@ -1166,7 +1164,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
-
 	}
 
 	// Formualting the result data set to be expected from ListObjects call inside the tests,
@@ -1785,12 +1782,10 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
-
 	}
 
 	// Formulating the result data set to be expected from ListObjects call inside the tests,
 	// This will be used in testCases and used for asserting the correctness of ListObjects output in the tests.
-
 	resultCases := []ListObjectsInfo{
 		{
 			Objects: []ObjectInfo{

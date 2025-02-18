@@ -225,7 +225,6 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, jsoniterXLMeta xlMetaV1Objec
 		if val != jsoniterVal {
 			t.Errorf("Expected the value for Meta data key \"%s\" to be \"%s\", but got \"%s\".", key, val, jsoniterVal)
 		}
-
 	}
 }
 

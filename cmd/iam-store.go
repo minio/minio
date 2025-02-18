@@ -1222,7 +1222,6 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			cache.iamGroupPolicyMap.Delete(name)
 		}
 	} else {
-
 		if err = store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
 			return
 		}
@@ -1624,7 +1623,6 @@ func (store *IAMStoreSys) MergePolicies(policyName string) (string, policy.Polic
 			policies = append(policies, policy)
 			toMerge = append(toMerge, p.Policy)
 		}
-
 	}
 
 	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)

@@ -1433,7 +1433,6 @@ func registerStorageRESTHandlers(router *mux.Router, endpointServerPools Endpoin
 					}
 				}
 			}(endpoint)
-
 		}
 	}
 }

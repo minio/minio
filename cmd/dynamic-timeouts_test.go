@@ -167,7 +167,6 @@ func testDynamicTimeoutAdjust(t *testing.T, timeout *dynamicTimeout, f func() fl
 	const successTimeout = 20 * time.Second
 
 	for i := 0; i < dynamicTimeoutLogSize; i++ {
-
 		rnd := f()
 		duration := time.Duration(float64(successTimeout) * rnd)
 

@@ -207,7 +207,6 @@ func (lc Lifecycle) HasActiveRules(prefix string) bool {
 		if !rule.Transition.IsNull() { // this allows for Transition.Days to be zero.
 			return true
 		}
-
 	}
 	return false
 }

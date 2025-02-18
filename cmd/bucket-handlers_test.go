@@ -188,7 +188,6 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		if errorResponse.Code != testCase.errorResponse.Code {
 			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
 		}
-
 	}
 
 	// Test for Anonymous/unsigned http request.
@@ -290,7 +289,6 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 		if recV2.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
-
 	}
 
 	// Test for Anonymous/unsigned http request.

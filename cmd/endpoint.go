@@ -213,7 +213,6 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 				u.Path = u.Path[1:]
 			}
 		}
-
 	} else {
 		// Only check if the arg is an ip address and ask for scheme since its absent.
 		// localhost, example.com, any FQDN cannot be disambiguated from a regular file path such as

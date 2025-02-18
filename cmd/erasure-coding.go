@@ -201,7 +201,6 @@ func erasureSelfTest() {
 				ok = false
 				continue
 			}
-
 		}
 	}
 	if !ok {

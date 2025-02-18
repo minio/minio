@@ -1981,7 +1981,6 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 			if !latest.header.FreeVersion() {
 				nVersions++
 			}
-
 		} else {
 			// Find latest.
 			var latestCount int

@@ -466,7 +466,6 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 				return
 			}
 		}
-
 	}
 }
 

@@ -143,7 +143,6 @@ func (c *CoreDNS) list(key string, domain bool) ([]SrvRecord, error) {
 
 		srvRecord.Key = msgUnPath(srvRecord.Key)
 		srvRecords = append(srvRecords, srvRecord)
-
 	}
 	sort.Slice(srvRecords, func(i int, j int) bool {
 		return srvRecords[i].Key < srvRecords[j].Key

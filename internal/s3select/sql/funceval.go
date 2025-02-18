@@ -107,7 +107,6 @@ func (e *FuncExpr) evalSQLFnNode(r Record, tableAlias string) (res *Value, err e
 
 	case sqlFnDateDiff:
 		return handleDateDiff(r, e.DateDiff, tableAlias)
-
 	}
 
 	// For all simple argument functions, we evaluate the arguments here

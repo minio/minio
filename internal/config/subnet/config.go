@@ -127,7 +127,6 @@ func LookupConfig(kvs config.KVS, transport http.RoundTripper) (cfg Config, err 
 		if err != nil {
 			return cfg, err
 		}
-
 	}
 
 	cfg.License = strings.TrimSpace(env.Get(config.EnvMinIOSubnetLicense, kvs.Get(config.License)))

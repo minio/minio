@@ -21,14 +21,17 @@ linters:
     - misspell
     - revive
     - staticcheck
-    - tenv
     - typecheck
     - unconvert
     - unused
+    - usetesting
     - forcetypeassert
+    - whitespace
 
 issues:
   exclude-use-default: false
+  max-issues-per-linter: 100
+  max-same-issues: 100
   exclude:
     - "empty-block:"
     - "unused-parameter:"
