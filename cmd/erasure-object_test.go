@@ -246,7 +246,6 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 				VersionID:  objInfo.VersionID,
 			},
 		}
-
 	}
 	names = append(names, ObjectToDelete{
 		ObjectV: ObjectV{

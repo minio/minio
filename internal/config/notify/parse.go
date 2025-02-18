@@ -125,7 +125,6 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 				return nil, err
 			}
 			targets = append(targets, t)
-
 		}
 	case config.NotifyKafkaSubSys:
 		kafkaTargets, err := GetNotifyKafka(cfg[config.NotifyKafkaSubSys])
@@ -142,7 +141,6 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 				return nil, err
 			}
 			targets = append(targets, t)
-
 		}
 
 	case config.NotifyMQTTSubSys:

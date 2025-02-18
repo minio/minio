@@ -174,7 +174,6 @@ internalAuth:
 		if subtle.ConstantTimeCompare([]byte(ui.Credentials.SecretKey), pass) != 1 {
 			return nil, errAuthentication
 		}
-
 	}
 
 	copts := map[string]string{
@@ -223,14 +222,11 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 		if err != nil {
 			return nil, err
 		}
-
 	} else if key != nil {
-
 		lookupResult, targetGroups, err = globalIAMSys.LDAPConfig.LookupUserDN(user)
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	if lookupResult == nil {

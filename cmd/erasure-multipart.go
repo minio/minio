@@ -1049,7 +1049,6 @@ func readParts(ctx context.Context, disks []StorageAPI, bucket string, partMetaP
 				PartNumber: partNumbers[pidx],
 			}.Error(),
 		}
-
 	}
 	return partInfosInQuorum, nil
 }

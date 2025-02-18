@@ -2286,7 +2286,6 @@ func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 			}
 			policies = policySet.ToSlice()
 		}
-
 	}
 
 	// Defensive code: Do not allow any operation if no policy is found in the session token

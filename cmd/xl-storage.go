@@ -2166,10 +2166,10 @@ func (s *xlStorage) writeAllDirect(ctx context.Context, filePath string, fileSiz
 	var bufp *[]byte
 	switch {
 	case fileSize <= xioutil.SmallBlock:
-		bufp = xioutil.ODirectPoolSmall.Get().(*[]byte)
+		bufp = xioutil.ODirectPoolSmall.Get()
 		defer xioutil.ODirectPoolSmall.Put(bufp)
 	default:
-		bufp = xioutil.ODirectPoolLarge.Get().(*[]byte)
+		bufp = xioutil.ODirectPoolLarge.Get()
 		defer xioutil.ODirectPoolLarge.Put(bufp)
 	}
 

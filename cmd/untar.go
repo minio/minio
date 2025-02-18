@@ -36,6 +36,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
+	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/pierrec/lz4/v4"
 )
 
@@ -182,7 +183,6 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 
 		header, err := tarReader.Next()
 		switch {
-
 		// if no more files are found return
 		case err == io.EOF:
 			wg.Wait()
@@ -226,13 +226,10 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 
 		// Do small files async
 		n++
-		if header.Size <= smallFileThreshold {
+		if header.Size <= xioutil.MediumBlock {
 			asyncWriters <- struct{}{}
-			b := poolBuf128k.Get().([]byte)
-			if cap(b) < int(header.Size) {
-				b = make([]byte, smallFileThreshold)
-			}
-			b = b[:header.Size]
+			bufp := xioutil.ODirectPoolMedium.Get()
+			b := (*bufp)[:header.Size]
 			if _, err := io.ReadFull(tarReader, b); err != nil {
 				return err
 			}
@@ -243,8 +240,7 @@ func untar(ctx context.Context, r io.Reader, putObject func(reader io.Reader, in
 					rc.Close()
 					<-asyncWriters
 					wg.Done()
-					//nolint:staticcheck // SA6002 we are fine with the tiny alloc
-					poolBuf128k.Put(b)
+					xioutil.ODirectPoolMedium.Put(bufp)
 				}()
 				if err := putObject(&rc, fi, name); err != nil {
 					if o.ignoreErrs {

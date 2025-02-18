@@ -1037,7 +1037,6 @@ func (c *SiteReplicationSys) PeerBucketConfigureReplHandler(ctx context.Context,
 			if _, err = globalBucketMetadataSys.Update(ctx, bucket, bucketTargetsFile, tgtBytes); err != nil {
 				return wrapSRErr(err)
 			}
-
 		}
 		// no replication rule for this peer or target ARN missing in bucket targets
 		if targetARN == "" {
@@ -1406,7 +1405,6 @@ func (c *SiteReplicationSys) PeerSvcAccChangeHandler(ctx context.Context, change
 		if err := globalIAMSys.DeleteServiceAccount(ctx, change.Delete.AccessKey, true); err != nil {
 			return wrapSRErr(err)
 		}
-
 	}
 
 	return nil
@@ -1430,8 +1428,8 @@ func (c *SiteReplicationSys) PeerPolicyMappingHandler(ctx context.Context, mappi
 	userType := IAMUserType(mapping.UserType)
 	isGroup := mapping.IsGroup
 	entityName := mapping.UserOrGroup
-	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType && userType == stsUser {
 
+	if globalIAMSys.GetUsersSysType() == LDAPUsersSysType && userType == stsUser {
 		// Validate that the user or group exists in LDAP and use the normalized
 		// form of the entityName (which will be an LDAP DN).
 		var err error
@@ -3062,7 +3060,6 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 					sum.ReplicatedGroupPolicyMappings++
 					info.StatsSummary[ps.DeploymentID] = sum
 				}
-
 			}
 		}
 

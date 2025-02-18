@@ -1184,7 +1184,6 @@ func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int)
 			defer wg.Done()
 			nodesOnlineIndex[idx] = client.restClient.HealthCheckFn()
 		}(idx, client)
-
 	}
 	wg.Wait()
 

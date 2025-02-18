@@ -388,6 +388,5 @@ func (m *muxServer) close() {
 	if m.outBlock != nil {
 		xioutil.SafeClose(m.outBlock)
 		m.outBlock = nil
-
 	}
 }

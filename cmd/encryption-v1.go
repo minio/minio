@@ -347,8 +347,8 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 				return errInvalidSSEParameters // AWS returns special error for equal but invalid keys.
 			}
 			return crypto.ErrInvalidCustomerKey // To provide strict AWS S3 compatibility we return: access denied.
-
 		}
+
 		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 && sealedKey.Algorithm == crypto.SealAlgorithm {
 			return nil // don't rotate on equal keys if seal algorithm is latest
 		}
