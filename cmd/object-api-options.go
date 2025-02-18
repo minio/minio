@@ -467,13 +467,10 @@ func completeMultipartOpts(ctx context.Context, r *http.Request, bucket, object 
 			}
 		}
 	}
+
 	opts.WantChecksum, err = hash.GetContentChecksum(r.Header)
 	if err != nil {
-		return opts, InvalidArgument{
-			Bucket: bucket,
-			Object: object,
-			Err:    fmt.Errorf("invalid/unknown checksum sent: %v", err),
-		}
+		return opts, err
 	}
 	opts.MTime = mtime
 	opts.UserDefined = make(map[string]string)

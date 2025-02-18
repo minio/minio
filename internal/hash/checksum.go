@@ -148,8 +148,12 @@ func (c ChecksumType) IsSet() bool {
 // NewChecksumType returns a checksum type based on the algorithm string and obj type.
 func NewChecksumType(alg, objType string) ChecksumType {
 	full := ChecksumFullObject
-	if objType != xhttp.AmzChecksumTypeFullObject {
+	switch objType {
+	case xhttp.AmzChecksumTypeFullObject:
+	case xhttp.AmzChecksumTypeComposite, "":
 		full = 0
+	default:
+		return ChecksumInvalid
 	}
 
 	switch strings.ToUpper(alg) {
@@ -567,6 +571,16 @@ func GetContentChecksum(h http.Header) (*Checksum, error) {
 			}
 		}
 		if res != nil {
+			switch h.Get(xhttp.AmzChecksumType) {
+			case xhttp.AmzChecksumTypeFullObject:
+				if !res.Type.CanMerge() {
+					return nil, ErrInvalidChecksum
+				}
+				res.Type |= ChecksumFullObject
+			case xhttp.AmzChecksumTypeComposite, "":
+			default:
+				return nil, ErrInvalidChecksum
+			}
 			return res, nil
 		}
 	}
