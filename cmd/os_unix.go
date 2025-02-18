@@ -183,7 +183,6 @@ func readDirFn(dirPath string, fn func(name string, typ os.FileMode) error) erro
 			}
 			return osErrToFileErr(err)
 		}
-
 	}
 	defer syscall.Close(fd)
 
