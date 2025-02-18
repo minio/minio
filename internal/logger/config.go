@@ -370,7 +370,6 @@ func lookupLegacyConfigForSubSys(ctx context.Context, subSys string) Config {
 				Endpoint: url,
 			}
 		}
-
 	}
 	return cfg
 }

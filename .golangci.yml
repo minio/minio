@@ -21,16 +21,25 @@ linters:
     - misspell
     - revive
     - staticcheck
-    - tenv
     - typecheck
     - unconvert
     - unused
+    - usetesting
+    - forcetypeassert
+    - whitespace
 
 issues:
   exclude-use-default: false
+  max-issues-per-linter: 100
+  max-same-issues: 100
   exclude:
     - "empty-block:"
     - "unused-parameter:"
     - "dot-imports:"
     - should have a package comment
     - error strings should not be capitalized or end with punctuation or a newline
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - forcetypeassert

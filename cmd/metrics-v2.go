@@ -2474,7 +2474,6 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 			}
 			downtimeDuration.Value = float64(dwntime / time.Second)
 			ml = append(ml, downtimeDuration)
-
 		}
 		return ml
 	})

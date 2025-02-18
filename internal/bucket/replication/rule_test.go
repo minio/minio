@@ -67,6 +67,5 @@ func TestMetadataReplicate(t *testing.T) {
 				t.Fatalf("Expected result with recursive set to false: `%v`, got: `%v`", tc.expectedResult, got)
 			}
 		})
-
 	}
 }

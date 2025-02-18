@@ -1487,8 +1487,8 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		effectivePolicy = globalIAMSys.GetCombinedPolicy(policies...)
-
 	}
+
 	buf, err = json.MarshalIndent(effectivePolicy, "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -2279,7 +2279,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 
 	// import policies first
 	{
-
 		f, err := zr.Open(pathJoin(iamAssetsDir, allPoliciesFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
@@ -2362,7 +2361,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				} else {
 					added.Users = append(added.Users, accessKey)
 				}
-
 			}
 		}
 	}

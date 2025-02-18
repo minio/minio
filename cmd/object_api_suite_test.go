@@ -228,7 +228,6 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 		if objInfo.Size != int64(len(value)) {
 			t.Errorf("%s: Size mismatch of the GetObject data.", instanceType)
 		}
-
 	}
 }
 
@@ -384,7 +383,6 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	// check results with Marker.
 	{
-
 		result, err = obj.ListObjects(context.Background(), "bucket", "", "newPrefix", "", 3)
 		if err != nil {
 			t.Fatalf("%s: <ERROR> %s", instanceType, err)

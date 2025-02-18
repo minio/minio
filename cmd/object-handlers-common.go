@@ -374,7 +374,8 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, del bool, h htt
 			lc.SetPredictionHeaders(w, objInfo.ToLifecycleOpts())
 		}
 	}
-	hash.AddChecksumHeader(w, objInfo.decryptChecksums(0, h))
+	cs, _ := objInfo.decryptChecksums(0, h)
+	hash.AddChecksumHeader(w, cs)
 }
 
 func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete, lcEvent lifecycle.Event) {

@@ -177,7 +177,6 @@ func loadClusterUsageBucketMetrics(ctx context.Context, m MetricValues, c *metri
 		for k, v := range usage.ObjectVersionsHistogram {
 			m.Set(usageBucketObjectVersionCountDistribution, float64(v), "range", k, "bucket", bucket)
 		}
-
 	}
 	return nil
 }

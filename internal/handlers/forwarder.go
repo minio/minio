@@ -24,8 +24,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/minio/minio/internal/bpool"
 )
 
 const defaultFlushInterval = time.Duration(100) * time.Millisecond
@@ -53,7 +54,7 @@ func NewForwarder(f *Forwarder) *Forwarder {
 
 type bufPool struct {
 	sz   int
-	pool sync.Pool
+	pool bpool.Pool[*[]byte]
 }
 
 func (b *bufPool) Put(buf []byte) {
@@ -66,13 +67,16 @@ func (b *bufPool) Put(buf []byte) {
 }
 
 func (b *bufPool) Get() []byte {
-	bufp := b.pool.Get().(*[]byte)
+	bufp := b.pool.Get()
+	if bufp == nil || cap(*bufp) < b.sz {
+		return make([]byte, 0, b.sz)
+	}
 	return (*bufp)[:b.sz]
 }
 
 func newBufPool(sz int) httputil.BufferPool {
-	return &bufPool{sz: sz, pool: sync.Pool{
-		New: func() interface{} {
+	return &bufPool{sz: sz, pool: bpool.Pool[*[]byte]{
+		New: func() *[]byte {
 			buf := make([]byte, sz)
 			return &buf
 		},

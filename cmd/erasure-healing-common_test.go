@@ -304,7 +304,6 @@ func TestListOnlineDisks(t *testing.T) {
 					f.Close()
 					break
 				}
-
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
@@ -485,7 +484,6 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					f.Close()
 					break
 				}
-
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount

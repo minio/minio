@@ -210,7 +210,7 @@ func TestIsKubernetes(t *testing.T) {
 // Tests if the environment we are running is Helm chart.
 func TestGetHelmVersion(t *testing.T) {
 	createTempFile := func(content string) string {
-		tmpfile, err := os.CreateTemp("", "helm-testfile-")
+		tmpfile, err := os.CreateTemp(t.TempDir(), "helm-testfile-")
 		if err != nil {
 			t.Fatalf("Unable to create temporary file. %s", err)
 		}

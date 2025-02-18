@@ -858,8 +858,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					}
 				}
 			}
-
 		}
+
 		if compact {
 			stop := globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			f.newCache.deleteRecursive(thisHash)
@@ -873,7 +873,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 			stop(total)
 		}
-
 	}
 	// Compact if too many children...
 	if !into.Compacted {

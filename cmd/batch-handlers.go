@@ -622,12 +622,12 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 				},
 			}
 
-			opts, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
+			opts, _, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
 			if err != nil {
 				batchLogIf(ctx, err)
 				continue
 			}
-
+			// TODO: I am not sure we read it back, but we aren't sending whether checksums are single/multipart.
 			for k, vals := range opts.Header() {
 				for _, v := range vals {
 					snowballObj.Headers.Add(k, v)
@@ -712,14 +712,14 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 		return err
 	}
 
-	putOpts, err := batchReplicationOpts(ctx, "", objInfo)
+	putOpts, isMP, err := batchReplicationOpts(ctx, "", objInfo)
 	if err != nil {
 		return err
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		putOpts.Internal = miniogo.AdvancedPutOptions{}
 	}
-	if objInfo.isMultipart() {
+	if isMP {
 		if err := replicateObjectWithMultipart(ctx, c, tgtBucket, pathJoin(tgtPrefix, objInfo.Name), rd, objInfo, putOpts); err != nil {
 			return err
 		}
@@ -1450,7 +1450,6 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		cred = r.Source.Creds
 		remoteBkt = r.Source.Bucket
 		pathStyle = r.Source.Path
-
 	}
 
 	u, err := url.Parse(remoteEp)
@@ -1576,11 +1575,11 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 	return err
 }
 
-func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
+func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, isMP bool, err error) {
 	// TODO: support custom storage class for remote replication
-	putOpts, err = putReplicationOpts(ctx, "", objInfo, 0)
+	putOpts, isMP, err = putReplicationOpts(ctx, "", objInfo)
 	if err != nil {
-		return putOpts, err
+		return putOpts, isMP, err
 	}
 	putOpts.Internal = miniogo.AdvancedPutOptions{
 		SourceVersionID:    objInfo.VersionID,
@@ -1588,7 +1587,7 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 		SourceETag:         objInfo.ETag,
 		ReplicationRequest: true,
 	}
-	return putOpts, nil
+	return putOpts, isMP, nil
 }
 
 // ListBatchJobs - lists all currently active batch jobs, optionally takes {jobType}
@@ -2310,7 +2309,6 @@ func lookupStyle(s string) miniogo.BucketLookupType {
 		lookup = miniogo.BucketLookupDNS
 	default:
 		lookup = miniogo.BucketLookupAuto
-
 	}
 	return lookup
 }

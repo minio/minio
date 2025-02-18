@@ -56,7 +56,6 @@ func (pr *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 
 	kvs := jstream.KVS{}
 	for _, col := range pr.r.Columns() {
-
 		var value interface{}
 		if v, ok := nextRow[col.FlatName()]; ok {
 			value, err = convertFromAnnotation(col.Element(), v)

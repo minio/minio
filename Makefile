@@ -2,8 +2,8 @@ PWD := $(shell pwd)
 GOPATH := $(shell go env GOPATH)
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 
-GOARCH := $(shell go env GOARCH)
-GOOS := $(shell go env GOOS)
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
 
 VERSION ?= $(shell git describe --tags)
 REPO ?= quay.io/minio
@@ -180,7 +180,7 @@ build-debugging:
 
 build: checks build-debugging ## builds minio to $(PWD)
 	@echo "Building minio binary to './minio'"
-	@CGO_ENABLED=0 go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+	@CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
 hotfix-vars:
 	$(eval LDFLAGS := $(shell MINIO_RELEASE="RELEASE" MINIO_HOTFIX="hotfix.$(shell git rev-parse --short HEAD)" go run buildscripts/gen-ldflags.go $(shell git describe --tags --abbrev=0 | \
@@ -188,9 +188,9 @@ hotfix-vars:
 	$(eval VERSION := $(shell git describe --tags --abbrev=0).hotfix.$(shell git rev-parse --short HEAD))
 
 hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
-	@wget -q -c https://github.com/minio/pkger/releases/download/v2.3.1/pkger_2.3.1_linux_amd64.deb
-	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.0.1/linux-systemd/distributed/minio.service
-	@sudo apt install ./pkger_2.3.1_linux_amd64.deb --yes
+	@wget -q -c https://github.com/minio/pkger/releases/download/v2.3.10/pkger_2.3.10_linux_amd64.deb
+	@wget -q -c https://raw.githubusercontent.com/minio/minio-service/v1.1.0/linux-systemd/distributed/minio.service
+	@sudo apt install ./pkger_2.3.10_linux_amd64.deb --yes
 	@mkdir -p minio-release/$(GOOS)-$(GOARCH)/archive
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio
 	@cp -af ./minio minio-release/$(GOOS)-$(GOARCH)/minio.$(VERSION)
@@ -200,11 +200,11 @@ hotfix: hotfix-vars clean install ## builds minio binary with hotfix tags
 	@pkger -r $(VERSION) --ignore
 
 hotfix-push: hotfix
-	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/
-	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive
-	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/
-	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-amd64/archive
-	@echo "Published new hotfix binaries at https://dl.min.io/server/minio/hotfixes/linux-amd64/archive/minio.$(VERSION)"
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-$(GOOS)/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-0.minio.io:~/releases/server/minio/hotfixes/linux-$(GOOS)/archive
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-$(GOOS)/
+	@scp -q -r minio-release/$(GOOS)-$(GOARCH)/* minio@dl-1.minio.io:~/releases/server/minio/hotfixes/linux-$(GOOS)/archive
+	@echo "Published new hotfix binaries at https://dl.min.io/server/minio/hotfixes/linux-$(GOOS)/archive/minio.$(VERSION)"
 
 docker-hotfix-push: docker-hotfix
 	@docker push -q $(TAG) && echo "Published new container $(TAG)"

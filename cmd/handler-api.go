@@ -366,7 +366,6 @@ func maxClients(f http.HandlerFunc) http.HandlerFunc {
 			writeErrorResponse(ctx, w,
 				errorCodes.ToAPIErr(ErrTooManyRequests),
 				r.URL)
-
 		}
 	}
 }
