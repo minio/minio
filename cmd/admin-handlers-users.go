@@ -2441,7 +2441,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 				var sp *policy.Policy
 				var err error
-				if len(svcAcctReq.SessionPolicy) > 0 {
+				if len(svcAcctReq.SessionPolicy) > 0 && !bytes.Equal(svcAcctReq.SessionPolicy, []byte("null")) {
 					sp, err = policy.ParseConfig(bytes.NewReader(svcAcctReq.SessionPolicy))
 					if err != nil {
 						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
