@@ -608,7 +608,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			// later to the final location.
 			err = erasure.Heal(ctx, writers, readers, partSize, prefer)
 			closeBitrotReaders(readers)
-			closeBitrotWriters(writers)
+			closeErrs := closeBitrotWriters(writers)
 			if err != nil {
 				return result, err
 			}
@@ -623,6 +623,13 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				// A non-nil stale disk which did not receive
 				// a healed part checksum had a write error.
 				if writers[i] == nil {
+					outDatedDisks[i] = nil
+					disksToHealCount--
+					continue
+				}
+
+				// A non-nil stale disk which got error on Close()
+				if closeErrs[i] != nil {
 					outDatedDisks[i] = nil
 					disksToHealCount--
 					continue
