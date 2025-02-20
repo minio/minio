@@ -99,7 +99,6 @@ func parseArgs() (command string) {
 		command = "hostfile"
 		flag.StringVar(&folder, "folder", "./cluster-hostfiles", "Hostfiles will be placed in this folder")
 		if hasHelp {
-			printCommands()
 			flag.Parse()
 			flag.Usage()
 			os.Exit(1)
@@ -108,7 +107,6 @@ func parseArgs() (command string) {
 	case "reboot":
 		flag.StringVar(&hostfile, "hostfile", "", "The list of hosts to be rebooted")
 		if hasHelp {
-			printCommands()
 			flag.Parse()
 			flag.Usage()
 			os.Exit(1)
@@ -116,7 +114,6 @@ func parseArgs() (command string) {
 	case "health":
 		flag.StringVar(&hostfile, "hostfile", "", "The list of hosts to be monitored for health")
 		if hasHelp {
-			printCommands()
 			flag.Parse()
 			flag.Usage()
 			os.Exit(1)
