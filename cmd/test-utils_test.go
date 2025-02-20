@@ -794,7 +794,6 @@ func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize in
 		if n <= 0 {
 			break
 		}
-
 	}
 	req.Body = io.NopCloser(bytes.NewReader(stream))
 	return req, nil

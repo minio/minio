@@ -1450,7 +1450,6 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		cred = r.Source.Creds
 		remoteBkt = r.Source.Bucket
 		pathStyle = r.Source.Path
-
 	}
 
 	u, err := url.Parse(remoteEp)
@@ -2310,7 +2309,6 @@ func lookupStyle(s string) miniogo.BucketLookupType {
 		lookup = miniogo.BucketLookupDNS
 	default:
 		lookup = miniogo.BucketLookupAuto
-
 	}
 	return lookup
 }

@@ -2254,6 +2254,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrServerNotInitialized
 	case errBucketMetadataNotInitialized:
 		apiErr = ErrBucketMetadataNotInitialized
+	case hash.ErrInvalidChecksum:
+		apiErr = ErrInvalidChecksum
 	}
 
 	// Compression errors

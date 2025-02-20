@@ -51,15 +51,34 @@ func main() {
 		generateKeys()
 		os.Exit(0)
 	}
-	var privateKey []byte
+	var privateKeys [][]byte
 	if *keyHex == "" {
-		if b, err := os.ReadFile(*privKeyPath); err == nil {
-			privateKey = b
-			fmt.Println("Using private key from", *privKeyPath)
+		// Attempt to load private key(s)
+		n := 1
+		var base, ext string
+		base = *privKeyPath
+		if idx := strings.LastIndexByte(base, '.'); idx != -1 {
+			ext = base[idx:]
+			base = base[:idx]
+		}
+		for {
+			// Automatically read "file.ext", "file-2.ext", "file-3.ext"...
+			fn := base + ext
+			if n > 1 {
+				fn = fmt.Sprintf("%s-%d%s", base, n, ext)
+			}
+
+			if b, err := os.ReadFile(fn); err == nil {
+				privateKeys = append(privateKeys, b)
+				fmt.Println("Added private key from", fn)
+			} else {
+				break
+			}
+			n++
 		}
 
 		// Prompt for decryption key if no --key or --private-key are provided
-		if len(privateKey) == 0 && !*stdin {
+		if len(privateKeys) == 0 && !*stdin {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Print("Enter Decryption Key: ")
 
@@ -91,17 +110,20 @@ func main() {
 		var err error
 		inputs, err = filepathx.Glob(flag.Args()[0])
 		fatalErr(err)
+		if len(inputs) == 0 {
+			fmt.Println("Usage: No input found")
+		}
 	default:
 		flag.Usage()
 		fatalIf(true, "Only 1 file can be decrypted")
 		os.Exit(1)
 	}
 	for _, input := range inputs {
-		processFile(input, privateKey)
+		processFile(input, privateKeys)
 	}
 }
 
-func processFile(inputFileName string, privateKey []byte) {
+func processFile(inputFileName string, privateKeys [][]byte) {
 	// Calculate the output file name
 	var outputFileName string
 	switch {
@@ -115,32 +137,31 @@ func processFile(inputFileName string, privateKey []byte) {
 		outputFileName = inputFileName + ".decrypted"
 	}
 
-	// Backup any already existing output file
-	_, err := os.Stat(outputFileName)
-	if err == nil {
-		err := os.Rename(outputFileName, outputFileName+"."+time.Now().Format("20060102150405"))
-		if err != nil {
-			fatalErr(err)
-		}
-	}
-
 	// Open the input and create the output file
 	input, err := os.Open(inputFileName)
 	fatalErr(err)
 	defer input.Close()
-	output, err := os.Create(outputFileName)
-	fatalErr(err)
 
 	// Decrypt the inspect data
-	msg := fmt.Sprintf("output written to %s", outputFileName)
-
 	switch {
 	case *keyHex != "":
+		// Backup any already existing output file
+		_, err := os.Stat(outputFileName)
+		if err == nil {
+			err := os.Rename(outputFileName, outputFileName+"."+time.Now().Format("20060102150405"))
+			if err != nil {
+				fatalErr(err)
+			}
+		}
+		output, err := os.Create(outputFileName)
+		fatalErr(err)
+		msg := fmt.Sprintf("output written to %s", outputFileName)
 		err = extractInspectV1(*keyHex, input, output, msg)
-	case len(privateKey) != 0:
-		err = extractInspectV2(privateKey, input, output, msg)
+		output.Close()
+	case len(privateKeys) != 0:
+		outputFileName := strings.TrimSuffix(outputFileName, ".zip")
+		err = extractInspectV2(privateKeys, input, outputFileName)
 	}
-	output.Close()
 	if err != nil {
 
 		var keep keepFileErr

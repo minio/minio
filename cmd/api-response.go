@@ -520,7 +520,6 @@ func cleanReservedKeys(metadata map[string]string) map[string]string {
 		}
 	case crypto.SSEC:
 		m[xhttp.AmzServerSideEncryptionCustomerAlgorithm] = xhttp.AmzEncryptionAES
-
 	}
 
 	var toRemove []string

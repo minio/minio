@@ -49,6 +49,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/tinylib/msgp/msgp"
@@ -145,7 +146,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 				if errInt == nil {
 					err = nil
 				} else {
-					err = errInt.(error)
+					err, _ = errInt.(error)
 				}
 			}
 			switch err.(type) {
@@ -894,7 +895,17 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 	}
 
 	if crypto.S3KMS.IsEncrypted(objInfo.UserDefined) {
-		sseEnc, err := encrypt.NewSSEKMS(objInfo.KMSKeyID(), nil)
+		// If KMS key ID replication is enabled (as by default)
+		// we include the object's KMS key ID. In any case, we
+		// always set the SSE-KMS header. If no KMS key ID is
+		// specified, MinIO is supposed to use whatever default
+		// config applies on the site or bucket.
+		var keyID string
+		if kms.ReplicateKeyID() {
+			keyID = objInfo.KMSKeyID()
+		}
+
+		sseEnc, err := encrypt.NewSSEKMS(keyID, nil)
 		if err != nil {
 			return putOpts, false, err
 		}

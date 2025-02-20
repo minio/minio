@@ -814,7 +814,6 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 				caseNumber++
 			}
 		}
-
 	}
 
 	// HTTP request for testing when `objectLayer` is set to `nil`.
@@ -1567,8 +1566,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 					}
 				}
 			}
-
 		}
+
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
@@ -3520,7 +3519,6 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 			t.Errorf("Case %d: MinIO %s: Expected the response status to be `%d`, but instead found `%d`", i+1,
 				instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
-
 	}
 
 	// Test for Anonymous/unsigned http request.
@@ -4198,7 +4196,6 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 
 				// validate the error response.
 				if test.expectedErr != noAPIErr {
-
 					var errBytes []byte
 					// read the response body.
 					errBytes, err = io.ReadAll(rec.Result().Body)

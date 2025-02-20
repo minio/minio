@@ -195,8 +195,8 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 				return false
 			}
 		}
-
 	}
+
 	if len(ef.Metadata) > 0 && !obj.DeleteMarker {
 		for _, kv := range ef.Metadata {
 			// Object (version) must match all x-amz-meta and

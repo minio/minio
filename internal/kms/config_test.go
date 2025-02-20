@@ -26,7 +26,7 @@ func TestIsPresent(t *testing.T) {
 	for i, test := range isPresentTests {
 		os.Clearenv()
 		for k, v := range test.Env {
-			os.Setenv(k, v)
+			t.Setenv(k, v)
 		}
 
 		ok, err := IsPresent()

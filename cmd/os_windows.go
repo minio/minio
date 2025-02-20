@@ -173,7 +173,6 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 
 		count--
 		entries = append(entries, name)
-
 	}
 
 	return entries, nil

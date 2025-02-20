@@ -584,7 +584,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
 					checksumInfo.Hash, erasure.ShardSize())
 				prefer[i] = disk.Hostname() == ""
-
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
 			for i, disk := range outDatedDisks {
@@ -643,9 +642,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			if disksToHealCount == 0 {
 				return result, fmt.Errorf("all drives had write errors, unable to heal %s/%s", bucket, object)
 			}
-
 		}
-
 	}
 
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tmpID)

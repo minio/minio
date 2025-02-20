@@ -845,7 +845,11 @@ func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, 
 		if err != nil {
 			return nil, err
 		}
-		return val.([]string), nil
+		res, ok := val.([]string)
+		if !ok {
+			return nil, errors.New("unexpected policy type")
+		}
+		return res, nil
 	}
 	return getPolicies()
 }
@@ -1218,7 +1222,6 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			cache.iamGroupPolicyMap.Delete(name)
 		}
 	} else {
-
 		if err = store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
 			return
 		}
@@ -1620,7 +1623,6 @@ func (store *IAMStoreSys) MergePolicies(policyName string) (string, policy.Polic
 			policies = append(policies, policy)
 			toMerge = append(toMerge, p.Policy)
 		}
-
 	}
 
 	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)
@@ -2917,7 +2919,10 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 		return err
 	}
 
-	newCache := val.(*iamCache)
+	newCache, ok := val.(*iamCache)
+	if !ok {
+		return nil
+	}
 
 	cache := store.lock()
 	defer store.unlock()
