@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -69,6 +70,14 @@ var (
 
 var mclient *madmin.AdminClient
 
+func jsonOut(b interface{}) {
+	outb, err := json.Marshal(b)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(outb))
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("invalid number of arguments.. try --help")
@@ -82,6 +91,8 @@ func main() {
 		rebootHostfile()
 	case "health":
 		healthCheck()
+	case "sets":
+		sets()
 	default:
 		flag.Usage()
 	}
@@ -120,6 +131,7 @@ func parseArgs() (command string) {
 			flag.Usage()
 			os.Exit(1)
 		}
+	case "sets":
 	default:
 	}
 
@@ -141,6 +153,7 @@ func printCommands() {
 	fmt.Println("")
 	fmt.Println(" Available commands")
 	fmt.Println(" -----------------------------")
+	fmt.Println(" sets       Shows which servers are in which sets")
 	fmt.Println(" hostfile   Generates hostfiles in `-folder`")
 	fmt.Println(" reboot     Reboots servers defined in `-hostfile`")
 	fmt.Println(" monitor    Monitors the uptime of hosts defined in `-hostfile`")
@@ -157,34 +170,61 @@ func makeClient() (err error) {
 	return
 }
 
-func info() {
+func sets() {
+	pools, _, err := getInfra()
+	if err != nil {
+		panic(err)
+	}
+	sets := make(map[int]map[int][]string)
+	for pid, p := range pools {
+		sets[pid] = make(map[int][]string, 0)
+		for _, s := range p.Servers {
+			for _, set := range s.Sets {
+				sets[pid][set.ID] = append(sets[pid][set.ID], s.Endpoint)
+			}
+		}
+	}
+	if jsonOutput {
+		jsonOut(sets)
+		return
+	}
+	for i, v := range sets {
+		fmt.Println("--------- POOL:", i, "----------")
+		for ii, vv := range v {
+			fmt.Println("--------- SET:", ii, "-----------")
+			for _, vvv := range vv {
+				fmt.Println(vvv)
+			}
+		}
+	}
 }
 
-func makeHostfile() {
+func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 	makeClient()
-	info, err := mclient.ServerInfo(context.Background())
+	var info madmin.InfoMessage
+	info, err = mclient.ServerInfo(context.Background())
 	if err != nil {
 		return
 	}
+
 	// bb, err := os.ReadFile("infra.json")
 	// if err != nil {
 	// 	panic(err)
 	// }
 	//
-	// var info madmin.InfoMessage
 	// err = json.Unmarshal(bb, &info)
 	// if err != nil {
 	// 	panic(err)
 	// }
-
-	pools := make(map[int]*Pool)
+	//
+	pools = make(map[int]*Pool, 0)
 	for i := range info.Pools {
 		pools[i+1] = &Pool{
 			Servers: make(map[string]*Server, 0),
 		}
 	}
 
-	totalServers := 0
+	totalServers = 0
 	for _, s := range info.Servers {
 		if s.State == "offline" {
 			continue
@@ -229,6 +269,11 @@ func makeHostfile() {
 		}
 	}
 
+	return
+}
+
+func makeHostfile() {
+	pools, totalServers, err := getInfra()
 	var rebootRounds [200][200]map[string]*Server
 	processed := 0
 	for i := 0; i < len(rebootRounds); i++ {
