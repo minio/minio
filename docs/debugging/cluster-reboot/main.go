@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -64,6 +64,7 @@ var (
 
 	folder   string
 	hostfile string
+	port     string
 )
 
 var mclient *madmin.AdminClient
@@ -113,6 +114,7 @@ func parseArgs() (command string) {
 		}
 	case "health":
 		flag.StringVar(&hostfile, "hostfile", "", "The list of hosts to be monitored for health")
+		flag.StringVar(&port, "port", "", "minio port")
 		if hasHelp {
 			flag.Parse()
 			flag.Usage()
@@ -155,22 +157,25 @@ func makeClient() (err error) {
 	return
 }
 
-func makeHostfile() {
-	// makeClient()
-	// info, err := mclient.ServerInfo(context.Background())
-	// if err != nil {
-	// 	return
-	// }
-	bb, err := os.ReadFile("infra.json")
-	if err != nil {
-		panic(err)
-	}
+func info() {
+}
 
-	var info madmin.InfoMessage
-	err = json.Unmarshal(bb, &info)
+func makeHostfile() {
+	makeClient()
+	info, err := mclient.ServerInfo(context.Background())
 	if err != nil {
-		panic(err)
+		return
 	}
+	// bb, err := os.ReadFile("infra.json")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	//
+	// var info madmin.InfoMessage
+	// err = json.Unmarshal(bb, &info)
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 	pools := make(map[int]*Pool)
 	for i := range info.Pools {
@@ -274,20 +279,21 @@ func makeHostfile() {
 	for ri, rv := range rebootRounds {
 		for _, rv2 := range rv {
 			if rv2 != nil && len(rv2) > 0 {
-				roundFile, err = os.Create(filepath.Join(folder, "round-"+strconv.Itoa(ri)))
+				roundFile, err = os.OpenFile(filepath.Join(folder, "round-"+strconv.Itoa(ri)), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o777)
 				if err != nil {
 					panic(err)
 				}
 				for _, rv3 := range rv2 {
-					_, err = roundFile.WriteString(rv3.Endpoint + "\n")
+					// _, err = roundFile.WriteString(rv3.Endpoint + "\n")
+					_, err = roundFile.WriteString(strings.Replace(rv3.Endpoint, ":443", "", -1) + "\n")
 					if err != nil {
 						panic(err)
 					}
 				}
+				roundFile.Sync()
+				roundFile.Close()
 			}
 		}
-		roundFile.Sync()
-		roundFile.Close()
 	}
 }
 
@@ -416,15 +422,16 @@ func rebootServer(host string) {
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         10 * time.Second,
 	}
-	host = strings.Replace(host, ":443", ":22", -1)
 	fmt.Println("Rebooting:", host)
-	con, err := ssh.Dial("tcp", host, config)
+	con, err := ssh.Dial("tcp", host+":22", config)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
 	session, err := con.NewSession()
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return
 	}
 	defer session.Close()
 
@@ -432,19 +439,18 @@ func rebootServer(host string) {
 	if err != nil {
 		fmt.Printf("Command failed @ %s .. err: %v\n", host, err)
 		fmt.Printf("Output: %s\n", output)
-		panic(err)
+		return
 	}
 
-	fmt.Println("Rebooted:", host)
-	fmt.Printf("Output: %s\n", output)
+	fmt.Println("Rebooted:", host, "output:", string(output))
 }
 
 func healthPing(endpoint string) (healthy bool, err error) {
 	client := new(http.Client)
 	client.Transport = DefaultTransport(secure)
-	url := "http://" + endpoint + "/minio/health/cluster"
+	url := "http://" + endpoint + ":" + port + "/minio/health/cluster"
 	if secure {
-		url = "https://" + endpoint + "/minio/health/cluster"
+		url = "https://" + endpoint + ":" + port + "/minio/health/cluster"
 	}
 	resp, rerr := client.Get(url)
 	if rerr != nil {
