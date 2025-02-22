@@ -133,6 +133,12 @@ func parseArgs() (command string) {
 			os.Exit(1)
 		}
 	case "sets":
+		flag.BoolVar(&jsonOutput, "json", false, "Print output in json")
+		if hasHelp {
+			flag.Parse()
+			flag.Usage()
+			os.Exit(1)
+		}
 	default:
 	}
 
@@ -140,7 +146,6 @@ func parseArgs() (command string) {
 	flag.StringVar(&miniokey, "key", "minioadmin", "minio user/key")
 	flag.StringVar(&miniosecret, "secret", "minioadmin", "minio password/secret")
 	flag.BoolVar(&secure, "secure", false, "Toggle SSL on/off")
-	flag.BoolVar(&jsonOutput, "json", false, "Print output in json")
 	flag.Parse()
 	if hasHelp {
 		printCommands()
