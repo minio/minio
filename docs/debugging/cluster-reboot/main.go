@@ -108,8 +108,8 @@ func parseArgs() (command string) {
 	switch command {
 
 	case "hostfile":
-		command = "hostfile"
 		flag.StringVar(&folder, "folder", "./cluster-hostfiles", "Hostfiles will be placed in this folder")
+		flag.StringVar(&port, "port", "", "minio port")
 		if hasHelp {
 			flag.Parse()
 			flag.Usage()
@@ -118,6 +118,7 @@ func parseArgs() (command string) {
 
 	case "reboot":
 		flag.StringVar(&hostfile, "hostfile", "", "The list of hosts to be rebooted")
+		flag.StringVar(&port, "port", "", "ssh port")
 		if hasHelp {
 			flag.Parse()
 			flag.Usage()
@@ -135,7 +136,7 @@ func parseArgs() (command string) {
 	default:
 	}
 
-	flag.StringVar(&endpoint, "endpoint", "127.0.0.1:9000", "server endpoint")
+	flag.StringVar(&endpoint, "endpoint", "127.0.0.1", "server endpoint")
 	flag.StringVar(&miniokey, "key", "minioadmin", "minio user/key")
 	flag.StringVar(&miniosecret, "secret", "minioadmin", "minio password/secret")
 	flag.BoolVar(&secure, "secure", false, "Toggle SSL on/off")
@@ -162,7 +163,8 @@ func printCommands() {
 }
 
 func makeClient() (err error) {
-	mclient, err = madmin.NewWithOptions(endpoint, &madmin.Options{
+	ep := endpoint + ":" + port
+	mclient, err = madmin.NewWithOptions(ep, &madmin.Options{
 		Creds:     credentials.NewStaticV4(miniokey, miniosecret, ""),
 		Secure:    secure,
 		Transport: DefaultTransport(secure),
@@ -200,7 +202,11 @@ func sets() {
 }
 
 func getInfra() (pools map[int]*Pool, totalServers int, err error) {
-	makeClient()
+	err = makeClient()
+	if err != nil {
+		panic(err)
+	}
+
 	var info madmin.InfoMessage
 	info, err = mclient.ServerInfo(context.Background())
 	if err != nil {
@@ -330,7 +336,12 @@ func makeHostfile() {
 				}
 				for _, rv3 := range rv2 {
 					// _, err = roundFile.WriteString(rv3.Endpoint + "\n")
-					_, err = roundFile.WriteString(strings.Replace(rv3.Endpoint, ":443", "", -1) + "\n")
+					splitS := strings.Split(rv3.Endpoint, ":")
+					if len(splitS) < 2 {
+						fmt.Println("Split:", splitS)
+						panic("invalid length of host, requires 2")
+					}
+					_, err = roundFile.WriteString(splitS[0] + "\n")
 					if err != nil {
 						panic(err)
 					}
@@ -468,7 +479,7 @@ func rebootServer(host string) {
 		Timeout:         10 * time.Second,
 	}
 	fmt.Println("Rebooting:", host)
-	con, err := ssh.Dial("tcp", host+":22", config)
+	con, err := ssh.Dial("tcp", host+":"+port, config)
 	if err != nil {
 		fmt.Println(err)
 		return
