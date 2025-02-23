@@ -79,7 +79,7 @@ Duplicate delete markers are not created on MinIO buckets with versioning, if an
 
 ### Motivation
 
-**PLEASE READ: This feature is meant for advanced usecases only where the setup is using bucket versioning or with replicated buckets, use this feature to optimize versioning behavior for some specific applications. MinIO experts will evaluate and guide on the benefits for your application, please reach out to us on <https://subnet.min.io>.**
+**PLEASE READ: This feature is meant for advanced use-cases only where the setup is using bucket versioning or with replicated buckets, use this feature to optimize versioning behavior for some specific applications. MinIO experts will evaluate and guide on the benefits for your application, please reach out to us on <https://subnet.min.io>.**
 
 Spark/Hadoop workloads which use Hadoop MR Committer v1/v2 algorithm upload objects to a temporary prefix in a bucket. These objects are 'renamed' to a different prefix on Job commit. Object storage admins are forced to configure separate ILM policies to expire these objects and their versions to reclaim space.
 
@@ -212,6 +212,6 @@ public class IsVersioningEnabled {
 ## Explore Further
 
 - [Use `minio-java` SDK with MinIO Server](https://min.io/docs/minio/linux/developers/java/minio-java.html)
-- [Object Lock and Immutablity Guide](https://min.io/docs/minio/linux/administration/object-management/object-retention.html)
+- [Object Lock and Immutability Guide](https://min.io/docs/minio/linux/administration/object-management/object-retention.html)
 - [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
 - [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)

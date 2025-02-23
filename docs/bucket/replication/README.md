@@ -8,7 +8,7 @@ To replicate objects in a bucket to a destination bucket on a target site either
 
 ## Highlights
 
-- Supports source and destination buckets to have the same name unlike AWS S3, addresses variety of usecases such as *Splunk*, *Veeam* site to site DR.
+- Supports source and destination buckets to have the same name unlike AWS S3, addresses variety of use-cases such as *Splunk*, *Veeam* site to site DR.
 - Supports object locking/retention across source and destination buckets natively out of the box, unlike AWS S3.
 - Simpler implementation than [AWS S3 Bucket Replication Config](https://docs.aws.amazon.com/AmazonS3/latest/dev/replication-add-config.html) with requirements such as IAM Role, AccessControlTranslation, Metrics and SourceSelectionCriteria are not needed with MinIO.
 - Active-Active replication
