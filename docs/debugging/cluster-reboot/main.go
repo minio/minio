@@ -8,9 +8,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -118,7 +118,7 @@ func parseArgs() (command string) {
 
 	case "reboot":
 		flag.StringVar(&hostfile, "hostfile", "", "The list of hosts to be rebooted")
-		flag.StringVar(&port, "port", "", "ssh port")
+		flag.StringVar(&port, "port", "", "minio port")
 		if hasHelp {
 			flag.Parse()
 			flag.Usage()
@@ -133,6 +133,7 @@ func parseArgs() (command string) {
 			os.Exit(1)
 		}
 	case "sets":
+		flag.StringVar(&port, "port", "", "ssh port")
 		flag.BoolVar(&jsonOutput, "json", false, "Print output in json")
 		if hasHelp {
 			flag.Parse()
@@ -212,13 +213,25 @@ func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 		panic(err)
 	}
 
-	var info madmin.InfoMessage
-	info, err = mclient.ServerInfo(context.Background())
+	// var info madmin.InfoMessage
+	var info madmin.StorageInfo
+	// info, err = mclient.ServerInfo(context.Background())
+	// if err != nil {
+	// 	return
+	// }
+
+	info, err = mclient.StorageInfo(context.Background())
 	if err != nil {
 		return
 	}
 
-	// bb, err := os.ReadFile("infra.json")
+	f, err := os.Create("storage_info.json")
+	ob, err := json.Marshal(info)
+	f.Write(ob)
+	f.Close()
+	os.Exit(1)
+
+	// bb, err := os.ReadFile("aus18_info.json")
 	// if err != nil {
 	// 	panic(err)
 	// }
@@ -227,59 +240,89 @@ func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 	// if err != nil {
 	// 	panic(err)
 	// }
-	//
+
 	pools = make(map[int]*Pool, 0)
-	for i := range info.Pools {
-		pools[i+1] = &Pool{
-			Servers: make(map[string]*Server, 0),
-		}
-	}
-
-	totalServers = 0
-	for _, s := range info.Servers {
-		if s.State == "offline" {
-			continue
-		}
-
-		totalServers++
-		pool := pools[s.PoolNumber]
-		server, ok := pool.Servers[s.Endpoint]
+	for _, d := range info.Disks {
+		_, ok := pools[d.PoolIndex]
 		if !ok {
-			pool.Servers[s.Endpoint] = &Server{
-				Sets:     make(map[int]*Set, 0),
-				Rebooted: false,
-				Endpoint: s.Endpoint,
-			}
-			server = pool.Servers[s.Endpoint]
-		}
-
-		for _, d := range s.Disks {
-			set, ok := server.Sets[d.SetIndex]
-			if !ok {
-				server.Sets[d.SetIndex] = &Set{
-					Disks:      make(map[string]*Disk, 0),
-					SCParity:   info.Backend.StandardSCParity,
-					RRSCParity: info.Backend.RRSCParity,
-					ID:         d.SetIndex,
-					Pool:       d.PoolIndex,
-					CanReboot:  false,
-				}
-				set = server.Sets[d.SetIndex]
-			}
-
-			set.Disks[d.Endpoint] = &Disk{
-				UUID:           d.UUID,
-				Index:          d.DiskIndex,
-				Pool:           d.PoolIndex,
-				Server:         d.Endpoint,
-				Set:            d.SetIndex,
-				Path:           d.DrivePath,
-				State:          d.State,
-				UsedPercentage: (math.Ceil((float64(d.UsedSpace)/float64(d.TotalSpace)*100)*100) / 100),
+			pools[d.PoolIndex] = &Pool{
+				Servers: make(map[string]*Server, 0),
 			}
 		}
+		x, errx := url.Parse(d.Endpoint)
+		if errx != nil {
+			return
+		}
+		fmt.Println(x.Hostname())
+		fmt.Println(d)
+
+		// server, ok := pool.Servers[s.Endpoint]
+		// if !ok {
+		// 	pool.Servers[s.Endpoint] = &Server{
+		// 		Sets:     make(map[int]*Set, 0),
+		// 		Rebooted: false,
+		// 		Endpoint: s.Endpoint,
+		// 	}
+		// 	server = pool.Servers[s.Endpoint]
+		// }
+		//
 	}
 
+	// for i := range info.Pools {
+	// 	pools[i+1] = &Pool{
+	// 		Servers: make(map[string]*Server, 0),
+	// 	}
+	// }
+	//
+	// offline := 0
+	// totalServers = 0
+	// for _, s := range info.Servers {
+	// 	if s.State == "offline" {
+	// 		offline++
+	// 		fmt.Println("offline", offline)
+	// 		fmt.Println("")
+	// 		continue
+	// 	}
+	//
+	// 	totalServers++
+	// 	pool := pools[s.PoolNumber]
+	// 	server, ok := pool.Servers[s.Endpoint]
+	// 	if !ok {
+	// 		pool.Servers[s.Endpoint] = &Server{
+	// 			Sets:     make(map[int]*Set, 0),
+	// 			Rebooted: false,
+	// 			Endpoint: s.Endpoint,
+	// 		}
+	// 		server = pool.Servers[s.Endpoint]
+	// 	}
+	//
+	// 	for _, d := range s.Disks {
+	// 		set, ok := server.Sets[d.SetIndex]
+	// 		if !ok {
+	// 			server.Sets[d.SetIndex] = &Set{
+	// 				Disks:      make(map[string]*Disk, 0),
+	// 				SCParity:   info.Backend.StandardSCParity,
+	// 				RRSCParity: info.Backend.RRSCParity,
+	// 				ID:         d.SetIndex,
+	// 				Pool:       d.PoolIndex,
+	// 				CanReboot:  false,
+	// 			}
+	// 			set = server.Sets[d.SetIndex]
+	// 		}
+	//
+	// 		set.Disks[d.Endpoint] = &Disk{
+	// 			UUID:           d.UUID,
+	// 			Index:          d.DiskIndex,
+	// 			Pool:           d.PoolIndex,
+	// 			Server:         d.Endpoint,
+	// 			Set:            d.SetIndex,
+	// 			Path:           d.DrivePath,
+	// 			State:          d.State,
+	// 			UsedPercentage: (math.Ceil((float64(d.UsedSpace)/float64(d.TotalSpace)*100)*100) / 100),
+	// 		}
+	// 	}
+	// }
+	//
 	return
 }
 
