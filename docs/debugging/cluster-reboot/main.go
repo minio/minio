@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,7 +17,6 @@ import (
 	"runtime/debug"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
@@ -213,29 +213,16 @@ func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 		panic(err)
 	}
 
-	// var info madmin.InfoMessage
 	var info madmin.StorageInfo
-	// info, err = mclient.ServerInfo(context.Background())
-	// if err != nil {
-	// 	return
-	// }
 
 	info, err = mclient.StorageInfo(context.Background())
 	if err != nil {
 		return
 	}
-
-	f, err := os.Create("storage_info.json")
-	ob, err := json.Marshal(info)
-	f.Write(ob)
-	f.Close()
-	os.Exit(1)
-
-	// bb, err := os.ReadFile("aus18_info.json")
+	// bb, err := os.ReadFile("storage_info.json")
 	// if err != nil {
 	// 	panic(err)
 	// }
-	//
 	// err = json.Unmarshal(bb, &info)
 	// if err != nil {
 	// 	panic(err)
@@ -243,86 +230,55 @@ func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 
 	pools = make(map[int]*Pool, 0)
 	for _, d := range info.Disks {
-		_, ok := pools[d.PoolIndex]
+		pool, ok := pools[d.PoolIndex]
 		if !ok {
 			pools[d.PoolIndex] = &Pool{
 				Servers: make(map[string]*Server, 0),
 			}
+			pool = pools[d.PoolIndex]
 		}
-		x, errx := url.Parse(d.Endpoint)
-		if errx != nil {
-			return
-		}
-		fmt.Println(x.Hostname())
-		fmt.Println(d)
 
-		// server, ok := pool.Servers[s.Endpoint]
-		// if !ok {
-		// 	pool.Servers[s.Endpoint] = &Server{
-		// 		Sets:     make(map[int]*Set, 0),
-		// 		Rebooted: false,
-		// 		Endpoint: s.Endpoint,
-		// 	}
-		// 	server = pool.Servers[s.Endpoint]
-		// }
-		//
+		x, errx := url.Parse(d.Endpoint)
+		if errx != nil || x == nil {
+			panic(errx)
+		}
+
+		server, ok := pool.Servers[x.Hostname()]
+		if !ok {
+			pool.Servers[x.Hostname()] = &Server{
+				Sets:     make(map[int]*Set, 0),
+				Rebooted: false,
+				Endpoint: x.Hostname(),
+			}
+			server = pool.Servers[x.Hostname()]
+			totalServers++
+		}
+
+		set, ok := server.Sets[d.SetIndex]
+		if !ok {
+			server.Sets[d.SetIndex] = &Set{
+				Disks:      make(map[string]*Disk, 0),
+				SCParity:   info.Backend.StandardSCParity,
+				RRSCParity: info.Backend.RRSCParity,
+				ID:         d.SetIndex,
+				Pool:       d.PoolIndex,
+				CanReboot:  false,
+			}
+			set = server.Sets[d.SetIndex]
+		}
+
+		set.Disks[d.Endpoint] = &Disk{
+			UUID:           d.UUID,
+			Index:          d.DiskIndex,
+			Pool:           d.PoolIndex,
+			Server:         d.Endpoint,
+			Set:            d.SetIndex,
+			Path:           d.DrivePath,
+			State:          d.State,
+			UsedPercentage: (math.Ceil((float64(d.UsedSpace)/float64(d.TotalSpace)*100)*100) / 100),
+		}
 	}
 
-	// for i := range info.Pools {
-	// 	pools[i+1] = &Pool{
-	// 		Servers: make(map[string]*Server, 0),
-	// 	}
-	// }
-	//
-	// offline := 0
-	// totalServers = 0
-	// for _, s := range info.Servers {
-	// 	if s.State == "offline" {
-	// 		offline++
-	// 		fmt.Println("offline", offline)
-	// 		fmt.Println("")
-	// 		continue
-	// 	}
-	//
-	// 	totalServers++
-	// 	pool := pools[s.PoolNumber]
-	// 	server, ok := pool.Servers[s.Endpoint]
-	// 	if !ok {
-	// 		pool.Servers[s.Endpoint] = &Server{
-	// 			Sets:     make(map[int]*Set, 0),
-	// 			Rebooted: false,
-	// 			Endpoint: s.Endpoint,
-	// 		}
-	// 		server = pool.Servers[s.Endpoint]
-	// 	}
-	//
-	// 	for _, d := range s.Disks {
-	// 		set, ok := server.Sets[d.SetIndex]
-	// 		if !ok {
-	// 			server.Sets[d.SetIndex] = &Set{
-	// 				Disks:      make(map[string]*Disk, 0),
-	// 				SCParity:   info.Backend.StandardSCParity,
-	// 				RRSCParity: info.Backend.RRSCParity,
-	// 				ID:         d.SetIndex,
-	// 				Pool:       d.PoolIndex,
-	// 				CanReboot:  false,
-	// 			}
-	// 			set = server.Sets[d.SetIndex]
-	// 		}
-	//
-	// 		set.Disks[d.Endpoint] = &Disk{
-	// 			UUID:           d.UUID,
-	// 			Index:          d.DiskIndex,
-	// 			Pool:           d.PoolIndex,
-	// 			Server:         d.Endpoint,
-	// 			Set:            d.SetIndex,
-	// 			Path:           d.DrivePath,
-	// 			State:          d.State,
-	// 			UsedPercentage: (math.Ceil((float64(d.UsedSpace)/float64(d.TotalSpace)*100)*100) / 100),
-	// 		}
-	// 	}
-	// }
-	//
 	return
 }
 
@@ -383,13 +339,7 @@ func makeHostfile() {
 					panic(err)
 				}
 				for _, rv3 := range rv2 {
-					// _, err = roundFile.WriteString(rv3.Endpoint + "\n")
-					splitS := strings.Split(rv3.Endpoint, ":")
-					if len(splitS) < 2 {
-						fmt.Println("Split:", splitS)
-						panic("invalid length of host, requires 2")
-					}
-					_, err = roundFile.WriteString(splitS[0] + "\n")
+					_, err = roundFile.WriteString(rv3.Endpoint + "\n")
 					if err != nil {
 						panic(err)
 					}
