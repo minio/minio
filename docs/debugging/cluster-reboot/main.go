@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"slices"
+	"sort"
 	"strconv"
 	"time"
 
@@ -183,7 +184,7 @@ func sets() {
 	if err != nil {
 		panic(err)
 	}
-	sets := make(map[int]map[int][]string)
+	sets := make(map[string]map[int][]string)
 	for pid, p := range pools {
 		sets[pid] = make(map[int][]string, 0)
 		for _, s := range p.Servers {
@@ -207,14 +208,13 @@ func sets() {
 	}
 }
 
-func getInfra() (pools map[int]*Pool, totalServers int, err error) {
+func getInfra() (pools map[string]*Pool, totalServers int, err error) {
 	err = makeClient()
 	if err != nil {
 		panic(err)
 	}
 
 	var info madmin.StorageInfo
-
 	info, err = mclient.StorageInfo(context.Background())
 	if err != nil {
 		return
@@ -228,14 +228,14 @@ func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 	// 	panic(err)
 	// }
 
-	pools = make(map[int]*Pool, 0)
+	pools = make(map[string]*Pool, 0)
 	for _, d := range info.Disks {
-		pool, ok := pools[d.PoolIndex]
+		pool, ok := pools[strconv.Itoa(d.PoolIndex)]
 		if !ok {
-			pools[d.PoolIndex] = &Pool{
+			pools[strconv.Itoa(d.PoolIndex)] = &Pool{
 				Servers: make(map[string]*Server, 0),
 			}
-			pool = pools[d.PoolIndex]
+			pool = pools[strconv.Itoa(d.PoolIndex)]
 		}
 
 		x, errx := url.Parse(d.Endpoint)
@@ -282,23 +282,41 @@ func getInfra() (pools map[int]*Pool, totalServers int, err error) {
 	return
 }
 
+// stringKeysSorted returns the keys as a sorted string slice.
+func stringKeysSorted[K string, V any](m map[K]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, string(k))
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func makeHostfile() {
 	pools, totalServers, err := getInfra()
 	var rebootRounds [200][200]map[string]*Server
 	processed := 0
+	poolss := stringKeysSorted(pools)
 	for i := 0; i < len(rebootRounds); i++ {
 		if processed >= totalServers {
 			fmt.Printf("Total (%d) Online (%d)\n", totalServers, processed)
 			break
 		}
 
-		for pid, v := range pools {
+		for _, pkey := range poolss {
+			pid, err := strconv.Atoi(pkey)
+			if err != nil {
+				panic(err)
+			}
+			v := pools[pkey]
 			if rebootRounds[i][pid] == nil {
 				rebootRounds[i][pid] = make(map[string]*Server)
 			}
 
+			sortServKey := stringKeysSorted(v.Servers)
 		nextServer:
-			for sid, s := range v.Servers {
+			for _, skey := range sortServKey {
+				s := v.Servers[skey]
 				if s.Processed {
 					continue
 				}
@@ -312,8 +330,8 @@ func makeHostfile() {
 						}
 					}
 
-					rebootRounds[i][pid][s.Endpoint] = pools[pid].Servers[sid]
-					pools[pid].Servers[sid].Processed = true
+					rebootRounds[i][pid][s.Endpoint] = pools[pkey].Servers[skey]
+					pools[pkey].Servers[skey].Processed = true
 					processed++
 				} else {
 					continue
@@ -338,8 +356,9 @@ func makeHostfile() {
 				if err != nil {
 					panic(err)
 				}
-				for _, rv3 := range rv2 {
-					_, err = roundFile.WriteString(rv3.Endpoint + "\n")
+				srvSort := stringKeysSorted(rv2)
+				for _, rvkey := range srvSort {
+					_, err = roundFile.WriteString(rv2[rvkey].Endpoint + "\n")
 					if err != nil {
 						panic(err)
 					}
