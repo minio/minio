@@ -783,7 +783,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 					Name:          newCred.Name,
 					Description:   newCred.Description,
 					Claims:        opts.claims,
-					SessionPolicy: createReq.Policy,
+					SessionPolicy: madmin.SRSessionPolicy(createReq.Policy),
 					Status:        auth.AccountOn,
 					Expiration:    createReq.Expiration,
 				},
@@ -907,7 +907,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 					Status:        opts.status,
 					Name:          opts.name,
 					Description:   opts.description,
-					SessionPolicy: updateReq.NewPolicy,
+					SessionPolicy: madmin.SRSessionPolicy(updateReq.NewPolicy),
 					Expiration:    updateReq.NewExpiration,
 				},
 			},
@@ -2169,7 +2169,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					SecretKey:     acc.Credentials.SecretKey,
 					Groups:        acc.Credentials.Groups,
 					Claims:        claims,
-					SessionPolicy: json.RawMessage(policyJSON),
+					SessionPolicy: policyJSON,
 					Status:        acc.Credentials.Status,
 					Name:          sa.Name,
 					Description:   sa.Description,
@@ -2441,7 +2441,7 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				}
 				var sp *policy.Policy
 				var err error
-				if len(svcAcctReq.SessionPolicy) > 0 && !bytes.Equal(svcAcctReq.SessionPolicy, []byte("null")) {
+				if len(svcAcctReq.SessionPolicy) > 0 {
 					sp, err = policy.ParseConfig(bytes.NewReader(svcAcctReq.SessionPolicy))
 					if err != nil {
 						writeErrorResponseJSON(ctx, w, importError(ctx, err, allSvcAcctsFile, user), r.URL)
