@@ -40,6 +40,7 @@ type Server struct {
 type Set struct {
 	SCParity   int
 	RRSCParity int
+	BadDisks   int
 	ID         int
 	Pool       int
 	CanReboot  bool
@@ -63,6 +64,8 @@ var (
 	miniosecret string
 	secure      bool
 	jsonOutput  bool
+
+	badSetsOnly bool
 
 	folder   string
 	hostfile string
@@ -136,6 +139,7 @@ func parseArgs() (command string) {
 	case "sets":
 		flag.StringVar(&port, "port", "", "ssh port")
 		flag.BoolVar(&jsonOutput, "json", false, "Print output in json")
+		flag.BoolVar(&badSetsOnly, "badSetsOnly", false, "Show only bad disks")
 		if hasHelp {
 			flag.Parse()
 			flag.Usage()
@@ -184,25 +188,59 @@ func sets() {
 	if err != nil {
 		panic(err)
 	}
-	sets := make(map[string]map[int][]string)
+
+	type settemp struct {
+		Disks     []*Disk
+		CanReboot bool
+		Parity    int
+		BadDisks  int
+	}
+
+	sets := make(map[string]map[int]*settemp)
 	for pid, p := range pools {
-		sets[pid] = make(map[int][]string, 0)
+		sets[pid] = make(map[int]*settemp, 0)
 		for _, s := range p.Servers {
 			for _, set := range s.Sets {
-				sets[pid][set.ID] = append(sets[pid][set.ID], s.Endpoint)
+				_, ok := sets[pid][set.ID]
+				if !ok {
+					sets[pid][set.ID] = new(settemp)
+				}
+
+				sets[pid][set.ID].Parity = set.SCParity
+				sets[pid][set.ID].CanReboot = set.CanReboot
+				sets[pid][set.ID].BadDisks = set.BadDisks
+
+				for _, d := range set.Disks {
+					if badSetsOnly {
+						if d.State != "ok" {
+							sets[pid][set.ID].Disks = append(sets[pid][set.ID].Disks, d)
+						}
+					} else {
+						sets[pid][set.ID].Disks = append(sets[pid][set.ID].Disks, d)
+					}
+				}
 			}
 		}
 	}
+
 	if jsonOutput {
 		jsonOut(sets)
 		return
 	}
+
 	for i, v := range sets {
-		fmt.Println("--------- POOL:", i, "----------")
 		for ii, vv := range v {
-			fmt.Println("--------- SET:", ii, "-----------")
-			for _, vvv := range vv {
-				fmt.Println(vvv)
+			toPrint := []string{}
+			for _, vvv := range vv.Disks {
+				toPrint = append(toPrint, fmt.Sprint(vvv.State, " ", vvv.Server))
+			}
+			if len(toPrint) < 1 {
+				continue
+			}
+
+			fmt.Printf("\nPool(%s) SET(%d) CanReboot(%t) Parity(%d) BadDisks(%d)\n", i, ii, vv.CanReboot, vv.Parity, vv.BadDisks)
+			for _, p := range toPrint {
+				fmt.Println(p)
 			}
 		}
 	}
@@ -228,8 +266,14 @@ func getInfra() (pools map[string]*Pool, totalServers int, err error) {
 	// 	panic(err)
 	// }
 
+	setInfo := make(map[string]map[string]*Set)
+
 	pools = make(map[string]*Pool, 0)
 	for _, d := range info.Disks {
+		if setInfo[strconv.Itoa(d.PoolIndex)] == nil {
+			setInfo[strconv.Itoa(d.PoolIndex)] = make(map[string]*Set, 0)
+		}
+
 		pool, ok := pools[strconv.Itoa(d.PoolIndex)]
 		if !ok {
 			pools[strconv.Itoa(d.PoolIndex)] = &Pool{
@@ -267,6 +311,23 @@ func getInfra() (pools map[string]*Pool, totalServers int, err error) {
 			set = server.Sets[d.SetIndex]
 		}
 
+		seti, ok := setInfo[strconv.Itoa(d.PoolIndex)][strconv.Itoa(d.SetIndex)]
+		if !ok {
+			setInfo[strconv.Itoa(d.PoolIndex)][strconv.Itoa(d.SetIndex)] = &Set{
+				SCParity:   info.Backend.StandardSCParity,
+				RRSCParity: info.Backend.RRSCParity,
+				ID:         d.SetIndex,
+				Pool:       d.PoolIndex,
+				BadDisks:   0,
+				CanReboot:  true,
+			}
+			seti = setInfo[strconv.Itoa(d.PoolIndex)][strconv.Itoa(d.SetIndex)]
+		}
+
+		if d.State != "ok" {
+			seti.BadDisks++
+		}
+
 		set.Disks[d.Endpoint] = &Disk{
 			UUID:           d.UUID,
 			Index:          d.DiskIndex,
@@ -276,6 +337,22 @@ func getInfra() (pools map[string]*Pool, totalServers int, err error) {
 			Path:           d.DrivePath,
 			State:          d.State,
 			UsedPercentage: (math.Ceil((float64(d.UsedSpace)/float64(d.TotalSpace)*100)*100) / 100),
+		}
+	}
+
+	for i, v := range pools {
+		for _, vv := range v.Servers {
+			for iii, vvv := range vv.Sets {
+				seti, ok := setInfo[i][strconv.Itoa(iii)]
+				if ok {
+					if seti.BadDisks >= (seti.SCParity - 1) {
+						vvv.CanReboot = false
+					} else {
+						vvv.CanReboot = true
+					}
+					vvv.BadDisks = seti.BadDisks
+				}
+			}
 		}
 	}
 
@@ -318,6 +395,11 @@ func makeHostfile() {
 			for _, skey := range sortServKey {
 				s := v.Servers[skey]
 				if s.Processed {
+					continue
+				}
+
+				if !areAllSetsOK(s) {
+					fmt.Println("can't reboot:", s.Endpoint)
 					continue
 				}
 
@@ -368,6 +450,16 @@ func makeHostfile() {
 			}
 		}
 	}
+}
+
+func areAllSetsOK(s1 *Server) (yes bool) {
+	for _, set := range s1.Sets {
+		if !set.CanReboot {
+			return false
+		}
+	}
+
+	return true
 }
 
 func haveMatchingSets(s1 *Server, s2 *Server) (yes bool) {
