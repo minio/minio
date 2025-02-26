@@ -1,6 +1,6 @@
 module github.com/minio/minio
 
-go 1.23
+go 1.23.0
 
 toolchain go1.23.6
 
@@ -90,7 +90,7 @@ require (
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.0
 	goftp.io/server/v2 v2.0.1
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 	golang.org/x/oauth2 v0.26.0
 	golang.org/x/sync v0.11.0
 	golang.org/x/sys v0.30.0
