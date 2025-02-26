@@ -11,7 +11,7 @@ MinIO supports two different types of server-side encryption ([SSE](#sse)):
 
 #### Secret Keys
 
-The MinIO server uses an unique, randomly generated secret key per object also known as, Object Encryption Key ([OEK](#oek)). Neither the client-provided SSE-C key nor the KMS-managed key is directly used to en/decrypt an object. Instead, the OEK is stored as part of the object metadata next to the object in an encrypted form. To en/decrypt the OEK another secret key is needed also known as, Key Encryption Key ([KEK](#kek)).
+The MinIO server uses a unique, randomly generated secret key per object also known as, Object Encryption Key ([OEK](#oek)). Neither the client-provided SSE-C key nor the KMS-managed key is directly used to en/decrypt an object. Instead, the OEK is stored as part of the object metadata next to the object in an encrypted form. To en/decrypt the OEK another secret key is needed also known as, Key Encryption Key ([KEK](#kek)).
 
 The MinIO server runs a key-derivation algorithm to generate the KEK using a pseudo-random function ([PRF](#prf)):
 `KEK := PRF(EK, IV, context_values)` where:
@@ -28,7 +28,7 @@ To summarize for any encrypted object there exists (at least) three different ke
 
 #### Content Encryption
 
-The MinIO server uses an authenticated encryption scheme ([AEAD](#aead)) to en/decrypt and authenticate the object content. The AEAD is combined with some state to build a *Secure Channel*. A *Secure Channel* is a cryptographic construction that ensures confidentiality and integrity of the processed data. In particular the *Secure Channel* splits the plaintext content into fixed size chunks and en/decrypts each chunk separately using an unique key-nonce combination.
+The MinIO server uses an authenticated encryption scheme ([AEAD](#aead)) to en/decrypt and authenticate the object content. The AEAD is combined with some state to build a *Secure Channel*. A *Secure Channel* is a cryptographic construction that ensures confidentiality and integrity of the processed data. In particular the *Secure Channel* splits the plaintext content into fixed size chunks and en/decrypts each chunk separately using a unique key-nonce combination.
 
 ##### Figure 1 - Secure Channel construction
 
@@ -42,7 +42,7 @@ plaintext   := chunk_0          ||       chunk_1          ||       chunk_2      
 ciphertext  := sealed_chunk_0   ||       sealed_chunk_1   ||       sealed_chunk_2   ||       ...
 ```
 
-In case of a S3 multi-part operation each part is en/decrypted with the scheme shown in Figure 1. However, for each part an unique secret key is derived from the OEK and the part number using a PRF. So in case of multi-part not the OEK but the output of `PRF(OEK, part_id)` is used as secret key.
+In case of a S3 multi-part operation each part is en/decrypted with the scheme shown in Figure 1. However, for each part a unique secret key is derived from the OEK and the part number using a PRF. So in case of multi-part not the OEK but the output of `PRF(OEK, part_id)` is used as secret key.
 
 #### Cryptographic Primitives
 
