@@ -3803,9 +3803,7 @@ func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) (cs map[string]string
 		}
 		if cksum.Valid() {
 			meta[cksum.Type.Key()] = v
-		}
-		if isMP && partNum == 0 {
-			meta[xhttp.AmzChecksumType] = cksum.Type.ObjType()
+			meta[xhttp.AmzChecksumType] = cs[xhttp.AmzChecksumType]
 			meta[xhttp.AmzChecksumAlgo] = cksum.Type.String()
 		}
 	}
