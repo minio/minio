@@ -664,6 +664,7 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					into.addChild(h)
 					continue
 				}
+				folder.objectHealProbDiv = dataUsageUpdateDirCycles
 			}
 			f.updateCurrentPath(folder.name)
 			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name)
