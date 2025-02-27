@@ -147,6 +147,8 @@ func (s *TestSuiteIAM) SFTPPublicKeyAuthentication(c *check) {
 	}
 }
 
+// A user without an sshpubkey attribute in LDAP (here: fahim) should not be
+// able to authenticate.
 func (s *TestSuiteIAM) SFTPPublicKeyAuthNoPubKey(c *check) {
 	keyBytes, err := os.ReadFile("./testdata/dillon_test_key.pub")
 	if err != nil {
@@ -344,5 +346,4 @@ func (s *TestSuiteIAM) SFTPValidLDAPLoginWithPassword(c *check) {
 			c.Fatal("Password authentication failed for user (fahim):", err)
 		}
 	}
-
 }
