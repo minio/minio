@@ -298,7 +298,6 @@ func TestParseSignature(t *testing.T) {
 				t.Errorf("Test %d: Expected the result to be \"%s\", but got \"%s\". ", i+1, testCase.expectedSignStr, actualSignStr)
 			}
 		}
-
 	}
 }
 
@@ -343,7 +342,6 @@ func TestParseSignedHeaders(t *testing.T) {
 				t.Errorf("Test %d: Expected the result to be \"%v\", but got \"%v\". ", i+1, testCase.expectedSignedHeaders, actualSignedHeaders)
 			}
 		}
-
 	}
 }
 
@@ -514,7 +512,6 @@ func TestParseSignV4(t *testing.T) {
 				t.Errorf("Test %d: Expected the result to be \"%v\", but got \"%v\". ", i+1, testCase.expectedAuthField, parsedAuthField.SignedHeaders)
 			}
 		}
-
 	}
 }
 
@@ -880,6 +877,5 @@ func TestParsePreSignV4(t *testing.T) {
 				t.Errorf("Test %d: Expected date to be %v, but got %v", i+1, testCase.expectedPreSignValues.Date.UTC().Format(iso8601Format), parsedPreSign.Date.UTC().Format(iso8601Format))
 			}
 		}
-
 	}
 }

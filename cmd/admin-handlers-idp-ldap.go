@@ -345,7 +345,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 					Name:          newCred.Name,
 					Description:   newCred.Description,
 					Claims:        opts.claims,
-					SessionPolicy: createReq.Policy,
+					SessionPolicy: madmin.SRSessionPolicy(createReq.Policy),
 					Status:        auth.AccountOn,
 					Expiration:    createReq.Expiration,
 				},

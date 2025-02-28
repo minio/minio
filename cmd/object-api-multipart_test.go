@@ -443,7 +443,6 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
-
 	}
 
 	// Expected Results set for asserting ListObjectMultipart test.

@@ -61,6 +61,8 @@ var globalBatchConfig batch.Config
 const (
 	// Keep the completed/failed job stats 3 days before removing it
 	oldJobsExpiration = 3 * 24 * time.Hour
+
+	redactedText = "**REDACTED**"
 )
 
 // BatchJobRequest this is an internal data structure not for external consumption.
@@ -73,6 +75,29 @@ type BatchJobRequest struct {
 	Expire    *BatchJobExpire      `yaml:"expire" json:"expire"`
 	ctx       context.Context      `msg:"-"`
 }
+
+// RedactSensitive will redact any sensitive information in b.
+func (j *BatchJobRequest) RedactSensitive() {
+	j.Replicate.RedactSensitive()
+	j.Expire.RedactSensitive()
+	j.KeyRotate.RedactSensitive()
+}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobReplicateV1) RedactSensitive() {
+	if r == nil {
+		return
+	}
+	if r.Target.Creds.SecretKey != "" {
+		r.Target.Creds.SecretKey = redactedText
+	}
+	if r.Target.Creds.SessionToken != "" {
+		r.Target.Creds.SessionToken = redactedText
+	}
+}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobKeyRotateV1) RedactSensitive() {}
 
 func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token string) error {
 	if endpoint == "" {
@@ -597,12 +622,12 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 				},
 			}
 
-			opts, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
+			opts, _, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
 			if err != nil {
 				batchLogIf(ctx, err)
 				continue
 			}
-
+			// TODO: I am not sure we read it back, but we aren't sending whether checksums are single/multipart.
 			for k, vals := range opts.Header() {
 				for _, v := range vals {
 					snowballObj.Headers.Add(k, v)
@@ -687,14 +712,14 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 		return err
 	}
 
-	putOpts, err := batchReplicationOpts(ctx, "", objInfo)
+	putOpts, isMP, err := batchReplicationOpts(ctx, "", objInfo)
 	if err != nil {
 		return err
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
 		putOpts.Internal = miniogo.AdvancedPutOptions{}
 	}
-	if objInfo.isMultipart() {
+	if isMP {
 		if err := replicateObjectWithMultipart(ctx, c, tgtBucket, pathJoin(tgtPrefix, objInfo.Name), rd, objInfo, putOpts); err != nil {
 			return err
 		}
@@ -971,7 +996,7 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 // Note: to be used only with batch jobs that affect multiple versions through
 // a single action. e.g batch-expire has an option to expire all versions of an
 // object which matches the given filters.
-func (ri *batchJobInfo) trackMultipleObjectVersions(bucket string, info ObjectInfo, success bool) {
+func (ri *batchJobInfo) trackMultipleObjectVersions(info ObjectInfo, success bool) {
 	if success {
 		ri.Objects += int64(info.NumVersions)
 	} else {
@@ -1425,7 +1450,6 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		cred = r.Source.Creds
 		remoteBkt = r.Source.Bucket
 		pathStyle = r.Source.Path
-
 	}
 
 	u, err := url.Parse(remoteEp)
@@ -1551,11 +1575,11 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 	return err
 }
 
-func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
+func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, isMP bool, err error) {
 	// TODO: support custom storage class for remote replication
-	putOpts, err = putReplicationOpts(ctx, "", objInfo, 0)
+	putOpts, isMP, err = putReplicationOpts(ctx, "", objInfo)
 	if err != nil {
-		return putOpts, err
+		return putOpts, isMP, err
 	}
 	putOpts.Internal = miniogo.AdvancedPutOptions{
 		SourceVersionID:    objInfo.VersionID,
@@ -1563,7 +1587,7 @@ func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (p
 		SourceETag:         objInfo.ETag,
 		ReplicationRequest: true,
 	}
-	return putOpts, nil
+	return putOpts, isMP, nil
 }
 
 // ListBatchJobs - lists all currently active batch jobs, optionally takes {jobType}
@@ -1695,6 +1719,8 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Remove sensitive fields.
+	req.RedactSensitive()
 	buf, err := yaml.Marshal(req)
 	if err != nil {
 		batchLogIf(ctx, err)
@@ -1802,7 +1828,7 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if _, success := proxyRequestByToken(ctx, w, r, jobID); success {
+	if _, proxied, _ := proxyRequestByToken(ctx, w, r, jobID, true); proxied {
 		return
 	}
 
@@ -2283,7 +2309,6 @@ func lookupStyle(s string) miniogo.BucketLookupType {
 		lookup = miniogo.BucketLookupDNS
 	default:
 		lookup = miniogo.BucketLookupAuto
-
 	}
 	return lookup
 }

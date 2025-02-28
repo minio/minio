@@ -127,9 +127,10 @@ func (f *sftpDriver) getMinIOClient() (*minio.Client, error) {
 		tr = forwardForTransport{tr: tr, fwd: f.remoteIP}
 	}
 	return minio.New(f.endpoint, &minio.Options{
-		Creds:     mcreds,
-		Secure:    globalIsTLS,
-		Transport: tr,
+		TrailingHeaders: true,
+		Creds:           mcreds,
+		Secure:          globalIsTLS,
+		Transport:       tr,
 	})
 }
 
@@ -289,6 +290,7 @@ func (f *sftpDriver) Filewrite(r *sftp.Request) (w io.WriterAt, err error) {
 		oi, err := clnt.PutObject(r.Context(), bucket, object, pr, -1, minio.PutObjectOptions{
 			ContentType:          mimedb.TypeByExtension(path.Ext(object)),
 			DisableContentSha256: true,
+			Checksum:             minio.ChecksumFullObjectCRC32C,
 		})
 		stopFn(oi.Size, err)
 		pr.CloseWithError(err)

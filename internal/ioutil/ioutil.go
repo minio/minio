@@ -25,10 +25,10 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
-	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/disk"
 )
 
@@ -39,27 +39,38 @@ const (
 	LargeBlock  = 1 * humanize.MiByte   // Default r/w block size for normal objects.
 )
 
+// AlignedBytePool is a pool of fixed size aligned blocks
+type AlignedBytePool struct {
+	size int
+	p    bpool.Pool[*[]byte]
+}
+
+// NewAlignedBytePool creates a new pool with the specified size.
+func NewAlignedBytePool(sz int) *AlignedBytePool {
+	return &AlignedBytePool{size: sz, p: bpool.Pool[*[]byte]{New: func() *[]byte {
+		b := disk.AlignedBlock(sz)
+		return &b
+	}}}
+}
+
 // aligned sync.Pool's
 var (
-	ODirectPoolLarge = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(LargeBlock)
-			return &b
-		},
-	}
-	ODirectPoolMedium = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(MediumBlock)
-			return &b
-		},
-	}
-	ODirectPoolSmall = sync.Pool{
-		New: func() interface{} {
-			b := disk.AlignedBlock(SmallBlock)
-			return &b
-		},
-	}
+	ODirectPoolLarge  = NewAlignedBytePool(LargeBlock)
+	ODirectPoolMedium = NewAlignedBytePool(MediumBlock)
+	ODirectPoolSmall  = NewAlignedBytePool(SmallBlock)
 )
+
+// Get a block.
+func (p *AlignedBytePool) Get() *[]byte {
+	return p.p.Get()
+}
+
+// Put a block.
+func (p *AlignedBytePool) Put(pb *[]byte) {
+	if pb != nil && len(*pb) == p.size {
+		p.p.Put(pb)
+	}
+}
 
 // WriteOnCloser implements io.WriteCloser and always
 // executes at least one write operation if it is closed.
@@ -250,15 +261,6 @@ func NopCloser(w io.Writer) io.WriteCloser {
 	return nopCloser{w}
 }
 
-const copyBufferSize = 32 * 1024
-
-var copyBufPool = sync.Pool{
-	New: func() interface{} {
-		b := make([]byte, copyBufferSize)
-		return &b
-	},
-}
-
 // SkipReader skips a given number of bytes and then returns all
 // remaining data.
 type SkipReader struct {
@@ -274,12 +276,11 @@ func (s *SkipReader) Read(p []byte) (int, error) {
 	}
 	if s.skipCount > 0 {
 		tmp := p
-		if s.skipCount > l && l < copyBufferSize {
+		if s.skipCount > l && l < SmallBlock {
 			// We may get a very small buffer, so we grab a temporary buffer.
-			bufp := copyBufPool.Get().(*[]byte)
-			buf := *bufp
-			tmp = buf[:copyBufferSize]
-			defer copyBufPool.Put(bufp)
+			bufp := ODirectPoolSmall.Get()
+			tmp = *bufp
+			defer ODirectPoolSmall.Put(bufp)
 			l = int64(len(tmp))
 		}
 		for s.skipCount > 0 {
@@ -309,7 +310,7 @@ type writerOnly struct {
 
 // Copy is exactly like io.Copy but with reusable buffers.
 func Copy(dst io.Writer, src io.Reader) (written int64, err error) {
-	bufp := ODirectPoolMedium.Get().(*[]byte)
+	bufp := ODirectPoolMedium.Get()
 	defer ODirectPoolMedium.Put(bufp)
 	buf := *bufp
 

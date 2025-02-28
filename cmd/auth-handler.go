@@ -162,7 +162,6 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 	s3Err := ErrAccessDenied
 	if _, ok := r.Header[xhttp.AmzContentSha256]; ok &&
 		getRequestAuthType(r) == authTypeSigned {
-
 		// Get credential information from the request.
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 		if s3Err != ErrNone {

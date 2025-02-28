@@ -783,7 +783,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 					Name:          newCred.Name,
 					Description:   newCred.Description,
 					Claims:        opts.claims,
-					SessionPolicy: createReq.Policy,
+					SessionPolicy: madmin.SRSessionPolicy(createReq.Policy),
 					Status:        auth.AccountOn,
 					Expiration:    createReq.Expiration,
 				},
@@ -907,7 +907,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 					Status:        opts.status,
 					Name:          opts.name,
 					Description:   opts.description,
-					SessionPolicy: updateReq.NewPolicy,
+					SessionPolicy: madmin.SRSessionPolicy(updateReq.NewPolicy),
 					Expiration:    updateReq.NewExpiration,
 				},
 			},
@@ -1487,8 +1487,8 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		effectivePolicy = globalIAMSys.GetCombinedPolicy(policies...)
-
 	}
+
 	buf, err = json.MarshalIndent(effectivePolicy, "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -2169,7 +2169,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					SecretKey:     acc.Credentials.SecretKey,
 					Groups:        acc.Credentials.Groups,
 					Claims:        claims,
-					SessionPolicy: json.RawMessage(policyJSON),
+					SessionPolicy: policyJSON,
 					Status:        acc.Credentials.Status,
 					Name:          sa.Name,
 					Description:   sa.Description,
@@ -2279,7 +2279,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 
 	// import policies first
 	{
-
 		f, err := zr.Open(pathJoin(iamAssetsDir, allPoliciesFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
@@ -2362,7 +2361,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				} else {
 					added.Users = append(added.Users, accessKey)
 				}
-
 			}
 		}
 	}

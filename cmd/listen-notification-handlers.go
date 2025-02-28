@@ -26,6 +26,7 @@ import (
 
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/grid"
+	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
@@ -200,19 +201,19 @@ func (api objectAPIHandlers) ListenNotificationHandler(w http.ResponseWriter, r 
 			}
 			if len(mergeCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 			grid.PutByteBuffer(ev)
 		case <-emptyEventTicker:
 			if err := enc.Encode(struct{ Records []event.Event }{}); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-keepAliveTicker:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}

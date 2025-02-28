@@ -148,8 +148,12 @@ func (c ChecksumType) IsSet() bool {
 // NewChecksumType returns a checksum type based on the algorithm string and obj type.
 func NewChecksumType(alg, objType string) ChecksumType {
 	full := ChecksumFullObject
-	if objType != xhttp.AmzChecksumTypeFullObject {
+	switch objType {
+	case xhttp.AmzChecksumTypeFullObject:
+	case xhttp.AmzChecksumTypeComposite, "":
 		full = 0
+	default:
+		return ChecksumInvalid
 	}
 
 	switch strings.ToUpper(alg) {
@@ -201,6 +205,24 @@ func (c ChecksumType) String() string {
 		return ""
 	}
 	return "invalid"
+}
+
+// StringFull returns the type and all flags as a string.
+func (c ChecksumType) StringFull() string {
+	out := []string{c.String()}
+	if c.Is(ChecksumMultipart) {
+		out = append(out, "MULTIPART")
+	}
+	if c.Is(ChecksumIncludesMultipart) {
+		out = append(out, "INCLUDESMP")
+	}
+	if c.Is(ChecksumTrailing) {
+		out = append(out, "TRAILING")
+	}
+	if c.Is(ChecksumFullObject) {
+		out = append(out, "FULLOBJ")
+	}
+	return strings.Join(out, "|")
 }
 
 // FullObjectRequested will return if the checksum type indicates full object checksum was requested.
@@ -263,7 +285,8 @@ func NewChecksumFromData(t ChecksumType, data []byte) *Checksum {
 }
 
 // ReadCheckSums will read checksums from b and return them.
-func ReadCheckSums(b []byte, part int) map[string]string {
+// Returns whether this is (part of) a multipart checksum.
+func ReadCheckSums(b []byte, part int) (cs map[string]string, isMP bool) {
 	res := make(map[string]string, 1)
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
@@ -277,9 +300,11 @@ func ReadCheckSums(b []byte, part int) map[string]string {
 		if length == 0 || len(b) < length {
 			break
 		}
+
 		cs := base64.StdEncoding.EncodeToString(b[:length])
 		b = b[length:]
 		if typ.Is(ChecksumMultipart) {
+			isMP = true
 			t, n := binary.Uvarint(b)
 			if n < 0 {
 				break
@@ -317,7 +342,7 @@ func ReadCheckSums(b []byte, part int) map[string]string {
 	if len(res) == 0 {
 		res = nil
 	}
-	return res
+	return res, isMP
 }
 
 // ReadPartCheckSums will read all part checksums from b and return them.
@@ -546,6 +571,16 @@ func GetContentChecksum(h http.Header) (*Checksum, error) {
 			}
 		}
 		if res != nil {
+			switch h.Get(xhttp.AmzChecksumType) {
+			case xhttp.AmzChecksumTypeFullObject:
+				if !res.Type.CanMerge() {
+					return nil, ErrInvalidChecksum
+				}
+				res.Type |= ChecksumFullObject
+			case xhttp.AmzChecksumTypeComposite, "":
+			default:
+				return nil, ErrInvalidChecksum
+			}
 			return res, nil
 		}
 	}

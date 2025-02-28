@@ -22,10 +22,11 @@ import (
 	"testing"
 )
 
-func createTempFile(prefix, content string) (tempFile string, err error) {
+func createTempFile(t testing.TB, prefix, content string) (tempFile string, err error) {
+	t.Helper()
 	var tmpfile *os.File
 
-	if tmpfile, err = os.CreateTemp("", prefix); err != nil {
+	if tmpfile, err = os.CreateTemp(t.TempDir(), prefix); err != nil {
 		return tempFile, err
 	}
 
@@ -42,14 +43,13 @@ func createTempFile(prefix, content string) (tempFile string, err error) {
 }
 
 func TestParsePublicCertFile(t *testing.T) {
-	tempFile1, err := createTempFile("public-cert-file", "")
+	tempFile1, err := createTempFile(t, "public-cert-file", "")
 	if err != nil {
 		t.Fatalf("Unable to create temporary file. %v", err)
 	}
 	defer os.Remove(tempFile1)
 
-	tempFile2, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
+	tempFile2, err := createTempFile(t, "public-cert-file", `-----BEGIN CERTIFICATE-----
 MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
 WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
 aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
@@ -70,8 +70,7 @@ M9ofSEt/bdRD
 	}
 	defer os.Remove(tempFile2)
 
-	tempFile3, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
+	tempFile3, err := createTempFile(t, "public-cert-file", `-----BEGIN CERTIFICATE-----
 MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
 WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
 aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
@@ -92,8 +91,7 @@ M9ofSEt/bdRD
 	}
 	defer os.Remove(tempFile3)
 
-	tempFile4, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
+	tempFile4, err := createTempFile(t, "public-cert-file", `-----BEGIN CERTIFICATE-----
 MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
 WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
 aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
@@ -114,8 +112,7 @@ M9ofSEt/bdRD
 	}
 	defer os.Remove(tempFile4)
 
-	tempFile5, err := createTempFile("public-cert-file",
-		`-----BEGIN CERTIFICATE-----
+	tempFile5, err := createTempFile(t, "public-cert-file", `-----BEGIN CERTIFICATE-----
 MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
 WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
 aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
@@ -184,11 +181,11 @@ func TestLoadX509KeyPair(t *testing.T) {
 		os.Unsetenv(EnvCertPassword)
 	})
 	for i, testCase := range loadX509KeyPairTests {
-		privateKey, err := createTempFile("private.key", testCase.privateKey)
+		privateKey, err := createTempFile(t, "private.key", testCase.privateKey)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create tmp private key file: %v", i, err)
 		}
-		certificate, err := createTempFile("public.crt", testCase.certificate)
+		certificate, err := createTempFile(t, "public.crt", testCase.certificate)
 		if err != nil {
 			os.Remove(privateKey)
 			t.Fatalf("Test %d: failed to create tmp certificate file: %v", i, err)

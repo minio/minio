@@ -668,9 +668,12 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	n, err := erasure.Encode(ctx, toEncode, writers, buffer, writeQuorum)
-	closeBitrotWriters(writers)
+	closeErrs := closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
+	}
+	if closeErr := reduceWriteQuorumErrs(ctx, closeErrs, objectOpIgnoredErrs, writeQuorum); closeErr != nil {
+		return pi, toObjectErr(closeErr, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
@@ -1049,7 +1052,6 @@ func readParts(ctx context.Context, disks []StorageAPI, bucket string, partMetaP
 				PartNumber: partNumbers[pidx],
 			}.Error(),
 		}
-
 	}
 	return partInfosInQuorum, nil
 }

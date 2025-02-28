@@ -22,11 +22,11 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/v7/pkg/s3utils"
@@ -293,12 +293,6 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	return time.Time{}, ErrMissingDateHeader
 }
 
-// Bad path components to be rejected by the path validity handler.
-const (
-	dotdotComponent = ".."
-	dotComponent    = "."
-)
-
 func hasBadHost(host string) error {
 	if globalIsCICD && strings.TrimSpace(host) == "" {
 		// under CI/CD test setups ignore empty hosts as invalid hosts
@@ -311,21 +305,41 @@ func hasBadHost(host string) error {
 // Check if the incoming path has bad path components,
 // such as ".." and "."
 func hasBadPathComponent(path string) bool {
-	if len(path) > 4096 {
-		// path cannot be greater than Linux PATH_MAX
-		// this is to avoid a busy loop, that can happen
-		// if the caller sends path of following style
-		// a/a/a/a/a/a/a/a...
+	n := len(path)
+	if n > 32<<10 {
+		// At 32K we are beyond reasonable.
 		return true
 	}
-	path = filepath.ToSlash(strings.TrimSpace(path)) // For windows '\' must be converted to '/'
-	for _, p := range strings.Split(path, SlashSeparator) {
-		switch strings.TrimSpace(p) {
-		case dotdotComponent:
+	i := 0
+	// Skip leading slashes (for sake of Windows \ is included as well)
+	for i < n && (path[i] == SlashSeparatorChar || path[i] == '\\') {
+		i++
+	}
+
+	for i < n {
+		// Find the next segment
+		start := i
+		for i < n && path[i] != SlashSeparatorChar && path[i] != '\\' {
+			i++
+		}
+
+		// Trim whitespace of segment
+		segmentStart, segmentEnd := start, i
+		for segmentStart < segmentEnd && unicode.IsSpace(rune(path[segmentStart])) {
+			segmentStart++
+		}
+		for segmentEnd > segmentStart && unicode.IsSpace(rune(path[segmentEnd-1])) {
+			segmentEnd--
+		}
+
+		// Check for ".." or "."
+		switch {
+		case segmentEnd-segmentStart == 2 && path[segmentStart] == '.' && path[segmentStart+1] == '.':
 			return true
-		case dotComponent:
+		case segmentEnd-segmentStart == 1 && path[segmentStart] == '.':
 			return true
 		}
+		i++
 	}
 	return false
 }

@@ -278,7 +278,6 @@ func (iamOS *IAMObjectStore) loadUserIdentity(ctx context.Context, user string, 
 				iamOS.deleteIAMConfig(ctx, getMappedPolicyPath(user, userType, false))
 			}
 			return u, errNoSuchUser
-
 		}
 		u.Credentials.Claims = jwtClaims.Map()
 	}

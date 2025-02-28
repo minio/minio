@@ -829,7 +829,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		// Flush before waiting for next...
-		w.(http.Flusher).Flush()
+		xhttp.Flush(w)
 
 		select {
 		case <-ticker.C:
@@ -1320,7 +1320,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Analyze the heal token and route the request accordingly
-	token, success := proxyRequestByToken(ctx, w, r, hip.clientToken)
+	token, _, success := proxyRequestByToken(ctx, w, r, hip.clientToken, false)
 	if success {
 		return
 	}
@@ -1359,7 +1359,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 				if _, err := w.Write([]byte(" ")); err != nil {
 					return
 				}
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			case hr := <-respCh:
 				switch hr.apiErr {
 				case noError:
@@ -1367,7 +1367,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 						if _, err := w.Write(hr.respBytes); err != nil {
 							return
 						}
-						w.(http.Flusher).Flush()
+						xhttp.Flush(w)
 					} else {
 						writeSuccessResponseJSON(w, hr.respBytes)
 					}
@@ -1394,7 +1394,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					if _, err := w.Write(errorRespJSON); err != nil {
 						return
 					}
-					w.(http.Flusher).Flush()
+					xhttp.Flush(w)
 				}
 				break forLoop
 			}
@@ -1611,7 +1611,6 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 		if err != nil || ctx.Err() != nil || totalRx > 100*humanize.GiByte {
 			break
 		}
-
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -1840,7 +1839,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 					return
 				}
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case result, ok := <-ch:
 			if !ok {
 				return
@@ -1849,7 +1848,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 				return
 			}
 			prevResult = result
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		}
 	}
 }
@@ -1958,7 +1957,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 			if err := enc.Encode(madmin.DriveSpeedTestResult{}); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case result, ok := <-ch:
 			if !ok {
 				return
@@ -1966,7 +1965,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 			if err := enc.Encode(result); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		}
 	}
 }
@@ -2083,7 +2082,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			grid.PutByteBuffer(entry)
 			if len(traceCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-keepAliveTicker.C:
 			if len(traceCh) > 0 {
@@ -2092,7 +2091,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}
@@ -2184,7 +2183,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 			grid.PutByteBuffer(log)
 			if len(logCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-keepAliveTicker.C:
 			if len(logCh) > 0 {
@@ -2193,7 +2192,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}
@@ -2963,13 +2962,13 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			}
 			if len(healthInfoCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-ticker.C:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-healthCtx.Done():
 			return
 		}

@@ -539,7 +539,6 @@ func (r *Config) GetSettings() madmin.OpenIDSettings {
 				HashedClientSecret:   hashedSecret,
 			}
 		}
-
 	}
 
 	return res

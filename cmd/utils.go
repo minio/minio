@@ -36,6 +36,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -271,10 +272,12 @@ func validateLengthAndChecksum(r *http.Request) bool {
 	if err != nil {
 		return false
 	}
-	if !cs.Type.IsSet() {
+	if cs == nil || !cs.Type.IsSet() {
 		return false
 	}
-	r.Body = hash.NewChecker(r.Body, cs.Type.Hasher(), cs.Raw, r.ContentLength)
+	if cs.Valid() && !cs.Type.Trailing() {
+		r.Body = hash.NewChecker(r.Body, cs.Type.Hasher(), cs.Raw, r.ContentLength)
+	}
 	return true
 }
 
@@ -1173,4 +1176,20 @@ func filterStorageClass(ctx context.Context, s string) string {
 		return globalVeeamForceSC
 	}
 	return s
+}
+
+type ordered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr | ~float32 | ~float64 | string
+}
+
+// mapKeysSorted returns the map keys as a sorted slice.
+func mapKeysSorted[Map ~map[K]V, K ordered, V any](m Map) []K {
+	res := make([]K, 0, len(m))
+	for k := range m {
+		res = append(res, k)
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i] < res[j]
+	})
+	return res
 }

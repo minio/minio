@@ -131,6 +131,75 @@ func TestErasureDeleteObjectBasic(t *testing.T) {
 	removeRoots(fsDirs)
 }
 
+func TestDeleteObjectsVersionedTwoPools(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, fsDirs, err := prepareErasurePools()
+	if err != nil {
+		t.Fatal("Unable to initialize 'Erasure' object layer.", err)
+	}
+	// Remove all dirs.
+	for _, dir := range fsDirs {
+		defer os.RemoveAll(dir)
+	}
+
+	bucketName := "bucket"
+	objectName := "myobject"
+	err = obj.MakeBucket(ctx, bucketName, MakeBucketOptions{
+		VersioningEnabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	z, ok := obj.(*erasureServerPools)
+	if !ok {
+		t.Fatal("unexpected object layer type")
+	}
+
+	versions := make([]string, 2)
+	for i := range z.serverPools {
+		objInfo, err := z.serverPools[i].PutObject(ctx, bucketName, objectName,
+			mustGetPutObjReader(t, bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), ObjectOptions{
+				Versioned: true,
+			})
+		if err != nil {
+			t.Fatalf("Erasure Object upload failed: <ERROR> %s", err)
+		}
+		versions[i] = objInfo.VersionID
+	}
+
+	// Remove and check the version in the second pool, then
+	// remove and check the version in the first pool
+	for testIdx, vid := range []string{versions[1], versions[0]} {
+		names := []ObjectToDelete{
+			{
+				ObjectV: ObjectV{
+					ObjectName: objectName,
+					VersionID:  vid,
+				},
+			},
+		}
+		_, delErrs := obj.DeleteObjects(ctx, bucketName, names, ObjectOptions{
+			Versioned: true,
+		})
+		for i := range delErrs {
+			if delErrs[i] != nil {
+				t.Errorf("Test %d: Failed to remove object `%v` with the error: `%v`", testIdx, names[i], delErrs[i])
+			}
+			_, statErr := obj.GetObjectInfo(ctx, bucketName, objectName, ObjectOptions{
+				VersionID: names[i].ObjectV.VersionID,
+			})
+			switch statErr.(type) {
+			case VersionNotFound:
+			default:
+				t.Errorf("Test %d: Object %s is not removed", testIdx, objectName)
+			}
+		}
+	}
+}
+
 func TestDeleteObjectsVersioned(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -177,7 +246,6 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 				VersionID:  objInfo.VersionID,
 			},
 		}
-
 	}
 	names = append(names, ObjectToDelete{
 		ObjectV: ObjectV{

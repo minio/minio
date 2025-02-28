@@ -156,7 +156,7 @@ func (store *QueueStore[I]) multiWrite(key Key, items []I) (err error) {
 
 // write - writes an item to the directory.
 func (store *QueueStore[I]) write(key Key, item I) error {
-	// Marshalls the item.
+	// Marshals the item.
 	eventData, err := json.Marshal(item)
 	if err != nil {
 		return err

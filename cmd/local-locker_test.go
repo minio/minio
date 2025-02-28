@@ -136,7 +136,6 @@ func TestLocalLockerUnlock(t *testing.T) {
 		}
 		wResources[i] = names
 		wUIDs[i] = uid
-
 	}
 	for i := range rResources {
 		name := mustGetUUID()

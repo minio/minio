@@ -84,3 +84,27 @@ func TestGetSourceIP(t *testing.T) {
 		}
 	}
 }
+
+func TestXFFDisabled(t *testing.T) {
+	req := &http.Request{
+		Header: http.Header{
+			xForwardedFor: []string{"8.8.8.8"},
+			xRealIP:       []string{"1.1.1.1"},
+		},
+	}
+	// When X-Forwarded-For and X-Real-IP headers are both present, X-Forwarded-For takes precedence.
+	res := GetSourceIP(req)
+	if res != "8.8.8.8" {
+		t.Errorf("wrong header, xff takes precedence: got %s, want: 8.8.8.8", res)
+	}
+
+	// When explicitly disabled, the XFF header is ignored and X-Real-IP is used.
+	enableXFFHeader = false
+	defer func() {
+		enableXFFHeader = true
+	}()
+	res = GetSourceIP(req)
+	if res != "1.1.1.1" {
+		t.Errorf("wrong header, xff is disabled: got %s, want: 1.1.1.1", res)
+	}
+}

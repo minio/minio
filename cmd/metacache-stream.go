@@ -27,6 +27,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/s2"
+	"github.com/minio/minio/internal/bpool"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/valyala/bytebufferpool"
@@ -236,7 +237,7 @@ func (w *metacacheWriter) Reset(out io.Writer) {
 	}
 }
 
-var s2DecPool = sync.Pool{New: func() interface{} {
+var s2DecPool = bpool.Pool[*s2.Reader]{New: func() *s2.Reader {
 	// Default alloc block for network transfer.
 	return s2.NewReader(nil, s2.ReaderAllocBlock(16<<10))
 }}
@@ -253,7 +254,7 @@ type metacacheReader struct {
 // newMetacacheReader creates a new cache reader.
 // Nothing will be read from the stream yet.
 func newMetacacheReader(r io.Reader) *metacacheReader {
-	dec := s2DecPool.Get().(*s2.Reader)
+	dec := s2DecPool.Get()
 	dec.Reset(r)
 	mr := msgpNewReader(dec)
 	return &metacacheReader{

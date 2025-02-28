@@ -175,7 +175,6 @@ func dateDiff(timePart string, ts1, ts2 time.Time) (*Value, error) {
 		seconds := duration / time.Second
 		return FromInt(int64(seconds)), nil
 	default:
-
 	}
 	return nil, errNotImplemented
 }
