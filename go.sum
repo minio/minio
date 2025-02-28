@@ -448,6 +448,8 @@ github.com/minio/kms-go/kes v0.3.1 h1:K3sPFAvFbJx33XlCTUBnQo8JRmSZyDvT6T2/MQ2iC3
 github.com/minio/kms-go/kes v0.3.1/go.mod h1:Q9Ct0KUAuN9dH0hSVa0eva45Jg99cahbZpPxeqR9rOQ=
 github.com/minio/kms-go/kms v0.4.0 h1:cLPZceEp+05xHotVBaeFJrgL7JcXM4lBy6PU0idkE7I=
 github.com/minio/kms-go/kms v0.4.0/go.mod h1:q12CehiIy2qgBnDKq6Q7wmPi2PHSyRVug5DKp0HAVeE=
+github.com/minio/madmin-go/v3 v3.0.85 h1:bP63oKd5YclvjuUw58BtE8cME0VAoZwvwUV50lEvES4=
+github.com/minio/madmin-go/v3 v3.0.85/go.mod h1:pMLdj9OtN0CANNs5tdm6opvOlDFfj0WhbztboZAjRWE=
 github.com/minio/mc v0.0.0-20250116095217-95e1f70eb5c3 h1:Vbvisu9tHkYUfSnx0+I6RA14gs9rkGB1M44oZrksLqU=
 github.com/minio/mc v0.0.0-20250116095217-95e1f70eb5c3/go.mod h1:QzDl5iEHkxNLY+ociZc0DJHIIs9p73RNYFWMFuwq+jM=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
