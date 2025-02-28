@@ -4,6 +4,8 @@ go 1.23.0
 
 toolchain go1.23.6
 
+replace github.com/minio/madmin-go/v3 => github.com/taran-p/madmin-go/v3 v3.0.55-0.20250217223458-d6361e4251b1
+
 require (
 	cloud.google.com/go/storage v1.46.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
