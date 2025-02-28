@@ -2737,8 +2737,19 @@ func (store *IAMStoreSys) ListAccessKeys(ctx context.Context) ([]auth.Credential
 	defer store.runlock()
 
 	accessKeys := store.getSTSAndServiceAccounts(cache)
-	for i := range accessKeys {
+	for i, accessKey := range accessKeys {
 		accessKeys[i].SecretKey = ""
+		if accessKey.IsTemp() {
+			secret, err := getTokenSigningKey()
+			if err != nil {
+				return nil, err
+			}
+			claims, err := getClaimsFromTokenWithSecret(accessKey.SessionToken, secret)
+			if err != nil {
+				return nil, err
+			}
+			accessKeys[i].Claims = claims.MapClaims
+		}
 		accessKeys[i].SessionToken = ""
 	}
 
