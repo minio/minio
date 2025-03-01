@@ -649,11 +649,14 @@ func (r Config) GetUserReadableClaim(cfgName string) string {
 	return ""
 }
 
-// GetUserIDClaim returns the user ID claim for the given configuration name.
+// GetUserIDClaim returns the user ID claim for the given configuration name, or "sub" if not set.
 func (r Config) GetUserIDClaim(cfgName string) string {
 	pCfg, ok := r.ProviderCfgs[cfgName]
 	if ok {
-		return pCfg.UserIDClaim
+		if pCfg.UserIDClaim != "" {
+			return pCfg.UserIDClaim
+		}
+		return "sub"
 	}
 	return ""
 }
