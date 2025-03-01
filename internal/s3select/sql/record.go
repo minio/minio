@@ -134,7 +134,7 @@ func IterToValue(iter simdjson.Iter) (interface{}, error) {
 			}
 			dst = append(dst, v)
 		}
-		return dst, err
+		return dst, nil
 	case simdjson.TypeNull:
 		return nil, nil
 	}
