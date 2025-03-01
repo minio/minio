@@ -43,14 +43,15 @@ import (
 
 // OpenID keys and envs.
 const (
-	ClientID      = "client_id"
-	ClientSecret  = "client_secret"
-	ConfigURL     = "config_url"
-	ClaimName     = "claim_name"
-	ClaimUserinfo = "claim_userinfo"
-	RolePolicy    = "role_policy"
-	DisplayName   = "display_name"
-	DisplayClaim  = "display_claim"
+	ClientID          = "client_id"
+	ClientSecret      = "client_secret"
+	ConfigURL         = "config_url"
+	ClaimName         = "claim_name"
+	ClaimUserinfo     = "claim_userinfo"
+	RolePolicy        = "role_policy"
+	DisplayName       = "display_name"
+	UserReadableClaim = "user_readable_claim"
+	UserIDClaim       = "user_id_claim"
 
 	Scopes             = "scopes"
 	RedirectURI        = "redirect_uri"
@@ -132,7 +133,11 @@ var (
 			Value: "",
 		},
 		config.KV{
-			Key:   DisplayClaim,
+			Key:   UserReadableClaim,
+			Value: "",
+		},
+		config.KV{
+			Key:   UserIDClaim,
 			Value: "",
 		},
 	}
@@ -634,10 +639,21 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	return defaultExpiryDuration, nil
 }
 
-func (r Config) GetReadableClaimName(cfgName string) string {
+// GetUserReadableClaim returns the human readable claim name for the given
+// configuration name.
+func (r Config) GetUserReadableClaim(cfgName string) string {
 	pCfg, ok := r.ProviderCfgs[cfgName]
 	if ok {
-		return pCfg.DisplayClaim
+		return pCfg.UserReadableClaim
+	}
+	return ""
+}
+
+// GetUserIDClaim returns the user ID claim for the given configuration name.
+func (r Config) GetUserIDClaim(cfgName string) string {
+	pCfg, ok := r.ProviderCfgs[cfgName]
+	if ok {
+		return pCfg.UserIDClaim
 	}
 	return ""
 }

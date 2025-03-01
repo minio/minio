@@ -157,15 +157,12 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 
 	for _, accessKey := range accessKeys {
 		// Filter out any disqualifying access keys
-		sub, ok := accessKey.Claims[subClaim]
+		_, ok := accessKey.Claims[subClaim]
 		if !ok {
 			continue // OpenID access keys must have a sub claim
 		}
-		if (!listSTSKeys && accessKey.IsTemp()) || (!listServiceAccounts && accessKey.IsServiceAccount()) {
+		if (!listSTSKeys && !accessKey.IsServiceAccount()) || (!listServiceAccounts && accessKey.IsServiceAccount()) {
 			continue // skip if not the type we want
-		}
-		if !userSet.IsEmpty() && !userSet.Contains(accessKey.ParentUser) {
-			continue // skip if not in the user list
 		}
 		arn, ok := accessKey.Claims[roleArnClaim].(string)
 		if !ok {
@@ -177,23 +174,25 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		if !ok {
 			continue // skip if not part of the target config
 		}
+		var id string
+		if idClaim := globalIAMSys.OpenIDConfig.GetUserIDClaim(matchingCfgName); idClaim != "" {
+			id, _ = accessKey.Claims[idClaim].(string)
+		}
+		if !userSet.IsEmpty() && !userSet.Contains(accessKey.ParentUser) && !userSet.Contains(id) {
+			continue // skip if not in the user list
+		}
 		openIDUserAccessKeys, ok := cfgToUsersMap[matchingCfgName][accessKey.ParentUser]
 
 		// Add new user to map if not already present
 		if !ok {
-			subStr, ok := sub.(string)
-			if !ok {
-				continue
-			}
-			readableClaimName := globalIAMSys.OpenIDConfig.GetReadableClaimName(matchingCfgName)
 			var readableClaim string
-			if readableClaimName != "" {
-				readableClaim, _ = accessKey.Claims[readableClaimName].(string)
+			if rc := globalIAMSys.OpenIDConfig.GetUserReadableClaim(matchingCfgName); rc != "" {
+				readableClaim, _ = accessKey.Claims[rc].(string)
 			}
 			openIDUserAccessKeys = madmin.OpenIDUserAccessKeys{
-				UserID:       accessKey.ParentUser,
-				Sub:          subStr,
-				ReadableName: readableClaim,
+				MinioAccessKey: accessKey.ParentUser,
+				ID:             id,
+				ReadableName:   readableClaim,
 			}
 		}
 		svcAccInfo := madmin.ServiceAccountInfo{
@@ -216,7 +215,7 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 			users = append(users, user)
 		}
 		sort.Slice(users, func(i, j int) bool {
-			return users[i].UserID < users[j].UserID
+			return users[i].MinioAccessKey < users[j].MinioAccessKey
 		})
 		resp = append(resp, madmin.ListAccessKeysOpenIDResp{
 			ConfigName: cfgName,

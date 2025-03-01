@@ -48,9 +48,8 @@ type providerCfg struct {
 	ClientID           string
 	ClientSecret       string
 	RolePolicy         string
-
-	// Human readable identifier for users when hashed ID is shown
-	DisplayClaim string
+	UserReadableClaim  string
+	UserIDClaim        string
 
 	roleArn  arn.ARN
 	provider provider.Provider
@@ -67,7 +66,8 @@ func newProviderCfgFromConfig(getCfgVal func(cfgName string) string) providerCfg
 		ClientID:           getCfgVal(ClientID),
 		ClientSecret:       getCfgVal(ClientSecret),
 		RolePolicy:         getCfgVal(RolePolicy),
-		DisplayClaim:       getCfgVal(DisplayClaim),
+		UserReadableClaim:  getCfgVal(UserReadableClaim),
+		UserIDClaim:        getCfgVal(UserIDClaim),
 	}
 }
 
