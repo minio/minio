@@ -658,5 +658,5 @@ func (r Config) GetUserIDClaim(cfgName string) string {
 		}
 		return "sub"
 	}
-	return ""
+	return "" // an incorrect config should be handled outside this function
 }
