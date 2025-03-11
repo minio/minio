@@ -1110,7 +1110,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 					continue
 				}
 				hasErr++
-				errs[i] = err
+				errs[i] = fmt.Errorf("drive: %s returned err: %v", disks[i], err)
 				continue
 			}
 			// If no current, add it.
@@ -1159,18 +1159,7 @@ func listPathRaw(ctx context.Context, opts listPathRawOptions) (err error) {
 			if opts.finished != nil {
 				opts.finished(errs)
 			}
-			var combinedErr []string
-			for i, err := range errs {
-				if err != nil {
-					if disks[i] != nil {
-						combinedErr = append(combinedErr,
-							fmt.Sprintf("drive %s returned: %s", disks[i], err))
-					} else {
-						combinedErr = append(combinedErr, err.Error())
-					}
-				}
-			}
-			return errors.New(strings.Join(combinedErr, ", "))
+			return errors.Join(errs...)
 		}
 
 		// Break if all at EOF or error.
