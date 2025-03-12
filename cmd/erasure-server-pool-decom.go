@@ -1025,7 +1025,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						go decommissionEntry(entry)
 					},
 				)
-				if err == nil || errors.Is(err, context.Canceled) {
+				if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, errVolumeNotFound) {
 					break
 				}
 				setN := humanize.Ordinal(setIdx + 1)
