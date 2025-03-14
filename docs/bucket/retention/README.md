@@ -1,4 +1,4 @@
-# Object Lock and Immutablity Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
+# Object Lock and Immutability Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
 MinIO server allows WORM for specific objects or by configuring a bucket with default object lock configuration that applies default retention mode and retention duration to all objects. This makes objects in the bucket immutable i.e. delete of the version are not allowed until an expiry specified in the bucket's object lock configuration or object retention.
 

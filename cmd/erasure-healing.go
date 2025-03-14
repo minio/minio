@@ -32,6 +32,7 @@ import (
 	"github.com/minio/minio/internal/grid"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 //go:generate stringer -type=healingMetric -trimprefix=healingMetric $GOFILE
@@ -117,9 +118,8 @@ func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string,
 
 // listAllBuckets lists all buckets from all disks. It also
 // returns the occurrence of each buckets in all disks
-func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets map[string]VolInfo, readQuorum int) error {
+func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets *xsync.MapOf[string, VolInfo], readQuorum int) error {
 	g := errgroup.WithNErrs(len(storageDisks))
-	var mu sync.Mutex
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
@@ -131,6 +131,7 @@ func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets 
 			if err != nil {
 				return err
 			}
+
 			for _, volInfo := range volsInfo {
 				// StorageAPI can send volume names which are
 				// incompatible with buckets - these are
@@ -138,25 +139,44 @@ func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets 
 				if isReservedOrInvalidBucket(volInfo.Name, false) {
 					continue
 				}
-				mu.Lock()
-				if _, ok := healBuckets[volInfo.Name]; !ok {
-					healBuckets[volInfo.Name] = volInfo
-				}
-				mu.Unlock()
+
+				healBuckets.Compute(volInfo.Name, func(oldValue VolInfo, loaded bool) (newValue VolInfo, del bool) {
+					if loaded {
+						newValue = oldValue
+						newValue.count = oldValue.count + 1
+						return newValue, false
+					}
+					return VolInfo{
+						Name:    volInfo.Name,
+						Created: volInfo.Created,
+						count:   1,
+					}, false
+				})
 			}
+
 			return nil
 		}, index)
 	}
-	return reduceReadQuorumErrs(ctx, g.Wait(), bucketMetadataOpIgnoredErrs, readQuorum)
+
+	if err := reduceReadQuorumErrs(ctx, g.Wait(), bucketMetadataOpIgnoredErrs, readQuorum); err != nil {
+		return err
+	}
+
+	healBuckets.Range(func(volName string, volInfo VolInfo) bool {
+		if volInfo.count < readQuorum {
+			healBuckets.Delete(volName)
+		}
+		return true
+	})
+
+	return nil
 }
 
-var errLegacyXLMeta = errors.New("legacy XL meta")
-
-var errOutdatedXLMeta = errors.New("outdated XL meta")
-
 var (
-	errPartCorrupt = errors.New("part corrupt")
-	errPartMissing = errors.New("part missing")
+	errLegacyXLMeta   = errors.New("legacy XL meta")
+	errOutdatedXLMeta = errors.New("outdated XL meta")
+	errPartCorrupt    = errors.New("part corrupt")
+	errPartMissing    = errors.New("part missing")
 )
 
 // Only heal on disks where we are sure that healing is needed. We can expand
@@ -564,7 +584,6 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 				readers[i] = newBitrotReader(disk, copyPartsMetadata[i].Data, bucket, partPath, tillOffset, checksumAlgo,
 					checksumInfo.Hash, erasure.ShardSize())
 				prefer[i] = disk.Hostname() == ""
-
 			}
 			writers := make([]io.Writer, len(outDatedDisks))
 			for i, disk := range outDatedDisks {
@@ -589,7 +608,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			// later to the final location.
 			err = erasure.Heal(ctx, writers, readers, partSize, prefer)
 			closeBitrotReaders(readers)
-			closeBitrotWriters(writers)
+			closeErrs := closeBitrotWriters(writers)
 			if err != nil {
 				return result, err
 			}
@@ -609,6 +628,13 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 					continue
 				}
 
+				// A non-nil stale disk which got error on Close()
+				if closeErrs[i] != nil {
+					outDatedDisks[i] = nil
+					disksToHealCount--
+					continue
+				}
+
 				partsMetadata[i].DataDir = dstDataDir
 				partsMetadata[i].AddObjectPart(partNumber, "", partSize, partActualSize, partModTime, partIdx, partChecksums)
 				if len(inlineBuffers) > 0 && inlineBuffers[i] != nil {
@@ -623,9 +649,7 @@ func (er *erasureObjects) healObject(ctx context.Context, bucket string, object 
 			if disksToHealCount == 0 {
 				return result, fmt.Errorf("all drives had write errors, unable to heal %s/%s", bucket, object)
 			}
-
 		}
-
 	}
 
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tmpID)

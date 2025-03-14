@@ -369,8 +369,8 @@ FLAGS:
 				defer f.Close()
 				r = f
 			}
-			if strings.HasSuffix(file, ".zip") {
-				zr, err := zip.NewReader(r.(io.ReaderAt), sz)
+			if ra, ok := r.(io.ReaderAt); ok && strings.HasSuffix(file, ".zip") {
+				zr, err := zip.NewReader(ra, sz)
 				if err != nil {
 					return err
 				}
@@ -664,7 +664,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 
 const (
 	xlHeaderVersion = 3
-	xlMetaVersion   = 2
+	xlMetaVersion   = 3
 )
 
 type xlHeaders struct {

@@ -159,7 +159,6 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 				t.Errorf("(%d) expected to get success, instead got %s", i, niceError(errCode))
 			}
 		}
-
 	}
 }
 

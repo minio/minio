@@ -98,7 +98,6 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 
 		// We leak entries while we copy
 		if entries == dynamicTimeoutLogSize {
-
 			// Make copy on stack in order to call adjust()
 			logCopy := [dynamicTimeoutLogSize]time.Duration{}
 			copy(logCopy[:], dt.log[:])

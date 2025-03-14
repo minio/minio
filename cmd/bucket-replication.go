@@ -49,6 +49,7 @@ import (
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/once"
 	"github.com/tinylib/msgp/msgp"
@@ -145,7 +146,7 @@ func validateReplicationDestination(ctx context.Context, bucket string, rCfg *re
 				if errInt == nil {
 					err = nil
 				} else {
-					err = errInt.(error)
+					err, _ = errInt.(error)
 				}
 			}
 			switch err.(type) {
@@ -773,7 +774,7 @@ func (m caseInsensitiveMap) Lookup(key string) (string, bool) {
 	return "", false
 }
 
-func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, partNum int) (putOpts minio.PutObjectOptions, err error) {
+func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, isMP bool, err error) {
 	meta := make(map[string]string)
 	isSSEC := crypto.SSEC.IsEncrypted(objInfo.UserDefined)
 
@@ -794,18 +795,22 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 			meta[k] = v
 		}
 	}
-
+	isMP = objInfo.isMultipart()
 	if len(objInfo.Checksum) > 0 {
 		// Add encrypted CRC to metadata for SSE-C objects.
 		if isSSEC {
 			meta[ReplicationSsecChecksumHeader] = base64.StdEncoding.EncodeToString(objInfo.Checksum)
 		} else {
-			for _, pi := range objInfo.Parts {
-				if pi.Number == partNum {
-					for k, v := range pi.Checksums {
-						meta[k] = v
-					}
-				}
+			cs, mp := getCRCMeta(objInfo, 0, nil)
+			// Set object checksum.
+			for k, v := range cs {
+				meta[k] = v
+			}
+			isMP = mp
+			if !objInfo.isMultipart() && cs[xhttp.AmzChecksumType] == xhttp.AmzChecksumTypeFullObject {
+				// For objects where checksum is full object, it will be the same.
+				// Therefore, we use the cheaper PutObject replication.
+				isMP = false
 			}
 		}
 	}
@@ -836,7 +841,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 			if tagTmstampStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp]; ok {
 				tagTimestamp, err = time.Parse(time.RFC3339Nano, tagTmstampStr)
 				if err != nil {
-					return putOpts, err
+					return putOpts, false, err
 				}
 			}
 			putOpts.Internal.TaggingTimestamp = tagTimestamp
@@ -860,7 +865,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	if retainDateStr, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
 		rdate, err := amztime.ISO8601Parse(retainDateStr)
 		if err != nil {
-			return putOpts, err
+			return putOpts, false, err
 		}
 		putOpts.RetainUntilDate = rdate
 		// set retention timestamp in opts
@@ -868,7 +873,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		if retainTmstampStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp]; ok {
 			retTimestamp, err = time.Parse(time.RFC3339Nano, retainTmstampStr)
 			if err != nil {
-				return putOpts, err
+				return putOpts, false, err
 			}
 		}
 		putOpts.Internal.RetentionTimestamp = retTimestamp
@@ -880,7 +885,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 		if lholdTmstampStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp]; ok {
 			lholdTimestamp, err = time.Parse(time.RFC3339Nano, lholdTmstampStr)
 			if err != nil {
-				return putOpts, err
+				return putOpts, false, err
 			}
 		}
 		putOpts.Internal.LegalholdTimestamp = lholdTimestamp
@@ -890,9 +895,19 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo, part
 	}
 
 	if crypto.S3KMS.IsEncrypted(objInfo.UserDefined) {
-		sseEnc, err := encrypt.NewSSEKMS(objInfo.KMSKeyID(), nil)
+		// If KMS key ID replication is enabled (as by default)
+		// we include the object's KMS key ID. In any case, we
+		// always set the SSE-KMS header. If no KMS key ID is
+		// specified, MinIO is supposed to use whatever default
+		// config applies on the site or bucket.
+		var keyID string
+		if kms.ReplicateKeyID() {
+			keyID = objInfo.KMSKeyID()
+		}
+
+		sseEnc, err := encrypt.NewSSEKMS(keyID, nil)
 		if err != nil {
-			return putOpts, err
+			return putOpts, false, err
 		}
 		putOpts.ServerSideEncryption = sseEnc
 	}
@@ -953,7 +968,11 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 	}
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
-	if (oi2.UserTagCount > 0 && !reflect.DeepEqual(oi2.UserTags, t.ToMap())) || (oi2.UserTagCount != len(t.ToMap())) {
+	oi2Map := make(map[string]string)
+	for k, v := range oi2.UserTags {
+		oi2Map[k] = v
+	}
+	if (oi2.UserTagCount > 0 && !reflect.DeepEqual(oi2Map, t.ToMap())) || (oi2.UserTagCount != len(t.ToMap())) {
 		return replicateMetadata
 	}
 
@@ -1281,7 +1300,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 	// use core client to avoid doing multipart on PUT
 	c := &minio.Core{Client: tgt.Client}
 
-	putOpts, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo, 0)
+	putOpts, isMP, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo)
 	if err != nil {
 		replLogIf(ctx, fmt.Errorf("failure setting options for replication bucket:%s err:%w", bucket, err))
 		sendEvent(eventArgs{
@@ -1313,7 +1332,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 		defer cancel()
 	}
 	r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
-	if objInfo.isMultipart() {
+	if isMP {
 		rinfo.Err = replicateObjectWithMultipart(ctx, c, tgt.Bucket, object, r, objInfo, putOpts)
 	} else {
 		_, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts)
@@ -1442,13 +1461,14 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		}
 		rinfo.Duration = time.Since(startTime)
 	}()
-
-	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, minio.StatObjectOptions{
+	sOpts := minio.StatObjectOptions{
 		VersionID: objInfo.VersionID,
 		Internal: minio.AdvancedGetOptions{
 			ReplicationProxyRequest: "false",
 		},
-	})
+	}
+	sOpts.Set(xhttp.AmzTagDirective, "ACCESS")
+	oi, cerr := tgt.StatObject(ctx, tgt.Bucket, object, sOpts)
 	if cerr == nil {
 		rAction = getReplicationAction(objInfo, oi, ri.OpType)
 		rinfo.ReplicationStatus = replication.Completed
@@ -1533,19 +1553,30 @@ applyAction:
 				ReplicationRequest: true, // always set this to distinguish between `mc mirror` replication and serverside
 			},
 		}
-		if tagTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+TaggingTimestamp]; ok {
+		// default timestamps to ModTime unless present in metadata
+		lkMap := caseInsensitiveMap(objInfo.UserDefined)
+		if _, ok := lkMap.Lookup(xhttp.AmzObjectLockLegalHold); ok {
+			dstOpts.Internal.LegalholdTimestamp = objInfo.ModTime
+		}
+		if _, ok := lkMap.Lookup(xhttp.AmzObjectLockRetainUntilDate); ok {
+			dstOpts.Internal.RetentionTimestamp = objInfo.ModTime
+		}
+		if objInfo.UserTags != "" {
+			dstOpts.Internal.TaggingTimestamp = objInfo.ModTime
+		}
+		if tagTmStr, ok := lkMap.Lookup(ReservedMetadataPrefixLower + TaggingTimestamp); ok {
 			ondiskTimestamp, err := time.Parse(time.RFC3339, tagTmStr)
 			if err == nil {
 				dstOpts.Internal.TaggingTimestamp = ondiskTimestamp
 			}
 		}
-		if retTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockRetentionTimestamp]; ok {
+		if retTmStr, ok := lkMap.Lookup(ReservedMetadataPrefixLower + ObjectLockRetentionTimestamp); ok {
 			ondiskTimestamp, err := time.Parse(time.RFC3339, retTmStr)
 			if err == nil {
 				dstOpts.Internal.RetentionTimestamp = ondiskTimestamp
 			}
 		}
-		if lholdTmStr, ok := objInfo.UserDefined[ReservedMetadataPrefixLower+ObjectLockLegalHoldTimestamp]; ok {
+		if lholdTmStr, ok := lkMap.Lookup(ReservedMetadataPrefixLower + ObjectLockLegalHoldTimestamp); ok {
 			ondiskTimestamp, err := time.Parse(time.RFC3339, lholdTmStr)
 			if err == nil {
 				dstOpts.Internal.LegalholdTimestamp = ondiskTimestamp
@@ -1556,8 +1587,7 @@ applyAction:
 			replLogIf(ctx, fmt.Errorf("unable to replicate metadata for object %s/%s(%s) to target %s: %w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
 		}
 	} else {
-		var putOpts minio.PutObjectOptions
-		putOpts, err = putReplicationOpts(ctx, tgt.StorageClass, objInfo, 0)
+		putOpts, isMP, err := putReplicationOpts(ctx, tgt.StorageClass, objInfo)
 		if err != nil {
 			replLogIf(ctx, fmt.Errorf("failed to set replicate options for object %s/%s(%s) (target %s) err:%w", bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), err))
 			sendEvent(eventArgs{
@@ -1588,7 +1618,7 @@ applyAction:
 			defer cancel()
 		}
 		r := bandwidth.NewMonitoredReader(newCtx, globalBucketMonitor, gr, opts)
-		if objInfo.isMultipart() {
+		if isMP {
 			rinfo.Err = replicateObjectWithMultipart(ctx, c, tgt.Bucket, object, r, objInfo, putOpts)
 		} else {
 			_, rinfo.Err = c.PutObject(ctx, tgt.Bucket, object, r, size, "", "", putOpts)
@@ -1666,7 +1696,8 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 		cHeader := http.Header{}
 		cHeader.Add(xhttp.MinIOSourceReplicationRequest, "true")
 		if !isSSEC {
-			for k, v := range partInfo.Checksums {
+			cs, _ := getCRCMeta(objInfo, partInfo.Number, nil)
+			for k, v := range cs {
 				cHeader.Add(k, v)
 			}
 		}
@@ -1690,12 +1721,13 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 			return fmt.Errorf("ssec(%t): Part size mismatch: got %d, want %d", isSSEC, pInfo.Size, size)
 		}
 		uploadedParts = append(uploadedParts, minio.CompletePart{
-			PartNumber:     pInfo.PartNumber,
-			ETag:           pInfo.ETag,
-			ChecksumCRC32:  pInfo.ChecksumCRC32,
-			ChecksumCRC32C: pInfo.ChecksumCRC32C,
-			ChecksumSHA1:   pInfo.ChecksumSHA1,
-			ChecksumSHA256: pInfo.ChecksumSHA256,
+			PartNumber:        pInfo.PartNumber,
+			ETag:              pInfo.ETag,
+			ChecksumCRC32:     pInfo.ChecksumCRC32,
+			ChecksumCRC32C:    pInfo.ChecksumCRC32C,
+			ChecksumSHA1:      pInfo.ChecksumSHA1,
+			ChecksumSHA256:    pInfo.ChecksumSHA256,
+			ChecksumCRC64NVME: pInfo.ChecksumCRC64NVME,
 		})
 	}
 	userMeta := map[string]string{
@@ -1708,6 +1740,13 @@ func replicateObjectWithMultipart(ctx context.Context, c *minio.Core, bucket, ob
 	// really big value but its okay on heavily loaded systems. This is just tail end timeout.
 	cctx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer ccancel()
+
+	if len(objInfo.Checksum) > 0 {
+		cs, _ := getCRCMeta(objInfo, 0, nil)
+		for k, v := range cs {
+			userMeta[k] = strings.Split(v, "-")[0]
+		}
+	}
 	_, err = c.CompleteMultipartUpload(cctx, bucket, object, uploadID, uploadedParts, minio.PutObjectOptions{
 		UserMetadata: userMeta,
 		Internal: minio.AdvancedPutOptions{
@@ -3752,4 +3791,21 @@ type validateReplicationDestinationOptions struct {
 	CheckReady        bool
 
 	checkReadyErr sync.Map
+}
+
+func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) (cs map[string]string, isMP bool) {
+	meta := make(map[string]string)
+	cs, isMP = oi.decryptChecksums(partNum, h)
+	for k, v := range cs {
+		cksum := hash.NewChecksumString(k, v)
+		if cksum == nil {
+			continue
+		}
+		if cksum.Valid() {
+			meta[cksum.Type.Key()] = v
+			meta[xhttp.AmzChecksumType] = cs[xhttp.AmzChecksumType]
+			meta[xhttp.AmzChecksumAlgo] = cksum.Type.String()
+		}
+	}
+	return meta, isMP
 }

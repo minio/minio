@@ -493,7 +493,6 @@ func (ies *IAMEtcdStore) watch(ctx context.Context, keyPath string) <-chan iamWa
 								keyPath:   string(event.Kv.Key),
 							}
 						}
-
 					}
 				}
 			}

@@ -845,7 +845,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				// to decommission, just skip it, this also includes
 				// any other versions that have already expired.
 				remainingVersions := len(fivs.Versions) - expired
-				if version.Deleted && remainingVersions == 1 {
+				if version.Deleted && remainingVersions == 1 && rcfg == nil {
 					decommissioned++
 					stopFn(version.Size, errors.New("DELETE marked object with no other non-current versions will be skipped"))
 					continue
@@ -1025,7 +1025,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 						go decommissionEntry(entry)
 					},
 				)
-				if err == nil || errors.Is(err, context.Canceled) {
+				if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, errVolumeNotFound) {
 					break
 				}
 				setN := humanize.Ordinal(setIdx + 1)

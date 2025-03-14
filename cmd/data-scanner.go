@@ -664,6 +664,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					into.addChild(h)
 					continue
 				}
+				// Adjust the probability of healing.
+				// This first removes lowest x from the mod check and makes it x times more likely.
+				// So if duudc = 10 and we want heal check every 50 cycles, we check
+				// if (cycle/10) % (50/10) == 0, which would make heal checks run once every 50 cycles,
+				// if the objects are pre-selected as 1:10.
+				folder.objectHealProbDiv = dataUsageUpdateDirCycles
 			}
 			f.updateCurrentPath(folder.name)
 			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name)
@@ -858,8 +864,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					}
 				}
 			}
-
 		}
+
 		if compact {
 			stop := globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			f.newCache.deleteRecursive(thisHash)
@@ -873,7 +879,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 			stop(total)
 		}
-
 	}
 	// Compact if too many children...
 	if !into.Compacted {

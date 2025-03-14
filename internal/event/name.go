@@ -85,7 +85,6 @@ var _ = uint64(1 << objectSingleTypesEnd)
 // Expand - returns expanded values of abbreviated event type.
 func (name Name) Expand() []Name {
 	switch name {
-
 	case ObjectAccessedAll:
 		return []Name{
 			ObjectAccessedGet, ObjectAccessedHead,

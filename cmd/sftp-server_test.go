@@ -91,6 +91,7 @@ func TestSFTPAuthentication(t *testing.T) {
 
 				suite.SFTPPublicKeyAuthentication(c)
 				suite.SFTPFailedPublicKeyAuthenticationInvalidKey(c)
+				suite.SFTPPublicKeyAuthNoPubKey(c)
 
 				suite.TearDownSuite(c)
 			},
@@ -143,6 +144,32 @@ func (s *TestSuiteIAM) SFTPPublicKeyAuthentication(c *check) {
 	_, err = sshPubKeyAuth(newSSHCon, testKey)
 	if err != nil {
 		c.Fatalf("expected no error but got(%s)", err)
+	}
+}
+
+// A user without an sshpubkey attribute in LDAP (here: fahim) should not be
+// able to authenticate.
+func (s *TestSuiteIAM) SFTPPublicKeyAuthNoPubKey(c *check) {
+	keyBytes, err := os.ReadFile("./testdata/dillon_test_key.pub")
+	if err != nil {
+		c.Fatalf("could not read test key file: %s", err)
+	}
+
+	testKey, _, _, _, err := ssh.ParseAuthorizedKey(keyBytes)
+	if err != nil {
+		c.Fatalf("could not parse test key file: %s", err)
+	}
+
+	newSSHCon := newSSHConnMock("fahim=ldap")
+	_, err = sshPubKeyAuth(newSSHCon, testKey)
+	if err == nil {
+		c.Fatalf("expected error but got none")
+	}
+
+	newSSHCon = newSSHConnMock("fahim")
+	_, err = sshPubKeyAuth(newSSHCon, testKey)
+	if err == nil {
+		c.Fatalf("expected error but got none")
 	}
 }
 
@@ -275,24 +302,48 @@ func (s *TestSuiteIAM) SFTPValidLDAPLoginWithPassword(c *check) {
 		c.Fatalf("policy add error: %v", err)
 	}
 
-	userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
-	userReq := madmin.PolicyAssociationReq{
-		Policies: []string{policy},
-		User:     userDN,
-	}
-	if _, err := s.adm.AttachPolicy(ctx, userReq); err != nil {
-		c.Fatalf("Unable to attach policy: %v", err)
-	}
+	{
+		userDN := "uid=dillon,ou=people,ou=swengg,dc=min,dc=io"
+		userReq := madmin.PolicyAssociationReq{
+			Policies: []string{policy},
+			User:     userDN,
+		}
+		if _, err := s.adm.AttachPolicyLDAP(ctx, userReq); err != nil {
+			c.Fatalf("Unable to attach policy: %v", err)
+		}
 
-	newSSHCon := newSSHConnMock("dillon=ldap")
-	_, err = sshPasswordAuth(newSSHCon, []byte("dillon"))
-	if err != nil {
-		c.Fatal("Password authentication failed for user (dillon):", err)
-	}
+		newSSHCon := newSSHConnMock("dillon=ldap")
+		_, err = sshPasswordAuth(newSSHCon, []byte("dillon"))
+		if err != nil {
+			c.Fatal("Password authentication failed for user (dillon):", err)
+		}
 
-	newSSHCon = newSSHConnMock("dillon")
-	_, err = sshPasswordAuth(newSSHCon, []byte("dillon"))
-	if err != nil {
-		c.Fatal("Password authentication failed for user (dillon):", err)
+		newSSHCon = newSSHConnMock("dillon")
+		_, err = sshPasswordAuth(newSSHCon, []byte("dillon"))
+		if err != nil {
+			c.Fatal("Password authentication failed for user (dillon):", err)
+		}
+	}
+	{
+		userDN := "uid=fahim,ou=people,ou=swengg,dc=min,dc=io"
+		userReq := madmin.PolicyAssociationReq{
+			Policies: []string{policy},
+			User:     userDN,
+		}
+		if _, err := s.adm.AttachPolicyLDAP(ctx, userReq); err != nil {
+			c.Fatalf("Unable to attach policy: %v", err)
+		}
+
+		newSSHCon := newSSHConnMock("fahim=ldap")
+		_, err = sshPasswordAuth(newSSHCon, []byte("fahim"))
+		if err != nil {
+			c.Fatal("Password authentication failed for user (fahim):", err)
+		}
+
+		newSSHCon = newSSHConnMock("fahim")
+		_, err = sshPasswordAuth(newSSHCon, []byte("fahim"))
+		if err != nil {
+			c.Fatal("Password authentication failed for user (fahim):", err)
+		}
 	}
 }

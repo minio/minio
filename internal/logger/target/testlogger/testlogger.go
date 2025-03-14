@@ -34,9 +34,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/target/types"
-	"github.com/minio/pkg/v3/logger/message/log"
 )
 
 const (

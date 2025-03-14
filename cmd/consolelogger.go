@@ -25,11 +25,11 @@ import (
 	"sync/atomic"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/logger/target/console"
 	"github.com/minio/minio/internal/logger/target/types"
 	"github.com/minio/minio/internal/pubsub"
-	"github.com/minio/pkg/v3/logger/message/log"
 	xnet "github.com/minio/pkg/v3/net"
 )
 

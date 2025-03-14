@@ -243,26 +243,26 @@ func parseRequestToken(token string) (subToken string, nodeIndex int) {
 	return subToken, nodeIndex
 }
 
-func proxyRequestByToken(ctx context.Context, w http.ResponseWriter, r *http.Request, token string) (string, bool) {
-	subToken, nodeIndex := parseRequestToken(token)
-	if nodeIndex >= 0 {
-		return subToken, proxyRequestByNodeIndex(ctx, w, r, nodeIndex)
+func proxyRequestByToken(ctx context.Context, w http.ResponseWriter, r *http.Request, token string, returnErr bool) (subToken string, proxied bool, success bool) {
+	var nodeIndex int
+	if subToken, nodeIndex = parseRequestToken(token); nodeIndex >= 0 {
+		proxied, success = proxyRequestByNodeIndex(ctx, w, r, nodeIndex, returnErr)
 	}
-	return subToken, false
+	return
 }
 
-func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int) (success bool) {
+func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int, returnErr bool) (proxied, success bool) {
 	if len(globalProxyEndpoints) == 0 {
-		return false
+		return
 	}
 	if index < 0 || index >= len(globalProxyEndpoints) {
-		return false
+		return
 	}
 	ep := globalProxyEndpoints[index]
 	if ep.IsLocal {
-		return false
+		return
 	}
-	return proxyRequest(ctx, w, r, ep)
+	return true, proxyRequest(ctx, w, r, ep, returnErr)
 }
 
 // ListObjectsV1Handler - GET Bucket (List Objects) Version 1.

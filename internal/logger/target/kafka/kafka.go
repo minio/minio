@@ -188,7 +188,6 @@ func (h *Target) startKafkaLogger() {
 		// We are not allowed to add when logCh is nil
 		h.wg.Add(1)
 		defer h.wg.Done()
-
 	}
 	h.logChMu.RUnlock()
 

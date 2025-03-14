@@ -2,7 +2,7 @@
 
 ## HTTP Trace
 
-HTTP tracing can be enabled by using [`mc admin trace`](https://github.com/minio/mc/blob/master/docs/minio-admin-complete-guide.md#command-trace---display-minio-server-http-trace) command.
+HTTP tracing can be enabled by using [`mc admin trace`](https://min.io/docs/minio/linux/reference/minio-mc-admin/mc-admin-trace.html) command.
 
 Example:
 

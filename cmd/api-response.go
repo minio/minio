@@ -166,10 +166,11 @@ type Part struct {
 	Size         int64
 
 	// Checksum values
-	ChecksumCRC32  string `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C string `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumSHA1   string `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256 string `xml:"ChecksumSHA256,omitempty"`
+	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+	ChecksumCRC64NVME string `xml:",omitempty"`
 }
 
 // ListPartsResponse - format for list parts response.
@@ -192,6 +193,8 @@ type ListPartsResponse struct {
 	IsTruncated          bool
 
 	ChecksumAlgorithm string
+	ChecksumType      string
+
 	// List of parts.
 	Parts []Part `xml:"Part"`
 }
@@ -413,10 +416,11 @@ type CompleteMultipartUploadResponse struct {
 	Key      string
 	ETag     string
 
-	ChecksumCRC32  string `xml:"ChecksumCRC32,omitempty"`
-	ChecksumCRC32C string `xml:"ChecksumCRC32C,omitempty"`
-	ChecksumSHA1   string `xml:"ChecksumSHA1,omitempty"`
-	ChecksumSHA256 string `xml:"ChecksumSHA256,omitempty"`
+	ChecksumCRC32     string `xml:"ChecksumCRC32,omitempty"`
+	ChecksumCRC32C    string `xml:"ChecksumCRC32C,omitempty"`
+	ChecksumSHA1      string `xml:"ChecksumSHA1,omitempty"`
+	ChecksumSHA256    string `xml:"ChecksumSHA256,omitempty"`
+	ChecksumCRC64NVME string `xml:",omitempty"`
 }
 
 // DeleteError structure.
@@ -516,7 +520,6 @@ func cleanReservedKeys(metadata map[string]string) map[string]string {
 		}
 	case crypto.SSEC:
 		m[xhttp.AmzServerSideEncryptionCustomerAlgorithm] = xhttp.AmzEncryptionAES
-
 	}
 
 	var toRemove []string
@@ -787,17 +790,18 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 
 // generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
 func generateCompleteMultipartUploadResponse(bucket, key, location string, oi ObjectInfo, h http.Header) CompleteMultipartUploadResponse {
-	cs := oi.decryptChecksums(0, h)
+	cs, _ := oi.decryptChecksums(0, h)
 	c := CompleteMultipartUploadResponse{
 		Location: location,
 		Bucket:   bucket,
 		Key:      key,
 		// AWS S3 quotes the ETag in XML, make sure we are compatible here.
-		ETag:           "\"" + oi.ETag + "\"",
-		ChecksumSHA1:   cs[hash.ChecksumSHA1.String()],
-		ChecksumSHA256: cs[hash.ChecksumSHA256.String()],
-		ChecksumCRC32:  cs[hash.ChecksumCRC32.String()],
-		ChecksumCRC32C: cs[hash.ChecksumCRC32C.String()],
+		ETag:              "\"" + oi.ETag + "\"",
+		ChecksumSHA1:      cs[hash.ChecksumSHA1.String()],
+		ChecksumSHA256:    cs[hash.ChecksumSHA256.String()],
+		ChecksumCRC32:     cs[hash.ChecksumCRC32.String()],
+		ChecksumCRC32C:    cs[hash.ChecksumCRC32C.String()],
+		ChecksumCRC64NVME: cs[hash.ChecksumCRC64NVME.String()],
 	}
 	return c
 }
@@ -825,6 +829,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 	listPartsResponse.IsTruncated = partsInfo.IsTruncated
 	listPartsResponse.NextPartNumberMarker = partsInfo.NextPartNumberMarker
 	listPartsResponse.ChecksumAlgorithm = partsInfo.ChecksumAlgorithm
+	listPartsResponse.ChecksumType = partsInfo.ChecksumType
 
 	listPartsResponse.Parts = make([]Part, len(partsInfo.Parts))
 	for index, part := range partsInfo.Parts {
@@ -837,6 +842,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo, encodingType string) Lis
 		newPart.ChecksumCRC32C = part.ChecksumCRC32C
 		newPart.ChecksumSHA1 = part.ChecksumSHA1
 		newPart.ChecksumSHA256 = part.ChecksumSHA256
+		newPart.ChecksumCRC64NVME = part.ChecksumCRC64NVME
 		listPartsResponse.Parts[index] = newPart
 	}
 	return listPartsResponse

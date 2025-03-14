@@ -6504,8 +6504,8 @@ func (z *VolInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 2 {
-		err = msgp.ArrayError{Wanted: 2, Got: zb0001}
+	if zb0001 != 3 {
+		err = msgp.ArrayError{Wanted: 3, Got: zb0001}
 		return
 	}
 	z.Name, err = dc.ReadString()
@@ -6518,13 +6518,18 @@ func (z *VolInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "Created")
 		return
 	}
+	z.Deleted, err = dc.ReadTime()
+	if err != nil {
+		err = msgp.WrapError(err, "Deleted")
+		return
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z VolInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 2
-	err = en.Append(0x92)
+	// array header, size 3
+	err = en.Append(0x93)
 	if err != nil {
 		return
 	}
@@ -6538,16 +6543,22 @@ func (z VolInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Created")
 		return
 	}
+	err = en.WriteTime(z.Deleted)
+	if err != nil {
+		err = msgp.WrapError(err, "Deleted")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z VolInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 2
-	o = append(o, 0x92)
+	// array header, size 3
+	o = append(o, 0x93)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendTime(o, z.Created)
+	o = msgp.AppendTime(o, z.Deleted)
 	return
 }
 
@@ -6559,8 +6570,8 @@ func (z *VolInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 2 {
-		err = msgp.ArrayError{Wanted: 2, Got: zb0001}
+	if zb0001 != 3 {
+		err = msgp.ArrayError{Wanted: 3, Got: zb0001}
 		return
 	}
 	z.Name, bts, err = msgp.ReadStringBytes(bts)
@@ -6573,13 +6584,18 @@ func (z *VolInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Created")
 		return
 	}
+	z.Deleted, bts, err = msgp.ReadTimeBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Deleted")
+		return
+	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z VolInfo) Msgsize() (s int) {
-	s = 1 + msgp.StringPrefixSize + len(z.Name) + msgp.TimeSize
+	s = 1 + msgp.StringPrefixSize + len(z.Name) + msgp.TimeSize + msgp.TimeSize
 	return
 }
 
@@ -6603,8 +6619,8 @@ func (z *VolsInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 			err = msgp.WrapError(err, zb0001)
 			return
 		}
-		if zb0003 != 2 {
-			err = msgp.ArrayError{Wanted: 2, Got: zb0003}
+		if zb0003 != 3 {
+			err = msgp.ArrayError{Wanted: 3, Got: zb0003}
 			return
 		}
 		(*z)[zb0001].Name, err = dc.ReadString()
@@ -6615,6 +6631,11 @@ func (z *VolsInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		(*z)[zb0001].Created, err = dc.ReadTime()
 		if err != nil {
 			err = msgp.WrapError(err, zb0001, "Created")
+			return
+		}
+		(*z)[zb0001].Deleted, err = dc.ReadTime()
+		if err != nil {
+			err = msgp.WrapError(err, zb0001, "Deleted")
 			return
 		}
 	}
@@ -6629,8 +6650,8 @@ func (z VolsInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for zb0004 := range z {
-		// array header, size 2
-		err = en.Append(0x92)
+		// array header, size 3
+		err = en.Append(0x93)
 		if err != nil {
 			return
 		}
@@ -6644,6 +6665,11 @@ func (z VolsInfo) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, zb0004, "Created")
 			return
 		}
+		err = en.WriteTime(z[zb0004].Deleted)
+		if err != nil {
+			err = msgp.WrapError(err, zb0004, "Deleted")
+			return
+		}
 	}
 	return
 }
@@ -6653,10 +6679,11 @@ func (z VolsInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	for zb0004 := range z {
-		// array header, size 2
-		o = append(o, 0x92)
+		// array header, size 3
+		o = append(o, 0x93)
 		o = msgp.AppendString(o, z[zb0004].Name)
 		o = msgp.AppendTime(o, z[zb0004].Created)
+		o = msgp.AppendTime(o, z[zb0004].Deleted)
 	}
 	return
 }
@@ -6681,8 +6708,8 @@ func (z *VolsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, zb0001)
 			return
 		}
-		if zb0003 != 2 {
-			err = msgp.ArrayError{Wanted: 2, Got: zb0003}
+		if zb0003 != 3 {
+			err = msgp.ArrayError{Wanted: 3, Got: zb0003}
 			return
 		}
 		(*z)[zb0001].Name, bts, err = msgp.ReadStringBytes(bts)
@@ -6695,6 +6722,11 @@ func (z *VolsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, zb0001, "Created")
 			return
 		}
+		(*z)[zb0001].Deleted, bts, err = msgp.ReadTimeBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001, "Deleted")
+			return
+		}
 	}
 	o = bts
 	return
@@ -6704,7 +6736,7 @@ func (z *VolsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z VolsInfo) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for zb0004 := range z {
-		s += 1 + msgp.StringPrefixSize + len(z[zb0004].Name) + msgp.TimeSize
+		s += 1 + msgp.StringPrefixSize + len(z[zb0004].Name) + msgp.TimeSize + msgp.TimeSize
 	}
 	return
 }

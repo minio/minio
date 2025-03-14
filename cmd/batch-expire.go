@@ -195,8 +195,8 @@ func (ef BatchJobExpireFilter) Matches(obj ObjectInfo, now time.Time) bool {
 				return false
 			}
 		}
-
 	}
+
 	if len(ef.Metadata) > 0 && !obj.DeleteMarker {
 		for _, kv := range ef.Metadata {
 			// Object (version) must match all x-amz-meta and
@@ -288,6 +288,16 @@ type BatchJobExpire struct {
 }
 
 var _ yaml.Unmarshaler = &BatchJobExpire{}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobExpire) RedactSensitive() {
+	if r == nil {
+		return
+	}
+	if r.NotificationCfg.Token != "" {
+		r.NotificationCfg.Token = redactedText
+	}
+}
 
 // UnmarshalYAML - BatchJobExpire extends default unmarshal to extract line, col information.
 func (r *BatchJobExpire) UnmarshalYAML(val *yaml.Node) error {
@@ -435,14 +445,14 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 				oiCache.Add(od, &exp.ObjectInfo)
 			}
 
-			var done bool
 			// DeleteObject(deletePrefix: true) to expire all versions of an object
 			for _, exp := range toExpireAll {
 				var success bool
 				for attempts := 1; attempts <= retryAttempts; attempts++ {
 					select {
 					case <-ctx.Done():
-						done = true
+						ri.trackMultipleObjectVersions(exp, success)
+						return
 					default:
 					}
 					stopFn := globalBatchJobsMetrics.trace(batchJobMetricExpire, ri.JobID, attempts)
@@ -459,14 +469,7 @@ func batchObjsForDelete(ctx context.Context, r *BatchJobExpire, ri *batchJobInfo
 						break
 					}
 				}
-				ri.trackMultipleObjectVersions(r.Bucket, exp, success)
-				if done {
-					break
-				}
-			}
-
-			if done {
-				return
+				ri.trackMultipleObjectVersions(exp, success)
 			}
 
 			// DeleteMultiple objects

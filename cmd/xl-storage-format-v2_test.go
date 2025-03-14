@@ -23,6 +23,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -582,6 +583,28 @@ func Test_xlMetaV2Shallow_Load(t *testing.T) {
 			t.Fatal(err)
 		}
 		// t.Logf("data := %#v\n", data)
+	})
+	// Test compressed index consistency fix
+	t.Run("comp-index", func(t *testing.T) {
+		// This file has a compressed index, due to https://github.com/minio/minio/pull/20575
+		// We ensure it is rewritten without an index.
+		// We compare this against the signature of the files stored without a version.
+		data, err := base64.StdEncoding.DecodeString(`WEwyIAEAAwDGAAACKgMCAcQml8QQAAAAAAAAAAAAAAAAAAAAANMYGu+UIK7akcQEofwXhAECCAjFAfyDpFR5cGUBpVYyT2Jq3gASoklExBAAAAAAAAAAAAAAAAAAAAAApEREaXLEEFTyKFqhkkXVoWn+8R1Lr2ymRWNBbGdvAaNFY00Io0VjTginRWNCU2l6ZdIAEAAAp0VjSW5kZXgBpkVjRGlzdNwAEAECAwQFBgcICQoLDA0ODxCoQ1N1bUFsZ28BqFBhcnROdW1zkgECqVBhcnRFVGFnc8CpUGFydFNpemVzktIAFtgq0gAGvb+qUGFydEFTaXplc5LSAFKb69IAGZg0p1BhcnRJZHiSxFqKm+4h9J7JCYCAgAFEABSPlBzH5g6z9gah3wOPnwLDlAGeD+os0xbjFd8O8w+TBoM8rz6bHO0KzQWtBu4GwgGSBocH6QPUSu8J5A/8gwSWtQPOtgL0euoMmAPEAKRTaXpl0gAdlemlTVRpbWXTGBrvlCCu2pGnTWV0YVN5c4K8WC1NaW5pby1JbnRlcm5hbC1hY3R1YWwtc2l6ZcQHNzA5MTIzMbxYLU1pbmlvLUludGVybmFsLWNvbXByZXNzaW9uxBVrbGF1c3Bvc3QvY29tcHJlc3MvczKnTWV0YVVzcoKsY29udGVudC10eXBlqHRleHQvY3N2pGV0YWfZIjEzYmYyMDU0NGVjN2VmY2YxNzhiYWRmNjc4NzNjODg2LTKhds5mYYMqzv8Vdtk=`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var xl xlMetaV2
+		err = xl.Load(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, v := range xl.versions {
+			// Signature should match
+			if binary.BigEndian.Uint32(v.header.Signature[:]) != 0x8e5a6406 {
+				t.Log(v.header.String())
+				t.Fatalf("invalid signature 0x%x", binary.BigEndian.Uint32(v.header.Signature[:]))
+			}
+		}
 	})
 }
 

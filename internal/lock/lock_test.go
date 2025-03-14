@@ -25,7 +25,7 @@ import (
 
 // Test lock fails.
 func TestLockFail(t *testing.T) {
-	f, err := os.CreateTemp("", "lock")
+	f, err := os.CreateTemp(t.TempDir(), "lock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestLockDirFail(t *testing.T) {
 
 // Tests rwlock methods.
 func TestRWLockedFile(t *testing.T) {
-	f, err := os.CreateTemp("", "lock")
+	f, err := os.CreateTemp(t.TempDir(), "lock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestRWLockedFile(t *testing.T) {
 
 // Tests lock and unlock semantics.
 func TestLockAndUnlock(t *testing.T) {
-	f, err := os.CreateTemp("", "lock")
+	f, err := os.CreateTemp(t.TempDir(), "lock")
 	if err != nil {
 		t.Fatal(err)
 	}
