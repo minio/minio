@@ -104,6 +104,19 @@ Determine secret name.
 {{- end -}}
 
 {{/*
+Determine domain for hosts
+*/}}
+{{- define "minio.domain" -}}
+  {{- if .Values.global.domain -}}
+    {{- printf ".%s" .Values.global.domain -}}
+  {{- else if .Values.domain -}}
+    {{- printf ".%s" .Values.domain -}}
+  {{- else -}}
+    {{- print "" -}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
 Determine name for scc role and rolebinding
 */}}
 {{- define "minio.sccRoleName" -}}
