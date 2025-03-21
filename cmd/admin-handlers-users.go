@@ -2003,6 +2003,84 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 	writeSuccessResponseJSON(w, encryptedData)
 }
 
+// RevokeTokens - POST /minio/admin/v3/revoke-tokens/{userProvider}
+func (a adminAPIHandlers) RevokeTokens(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	userProvider := mux.Vars(r)["userProvider"]
+
+	user := r.Form.Get("user")
+	tokenRevokeType := r.Form.Get("tokenRevokeType")
+	fullRevoke := r.Form.Get("fullRevoke") == "true"
+	isTokenSelfRevoke := user == ""
+	if !isTokenSelfRevoke {
+		var err error
+		user, err = getUserWithProvider(ctx, userProvider, user, false)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	if (user != "" && tokenRevokeType == "" && !fullRevoke) || (tokenRevokeType != "" && fullRevoke) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	adminPrivilege := globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.RemoveServiceAccountAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+	})
+
+	if !adminPrivilege || isTokenSelfRevoke {
+		parentUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			parentUser = cred.ParentUser
+		}
+		if !isTokenSelfRevoke && user != parentUser {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+		user = parentUser
+	}
+
+	// Infer token revoke type from the request if requestor is STS.
+	if isTokenSelfRevoke && tokenRevokeType == "" && !fullRevoke {
+		if cred.IsTemp() {
+			tokenRevokeType, _ = cred.Claims[tokenRevokeTypeClaim].(string)
+		}
+		if tokenRevokeType == "" {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL) // TODO: copy error code over
+			return
+		}
+	}
+
+	err := globalIAMSys.RevokeTokens(ctx, user, tokenRevokeType)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessNoContent(w)
+}
+
 const (
 	allPoliciesFile           = "policies.json"
 	allUsersFile              = "users.json"
