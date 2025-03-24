@@ -149,7 +149,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	// has not been changed from its "default" value, if it has been changed honor new settings.
 	if kvs.GetWithDefault(Speed, DefaultKVS) == "default" {
 		if kvs.Get(Delay) != "" && kvs.Get(MaxWait) != "" {
-			if err = lookupDeprecatedScannerConfig(kvs, &cfg); err != nil {
+			if err = lookupDeprecatedScannerConfig(kvs, &cfg); err == nil {
 				return cfg, err
 			}
 		}
