@@ -45,6 +45,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/felixge/fgprof"
 	"github.com/minio/madmin-go/v3"
+	xaudit "github.com/minio/madmin-go/v3/logger/audit"
 	"github.com/minio/minio-go/v7"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio/internal/config"
@@ -62,7 +63,6 @@ import (
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
-	xaudit "github.com/minio/pkg/v3/logger/message/audit"
 	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/oauth2"
 )

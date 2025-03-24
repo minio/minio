@@ -37,6 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zstd"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
@@ -45,7 +46,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v3/logger/message/log"
 )
 
 // To abstract a node over network.
