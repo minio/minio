@@ -55,6 +55,7 @@ const (
 	stsDurationSeconds        = "DurationSeconds"
 	stsLDAPUsername           = "LDAPUsername"
 	stsLDAPPassword           = "LDAPPassword"
+	stsRevokeTokenType        = "TokenRevokeType"
 
 	// STS API action constants
 	clientGrants        = "AssumeRoleWithClientGrants"
@@ -84,6 +85,9 @@ const (
 
 	// Role Claim key
 	roleArnClaim = "roleArn"
+
+	// STS revoke type claim key
+	tokenRevokeTypeClaim = "tokenRevokeType"
 
 	// maximum supported STS session policy size
 	maxSTSSessionPolicySize = 2048
@@ -307,6 +311,11 @@ func (sts *stsAPIHandlers) AssumeRole(w http.ResponseWriter, r *http.Request) {
 	claims[expClaim] = UTCNow().Add(duration).Unix()
 	claims[parentClaim] = user.AccessKey
 
+	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
+	if tokenRevokeType != "" {
+		claims[tokenRevokeTypeClaim] = tokenRevokeType
+	}
+
 	// Validate that user.AccessKey's policies can be retrieved - it may not
 	// be in case the user is disabled.
 	if _, err = globalIAMSys.PolicyDBGet(user.AccessKey, user.Groups...); err != nil {
@@ -469,6 +478,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			}
 		}
 		claims[iamPolicyClaimNameOpenID()] = policyName
+	}
+
+	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
+	if tokenRevokeType != "" {
+		claims[tokenRevokeTypeClaim] = tokenRevokeType
 	}
 
 	if err := claims.populateSessionPolicy(r.Form); err != nil {
@@ -691,6 +705,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	for attrib, value := range lookupResult.Attributes {
 		claims[ldapAttribPrefix+attrib] = value
 	}
+	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
+	if tokenRevokeType != "" {
+		claims[tokenRevokeTypeClaim] = tokenRevokeType
+	}
 
 	secret, err := getTokenSigningKey()
 	if err != nil {
@@ -887,6 +905,11 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	claims[audClaim] = certificate.Subject.Organization
 	claims[issClaim] = certificate.Issuer.CommonName
 	claims[parentClaim] = parentUser
+	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
+	if tokenRevokeType != "" {
+		claims[tokenRevokeTypeClaim] = tokenRevokeType
+	}
+
 	secretKey, err := getTokenSigningKey()
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
@@ -1012,6 +1035,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 	claims[subClaim] = parentUser
 	claims[roleArnClaim] = roleArn.String()
 	claims[parentClaim] = parentUser
+	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
+	if tokenRevokeType != "" {
+		claims[tokenRevokeTypeClaim] = tokenRevokeType
+	}
 
 	// Add all other claims from the plugin **without** replacing any
 	// existing claims.

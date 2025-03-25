@@ -2032,6 +2032,50 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 	return u.UpdatedAt, nil
 }
 
+// RevokeTokens - revokes all temporary credentials, or those with matching type,
+// associated with the parent user.
+func (store *IAMStoreSys) RevokeTokens(ctx context.Context, parentUser string, tokenRevokeType string) error {
+	if parentUser == "" {
+		return errInvalidArgument
+	}
+
+	cache := store.lock()
+	defer store.unlock()
+
+	var revoked bool
+	for _, ui := range cache.iamSTSAccountsMap {
+		if ui.Credentials.ParentUser != parentUser {
+			continue
+		}
+		if tokenRevokeType != "" {
+			secret, err := getTokenSigningKey()
+			if err != nil {
+				return err
+			}
+			claims, err := getClaimsFromTokenWithSecret(ui.Credentials.SessionToken, secret)
+			if err != nil {
+				return err
+			}
+			if v, ok := claims.Lookup(tokenRevokeTypeClaim); ok {
+				if v != tokenRevokeType {
+					continue
+				}
+			}
+		}
+		if err := store.deleteUserIdentity(ctx, ui.Credentials.AccessKey, stsUser); err != nil {
+			return err
+		}
+		delete(cache.iamSTSAccountsMap, ui.Credentials.AccessKey)
+		revoked = true
+	}
+
+	if revoked {
+		cache.updatedAt = time.Now()
+	}
+
+	return nil
+}
+
 // DeleteUsers - given a set of users or access keys, deletes them along with
 // any derived credentials (STS or service accounts) and any associated policy
 // mappings.
