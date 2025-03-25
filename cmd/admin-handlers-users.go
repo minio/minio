@@ -2106,7 +2106,6 @@ func (a adminAPIHandlers) InfoAccessKey(w http.ResponseWriter, r *http.Request) 
 	}
 
 	userProvider := guessUserProvider(targetCred)
-	providerInfo := getProviderInfoFromClaims(targetCred.Claims, userProvider)
 
 	infoResp := madmin.InfoAccessKeyResp{
 		AccessKey: accessKey,
@@ -2120,10 +2119,11 @@ func (a adminAPIHandlers) InfoAccessKey(w http.ResponseWriter, r *http.Request) 
 			Expiration:    expiration,
 		},
 
-		UserType:             userType,
-		UserProvider:         userProvider,
-		ProviderSpecificInfo: providerInfo,
+		UserType:     userType,
+		UserProvider: userProvider,
 	}
+
+	populateProviderInfoFromClaims(targetCred.Claims, userProvider, &infoResp)
 
 	data, err := json.Marshal(infoResp)
 	if err != nil {

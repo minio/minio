@@ -27,7 +27,7 @@ import (
 // guessUserProvider - guesses the user provider based on the access key and claims.
 func guessUserProvider(credentials auth.Credentials) string {
 	if !credentials.IsServiceAccount() && !credentials.IsTemp() {
-		return madmin.InternalProvider // regular users are always internal
+		return madmin.BuiltinProvider // regular users are always internal
 	}
 
 	claims := credentials.Claims
@@ -43,18 +43,18 @@ func guessUserProvider(credentials auth.Credentials) string {
 		return madmin.OpenIDProvider // openid users are already hashed, so no separator
 	}
 
-	return madmin.InternalProvider // default to internal
+	return madmin.BuiltinProvider // default to internal
 }
 
 // getProviderInfoFromClaims - returns the provider info from the claims.
-func getProviderInfoFromClaims(claims map[string]interface{}, provider string) map[string]string {
+func populateProviderInfoFromClaims(claims map[string]interface{}, provider string, resp *madmin.InfoAccessKeyResp) {
+	resp.UserProvider = provider
 	switch provider {
 	case madmin.LDAPProvider:
-		return getLDAPInfoFromClaims(claims)
+		resp.LDAPSpecificInfo = getLDAPInfoFromClaims(claims)
 	case madmin.OpenIDProvider:
-		return getOpenIDInfoFromClaims(claims)
+		resp.OpenIDSpecificInfo = getOpenIDInfoFromClaims(claims)
 	}
-	return nil
 }
 
 func getOpenIDCfgNameFromClaims(claims map[string]interface{}) (string, bool) {
@@ -74,34 +74,34 @@ func getOpenIDCfgNameFromClaims(claims map[string]interface{}) (string, bool) {
 
 }
 
-func getOpenIDInfoFromClaims(claims map[string]interface{}) map[string]string {
-	info := make(map[string]string)
+func getOpenIDInfoFromClaims(claims map[string]interface{}) madmin.OpenIDSpecificAccessKeyInfo {
+	info := madmin.OpenIDSpecificAccessKeyInfo{}
 
 	cfgName, ok := getOpenIDCfgNameFromClaims(claims)
 	if !ok {
-		return nil
+		return info
 	}
 
-	info["Config Name"] = cfgName
+	info.ConfigName = cfgName
 	if displayNameClaim := globalIAMSys.OpenIDConfig.GetUserReadableClaim(cfgName); displayNameClaim != "" {
 		name, _ := claims[displayNameClaim].(string)
-		info["Display Name"] = name
-		info["Display Name Claim"] = displayNameClaim
+		info.DisplayName = name
+		info.DisplayNameClaim = displayNameClaim
 	}
 	if idClaim := globalIAMSys.OpenIDConfig.GetUserIDClaim(cfgName); idClaim != "" {
 		id, _ := claims[idClaim].(string)
-		info["User ID"] = id
-		info["User ID Claim"] = idClaim
+		info.UserID = id
+		info.UserIDClaim = idClaim
 	}
 
 	return info
 }
 
-func getLDAPInfoFromClaims(claims map[string]interface{}) map[string]string {
-	info := make(map[string]string)
+func getLDAPInfoFromClaims(claims map[string]interface{}) madmin.LDAPSpecificAccessKeyInfo {
+	info := madmin.LDAPSpecificAccessKeyInfo{}
 
 	if name, ok := claims[ldapUser].(string); ok {
-		info["User Name"] = name
+		info.Username = name
 	}
 
 	return info

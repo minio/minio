@@ -2748,7 +2748,7 @@ func (store *IAMStoreSys) ListAccessKeys(ctx context.Context) ([]auth.Credential
 			}
 			claims, err := getClaimsFromTokenWithSecret(accessKey.SessionToken, secret)
 			if err != nil {
-				return nil, err
+				continue // ignore invalid session tokens
 			}
 			accessKeys[i].Claims = claims.MapClaims
 		}

@@ -610,8 +610,8 @@ github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOfJA=
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
-github.com/taran-p/madmin-go/v3 v3.0.55-0.20250324220303-da8b4dcea924 h1:AyLYLeZ8DoRSSgZCVzcglblnhZAQYUMANYHr1R3YDX8=
-github.com/taran-p/madmin-go/v3 v3.0.55-0.20250324220303-da8b4dcea924/go.mod h1:pMLdj9OtN0CANNs5tdm6opvOlDFfj0WhbztboZAjRWE=
+github.com/taran-p/madmin-go/v3 v3.0.55-0.20250325221636-f5498832320f h1:U8MMUkE2W8zVMMxpI6AwIf0PacwEYdBP1LR30FWNlhk=
+github.com/taran-p/madmin-go/v3 v3.0.55-0.20250325221636-f5498832320f/go.mod h1:pMLdj9OtN0CANNs5tdm6opvOlDFfj0WhbztboZAjRWE=
 github.com/tidwall/gjson v1.18.0 h1:FIDeeyB800efLX89e5a8Y0BNH+LOngJyGrIWxG2FKQY=
 github.com/tidwall/gjson v1.18.0/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/match v1.1.1 h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=

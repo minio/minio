@@ -4,7 +4,7 @@ go 1.23.0
 
 toolchain go1.23.6
 
-replace github.com/minio/madmin-go/v3 => github.com/taran-p/madmin-go/v3 v3.0.55-0.20250324220303-da8b4dcea924
+replace github.com/minio/madmin-go/v3 => github.com/taran-p/madmin-go/v3 v3.0.55-0.20250325221636-f5498832320f
 
 require (
 	cloud.google.com/go/storage v1.46.0
