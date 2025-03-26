@@ -1112,7 +1112,6 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 			o.Parts[i].Checksums = cs[i]
 		}
 	}
-	return
 }
 
 // metadataEncryptFn provides an encryption function for metadata.

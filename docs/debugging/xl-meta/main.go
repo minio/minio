@@ -68,6 +68,7 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}
 `
+	//nolint:staticcheck
 	isPart := regexp.MustCompile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/part\\.[0-9]+$")
 
 	app.HideHelpCommand = true
@@ -1555,6 +1556,7 @@ func shardSize(blockSize, dataBlocks int) (sz int) {
 	return
 }
 
+//nolint:staticcheck
 var rePartNum = regexp.MustCompile("/part\\.([0-9]+)/")
 
 func getPartNum(s string) int {

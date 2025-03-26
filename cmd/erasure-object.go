@@ -813,8 +813,6 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				PoolIndex: er.poolIndex,
 			})
 		}
-
-		return
 	}()
 
 	validResp := 0
