@@ -176,7 +176,7 @@ func (c Config) HasExistingObjectReplication(arn string) (hasARN, isEnabled bool
 // FilterActionableRules returns the rules actions that need to be executed
 // after evaluating prefix/tag filtering
 func (c Config) FilterActionableRules(obj ObjectOpts) []Rule {
-	if obj.Name == "" && !(obj.OpType == ResyncReplicationType || obj.OpType == AllReplicationType) {
+	if obj.Name == "" && (obj.OpType != ResyncReplicationType && obj.OpType != AllReplicationType) {
 		return nil
 	}
 	var rules []Rule

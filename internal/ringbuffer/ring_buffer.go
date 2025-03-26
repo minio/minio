@@ -85,10 +85,8 @@ func (r *RingBuffer) SetBlocking(block bool) *RingBuffer {
 // A goroutine will be started and run until the provided context is canceled.
 func (r *RingBuffer) WithCancel(ctx context.Context) *RingBuffer {
 	go func() {
-		select {
-		case <-ctx.Done():
-			r.CloseWithError(ctx.Err())
-		}
+		<-ctx.Done()
+		r.CloseWithError(ctx.Err())
 	}()
 	return r
 }

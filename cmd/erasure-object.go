@@ -1634,7 +1634,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	if !opts.NoAuditLog {
 		for _, obj := range objects {
-			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectV.ObjectName, &er)
+			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectName, &er)
 		}
 	}
 

@@ -146,7 +146,7 @@ func IsValidBucketName(bucket string) bool {
 		allNumbers = allNumbers && !isNotNumber
 	}
 	// Does the bucket name look like an IP address?
-	return !(len(pieces) == 4 && allNumbers)
+	return len(pieces) != 4 || !allNumbers
 }
 
 // IsValidObjectName verifies an object name in accordance with Amazon's
