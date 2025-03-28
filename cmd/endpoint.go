@@ -138,6 +138,17 @@ func (endpoint *Endpoint) SetDiskIndex(i int) {
 	endpoint.DiskIdx = i
 }
 
+func isValidURLEndpoint(u *url.URL) bool {
+	// URL style of endpoint.
+	// Valid URL style endpoint is
+	// - Scheme field must contain "http" or "https"
+	// - All field should be empty except Host and Path.
+	isURLOk := (u.Scheme == "http" || u.Scheme == "https") &&
+		u.User == nil && u.Opaque == "" && !u.ForceQuery &&
+		u.RawQuery == "" && u.Fragment == ""
+	return isURLOk
+}
+
 // NewEndpoint - returns new endpoint based on given arguments.
 func NewEndpoint(arg string) (ep Endpoint, e error) {
 	// isEmptyPath - check whether given path is not empty.
@@ -157,8 +168,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		// Valid URL style endpoint is
 		// - Scheme field must contain "http" or "https"
 		// - All field should be empty except Host and Path.
-		if !((u.Scheme == "http" || u.Scheme == "https") &&
-			u.User == nil && u.Opaque == "" && !u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+		if !isValidURLEndpoint(u) {
 			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 

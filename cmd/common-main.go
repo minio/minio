@@ -717,9 +717,7 @@ func serverHandleEnvVars() {
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
 			}
 			// Look for if URL has invalid values and return error.
-			if !((u.Scheme == "http" || u.Scheme == "https") &&
-				u.Opaque == "" &&
-				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+			if !isValidURLEndpoint((*url.URL)(u)) {
 				err := fmt.Errorf("URL contains unexpected resources, expected URL to be one of http(s)://console.example.com or as a subpath via API endpoint http(s)://minio.example.com/minio format: %v", u)
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value is environment variable")
 			}
@@ -734,9 +732,7 @@ func serverHandleEnvVars() {
 			logger.Fatal(err, "Invalid MINIO_SERVER_URL value in environment variable")
 		}
 		// Look for if URL has invalid values and return error.
-		if !((u.Scheme == "http" || u.Scheme == "https") &&
-			(u.Path == "/" || u.Path == "") && u.Opaque == "" &&
-			!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+		if !isValidURLEndpoint((*url.URL)(u)) {
 			err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
 			logger.Fatal(err, "Invalid MINIO_SERVER_URL value is environment variable")
 		}

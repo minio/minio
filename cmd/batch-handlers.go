@@ -1122,7 +1122,8 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		}
 
 		// if one of source or target is non MinIO, just replicate the top most version like `mc mirror`
-		return !((r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3) && !info.IsLatest)
+		isSourceOrTargetS3 := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
+		return !isSourceOrTargetS3 || info.IsLatest
 	}
 
 	u, err := url.Parse(r.Target.Endpoint)
