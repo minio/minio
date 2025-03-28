@@ -37,7 +37,6 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
-	minioClient "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/replication"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -738,7 +737,6 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 				resultsMu.Lock()
 				results.NodeResults = append(results.NodeResults, result)
 				resultsMu.Unlock()
-				return
 			}()
 			continue
 		}
@@ -756,7 +754,6 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 			resultsMu.Lock()
 			results.NodeResults = append(results.NodeResults, result)
 			resultsMu.Unlock()
-			return
 		}()
 	}
 	wg.Wait()
@@ -2625,7 +2622,7 @@ func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient,
 	return client, nil
 }
 
-func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
+func getS3Client(pc madmin.PeerSite) (*minio.Client, error) {
 	ep, err := url.Parse(pc.Endpoint)
 	if err != nil {
 		return nil, err
@@ -2634,7 +2631,7 @@ func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
 		return nil, RemoteTargetConnectionErr{Endpoint: ep.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", ep.String())}
 	}
 
-	return minioClient.New(ep.Host, &minioClient.Options{
+	return minio.New(ep.Host, &minio.Options{
 		Creds:     credentials.NewStaticV4(pc.AccessKey, pc.SecretKey, ""),
 		Secure:    ep.Scheme == "https",
 		Transport: globalRemoteTargetTransport,

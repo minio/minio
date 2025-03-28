@@ -147,7 +147,6 @@ func (r *ReqInfo) PopulateTagsMap(tagsMap map[string]string) {
 	for _, t := range r.tags {
 		tagsMap[t.Key] = t.Val
 	}
-	return
 }
 
 // SetReqInfo sets ReqInfo in the context.

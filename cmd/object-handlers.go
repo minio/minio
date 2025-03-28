@@ -706,8 +706,6 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
-
-	return
 }
 
 // GetObjectHandler - GET Object
