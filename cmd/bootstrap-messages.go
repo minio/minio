@@ -48,9 +48,7 @@ func (bs *bootstrapTracer) Events() []madmin.TraceInfo {
 	traceInfo := make([]madmin.TraceInfo, 0, bootstrapTraceLimit)
 
 	bs.mu.RLock()
-	for _, i := range bs.info {
-		traceInfo = append(traceInfo, i)
-	}
+	traceInfo = append(traceInfo, bs.info...)
 	bs.mu.RUnlock()
 
 	return traceInfo

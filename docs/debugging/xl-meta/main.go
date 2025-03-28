@@ -1508,7 +1508,7 @@ func reconPartial(shards [][]byte, k int, parityOK []bool, splitData [][]byte, s
 			}
 		}
 	}
-	fmt.Println("Reconstructed", reconstructed, "bytes and verified", verified, "bytes of partial shard with config", shardConfig)
+	fmt.Println("Reconstructed", reconstructed, "bytes and verified", verified, "bytes of partial shard with config", string(shardConfig))
 }
 
 // bitrot returns a shard beginning at startOffset after doing bitrot checks.

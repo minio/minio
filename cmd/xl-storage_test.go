@@ -1194,7 +1194,7 @@ func TestXLStorageReadFile(t *testing.T) {
 								expectErrno = uintptr(errno)
 							}
 						}
-						if !(expectErrno != 0 && resultErrno != 0 && expectErrno == resultErrno) {
+						if expectErrno == 0 || resultErrno == 0 || expectErrno != resultErrno {
 							t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
 						}
 					}
