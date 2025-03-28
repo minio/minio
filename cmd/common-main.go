@@ -382,7 +382,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	}
 
 	// Check "no-compat" flag from command line argument.
-	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
+	ctxt.StrictS3Compat = !ctx.IsSet("no-compat") && !ctx.GlobalIsSet("no-compat")
 
 	switch {
 	case ctx.IsSet("config-dir"):
@@ -911,7 +911,7 @@ func handleKMSConfig() {
 }
 
 func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
-	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
+	if !isFile(getPublicCertFile()) || !isFile(getPrivateKeyFile()) {
 		return nil, nil, false, nil
 	}
 

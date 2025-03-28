@@ -614,11 +614,8 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 	startTime := time.Now()
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
-	for {
+	for !foundLocal && (epsResolved != len(endpoints)) {
 		// Break if the local endpoint is found already Or all the endpoints are resolved.
-		if foundLocal || (epsResolved == len(endpoints)) {
-			break
-		}
 
 		// Retry infinitely on Kubernetes and Docker swarm.
 		// This is needed as the remote hosts are sometime
@@ -804,11 +801,8 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 	startTime := time.Now()
 	keepAliveTicker := time.NewTicker(1 * time.Second)
 	defer keepAliveTicker.Stop()
-	for {
+	for !foundLocal && (epsResolved != epCount) {
 		// Break if the local endpoint is found already Or all the endpoints are resolved.
-		if foundLocal || (epsResolved == epCount) {
-			break
-		}
 
 		// Retry infinitely on Kubernetes and Docker swarm.
 		// This is needed as the remote hosts are sometime
