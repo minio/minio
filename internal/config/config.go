@@ -941,6 +941,9 @@ func (c Config) SetKVS(s string, defaultKVS map[string]KVS) (dynamic bool, err e
 	if err != nil {
 		return false, err
 	}
+	if len(inputs) < 2 {
+		return false, Errorf("sub-system '%s' must have key", subSys)
+	}
 
 	dynamic = SubSystemsDynamic.Contains(subSys)
 
