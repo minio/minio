@@ -125,16 +125,16 @@ func (ri replicatedInfos) VersionPurgeStatus() VersionPurgeStatusType {
 	completed := 0
 	for _, v := range ri.Targets {
 		switch v.VersionPurgeStatus {
-		case Failed:
-			return Failed
-		case Complete:
+		case replication.VersionPurgeFailed:
+			return replication.VersionPurgeFailed
+		case replication.VersionPurgeComplete:
 			completed++
 		}
 	}
 	if completed == len(ri.Targets) {
-		return Complete
+		return replication.VersionPurgeComplete
 	}
-	return Pending
+	return replication.VersionPurgePending
 }
 
 func (ri replicatedInfos) VersionPurgeStatusInternal() string {
@@ -380,7 +380,7 @@ func (rs *ReplicationState) CompositeReplicationStatus() (st replication.StatusT
 // CompositeVersionPurgeStatus returns overall replication purge status for the permanent delete being replicated.
 func (rs *ReplicationState) CompositeVersionPurgeStatus() VersionPurgeStatusType {
 	switch VersionPurgeStatusType(rs.VersionPurgeStatusInternal) {
-	case Pending, Complete, Failed: // for backward compatibility
+	case replication.VersionPurgePending, replication.VersionPurgeComplete, replication.VersionPurgeFailed: // for backward compatibility
 		return VersionPurgeStatusType(rs.VersionPurgeStatusInternal)
 	default:
 		return getCompositeVersionPurgeStatus(rs.PurgeTargets)
@@ -478,16 +478,16 @@ func getCompositeVersionPurgeStatus(m map[string]VersionPurgeStatusType) Version
 	completed := 0
 	for _, v := range m {
 		switch v {
-		case Failed:
-			return Failed
-		case Complete:
+		case replication.VersionPurgeFailed:
+			return replication.VersionPurgeFailed
+		case replication.VersionPurgeComplete:
 			completed++
 		}
 	}
 	if completed == len(m) {
-		return Complete
+		return replication.VersionPurgeComplete
 	}
-	return Pending
+	return replication.VersionPurgePending
 }
 
 // getHealReplicateObjectInfo returns info needed by heal replication in ReplicateObjectInfo
@@ -635,28 +635,7 @@ type ResyncTarget struct {
 }
 
 // VersionPurgeStatusType represents status of a versioned delete or permanent delete w.r.t bucket replication
-type VersionPurgeStatusType string
-
-const (
-	// Pending - versioned delete replication is pending.
-	Pending VersionPurgeStatusType = "PENDING"
-
-	// Complete - versioned delete replication is now complete, erase version on disk.
-	Complete VersionPurgeStatusType = "COMPLETE"
-
-	// Failed - versioned delete replication failed.
-	Failed VersionPurgeStatusType = "FAILED"
-)
-
-// Empty returns true if purge status was not set.
-func (v VersionPurgeStatusType) Empty() bool {
-	return string(v) == ""
-}
-
-// Pending returns true if the version is pending purge.
-func (v VersionPurgeStatusType) Pending() bool {
-	return v == Pending || v == Failed
-}
+type VersionPurgeStatusType = replication.VersionPurgeStatusType
 
 type replicationResyncer struct {
 	// map of bucket to their resync status

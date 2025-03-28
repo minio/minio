@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -310,6 +311,10 @@ type ObjectOpts struct {
 	TransitionStatus string
 	RestoreOngoing   bool
 	RestoreExpires   time.Time
+	// to determine if object is locked due to retention
+	UserDefined        map[string]string
+	VersionPurgeStatus replication.VersionPurgeStatusType
+	ReplicationStatus  replication.StatusType
 }
 
 // ExpiredObjectDeleteMarker returns true if an object version referred to by o
@@ -331,12 +336,12 @@ type Event struct {
 
 // Eval returns the lifecycle event applicable now.
 func (lc Lifecycle) Eval(obj ObjectOpts) Event {
-	return lc.eval(obj, time.Now().UTC())
+	return lc.eval(obj, time.Now().UTC(), 0)
 }
 
 // eval returns the lifecycle event applicable at the given now. If now is the
 // zero value of time.Time, it returns the upcoming lifecycle event.
-func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
+func (lc Lifecycle) eval(obj ObjectOpts, now time.Time, remainingVersions int) Event {
 	var events []Event
 	if obj.ModTime.IsZero() {
 		return Event{}
@@ -404,17 +409,22 @@ func (lc Lifecycle) eval(obj ObjectOpts, now time.Time) Event {
 			continue
 		}
 
-		// Skip rules with newer noncurrent versions specified. These rules are
-		// not handled at an individual version level. eval applies only to a
-		// specific version.
-		if !obj.IsLatest && rule.NoncurrentVersionExpiration.NewerNoncurrentVersions > 0 {
-			continue
-		}
-
-		if !obj.IsLatest && !rule.NoncurrentVersionExpiration.IsDaysNull() {
-			// Non current versions should be deleted if their age exceeds non current days configuration
-			// https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
-			if expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays)); now.IsZero() || now.After(expectedExpiry) {
+		// NoncurrentVersionExpiration
+		if !obj.IsLatest && rule.NoncurrentVersionExpiration.set {
+			var (
+				retainedEnough bool
+				oldEnough      bool
+			)
+			if rule.NoncurrentVersionExpiration.NewerNoncurrentVersions == 0 || remainingVersions >= rule.NoncurrentVersionExpiration.NewerNoncurrentVersions {
+				retainedEnough = true
+			}
+			expectedExpiry := ExpectedExpiryTime(obj.SuccessorModTime, int(rule.NoncurrentVersionExpiration.NoncurrentDays))
+			if now.IsZero() || now.After(expectedExpiry) {
+				oldEnough = true
+			}
+			// > For the deletion to occur, both the <NoncurrentDays> and the <NewerNoncurrentVersions> values must be exceeded.
+			// ref: https://docs.aws.amazon.com/AmazonS3/latest/dev/intro-lifecycle-rules.html#intro-lifecycle-rules-actions
+			if retainedEnough && oldEnough {
 				events = append(events, Event{
 					Action: DeleteVersionAction,
 					RuleID: rule.ID,
@@ -529,7 +539,7 @@ func ExpectedExpiryTime(modTime time.Time, days int) time.Time {
 // SetPredictionHeaders sets time to expiry and transition headers on w for a
 // given obj.
 func (lc Lifecycle) SetPredictionHeaders(w http.ResponseWriter, obj ObjectOpts) {
-	event := lc.eval(obj, time.Time{})
+	event := lc.eval(obj, time.Time{}, 0)
 	switch event.Action {
 	case DeleteAction, DeleteVersionAction, DeleteAllVersionsAction, DelMarkerDeleteAllVersionsAction:
 		w.Header()[xhttp.AmzExpiration] = []string{

@@ -960,7 +960,9 @@ func TestTransitionTier(t *testing.T) {
 	// Go back seven days in the past
 	now = now.Add(7 * 24 * time.Hour)
 
-	evt := lc.eval(obj1, now)
+	evaluator := NewEvaluator(lc)
+	evts := evaluator.eval([]ObjectOpts{obj1, obj2}, now)
+	evt := evts[0]
 	if evt.Action != TransitionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
@@ -968,7 +970,7 @@ func TestTransitionTier(t *testing.T) {
 		t.Fatalf("Expected TIER-1 but got %s", evt.StorageClass)
 	}
 
-	evt = lc.eval(obj2, now)
+	evt = evts[1]
 	if evt.Action != TransitionVersionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionVersionAction, evt.Action)
 	}
@@ -1036,14 +1038,16 @@ func TestTransitionTierWithPrefixAndTags(t *testing.T) {
 	// Go back seven days in the past
 	now = now.Add(7 * 24 * time.Hour)
 
+	evaluator := NewEvaluator(lc)
+	evts := evaluator.eval([]ObjectOpts{obj1, obj2, obj3}, now)
 	// Eval object 1
-	evt := lc.eval(obj1, now)
+	evt := evts[0]
 	if evt.Action != NoneAction {
 		t.Fatalf("Expected action: %s but got %s", NoneAction, evt.Action)
 	}
 
 	// Eval object 2
-	evt = lc.eval(obj2, now)
+	evt = evts[1]
 	if evt.Action != TransitionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
@@ -1052,7 +1056,7 @@ func TestTransitionTierWithPrefixAndTags(t *testing.T) {
 	}
 
 	// Eval object 3
-	evt = lc.eval(obj3, now)
+	evt = evts[2]
 	if evt.Action != TransitionAction {
 		t.Fatalf("Expected action: %s but got %s", TransitionAction, evt.Action)
 	}
@@ -1466,7 +1470,9 @@ func TestDeleteAllVersions(t *testing.T) {
 		NumVersions: 4,
 	}
 
-	event := lc.eval(opts, time.Time{})
+	evaluator := NewEvaluator(lc)
+	events := evaluator.eval([]ObjectOpts{opts}, time.Time{})
+	event := events[0]
 	if event.Action != TransitionAction {
 		t.Fatalf("Expected %v action but got %v", TransitionAction, event.Action)
 	}
@@ -1503,7 +1509,9 @@ func TestDeleteAllVersions(t *testing.T) {
 		DeleteMarker: true,
 		NumVersions:  4,
 	}
-	event = lc.eval(opts, time.Time{})
+	evaluator = NewEvaluator(lc)
+	events = evaluator.eval([]ObjectOpts{opts}, time.Time{})
+	event = events[0]
 	if event.Action != DelMarkerDeleteAllVersionsAction {
 		t.Fatalf("Expected %v action but got %v", DelMarkerDeleteAllVersionsAction, event.Action)
 	}

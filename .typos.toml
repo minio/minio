@@ -41,4 +41,5 @@ extend-ignore-identifiers-re = [
     # keyword - some of these (like typ1 -> type1) can be fixed, but probably
     # not worth the effort.
     "[tT]yp[0-9]*",
+    "(?Rm)^.*(#|//)\\s*spellchecker:disable-line$", # ignore line
 ]
