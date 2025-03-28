@@ -138,6 +138,17 @@ func (endpoint *Endpoint) SetDiskIndex(i int) {
 	endpoint.DiskIdx = i
 }
 
+func isValidURLEndpoint(u *url.URL) bool {
+	// URL style of endpoint.
+	// Valid URL style endpoint is
+	// - Scheme field must contain "http" or "https"
+	// - All field should be empty except Host and Path.
+	isURLOk := (u.Scheme == "http" || u.Scheme == "https") &&
+		u.User == nil && u.Opaque == "" && !u.ForceQuery &&
+		u.RawQuery == "" && u.Fragment == ""
+	return isURLOk
+}
+
 // NewEndpoint - returns new endpoint based on given arguments.
 func NewEndpoint(arg string) (ep Endpoint, e error) {
 	// isEmptyPath - check whether given path is not empty.
@@ -157,8 +168,7 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 		// Valid URL style endpoint is
 		// - Scheme field must contain "http" or "https"
 		// - All field should be empty except Host and Path.
-		if !((u.Scheme == "http" || u.Scheme == "https") &&
-			u.User == nil && u.Opaque == "" && !u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+		if !isValidURLEndpoint(u) {
 			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 
@@ -604,11 +614,8 @@ func (endpoints Endpoints) UpdateIsLocal() error {
 	startTime := time.Now()
 	keepAliveTicker := time.NewTicker(500 * time.Millisecond)
 	defer keepAliveTicker.Stop()
-	for {
+	for !foundLocal && (epsResolved != len(endpoints)) {
 		// Break if the local endpoint is found already Or all the endpoints are resolved.
-		if foundLocal || (epsResolved == len(endpoints)) {
-			break
-		}
 
 		// Retry infinitely on Kubernetes and Docker swarm.
 		// This is needed as the remote hosts are sometime
@@ -794,11 +801,8 @@ func (p PoolEndpointList) UpdateIsLocal() error {
 	startTime := time.Now()
 	keepAliveTicker := time.NewTicker(1 * time.Second)
 	defer keepAliveTicker.Stop()
-	for {
+	for !foundLocal && (epsResolved != epCount) {
 		// Break if the local endpoint is found already Or all the endpoints are resolved.
-		if foundLocal || (epsResolved == epCount) {
-			break
-		}
 
 		// Retry infinitely on Kubernetes and Docker swarm.
 		// This is needed as the remote hosts are sometime

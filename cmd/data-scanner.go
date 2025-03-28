@@ -37,7 +37,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
-	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
@@ -991,7 +990,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	versionID := oi.VersionID
 
 	var vc *versioning.Versioning
-	var lr objectlock.Retention
+	var lr lock.Retention
 	var rcfg *replication.Config
 	if !isMinioMetaBucketName(i.bucket) {
 		vc, err = globalBucketVersioningSys.Get(i.bucket)

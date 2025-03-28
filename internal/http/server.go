@@ -129,7 +129,7 @@ func (srv *Server) Init(listenCtx context.Context, listenErrCallback func(listen
 	}
 
 	serve = func() error {
-		return srv.Server.Serve(l)
+		return srv.Serve(l)
 	}
 
 	return

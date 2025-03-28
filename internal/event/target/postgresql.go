@@ -376,7 +376,7 @@ func (target *PostgreSQLTarget) initPostgreSQL() error {
 
 	err = target.db.Ping()
 	if err != nil {
-		if !(xnet.IsConnRefusedErr(err) || xnet.IsConnResetErr(err)) {
+		if !xnet.IsConnRefusedErr(err) && !xnet.IsConnResetErr(err) {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
 	} else {

@@ -51,9 +51,9 @@ func (gcs *warmBackendGCS) PutWithMeta(ctx context.Context, key string, data io.
 	object := gcs.client.Bucket(gcs.Bucket).Object(gcs.getDest(key))
 	w := object.NewWriter(ctx)
 	if gcs.StorageClass != "" {
-		w.ObjectAttrs.StorageClass = gcs.StorageClass
+		w.StorageClass = gcs.StorageClass
 	}
-	w.ObjectAttrs.Metadata = meta
+	w.Metadata = meta
 	if _, err := xioutil.Copy(w, data); err != nil {
 		return "", gcsToObjectError(err, gcs.Bucket, key)
 	}

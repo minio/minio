@@ -118,7 +118,6 @@ func (ats *allTierStats) populateStats(stats map[string]madmin.TierStats) {
 			NumObjects:  st.NumObjects,
 		}
 	}
-	return
 }
 
 // tierStats holds per-tier stats of a remote tier.

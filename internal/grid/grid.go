@@ -192,7 +192,7 @@ func bytesOrLength(b []byte) string {
 	if len(b) > 100 {
 		return fmt.Sprintf("%d bytes", len(b))
 	}
-	return fmt.Sprint(b)
+	return fmt.Sprint(string(b))
 }
 
 // ConnDialer is a function that dials a connection to the given address.

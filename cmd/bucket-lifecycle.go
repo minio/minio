@@ -152,7 +152,7 @@ func (f freeVersionTask) OpHash() uint64 {
 }
 
 func (n newerNoncurrentTask) OpHash() uint64 {
-	return xxh3.HashString(n.bucket + n.versions[0].ObjectV.ObjectName)
+	return xxh3.HashString(n.bucket + n.versions[0].ObjectName)
 }
 
 func (j jentry) OpHash() uint64 {

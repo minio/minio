@@ -943,12 +943,12 @@ func isObjectDirDangling(errs []error) (ok bool) {
 	var foundNotEmpty int
 	var otherFound int
 	for _, readErr := range errs {
-		switch {
-		case readErr == nil:
+		switch readErr {
+		case nil:
 			found++
-		case readErr == errFileNotFound || readErr == errVolumeNotFound:
+		case errFileNotFound, errVolumeNotFound:
 			notFound++
-		case readErr == errVolumeNotEmpty:
+		case errVolumeNotEmpty:
 			foundNotEmpty++
 		default:
 			otherFound++

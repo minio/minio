@@ -178,9 +178,7 @@ func (u UUIDHash) Sum(b []byte) []byte {
 }
 
 // Reset -  implement hash.Hash Reset
-func (u UUIDHash) Reset() {
-	return
-}
+func (u UUIDHash) Reset() {}
 
 // Size -  implement hash.Hash Size
 func (u UUIDHash) Size() int {

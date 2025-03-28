@@ -243,7 +243,7 @@ func (target *NSQTarget) initNSQ() error {
 	err = target.producer.Ping()
 	if err != nil {
 		// To treat "connection refused" errors as errNotConnected.
-		if !(xnet.IsConnRefusedErr(err) || xnet.IsConnResetErr(err)) {
+		if !xnet.IsConnRefusedErr(err) && !xnet.IsConnResetErr(err) {
 			target.loggerOnce(context.Background(), err, target.ID().String())
 		}
 		target.producer.Stop()

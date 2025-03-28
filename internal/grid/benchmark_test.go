@@ -466,19 +466,14 @@ func benchmarkGridStreamTwoway(b *testing.B, n int) {
 			// Send 10x requests.
 			Handle: func(ctx context.Context, payload []byte, in <-chan []byte, out chan<- []byte) *RemoteErr {
 				got := 0
-				for {
-					select {
-					case b, ok := <-in:
-						if !ok {
-							if got != messages {
-								return NewRemoteErrf("wrong number of requests. want %d, got %d", messages, got)
-							}
-							return nil
-						}
-						out <- b
-						got++
-					}
+				for b := range in {
+					out <- b
+					got++
 				}
+				if got != messages {
+					return NewRemoteErrf("wrong number of requests. want %d, got %d", messages, got)
+				}
+				return nil
 			},
 
 			Subroute:    "some-subroute",

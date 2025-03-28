@@ -147,8 +147,7 @@ func (w *Writer) compress() error {
 	}
 	defer gw.Close()
 
-	var wc io.WriteCloser
-	wc = gzip.NewWriter(gw)
+	var wc io.WriteCloser = gzip.NewWriter(gw)
 	if _, err = io.Copy(wc, r); err != nil {
 		return err
 	}

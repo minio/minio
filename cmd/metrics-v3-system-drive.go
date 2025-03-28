@@ -131,7 +131,7 @@ var (
 )
 
 func getCurrentDriveIOStats() map[string]madmin.DiskIOStats {
-	var types madmin.MetricType = madmin.MetricsDisk
+	types := madmin.MetricsDisk
 	driveRealtimeMetrics := collectLocalMetrics(types, collectMetricsOpts{
 		hosts: map[string]struct{}{
 			globalLocalNodeName: {},

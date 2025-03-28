@@ -159,7 +159,7 @@ func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 			a.Total = atomic.LoadInt64(&old.Total)
 			a.N = atomic.LoadInt64(&old.N)
 			e.mu.Lock()
-			e.lastMinuteLatency.addAll(t-1, a)
+			e.addAll(t-1, a)
 			e.mu.Unlock()
 			acc = newAcc
 		} else {
@@ -177,7 +177,7 @@ func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 func (e *lockedLastMinuteLatency) total() AccElem {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.lastMinuteLatency.getTotal()
+	return e.getTotal()
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDiskIDCheck {

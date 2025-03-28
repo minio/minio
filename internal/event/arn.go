@@ -30,7 +30,7 @@ type ARN struct {
 
 // String - returns string representation.
 func (arn ARN) String() string {
-	if arn.TargetID.ID == "" && arn.TargetID.Name == "" && arn.region == "" {
+	if arn.ID == "" && arn.Name == "" && arn.region == "" {
 		return ""
 	}
 

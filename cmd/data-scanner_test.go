@@ -137,7 +137,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	close(workers[0])
 	wg.Wait()
 	for _, obj := range expired {
-		switch obj.ObjectV.VersionID {
+		switch obj.VersionID {
 		case uuids[2].String(), uuids[3].String(), uuids[4].String():
 		default:
 			t.Errorf("Unexpected versionID being expired: %#v\n", obj)

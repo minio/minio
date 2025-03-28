@@ -353,9 +353,9 @@ func (h *Target) startQueueProcessor(ctx context.Context, mainWorker bool) {
 		if count < h.batchSize {
 			tickered := false
 			select {
-			case _ = <-ticker.C:
+			case <-ticker.C:
 				tickered = true
-			case entry, _ = <-globalBuffer:
+			case entry = <-globalBuffer:
 			case entry, ok = <-h.logCh:
 				if !ok {
 					return

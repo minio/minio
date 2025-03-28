@@ -114,7 +114,6 @@ func (list *TargetList) incCurrentSendCalls(id TargetID) {
 
 	stats.currentSendCalls++
 	list.targetStats[id] = stats
-	return
 }
 
 func (list *TargetList) decCurrentSendCalls(id TargetID) {
@@ -129,7 +128,6 @@ func (list *TargetList) decCurrentSendCalls(id TargetID) {
 
 	stats.currentSendCalls--
 	list.targetStats[id] = stats
-	return
 }
 
 func (list *TargetList) incFailedEvents(id TargetID) {
@@ -143,7 +141,6 @@ func (list *TargetList) incFailedEvents(id TargetID) {
 
 	stats.failedEvents++
 	list.targetStats[id] = stats
-	return
 }
 
 func (list *TargetList) incTotalEvents(id TargetID) {
@@ -157,7 +154,6 @@ func (list *TargetList) incTotalEvents(id TargetID) {
 
 	stats.totalEvents++
 	list.targetStats[id] = stats
-	return
 }
 
 type asyncEvent struct {

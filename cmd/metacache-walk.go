@@ -69,7 +69,7 @@ const (
 // On success a sorted meta cache stream will be returned.
 // Metadata has data stripped, if any.
 func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
-	legacyFS := !(s.fsType == xfs || s.fsType == ext4)
+	legacyFS := s.fsType != xfs && s.fsType != ext4
 
 	s.RLock()
 	legacy := s.formatLegacy

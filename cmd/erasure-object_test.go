@@ -189,7 +189,7 @@ func TestDeleteObjectsVersionedTwoPools(t *testing.T) {
 				t.Errorf("Test %d: Failed to remove object `%v` with the error: `%v`", testIdx, names[i], delErrs[i])
 			}
 			_, statErr := obj.GetObjectInfo(ctx, bucketName, objectName, ObjectOptions{
-				VersionID: names[i].ObjectV.VersionID,
+				VersionID: names[i].VersionID,
 			})
 			switch statErr.(type) {
 			case VersionNotFound:
@@ -265,7 +265,7 @@ func TestDeleteObjectsVersioned(t *testing.T) {
 
 	for i, test := range testCases {
 		_, statErr := obj.GetObjectInfo(ctx, test.bucket, test.object, ObjectOptions{
-			VersionID: names[i].ObjectV.VersionID,
+			VersionID: names[i].VersionID,
 		})
 		switch statErr.(type) {
 		case VersionNotFound:

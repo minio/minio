@@ -214,10 +214,7 @@ func (a adminAPIHandlers) AddServiceAccountLDAP(w http.ResponseWriter, r *http.R
 	}
 
 	// Check if we are creating svc account for request sender.
-	isSvcAccForRequestor := false
-	if targetUser == requestorUser || targetUser == requestorParentUser {
-		isSvcAccForRequestor = true
-	}
+	isSvcAccForRequestor := targetUser == requestorUser || targetUser == requestorParentUser
 
 	var (
 		targetGroups []string
