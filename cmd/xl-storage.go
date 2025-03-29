@@ -3373,9 +3373,7 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 	}
 
 	// Clear and repopulate
-	for k := range foundDirs {
-		delete(foundDirs, k)
-	}
+	clear(foundDirs)
 
 	// Populate into map
 	for _, k := range dirs {
