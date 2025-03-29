@@ -295,7 +295,7 @@ func checkPutObjectLockAllowed(ctx context.Context, rq *http.Request, bucket, ob
 	if legalHoldRequested {
 		var lerr error
 		if legalHold, lerr = objectlock.ParseObjectLockLegalHoldHeaders(rq.Header); lerr != nil {
-			return mode, retainDate, legalHold, toAPIErrorCode(ctx, err)
+			return mode, retainDate, legalHold, toAPIErrorCode(ctx, lerr)
 		}
 	}
 
