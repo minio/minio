@@ -87,9 +87,7 @@ func (r *Record) Reset() {
 	if len(r.csvRecord) > 0 {
 		r.csvRecord = r.csvRecord[:0]
 	}
-	for k := range r.nameIndexMap {
-		delete(r.nameIndexMap, k)
-	}
+	clear(r.nameIndexMap)
 }
 
 // Clone the record.

@@ -491,13 +491,9 @@ func (config *TierConfigMgr) Reload(ctx context.Context, objAPI ObjectLayer) err
 	}
 
 	// Reset drivercache built using current config
-	for k := range config.drivercache {
-		delete(config.drivercache, k)
-	}
+	clear(config.drivercache)
 	// Remove existing tier configs
-	for k := range config.Tiers {
-		delete(config.Tiers, k)
-	}
+	clear(config.Tiers)
 	// Copy over the new tier configs
 	for tier, cfg := range newConfig.Tiers {
 		config.Tiers[tier] = cfg

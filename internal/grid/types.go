@@ -132,9 +132,7 @@ func (m *MSS) Msgsize() int {
 // NewMSS returns a new MSS.
 func NewMSS() *MSS {
 	m := MSS(mssPool.Get())
-	for k := range m {
-		delete(m, k)
-	}
+	clear(m)
 	return &m
 }
 

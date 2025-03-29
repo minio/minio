@@ -647,9 +647,7 @@ func (sys *BucketMetadataSys) init(ctx context.Context, buckets []string) {
 // Reset the state of the BucketMetadataSys.
 func (sys *BucketMetadataSys) Reset() {
 	sys.Lock()
-	for k := range sys.metadataMap {
-		delete(sys.metadataMap, k)
-	}
+	clear(sys.metadataMap)
 	sys.Unlock()
 }
 
