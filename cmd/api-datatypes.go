@@ -44,10 +44,10 @@ type DeleteMarkerMTime struct {
 // MarshalXML encodes expiration date if it is non-zero and encodes
 // empty string otherwise
 func (t DeleteMarkerMTime) MarshalXML(e *xml.Encoder, startElement xml.StartElement) error {
-	if t.Time.IsZero() {
+	if t.IsZero() {
 		return nil
 	}
-	return e.EncodeElement(t.Time.Format(time.RFC3339), startElement)
+	return e.EncodeElement(t.Format(time.RFC3339), startElement)
 }
 
 // ObjectV object version key/versionId

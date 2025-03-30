@@ -3750,7 +3750,7 @@ func (p *ReplicationPool) queueMRFHeal() error {
 }
 
 func (p *ReplicationPool) initialized() bool {
-	return !(p == nil || p.objLayer == nil)
+	return p != nil && p.objLayer != nil
 }
 
 // getMRF returns MRF entries for this node.
