@@ -293,7 +293,7 @@ func (target *RedisTarget) initRedis() error {
 
 	_, pingErr := conn.Do("PING")
 	if pingErr != nil {
-		if !(xnet.IsConnRefusedErr(pingErr) || xnet.IsConnResetErr(pingErr)) {
+		if !xnet.IsConnRefusedErr(pingErr) && !xnet.IsConnResetErr(pingErr) {
 			target.loggerOnce(context.Background(), pingErr, target.ID().String())
 		}
 		return pingErr

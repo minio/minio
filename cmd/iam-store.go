@@ -2103,7 +2103,7 @@ func (store *IAMStoreSys) getParentUsers(cache *iamCache) map[string]ParentUserI
 		cred := ui.Credentials
 		// Only consider service account or STS credentials with
 		// non-empty session tokens.
-		if !(cred.IsServiceAccount() || cred.IsTemp()) ||
+		if (!cred.IsServiceAccount() && !cred.IsTemp()) ||
 			cred.SessionToken == "" {
 			continue
 		}

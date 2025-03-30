@@ -382,7 +382,7 @@ func buildServerCtxt(ctx *cli.Context, ctxt *serverCtxt) (err error) {
 	}
 
 	// Check "no-compat" flag from command line argument.
-	ctxt.StrictS3Compat = !(ctx.IsSet("no-compat") || ctx.GlobalIsSet("no-compat"))
+	ctxt.StrictS3Compat = !ctx.IsSet("no-compat") && !ctx.GlobalIsSet("no-compat")
 
 	switch {
 	case ctx.IsSet("config-dir"):
@@ -717,9 +717,7 @@ func serverHandleEnvVars() {
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value in environment variable")
 			}
 			// Look for if URL has invalid values and return error.
-			if !((u.Scheme == "http" || u.Scheme == "https") &&
-				u.Opaque == "" &&
-				!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+			if !isValidURLEndpoint((*url.URL)(u)) {
 				err := fmt.Errorf("URL contains unexpected resources, expected URL to be one of http(s)://console.example.com or as a subpath via API endpoint http(s)://minio.example.com/minio format: %v", u)
 				logger.Fatal(err, "Invalid MINIO_BROWSER_REDIRECT_URL value is environment variable")
 			}
@@ -734,9 +732,7 @@ func serverHandleEnvVars() {
 			logger.Fatal(err, "Invalid MINIO_SERVER_URL value in environment variable")
 		}
 		// Look for if URL has invalid values and return error.
-		if !((u.Scheme == "http" || u.Scheme == "https") &&
-			(u.Path == "/" || u.Path == "") && u.Opaque == "" &&
-			!u.ForceQuery && u.RawQuery == "" && u.Fragment == "") {
+		if !isValidURLEndpoint((*url.URL)(u)) {
 			err := fmt.Errorf("URL contains unexpected resources, expected URL to be of http(s)://minio.example.com format: %v", u)
 			logger.Fatal(err, "Invalid MINIO_SERVER_URL value is environment variable")
 		}
@@ -915,7 +911,7 @@ func handleKMSConfig() {
 }
 
 func getTLSConfig() (x509Certs []*x509.Certificate, manager *certs.Manager, secureConn bool, err error) {
-	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
+	if !isFile(getPublicCertFile()) || !isFile(getPrivateKeyFile()) {
 		return nil, nil, false, nil
 	}
 

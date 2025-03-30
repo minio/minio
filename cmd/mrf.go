@@ -208,8 +208,6 @@ func (m *mrfState) startMRFPersistence() {
 		localDrive.Delete(GlobalContext, minioMetaBucket, pathJoin(healMRFDir, "list.bin"), DeleteOptions{})
 		break
 	}
-
-	return
 }
 
 var healSleeper = newDynamicSleeper(5, time.Second, false)

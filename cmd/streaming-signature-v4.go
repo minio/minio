@@ -592,9 +592,10 @@ func readChunkLine(b *bufio.Reader) ([]byte, []byte, error) {
 	if err != nil {
 		// We always know when EOF is coming.
 		// If the caller asked for a line, there should be a line.
-		if err == io.EOF {
+		switch err {
+		case io.EOF:
 			err = io.ErrUnexpectedEOF
-		} else if err == bufio.ErrBufferFull {
+		case bufio.ErrBufferFull:
 			err = errLineTooLong
 		}
 		return nil, nil, err
