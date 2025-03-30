@@ -165,7 +165,7 @@ func TestCmpReaders(t *testing.T) {
 		r1 := bytes.NewReader([]byte("abc"))
 		r2 := bytes.NewReader([]byte("abc"))
 		ok, msg := cmpReaders(r1, r2)
-		if !(ok && msg == "") {
+		if !ok || msg != "" {
 			t.Fatalf("unexpected")
 		}
 	}

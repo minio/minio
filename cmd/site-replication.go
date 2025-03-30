@@ -37,7 +37,6 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
-	minioClient "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/replication"
 	"github.com/minio/minio-go/v7/pkg/set"
@@ -478,8 +477,8 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 	var secretKey string
 	var svcCred auth.Credentials
 	sa, _, err := globalIAMSys.getServiceAccount(ctx, siteReplicatorSvcAcc)
-	switch {
-	case err == errNoSuchServiceAccount:
+	switch err {
+	case errNoSuchServiceAccount:
 		_, secretKey, err = auth.GenerateCredentials()
 		if err != nil {
 			return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
@@ -492,7 +491,7 @@ func (c *SiteReplicationSys) AddPeerClusters(ctx context.Context, psites []madmi
 		if err != nil {
 			return madmin.ReplicateAddStatus{}, errSRServiceAccount(fmt.Errorf("unable to create local service account: %w", err))
 		}
-	case err == nil:
+	case nil:
 		svcCred = sa.Credentials
 		secretKey = svcCred.SecretKey
 	default:
@@ -738,7 +737,6 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 				resultsMu.Lock()
 				results.NodeResults = append(results.NodeResults, result)
 				resultsMu.Unlock()
-				return
 			}()
 			continue
 		}
@@ -756,7 +754,6 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 			resultsMu.Lock()
 			results.NodeResults = append(results.NodeResults, result)
 			resultsMu.Unlock()
-			return
 		}()
 	}
 	wg.Wait()
@@ -2625,7 +2622,7 @@ func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient,
 	return client, nil
 }
 
-func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
+func getS3Client(pc madmin.PeerSite) (*minio.Client, error) {
 	ep, err := url.Parse(pc.Endpoint)
 	if err != nil {
 		return nil, err
@@ -2634,7 +2631,7 @@ func getS3Client(pc madmin.PeerSite) (*minioClient.Client, error) {
 		return nil, RemoteTargetConnectionErr{Endpoint: ep.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", ep.String())}
 	}
 
-	return minioClient.New(ep.Host, &minioClient.Options{
+	return minio.New(ep.Host, &minio.Options{
 		Creds:     credentials.NewStaticV4(pc.AccessKey, pc.SecretKey, ""),
 		Secure:    ep.Scheme == "https",
 		Transport: globalRemoteTargetTransport,
@@ -3106,7 +3103,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			var policies []*policy.Policy
 			uPolicyCount := 0
 			for _, ps := range pslc {
-				plcy, err := policy.ParseConfig(bytes.NewReader([]byte(ps.SRIAMPolicy.Policy)))
+				plcy, err := policy.ParseConfig(bytes.NewReader([]byte(ps.Policy)))
 				if err != nil {
 					continue
 				}
@@ -3323,7 +3320,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 			uRuleCount := 0
 			for _, rl := range ilmExpRules {
 				var rule lifecycle.Rule
-				if err := xml.Unmarshal([]byte(rl.ILMExpiryRule.ILMRule), &rule); err != nil {
+				if err := xml.Unmarshal([]byte(rl.ILMRule), &rule); err != nil {
 					continue
 				}
 				rules = append(rules, &rule)
@@ -3600,7 +3597,7 @@ func isILMExpRuleReplicated(cntReplicated, total int, rules []*lifecycle.Rule) b
 		if err != nil {
 			return false
 		}
-		if !(string(prevRData) == string(rData)) {
+		if string(prevRData) != string(rData) {
 			return false
 		}
 	}
@@ -4416,7 +4413,7 @@ func (c *SiteReplicationSys) healILMExpiryConfig(ctx context.Context, objAPI Obj
 		// If latest peers ILM expiry flags are equal to current peer, no need to heal
 		flagEqual := true
 		for id, peer := range latestPeers {
-			if !(ps.Peers[id].ReplicateILMExpiry == peer.ReplicateILMExpiry) {
+			if ps.Peers[id].ReplicateILMExpiry != peer.ReplicateILMExpiry {
 				flagEqual = false
 				break
 			}
@@ -5478,12 +5475,12 @@ func (c *SiteReplicationSys) healUsers(ctx context.Context, objAPI ObjectLayer, 
 	)
 	for dID, ss := range us {
 		if lastUpdate.IsZero() {
-			lastUpdate = ss.userInfo.UserInfo.UpdatedAt
+			lastUpdate = ss.userInfo.UpdatedAt
 			latestID = dID
 			latestUserStat = ss
 		}
-		if !ss.userInfo.UserInfo.UpdatedAt.IsZero() && ss.userInfo.UserInfo.UpdatedAt.After(lastUpdate) {
-			lastUpdate = ss.userInfo.UserInfo.UpdatedAt
+		if !ss.userInfo.UpdatedAt.IsZero() && ss.userInfo.UpdatedAt.After(lastUpdate) {
+			lastUpdate = ss.userInfo.UpdatedAt
 			latestID = dID
 			latestUserStat = ss
 		}

@@ -284,7 +284,6 @@ func (c *Client) dumpHTTP(req *http.Request, resp *http.Response) {
 	}
 
 	// Returns success.
-	return
 }
 
 // ErrClientClosed returned when *Client is closed.

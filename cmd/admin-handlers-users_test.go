@@ -160,7 +160,7 @@ func (s *TestSuiteIAM) SetUpSuite(c *check) {
 }
 
 func (s *TestSuiteIAM) RestartIAMSuite(c *check) {
-	s.TestSuiteCommon.RestartTestServer(c)
+	s.RestartTestServer(c)
 
 	s.iamSetup(c)
 }
