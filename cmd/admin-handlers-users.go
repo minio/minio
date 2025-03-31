@@ -197,12 +197,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checkDenyOnly := false
-	if name == cred.AccessKey {
-		// Check that there is no explicit deny - otherwise it's allowed
-		// to view one's own info.
-		checkDenyOnly = true
-	}
+	checkDenyOnly := name == cred.AccessKey
 
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
@@ -493,12 +488,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checkDenyOnly := false
-	if accessKey == cred.AccessKey {
-		// Check that there is no explicit deny - otherwise it's allowed
-		// to change one's own password.
-		checkDenyOnly = true
-	}
+	checkDenyOnly := accessKey == cred.AccessKey
 
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
@@ -689,10 +679,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Check if we are creating svc account for request sender.
-	isSvcAccForRequestor := false
-	if targetUser == requestorUser || targetUser == requestorParentUser {
-		isSvcAccForRequestor = true
-	}
+	isSvcAccForRequestor := targetUser == requestorUser || targetUser == requestorParentUser
 
 	// If we are creating svc account for request sender, ensure
 	// that targetUser is a real user (i.e. not derived
@@ -2673,7 +2660,7 @@ func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) e
 	if exp == nil || exp.IsZero() || exp.Equal(timeSentinel) {
 		return nil
 	}
-	dur := exp.Sub(time.Now())
+	dur := time.Until(*exp)
 	if dur <= 0 {
 		return errors.New("unsupported expiration time")
 	}

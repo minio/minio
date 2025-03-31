@@ -278,7 +278,7 @@ func collectDriveMetrics(m madmin.RealtimeMetrics) {
 }
 
 func collectLocalResourceMetrics() {
-	var types madmin.MetricType = madmin.MetricsDisk | madmin.MetricNet | madmin.MetricsMem | madmin.MetricsCPU
+	types := madmin.MetricsDisk | madmin.MetricNet | madmin.MetricsMem | madmin.MetricsCPU
 
 	m := collectLocalMetrics(types, collectMetricsOpts{})
 	for _, hm := range m.ByHost {

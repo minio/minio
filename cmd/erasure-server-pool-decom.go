@@ -1014,11 +1014,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 			defer wk.Give()
 			// We will perpetually retry listing if it fails, since we cannot
 			// possibly give up in this matter
-			for {
-				if contextCanceled(ctx) {
-					break
-				}
-
+			for !contextCanceled(ctx) {
 				err := set.listObjectsToDecommission(ctx, bi,
 					func(entry metaCacheEntry) {
 						wk.Take()

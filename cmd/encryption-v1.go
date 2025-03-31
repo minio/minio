@@ -1015,7 +1015,7 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 
 	if encrypted {
 		if crypto.SSEC.IsEncrypted(info.UserDefined) {
-			if !(crypto.SSEC.IsRequested(headers) || crypto.SSECopy.IsRequested(headers)) {
+			if !crypto.SSEC.IsRequested(headers) && !crypto.SSECopy.IsRequested(headers) {
 				if r.Header.Get(xhttp.MinIOSourceReplicationRequest) != "true" {
 					return encrypted, errEncryptedObject
 				}
@@ -1112,7 +1112,6 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 			o.Parts[i].Checksums = cs[i]
 		}
 	}
-	return
 }
 
 // metadataEncryptFn provides an encryption function for metadata.

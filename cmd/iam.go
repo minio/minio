@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	libldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
@@ -1691,7 +1690,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	// We map keys that correspond to LDAP DNs and validate that they exist in
 	// the LDAP server.
-	var dnValidator func(*libldap.Conn, string) (*ldap.DNSearchResult, bool, error) = sys.LDAPConfig.GetValidatedUserDN
+	dnValidator := sys.LDAPConfig.GetValidatedUserDN
 	if isGroup {
 		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
 	}

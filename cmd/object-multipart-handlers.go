@@ -130,7 +130,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 				break
 			}
 		}
-		if !(ssecRep && sourceReplReq) {
+		if !ssecRep || !sourceReplReq {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
@@ -803,7 +803,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 		}
 
-		if !(sourceReplReq && crypto.SSEC.IsEncrypted(mi.UserDefined)) {
+		if !sourceReplReq || !crypto.SSEC.IsEncrypted(mi.UserDefined) {
 			// Calculating object encryption key
 			key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
 			if err != nil {
