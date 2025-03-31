@@ -662,6 +662,16 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p policy.Po
 	return updatedAt, nil
 }
 
+// RevokeTokens - revokes all STS tokens, or those of specified type, for a user
+// If `tokenRevokeType` is empty, all tokens are revoked.
+func (sys *IAMSys) RevokeTokens(ctx context.Context, accessKey, tokenRevokeType string) error {
+	if !sys.Initialized() {
+		return errServerNotInitialized
+	}
+
+	return sys.store.RevokeTokens(ctx, accessKey, tokenRevokeType)
+}
+
 // DeleteUser - delete user (only for long-term users not STS users).
 func (sys *IAMSys) DeleteUser(ctx context.Context, accessKey string, notifyPeers bool) error {
 	if !sys.Initialized() {
