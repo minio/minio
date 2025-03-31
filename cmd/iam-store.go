@@ -2056,10 +2056,9 @@ func (store *IAMStoreSys) RevokeTokens(ctx context.Context, parentUser string, t
 			if err != nil {
 				return err
 			}
-			if v, ok := claims.Lookup(tokenRevokeTypeClaim); ok {
-				if v != tokenRevokeType {
-					continue
-				}
+			// skip if token type is given and does not match
+			if v, _ := claims.Lookup(tokenRevokeTypeClaim); v != tokenRevokeType {
+				continue
 			}
 		}
 		if err := store.deleteUserIdentity(ctx, ui.Credentials.AccessKey, stsUser); err != nil {

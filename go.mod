@@ -4,11 +4,6 @@ go 1.23.0
 
 toolchain go1.23.6
 
-replace (
-	github.com/minio/madmin-go/v3 => github.com/minio/madmin-go/v3 v3.0.100-0.20250319234114-3c39f28946cb
-	github.com/minio/minio-go/v7 => github.com/minio/minio-go/v7 v7.0.89-0.20250319232216-07d26d943841
-)
-
 require (
 	cloud.google.com/go/storage v1.46.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
@@ -56,8 +51,8 @@ require (
 	github.com/minio/highwayhash v1.0.3
 	github.com/minio/kms-go/kes v0.3.1
 	github.com/minio/kms-go/kms v0.4.0
-	github.com/minio/madmin-go/v3 v3.0.97
-	github.com/minio/minio-go/v7 v7.0.88
+	github.com/minio/madmin-go/v3 v3.0.102
+	github.com/minio/minio-go/v7 v7.0.89
 	github.com/minio/mux v1.9.2
 	github.com/minio/pkg/v3 v3.1.0
 	github.com/minio/selfupdate v0.6.0
