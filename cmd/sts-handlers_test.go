@@ -643,7 +643,7 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	gotBuckets := set.NewStringSet()
 	for _, b := range accInfo.Buckets {
 		gotBuckets.Add(b.Name)
-		if !(b.Access.Read && b.Access.Write) {
+		if !b.Access.Read || !b.Access.Write {
 			c.Fatalf("root user should have read and write access to bucket: %v", b.Name)
 		}
 	}
@@ -1567,7 +1567,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
 		idx := slices.IndexFunc(policyResult.PolicyMappings, func(e madmin.PolicyEntities) bool {
 			return e.Policy == policy && slices.Contains(e.Groups, actualGroupDN)
 		})
-		if !(idx >= 0) {
+		if idx < 0 {
 			c.Fatalf("expected groupDN (%s) to be present in mapping list: %#v", actualGroupDN, policyResult)
 		}
 	}
@@ -1730,7 +1730,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
 		idx := slices.IndexFunc(policyResult.PolicyMappings, func(e madmin.PolicyEntities) bool {
 			return e.Policy == policy && slices.Contains(e.Groups, actualGroupDN)
 		})
-		if !(idx >= 0) {
+		if idx < 0 {
 			c.Fatalf("expected groupDN (%s) to be present in mapping list: %#v", actualGroupDN, policyResult)
 		}
 	}

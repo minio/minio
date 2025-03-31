@@ -323,12 +323,7 @@ func checkObjectWithAllParts(ctx context.Context, onlineDisks []StorageAPI, part
 		}
 	}
 
-	erasureDistributionReliable := true
-	if inconsistent > len(partsMetadata)/2 {
-		// If there are too many inconsistent files, then we can't trust erasure.Distribution (most likely
-		// because of bugs found in CopyObject/PutObjectTags) https://github.com/minio/minio/pull/10772
-		erasureDistributionReliable = false
-	}
+	erasureDistributionReliable := inconsistent <= len(partsMetadata)/2
 
 	metaErrs := make([]error, len(errs))
 

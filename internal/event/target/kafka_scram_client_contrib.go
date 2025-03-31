@@ -62,11 +62,11 @@ type XDGSCRAMClient struct {
 // and authzID via the SASLprep algorithm, as recommended by RFC-5802.  If
 // SASLprep fails, the method returns an error.
 func (x *XDGSCRAMClient) Begin(userName, password, authzID string) (err error) {
-	x.Client, err = x.HashGeneratorFcn.NewClient(userName, password, authzID)
+	x.Client, err = x.NewClient(userName, password, authzID)
 	if err != nil {
 		return err
 	}
-	x.ClientConversation = x.Client.NewConversation()
+	x.ClientConversation = x.NewConversation()
 	return nil
 }
 

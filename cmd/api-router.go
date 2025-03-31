@@ -227,13 +227,13 @@ func s3APIMiddleware(f http.HandlerFunc, flags ...s3HFlag) http.HandlerFunc {
 		}
 
 		// Skip wrapping with the gzip middleware if specified.
-		var gzippedHandler http.HandlerFunc = tracedHandler
+		gzippedHandler := tracedHandler
 		if !handlerFlags.has(noGZS3HFlag) {
 			gzippedHandler = gzipHandler(gzippedHandler)
 		}
 
 		// Skip wrapping with throttling middleware if specified.
-		var throttledHandler http.HandlerFunc = gzippedHandler
+		throttledHandler := gzippedHandler
 		if !handlerFlags.has(noThrottleS3HFlag) {
 			throttledHandler = maxClients(throttledHandler)
 		}
