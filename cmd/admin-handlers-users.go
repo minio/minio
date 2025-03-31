@@ -2054,7 +2054,7 @@ func (a adminAPIHandlers) RevokeTokens(w http.ResponseWriter, r *http.Request) {
 			tokenRevokeType, _ = cred.Claims[tokenRevokeTypeClaim].(string)
 		}
 		if tokenRevokeType == "" {
-			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL) // TODO: copy error code over
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNoTokenRevokeType), r.URL)
 			return
 		}
 	}

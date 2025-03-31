@@ -2055,7 +2055,7 @@ func (store *IAMStoreSys) RevokeTokens(ctx context.Context, parentUser string, t
 		if tokenRevokeType != "" {
 			claims, err := getClaimsFromTokenWithSecret(ui.Credentials.SessionToken, secret)
 			if err != nil {
-				return err
+				continue // skip if token is invalid
 			}
 			// skip if token type is given and does not match
 			if v, _ := claims.Lookup(tokenRevokeTypeClaim); v != tokenRevokeType {
