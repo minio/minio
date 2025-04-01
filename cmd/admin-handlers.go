@@ -1407,7 +1407,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
 			clientToken := nh.clientToken
 			if globalIsDistErasure {
-				clientToken = fmt.Sprintf("%s:%d", nh.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+				clientToken = fmt.Sprintf("%s%s%d", nh.clientToken, getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 			}
 			b, err := json.Marshal(madmin.HealStartSuccess{
 				ClientToken:   clientToken,
