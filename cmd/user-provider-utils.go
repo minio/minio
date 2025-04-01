@@ -105,7 +105,6 @@ func getOpenIDCfgNameFromClaims(claims map[string]interface{}) (string, bool) {
 		}
 	}
 	return "", false
-
 }
 
 func getOpenIDInfoFromClaims(claims map[string]interface{}) madmin.OpenIDSpecificAccessKeyInfo {
