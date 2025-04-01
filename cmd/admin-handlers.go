@@ -1407,7 +1407,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
 			clientToken := nh.clientToken
 			if globalIsDistErasure {
-				clientToken = fmt.Sprintf("%s:%d", nh.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+				clientToken = fmt.Sprintf("%s%s%d", nh.clientToken, getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 			}
 			b, err := json.Marshal(madmin.HealStartSuccess{
 				ClientToken:   clientToken,
@@ -2676,7 +2676,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 	// disk metrics are already included under drive info of each server
 	getRealtimeMetrics := func() *madmin.RealtimeMetrics {
 		var m madmin.RealtimeMetrics
-		var types madmin.MetricType = madmin.MetricsAll &^ madmin.MetricsDisk
+		types := madmin.MetricsAll &^ madmin.MetricsDisk
 		mLocal := collectLocalMetrics(types, collectMetricsOpts{})
 		m.Merge(&mLocal)
 		cctx, cancel := context.WithTimeout(healthCtx, time.Second/2)
@@ -2720,7 +2720,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		poolsArgs := re.ReplaceAllString(cmdLine, `$3`)
 		var anonPools []string
 
-		if !(strings.Contains(poolsArgs, "{") && strings.Contains(poolsArgs, "}")) {
+		if !strings.Contains(poolsArgs, "{") || !strings.Contains(poolsArgs, "}") {
 			// No ellipses pattern. Anonymize host name from every pool arg
 			pools := strings.Fields(poolsArgs)
 			anonPools = make([]string, len(pools))
@@ -3420,7 +3420,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// save the format.json as part of inspect by default
-	if !(volume == minioMetaBucket && file == formatConfigFile) {
+	if volume != minioMetaBucket || file != formatConfigFile {
 		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
 	}
 	if !errors.Is(err, errFileNotFound) {

@@ -1716,7 +1716,7 @@ func (s *xlStorage) ReadVersion(ctx context.Context, origvolume, volume, path, v
 				// If written with header we are fine.
 				return fi, nil
 			}
-			if fi.Size == 0 || !(fi.VersionID != "" && fi.VersionID != nullVersionID) {
+			if fi.Size == 0 || (fi.VersionID == "" || fi.VersionID == nullVersionID) {
 				// If versioned we have no conflicts.
 				fi.SetInlineData()
 				return fi, nil
@@ -3024,7 +3024,7 @@ func (s *xlStorage) RenameFile(ctx context.Context, srcVolume, srcPath, dstVolum
 	srcIsDir := HasSuffix(srcPath, SlashSeparator)
 	dstIsDir := HasSuffix(dstPath, SlashSeparator)
 	// Either src and dst have to be directories or files, else return error.
-	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
+	if (!srcIsDir || !dstIsDir) && (srcIsDir || dstIsDir) {
 		return errFileAccessDenied
 	}
 	srcFilePath := pathutil.Join(srcVolumeDir, srcPath)
@@ -3373,9 +3373,7 @@ func (s *xlStorage) CleanAbandonedData(ctx context.Context, volume string, path 
 	}
 
 	// Clear and repopulate
-	for k := range foundDirs {
-		delete(foundDirs, k)
-	}
+	clear(foundDirs)
 
 	// Populate into map
 	for _, k := range dirs {

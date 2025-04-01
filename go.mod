@@ -53,8 +53,8 @@ require (
 	github.com/minio/highwayhash v1.0.3
 	github.com/minio/kms-go/kes v0.3.1
 	github.com/minio/kms-go/kms v0.4.0
-	github.com/minio/madmin-go/v3 v3.0.97
-	github.com/minio/minio-go/v7 v7.0.88
+	github.com/minio/madmin-go/v3 v3.0.102
+	github.com/minio/minio-go/v7 v7.0.89
 	github.com/minio/mux v1.9.2
 	github.com/minio/pkg/v3 v3.1.0
 	github.com/minio/selfupdate v0.6.0

@@ -18,11 +18,45 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 )
+
+// getUserWithProvider - returns the appropriate internal username based on the user provider.
+// if validate is true, an error is returned if the user does not exist.
+func getUserWithProvider(ctx context.Context, userProvider, user string, validate bool) (string, error) {
+	switch userProvider {
+	case madmin.BuiltinProvider:
+		if validate {
+			if _, ok := globalIAMSys.GetUser(ctx, user); !ok {
+				return "", errNoSuchUser
+			}
+		}
+		return user, nil
+	case madmin.LDAPProvider:
+		if globalIAMSys.GetUsersSysType() != LDAPUsersSysType {
+			return "", errIAMActionNotAllowed
+		}
+		res, err := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(user)
+		if res == nil {
+			err = errNoSuchUser
+		}
+		if err != nil {
+			if validate {
+				return "", err
+			}
+			if !globalIAMSys.LDAPConfig.ParsesAsDN(user) {
+				return "", errNoSuchUser
+			}
+		}
+		return res.NormDN, nil
+	default:
+		return "", errIAMActionNotAllowed
+	}
+}
 
 // guessUserProvider - guesses the user provider based on the access key and claims.
 func guessUserProvider(credentials auth.Credentials) string {

@@ -408,7 +408,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 			perr   error
 		)
 
-		if (isErrObjectNotFound(err) || isErrVersionNotFound(err) || isErrReadQuorum(err)) && !(gr != nil && gr.ObjInfo.DeleteMarker) {
+		if (isErrObjectNotFound(err) || isErrVersionNotFound(err) || isErrReadQuorum(err)) && (gr == nil || !gr.ObjInfo.DeleteMarker) {
 			proxytgts := getProxyTargets(ctx, bucket, object, opts)
 			if !proxytgts.Empty() {
 				globalReplicationStats.Load().incProxy(bucket, getObjectAPI, false)
@@ -537,8 +537,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 
 	setHeadGetRespHeaders(w, r.Form)
 
-	var iw io.Writer
-	iw = w
+	var iw io.Writer = w
 
 	statusCodeWritten := false
 	httpWriter := xioutil.WriteOnClose(iw)
@@ -707,8 +706,6 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 		UserAgent:    r.UserAgent(),
 		Host:         handlers.GetSourceIP(r),
 	})
-
-	return
 }
 
 // GetObjectHandler - GET Object

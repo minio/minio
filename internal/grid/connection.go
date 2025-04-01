@@ -1511,7 +1511,6 @@ func (c *Connection) handlePing(ctx context.Context, m message) {
 		pong := pongMsg{NotFound: true, T: ping.T}
 		gridLogIf(ctx, c.queueMsg(m, &pong))
 	}
-	return
 }
 
 func (c *Connection) handleDisconnectClientMux(m message) {

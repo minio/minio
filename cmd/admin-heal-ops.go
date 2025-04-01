@@ -260,7 +260,7 @@ func (ahs *allHealState) stopHealSequence(path string) ([]byte, APIError) {
 	} else {
 		clientToken := he.clientToken
 		if globalIsDistErasure {
-			clientToken = fmt.Sprintf("%s:%d", he.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+			clientToken = fmt.Sprintf("%s%s%d", he.clientToken, getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 		}
 
 		hsp = madmin.HealStopSuccess{
@@ -331,7 +331,7 @@ func (ahs *allHealState) LaunchNewHealSequence(h *healSequence, objAPI ObjectLay
 
 	clientToken := h.clientToken
 	if globalIsDistErasure {
-		clientToken = fmt.Sprintf("%s:%d", h.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+		clientToken = fmt.Sprintf("%s%s%d", h.clientToken, getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 	}
 
 	if h.clientToken == bgHealingUUID {

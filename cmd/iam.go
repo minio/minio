@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	libldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
@@ -661,6 +660,16 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p policy.Po
 		}
 	}
 	return updatedAt, nil
+}
+
+// RevokeTokens - revokes all STS tokens, or those of specified type, for a user
+// If `tokenRevokeType` is empty, all tokens are revoked.
+func (sys *IAMSys) RevokeTokens(ctx context.Context, accessKey, tokenRevokeType string) error {
+	if !sys.Initialized() {
+		return errServerNotInitialized
+	}
+
+	return sys.store.RevokeTokens(ctx, accessKey, tokenRevokeType)
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
@@ -1705,7 +1714,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	// We map keys that correspond to LDAP DNs and validate that they exist in
 	// the LDAP server.
-	var dnValidator func(*libldap.Conn, string) (*ldap.DNSearchResult, bool, error) = sys.LDAPConfig.GetValidatedUserDN
+	dnValidator := sys.LDAPConfig.GetValidatedUserDN
 	if isGroup {
 		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
 	}
