@@ -754,8 +754,14 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
-	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
+	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer:
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+	case authTypeStreamingUnsignedTrailer:
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+		if s3Err == ErrMissingFields {
+			// Could be anonymous. cred + owner is zero value.
+			s3Err = ErrNone
+		}
 	}
 	if s3Err != ErrNone {
 		return s3Err
