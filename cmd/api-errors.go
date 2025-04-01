@@ -214,6 +214,7 @@ const (
 	ErrPolicyNotAttached
 	ErrExcessData
 	ErrPolicyInvalidName
+	ErrNoTokenRevokeType
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -1263,6 +1264,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidTokenId",
 		Description:    "The security token included in the request is invalid",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrNoTokenRevokeType: {
+		Code:           "InvalidArgument",
+		Description:    "No token revoke type specified and one could not be inferred from the request",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 
 	// S3 extensions.
