@@ -14,6 +14,7 @@ extend-ignore-re = [
     'http\.Header\{"X-Amz-Server-Side-Encryptio":',
     "ZoEoZdLlzVbOlT9rbhD7ZN7TLyiYXSAlB79uGEge",
     "ERRO:",
+    "(?Rm)^.*(#|//)\\s*spellchecker:disable-line$", # ignore line
 ]
 
 [default.extend-words]
@@ -41,5 +42,4 @@ extend-ignore-identifiers-re = [
     # keyword - some of these (like typ1 -> type1) can be fixed, but probably
     # not worth the effort.
     "[tT]yp[0-9]*",
-    "(?Rm)^.*(#|//)\\s*spellchecker:disable-line$", # ignore line
 ]
