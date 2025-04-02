@@ -746,6 +746,8 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -801,6 +803,7 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "OldDataDir")
 				return
 			}
+			zb0001Mask |= 0x1
 		default:
 			err = dc.Skip()
 			if err != nil {
@@ -809,6 +812,11 @@ func (z *DeleteOptions) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if (zb0001Mask & 0x1) == 0 {
+		z.OldDataDir = ""
+	}
+
 	return
 }
 
@@ -827,60 +835,61 @@ func (z *DeleteOptions) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if zb0001Len == 0 {
-		return
-	}
-	// write "BaseOptions"
-	err = en.Append(0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
-	if err != nil {
-		return
-	}
-	// map header, size 0
-	_ = z.BaseOptions
-	err = en.Append(0x80)
-	if err != nil {
-		return
-	}
-	// write "r"
-	err = en.Append(0xa1, 0x72)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.Recursive)
-	if err != nil {
-		err = msgp.WrapError(err, "Recursive")
-		return
-	}
-	// write "i"
-	err = en.Append(0xa1, 0x69)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.Immediate)
-	if err != nil {
-		err = msgp.WrapError(err, "Immediate")
-		return
-	}
-	// write "u"
-	err = en.Append(0xa1, 0x75)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.UndoWrite)
-	if err != nil {
-		err = msgp.WrapError(err, "UndoWrite")
-		return
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not omitted
-		// write "o"
-		err = en.Append(0xa1, 0x6f)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// write "BaseOptions"
+		err = en.Append(0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
 		if err != nil {
 			return
 		}
-		err = en.WriteString(z.OldDataDir)
+		// map header, size 0
+		_ = z.BaseOptions
+		err = en.Append(0x80)
 		if err != nil {
-			err = msgp.WrapError(err, "OldDataDir")
 			return
+		}
+		// write "r"
+		err = en.Append(0xa1, 0x72)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.Recursive)
+		if err != nil {
+			err = msgp.WrapError(err, "Recursive")
+			return
+		}
+		// write "i"
+		err = en.Append(0xa1, 0x69)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.Immediate)
+		if err != nil {
+			err = msgp.WrapError(err, "Immediate")
+			return
+		}
+		// write "u"
+		err = en.Append(0xa1, 0x75)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.UndoWrite)
+		if err != nil {
+			err = msgp.WrapError(err, "UndoWrite")
+			return
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// write "o"
+			err = en.Append(0xa1, 0x6f)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.OldDataDir)
+			if err != nil {
+				err = msgp.WrapError(err, "OldDataDir")
+				return
+			}
 		}
 	}
 	return
@@ -899,27 +908,28 @@ func (z *DeleteOptions) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
-	}
-	// string "BaseOptions"
-	o = append(o, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
-	// map header, size 0
-	_ = z.BaseOptions
-	o = append(o, 0x80)
-	// string "r"
-	o = append(o, 0xa1, 0x72)
-	o = msgp.AppendBool(o, z.Recursive)
-	// string "i"
-	o = append(o, 0xa1, 0x69)
-	o = msgp.AppendBool(o, z.Immediate)
-	// string "u"
-	o = append(o, 0xa1, 0x75)
-	o = msgp.AppendBool(o, z.UndoWrite)
-	if (zb0001Mask & 0x10) == 0 { // if not omitted
-		// string "o"
-		o = append(o, 0xa1, 0x6f)
-		o = msgp.AppendString(o, z.OldDataDir)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// string "BaseOptions"
+		o = append(o, 0xab, 0x42, 0x61, 0x73, 0x65, 0x4f, 0x70, 0x74, 0x69, 0x6f, 0x6e, 0x73)
+		// map header, size 0
+		_ = z.BaseOptions
+		o = append(o, 0x80)
+		// string "r"
+		o = append(o, 0xa1, 0x72)
+		o = msgp.AppendBool(o, z.Recursive)
+		// string "i"
+		o = append(o, 0xa1, 0x69)
+		o = msgp.AppendBool(o, z.Immediate)
+		// string "u"
+		o = append(o, 0xa1, 0x75)
+		o = msgp.AppendBool(o, z.UndoWrite)
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// string "o"
+			o = append(o, 0xa1, 0x6f)
+			o = msgp.AppendString(o, z.OldDataDir)
+		}
 	}
 	return
 }
@@ -934,6 +944,8 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -989,6 +1001,7 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "OldDataDir")
 				return
 			}
+			zb0001Mask |= 0x1
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -997,6 +1010,11 @@ func (z *DeleteOptions) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if (zb0001Mask & 0x1) == 0 {
+		z.OldDataDir = ""
+	}
+
 	o = bts
 	return
 }
@@ -2453,6 +2471,9 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 			err = msgp.WrapError(err, "Data")
 			return
 		}
+		if z.Data == nil {
+			z.Data = make([]byte, 0)
+		}
 	}
 	z.NumVersions, err = dc.ReadInt()
 	if err != nil {
@@ -2486,6 +2507,9 @@ func (z *FileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		if err != nil {
 			err = msgp.WrapError(err, "Checksum")
 			return
+		}
+		if z.Checksum == nil {
+			z.Checksum = make([]byte, 0)
 		}
 	}
 	z.Versioned, err = dc.ReadBool()
@@ -2907,6 +2931,9 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, "Data")
 			return
 		}
+		if z.Data == nil {
+			z.Data = make([]byte, 0)
+		}
 	}
 	z.NumVersions, bts, err = msgp.ReadIntBytes(bts)
 	if err != nil {
@@ -2936,6 +2963,9 @@ func (z *FileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		if err != nil {
 			err = msgp.WrapError(err, "Checksum")
 			return
+		}
+		if z.Checksum == nil {
+			z.Checksum = make([]byte, 0)
 		}
 	}
 	z.Versioned, bts, err = msgp.ReadBoolBytes(bts)
@@ -3961,6 +3991,9 @@ func (z *RawFileInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 					err = msgp.WrapError(err, "Buf")
 					return
 				}
+				if z.Buf == nil {
+					z.Buf = make([]byte, 0)
+				}
 			}
 		default:
 			err = dc.Skip()
@@ -4037,6 +4070,9 @@ func (z *RawFileInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if err != nil {
 					err = msgp.WrapError(err, "Buf")
 					return
+				}
+				if z.Buf == nil {
+					z.Buf = make([]byte, 0)
 				}
 			}
 		default:
@@ -4220,6 +4256,8 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -4240,6 +4278,7 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			var zb0002 uint32
 			zb0002, err = dc.ReadArrayHeader()
@@ -4291,6 +4330,11 @@ func (z *ReadMultipleReq) DecodeMsg(dc *msgp.Reader) (err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if (zb0001Mask & 0x1) == 0 {
+		z.Prefix = ""
+	}
+
 	return
 }
 
@@ -4309,87 +4353,88 @@ func (z *ReadMultipleReq) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if zb0001Len == 0 {
-		return
-	}
-	// write "bk"
-	err = en.Append(0xa2, 0x62, 0x6b)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Bucket)
-	if err != nil {
-		err = msgp.WrapError(err, "Bucket")
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not omitted
-		// write "pr"
-		err = en.Append(0xa2, 0x70, 0x72)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// write "bk"
+		err = en.Append(0xa2, 0x62, 0x6b)
 		if err != nil {
 			return
 		}
-		err = en.WriteString(z.Prefix)
+		err = en.WriteString(z.Bucket)
 		if err != nil {
-			err = msgp.WrapError(err, "Prefix")
+			err = msgp.WrapError(err, "Bucket")
 			return
 		}
-	}
-	// write "fl"
-	err = en.Append(0xa2, 0x66, 0x6c)
-	if err != nil {
-		return
-	}
-	err = en.WriteArrayHeader(uint32(len(z.Files)))
-	if err != nil {
-		err = msgp.WrapError(err, "Files")
-		return
-	}
-	for za0001 := range z.Files {
-		err = en.WriteString(z.Files[za0001])
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// write "pr"
+			err = en.Append(0xa2, 0x70, 0x72)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.Prefix)
+			if err != nil {
+				err = msgp.WrapError(err, "Prefix")
+				return
+			}
+		}
+		// write "fl"
+		err = en.Append(0xa2, 0x66, 0x6c)
 		if err != nil {
-			err = msgp.WrapError(err, "Files", za0001)
 			return
 		}
-	}
-	// write "ms"
-	err = en.Append(0xa2, 0x6d, 0x73)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt64(z.MaxSize)
-	if err != nil {
-		err = msgp.WrapError(err, "MaxSize")
-		return
-	}
-	// write "mo"
-	err = en.Append(0xa2, 0x6d, 0x6f)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.MetadataOnly)
-	if err != nil {
-		err = msgp.WrapError(err, "MetadataOnly")
-		return
-	}
-	// write "ab"
-	err = en.Append(0xa2, 0x61, 0x62)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.AbortOn404)
-	if err != nil {
-		err = msgp.WrapError(err, "AbortOn404")
-		return
-	}
-	// write "mr"
-	err = en.Append(0xa2, 0x6d, 0x72)
-	if err != nil {
-		return
-	}
-	err = en.WriteInt(z.MaxResults)
-	if err != nil {
-		err = msgp.WrapError(err, "MaxResults")
-		return
+		err = en.WriteArrayHeader(uint32(len(z.Files)))
+		if err != nil {
+			err = msgp.WrapError(err, "Files")
+			return
+		}
+		for za0001 := range z.Files {
+			err = en.WriteString(z.Files[za0001])
+			if err != nil {
+				err = msgp.WrapError(err, "Files", za0001)
+				return
+			}
+		}
+		// write "ms"
+		err = en.Append(0xa2, 0x6d, 0x73)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt64(z.MaxSize)
+		if err != nil {
+			err = msgp.WrapError(err, "MaxSize")
+			return
+		}
+		// write "mo"
+		err = en.Append(0xa2, 0x6d, 0x6f)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.MetadataOnly)
+		if err != nil {
+			err = msgp.WrapError(err, "MetadataOnly")
+			return
+		}
+		// write "ab"
+		err = en.Append(0xa2, 0x61, 0x62)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.AbortOn404)
+		if err != nil {
+			err = msgp.WrapError(err, "AbortOn404")
+			return
+		}
+		// write "mr"
+		err = en.Append(0xa2, 0x6d, 0x72)
+		if err != nil {
+			return
+		}
+		err = en.WriteInt(z.MaxResults)
+		if err != nil {
+			err = msgp.WrapError(err, "MaxResults")
+			return
+		}
 	}
 	return
 }
@@ -4407,35 +4452,36 @@ func (z *ReadMultipleReq) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// string "bk"
+		o = append(o, 0xa2, 0x62, 0x6b)
+		o = msgp.AppendString(o, z.Bucket)
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// string "pr"
+			o = append(o, 0xa2, 0x70, 0x72)
+			o = msgp.AppendString(o, z.Prefix)
+		}
+		// string "fl"
+		o = append(o, 0xa2, 0x66, 0x6c)
+		o = msgp.AppendArrayHeader(o, uint32(len(z.Files)))
+		for za0001 := range z.Files {
+			o = msgp.AppendString(o, z.Files[za0001])
+		}
+		// string "ms"
+		o = append(o, 0xa2, 0x6d, 0x73)
+		o = msgp.AppendInt64(o, z.MaxSize)
+		// string "mo"
+		o = append(o, 0xa2, 0x6d, 0x6f)
+		o = msgp.AppendBool(o, z.MetadataOnly)
+		// string "ab"
+		o = append(o, 0xa2, 0x61, 0x62)
+		o = msgp.AppendBool(o, z.AbortOn404)
+		// string "mr"
+		o = append(o, 0xa2, 0x6d, 0x72)
+		o = msgp.AppendInt(o, z.MaxResults)
 	}
-	// string "bk"
-	o = append(o, 0xa2, 0x62, 0x6b)
-	o = msgp.AppendString(o, z.Bucket)
-	if (zb0001Mask & 0x2) == 0 { // if not omitted
-		// string "pr"
-		o = append(o, 0xa2, 0x70, 0x72)
-		o = msgp.AppendString(o, z.Prefix)
-	}
-	// string "fl"
-	o = append(o, 0xa2, 0x66, 0x6c)
-	o = msgp.AppendArrayHeader(o, uint32(len(z.Files)))
-	for za0001 := range z.Files {
-		o = msgp.AppendString(o, z.Files[za0001])
-	}
-	// string "ms"
-	o = append(o, 0xa2, 0x6d, 0x73)
-	o = msgp.AppendInt64(o, z.MaxSize)
-	// string "mo"
-	o = append(o, 0xa2, 0x6d, 0x6f)
-	o = msgp.AppendBool(o, z.MetadataOnly)
-	// string "ab"
-	o = append(o, 0xa2, 0x61, 0x62)
-	o = msgp.AppendBool(o, z.AbortOn404)
-	// string "mr"
-	o = append(o, 0xa2, 0x6d, 0x72)
-	o = msgp.AppendInt(o, z.MaxResults)
 	return
 }
 
@@ -4449,6 +4495,8 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 1 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -4469,6 +4517,7 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			var zb0002 uint32
 			zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -4520,6 +4569,11 @@ func (z *ReadMultipleReq) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		}
 	}
+	// Clear omitted fields.
+	if (zb0001Mask & 0x1) == 0 {
+		z.Prefix = ""
+	}
+
 	o = bts
 	return
 }
@@ -4544,6 +4598,8 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, err = dc.ReadMapKeyPtr()
@@ -4564,6 +4620,7 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			z.File, err = dc.ReadString()
 			if err != nil {
@@ -4582,6 +4639,7 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err, "Error")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "d":
 			z.Data, err = dc.ReadBytes(z.Data)
 			if err != nil {
@@ -4600,6 +4658,15 @@ func (z *ReadMultipleResp) DecodeMsg(dc *msgp.Reader) (err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x3 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Prefix = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Error = ""
 		}
 	}
 	return
@@ -4624,82 +4691,83 @@ func (z *ReadMultipleResp) EncodeMsg(en *msgp.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	if zb0001Len == 0 {
-		return
-	}
-	// write "bk"
-	err = en.Append(0xa2, 0x62, 0x6b)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.Bucket)
-	if err != nil {
-		err = msgp.WrapError(err, "Bucket")
-		return
-	}
-	if (zb0001Mask & 0x2) == 0 { // if not omitted
-		// write "pr"
-		err = en.Append(0xa2, 0x70, 0x72)
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// write "bk"
+		err = en.Append(0xa2, 0x62, 0x6b)
 		if err != nil {
 			return
 		}
-		err = en.WriteString(z.Prefix)
+		err = en.WriteString(z.Bucket)
 		if err != nil {
-			err = msgp.WrapError(err, "Prefix")
+			err = msgp.WrapError(err, "Bucket")
 			return
 		}
-	}
-	// write "fl"
-	err = en.Append(0xa2, 0x66, 0x6c)
-	if err != nil {
-		return
-	}
-	err = en.WriteString(z.File)
-	if err != nil {
-		err = msgp.WrapError(err, "File")
-		return
-	}
-	// write "ex"
-	err = en.Append(0xa2, 0x65, 0x78)
-	if err != nil {
-		return
-	}
-	err = en.WriteBool(z.Exists)
-	if err != nil {
-		err = msgp.WrapError(err, "Exists")
-		return
-	}
-	if (zb0001Mask & 0x10) == 0 { // if not omitted
-		// write "er"
-		err = en.Append(0xa2, 0x65, 0x72)
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// write "pr"
+			err = en.Append(0xa2, 0x70, 0x72)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.Prefix)
+			if err != nil {
+				err = msgp.WrapError(err, "Prefix")
+				return
+			}
+		}
+		// write "fl"
+		err = en.Append(0xa2, 0x66, 0x6c)
 		if err != nil {
 			return
 		}
-		err = en.WriteString(z.Error)
+		err = en.WriteString(z.File)
 		if err != nil {
-			err = msgp.WrapError(err, "Error")
+			err = msgp.WrapError(err, "File")
 			return
 		}
-	}
-	// write "d"
-	err = en.Append(0xa1, 0x64)
-	if err != nil {
-		return
-	}
-	err = en.WriteBytes(z.Data)
-	if err != nil {
-		err = msgp.WrapError(err, "Data")
-		return
-	}
-	// write "m"
-	err = en.Append(0xa1, 0x6d)
-	if err != nil {
-		return
-	}
-	err = en.WriteTime(z.Modtime)
-	if err != nil {
-		err = msgp.WrapError(err, "Modtime")
-		return
+		// write "ex"
+		err = en.Append(0xa2, 0x65, 0x78)
+		if err != nil {
+			return
+		}
+		err = en.WriteBool(z.Exists)
+		if err != nil {
+			err = msgp.WrapError(err, "Exists")
+			return
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// write "er"
+			err = en.Append(0xa2, 0x65, 0x72)
+			if err != nil {
+				return
+			}
+			err = en.WriteString(z.Error)
+			if err != nil {
+				err = msgp.WrapError(err, "Error")
+				return
+			}
+		}
+		// write "d"
+		err = en.Append(0xa1, 0x64)
+		if err != nil {
+			return
+		}
+		err = en.WriteBytes(z.Data)
+		if err != nil {
+			err = msgp.WrapError(err, "Data")
+			return
+		}
+		// write "m"
+		err = en.Append(0xa1, 0x6d)
+		if err != nil {
+			return
+		}
+		err = en.WriteTime(z.Modtime)
+		if err != nil {
+			err = msgp.WrapError(err, "Modtime")
+			return
+		}
 	}
 	return
 }
@@ -4721,34 +4789,35 @@ func (z *ReadMultipleResp) MarshalMsg(b []byte) (o []byte, err error) {
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len == 0 {
-		return
+
+	// skip if no fields are to be emitted
+	if zb0001Len != 0 {
+		// string "bk"
+		o = append(o, 0xa2, 0x62, 0x6b)
+		o = msgp.AppendString(o, z.Bucket)
+		if (zb0001Mask & 0x2) == 0 { // if not omitted
+			// string "pr"
+			o = append(o, 0xa2, 0x70, 0x72)
+			o = msgp.AppendString(o, z.Prefix)
+		}
+		// string "fl"
+		o = append(o, 0xa2, 0x66, 0x6c)
+		o = msgp.AppendString(o, z.File)
+		// string "ex"
+		o = append(o, 0xa2, 0x65, 0x78)
+		o = msgp.AppendBool(o, z.Exists)
+		if (zb0001Mask & 0x10) == 0 { // if not omitted
+			// string "er"
+			o = append(o, 0xa2, 0x65, 0x72)
+			o = msgp.AppendString(o, z.Error)
+		}
+		// string "d"
+		o = append(o, 0xa1, 0x64)
+		o = msgp.AppendBytes(o, z.Data)
+		// string "m"
+		o = append(o, 0xa1, 0x6d)
+		o = msgp.AppendTime(o, z.Modtime)
 	}
-	// string "bk"
-	o = append(o, 0xa2, 0x62, 0x6b)
-	o = msgp.AppendString(o, z.Bucket)
-	if (zb0001Mask & 0x2) == 0 { // if not omitted
-		// string "pr"
-		o = append(o, 0xa2, 0x70, 0x72)
-		o = msgp.AppendString(o, z.Prefix)
-	}
-	// string "fl"
-	o = append(o, 0xa2, 0x66, 0x6c)
-	o = msgp.AppendString(o, z.File)
-	// string "ex"
-	o = append(o, 0xa2, 0x65, 0x78)
-	o = msgp.AppendBool(o, z.Exists)
-	if (zb0001Mask & 0x10) == 0 { // if not omitted
-		// string "er"
-		o = append(o, 0xa2, 0x65, 0x72)
-		o = msgp.AppendString(o, z.Error)
-	}
-	// string "d"
-	o = append(o, 0xa1, 0x64)
-	o = msgp.AppendBytes(o, z.Data)
-	// string "m"
-	o = append(o, 0xa1, 0x6d)
-	o = msgp.AppendTime(o, z.Modtime)
 	return
 }
 
@@ -4762,6 +4831,8 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	var zb0001Mask uint8 /* 2 bits */
+	_ = zb0001Mask
 	for zb0001 > 0 {
 		zb0001--
 		field, bts, err = msgp.ReadMapKeyZC(bts)
@@ -4782,6 +4853,7 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Prefix")
 				return
 			}
+			zb0001Mask |= 0x1
 		case "fl":
 			z.File, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -4800,6 +4872,7 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "Error")
 				return
 			}
+			zb0001Mask |= 0x2
 		case "d":
 			z.Data, bts, err = msgp.ReadBytesBytes(bts, z.Data)
 			if err != nil {
@@ -4818,6 +4891,15 @@ func (z *ReadMultipleResp) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err)
 				return
 			}
+		}
+	}
+	// Clear omitted fields.
+	if zb0001Mask != 0x3 {
+		if (zb0001Mask & 0x1) == 0 {
+			z.Prefix = ""
+		}
+		if (zb0001Mask & 0x2) == 0 {
+			z.Error = ""
 		}
 	}
 	o = bts
@@ -6422,8 +6504,8 @@ func (z *VolInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 2 {
-		err = msgp.ArrayError{Wanted: 2, Got: zb0001}
+	if zb0001 != 3 {
+		err = msgp.ArrayError{Wanted: 3, Got: zb0001}
 		return
 	}
 	z.Name, err = dc.ReadString()
@@ -6436,13 +6518,18 @@ func (z *VolInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		err = msgp.WrapError(err, "Created")
 		return
 	}
+	z.Deleted, err = dc.ReadTime()
+	if err != nil {
+		err = msgp.WrapError(err, "Deleted")
+		return
+	}
 	return
 }
 
 // EncodeMsg implements msgp.Encodable
 func (z VolInfo) EncodeMsg(en *msgp.Writer) (err error) {
-	// array header, size 2
-	err = en.Append(0x92)
+	// array header, size 3
+	err = en.Append(0x93)
 	if err != nil {
 		return
 	}
@@ -6456,16 +6543,22 @@ func (z VolInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		err = msgp.WrapError(err, "Created")
 		return
 	}
+	err = en.WriteTime(z.Deleted)
+	if err != nil {
+		err = msgp.WrapError(err, "Deleted")
+		return
+	}
 	return
 }
 
 // MarshalMsg implements msgp.Marshaler
 func (z VolInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// array header, size 2
-	o = append(o, 0x92)
+	// array header, size 3
+	o = append(o, 0x93)
 	o = msgp.AppendString(o, z.Name)
 	o = msgp.AppendTime(o, z.Created)
+	o = msgp.AppendTime(o, z.Deleted)
 	return
 }
 
@@ -6477,8 +6570,8 @@ func (z *VolInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0001 != 2 {
-		err = msgp.ArrayError{Wanted: 2, Got: zb0001}
+	if zb0001 != 3 {
+		err = msgp.ArrayError{Wanted: 3, Got: zb0001}
 		return
 	}
 	z.Name, bts, err = msgp.ReadStringBytes(bts)
@@ -6491,13 +6584,18 @@ func (z *VolInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "Created")
 		return
 	}
+	z.Deleted, bts, err = msgp.ReadTimeBytes(bts)
+	if err != nil {
+		err = msgp.WrapError(err, "Deleted")
+		return
+	}
 	o = bts
 	return
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z VolInfo) Msgsize() (s int) {
-	s = 1 + msgp.StringPrefixSize + len(z.Name) + msgp.TimeSize
+	s = 1 + msgp.StringPrefixSize + len(z.Name) + msgp.TimeSize + msgp.TimeSize
 	return
 }
 
@@ -6521,8 +6619,8 @@ func (z *VolsInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 			err = msgp.WrapError(err, zb0001)
 			return
 		}
-		if zb0003 != 2 {
-			err = msgp.ArrayError{Wanted: 2, Got: zb0003}
+		if zb0003 != 3 {
+			err = msgp.ArrayError{Wanted: 3, Got: zb0003}
 			return
 		}
 		(*z)[zb0001].Name, err = dc.ReadString()
@@ -6533,6 +6631,11 @@ func (z *VolsInfo) DecodeMsg(dc *msgp.Reader) (err error) {
 		(*z)[zb0001].Created, err = dc.ReadTime()
 		if err != nil {
 			err = msgp.WrapError(err, zb0001, "Created")
+			return
+		}
+		(*z)[zb0001].Deleted, err = dc.ReadTime()
+		if err != nil {
+			err = msgp.WrapError(err, zb0001, "Deleted")
 			return
 		}
 	}
@@ -6547,8 +6650,8 @@ func (z VolsInfo) EncodeMsg(en *msgp.Writer) (err error) {
 		return
 	}
 	for zb0004 := range z {
-		// array header, size 2
-		err = en.Append(0x92)
+		// array header, size 3
+		err = en.Append(0x93)
 		if err != nil {
 			return
 		}
@@ -6562,6 +6665,11 @@ func (z VolsInfo) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, zb0004, "Created")
 			return
 		}
+		err = en.WriteTime(z[zb0004].Deleted)
+		if err != nil {
+			err = msgp.WrapError(err, zb0004, "Deleted")
+			return
+		}
 	}
 	return
 }
@@ -6571,10 +6679,11 @@ func (z VolsInfo) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	o = msgp.AppendArrayHeader(o, uint32(len(z)))
 	for zb0004 := range z {
-		// array header, size 2
-		o = append(o, 0x92)
+		// array header, size 3
+		o = append(o, 0x93)
 		o = msgp.AppendString(o, z[zb0004].Name)
 		o = msgp.AppendTime(o, z[zb0004].Created)
+		o = msgp.AppendTime(o, z[zb0004].Deleted)
 	}
 	return
 }
@@ -6599,8 +6708,8 @@ func (z *VolsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, zb0001)
 			return
 		}
-		if zb0003 != 2 {
-			err = msgp.ArrayError{Wanted: 2, Got: zb0003}
+		if zb0003 != 3 {
+			err = msgp.ArrayError{Wanted: 3, Got: zb0003}
 			return
 		}
 		(*z)[zb0001].Name, bts, err = msgp.ReadStringBytes(bts)
@@ -6613,6 +6722,11 @@ func (z *VolsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err, zb0001, "Created")
 			return
 		}
+		(*z)[zb0001].Deleted, bts, err = msgp.ReadTimeBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err, zb0001, "Deleted")
+			return
+		}
 	}
 	o = bts
 	return
@@ -6622,7 +6736,7 @@ func (z *VolsInfo) UnmarshalMsg(bts []byte) (o []byte, err error) {
 func (z VolsInfo) Msgsize() (s int) {
 	s = msgp.ArrayHeaderSize
 	for zb0004 := range z {
-		s += 1 + msgp.StringPrefixSize + len(z[zb0004].Name) + msgp.TimeSize
+		s += 1 + msgp.StringPrefixSize + len(z[zb0004].Name) + msgp.TimeSize + msgp.TimeSize
 	}
 	return
 }

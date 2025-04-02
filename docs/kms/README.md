@@ -1,6 +1,6 @@
 # KMS Guide [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io)
 
-MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests SSE-S3, or auto-encryption is enabled, the MinIO server encrypts each object with an unique object key which is protected by a master key managed by the KMS.
+MinIO uses a key-management-system (KMS) to support SSE-S3. If a client requests SSE-S3, or auto-encryption is enabled, the MinIO server encrypts each object with a unique object key which is protected by a master key managed by the KMS.
 
 ## Quick Start
 
@@ -69,7 +69,7 @@ The MinIO-KES configuration is always the same - regardless of the underlying KM
 
 - [Run MinIO with TLS / HTTPS](https://min.io/docs/minio/linux/operations/network-encryption.html)
 - [Tweak the KES server configuration](https://github.com/minio/kes/wiki/Configuration)
-- [Run a load balancer infront of KES](https://github.com/minio/kes/wiki/TLS-Proxy)
+- [Run a load balancer in front of KES](https://github.com/minio/kes/wiki/TLS-Proxy)
 - [Understand the KES server concepts](https://github.com/minio/kes/wiki/Concepts)
 
 ## Auto Encryption

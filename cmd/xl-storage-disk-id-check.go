@@ -159,7 +159,7 @@ func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 			a.Total = atomic.LoadInt64(&old.Total)
 			a.N = atomic.LoadInt64(&old.N)
 			e.mu.Lock()
-			e.lastMinuteLatency.addAll(t-1, a)
+			e.addAll(t-1, a)
 			e.mu.Unlock()
 			acc = newAcc
 		} else {
@@ -177,7 +177,7 @@ func (e *lockedLastMinuteLatency) addSize(value time.Duration, sz int64) {
 func (e *lockedLastMinuteLatency) total() AccElem {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.lastMinuteLatency.getTotal()
+	return e.getTotal()
 }
 
 func newXLStorageDiskIDCheck(storage *xlStorage, healthCheck bool) *xlStorageDiskIDCheck {
@@ -509,9 +509,7 @@ func (p *xlStorageDiskIDCheck) CheckParts(ctx context.Context, volume string, pa
 	}
 	defer done(0, &err)
 
-	return xioutil.WithDeadline[*CheckPartsResp](ctx, globalDriveConfig.GetMaxTimeout(), func(ctx context.Context) (res *CheckPartsResp, err error) {
-		return p.storage.CheckParts(ctx, volume, path, fi)
-	})
+	return p.storage.CheckParts(ctx, volume, path, fi)
 }
 
 func (p *xlStorageDiskIDCheck) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {

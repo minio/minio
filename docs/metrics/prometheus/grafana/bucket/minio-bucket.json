@@ -103,7 +103,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (bucket,range) (minio_bucket_objects_size_distribution{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket,range) (minio_bucket_objects_size_distribution{job=~\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -175,7 +175,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (bucket,range) (minio_bucket_objects_version_distribution{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket,range) (minio_bucket_objects_version_distribution{job=~\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -247,7 +247,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (bucket,le,api) (minio_bucket_requests_ttfb_seconds_distribution{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket,le,api) (minio_bucket_requests_ttfb_seconds_distribution{job=~\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -378,7 +378,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket,api) (increase(minio_bucket_requests_4xx_errors_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket,api) (increase(minio_bucket_requests_4xx_errors_total{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket,api}}",
@@ -506,7 +506,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket,api) (minio_bucket_requests_inflight_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket,api) (minio_bucket_requests_inflight_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket,api}}",
@@ -634,7 +634,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket,api) (increase(minio_bucket_requests_total{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket,api) (increase(minio_bucket_requests_total{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket,api}}",
@@ -762,7 +762,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_traffic_sent_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (rate(minio_bucket_traffic_sent_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Data Sent [{{bucket}}]",
@@ -890,7 +890,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_usage_total_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (rate(minio_bucket_usage_total_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Usage [{{bucket}}]",
@@ -1018,7 +1018,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_usage_object_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_usage_object_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -1146,7 +1146,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_usage_version_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_usage_version_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -1274,7 +1274,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_usage_deletemarker_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_usage_deletemarker_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -1372,7 +1372,7 @@
             "uid": "Prometheus"
           },
           "exemplar": true,
-          "expr": "minio_usage_last_activity_nano_seconds{job=\"$scrape_jobs\"}",
+          "expr": "minio_usage_last_activity_nano_seconds{job=~\"$scrape_jobs\"}",
           "interval": "1m",
           "legendFormat": "{{server}}",
           "refId": "A"
@@ -1499,7 +1499,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_traffic_received_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (rate(minio_bucket_traffic_received_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Data Received [{{bucket}}]",
@@ -1627,7 +1627,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_received_bytes{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_received_bytes{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Data Received [{{bucket}}]",
@@ -1755,7 +1755,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_sent_bytes{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_sent_bytes{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Replication Data Sent [{{bucket}}]",
@@ -1883,7 +1883,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_total_failed_bytes{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_total_failed_bytes{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Replication Failed [{{bucket}}]",
@@ -2011,7 +2011,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_total_failed_count{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_total_failed_count{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Replication Failed Objects [{{bucket}}]",
@@ -2139,7 +2139,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_received_count{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_received_count{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Replicated In Objects [{{bucket}}]",
@@ -2267,7 +2267,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_sent_count{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_sent_count{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Replicated Out Objects [{{bucket}}]",
@@ -2395,7 +2395,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_replication_last_hour_failed_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (rate(minio_bucket_replication_last_hour_failed_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Last Hour Failed Size [{{bucket}}]",
@@ -2523,7 +2523,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_last_hour_failed_count{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_last_hour_failed_count{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Last Hour Failed Objects [{{bucket}}]",
@@ -2651,7 +2651,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (rate(minio_bucket_replication_last_minute_failed_bytes{job=\"$scrape_jobs\"}[$__rate_interval]))",
+          "expr": "sum by (bucket) (rate(minio_bucket_replication_last_minute_failed_bytes{job=~\"$scrape_jobs\"}[$__rate_interval]))",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Last Minute Failed Size [{{bucket}}]",
@@ -2779,7 +2779,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_last_minute_failed_count{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_last_minute_failed_count{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "Last Minute Failed Objects [{{bucket}}]",
@@ -2848,7 +2848,7 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum by (bucket,range,operation) (minio_bucket_replication_latency_ms{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket,range,operation) (minio_bucket_replication_latency_ms{job=~\"$scrape_jobs\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -2979,7 +2979,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_proxied_head_requests_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_proxied_head_requests_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -3107,7 +3107,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_bucket_replication_proxied_head_requests_failures{job=\"$scrape_jobs\"}",
+          "expr": "minio_bucket_replication_proxied_head_requests_failures{job=~\"$scrape_jobs\"}",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{instance}}",
@@ -3235,7 +3235,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_proxied_put_tagging_requests_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_proxied_put_tagging_requests_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -3363,7 +3363,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_bucket_replication_proxied_put_tagging_requests_failures{job=\"$scrape_jobs\"}",
+          "expr": "minio_bucket_replication_proxied_put_tagging_requests_failures{job=~\"$scrape_jobs\"}",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{instance}}",
@@ -3491,7 +3491,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_proxied_get_tagging_requests_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_proxied_get_tagging_requests_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -3619,7 +3619,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_bucket_replication_proxied_get_tagging_requests_failures{job=\"$scrape_jobs\"}",
+          "expr": "minio_bucket_replication_proxied_get_tagging_requests_failures{job=~\"$scrape_jobs\"}",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{instance}}",
@@ -3747,7 +3747,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_proxied_delete_tagging_requests_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_proxied_delete_tagging_requests_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -3875,7 +3875,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_bucket_replication_proxied_delete_tagging_requests_failures{job=\"$scrape_jobs\"}",
+          "expr": "minio_bucket_replication_proxied_delete_tagging_requests_failures{job=~\"$scrape_jobs\"}",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{instance}}",
@@ -4003,7 +4003,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (bucket) (minio_bucket_replication_proxied_get_requests_total{job=\"$scrape_jobs\"})",
+          "expr": "sum by (bucket) (minio_bucket_replication_proxied_get_requests_total{job=~\"$scrape_jobs\"})",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{bucket}}",
@@ -4131,7 +4131,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "minio_bucket_replication_proxied_get_requests_failures{job=\"$scrape_jobs\"}",
+          "expr": "minio_bucket_replication_proxied_get_requests_failures{job=~\"$scrape_jobs\"}",
           "interval": "1m",
           "intervalFactor": 2,
           "legendFormat": "{{instance}}",

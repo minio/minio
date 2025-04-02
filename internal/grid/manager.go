@@ -32,6 +32,7 @@ import (
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/deadlineconn"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/mux"
 )
@@ -188,6 +189,8 @@ func (m *Manager) Handler(authReq func(r *http.Request) error) http.HandlerFunc 
 // This should be called with the incoming connection after accept.
 // Auth is handled internally, as well as disconnecting any connections from the same host.
 func (m *Manager) IncomingConn(ctx context.Context, conn net.Conn) {
+	// We manage our own deadlines.
+	conn = deadlineconn.Unwrap(conn)
 	remoteAddr := conn.RemoteAddr().String()
 	// will write an OpConnectResponse message to the remote and log it once locally.
 	defer conn.Close()

@@ -362,7 +362,6 @@ func TestGetDecryptedRange(t *testing.T) {
 				t.Errorf("Case %d: test failed: %d %d %d %d %d", i, o, l, skip, sn, ps)
 			}
 		}
-
 	}
 
 	// Multipart object tests
@@ -538,7 +537,6 @@ func TestGetDecryptedRange(t *testing.T) {
 					i, o, l, skip, sn, ps, oRef, lRef, skipRef, snRef, psRef)
 			}
 		}
-
 	}
 }
 

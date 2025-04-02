@@ -112,7 +112,6 @@ func (r *ReplicationStats) collectWorkerMetrics(ctx context.Context) {
 			r.wlock.Lock()
 			r.workers.update()
 			r.wlock.Unlock()
-
 		}
 	}
 }

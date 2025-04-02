@@ -26,6 +26,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -37,6 +38,7 @@ import (
 	"github.com/minio/minio/internal/jwt"
 	"github.com/minio/pkg/v3/env"
 	"github.com/minio/pkg/v3/policy"
+	"github.com/minio/pkg/v3/sync/errgroup"
 	"github.com/puzpuzpuz/xsync/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -355,6 +357,68 @@ func (c *iamCache) removeGroupFromMembershipsMap(group string) {
 		groups.Remove(group)
 		c.iamUserGroupMemberships[member] = groups
 	}
+}
+
+func (c *iamCache) policyDBGetGroups(store *IAMStoreSys, userPolicyPresent bool, groups ...string) ([]string, error) {
+	var policies []string
+	for _, group := range groups {
+		if store.getUsersSysType() == MinIOUsersSysType {
+			g, ok := c.iamGroupsMap[group]
+			if !ok {
+				continue
+			}
+
+			// Group is disabled, so we return no policy - this
+			// ensures the request is denied.
+			if g.Status == statusDisabled {
+				continue
+			}
+		}
+
+		policy, ok := c.iamGroupPolicyMap.Load(group)
+		if !ok {
+			continue
+		}
+
+		policies = append(policies, policy.toSlice()...)
+	}
+
+	found := len(policies) > 0
+	if found {
+		return policies, nil
+	}
+
+	if userPolicyPresent {
+		// if user mapping present and no group policies found
+		// rely on user policy for access, instead of fallback.
+		return nil, nil
+	}
+
+	var mu sync.Mutex
+
+	// no mappings found, fallback for all groups.
+	g := errgroup.WithNErrs(len(groups)).WithConcurrency(10) // load like 10 groups at a time.
+
+	for index := range groups {
+		index := index
+		g.Go(func() error {
+			err := store.loadMappedPolicy(context.TODO(), groups[index], regUser, true, c.iamGroupPolicyMap)
+			if err != nil && !errors.Is(err, errNoSuchPolicy) {
+				return err
+			}
+			if errors.Is(err, errNoSuchPolicy) {
+				return nil
+			}
+			policy, _ := c.iamGroupPolicyMap.Load(groups[index])
+			mu.Lock()
+			policies = append(policies, policy.toSlice()...)
+			mu.Unlock()
+			return nil
+		}, index)
+	}
+
+	err := errors.Join(g.Wait()...)
+	return policies, err
 }
 
 // policyDBGet - lower-level helper; does not take locks.
@@ -676,7 +740,8 @@ func (store *IAMStoreSys) LoadIAMCache(ctx context.Context, firstTime bool) erro
 type IAMStoreSys struct {
 	IAMStorageAPI
 
-	group *singleflight.Group
+	group  *singleflight.Group
+	policy *singleflight.Group
 }
 
 // HasWatcher - returns if the storage system has a watcher.
@@ -757,21 +822,36 @@ func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, 
 	cache := store.rlock()
 	defer store.runlock()
 
-	policies, _, err := cache.policyDBGet(store, name, false, false)
-	if err != nil {
-		return nil, err
-	}
-
-	userPolicyPresent := len(policies) > 0
-	for _, group := range groups {
-		ps, _, err := cache.policyDBGet(store, group, true, userPolicyPresent)
+	getPolicies := func() ([]string, error) {
+		policies, _, err := cache.policyDBGet(store, name, false, false)
 		if err != nil {
 			return nil, err
 		}
-		policies = append(policies, ps...)
-	}
 
-	return policies, nil
+		userPolicyPresent := len(policies) > 0
+
+		groupPolicies, err := cache.policyDBGetGroups(store, userPolicyPresent, groups...)
+		if err != nil {
+			return nil, err
+		}
+
+		policies = append(policies, groupPolicies...)
+		return policies, nil
+	}
+	if store.policy != nil {
+		val, err, _ := store.policy.Do(name, func() (interface{}, error) {
+			return getPolicies()
+		})
+		if err != nil {
+			return nil, err
+		}
+		res, ok := val.([]string)
+		if !ok {
+			return nil, errors.New("unexpected policy type")
+		}
+		return res, nil
+	}
+	return getPolicies()
 }
 
 // AddUsersToGroup - adds users to group, creating the group if needed.
@@ -1142,7 +1222,6 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			cache.iamGroupPolicyMap.Delete(name)
 		}
 	} else {
-
 		if err = store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
 			return
 		}
@@ -1544,7 +1623,6 @@ func (store *IAMStoreSys) MergePolicies(policyName string) (string, policy.Polic
 			policies = append(policies, policy)
 			toMerge = append(toMerge, p.Policy)
 		}
-
 	}
 
 	return strings.Join(policies, ","), policy.MergePolicies(toMerge...)
@@ -1954,6 +2032,50 @@ func (store *IAMStoreSys) SetTempUser(ctx context.Context, accessKey string, cre
 	return u.UpdatedAt, nil
 }
 
+// RevokeTokens - revokes all temporary credentials, or those with matching type,
+// associated with the parent user.
+func (store *IAMStoreSys) RevokeTokens(ctx context.Context, parentUser string, tokenRevokeType string) error {
+	if parentUser == "" {
+		return errInvalidArgument
+	}
+
+	cache := store.lock()
+	defer store.unlock()
+
+	secret, err := getTokenSigningKey()
+	if err != nil {
+		return err
+	}
+
+	var revoked bool
+	for _, ui := range cache.iamSTSAccountsMap {
+		if ui.Credentials.ParentUser != parentUser {
+			continue
+		}
+		if tokenRevokeType != "" {
+			claims, err := getClaimsFromTokenWithSecret(ui.Credentials.SessionToken, secret)
+			if err != nil {
+				continue // skip if token is invalid
+			}
+			// skip if token type is given and does not match
+			if v, _ := claims.Lookup(tokenRevokeTypeClaim); v != tokenRevokeType {
+				continue
+			}
+		}
+		if err := store.deleteUserIdentity(ctx, ui.Credentials.AccessKey, stsUser); err != nil {
+			return err
+		}
+		delete(cache.iamSTSAccountsMap, ui.Credentials.AccessKey)
+		revoked = true
+	}
+
+	if revoked {
+		cache.updatedAt = time.Now()
+	}
+
+	return nil
+}
+
 // DeleteUsers - given a set of users or access keys, deletes them along with
 // any derived credentials (STS or service accounts) and any associated policy
 // mappings.
@@ -2009,7 +2131,8 @@ type ParentUserInfo struct {
 // GetAllParentUsers - returns all distinct "parent-users" associated with STS
 // or service credentials, mapped to all distinct roleARNs associated with the
 // parent user. The dummy role ARN is associated with parent users from
-// policy-claim based OpenID providers.
+// policy-claim based OpenID providers. The root credential as a parent
+// user is not included in the result.
 func (store *IAMStoreSys) GetAllParentUsers() map[string]ParentUserInfo {
 	cache := store.rlock()
 	defer store.runlock()
@@ -2024,14 +2147,14 @@ func (store *IAMStoreSys) getParentUsers(cache *iamCache) map[string]ParentUserI
 		cred := ui.Credentials
 		// Only consider service account or STS credentials with
 		// non-empty session tokens.
-		if !(cred.IsServiceAccount() || cred.IsTemp()) ||
+		if (!cred.IsServiceAccount() && !cred.IsTemp()) ||
 			cred.SessionToken == "" {
 			continue
 		}
 
 		var (
 			err    error
-			claims map[string]interface{} = cred.Claims
+			claims *jwt.MapClaims
 		)
 
 		if cred.IsServiceAccount() {
@@ -2048,29 +2171,22 @@ func (store *IAMStoreSys) getParentUsers(cache *iamCache) map[string]ParentUserI
 		if err != nil {
 			continue
 		}
-		if cred.ParentUser == "" {
+		if cred.ParentUser == "" || cred.ParentUser == globalActiveCred.AccessKey {
 			continue
 		}
 
 		subClaimValue := cred.ParentUser
-		if v, ok := claims[subClaim]; ok {
-			subFromToken, ok := v.(string)
-			if ok {
-				subClaimValue = subFromToken
-			}
+		if v, ok := claims.Lookup(subClaim); ok {
+			subClaimValue = v
 		}
-		if v, ok := claims[ldapActualUser]; ok {
-			subFromToken, ok := v.(string)
-			if ok {
-				subClaimValue = subFromToken
-			}
+		if v, ok := claims.Lookup(ldapActualUser); ok {
+			subClaimValue = v
 		}
 
 		roleArn := openid.DummyRoleARN.String()
-		s, ok := claims[roleArnClaim]
-		val, ok2 := s.(string)
-		if ok && ok2 {
-			roleArn = val
+		s, ok := claims.Lookup(roleArnClaim)
+		if ok {
+			roleArn = s
 		}
 		v, ok := res[cred.ParentUser]
 		if ok {
@@ -2537,13 +2653,15 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 
 	// Extracted session policy name string can be removed as its not useful
 	// at this point.
-	delete(m, sessionPolicyNameExtracted)
+	m.Delete(sessionPolicyNameExtracted)
+
+	nosp := opts.sessionPolicy == nil || opts.sessionPolicy.Version == "" && len(opts.sessionPolicy.Statements) == 0
 
 	// sessionPolicy is nil and there is embedded policy attached we remove
 	// embedded policy at that point.
-	if _, ok := m[policy.SessionPolicyName]; ok && opts.sessionPolicy == nil {
-		delete(m, policy.SessionPolicyName)
-		m[iamPolicyClaimNameSA()] = inheritedPolicyType
+	if _, ok := m.Lookup(policy.SessionPolicyName); ok && nosp {
+		m.Delete(policy.SessionPolicyName)
+		m.Set(iamPolicyClaimNameSA(), inheritedPolicyType)
 	}
 
 	if opts.sessionPolicy != nil { // session policies is being updated
@@ -2551,21 +2669,23 @@ func (store *IAMStoreSys) UpdateServiceAccount(ctx context.Context, accessKey st
 			return updatedAt, err
 		}
 
-		policyBuf, err := json.Marshal(opts.sessionPolicy)
-		if err != nil {
-			return updatedAt, err
-		}
+		if opts.sessionPolicy.Version != "" && len(opts.sessionPolicy.Statements) > 0 {
+			policyBuf, err := json.Marshal(opts.sessionPolicy)
+			if err != nil {
+				return updatedAt, err
+			}
 
-		if len(policyBuf) > maxSVCSessionPolicySize {
-			return updatedAt, errSessionPolicyTooLarge
-		}
+			if len(policyBuf) > maxSVCSessionPolicySize {
+				return updatedAt, errSessionPolicyTooLarge
+			}
 
-		// Overwrite session policy claims.
-		m[policy.SessionPolicyName] = base64.StdEncoding.EncodeToString(policyBuf)
-		m[iamPolicyClaimNameSA()] = embeddedPolicyType
+			// Overwrite session policy claims.
+			m.Set(policy.SessionPolicyName, base64.StdEncoding.EncodeToString(policyBuf))
+			m.Set(iamPolicyClaimNameSA(), embeddedPolicyType)
+		}
 	}
 
-	cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m, cr.SecretKey)
+	cr.SessionToken, err = auth.JWTSignWithAccessKey(accessKey, m.Map(), cr.SecretKey)
 	if err != nil {
 		return updatedAt, err
 	}
@@ -2843,7 +2963,10 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 		return err
 	}
 
-	newCache := val.(*iamCache)
+	newCache, ok := val.(*iamCache)
+	if !ok {
+		return nil
+	}
 
 	cache := store.lock()
 	defer store.unlock()
@@ -2892,22 +3015,22 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 
 func extractJWTClaims(u UserIdentity) (jwtClaims *jwt.MapClaims, err error) {
 	keys := make([]string, 0, 3)
+
 	// Append credentials secret key itself
 	keys = append(keys, u.Credentials.SecretKey)
+
 	// Use site-replication credentials if found
 	if globalSiteReplicationSys.isEnabled() {
-		siteReplSecretKey, e := globalSiteReplicatorCred.Get(GlobalContext)
-		if e != nil {
-			return nil, e
+		secretKey, err := getTokenSigningKey()
+		if err != nil {
+			return nil, err
 		}
-		keys = append(keys, siteReplSecretKey)
+		keys = append(keys, secretKey)
 	}
-	// Use root credentials for credentials created with older deployments
-	keys = append(keys, globalActiveCred.SecretKey)
 
 	// Iterate over all keys and return with the first successful claim extraction
 	for _, key := range keys {
-		jwtClaims, err = auth.ExtractClaims(u.Credentials.SessionToken, key)
+		jwtClaims, err = getClaimsFromTokenWithSecret(u.Credentials.SessionToken, key)
 		if err == nil {
 			break
 		}

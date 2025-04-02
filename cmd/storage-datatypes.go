@@ -25,6 +25,8 @@ import (
 	xioutil "github.com/minio/minio/internal/ioutil"
 )
 
+//msgp:clearomitted
+
 //go:generate msgp -file=$GOFILE
 
 // DeleteOptions represents the disk level delete options available for the APIs
@@ -99,8 +101,6 @@ type VolsInfo []VolInfo
 // VolInfo - represents volume stat information.
 // The above means that any added/deleted fields are incompatible.
 //
-// The above means that any added/deleted fields are incompatible.
-//
 //msgp:tuple VolInfo
 type VolInfo struct {
 	// Name of the volume.
@@ -108,6 +108,12 @@ type VolInfo struct {
 
 	// Date and time when the volume was created.
 	Created time.Time
+
+	// total VolInfo counts
+	count int
+
+	// Date and time when the volume was deleted, if Deleted
+	Deleted time.Time
 }
 
 // FilesInfo represent a list of files, additionally

@@ -304,7 +304,6 @@ func TestListOnlineDisks(t *testing.T) {
 					f.Close()
 					break
 				}
-
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
@@ -313,11 +312,11 @@ func TestListOnlineDisks(t *testing.T) {
 				t.Fatalf("Expected modTime to be equal to %v but was found to be %v",
 					test.expectedTime, modTime)
 			}
-			availableDisks, _, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
-				test.errs, fi, bucket, object, madmin.HealDeepScan)
+			_, _ = checkObjectWithAllParts(ctx, onlineDisks, partsMetadata,
+				test.errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 			if test._tamperBackend != noTamper {
-				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
+				if tamperedIndex != -1 && onlineDisks[tamperedIndex] != nil {
 					t.Fatalf("Drive (%v) with part.1 missing is not a drive with available data",
 						erasureDisks[tamperedIndex])
 				}
@@ -485,7 +484,6 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					f.Close()
 					break
 				}
-
 			}
 
 			rQuorum := len(errs) - z.serverPools[0].sets[0].defaultParityCount
@@ -495,11 +493,11 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					test.expectedTime, modTime)
 			}
 
-			availableDisks, _, _ := disksWithAllParts(ctx, onlineDisks, partsMetadata,
-				test.errs, fi, bucket, object, madmin.HealDeepScan)
+			_, _ = checkObjectWithAllParts(ctx, onlineDisks, partsMetadata,
+				test.errs, fi, false, bucket, object, madmin.HealDeepScan)
 
 			if test._tamperBackend != noTamper {
-				if tamperedIndex != -1 && availableDisks[tamperedIndex] != nil {
+				if tamperedIndex != -1 && onlineDisks[tamperedIndex] != nil {
 					t.Fatalf("Drive (%v) with part.1 missing is not a drive with available data",
 						erasureDisks[tamperedIndex])
 				}
@@ -545,6 +543,7 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	// Test 1: Test that all disks are returned without any failures with
 	// unmodified meta data
+	erasureDisks = s.getDisks()
 	partsMetadata, errs := readAllFileInfo(ctx, erasureDisks, "", bucket, object, "", false, true)
 	if err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
@@ -557,14 +556,10 @@ func TestDisksWithAllParts(t *testing.T) {
 
 	erasureDisks, _, _ = listOnlineDisks(erasureDisks, partsMetadata, errs, readQuorum)
 
-	filteredDisks, _, dataErrsPerDisk := disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+	dataErrsPerDisk, _ := checkObjectWithAllParts(ctx, erasureDisks, partsMetadata,
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
-	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
-	}
-
-	for diskIndex, disk := range filteredDisks {
+	for diskIndex, disk := range erasureDisks {
 		if partNeedsHealing(dataErrsPerDisk[diskIndex]) {
 			t.Errorf("Unexpected error: %v", dataErrsPerDisk[diskIndex])
 		}
@@ -575,17 +570,15 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	// Test 2: Not synchronized modtime
+	erasureDisks = s.getDisks()
 	partsMetadataBackup := partsMetadata[0]
 	partsMetadata[0].ModTime = partsMetadata[0].ModTime.Add(-1 * time.Hour)
 
 	errs = make([]error, len(erasureDisks))
-	filteredDisks, _, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+	_, _ = checkObjectWithAllParts(ctx, erasureDisks, partsMetadata,
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
-	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
-	}
-	for diskIndex, disk := range filteredDisks {
+	for diskIndex, disk := range erasureDisks {
 		if diskIndex == 0 && disk != nil {
 			t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
 		}
@@ -596,17 +589,15 @@ func TestDisksWithAllParts(t *testing.T) {
 	partsMetadata[0] = partsMetadataBackup // Revert before going to the next test
 
 	// Test 3: Not synchronized DataDir
+	erasureDisks = s.getDisks()
 	partsMetadataBackup = partsMetadata[1]
 	partsMetadata[1].DataDir = "foo-random"
 
 	errs = make([]error, len(erasureDisks))
-	filteredDisks, _, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+	_, _ = checkObjectWithAllParts(ctx, erasureDisks, partsMetadata,
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
-	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
-	}
-	for diskIndex, disk := range filteredDisks {
+	for diskIndex, disk := range erasureDisks {
 		if diskIndex == 1 && disk != nil {
 			t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
 		}
@@ -617,6 +608,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	partsMetadata[1] = partsMetadataBackup // Revert before going to the next test
 
 	// Test 4: key = disk index, value = part name with hash mismatch
+	erasureDisks = s.getDisks()
 	diskFailures := make(map[int]string)
 	diskFailures[0] = "part.1"
 	diskFailures[3] = "part.1"
@@ -637,29 +629,18 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	errs = make([]error, len(erasureDisks))
-	filteredDisks, dataErrsPerDisk, _ = disksWithAllParts(ctx, erasureDisks, partsMetadata,
-		errs, fi, bucket, object, madmin.HealDeepScan)
+	dataErrsPerDisk, _ = checkObjectWithAllParts(ctx, erasureDisks, partsMetadata,
+		errs, fi, false, bucket, object, madmin.HealDeepScan)
 
-	if len(filteredDisks) != len(erasureDisks) {
-		t.Errorf("Unexpected number of drives: %d", len(filteredDisks))
-	}
-
-	for diskIndex, disk := range filteredDisks {
+	for diskIndex := range erasureDisks {
 		if _, ok := diskFailures[diskIndex]; ok {
-			if disk != nil {
-				t.Errorf("Drive not filtered as expected, drive: %d", diskIndex)
-			}
 			if !partNeedsHealing(dataErrsPerDisk[diskIndex]) {
 				t.Errorf("Disk expected to be healed, driveIndex: %d", diskIndex)
 			}
 		} else {
-			if disk == nil {
-				t.Errorf("Drive erroneously filtered, driveIndex: %d", diskIndex)
-			}
 			if partNeedsHealing(dataErrsPerDisk[diskIndex]) {
 				t.Errorf("Disk not expected to be healed, driveIndex: %d", diskIndex)
 			}
-
 		}
 	}
 }

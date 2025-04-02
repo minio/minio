@@ -1,0 +1,56 @@
+# Create hardware engg org unit
+dn: ou=hwengg,dc=min,dc=io
+objectClass: organizationalUnit
+ou: hwengg
+
+# Create people sub-org
+dn: ou=people,ou=hwengg,dc=min,dc=io
+objectClass: organizationalUnit
+ou: people
+
+# Create Alice, Bob and Cody in hwengg
+dn: uid=alice1,ou=people,ou=hwengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Alice Smith
+sn: Smith
+uid: alice1
+mail: alice@example.io
+userPassword: {SSHA}Yeh2/IV/q/HjG2yzN3YdE9CAF3EJFCLu
+
+dn: uid=bobfisher,ou=people,ou=hwengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Robert Fisher
+sn: Fisher
+uid: bobfisher
+mail: bob@example.io
+userPassword: {SSHA}LktfbhK5oXSdDWCNzauJ9JA+Poxinl3y
+
+dn: uid=cody3,ou=people,ou=hwengg,dc=min,dc=io
+objectClass: inetOrgPerson
+cn: Cody Thomas
+sn: Thomas
+uid: cody3
+mail: cody@example.io
+userPassword: {SSHA}H8B0gaOd4bRklK3fXj9ltHvJXWQFXW5Q
+
+# Create groups ou for hwengg
+dn: ou=groups,ou=hwengg,dc=min,dc=io
+objectclass: organizationalUnit
+ou: groups
+description: groups branch
+
+# Create project groups
+
+dn: cn=projectx,ou=groups,ou=hwengg,dc=min,dc=io
+objectclass: groupofnames
+cn: projectx
+description: Project X group members
+member: uid=alice1,ou=people,ou=hwengg,dc=min,dc=io
+member: uid=bobfisher,ou=people,ou=hwengg,dc=min,dc=io
+
+dn: cn=projecty,ou=groups,ou=hwengg,dc=min,dc=io
+objectclass: groupofnames
+cn: projecty
+description: Project Y group members
+member: uid=bobfisher,ou=people,ou=hwengg,dc=min,dc=io
+member: uid=cody3,ou=people,ou=hwengg,dc=min,dc=io

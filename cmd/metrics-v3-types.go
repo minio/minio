@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/exp/slices"
 )
 
 type collectorPath string
@@ -267,7 +267,7 @@ func (m *MetricValues) SetHistogram(name MetricName, hist *prometheus.HistogramV
 		panic(fmt.Sprintf("metric has no description: %s", name))
 	}
 	dummyDesc := MetricDescription{}
-	metricsV2 := getHistogramMetrics(hist, dummyDesc, false)
+	metricsV2 := getHistogramMetrics(hist, dummyDesc, false, false)
 mainLoop:
 	for _, metric := range metricsV2 {
 		for label, allowedValues := range filterByLabels {

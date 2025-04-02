@@ -213,6 +213,8 @@ const (
 	ErrPolicyAlreadyAttached
 	ErrPolicyNotAttached
 	ErrExcessData
+	ErrPolicyInvalidName
+	ErrNoTokenRevokeType
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -561,6 +563,11 @@ var errorCodes = errorCodeMap{
 		Description:    "More data provided than indicated content length",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPolicyInvalidName: {
+		Code:           "PolicyInvalidName",
+		Description:    "Policy name may not contain comma",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrPolicyTooLarge: {
 		Code:           "PolicyTooLarge",
 		Description:    "Policy exceeds the maximum allowed document size.",
@@ -623,7 +630,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrMissingContentMD5: {
 		Code:           "MissingContentMD5",
-		Description:    "Missing required header for this request: Content-Md5.",
+		Description:    "Missing or invalid required header for this request: Content-Md5 or Amz-Content-Checksum",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrMissingSecurityHeader: {
@@ -978,7 +985,7 @@ var errorCodes = errorCodeMap{
 	},
 	ErrReplicationNoExistingObjects: {
 		Code:           "XMinioReplicationNoExistingObjects",
-		Description:    "No matching ExistingsObjects rule enabled",
+		Description:    "No matching ExistingObjects rule enabled",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrRemoteTargetDenyAddError: {
@@ -1257,6 +1264,11 @@ var errorCodes = errorCodeMap{
 		Code:           "InvalidTokenId",
 		Description:    "The security token included in the request is invalid",
 		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrNoTokenRevokeType: {
+		Code:           "InvalidArgument",
+		Description:    "No token revoke type specified and one could not be inferred from the request",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 
 	// S3 extensions.
@@ -2248,6 +2260,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrServerNotInitialized
 	case errBucketMetadataNotInitialized:
 		apiErr = ErrBucketMetadataNotInitialized
+	case hash.ErrInvalidChecksum:
+		apiErr = ErrInvalidChecksum
 	}
 
 	// Compression errors

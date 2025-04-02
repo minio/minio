@@ -49,6 +49,7 @@ import (
 	"github.com/klauspost/compress/zip"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/estream"
+	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/dsync"
@@ -59,7 +60,6 @@ import (
 	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
-	"github.com/minio/pkg/v3/logger/message/log"
 	xnet "github.com/minio/pkg/v3/net"
 	"github.com/minio/pkg/v3/policy"
 	"github.com/secure-io/sio-go"
@@ -93,8 +93,15 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if globalInplaceUpdateDisabled || currentReleaseTime.IsZero() {
+	if globalInplaceUpdateDisabled {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrMethodNotAllowed), r.URL)
+		return
+	}
+
+	if currentReleaseTime.IsZero() || currentReleaseTime.Equal(timeSentinel) {
+		apiErr := errorCodes.ToAPIErr(ErrMethodNotAllowed)
+		apiErr.Description = fmt.Sprintf("unable to perform in-place update, release time is unrecognized: %s", currentReleaseTime)
+		writeErrorResponseJSON(ctx, w, apiErr, r.URL)
 		return
 	}
 
@@ -108,6 +115,11 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		if runtime.GOOS == globalWindowsOSName {
 			updateURL = minioReleaseWindowsInfoURL
 		}
+	}
+
+	local := globalLocalNodeName
+	if local == "" {
+		local = "127.0.0.1"
 	}
 
 	u, err := url.Parse(updateURL)
@@ -128,6 +140,39 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	updateStatus := madmin.ServerUpdateStatusV2{
+		DryRun:  dryRun,
+		Results: make([]madmin.ServerPeerUpdateStatus, 0, len(globalNotificationSys.allPeerClients)),
+	}
+	peerResults := make(map[string]madmin.ServerPeerUpdateStatus, len(globalNotificationSys.allPeerClients))
+	failedClients := make(map[int]bool, len(globalNotificationSys.allPeerClients))
+
+	if lrTime.Sub(currentReleaseTime) <= 0 {
+		updateStatus.Results = append(updateStatus.Results, madmin.ServerPeerUpdateStatus{
+			Host:           local,
+			Err:            fmt.Sprintf("server is running the latest version: %s", Version),
+			CurrentVersion: Version,
+		})
+
+		for _, client := range globalNotificationSys.peerClients {
+			updateStatus.Results = append(updateStatus.Results, madmin.ServerPeerUpdateStatus{
+				Host:           client.String(),
+				Err:            fmt.Sprintf("server is running the latest version: %s", Version),
+				CurrentVersion: Version,
+			})
+		}
+
+		// Marshal API response
+		jsonBytes, err := json.Marshal(updateStatus)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+
+		writeSuccessResponseJSON(w, jsonBytes)
+		return
+	}
+
 	u.Path = path.Dir(u.Path) + SlashSeparator + releaseInfo
 	// Download Binary Once
 	binC, bin, err := downloadBinary(u, mode)
@@ -136,16 +181,6 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-
-	updateStatus := madmin.ServerUpdateStatusV2{DryRun: dryRun}
-	peerResults := make(map[string]madmin.ServerPeerUpdateStatus)
-
-	local := globalLocalNodeName
-	if local == "" {
-		local = "127.0.0.1"
-	}
-
-	failedClients := make(map[int]struct{})
 
 	if globalIsDistErasure {
 		// Push binary to other servers
@@ -156,7 +191,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 					Err:            nerr.Err.Error(),
 					CurrentVersion: Version,
 				}
-				failedClients[idx] = struct{}{}
+				failedClients[idx] = true
 			} else {
 				peerResults[nerr.Host.String()] = madmin.ServerPeerUpdateStatus{
 					Host:           nerr.Host.String(),
@@ -167,25 +202,17 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	if lrTime.Sub(currentReleaseTime) > 0 {
-		if err = verifyBinary(u, sha256Sum, releaseInfo, mode, bytes.NewReader(bin)); err != nil {
-			peerResults[local] = madmin.ServerPeerUpdateStatus{
-				Host:           local,
-				Err:            err.Error(),
-				CurrentVersion: Version,
-			}
-		} else {
-			peerResults[local] = madmin.ServerPeerUpdateStatus{
-				Host:           local,
-				CurrentVersion: Version,
-				UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
-			}
+	if err = verifyBinary(u, sha256Sum, releaseInfo, mode, bytes.NewReader(bin)); err != nil {
+		peerResults[local] = madmin.ServerPeerUpdateStatus{
+			Host:           local,
+			Err:            err.Error(),
+			CurrentVersion: Version,
 		}
 	} else {
 		peerResults[local] = madmin.ServerPeerUpdateStatus{
 			Host:           local,
-			Err:            fmt.Sprintf("server is already running the latest version: %s", Version),
 			CurrentVersion: Version,
+			UpdatedVersion: lrTime.Format(MinioReleaseTagTimeLayout),
 		}
 	}
 
@@ -193,8 +220,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		if globalIsDistErasure {
 			ng := WithNPeers(len(globalNotificationSys.peerClients))
 			for idx, client := range globalNotificationSys.peerClients {
-				_, ok := failedClients[idx]
-				if ok {
+				if failedClients[idx] {
 					continue
 				}
 				client := client
@@ -240,14 +266,14 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 		startTime := time.Now().Add(restartUpdateDelay)
 		ng := WithNPeers(len(globalNotificationSys.peerClients))
 		for idx, client := range globalNotificationSys.peerClients {
-			_, ok := failedClients[idx]
-			if ok {
+			if failedClients[idx] {
 				continue
 			}
 			client := client
 			ng.Go(ctx, func() error {
 				prs, ok := peerResults[client.String()]
-				if ok && prs.CurrentVersion != prs.UpdatedVersion && prs.UpdatedVersion != "" {
+				// We restart only on success, not for any failures.
+				if ok && prs.Err == "" {
 					return client.SignalService(serviceRestart, "", dryRun, &startTime)
 				}
 				return nil
@@ -284,7 +310,9 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 	writeSuccessResponseJSON(w, jsonBytes)
 
 	if !dryRun {
-		if lrTime.Sub(currentReleaseTime) > 0 {
+		prs, ok := peerResults[local]
+		// We restart only on success, not for any failures.
+		if ok && prs.Err == "" {
 			globalServiceSignalCh <- serviceRestart
 		}
 	}
@@ -801,7 +829,7 @@ func (a adminAPIHandlers) MetricsHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		// Flush before waiting for next...
-		w.(http.Flusher).Flush()
+		xhttp.Flush(w)
 
 		select {
 		case <-ticker.C:
@@ -1292,7 +1320,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Analyze the heal token and route the request accordingly
-	token, success := proxyRequestByToken(ctx, w, r, hip.clientToken)
+	token, _, success := proxyRequestByToken(ctx, w, r, hip.clientToken, false)
 	if success {
 		return
 	}
@@ -1331,7 +1359,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 				if _, err := w.Write([]byte(" ")); err != nil {
 					return
 				}
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			case hr := <-respCh:
 				switch hr.apiErr {
 				case noError:
@@ -1339,7 +1367,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 						if _, err := w.Write(hr.respBytes); err != nil {
 							return
 						}
-						w.(http.Flusher).Flush()
+						xhttp.Flush(w)
 					} else {
 						writeSuccessResponseJSON(w, hr.respBytes)
 					}
@@ -1366,7 +1394,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 					if _, err := w.Write(errorRespJSON); err != nil {
 						return
 					}
-					w.(http.Flusher).Flush()
+					xhttp.Flush(w)
 				}
 				break forLoop
 			}
@@ -1379,7 +1407,7 @@ func (a adminAPIHandlers) HealHandler(w http.ResponseWriter, r *http.Request) {
 		if exists && !nh.hasEnded() && len(nh.currentStatus.Items) > 0 {
 			clientToken := nh.clientToken
 			if globalIsDistErasure {
-				clientToken = fmt.Sprintf("%s:%d", nh.clientToken, GetProxyEndpointLocalIndex(globalProxyEndpoints))
+				clientToken = fmt.Sprintf("%s%s%d", nh.clientToken, getKeySeparator(), GetProxyEndpointLocalIndex(globalProxyEndpoints))
 			}
 			b, err := json.Marshal(madmin.HealStartSuccess{
 				ClientToken:   clientToken,
@@ -1583,7 +1611,6 @@ func (a adminAPIHandlers) ClientDevNull(w http.ResponseWriter, r *http.Request) 
 		if err != nil || ctx.Err() != nil || totalRx > 100*humanize.GiByte {
 			break
 		}
-
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -1812,7 +1839,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 					return
 				}
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case result, ok := <-ch:
 			if !ok {
 				return
@@ -1821,7 +1848,7 @@ func (a adminAPIHandlers) ObjectSpeedTestHandler(w http.ResponseWriter, r *http.
 				return
 			}
 			prevResult = result
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		}
 	}
 }
@@ -1930,7 +1957,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 			if err := enc.Encode(madmin.DriveSpeedTestResult{}); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case result, ok := <-ch:
 			if !ok {
 				return
@@ -1938,7 +1965,7 @@ func (a adminAPIHandlers) DriveSpeedtestHandler(w http.ResponseWriter, r *http.R
 			if err := enc.Encode(result); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		}
 	}
 }
@@ -2055,7 +2082,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			grid.PutByteBuffer(entry)
 			if len(traceCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-keepAliveTicker.C:
 			if len(traceCh) > 0 {
@@ -2064,7 +2091,7 @@ func (a adminAPIHandlers) TraceHandler(w http.ResponseWriter, r *http.Request) {
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}
@@ -2156,7 +2183,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 			grid.PutByteBuffer(log)
 			if len(logCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-keepAliveTicker.C:
 			if len(logCh) > 0 {
@@ -2165,7 +2192,7 @@ func (a adminAPIHandlers) ConsoleLogHandler(w http.ResponseWriter, r *http.Reque
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-ctx.Done():
 			return
 		}
@@ -2649,7 +2676,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 	// disk metrics are already included under drive info of each server
 	getRealtimeMetrics := func() *madmin.RealtimeMetrics {
 		var m madmin.RealtimeMetrics
-		var types madmin.MetricType = madmin.MetricsAll &^ madmin.MetricsDisk
+		types := madmin.MetricsAll &^ madmin.MetricsDisk
 		mLocal := collectLocalMetrics(types, collectMetricsOpts{})
 		m.Merge(&mLocal)
 		cctx, cancel := context.WithTimeout(healthCtx, time.Second/2)
@@ -2693,7 +2720,7 @@ func fetchHealthInfo(healthCtx context.Context, objectAPI ObjectLayer, query *ur
 		poolsArgs := re.ReplaceAllString(cmdLine, `$3`)
 		var anonPools []string
 
-		if !(strings.Contains(poolsArgs, "{") && strings.Contains(poolsArgs, "}")) {
+		if !strings.Contains(poolsArgs, "{") || !strings.Contains(poolsArgs, "}") {
 			// No ellipses pattern. Anonymize host name from every pool arg
 			pools := strings.Fields(poolsArgs)
 			anonPools = make([]string, len(pools))
@@ -2935,13 +2962,13 @@ func (a adminAPIHandlers) HealthInfoHandler(w http.ResponseWriter, r *http.Reque
 			}
 			if len(healthInfoCh) == 0 {
 				// Flush if nothing is queued
-				w.(http.Flusher).Flush()
+				xhttp.Flush(w)
 			}
 		case <-ticker.C:
 			if _, err := w.Write([]byte(" ")); err != nil {
 				return
 			}
-			w.(http.Flusher).Flush()
+			xhttp.Flush(w)
 		case <-healthCtx.Done():
 			return
 		}
@@ -3393,7 +3420,7 @@ func (a adminAPIHandlers) InspectDataHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// save the format.json as part of inspect by default
-	if !(volume == minioMetaBucket && file == formatConfigFile) {
+	if volume != minioMetaBucket || file != formatConfigFile {
 		err = o.GetRawData(ctx, minioMetaBucket, formatConfigFile, rawDataFn)
 	}
 	if !errors.Is(err, errFileNotFound) {

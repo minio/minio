@@ -37,6 +37,7 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/config/dns"
+	"github.com/minio/minio/internal/logger"
 	"github.com/minio/mux"
 	xldap "github.com/minio/pkg/v3/ldap"
 	"github.com/minio/pkg/v3/policy"
@@ -56,6 +57,17 @@ func (a adminAPIHandlers) RemoveUser(w http.ResponseWriter, r *http.Request) {
 	accessKey := vars["accessKey"]
 
 	ok, _, err := globalIAMSys.IsTempUser(accessKey)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+	if ok {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errIAMActionNotAllowed), r.URL)
+		return
+	}
+
+	// This API only supports removal of internal users not service accounts.
+	ok, _, err = globalIAMSys.IsServiceAccount(accessKey)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
@@ -185,12 +197,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checkDenyOnly := false
-	if name == cred.AccessKey {
-		// Check that there is no explicit deny - otherwise it's allowed
-		// to view one's own info.
-		checkDenyOnly = true
-	}
+	checkDenyOnly := name == cred.AccessKey
 
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
@@ -481,12 +488,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checkDenyOnly := false
-	if accessKey == cred.AccessKey {
-		// Check that there is no explicit deny - otherwise it's allowed
-		// to change one's own password.
-		checkDenyOnly = true
-	}
+	checkDenyOnly := accessKey == cred.AccessKey
 
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
@@ -637,7 +639,7 @@ func (a adminAPIHandlers) TemporaryAccountInfo(w http.ResponseWriter, r *http.Re
 
 // AddServiceAccount - PUT /minio/admin/v3/add-service-account
 func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Request) {
-	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r)
+	ctx, cred, opts, createReq, targetUser, APIError := commonAddServiceAccount(r, false)
 	if APIError.Code != "" {
 		writeErrorResponseJSON(ctx, w, APIError, r.URL)
 		return
@@ -677,10 +679,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Check if we are creating svc account for request sender.
-	isSvcAccForRequestor := false
-	if targetUser == requestorUser || targetUser == requestorParentUser {
-		isSvcAccForRequestor = true
-	}
+	isSvcAccForRequestor := targetUser == requestorUser || targetUser == requestorParentUser
 
 	// If we are creating svc account for request sender, ensure
 	// that targetUser is a real user (i.e. not derived
@@ -771,7 +770,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 					Name:          newCred.Name,
 					Description:   newCred.Description,
 					Claims:        opts.claims,
-					SessionPolicy: createReq.Policy,
+					SessionPolicy: madmin.SRSessionPolicy(createReq.Policy),
 					Status:        auth.AccountOn,
 					Expiration:    createReq.Expiration,
 				},
@@ -895,7 +894,7 @@ func (a adminAPIHandlers) UpdateServiceAccount(w http.ResponseWriter, r *http.Re
 					Status:        opts.status,
 					Name:          opts.name,
 					Description:   opts.description,
-					SessionPolicy: updateReq.NewPolicy,
+					SessionPolicy: madmin.SRSessionPolicy(updateReq.NewPolicy),
 					Expiration:    updateReq.NewExpiration,
 				},
 			},
@@ -1167,6 +1166,172 @@ func (a adminAPIHandlers) DeleteServiceAccount(w http.ResponseWriter, r *http.Re
 	writeSuccessNoContent(w)
 }
 
+// ListAccessKeysBulk - GET /minio/admin/v3/list-access-keys-bulk
+func (a adminAPIHandlers) ListAccessKeysBulk(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	users := r.Form["users"]
+	isAll := r.Form.Get("all") == "true"
+	selfOnly := !isAll && len(users) == 0
+
+	if isAll && len(users) > 0 {
+		// This should be checked on client side, so return generic error
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	// Empty user list and not self, list access keys for all users
+	if isAll {
+		if !globalIAMSys.IsAllowed(policy.Args{
+			AccountName:     cred.AccessKey,
+			Groups:          cred.Groups,
+			Action:          policy.ListUsersAdminAction,
+			ConditionValues: getConditionValues(r, "", cred),
+			IsOwner:         owner,
+			Claims:          cred.Claims,
+		}) {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	} else if len(users) == 1 {
+		if users[0] == cred.AccessKey || users[0] == cred.ParentUser {
+			selfOnly = true
+		}
+	}
+
+	if !globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.ListServiceAccountsAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+		DenyOnly:        selfOnly,
+	}) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+		return
+	}
+
+	if selfOnly && len(users) == 0 {
+		selfUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			selfUser = cred.ParentUser
+		}
+		users = append(users, selfUser)
+	}
+
+	var checkedUserList []string
+	if isAll {
+		users, err := globalIAMSys.ListUsers(ctx)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		for user := range users {
+			checkedUserList = append(checkedUserList, user)
+		}
+		checkedUserList = append(checkedUserList, globalActiveCred.AccessKey)
+	} else {
+		for _, user := range users {
+			// Validate the user
+			_, ok := globalIAMSys.GetUser(ctx, user)
+			if !ok {
+				continue
+			}
+			checkedUserList = append(checkedUserList, user)
+		}
+	}
+
+	listType := r.Form.Get("listType")
+	var listSTSKeys, listServiceAccounts bool
+	switch listType {
+	case madmin.AccessKeyListUsersOnly:
+		listSTSKeys = false
+		listServiceAccounts = false
+	case madmin.AccessKeyListSTSOnly:
+		listSTSKeys = true
+		listServiceAccounts = false
+	case madmin.AccessKeyListSvcaccOnly:
+		listSTSKeys = false
+		listServiceAccounts = true
+	case madmin.AccessKeyListAll:
+		listSTSKeys = true
+		listServiceAccounts = true
+	default:
+		err := errors.New("invalid list type")
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErrWithErr(ErrInvalidRequest, err), r.URL)
+		return
+	}
+
+	accessKeyMap := make(map[string]madmin.ListAccessKeysResp)
+	for _, user := range checkedUserList {
+		accessKeys := madmin.ListAccessKeysResp{}
+		if listSTSKeys {
+			stsKeys, err := globalIAMSys.ListSTSAccounts(ctx, user)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, sts := range stsKeys {
+				accessKeys.STSKeys = append(accessKeys.STSKeys, madmin.ServiceAccountInfo{
+					AccessKey:  sts.AccessKey,
+					Expiration: &sts.Expiration,
+				})
+			}
+			// if only STS keys, skip if user has no STS keys
+			if !listServiceAccounts && len(stsKeys) == 0 {
+				continue
+			}
+		}
+
+		if listServiceAccounts {
+			serviceAccounts, err := globalIAMSys.ListServiceAccounts(ctx, user)
+			if err != nil {
+				writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+				return
+			}
+			for _, svc := range serviceAccounts {
+				accessKeys.ServiceAccounts = append(accessKeys.ServiceAccounts, madmin.ServiceAccountInfo{
+					AccessKey:  svc.AccessKey,
+					Expiration: &svc.Expiration,
+				})
+			}
+			// if only service accounts, skip if user has no service accounts
+			if !listSTSKeys && len(serviceAccounts) == 0 {
+				continue
+			}
+		}
+		accessKeyMap[user] = accessKeys
+	}
+
+	data, err := json.Marshal(accessKeyMap)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+}
+
 // AccountInfoHandler returns usage, permissions and other bucket metadata for incoming us
 func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -1276,7 +1441,12 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 
 	var buf []byte
 	switch {
-	case accountName == globalActiveCred.AccessKey:
+	case accountName == globalActiveCred.AccessKey || newGlobalAuthZPluginFn() != nil:
+		// For owner account and when plugin authZ is configured always set
+		// effective policy as `consoleAdmin`.
+		//
+		// In the latter case, we let the UI render everything, but individual
+		// actions would fail if not permitted by the external authZ service.
 		for _, policy := range policy.DefaultPolicies {
 			if policy.Name == "consoleAdmin" {
 				effectivePolicy = policy.Definition
@@ -1304,8 +1474,8 @@ func (a adminAPIHandlers) AccountInfoHandler(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		effectivePolicy = globalIAMSys.GetCombinedPolicy(policies...)
-
 	}
+
 	buf, err = json.MarshalIndent(effectivePolicy, "", " ")
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1397,6 +1567,7 @@ func (a adminAPIHandlers) InfoCannedPolicy(w http.ResponseWriter, r *http.Reques
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, errTooManyPolicies), r.URL)
 		return
 	}
+	setReqInfoPolicyName(ctx, name)
 
 	policyDoc, err := globalIAMSys.InfoPolicy(name)
 	if err != nil {
@@ -1500,6 +1671,7 @@ func (a adminAPIHandlers) RemoveCannedPolicy(w http.ResponseWriter, r *http.Requ
 
 	vars := mux.Vars(r)
 	policyName := vars["name"]
+	setReqInfoPolicyName(ctx, policyName)
 
 	if err := globalIAMSys.DeletePolicy(ctx, policyName, true); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
@@ -1530,6 +1702,13 @@ func (a adminAPIHandlers) AddCannedPolicy(w http.ResponseWriter, r *http.Request
 	// Policy has space characters in begin and end reject such inputs.
 	if hasSpaceBE(policyName) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
+		return
+	}
+	setReqInfoPolicyName(ctx, policyName)
+
+	// Reject policy names with commas.
+	if strings.Contains(policyName, ",") {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrPolicyInvalidName), r.URL)
 		return
 	}
 
@@ -1597,6 +1776,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	policyName := vars["policyName"]
 	entityName := vars["userOrGroup"]
 	isGroup := vars["isGroup"] == "true"
+	setReqInfoPolicyName(ctx, policyName)
 
 	if !isGroup {
 		ok, _, err := globalIAMSys.IsTempUser(entityName)
@@ -1682,7 +1862,7 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 	}))
 }
 
-// ListPolicyMappingEntities - GET /minio/admin/v3/idp/builtin/polciy-entities?policy=xxx&user=xxx&group=xxx
+// ListPolicyMappingEntities - GET /minio/admin/v3/idp/builtin/policy-entities?policy=xxx&user=xxx&group=xxx
 func (a adminAPIHandlers) ListPolicyMappingEntities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -1784,6 +1964,7 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
+	setReqInfoPolicyName(ctx, strings.Join(addedOrRemoved, ","))
 
 	respBody := madmin.PolicyAssociationResp{
 		UpdatedAt: updatedAt,
@@ -1807,6 +1988,84 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 	}
 
 	writeSuccessResponseJSON(w, encryptedData)
+}
+
+// RevokeTokens - POST /minio/admin/v3/revoke-tokens/{userProvider}
+func (a adminAPIHandlers) RevokeTokens(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	userProvider := mux.Vars(r)["userProvider"]
+
+	user := r.Form.Get("user")
+	tokenRevokeType := r.Form.Get("tokenRevokeType")
+	fullRevoke := r.Form.Get("fullRevoke") == "true"
+	isTokenSelfRevoke := user == ""
+	if !isTokenSelfRevoke {
+		var err error
+		user, err = getUserWithProvider(ctx, userProvider, user, false)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	if (user != "" && tokenRevokeType == "" && !fullRevoke) || (tokenRevokeType != "" && fullRevoke) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	adminPrivilege := globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.RemoveServiceAccountAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+	})
+
+	if !adminPrivilege || isTokenSelfRevoke {
+		parentUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			parentUser = cred.ParentUser
+		}
+		if !isTokenSelfRevoke && user != parentUser {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+		user = parentUser
+	}
+
+	// Infer token revoke type from the request if requestor is STS.
+	if isTokenSelfRevoke && tokenRevokeType == "" && !fullRevoke {
+		if cred.IsTemp() {
+			tokenRevokeType, _ = cred.Claims[tokenRevokeTypeClaim].(string)
+		}
+		if tokenRevokeType == "" {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNoTokenRevokeType), r.URL)
+			return
+		}
+	}
+
+	err := globalIAMSys.RevokeTokens(ctx, user, tokenRevokeType)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessNoContent(w)
 }
 
 const (
@@ -1838,6 +2097,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 	// Get current object layer instance.
 	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ExportIAMAction)
 	if objectAPI == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
 	// Initialize a zip writer which will provide a zipped content
@@ -1974,7 +2234,7 @@ func (a adminAPIHandlers) ExportIAM(w http.ResponseWriter, r *http.Request) {
 					SecretKey:     acc.Credentials.SecretKey,
 					Groups:        acc.Credentials.Groups,
 					Claims:        claims,
-					SessionPolicy: json.RawMessage(policyJSON),
+					SessionPolicy: policyJSON,
 					Status:        acc.Credentials.Status,
 					Name:          sa.Name,
 					Description:   sa.Description,
@@ -2060,17 +2320,13 @@ func (a adminAPIHandlers) ImportIAMV2(w http.ResponseWriter, r *http.Request) {
 func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiVer string) {
 	ctx := r.Context()
 
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
+	// Validate signature, permissions and get current object layer instance.
+	objectAPI, _ := validateAdminReq(ctx, w, r, policy.ImportIAMAction)
 	if objectAPI == nil || globalNotificationSys == nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
 		return
 	}
-	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
-	if s3Err != ErrNone {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
-		return
-	}
+
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
@@ -2088,7 +2344,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 
 	// import policies first
 	{
-
 		f, err := zr.Open(pathJoin(iamAssetsDir, allPoliciesFile))
 		switch {
 		case errors.Is(err, os.ErrNotExist):
@@ -2160,44 +2415,17 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 					return
 				}
 
-				if (cred.IsTemp() || cred.IsServiceAccount()) && cred.ParentUser == accessKey {
-					// Incoming access key matches parent user then we should
-					// reject password change requests.
-					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAddUserInvalidArgument, err, allUsersFile, accessKey), r.URL)
-					return
-				}
-
 				// Check if accessKey has beginning and end space characters, this only applies to new users.
 				if !exists && hasSpaceBE(accessKey) {
 					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAdminResourceInvalidArgument, err, allUsersFile, accessKey), r.URL)
 					return
 				}
 
-				checkDenyOnly := false
-				if accessKey == cred.AccessKey {
-					// Check that there is no explicit deny - otherwise it's allowed
-					// to change one's own password.
-					checkDenyOnly = true
-				}
-
-				if !globalIAMSys.IsAllowed(policy.Args{
-					AccountName:     cred.AccessKey,
-					Groups:          cred.Groups,
-					Action:          policy.CreateUserAdminAction,
-					ConditionValues: getConditionValues(r, "", cred),
-					IsOwner:         owner,
-					Claims:          cred.Claims,
-					DenyOnly:        checkDenyOnly,
-				}) {
-					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAccessDenied, err, allUsersFile, accessKey), r.URL)
-					return
-				}
 				if _, err = globalIAMSys.CreateUser(ctx, accessKey, ureq); err != nil {
 					failed.Users = append(failed.Users, madmin.IAMErrEntity{Name: accessKey, Error: err})
 				} else {
 					added.Users = append(added.Users, accessKey)
 				}
-
 			}
 		}
 	}
@@ -2289,17 +2517,6 @@ func (a adminAPIHandlers) importIAM(w http.ResponseWriter, r *http.Request, apiV
 				// beginning and end of the string.
 				if hasSpaceBE(svcAcctReq.AccessKey) {
 					writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminResourceInvalidArgument), r.URL)
-					return
-				}
-				if !globalIAMSys.IsAllowed(policy.Args{
-					AccountName:     cred.AccessKey,
-					Groups:          cred.Groups,
-					Action:          policy.CreateServiceAccountAdminAction,
-					ConditionValues: getConditionValues(r, "", cred),
-					IsOwner:         owner,
-					Claims:          cred.Claims,
-				}) {
-					writeErrorResponseJSON(ctx, w, importErrorWithAPIErr(ctx, ErrAccessDenied, err, allSvcAcctsFile, user), r.URL)
 					return
 				}
 				updateReq := true
@@ -2521,7 +2738,7 @@ func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) e
 	if exp == nil || exp.IsZero() || exp.Equal(timeSentinel) {
 		return nil
 	}
-	dur := exp.Sub(time.Now())
+	dur := time.Until(*exp)
 	if dur <= 0 {
 		return errors.New("unsupported expiration time")
 	}
@@ -2529,7 +2746,7 @@ func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) e
 	return nil
 }
 
-func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
+func commonAddServiceAccount(r *http.Request, ldap bool) (context.Context, auth.Credentials, newServiceAccountOpts, madmin.AddServiceAccountReq, string, APIError) {
 	ctx := r.Context()
 
 	// Get current object layer instance.
@@ -2596,6 +2813,14 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", toAdminAPIErr(ctx, err)
 	}
 
+	denyOnly := (targetUser == cred.AccessKey || targetUser == cred.ParentUser)
+	if ldap && !denyOnly {
+		res, _ := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(targetUser)
+		if res.NormDN == cred.ParentUser {
+			denyOnly = true
+		}
+	}
+
 	// Check if action is allowed if creating access key for another user
 	// Check if action is explicitly denied if for self
 	if !globalIAMSys.IsAllowed(policy.Args{
@@ -2605,7 +2830,7 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 		ConditionValues: condValues,
 		IsOwner:         owner,
 		Claims:          cred.Claims,
-		DenyOnly:        (targetUser == cred.AccessKey || targetUser == cred.ParentUser),
+		DenyOnly:        denyOnly,
 	}) {
 		return ctx, auth.Credentials{}, newServiceAccountOpts{}, madmin.AddServiceAccountReq{}, "", errorCodes.ToAPIErr(ErrAccessDenied)
 	}
@@ -2621,4 +2846,11 @@ func commonAddServiceAccount(r *http.Request) (context.Context, auth.Credentials
 	opts.sessionPolicy = sp
 
 	return ctx, cred, opts, createReq, targetUser, APIError{}
+}
+
+// setReqInfoPolicyName will set the given policyName as a tag on the context's request info,
+// so that it appears in audit logs.
+func setReqInfoPolicyName(ctx context.Context, policyName string) {
+	reqInfo := logger.GetReqInfo(ctx)
+	reqInfo.SetTags("policyName", policyName)
 }

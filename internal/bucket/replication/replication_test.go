@@ -365,7 +365,6 @@ func TestHasActiveRules(t *testing.T) {
 				t.Fatalf("Expected result with recursive set to true: `%v`, got: `%v`", tc.expectedRec, got)
 			}
 		})
-
 	}
 }
 

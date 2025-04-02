@@ -14,7 +14,7 @@ clusterDomain: cluster.local
 ##
 image:
   repository: quay.io/minio/minio
-  tag: RELEASE.2024-04-18T19-09-19Z
+  tag: RELEASE.2024-12-18T13-15-44Z
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -25,7 +25,7 @@ imagePullSecrets: []
 ##
 mcImage:
   repository: quay.io/minio/mc
-  tag: RELEASE.2024-04-18T16-45-29Z
+  tag: RELEASE.2024-11-21T17-21-54Z
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
@@ -275,6 +275,8 @@ securityContext:
   runAsGroup: 1000
   fsGroup: 1000
   fsGroupChangePolicy: "OnRootMismatch"
+
+containerSecurityContext:
   readOnlyRootFilesystem: false
 
 # Additational pod annotations
@@ -476,6 +478,16 @@ customCommandJob:
   resources:
     requests:
       memory: 128Mi
+  ## Additional volumes to add to the post-job.
+  extraVolumes: []
+    # - name: extra-policies
+    #   configMap:
+    #     name: my-extra-policies-cm
+  ## Additional volumeMounts to add to the custom commands container when
+  ## running the post-job.
+  extraVolumeMounts: []
+    # - name: extra-policies
+    #   mountPath: /mnt/extras/
   # Command to run after the main command on exit
   exitCommand: ""
 

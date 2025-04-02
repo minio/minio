@@ -127,7 +127,6 @@ func (m *Monitor) getReport(selectBucket SelectionFunction) *BucketBandwidthRepo
 			}
 		}
 		m.tlock.RUnlock()
-
 	}
 	return report
 }

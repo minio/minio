@@ -39,7 +39,6 @@ import (
 	"github.com/lithammer/shortuuid/v4"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7"
-	miniogo "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/encrypt"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -47,7 +46,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/pkg/v3/console"
 	"github.com/minio/pkg/v3/env"
@@ -61,6 +59,8 @@ var globalBatchConfig batch.Config
 const (
 	// Keep the completed/failed job stats 3 days before removing it
 	oldJobsExpiration = 3 * 24 * time.Hour
+
+	redactedText = "**REDACTED**"
 )
 
 // BatchJobRequest this is an internal data structure not for external consumption.
@@ -73,6 +73,29 @@ type BatchJobRequest struct {
 	Expire    *BatchJobExpire      `yaml:"expire" json:"expire"`
 	ctx       context.Context      `msg:"-"`
 }
+
+// RedactSensitive will redact any sensitive information in b.
+func (j *BatchJobRequest) RedactSensitive() {
+	j.Replicate.RedactSensitive()
+	j.Expire.RedactSensitive()
+	j.KeyRotate.RedactSensitive()
+}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobReplicateV1) RedactSensitive() {
+	if r == nil {
+		return
+	}
+	if r.Target.Creds.SecretKey != "" {
+		r.Target.Creds.SecretKey = redactedText
+	}
+	if r.Target.Creds.SessionToken != "" {
+		r.Target.Creds.SessionToken = redactedText
+	}
+}
+
+// RedactSensitive will redact any sensitive information in b.
+func (r *BatchJobKeyRotateV1) RedactSensitive() {}
 
 func notifyEndpoint(ctx context.Context, ri *batchJobInfo, endpoint, token string) error {
 	if endpoint == "" {
@@ -117,7 +140,7 @@ func (r BatchJobReplicateV1) Notify(ctx context.Context, ri *batchJobInfo) error
 }
 
 // ReplicateFromSource - this is not implemented yet where source is 'remote' and target is local.
-func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api ObjectLayer, core *miniogo.Core, srcObjInfo ObjectInfo, retry bool) error {
+func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api ObjectLayer, core *minio.Core, srcObjInfo ObjectInfo, retry bool) error {
 	srcBucket := r.Source.Bucket
 	tgtBucket := r.Target.Bucket
 	srcObject := srcObjInfo.Name
@@ -164,7 +187,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 		}
 		return r.copyWithMultipartfromSource(ctx, api, core, srcObjInfo, opts, partsCount)
 	}
-	gopts := miniogo.GetObjectOptions{
+	gopts := minio.GetObjectOptions{
 		VersionID: srcObjInfo.VersionID,
 	}
 	if err := gopts.SetMatchETag(srcObjInfo.ETag); err != nil {
@@ -185,7 +208,7 @@ func (r *BatchJobReplicateV1) ReplicateFromSource(ctx context.Context, api Objec
 	return err
 }
 
-func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, api ObjectLayer, c *miniogo.Core, srcObjInfo ObjectInfo, opts ObjectOptions, partsCount int) (err error) {
+func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, api ObjectLayer, c *minio.Core, srcObjInfo ObjectInfo, opts ObjectOptions, partsCount int) (err error) {
 	srcBucket := r.Source.Bucket
 	tgtBucket := r.Target.Bucket
 	srcObject := srcObjInfo.Name
@@ -226,7 +249,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 	)
 
 	for i := 0; i < partsCount; i++ {
-		gopts := miniogo.GetObjectOptions{
+		gopts := minio.GetObjectOptions{
 			VersionID:  srcObjInfo.VersionID,
 			PartNumber: i + 1,
 		}
@@ -276,8 +299,12 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 	}
 	globalBatchJobsMetrics.save(job.ID, ri)
 
+	retryAttempts := job.Replicate.Flags.Retry.Attempts
+	if retryAttempts <= 0 {
+		retryAttempts = batchReplJobDefaultRetries
+	}
 	delay := job.Replicate.Flags.Retry.Delay
-	if delay == 0 {
+	if delay <= 0 {
 		delay = batchReplJobDefaultRetryDelay
 	}
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -297,12 +324,12 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 			return true
 		}
 
-		if !r.Flags.Filter.CreatedAfter.IsZero() && r.Flags.Filter.CreatedAfter.Before(oi.ModTime) {
+		if !r.Flags.Filter.CreatedAfter.IsZero() && r.Flags.Filter.CreatedAfter.After(oi.ModTime) {
 			// skip all objects that are created before the specified time.
 			return true
 		}
 
-		if !r.Flags.Filter.CreatedBefore.IsZero() && r.Flags.Filter.CreatedBefore.After(oi.ModTime) {
+		if !r.Flags.Filter.CreatedBefore.IsZero() && r.Flags.Filter.CreatedBefore.Before(oi.ModTime) {
 			// skip all objects that are created after the specified time.
 			return true
 		}
@@ -353,7 +380,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 
 	cred := r.Source.Creds
 
-	c, err := miniogo.New(u.Host, &miniogo.Options{
+	c, err := minio.New(u.Host, &minio.Options{
 		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:       u.Scheme == "https",
 		Transport:    getRemoteInstanceTransport(),
@@ -364,7 +391,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 	}
 
 	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
-	core := &miniogo.Core{Client: c}
+	core := &minio.Core{Client: c}
 
 	workerSize, err := strconv.Atoi(env.Get("_MINIO_BATCH_REPLICATION_WORKERS", strconv.Itoa(runtime.GOMAXPROCS(0)/2)))
 	if err != nil {
@@ -377,7 +404,6 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		return err
 	}
 
-	retryAttempts := ri.RetryAttempts
 	retry := false
 	for attempts := 1; attempts <= retryAttempts; attempts++ {
 		attempts := attempts
@@ -386,15 +412,15 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 		minioSrc := r.Source.Type == BatchJobReplicateResourceMinIO
 		ctx, cancel := context.WithCancel(ctx)
 
-		objInfoCh := make(chan miniogo.ObjectInfo, 1)
+		objInfoCh := make(chan minio.ObjectInfo, 1)
 		go func() {
 			prefixes := r.Source.Prefix.F()
 			if len(prefixes) == 0 {
 				prefixes = []string{""}
 			}
 			for _, prefix := range prefixes {
-				prefixObjInfoCh := c.ListObjects(ctx, r.Source.Bucket, miniogo.ListObjectsOptions{
-					Prefix:       strings.TrimSpace(prefix),
+				prefixObjInfoCh := c.ListObjects(ctx, r.Source.Bucket, minio.ListObjectsOptions{
+					Prefix:       prefix,
 					WithVersions: minioSrc,
 					Recursive:    true,
 					WithMetadata: true,
@@ -416,7 +442,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 				// all user metadata or just storageClass. If its only storageClass
 				// List() already returns relevant information for filter to be applied.
 				if isMetadata && !isStorageClassOnly {
-					oi2, err := c.StatObject(ctx, r.Source.Bucket, obj.Key, miniogo.StatObjectOptions{})
+					oi2, err := c.StatObject(ctx, r.Source.Bucket, obj.Key, minio.StatObjectOptions{})
 					if err == nil {
 						oi = toObjectInfo(r.Source.Bucket, obj.Key, oi2)
 					} else {
@@ -512,7 +538,7 @@ func (r *BatchJobReplicateV1) StartFromSource(ctx context.Context, api ObjectLay
 }
 
 // toObjectInfo converts minio.ObjectInfo to ObjectInfo
-func toObjectInfo(bucket, object string, objInfo miniogo.ObjectInfo) ObjectInfo {
+func toObjectInfo(bucket, object string, objInfo minio.ObjectInfo) ObjectInfo {
 	tags, _ := tags.MapToObjectTags(objInfo.UserTags)
 	oi := ObjectInfo{
 		Bucket:                    bucket,
@@ -594,12 +620,12 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 				},
 			}
 
-			opts, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
+			opts, _, err := batchReplicationOpts(ctx, "", gr.ObjInfo)
 			if err != nil {
 				batchLogIf(ctx, err)
 				continue
 			}
-
+			// TODO: I am not sure we read it back, but we aren't sending whether checksums are single/multipart.
 			for k, vals := range opts.Header() {
 				for _, v := range vals {
 					snowballObj.Headers.Add(k, v)
@@ -615,7 +641,7 @@ func (r BatchJobReplicateV1) writeAsArchive(ctx context.Context, objAPI ObjectLa
 }
 
 // ReplicateToTarget read from source and replicate to configured target
-func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectLayer, c *miniogo.Core, srcObjInfo ObjectInfo, retry bool) error {
+func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectLayer, c *minio.Core, srcObjInfo ObjectInfo, retry bool) error {
 	srcBucket := r.Source.Bucket
 	tgtBucket := r.Target.Bucket
 	tgtPrefix := r.Target.Prefix
@@ -624,9 +650,9 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 
 	if srcObjInfo.DeleteMarker || !srcObjInfo.VersionPurgeStatus.Empty() {
 		if retry && !s3Type {
-			if _, err := c.StatObject(ctx, tgtBucket, pathJoin(tgtPrefix, srcObject), miniogo.StatObjectOptions{
+			if _, err := c.StatObject(ctx, tgtBucket, pathJoin(tgtPrefix, srcObject), minio.StatObjectOptions{
 				VersionID: srcObjInfo.VersionID,
-				Internal: miniogo.AdvancedGetOptions{
+				Internal: minio.AdvancedGetOptions{
 					ReplicationProxyRequest: "false",
 				},
 			}); isErrMethodNotAllowed(ErrorRespToObjectError(err, tgtBucket, pathJoin(tgtPrefix, srcObject))) {
@@ -643,19 +669,19 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 			dmVersionID = ""
 			versionID = ""
 		}
-		return c.RemoveObject(ctx, tgtBucket, pathJoin(tgtPrefix, srcObject), miniogo.RemoveObjectOptions{
+		return c.RemoveObject(ctx, tgtBucket, pathJoin(tgtPrefix, srcObject), minio.RemoveObjectOptions{
 			VersionID: versionID,
-			Internal: miniogo.AdvancedRemoveOptions{
+			Internal: minio.AdvancedRemoveOptions{
 				ReplicationDeleteMarker: dmVersionID != "",
 				ReplicationMTime:        srcObjInfo.ModTime,
-				ReplicationStatus:       miniogo.ReplicationStatusReplica,
+				ReplicationStatus:       minio.ReplicationStatusReplica,
 				ReplicationRequest:      true, // always set this to distinguish between `mc mirror` replication and serverside
 			},
 		})
 	}
 
 	if retry && !s3Type { // when we are retrying avoid copying if necessary.
-		gopts := miniogo.GetObjectOptions{}
+		gopts := minio.GetObjectOptions{}
 		if err := gopts.SetMatchETag(srcObjInfo.ETag); err != nil {
 			return err
 		}
@@ -684,14 +710,14 @@ func (r *BatchJobReplicateV1) ReplicateToTarget(ctx context.Context, api ObjectL
 		return err
 	}
 
-	putOpts, err := batchReplicationOpts(ctx, "", objInfo)
+	putOpts, isMP, err := batchReplicationOpts(ctx, "", objInfo)
 	if err != nil {
 		return err
 	}
 	if r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3 {
-		putOpts.Internal = miniogo.AdvancedPutOptions{}
+		putOpts.Internal = minio.AdvancedPutOptions{}
 	}
-	if objInfo.isMultipart() {
+	if isMP {
 		if err := replicateObjectWithMultipart(ctx, c, tgtBucket, pathJoin(tgtPrefix, objInfo.Name), rd, objInfo, putOpts); err != nil {
 			return err
 		}
@@ -772,22 +798,10 @@ func (ri *batchJobInfo) loadOrInit(ctx context.Context, api ObjectLayer, job Bat
 		switch {
 		case job.Replicate != nil:
 			ri.Version = batchReplVersionV1
-			ri.RetryAttempts = batchReplJobDefaultRetries
-			if job.Replicate.Flags.Retry.Attempts > 0 {
-				ri.RetryAttempts = job.Replicate.Flags.Retry.Attempts
-			}
 		case job.KeyRotate != nil:
 			ri.Version = batchKeyRotateVersionV1
-			ri.RetryAttempts = batchKeyRotateJobDefaultRetries
-			if job.KeyRotate.Flags.Retry.Attempts > 0 {
-				ri.RetryAttempts = job.KeyRotate.Flags.Retry.Attempts
-			}
 		case job.Expire != nil:
 			ri.Version = batchExpireVersionV1
-			ri.RetryAttempts = batchExpireJobDefaultRetries
-			if job.Expire.Retry.Attempts > 0 {
-				ri.RetryAttempts = job.Expire.Retry.Attempts
-			}
 		}
 		return nil
 	}
@@ -980,7 +994,7 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 // Note: to be used only with batch jobs that affect multiple versions through
 // a single action. e.g batch-expire has an option to expire all versions of an
 // object which matches the given filters.
-func (ri *batchJobInfo) trackMultipleObjectVersions(bucket string, info ObjectInfo, success bool) {
+func (ri *batchJobInfo) trackMultipleObjectVersions(info ObjectInfo, success bool) {
 	if success {
 		ri.Objects += int64(info.NumVersions)
 	} else {
@@ -1034,10 +1048,15 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 	globalBatchJobsMetrics.save(job.ID, ri)
 	lastObject := ri.Object
 
+	retryAttempts := job.Replicate.Flags.Retry.Attempts
+	if retryAttempts <= 0 {
+		retryAttempts = batchReplJobDefaultRetries
+	}
 	delay := job.Replicate.Flags.Retry.Delay
-	if delay < time.Second {
+	if delay <= 0 {
 		delay = batchReplJobDefaultRetryDelay
 	}
+
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	selectObj := func(info FileInfo) (ok bool) {
@@ -1051,12 +1070,12 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			return false
 		}
 
-		if !r.Flags.Filter.CreatedAfter.IsZero() && r.Flags.Filter.CreatedAfter.Before(info.ModTime) {
+		if !r.Flags.Filter.CreatedAfter.IsZero() && r.Flags.Filter.CreatedAfter.After(info.ModTime) {
 			// skip all objects that are created before the specified time.
 			return false
 		}
 
-		if !r.Flags.Filter.CreatedBefore.IsZero() && r.Flags.Filter.CreatedBefore.After(info.ModTime) {
+		if !r.Flags.Filter.CreatedBefore.IsZero() && r.Flags.Filter.CreatedBefore.Before(info.ModTime) {
 			// skip all objects that are created after the specified time.
 			return false
 		}
@@ -1103,7 +1122,8 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		}
 
 		// if one of source or target is non MinIO, just replicate the top most version like `mc mirror`
-		return !((r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3) && !info.IsLatest)
+		isSourceOrTargetS3 := r.Target.Type == BatchJobReplicateResourceS3 || r.Source.Type == BatchJobReplicateResourceS3
+		return !isSourceOrTargetS3 || info.IsLatest
 	}
 
 	u, err := url.Parse(r.Target.Endpoint)
@@ -1113,7 +1133,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 	cred := r.Target.Creds
 
-	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
+	c, err := minio.NewCore(u.Host, &minio.Options{
 		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:       u.Scheme == "https",
 		Transport:    getRemoteInstanceTransport(),
@@ -1125,7 +1145,6 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 
 	c.SetAppInfo("minio-"+batchJobPrefix, r.APIVersion+" "+job.ID)
 
-	retryAttempts := ri.RetryAttempts
 	retry := false
 	for attempts := 1; attempts <= retryAttempts; attempts++ {
 		attempts := attempts
@@ -1137,14 +1156,14 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 		if r.Source.Snowball.Disable != nil && !*r.Source.Snowball.Disable && r.Source.Type.isMinio() && r.Target.Type.isMinio() {
 			go func() {
 				// Snowball currently needs the high level minio-go Client, not the Core one
-				cl, err := miniogo.New(u.Host, &miniogo.Options{
+				cl, err := minio.New(u.Host, &minio.Options{
 					Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 					Secure:       u.Scheme == "https",
 					Transport:    getRemoteInstanceTransport(),
 					BucketLookup: lookupStyle(r.Target.Path),
 				})
 				if err != nil {
-					batchLogOnceIf(ctx, err, job.ID+"miniogo.New")
+					batchLogOnceIf(ctx, err, job.ID+"minio.New")
 					return
 				}
 
@@ -1214,7 +1233,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 			}
 			for _, prefix := range prefixes {
 				prefixWalkCh := make(chan itemOrErr[ObjectInfo], 100)
-				if err := api.Walk(ctx, r.Source.Bucket, strings.TrimSpace(prefix), prefixWalkCh, WalkOptions{
+				if err := api.Walk(ctx, r.Source.Bucket, prefix, prefixWalkCh, WalkOptions{
 					Marker:   lastObject,
 					Filter:   selectObj,
 					AskDisks: walkQuorum,
@@ -1254,7 +1273,7 @@ func (r *BatchJobReplicateV1) Start(ctx context.Context, api ObjectLayer, job Ba
 				stopFn := globalBatchJobsMetrics.trace(batchJobMetricReplication, job.ID, attempts)
 				success := true
 				if err := r.ReplicateToTarget(ctx, api, c, result, retry); err != nil {
-					if miniogo.ToErrorResponse(err).Code == "PreconditionFailed" {
+					if minio.ToErrorResponse(err).Code == "PreconditionFailed" {
 						// pre-condition failed means we already have the object copied over.
 						return
 					}
@@ -1430,7 +1449,6 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		cred = r.Source.Creds
 		remoteBkt = r.Source.Bucket
 		pathStyle = r.Source.Path
-
 	}
 
 	u, err := url.Parse(remoteEp)
@@ -1438,7 +1456,7 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 		return err
 	}
 
-	c, err := miniogo.NewCore(u.Host, &miniogo.Options{
+	c, err := minio.NewCore(u.Host, &minio.Options{
 		Creds:        credentials.NewStaticV4(cred.AccessKey, cred.SecretKey, cred.SessionToken),
 		Secure:       u.Scheme == "https",
 		Transport:    getRemoteInstanceTransport(),
@@ -1451,7 +1469,7 @@ func (r *BatchJobReplicateV1) Validate(ctx context.Context, job BatchJobRequest,
 
 	vcfg, err := c.GetBucketVersioning(ctx, remoteBkt)
 	if err != nil {
-		if miniogo.ToErrorResponse(err).Code == "NoSuchBucket" {
+		if minio.ToErrorResponse(err).Code == "NoSuchBucket" {
 			return batchReplicationJobError{
 				Code:           "NoSuchTargetBucket",
 				Description:    "The specified target bucket does not exist",
@@ -1556,19 +1574,19 @@ func (j *BatchJobRequest) load(ctx context.Context, api ObjectLayer, name string
 	return err
 }
 
-func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts miniogo.PutObjectOptions, err error) {
+func batchReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (putOpts minio.PutObjectOptions, isMP bool, err error) {
 	// TODO: support custom storage class for remote replication
-	putOpts, err = putReplicationOpts(ctx, "", objInfo, 0)
+	putOpts, isMP, err = putReplicationOpts(ctx, "", objInfo)
 	if err != nil {
-		return putOpts, err
+		return putOpts, isMP, err
 	}
-	putOpts.Internal = miniogo.AdvancedPutOptions{
+	putOpts.Internal = minio.AdvancedPutOptions{
 		SourceVersionID:    objInfo.VersionID,
 		SourceMTime:        objInfo.ModTime,
 		SourceETag:         objInfo.ETag,
 		ReplicationRequest: true,
 	}
-	return putOpts, nil
+	return putOpts, isMP, nil
 }
 
 // ListBatchJobs - lists all currently active batch jobs, optionally takes {jobType}
@@ -1582,9 +1600,6 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 	}
 
 	jobType := r.Form.Get("jobType")
-	if jobType == "" {
-		jobType = string(madmin.BatchJobReplicate)
-	}
 
 	resultCh := make(chan itemOrErr[ObjectInfo])
 
@@ -1613,7 +1628,7 @@ func (a adminAPIHandlers) ListBatchJobs(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
-		if jobType == string(req.Type()) {
+		if jobType == string(req.Type()) || jobType == "" {
 			listResult.Jobs = append(listResult.Jobs, madmin.BatchJobResult{
 				ID:      req.ID,
 				Type:    req.Type(),
@@ -1703,6 +1718,8 @@ func (a adminAPIHandlers) DescribeBatchJob(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Remove sensitive fields.
+	req.RedactSensitive()
 	buf, err := yaml.Marshal(req)
 	if err != nil {
 		batchLogIf(ctx, err)
@@ -1722,7 +1739,7 @@ func (a adminAPIHandlers) StartBatchJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	buf, err := io.ReadAll(ioutil.HardLimitReader(r.Body, humanize.MiByte*4))
+	buf, err := io.ReadAll(xioutil.HardLimitReader(r.Body, humanize.MiByte*4))
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAPIError(ctx, err), r.URL)
 		return
@@ -1810,7 +1827,7 @@ func (a adminAPIHandlers) CancelBatchJob(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if _, success := proxyRequestByToken(ctx, w, r, jobID); success {
+	if _, proxied, _ := proxyRequestByToken(ctx, w, r, jobID, true); proxied {
 		return
 	}
 
@@ -1994,7 +2011,6 @@ func (j *BatchJobPool) AddWorker() {
 					}
 				}
 			}
-			job.delete(j.ctx, j.objLayer)
 			j.canceler(job.ID, false)
 		case <-j.workerKillCh:
 			return
@@ -2055,7 +2071,9 @@ func (j *BatchJobPool) canceler(jobID string, cancel bool) error {
 			canceler()
 		}
 	}
-	delete(j.jobCancelers, jobID)
+	if cancel {
+		delete(j.jobCancelers, jobID)
+	}
 	return nil
 }
 
@@ -2181,9 +2199,40 @@ func (m *batchJobMetrics) purgeJobMetrics() {
 			m.RUnlock()
 			for _, jobID := range toDeleteJobMetrics {
 				m.delete(jobID)
+				j := BatchJobRequest{
+					ID: jobID,
+				}
+				j.delete(GlobalContext, newObjectLayerFn())
 			}
 		}
 	}
+}
+
+// load metrics from disk on startup
+func (m *batchJobMetrics) init(ctx context.Context, objectAPI ObjectLayer) error {
+	resultCh := make(chan itemOrErr[ObjectInfo])
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if err := objectAPI.Walk(ctx, minioMetaBucket, batchJobReportsPrefix, resultCh, WalkOptions{}); err != nil {
+		return err
+	}
+
+	for result := range resultCh {
+		if result.Err != nil {
+			return result.Err
+		}
+		ri := &batchJobInfo{}
+		if err := ri.loadByPath(ctx, objectAPI, result.Item.Name); err != nil {
+			if !errors.Is(err, errNoSuchJob) {
+				batchLogIf(ctx, err)
+			}
+			continue
+		}
+		m.metrics[ri.JobID] = ri
+	}
+	return nil
 }
 
 func (m *batchJobMetrics) delete(jobID string) {
@@ -2250,16 +2299,15 @@ func (m *batchJobMetrics) trace(d batchJobMetric, job string, attempts int) func
 	}
 }
 
-func lookupStyle(s string) miniogo.BucketLookupType {
-	var lookup miniogo.BucketLookupType
+func lookupStyle(s string) minio.BucketLookupType {
+	var lookup minio.BucketLookupType
 	switch s {
 	case "on":
-		lookup = miniogo.BucketLookupPath
+		lookup = minio.BucketLookupPath
 	case "off":
-		lookup = miniogo.BucketLookupDNS
+		lookup = minio.BucketLookupDNS
 	default:
-		lookup = miniogo.BucketLookupAuto
-
+		lookup = minio.BucketLookupAuto
 	}
 	return lookup
 }

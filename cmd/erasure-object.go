@@ -27,12 +27,13 @@ import (
 	"net/http"
 	"path"
 	"runtime"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"github.com/klauspost/readahead"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/tags"
@@ -49,6 +50,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/mimedb"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/sio"
 )
 
 // list all errors which can be ignored in object operations.
@@ -102,7 +104,7 @@ func (er erasureObjects) CopyObject(ctx context.Context, srcBucket, srcObject, d
 
 	readQuorum, writeQuorum, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(srcBucket, minioMetaBucket) {
+		if shouldCheckForDangling(err, errs, srcBucket) {
 			_, derr := er.deleteIfDangling(context.Background(), srcBucket, srcObject, metaArr, errs, nil, srcOpts)
 			if derr == nil {
 				if srcOpts.VersionID != "" {
@@ -690,13 +692,9 @@ func shouldCheckForDangling(err error, errs []error, bucket string) bool {
 	// Check if we have a read quorum issue
 	case errors.Is(err, errErasureReadQuorum):
 		return true
-	// Check if the object is inexistent in most disks but not all of them
-	case errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound):
-		for i := range errs {
-			if errs[i] == nil {
-				return true
-			}
-		}
+	// Check if the object is non-existent on most disks but not all of them
+	case (errors.Is(err, errFileNotFound) || errors.Is(err, errFileVersionNotFound)) && (countErrs(errs, nil) > 0):
+		return true
 	}
 	return false
 }
@@ -815,8 +813,6 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				PoolIndex: er.poolIndex,
 			})
 		}
-
-		return
 	}()
 
 	validResp := 0
@@ -919,6 +915,16 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				} else {
 					err = errFileNotFound
 				}
+			}
+		}
+		// when we have insufficient read quorum and inconsistent metadata return
+		// file not found, since we can't possibly have a way to recover this object
+		// anyway.
+		if v, ok := err.(InsufficientReadQuorum); ok && v.Type == RQInconsistentMeta {
+			if opts.VersionID != "" {
+				err = errFileVersionNotFound
+			} else {
+				err = errFileNotFound
 			}
 		}
 		return fi, nil, nil, toObjectErr(err, bucket, object)
@@ -1170,9 +1176,13 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 	}
 
 	n, erasureErr := erasure.Encode(ctx, data, writers, buffer, writeQuorum)
-	closeBitrotWriters(writers)
+	closeErrs := closeBitrotWriters(writers)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, minioMetaBucket, key)
+	}
+
+	if closeErr := reduceWriteQuorumErrs(ctx, closeErrs, objectOpIgnoredErrs, writeQuorum); closeErr != nil {
+		return ObjectInfo{}, toObjectErr(closeErr, minioMetaBucket, key)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
@@ -1329,16 +1339,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	}
 
 	fi.DataDir = mustGetUUID()
-	fi.Checksum = opts.WantChecksum.AppendTo(nil, nil)
-	if opts.EncryptFn != nil {
-		fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
-	}
-	if userDefined[ReplicationSsecChecksumHeader] != "" {
-		if v, err := base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader]); err == nil {
+	if ckSum := userDefined[ReplicationSsecChecksumHeader]; ckSum != "" {
+		if v, err := base64.StdEncoding.DecodeString(ckSum); err == nil {
 			fi.Checksum = v
 		}
+		delete(userDefined, ReplicationSsecChecksumHeader)
 	}
-	delete(userDefined, ReplicationSsecChecksumHeader)
 	uniqueID := mustGetUUID()
 	tempObj := uniqueID
 
@@ -1378,30 +1384,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 
 	defer er.deleteAll(context.Background(), minioMetaTmpBucket, tempObj)
 
-	shardFileSize := erasure.ShardFileSize(data.Size())
-	inlineBlock := globalStorageClass.InlineBlock()
-	if inlineBlock <= 0 {
-		inlineBlock = 128 * humanize.KiByte
+	var inlineBuffers []*bytes.Buffer
+	if globalStorageClass.ShouldInline(erasure.ShardFileSize(data.ActualSize()), opts.Versioned) {
+		inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
 	}
 
+	shardFileSize := erasure.ShardFileSize(data.Size())
 	writers := make([]io.Writer, len(onlineDisks))
-	var inlineBuffers []*bytes.Buffer
-	if shardFileSize >= 0 {
-		if !opts.Versioned && shardFileSize <= inlineBlock {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		} else if shardFileSize < inlineBlock/8 {
-			inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-		}
-	} else {
-		// If compressed, use actual size to determine.
-		if sz := erasure.ShardFileSize(data.ActualSize()); sz > 0 {
-			if !opts.Versioned && sz <= inlineBlock {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			} else if sz < inlineBlock/8 {
-				inlineBuffers = make([]*bytes.Buffer, len(onlineDisks))
-			}
-		}
-	}
 	for i, disk := range onlineDisks {
 		if disk == nil {
 			continue
@@ -1438,9 +1427,13 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		bugLogIf(ctx, err)
 	}
 	n, erasureErr := erasure.Encode(ctx, toEncode, writers, buffer, writeQuorum)
-	closeBitrotWriters(writers)
+	closeErrs := closeBitrotWriters(writers)
 	if erasureErr != nil {
 		return ObjectInfo{}, toObjectErr(erasureErr, bucket, object)
+	}
+
+	if closeErr := reduceWriteQuorumErrs(ctx, closeErrs, objectOpIgnoredErrs, writeQuorum); closeErr != nil {
+		return ObjectInfo{}, toObjectErr(closeErr, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
@@ -1453,21 +1446,37 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	if opts.IndexCB != nil {
 		compIndex = opts.IndexCB()
 	}
-	if !opts.NoLock {
-		lk := er.NewNSLock(bucket, object)
-		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx)
-	}
 
 	modTime := opts.MTime
 	if opts.MTime.IsZero() {
 		modTime = UTCNow()
 	}
 
+	kind, encrypted := crypto.IsEncrypted(userDefined)
+	actualSize := data.ActualSize()
+	if actualSize < 0 {
+		compressed := fi.IsCompressed()
+		switch {
+		case compressed:
+			// ... nothing changes for compressed stream.
+			// if actualSize is -1 we have no known way to
+			// determine what is the actualSize.
+		case encrypted:
+			decSize, err := sio.DecryptedSize(uint64(n))
+			if err == nil {
+				actualSize = int64(decSize)
+			}
+		default:
+			actualSize = n
+		}
+	}
+	if fi.Checksum == nil {
+		// Trailing headers checksums should now be filled.
+		fi.Checksum = opts.WantChecksum.AppendTo(nil, nil)
+		if opts.EncryptFn != nil {
+			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+		}
+	}
 	for i, w := range writers {
 		if w == nil {
 			onlineDisks[i] = nil
@@ -1479,12 +1488,12 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			partsMetadata[i].Data = nil
 		}
 		// No need to add checksum to part. We already have it on the object.
-		partsMetadata[i].AddObjectPart(1, "", n, data.ActualSize(), modTime, compIndex, nil)
+		partsMetadata[i].AddObjectPart(1, "", n, actualSize, modTime, compIndex, nil)
 		partsMetadata[i].Versioned = opts.Versioned || opts.VersionSuspended
+		partsMetadata[i].Checksum = fi.Checksum
 	}
 
 	userDefined["etag"] = r.MD5CurrentHexString()
-	kind, _ := crypto.IsEncrypted(userDefined)
 	if opts.PreserveETag != "" {
 		if !opts.ReplicationRequest {
 			userDefined["etag"] = opts.PreserveETag
@@ -1518,6 +1527,16 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if opts.DataMovement {
 			partsMetadata[index].SetDataMov()
 		}
+	}
+
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
 
 	// Rename the successfully written temporary object to final location.
@@ -1613,7 +1632,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	if !opts.NoAuditLog {
 		for _, obj := range objects {
-			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectV.ObjectName, &er)
+			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectName, &er)
 		}
 	}
 
@@ -1695,8 +1714,21 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 	}
 
 	dedupVersions := make([]FileInfoVersions, 0, len(versionsMap))
-	for _, version := range versionsMap {
-		dedupVersions = append(dedupVersions, version)
+	for _, fivs := range versionsMap {
+		// Removal of existing versions and adding a delete marker in the same
+		// request is supported. At the same time, we cannot allow adding
+		// two delete markers on top of any object. To avoid this situation,
+		// we will sort deletions to execute existing deletion first,
+		// then add only one delete marker if requested
+		sort.SliceStable(fivs.Versions, func(i, j int) bool {
+			return !fivs.Versions[i].Deleted
+		})
+		if idx := slices.IndexFunc(fivs.Versions, func(fi FileInfo) bool {
+			return fi.Deleted
+		}); idx > -1 {
+			fivs.Versions = fivs.Versions[:idx+1]
+		}
+		dedupVersions = append(dedupVersions, fivs)
 	}
 
 	// Initialize list of errors.
@@ -1721,12 +1753,6 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 					continue
 				}
 				for _, v := range dedupVersions[i].Versions {
-					if err == errFileNotFound || err == errFileVersionNotFound {
-						if !dobjects[v.Idx].DeleteMarker {
-							// Not delete marker, if not found, ok.
-							continue
-						}
-					}
 					delObjErrs[index][v.Idx] = err
 				}
 			}
@@ -1746,6 +1772,13 @@ func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objec
 			}
 		}
 		err := reduceWriteQuorumErrs(ctx, diskErrs, objectOpIgnoredErrs, writeQuorums[objIndex])
+		if err == nil {
+			dobjects[objIndex].found = true
+		} else if isErrVersionNotFound(err) || isErrObjectNotFound(err) {
+			if !dobjects[objIndex].DeleteMarker {
+				err = nil
+			}
+		}
 		if objects[objIndex].VersionID != "" {
 			errs[objIndex] = toObjectErr(err, bucket, objects[objIndex].ObjectName, objects[objIndex].VersionID)
 		} else {
@@ -2133,7 +2166,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
+		if shouldCheckForDangling(err, errs, bucket) {
 			_, derr := er.deleteIfDangling(context.Background(), bucket, object, metaArr, errs, nil, opts)
 			if derr == nil {
 				if opts.VersionID != "" {
@@ -2187,14 +2220,16 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 
 // PutObjectTags - replace or add tags to an existing object
 func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object string, tags string, opts ObjectOptions) (ObjectInfo, error) {
-	// Lock the object before updating tags.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return ObjectInfo{}, err
+	if !opts.NoLock {
+		// Lock the object before updating tags.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	disks := er.getDisks()
 
@@ -2210,7 +2245,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 	if err != nil {
-		if errors.Is(err, errErasureReadQuorum) && !strings.HasPrefix(bucket, minioMetaBucket) {
+		if shouldCheckForDangling(err, errs, bucket) {
 			_, derr := er.deleteIfDangling(context.Background(), bucket, object, metaArr, errs, nil, opts)
 			if derr == nil {
 				if opts.VersionID != "" {
@@ -2305,14 +2340,16 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 		return err
 	}
 
-	// Acquire write lock before starting to transition the object.
-	lk := er.NewNSLock(bucket, object)
-	lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
-	if err != nil {
-		return err
+	if !opts.NoLock {
+		// Acquire write lock before starting to transition the object.
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalDeleteOperationTimeout)
+		if err != nil {
+			return err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
 	if err != nil {
@@ -2350,6 +2387,7 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 
 	destObj, err := genTransitionObjName(bucket)
 	if err != nil {
+		traceFn(ILMTransition, nil, err)
 		return err
 	}
 
@@ -2360,9 +2398,14 @@ func (er erasureObjects) TransitionObject(ctx context.Context, bucket, object st
 	}()
 
 	var rv remoteVersionID
-	rv, err = tgtClient.Put(ctx, destObj, pr, fi.Size)
+	rv, err = tgtClient.PutWithMeta(ctx, destObj, pr, fi.Size, map[string]string{
+		"name": object, // preserve the original name of the object on the remote tier object metadata.
+		// this is just for future reverse lookup() purposes (applies only for new objects)
+		// does not apply retro-actively on already transitioned objects.
+	})
 	pr.CloseWithError(err)
 	if err != nil {
+		traceFn(ILMTransition, nil, err)
 		return err
 	}
 	fi.TransitionStatus = lifecycle.TransitionComplete

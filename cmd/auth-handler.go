@@ -162,7 +162,6 @@ func validateAdminSignature(ctx context.Context, r *http.Request, region string)
 	s3Err := ErrAccessDenied
 	if _, ok := r.Header[xhttp.AmzContentSha256]; ok &&
 		getRequestAuthType(r) == authTypeSigned {
-
 		// Get credential information from the request.
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
 		if s3Err != ErrNone {
@@ -222,7 +221,7 @@ func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
 	return claims
 }
 
-func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{}, error) {
+func getClaimsFromTokenWithSecret(token, secret string) (*xjwt.MapClaims, error) {
 	// JWT token for x-amz-security-token is signed with admin
 	// secret key, temporary credentials become invalid if
 	// server admin credentials change. This is done to ensure
@@ -244,7 +243,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 
 	// If AuthZPlugin is set, return without any further checks.
 	if newGlobalAuthZPluginFn() != nil {
-		return claims.Map(), nil
+		return claims, nil
 	}
 
 	// Check if a session policy is set. If so, decode it here.
@@ -263,12 +262,16 @@ func getClaimsFromTokenWithSecret(token, secret string) (map[string]interface{},
 		claims.MapClaims[sessionPolicyNameExtracted] = string(spBytes)
 	}
 
-	return claims.Map(), nil
+	return claims, nil
 }
 
 // Fetch claims in the security token returned by the client.
 func getClaimsFromToken(token string) (map[string]interface{}, error) {
-	return getClaimsFromTokenWithSecret(token, globalActiveCred.SecretKey)
+	jwtClaims, err := getClaimsFromTokenWithSecret(token, globalActiveCred.SecretKey)
+	if err != nil {
+		return nil, err
+	}
+	return jwtClaims.Map(), nil
 }
 
 // Fetch claims in the security token returned by the client and validate the token.
@@ -319,7 +322,7 @@ func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]in
 		if err != nil {
 			return nil, toAPIErrorCode(r.Context(), err)
 		}
-		return claims, ErrNone
+		return claims.Map(), ErrNone
 	}
 
 	claims := xjwt.NewMapClaims()
@@ -751,8 +754,14 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
-	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
+	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer:
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+	case authTypeStreamingUnsignedTrailer:
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+		if s3Err == ErrMissingFields {
+			// Could be anonymous. cred + owner is zero value.
+			s3Err = ErrNone
+		}
 	}
 	if s3Err != ErrNone {
 		return s3Err

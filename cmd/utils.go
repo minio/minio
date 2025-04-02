@@ -20,7 +20,9 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -34,6 +36,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +45,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/felixge/fgprof"
 	"github.com/minio/madmin-go/v3"
+	xaudit "github.com/minio/madmin-go/v3/logger/audit"
 	"github.com/minio/minio-go/v7"
 	miniogopolicy "github.com/minio/minio-go/v7/pkg/policy"
 	"github.com/minio/minio/internal/config"
@@ -59,7 +63,6 @@ import (
 	"github.com/minio/mux"
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
-	xaudit "github.com/minio/pkg/v3/logger/message/audit"
 	xnet "github.com/minio/pkg/v3/net"
 	"golang.org/x/oauth2"
 )
@@ -254,10 +257,28 @@ func xmlDecoder(body io.Reader, v interface{}, size int64) error {
 	return err
 }
 
-// hasContentMD5 returns true if Content-MD5 header is set.
-func hasContentMD5(h http.Header) bool {
-	_, ok := h[xhttp.ContentMD5]
-	return ok
+// validateLengthAndChecksum returns if a content checksum is set,
+// and will replace r.Body with a reader that checks the provided checksum
+func validateLengthAndChecksum(r *http.Request) bool {
+	if mdFive := r.Header.Get(xhttp.ContentMD5); mdFive != "" {
+		want, err := base64.StdEncoding.DecodeString(mdFive)
+		if err != nil {
+			return false
+		}
+		r.Body = hash.NewChecker(r.Body, md5.New(), want, r.ContentLength)
+		return true
+	}
+	cs, err := hash.GetContentChecksum(r.Header)
+	if err != nil {
+		return false
+	}
+	if cs == nil || !cs.Type.IsSet() {
+		return false
+	}
+	if cs.Valid() && !cs.Type.Trailing() {
+		r.Body = hash.NewChecker(r.Body, cs.Type.Hasher(), cs.Raw, r.ContentLength)
+	}
+	return true
 }
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
@@ -411,7 +432,12 @@ func startProfiler(profilerType string) (minioProfiler, error) {
 			return nil, err
 		}
 		stop := fgprof.Start(f, fgprof.FormatPprof)
+		startedAt := time.Now()
 		prof.stopFn = func() ([]byte, error) {
+			if elapsed := time.Since(startedAt); elapsed < 100*time.Millisecond {
+				// Light hack around https://github.com/felixge/fgprof/pull/34
+				time.Sleep(100*time.Millisecond - elapsed)
+			}
 			err := stop()
 			if err != nil {
 				return nil, err
@@ -1150,4 +1176,20 @@ func filterStorageClass(ctx context.Context, s string) string {
 		return globalVeeamForceSC
 	}
 	return s
+}
+
+type ordered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr | ~float32 | ~float64 | string
+}
+
+// mapKeysSorted returns the map keys as a sorted slice.
+func mapKeysSorted[Map ~map[K]V, K ordered, V any](m Map) []K {
+	res := make([]K, 0, len(m))
+	for k := range m {
+		res = append(res, k)
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i] < res[j]
+	})
+	return res
 }

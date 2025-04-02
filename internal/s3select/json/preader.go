@@ -24,7 +24,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/bcicen/jstream"
+	"github.com/minio/minio/internal/bpool"
+	"github.com/minio/minio/internal/s3select/jstream"
 	"github.com/minio/minio/internal/s3select/sql"
 )
 
@@ -32,17 +33,17 @@ import (
 // Operates concurrently on line-delimited JSON.
 type PReader struct {
 	args        *ReaderArgs
-	readCloser  io.ReadCloser   // raw input
-	buf         *bufio.Reader   // input to the splitter
-	current     []jstream.KVS   // current block of results to be returned
-	recordsRead int             // number of records read in current slice
-	input       chan *queueItem // input for workers
-	queue       chan *queueItem // output from workers in order
-	err         error           // global error state, only touched by Reader.Read
-	bufferPool  sync.Pool       // pool of []byte objects for input
-	kvDstPool   sync.Pool       // pool of []jstream.KV used for output
-	close       chan struct{}   // used for shutting down the splitter before end of stream
-	readerWg    sync.WaitGroup  // used to keep track of async reader.
+	readCloser  io.ReadCloser             // raw input
+	buf         *bufio.Reader             // input to the splitter
+	current     []jstream.KVS             // current block of results to be returned
+	recordsRead int                       // number of records read in current slice
+	input       chan *queueItem           // input for workers
+	queue       chan *queueItem           // output from workers in order
+	err         error                     // global error state, only touched by Reader.Read
+	bufferPool  bpool.Pool[[]byte]        // pool of []byte objects for input
+	kvDstPool   bpool.Pool[[]jstream.KVS] // pool of []jstream.KVS used for output
+	close       chan struct{}             // used for shutting down the splitter before end of stream
+	readerWg    sync.WaitGroup            // used to keep track of async reader.
 }
 
 // queueItem is an item in the queue.
@@ -66,7 +67,6 @@ func (r *PReader) Read(dst sql.Record) (sql.Record, error) {
 			r.err = io.EOF
 			return nil, r.err
 		}
-		//nolint:staticcheck // SA6002 Using pointer would allocate more since we would have to copy slice header before taking a pointer.
 		r.kvDstPool.Put(r.current)
 		r.current = <-item.dst
 		r.err = item.err
@@ -133,7 +133,7 @@ const jsonSplitSize = 128 << 10
 // and a number of workers based on GOMAXPROCS.
 // If an error is returned no goroutines have been started and r.err will have been set.
 func (r *PReader) startReaders() {
-	r.bufferPool.New = func() interface{} {
+	r.bufferPool.New = func() []byte {
 		return make([]byte, jsonSplitSize+1024)
 	}
 
@@ -148,7 +148,7 @@ func (r *PReader) startReaders() {
 		defer close(r.queue)
 		defer r.readerWg.Done()
 		for {
-			next, err := r.nextSplit(jsonSplitSize, r.bufferPool.Get().([]byte))
+			next, err := r.nextSplit(jsonSplitSize, r.bufferPool.Get())
 			q := queueItem{
 				input: next,
 				dst:   make(chan []jstream.KVS, 1),
@@ -180,12 +180,12 @@ func (r *PReader) startReaders() {
 					in.dst <- nil
 					continue
 				}
-				dst, ok := r.kvDstPool.Get().([]jstream.KVS)
-				if !ok {
+				dst := r.kvDstPool.Get()
+				if len(dst) < 1000 {
 					dst = make([]jstream.KVS, 0, 1000)
 				}
 
-				d := jstream.NewDecoder(bytes.NewBuffer(in.input), 0).ObjectAsKVS()
+				d := jstream.NewDecoder(bytes.NewBuffer(in.input), 0).ObjectAsKVS().MaxDepth(100)
 				stream := d.Stream()
 				all := dst[:0]
 				for mv := range stream {
@@ -193,7 +193,7 @@ func (r *PReader) startReaders() {
 					if mv.ValueType == jstream.Object {
 						// This is a JSON object type (that preserves key
 						// order)
-						kvs = mv.Value.(jstream.KVS)
+						kvs, _ = mv.Value.(jstream.KVS)
 					} else {
 						// To be AWS S3 compatible Select for JSON needs to
 						// output non-object JSON as single column value

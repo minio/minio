@@ -447,7 +447,7 @@ func getHostName(r *http.Request) (hostName string) {
 }
 
 // Proxy any request to an endpoint.
-func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint) (success bool) {
+func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, ep ProxyEndpoint, returnErr bool) (success bool) {
 	success = true
 
 	// Make sure we remove any existing headers before
@@ -462,7 +462,10 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			success = false
 			if err != nil && !errors.Is(err, context.Canceled) {
-				replLogIf(GlobalContext, err)
+				proxyLogIf(GlobalContext, err)
+			}
+			if returnErr {
+				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			}
 		},
 	})

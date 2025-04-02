@@ -26,13 +26,21 @@ cleanup
 
 export MINIO_CI_CD=1
 export MINIO_BROWSER=off
-export MINIO_ROOT_USER="minio"
-export MINIO_ROOT_PASSWORD="minio123"
+
+make install-race
 
 # Start MinIO instances
 echo -n "Starting MinIO instances ..."
-minio server --address ":9001" --console-address ":10000" /tmp/sitea/{1...4}/disk{1...4} /tmp/sitea/{5...8}/disk{1...4} >/tmp/sitea_1.log 2>&1 &
-minio server --address ":9002" --console-address ":11000" /tmp/siteb/{1...4}/disk{1...4} /tmp/siteb/{5...8}/disk{1...4} >/tmp/siteb_1.log 2>&1 &
+minio server --address 127.0.0.1:9001 --console-address ":10000" "http://127.0.0.1:9001/tmp/sitea/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9002/tmp/sitea/data/disterasure/xl{5...8}" >/tmp/sitea_1.log 2>&1 &
+minio server --address 127.0.0.1:9002 "http://127.0.0.1:9001/tmp/sitea/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9002/tmp/sitea/data/disterasure/xl{5...8}" >/tmp/sitea_2.log 2>&1 &
+
+minio server --address 127.0.0.1:9003 --console-address ":10001" "http://127.0.0.1:9003/tmp/siteb/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9004/tmp/siteb/data/disterasure/xl{5...8}" >/tmp/siteb_1.log 2>&1 &
+minio server --address 127.0.0.1:9004 "http://127.0.0.1:9003/tmp/siteb/data/disterasure/xl{1...4}" \
+	"http://127.0.0.1:9004/tmp/siteb/data/disterasure/xl{5...8}" >/tmp/siteb_2.log 2>&1 &
+
 echo "done"
 
 if [ ! -f ./mc ]; then
@@ -40,8 +48,8 @@ if [ ! -f ./mc ]; then
 		chmod +x mc
 fi
 
-export MC_HOST_sitea=http://minio:minio123@127.0.0.1:9001
-export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9002
+export MC_HOST_sitea=http://minioadmin:minioadmin@127.0.0.1:9001
+export MC_HOST_siteb=http://minioadmin:minioadmin@127.0.0.1:9004
 
 ./mc ready sitea
 ./mc ready siteb
@@ -57,12 +65,12 @@ export MC_HOST_siteb=http://minio:minio123@127.0.0.1:9002
 # Run the test to make sure proxying of DEL marker doesn't happen
 loop_count=0
 while true; do
-	if [ $loop_count -eq 100 ]; then
+	if [ $loop_count -eq 1000 ]; then
 		break
 	fi
 	echo "Hello World" | ./mc pipe sitea/bucket/obj$loop_count
 	./mc rm sitea/bucket/obj$loop_count
-	RESULT=$({ ./mc stat sitea/bucket/obj$loop_count; } 2>&1)
+	RESULT=$({ ./mc stat --no-list sitea/bucket/obj$loop_count; } 2>&1)
 	if [[ ${RESULT} != *"Object does not exist"* ]]; then
 		echo "BUG: stat should fail. succeeded."
 		exit_1

@@ -37,7 +37,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/object/lock"
-	objectlock "github.com/minio/minio/internal/bucket/object/lock"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/bucket/versioning"
 	"github.com/minio/minio/internal/color"
@@ -664,6 +663,12 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					into.addChild(h)
 					continue
 				}
+				// Adjust the probability of healing.
+				// This first removes lowest x from the mod check and makes it x times more likely.
+				// So if duudc = 10 and we want heal check every 50 cycles, we check
+				// if (cycle/10) % (50/10) == 0, which would make heal checks run once every 50 cycles,
+				// if the objects are pre-selected as 1:10.
+				folder.objectHealProbDiv = dataUsageUpdateDirCycles
 			}
 			f.updateCurrentPath(folder.name)
 			stopFn := globalScannerMetrics.log(scannerMetricScanFolder, f.root, folder.name)
@@ -858,8 +863,8 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 					}
 				}
 			}
-
 		}
+
 		if compact {
 			stop := globalScannerMetrics.log(scannerMetricCompactFolder, folder.name)
 			f.newCache.deleteRecursive(thisHash)
@@ -873,7 +878,6 @@ func (f *folderScanner) scanFolder(ctx context.Context, folder cachedFolder, int
 			}
 			stop(total)
 		}
-
 	}
 	// Compact if too many children...
 	if !into.Compacted {
@@ -986,7 +990,7 @@ func (i *scannerItem) applyLifecycle(ctx context.Context, o ObjectLayer, oi Obje
 	versionID := oi.VersionID
 
 	var vc *versioning.Versioning
-	var lr objectlock.Retention
+	var lr lock.Retention
 	var rcfg *replication.Config
 	if !isMinioMetaBucketName(i.bucket) {
 		vc, err = globalBucketVersioningSys.Get(i.bucket)
@@ -1325,10 +1329,13 @@ func applyExpiryOnNonTransitionedObjects(ctx context.Context, objLayer ObjectLay
 	dobj, err = objLayer.DeleteObject(ctx, obj.Bucket, encodeDirObject(obj.Name), opts)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrVersionNotFound(err) {
+			traceFn(ILMExpiry, nil, nil)
 			return false
 		}
 		// Assume it is still there.
-		ilmLogOnceIf(ctx, fmt.Errorf("DeleteObject(%s, %s): %w", obj.Bucket, obj.Name, err), "non-transition-expiry"+obj.Name)
+		err := fmt.Errorf("DeleteObject(%s, %s): %w", obj.Bucket, obj.Name, err)
+		ilmLogOnceIf(ctx, err, "non-transition-expiry"+obj.Name)
+		traceFn(ILMExpiry, nil, err)
 		return false
 	}
 	if dobj.Name == "" {
@@ -1549,7 +1556,7 @@ const (
 	ILMTransition = " ilm:transition"
 )
 
-func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]string, traceFn func(event string, metadata map[string]string)) {
+func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags map[string]string, traceFn func(event string, metadata map[string]string, err error)) {
 	var apiName string
 	switch event {
 	case ILMExpiry:
@@ -1567,5 +1574,5 @@ func auditLogLifecycle(ctx context.Context, oi ObjectInfo, event string, tags ma
 		VersionID: oi.VersionID,
 		Tags:      tags,
 	})
-	traceFn(event, tags)
+	traceFn(event, tags, nil)
 }

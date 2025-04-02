@@ -49,10 +49,10 @@ type Config struct {
 }
 
 // Update - updates the config with latest values
-func (c *Config) Update(new Config) error {
+func (c *Config) Update(updated Config) error {
 	configLk.Lock()
 	defer configLk.Unlock()
-	c.MaxTimeout = getMaxTimeout(new.MaxTimeout)
+	c.MaxTimeout = getMaxTimeout(updated.MaxTimeout)
 	return nil
 }
 

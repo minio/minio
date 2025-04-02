@@ -514,8 +514,10 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 		if metadata.Deleted || metadata.Size == 0 {
 			parities[index] = totalShards / 2
 		} else if metadata.TransitionStatus == lifecycle.TransitionComplete {
-			// For tiered objects, read quorum is N/2+1 to ensure simple majority on xl.meta. It is not equal to EcM because the data integrity is entrusted with the warm tier.
-			parities[index] = totalShards - (totalShards/2 + 1)
+			// For tiered objects, read quorum is N/2+1 to ensure simple majority on xl.meta.
+			// It is not equal to EcM because the data integrity is entrusted with the warm tier.
+			// However, we never go below EcM, in case of a EcM=EcN setup.
+			parities[index] = max(totalShards-(totalShards/2+1), metadata.Erasure.ParityBlocks)
 		} else {
 			parities[index] = metadata.Erasure.ParityBlocks
 		}

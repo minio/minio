@@ -1,36 +1,64 @@
-linters-settings:
-  gofumpt:
-    simplify: true
-
-  misspell:
-    locale: US
-
-  staticcheck:
-    checks: ['all', '-ST1005', '-ST1000', '-SA4000', '-SA9004', '-SA1019', '-SA1008', '-U1000', '-ST1016']
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - durationcheck
+    - forcetypeassert
     - gocritic
-    - gofumpt
-    - goimports
     - gomodguard
     - govet
     - ineffassign
     - misspell
     - revive
     - staticcheck
-    - tenv
-    - typecheck
     - unconvert
     - unused
-
+    - usetesting
+    - whitespace
+  settings:
+    misspell:
+      locale: US
+    staticcheck:
+      checks:
+        - all
+        - -SA1008
+        - -SA1019
+        - -SA4000
+        - -SA9004
+        - -ST1000
+        - -ST1005
+        - -ST1016
+        - -U1000
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - forcetypeassert
+        path: _test\.go
+      - path: (.+)\.go$
+        text: 'empty-block:'
+      - path: (.+)\.go$
+        text: 'unused-parameter:'
+      - path: (.+)\.go$
+        text: 'dot-imports:'
+      - path: (.+)\.go$
+        text: should have a package comment
+      - path: (.+)\.go$
+        text: error strings should not be capitalized or end with punctuation or a newline
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-use-default: false
-  exclude:
-    - "empty-block:"
-    - "unused-parameter:"
-    - "dot-imports:"
-    - should have a package comment
-    - error strings should not be capitalized or end with punctuation or a newline
+  max-issues-per-linter: 100
+  max-same-issues: 100
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

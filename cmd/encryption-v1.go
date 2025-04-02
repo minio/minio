@@ -109,7 +109,7 @@ func kmsKeyIDFromMetadata(metadata map[string]string) string {
 // be AWS S3 compliant.
 //
 // DecryptETags uses a KMS bulk decryption API, if available, which
-// is more efficient than decrypting ETags sequentually.
+// is more efficient than decrypting ETags sequentially.
 func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 	const BatchSize = 250 // We process the objects in batches - 250 is a reasonable default.
 	var (
@@ -347,8 +347,8 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 				return errInvalidSSEParameters // AWS returns special error for equal but invalid keys.
 			}
 			return crypto.ErrInvalidCustomerKey // To provide strict AWS S3 compatibility we return: access denied.
-
 		}
+
 		if subtle.ConstantTimeCompare(oldKey, newKey) == 1 && sealedKey.Algorithm == crypto.SealAlgorithm {
 			return nil // don't rotate on equal keys if seal algorithm is latest
 		}
@@ -1015,7 +1015,7 @@ func DecryptObjectInfo(info *ObjectInfo, r *http.Request) (encrypted bool, err e
 
 	if encrypted {
 		if crypto.SSEC.IsEncrypted(info.UserDefined) {
-			if !(crypto.SSEC.IsRequested(headers) || crypto.SSECopy.IsRequested(headers)) {
+			if !crypto.SSEC.IsRequested(headers) && !crypto.SSECopy.IsRequested(headers) {
 				if r.Header.Get(xhttp.MinIOSourceReplicationRequest) != "true" {
 					return encrypted, errEncryptedObject
 				}
@@ -1099,7 +1099,9 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
 		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
 		if err != nil {
-			encLogIf(GlobalContext, err)
+			if !errors.Is(err, crypto.ErrSecretKeyMismatch) {
+				encLogIf(GlobalContext, err)
+			}
 			return
 		}
 		data = decrypted
@@ -1110,7 +1112,6 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 			o.Parts[i].Checksums = cs[i]
 		}
 	}
-	return
 }
 
 // metadataEncryptFn provides an encryption function for metadata.
@@ -1153,16 +1154,17 @@ func (o *ObjectInfo) metadataEncryptFn(headers http.Header) (objectMetaEncryptFn
 
 // decryptChecksums will attempt to decode checksums and return it/them if set.
 // if part > 0, and we have the checksum for the part that will be returned.
-func (o *ObjectInfo) decryptChecksums(part int, h http.Header) map[string]string {
+// Returns whether the checksum (main part 0) is a multipart checksum.
+func (o *ObjectInfo) decryptChecksums(part int, h http.Header) (cs map[string]string, isMP bool) {
 	data := o.Checksum
 	if len(data) == 0 {
-		return nil
+		return nil, false
 	}
 	if part > 0 && !crypto.SSEC.IsEncrypted(o.UserDefined) {
 		// already decrypted in ToObjectInfo for multipart objects
 		for _, pi := range o.Parts {
 			if pi.Number == part {
-				return pi.Checksums
+				return pi.Checksums, true
 			}
 		}
 	}
@@ -1172,7 +1174,7 @@ func (o *ObjectInfo) decryptChecksums(part int, h http.Header) map[string]string
 			if err != crypto.ErrSecretKeyMismatch {
 				encLogIf(GlobalContext, err)
 			}
-			return nil
+			return nil, part > 0
 		}
 		data = decrypted
 	}

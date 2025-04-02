@@ -53,6 +53,10 @@ var (
 	bucketPeerMetricsGroups []*MetricsGroupV2
 )
 
+// v2MetricsMaxBuckets enforces a bucket count limit on metrics for v2 calls.
+// If people hit this limit, they should move to v3, as certain calls explode with high bucket count.
+const v2MetricsMaxBuckets = 100
+
 func init() {
 	clusterMetricsGroups := []*MetricsGroupV2{
 		getNodeHealthMetrics(MetricsGroupOpts{dependGlobalNotificationSys: true}),
@@ -315,6 +319,7 @@ type MetricDescription struct {
 	Name      MetricName      `json:"MetricName"`
 	Help      string          `json:"Help"`
 	Type      MetricTypeV2    `json:"Type"`
+	Buckets   []float64       `json:"Buckets,omitempty"`
 }
 
 // MetricV2 captures the details for a metric
@@ -678,6 +683,16 @@ func getNodeDriveTotalBytesMD() MetricDescription {
 func getUsageLastScanActivityMD() MetricDescription {
 	return MetricDescription{
 		Namespace: minioMetricNamespace,
+		Subsystem: usageSubsystem,
+		Name:      lastActivityTime,
+		Help:      "Time elapsed (in nano seconds) since last scan activity",
+		Type:      gaugeMetric,
+	}
+}
+
+func getBucketUsageLastScanActivityMD() MetricDescription {
+	return MetricDescription{
+		Namespace: bucketMetricNamespace,
 		Subsystem: usageSubsystem,
 		Name:      lastActivityTime,
 		Help:      "Time elapsed (in nano seconds) since last scan activity",
@@ -1529,7 +1544,8 @@ func getS3TTFBDistributionMD() MetricDescription {
 		Subsystem: ttfbSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of time to first byte across API calls",
-		Type:      gaugeMetric,
+		Type:      histogramMetric,
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
 	}
 }
 
@@ -1539,7 +1555,8 @@ func getBucketTTFBDistributionMD() MetricDescription {
 		Subsystem: ttfbSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of time to first byte across API calls per bucket",
-		Type:      gaugeMetric,
+		Type:      histogramMetric,
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
 	}
 }
 
@@ -1832,9 +1849,9 @@ func getGoMetrics() *MetricsGroupV2 {
 // getHistogramMetrics fetches histogram metrics and returns it in a []Metric
 // Note: Typically used in MetricGroup.RegisterRead
 //
-// The last parameter is added for compatibility - if true it lowercases the
-// `api` label values.
-func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, toLowerAPILabels bool) []MetricV2 {
+// The toLowerAPILabels parameter is added for compatibility,
+// if set, it lowercases the `api` label values.
+func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, toLowerAPILabels, limitBuckets bool) []MetricV2 {
 	ch := make(chan prometheus.Metric)
 	go func() {
 		defer xioutil.SafeClose(ch)
@@ -1844,6 +1861,7 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 
 	// Converts metrics received into internal []Metric type
 	var metrics []MetricV2
+	buckets := make(map[string][]MetricV2, v2MetricsMaxBuckets)
 	for promMetric := range ch {
 		dtoMetric := &dto.Metric{}
 		err := promMetric.Write(dtoMetric)
@@ -1870,19 +1888,42 @@ func getHistogramMetrics(hist *prometheus.HistogramVec, desc MetricDescription, 
 				VariableLabels: labels,
 				Value:          float64(b.GetCumulativeCount()),
 			}
-			metrics = append(metrics, metric)
+			if limitBuckets && labels["bucket"] != "" {
+				buckets[labels["bucket"]] = append(buckets[labels["bucket"]], metric)
+			} else {
+				metrics = append(metrics, metric)
+			}
 		}
 		// add metrics with +Inf label
 		labels1 := make(map[string]string)
 		for _, lp := range dtoMetric.GetLabel() {
-			labels1[*lp.Name] = *lp.Value
+			if *lp.Name == "api" && toLowerAPILabels {
+				labels1[*lp.Name] = strings.ToLower(*lp.Value)
+			} else {
+				labels1[*lp.Name] = *lp.Value
+			}
 		}
 		labels1["le"] = fmt.Sprintf("%.3f", math.Inf(+1))
-		metrics = append(metrics, MetricV2{
+
+		metric := MetricV2{
 			Description:    desc,
 			VariableLabels: labels1,
-			Value:          dtoMetric.Counter.GetValue(),
-		})
+			Value:          float64(dtoMetric.Histogram.GetSampleCount()),
+		}
+		if limitBuckets && labels1["bucket"] != "" {
+			buckets[labels1["bucket"]] = append(buckets[labels1["bucket"]], metric)
+		} else {
+			metrics = append(metrics, metric)
+		}
+	}
+
+	// Limit bucket metrics...
+	if limitBuckets {
+		bucketNames := mapKeysSorted(buckets)
+		bucketNames = bucketNames[:min(len(buckets), v2MetricsMaxBuckets)]
+		for _, b := range bucketNames {
+			metrics = append(metrics, buckets[b]...)
+		}
 	}
 	return metrics
 }
@@ -1893,7 +1934,7 @@ func getBucketTTFBMetric() *MetricsGroupV2 {
 	}
 	mg.RegisterRead(func(ctx context.Context) []MetricV2 {
 		return getHistogramMetrics(bucketHTTPRequestsDuration,
-			getBucketTTFBDistributionMD(), true)
+			getBucketTTFBDistributionMD(), true, true)
 	})
 	return mg
 }
@@ -1904,7 +1945,7 @@ func getS3TTFBMetric() *MetricsGroupV2 {
 	}
 	mg.RegisterRead(func(ctx context.Context) []MetricV2 {
 		return getHistogramMetrics(httpRequestsDuration,
-			getS3TTFBDistributionMD(), true)
+			getS3TTFBDistributionMD(), true, true)
 	})
 	return mg
 }
@@ -2460,7 +2501,6 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 			}
 			downtimeDuration.Value = float64(dwntime / time.Second)
 			ml = append(ml, downtimeDuration)
-
 		}
 		return ml
 	})
@@ -3004,7 +3044,13 @@ func getHTTPMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 			return
 		}
 
-		for bucket, inOut := range globalBucketConnStats.getS3InOutBytes() {
+		// If we have too many, limit them
+		bConnStats := globalBucketConnStats.getS3InOutBytes()
+		buckets := mapKeysSorted(bConnStats)
+		buckets = buckets[:min(v2MetricsMaxBuckets, len(buckets))]
+
+		for _, bucket := range buckets {
+			inOut := bConnStats[bucket]
 			recvBytes := inOut.In
 			if recvBytes > 0 {
 				metrics = append(metrics, MetricV2{
@@ -3239,7 +3285,7 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		}
 
 		metrics = append(metrics, MetricV2{
-			Description: getUsageLastScanActivityMD(),
+			Description: getBucketUsageLastScanActivityMD(),
 			Value:       float64(time.Since(dataUsageInfo.LastUpdate)),
 		})
 
@@ -3247,7 +3293,12 @@ func getBucketUsageMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 		if !globalSiteReplicationSys.isEnabled() {
 			bucketReplStats = globalReplicationStats.Load().getAllLatest(dataUsageInfo.BucketsUsage)
 		}
-		for bucket, usage := range dataUsageInfo.BucketsUsage {
+		buckets := mapKeysSorted(dataUsageInfo.BucketsUsage)
+		if len(buckets) > v2MetricsMaxBuckets {
+			buckets = buckets[:v2MetricsMaxBuckets]
+		}
+		for _, bucket := range buckets {
+			usage := dataUsageInfo.BucketsUsage[bucket]
 			quota, _ := globalBucketQuotaSys.Get(ctx, bucket)
 
 			metrics = append(metrics, MetricV2{

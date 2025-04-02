@@ -68,6 +68,7 @@ FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}
 `
+	//nolint:staticcheck
 	isPart := regexp.MustCompile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/part\\.[0-9]+$")
 
 	app.HideHelpCommand = true
@@ -369,8 +370,8 @@ FLAGS:
 				defer f.Close()
 				r = f
 			}
-			if strings.HasSuffix(file, ".zip") {
-				zr, err := zip.NewReader(r.(io.ReaderAt), sz)
+			if ra, ok := r.(io.ReaderAt); ok && strings.HasSuffix(file, ".zip") {
+				zr, err := zip.NewReader(ra, sz)
 				if err != nil {
 					return err
 				}
@@ -664,7 +665,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 
 const (
 	xlHeaderVersion = 3
-	xlMetaVersion   = 2
+	xlMetaVersion   = 3
 )
 
 type xlHeaders struct {
@@ -1508,7 +1509,7 @@ func reconPartial(shards [][]byte, k int, parityOK []bool, splitData [][]byte, s
 			}
 		}
 	}
-	fmt.Println("Reconstructed", reconstructed, "bytes and verified", verified, "bytes of partial shard with config", shardConfig)
+	fmt.Println("Reconstructed", reconstructed, "bytes and verified", verified, "bytes of partial shard with config", string(shardConfig))
 }
 
 // bitrot returns a shard beginning at startOffset after doing bitrot checks.
@@ -1555,6 +1556,7 @@ func shardSize(blockSize, dataBlocks int) (sz int) {
 	return
 }
 
+//nolint:staticcheck
 var rePartNum = regexp.MustCompile("/part\\.([0-9]+)/")
 
 func getPartNum(s string) int {

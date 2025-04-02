@@ -24,9 +24,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/minio/madmin-go/v3/logger/audit"
 	internalAudit "github.com/minio/minio/internal/logger/message/audit"
 	"github.com/minio/minio/internal/mcontext"
-	"github.com/minio/pkg/v3/logger/message/audit"
 
 	xhttp "github.com/minio/minio/internal/http"
 )
@@ -100,7 +100,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 			outputBytes = int64(tc.ResponseRecorder.Size())
 			headerBytes = int64(tc.ResponseRecorder.HeaderSize())
 			timeToResponse = time.Now().UTC().Sub(tc.ResponseRecorder.StartTime)
-			timeToFirstByte = tc.ResponseRecorder.TimeToFirstByte
+			timeToFirstByte = tc.ResponseRecorder.TTFB()
 		}
 
 		entry.AccessKey = reqInfo.Cred.AccessKey

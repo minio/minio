@@ -183,11 +183,19 @@ var binaryChecksum = getBinaryChecksum()
 
 func getBinaryChecksum() string {
 	mw := md5.New()
-	b, err := os.Open(os.Args[0])
-	if err == nil {
-		defer b.Close()
-		io.Copy(mw, b)
+	binPath, err := os.Executable()
+	if err != nil {
+		logger.Error("Calculating checksum failed: %s", err)
+		return "00000000000000000000000000000000"
 	}
+	b, err := os.Open(binPath)
+	if err != nil {
+		logger.Error("Calculating checksum failed: %s", err)
+		return "00000000000000000000000000000000"
+	}
+
+	defer b.Close()
+	io.Copy(mw, b)
 	return hex.EncodeToString(mw.Sum(nil))
 }
 

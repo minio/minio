@@ -20,7 +20,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -30,15 +29,14 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/minio/madmin-go/v3"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/cachevalue"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
-	"github.com/minio/minio/internal/ioutil"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/rest"
 	xnet "github.com/minio/pkg/v3/net"
@@ -465,16 +463,20 @@ func (client *storageRESTClient) WriteAll(ctx context.Context, volume string, pa
 // CheckParts - stat all file parts.
 func (client *storageRESTClient) CheckParts(ctx context.Context, volume string, path string, fi FileInfo) (*CheckPartsResp, error) {
 	var resp *CheckPartsResp
-	resp, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
+	st, err := storageCheckPartsRPC.Call(ctx, client.gridConn, &CheckPartsHandlerParams{
 		DiskID:   *client.diskID.Load(),
 		Volume:   volume,
 		FilePath: path,
 		FI:       fi,
 	})
 	if err != nil {
-		return nil, err
+		return nil, toStorageErr(err)
 	}
-	return resp, nil
+	err = st.Results(func(r *CheckPartsResp) error {
+		resp = r
+		return nil
+	})
+	return resp, toStorageErr(err)
 }
 
 // RenameData - rename source path to destination path atomically, metadata and data file.
@@ -505,13 +507,13 @@ func (client *storageRESTClient) RenameData(ctx context.Context, srcVolume, srcP
 }
 
 // where we keep old *Readers
-var readMsgpReaderPool = sync.Pool{New: func() interface{} { return &msgp.Reader{} }}
+var readMsgpReaderPool = bpool.Pool[*msgp.Reader]{New: func() *msgp.Reader { return &msgp.Reader{} }}
 
 // mspNewReader returns a *Reader that reads from the provided reader.
 // The reader will be buffered.
 // Return with readMsgpReaderPoolPut when done.
 func msgpNewReader(r io.Reader) *msgp.Reader {
-	p := readMsgpReaderPool.Get().(*msgp.Reader)
+	p := readMsgpReaderPool.Get()
 	if p.R == nil {
 		p.R = xbufio.NewReaderSize(r, 32<<10)
 	} else {
@@ -842,12 +844,16 @@ func (client *storageRESTClient) VerifyFile(ctx context.Context, volume, path st
 		return nil, toStorageErr(err)
 	}
 
-	verifyResp := &CheckPartsResp{}
-	if err = gob.NewDecoder(respReader).Decode(verifyResp); err != nil {
+	dec := msgpNewReader(respReader)
+	defer readMsgpReaderPoolPut(dec)
+
+	verifyResp := CheckPartsResp{}
+	err = verifyResp.DecodeMsg(dec)
+	if err != nil {
 		return nil, toStorageErr(err)
 	}
 
-	return verifyResp, nil
+	return &verifyResp, nil
 }
 
 func (client *storageRESTClient) DeleteBulk(ctx context.Context, volume string, paths ...string) (err error) {
@@ -921,7 +927,7 @@ func (client *storageRESTClient) ReadMultiple(ctx context.Context, req ReadMulti
 
 	pr, pw := io.Pipe()
 	go func() {
-		pw.CloseWithError(waitForHTTPStream(respBody, ioutil.NewDeadlineWriter(pw, globalDriveConfig.GetMaxTimeout())))
+		pw.CloseWithError(waitForHTTPStream(respBody, xioutil.NewDeadlineWriter(pw, globalDriveConfig.GetMaxTimeout())))
 	}()
 	mr := msgp.NewReader(pr)
 	defer readMsgpReaderPoolPut(mr)

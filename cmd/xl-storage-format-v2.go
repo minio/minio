@@ -26,12 +26,12 @@ import (
 	"io"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/bpool"
 	"github.com/minio/minio/internal/bucket/lifecycle"
 	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/config/storageclass"
@@ -46,6 +46,8 @@ var (
 	// Current version being written.
 	xlVersionCurrent [4]byte
 )
+
+//msgp:clearomitted
 
 //go:generate msgp -file=$GOFILE -unexported
 //go:generate stringer -type VersionType,ErasureAlgo -output=xl-storage-format-v2_string.go $GOFILE
@@ -460,7 +462,7 @@ func (j *xlMetaV2Version) ToFileInfo(volume, path string, allParts bool) (fi Fil
 
 const (
 	xlHeaderVersion = 3
-	xlMetaVersion   = 2
+	xlMetaVersion   = 3
 )
 
 func (j xlMetaV2DeleteMarker) ToFileInfo(volume, path string) (FileInfo, error) {
@@ -701,18 +703,17 @@ func (j xlMetaV2Object) ToFileInfo(volume, path string, allParts bool) (FileInfo
 const metaDataReadDefault = 4 << 10
 
 // Return used metadata byte slices here.
-var metaDataPool = sync.Pool{New: func() interface{} { return make([]byte, 0, metaDataReadDefault) }}
+var metaDataPool = bpool.Pool[[]byte]{New: func() []byte { return make([]byte, 0, metaDataReadDefault) }}
 
 // metaDataPoolGet will return a byte slice with capacity at least metaDataReadDefault.
 // It will be length 0.
 func metaDataPoolGet() []byte {
-	return metaDataPool.Get().([]byte)[:0]
+	return metaDataPool.Get()[:0]
 }
 
 // metaDataPoolPut will put an unused small buffer back into the pool.
 func metaDataPoolPut(buf []byte) {
 	if cap(buf) >= metaDataReadDefault && cap(buf) < metaDataReadDefault*4 {
-		//nolint:staticcheck // SA6002 we are fine with the tiny alloc
 		metaDataPool.Put(buf)
 	}
 }
@@ -966,6 +967,50 @@ func (x *xlMetaV2) loadIndexed(buf xlMetaBuf, data xlMetaInlineData) error {
 			return err
 		}
 		ver.meta = meta
+
+		// Fix inconsistent compression index due to https://github.com/minio/minio/pull/20575
+		// First search marshaled content for encoded values.
+		// We have bumped metaV to make this check cheaper.
+		if metaV < 3 && ver.header.Type == ObjectType && bytes.Contains(meta, []byte("\xa7PartIdx")) &&
+			bytes.Contains(meta, []byte("\xbcX-Minio-Internal-compression\xc4\x15klauspost/compress/s2")) {
+			// Likely candidate...
+			version, err := x.getIdx(i)
+			if err == nil {
+				// Check write date...
+				// RELEASE.2023-12-02T10-51-33Z -> RELEASE.2024-10-29T16-01-48Z
+				const dateStart = 1701471618
+				const dateEnd = 1730156418
+				if version.WrittenByVersion > dateStart && version.WrittenByVersion < dateEnd &&
+					version.ObjectV2 != nil && len(version.ObjectV2.PartIndices) > 0 {
+					var changed bool
+					clearField := true
+					for i, sz := range version.ObjectV2.PartActualSizes {
+						if len(version.ObjectV2.PartIndices) > i {
+							// 8<<20 is current 'compMinIndexSize', but we detach it in case it should change in the future.
+							if sz <= 8<<20 && len(version.ObjectV2.PartIndices[i]) > 0 {
+								changed = true
+								version.ObjectV2.PartIndices[i] = nil
+							}
+							clearField = clearField && len(version.ObjectV2.PartIndices[i]) == 0
+						}
+					}
+					if changed {
+						// All empty, clear.
+						if clearField {
+							version.ObjectV2.PartIndices = nil
+						}
+
+						// Reindex since it was changed.
+						meta, err := version.MarshalMsg(make([]byte, 0, len(ver.meta)+10))
+						if err == nil {
+							// Override both if fine.
+							ver.header = version.header()
+							ver.meta = meta
+						}
+					}
+				}
+			}
+		}
 
 		// Fix inconsistent x-minio-internal-replication-timestamp by loading and reindexing.
 		if metaV < 2 && ver.header.Type == DeleteType {
@@ -1629,7 +1674,7 @@ func (x *xlMetaV2) AddVersion(fi FileInfo) error {
 			}
 			ventry.ObjectV2.PartNumbers[i] = fi.Parts[i].Number
 			ventry.ObjectV2.PartActualSizes[i] = fi.Parts[i].ActualSize
-			if len(ventry.ObjectV2.PartIndices) > 0 {
+			if len(ventry.ObjectV2.PartIndices) > i {
 				ventry.ObjectV2.PartIndices[i] = fi.Parts[i].Index
 			}
 		}
@@ -1936,7 +1981,6 @@ func mergeXLV2Versions(quorum int, strict bool, requestedVersions int, versions 
 			if !latest.header.FreeVersion() {
 				nVersions++
 			}
-
 		} else {
 			// Find latest.
 			var latestCount int

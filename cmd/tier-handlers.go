@@ -198,12 +198,14 @@ func (api adminAPIHandlers) RemoveTierHandler(w http.ResponseWriter, r *http.Req
 
 	vars := mux.Vars(r)
 	tier := vars["tier"]
+	force := r.Form.Get("force") == "true"
+
 	if err := globalTierConfigMgr.Reload(ctx, objAPI); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
 
-	if err := globalTierConfigMgr.Remove(ctx, tier); err != nil {
+	if err := globalTierConfigMgr.Remove(ctx, tier, force); err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}

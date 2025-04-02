@@ -165,7 +165,7 @@ var (
 )
 
 func (t *tierMetrics) Report() []MetricV2 {
-	metrics := getHistogramMetrics(t.histogram, tierTTLBMD, true)
+	metrics := getHistogramMetrics(t.histogram, tierTTLBMD, true, true)
 	t.RLock()
 	defer t.RUnlock()
 	for tier, stat := range t.requestsCount {
@@ -248,7 +248,7 @@ func (config *TierConfigMgr) Add(ctx context.Context, tier madmin.TierConfig, ig
 }
 
 // Remove removes tier if it is empty.
-func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
+func (config *TierConfigMgr) Remove(ctx context.Context, tier string, force bool) error {
 	d, err := config.getDriver(ctx, tier)
 	if err != nil {
 		if errors.Is(err, errTierNotFound) {
@@ -256,10 +256,12 @@ func (config *TierConfigMgr) Remove(ctx context.Context, tier string) error {
 		}
 		return err
 	}
-	if inuse, err := d.InUse(ctx); err != nil {
-		return err
-	} else if inuse {
-		return errTierBackendNotEmpty
+	if !force {
+		if inuse, err := d.InUse(ctx); err != nil {
+			return err
+		} else if inuse {
+			return errTierBackendNotEmpty
+		}
 	}
 	config.Lock()
 	delete(config.Tiers, tier)
@@ -489,13 +491,9 @@ func (config *TierConfigMgr) Reload(ctx context.Context, objAPI ObjectLayer) err
 	}
 
 	// Reset drivercache built using current config
-	for k := range config.drivercache {
-		delete(config.drivercache, k)
-	}
+	clear(config.drivercache)
 	// Remove existing tier configs
-	for k := range config.Tiers {
-		delete(config.Tiers, k)
-	}
+	clear(config.Tiers)
 	// Copy over the new tier configs
 	for tier, cfg := range newConfig.Tiers {
 		config.Tiers[tier] = cfg

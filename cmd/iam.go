@@ -32,7 +32,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	libldap "github.com/go-ldap/ldap/v3"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/minio/internal/arn"
@@ -178,13 +177,18 @@ func (sys *IAMSys) initStore(objAPI ObjectLayer, etcdClient *etcd.Client) {
 	}
 
 	if etcdClient == nil {
-		var group *singleflight.Group
+		var (
+			group  *singleflight.Group
+			policy *singleflight.Group
+		)
 		if env.Get("_MINIO_IAM_SINGLE_FLIGHT", config.EnableOn) == config.EnableOn {
 			group = &singleflight.Group{}
+			policy = &singleflight.Group{}
 		}
 		sys.store = &IAMStoreSys{
 			IAMStorageAPI: newIAMObjectStore(objAPI, sys.usersSysType),
 			group:         group,
+			policy:        policy,
 		}
 	} else {
 		sys.store = &IAMStoreSys{IAMStorageAPI: newIAMEtcdStore(etcdClient, sys.usersSysType)}
@@ -460,6 +464,7 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 	timer := time.NewTimer(waitInterval())
 	defer timer.Stop()
 
+	lastPurgeHour := -1
 	for {
 		select {
 		case <-timer.C:
@@ -475,9 +480,9 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 				}
 			}
 
-			// The following actions are performed about once in 4 times that
-			// IAM is refreshed:
-			if r.Intn(4) == 0 {
+			// Run purge routines once in each hour.
+			if refreshStart.Hour() != lastPurgeHour {
+				lastPurgeHour = refreshStart.Hour()
 				// Poll and remove accounts for those users who were removed
 				// from LDAP/OpenID.
 				if sys.LDAPConfig.Enabled() {
@@ -709,6 +714,16 @@ func (sys *IAMSys) SetPolicy(ctx context.Context, policyName string, p policy.Po
 		}
 	}
 	return updatedAt, nil
+}
+
+// RevokeTokens - revokes all STS tokens, or those of specified type, for a user
+// If `tokenRevokeType` is empty, all tokens are revoked.
+func (sys *IAMSys) RevokeTokens(ctx context.Context, accessKey, tokenRevokeType string) error {
+	if !sys.Initialized() {
+		return errServerNotInitialized
+	}
+
+	return sys.store.RevokeTokens(ctx, accessKey, tokenRevokeType)
 }
 
 // DeleteUser - delete user (only for long-term users not STS users).
@@ -1348,10 +1363,6 @@ func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (ma
 		return nil, errServerNotInitialized
 	}
 
-	if sys.usersSysType != LDAPUsersSysType {
-		return nil, nil
-	}
-
 	sa, ok := sys.store.GetUser(accessKey)
 	if !ok || !sa.Credentials.IsServiceAccount() {
 		return nil, errNoSuchServiceAccount
@@ -1743,7 +1754,7 @@ func (sys *IAMSys) NormalizeLDAPMappingImport(ctx context.Context, isGroup bool,
 
 	// We map keys that correspond to LDAP DNs and validate that they exist in
 	// the LDAP server.
-	var dnValidator func(*libldap.Conn, string) (*ldap.DNSearchResult, bool, error) = sys.LDAPConfig.GetValidatedUserDN
+	dnValidator := sys.LDAPConfig.GetValidatedUserDN
 	if isGroup {
 		dnValidator = sys.LDAPConfig.GetValidatedGroupDN
 	}
@@ -2233,7 +2244,6 @@ func (sys *IAMSys) IsAllowedServiceAccount(args policy.Args, parentUser string) 
 			return false
 		}
 		svcPolicies = newMappedPolicy(sys.rolesMap[arn]).toSlice()
-
 	default:
 		// Check policy for parent user of service account.
 		svcPolicies, err = sys.PolicyDBGet(parentUser, args.Groups...)
@@ -2339,7 +2349,6 @@ func (sys *IAMSys) IsAllowedSTS(args policy.Args, parentUser string) bool {
 			}
 			policies = policySet.ToSlice()
 		}
-
 	}
 
 	// Defensive code: Do not allow any operation if no policy is found in the session token

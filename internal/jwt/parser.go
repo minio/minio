@@ -30,13 +30,13 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"sync"
 	"time"
 
 	"github.com/buger/jsonparser"
 	"github.com/dustin/go-humanize"
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/minio/minio/internal/bpool"
 )
 
 // SigningMethodHMAC - Implements the HMAC-SHA family of signing methods signing methods
@@ -44,7 +44,7 @@ import (
 type SigningMethodHMAC struct {
 	Name       string
 	Hash       crypto.Hash
-	HasherPool sync.Pool
+	HasherPool bpool.Pool[hash.Hash]
 }
 
 // Specific instances for HS256, HS384, HS512
@@ -57,13 +57,13 @@ var (
 const base64BufferSize = 64 * humanize.KiByte
 
 var (
-	base64BufPool sync.Pool
+	base64BufPool bpool.Pool[*[]byte]
 	hmacSigners   []*SigningMethodHMAC
 )
 
 func init() {
-	base64BufPool = sync.Pool{
-		New: func() interface{} {
+	base64BufPool = bpool.Pool[*[]byte]{
+		New: func() *[]byte {
 			buf := make([]byte, base64BufferSize)
 			return &buf
 		},
@@ -76,7 +76,7 @@ func init() {
 	}
 	for i := range hmacSigners {
 		h := hmacSigners[i].Hash
-		hmacSigners[i].HasherPool.New = func() interface{} {
+		hmacSigners[i].HasherPool.New = func() hash.Hash {
 			return h.New()
 		}
 	}
@@ -89,13 +89,13 @@ func (s *SigningMethodHMAC) HashBorrower() HashBorrower {
 
 // HashBorrower keeps track of borrowed hashers and allows to return them all.
 type HashBorrower struct {
-	pool     *sync.Pool
+	pool     *bpool.Pool[hash.Hash]
 	borrowed []hash.Hash
 }
 
 // Borrow a single hasher.
 func (h *HashBorrower) Borrow() hash.Hash {
-	hasher := h.pool.Get().(hash.Hash)
+	hasher := h.pool.Get()
 	h.borrowed = append(h.borrowed, hasher)
 	hasher.Reset()
 	return hasher
@@ -245,6 +245,22 @@ func NewMapClaims() *MapClaims {
 	return &MapClaims{MapClaims: jwtgo.MapClaims{}}
 }
 
+// Set Adds new arbitrary claim keys and values.
+func (c *MapClaims) Set(key string, val interface{}) {
+	if c == nil {
+		return
+	}
+	c.MapClaims[key] = val
+}
+
+// Delete deletes a key named key.
+func (c *MapClaims) Delete(key string) {
+	if c == nil {
+		return
+	}
+	delete(c.MapClaims, key)
+}
+
 // Lookup returns the value and if the key is found.
 func (c *MapClaims) Lookup(key string) (value string, ok bool) {
 	if c == nil {
@@ -307,10 +323,10 @@ func ParseWithStandardClaims(tokenStr string, claims *StandardClaims, key []byte
 		return jwtgo.NewValidationError("no key was provided.", jwtgo.ValidationErrorUnverifiable)
 	}
 
-	bufp := base64BufPool.Get().(*[]byte)
+	bufp := base64BufPool.Get()
 	defer base64BufPool.Put(bufp)
 
-	tokenBuf := base64BufPool.Get().(*[]byte)
+	tokenBuf := base64BufPool.Get()
 	defer base64BufPool.Put(tokenBuf)
 
 	token := *tokenBuf
@@ -403,10 +419,10 @@ func ParseWithClaims(tokenStr string, claims *MapClaims, fn func(*MapClaims) ([]
 		return jwtgo.NewValidationError("no Keyfunc was provided.", jwtgo.ValidationErrorUnverifiable)
 	}
 
-	bufp := base64BufPool.Get().(*[]byte)
+	bufp := base64BufPool.Get()
 	defer base64BufPool.Put(bufp)
 
-	tokenBuf := base64BufPool.Get().(*[]byte)
+	tokenBuf := base64BufPool.Get()
 	defer base64BufPool.Put(tokenBuf)
 
 	token := *tokenBuf

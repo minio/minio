@@ -23,6 +23,8 @@ import (
 	"net"
 	"syscall"
 	"time"
+
+	"github.com/minio/minio/internal/deadlineconn"
 )
 
 type acceptResult struct {
@@ -73,7 +75,7 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 	select {
 	case result, ok := <-listener.acceptCh:
 		if ok {
-			return result.conn, result.err
+			return deadlineconn.New(result.conn).WithReadDeadline(listener.opts.IdleTimeout).WithWriteDeadline(listener.opts.IdleTimeout), result.err
 		}
 	case <-listener.ctx.Done():
 	}
@@ -98,13 +100,15 @@ func (listener *httpListener) Addr() (addr net.Addr) {
 		return addr
 	}
 
-	tcpAddr := addr.(*net.TCPAddr)
-	if ip := net.ParseIP("0.0.0.0"); ip != nil {
-		tcpAddr.IP = ip
-	}
+	if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+		if ip := net.ParseIP("0.0.0.0"); ip != nil {
+			tcpAddr.IP = ip
+		}
 
-	addr = tcpAddr
-	return addr
+		addr = tcpAddr
+		return addr
+	}
+	panic("unknown address type on listener")
 }
 
 // Addrs - returns all address information of TCP listeners.
@@ -128,6 +132,7 @@ type TCPOptions struct {
 	NoDelay     bool             // Indicates callers to enable TCP_NODELAY on the net.Conn
 	Interface   string           // This is a VRF device passed via `--interface` flag
 	Trace       func(msg string) // Trace when starting.
+	IdleTimeout time.Duration    // Incoming TCP read/write timeout
 }
 
 // ForWebsocket returns TCPOptions valid for websocket net.Conn

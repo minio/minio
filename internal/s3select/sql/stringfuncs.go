@@ -107,7 +107,6 @@ func evalSQLLike(text, pattern string, escape rune) (match bool, err error) {
 		default:
 			s = append(s, r)
 		}
-
 	}
 	if hasLeadingPercent {
 		return strings.HasSuffix(text, string(s)), nil

@@ -28,11 +28,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+	"github.com/minio/minio/internal/bpool"
 )
 
 // ErrDisconnected is returned when the connection to the remote has been lost during the call.
@@ -68,15 +68,15 @@ const (
 	defaultSingleRequestTimeout = time.Minute
 )
 
-var internalByteBuffer = sync.Pool{
-	New: func() any {
+var internalByteBuffer = bpool.Pool[*[]byte]{
+	New: func() *[]byte {
 		m := make([]byte, 0, defaultBufferSize)
 		return &m
 	},
 }
 
-var internal32KByteBuffer = sync.Pool{
-	New: func() any {
+var internal32KByteBuffer = bpool.Pool[*[]byte]{
+	New: func() *[]byte {
 		m := make([]byte, 0, biggerBufMin)
 		return &m
 	},
@@ -87,7 +87,7 @@ var internal32KByteBuffer = sync.Pool{
 // When replacing PutByteBuffer should also be replaced
 // There is no minimum size.
 var GetByteBuffer = func() []byte {
-	b := *internalByteBuffer.Get().(*[]byte)
+	b := *internalByteBuffer.Get()
 	return b[:0]
 }
 
@@ -101,7 +101,7 @@ func GetByteBufferCap(wantSz int) []byte {
 		PutByteBuffer(b)
 	}
 	if wantSz <= maxBufferSize {
-		b := *internal32KByteBuffer.Get().(*[]byte)
+		b := *internal32KByteBuffer.Get()
 		if cap(b) >= wantSz {
 			return b[:0]
 		}
@@ -192,7 +192,7 @@ func bytesOrLength(b []byte) string {
 	if len(b) > 100 {
 		return fmt.Sprintf("%d bytes", len(b))
 	}
-	return fmt.Sprint(b)
+	return fmt.Sprint(string(b))
 }
 
 // ConnDialer is a function that dials a connection to the given address.

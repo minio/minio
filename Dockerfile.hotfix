@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine as build
+FROM golang:1.23-alpine as build
 
 ARG TARGETARCH
 ARG RELEASE
@@ -53,7 +53,7 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_CONFIG_ENV_FILE=config.env \
     MC_CONFIG_DIR=/tmp/.mc
 
-RUN chmod 1777 /usr/bin
+RUN chmod -R 777 /usr/bin
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /go/bin/minio* /usr/bin/

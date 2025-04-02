@@ -68,7 +68,7 @@ The field of `getObjectContext` means the input and output details for connectio
 
 - `outputToken` – A token added to the response headers when the Lambda function returns the transformed object. This is used by MinIO to verify the incoming response validity.
 
-Lets start the lamdba handler.
+Lets start the lambda handler.
 
 ```
 python lambda_handler.py

@@ -20,12 +20,12 @@ package cmd
 import (
 	"bytes"
 	"encoding/base64"
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	minio "github.com/minio/minio-go/v7"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 func TestParsePostPolicyForm(t *testing.T) {
@@ -78,6 +78,28 @@ func TestParsePostPolicyForm(t *testing.T) {
 	}
 }
 
+type formValues struct {
+	http.Header
+}
+
+func newFormValues() formValues {
+	return formValues{make(http.Header)}
+}
+
+func (f formValues) Set(key, value string) formValues {
+	f.Header.Set(key, value)
+	return f
+}
+
+func (f formValues) Add(key, value string) formValues {
+	f.Header.Add(key, value)
+	return f
+}
+
+func (f formValues) Clone() formValues {
+	return formValues{f.Header.Clone()}
+}
+
 // Test Post Policy parsing and checking conditions
 func TestPostPolicyForm(t *testing.T) {
 	pp := minio.NewPostPolicy()
@@ -85,76 +107,193 @@ func TestPostPolicyForm(t *testing.T) {
 	pp.SetContentType("image/jpeg")
 	pp.SetUserMetadata("uuid", "14365123651274")
 	pp.SetKeyStartsWith("user/user1/filename")
-	pp.SetContentLengthRange(1048579, 10485760)
+	pp.SetContentLengthRange(100, 999999) // not testable from this layer, condition is checked in the API handler.
 	pp.SetSuccessStatusAction("201")
+	pp.SetCondition("eq", "X-Amz-Credential", "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request")
+	pp.SetCondition("eq", "X-Amz-Algorithm", "AWS4-HMAC-SHA256")
+	pp.SetCondition("eq", xhttp.AmzDate, "20160727T000000Z")
+
+	defaultFormVals := newFormValues()
+	defaultFormVals.Set("Bucket", "testbucket")
+	defaultFormVals.Set("Content-Type", "image/jpeg")
+	defaultFormVals.Set(xhttp.AmzMetaUUID, "14365123651274")
+	defaultFormVals.Set("Key", "user/user1/filename/${filename}/myfile.txt")
+	defaultFormVals.Set("X-Amz-Credential", "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request")
+	defaultFormVals.Set("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
+	defaultFormVals.Set(xhttp.AmzDate, "20160727T000000Z")
+	defaultFormVals.Set("Success_action_status", "201")
+
+	policyCondFailedErr := "Invalid according to Policy: Policy Condition failed"
 
 	type testCase struct {
-		Bucket              string
-		Key                 string
-		XAmzDate            string
-		XAmzAlgorithm       string
-		XAmzCredential      string
-		XAmzMetaUUID        string
-		ContentType         string
-		SuccessActionStatus string
-		Policy              string
-		Expired             bool
-		expectedErr         error
+		name    string
+		fv      formValues
+		expired bool
+		wantErr string
 	}
 
+	// Test case just contains fields we override from defaultFormVals.
 	testCases := []testCase{
-		// Everything is fine with this test
-		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", SuccessActionStatus: "201", XAmzCredential: "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: nil},
-		// Expired policy document
-		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", SuccessActionStatus: "201", XAmzCredential: "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", Expired: true, expectedErr: fmt.Errorf("Invalid according to Policy: Policy expired")},
-		// Different AMZ date
-		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", XAmzDate: "2017T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed")},
-		// Key which doesn't start with user/user1/filename
-		{Bucket: "testbucket", Key: "myfile.txt", XAmzDate: "20160727T000000Z", XAmzMetaUUID: "14365123651274", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed")},
-		// Incorrect bucket name.
-		{Bucket: "incorrect", Key: "user/user1/filename/myfile.txt", XAmzMetaUUID: "14365123651274", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed")},
-		// Incorrect key name
-		{Bucket: "testbucket", Key: "incorrect", XAmzDate: "20160727T000000Z", XAmzMetaUUID: "14365123651274", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed")},
-		// Incorrect date
-		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", XAmzDate: "incorrect", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed")},
-		// Incorrect ContentType
-		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "14365123651274", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "incorrect", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed")},
-		// Incorrect Metadata
-		{Bucket: "testbucket", Key: "user/user1/filename/${filename}/myfile.txt", XAmzMetaUUID: "151274", SuccessActionStatus: "201", XAmzCredential: "KVGKMDUQ23TCZXTLTHLP/20160727/us-east-1/s3/aws4_request", XAmzDate: "20160727T000000Z", XAmzAlgorithm: "AWS4-HMAC-SHA256", ContentType: "image/jpeg", expectedErr: fmt.Errorf("Invalid according to Policy: Policy Condition failed: [eq, $x-amz-meta-uuid, 14365123651274]")},
+		{
+			name:    "happy path no errors",
+			fv:      defaultFormVals.Clone(),
+			wantErr: "",
+		},
+		{
+			name:    "expired policy document",
+			fv:      defaultFormVals.Clone(),
+			expired: true,
+			wantErr: "Invalid according to Policy: Policy expired",
+		},
+		{
+			name:    "different AMZ date",
+			fv:      defaultFormVals.Clone().Set(xhttp.AmzDate, "2017T000000Z"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect date",
+			fv:      defaultFormVals.Clone().Set(xhttp.AmzDate, "incorrect"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "key which doesn't start with user/user1/filename",
+			fv:      defaultFormVals.Clone().Set("Key", "myfile.txt"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect key name",
+			fv:      defaultFormVals.Clone().Set("Key", "incorrect"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect bucket name",
+			fv:      defaultFormVals.Clone().Set("Bucket", "incorrect"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect ContentType",
+			fv:      defaultFormVals.Clone().Set(xhttp.ContentType, "incorrect"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect X-Amz-Algorithm",
+			fv:      defaultFormVals.Clone().Set(xhttp.AmzAlgorithm, "incorrect"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect X-Amz-Credential",
+			fv:      defaultFormVals.Clone().Set(xhttp.AmzCredential, "incorrect"),
+			wantErr: policyCondFailedErr,
+		},
+		{
+			name:    "incorrect metadata uuid",
+			fv:      defaultFormVals.Clone().Set(xhttp.AmzMetaUUID, "151274"),
+			wantErr: "Invalid according to Policy: Policy Condition failed: [eq, $x-amz-meta-uuid, 14365123651274]",
+		},
+		{
+			name:    "unknown key XAmzMetaName is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(xhttp.AmzMetaName, "my-name"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Meta-Name" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key XAmzChecksumAlgo is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.AmzChecksumAlgo), "algo-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Checksum-Algorithm" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key XAmzChecksumCRC32 is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.AmzChecksumCRC32), "crc32-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Checksum-Crc32" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key XAmzChecksumCRC32C is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.AmzChecksumCRC32C), "crc32c-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Checksum-Crc32c" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key XAmzChecksumSHA1 is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.AmzChecksumSHA1), "sha1-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Checksum-Sha1" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key XAmzChecksumSHA256 is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.AmzChecksumSHA256), "sha256-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Checksum-Sha256" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key XAmzChecksumMode is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.AmzChecksumMode), "mode-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "X-Amz-Checksum-Mode" not specified in the policy.`,
+		},
+		{
+			name:    "unknown key Content-Encoding is error as it does not appear in policy",
+			fv:      defaultFormVals.Clone().Set(http.CanonicalHeaderKey(xhttp.ContentEncoding), "encoding-val"),
+			wantErr: `Each form field that you specify in a form must appear in the list of policy conditions. "Content-Encoding" not specified in the policy.`,
+		},
+		{
+			name:    "many bucket values",
+			fv:      defaultFormVals.Clone().Add("Bucket", "anotherbucket"),
+			wantErr: "Invalid according to Policy: Policy Condition failed: [eq, $bucket, testbucket]. FormValues have multiple values: [testbucket, anotherbucket]",
+		},
+		{
+			name: "XAmzSignature does not have to appear in policy",
+			fv:   defaultFormVals.Clone().Set(xhttp.AmzSignature, "my-signature"),
+		},
+		{
+			name: "XIgnoreFoo does not have to appear in policy",
+			fv:   defaultFormVals.Clone().Set("X-Ignore-Foo", "my-foo-value"),
+		},
+		{
+			name: "File does not have to appear in policy",
+			fv:   defaultFormVals.Clone().Set("File", "file-value"),
+		},
+		{
+			name: "Signature does not have to appear in policy",
+			fv:   defaultFormVals.Clone().Set(xhttp.AmzSignatureV2, "signature-value"),
+		},
+		{
+			name: "AWSAccessKeyID does not have to appear in policy",
+			fv:   defaultFormVals.Clone().Set(xhttp.AmzAccessKeyID, "access").Set(xhttp.AmzSignatureV2, "signature-value"),
+		},
+		{
+			name: "any form value starting with X-Amz-Server-Side-Encryption- does not have to appear in policy",
+			fv: defaultFormVals.Clone().
+				Set(xhttp.AmzServerSideEncryptionKmsContext, "context-val").
+				Set(xhttp.AmzServerSideEncryptionCustomerAlgorithm, "algo-val"),
+		},
 	}
-	// Validate all the test cases.
-	for i, tt := range testCases {
-		formValues := make(http.Header)
-		formValues.Set("Bucket", tt.Bucket)
-		formValues.Set("Key", tt.Key)
-		formValues.Set("Content-Type", tt.ContentType)
-		formValues.Set("X-Amz-Date", tt.XAmzDate)
-		formValues.Set("X-Amz-Meta-Uuid", tt.XAmzMetaUUID)
-		formValues.Set("X-Amz-Algorithm", tt.XAmzAlgorithm)
-		formValues.Set("X-Amz-Credential", tt.XAmzCredential)
-		if tt.Expired {
-			// Expired already.
-			pp.SetExpires(UTCNow().AddDate(0, 0, -10))
-		} else {
-			// Expires in 10 days.
-			pp.SetExpires(UTCNow().AddDate(0, 0, 10))
-		}
 
-		formValues.Set("Policy", base64.StdEncoding.EncodeToString([]byte(pp.String())))
-		formValues.Set("Success_action_status", tt.SuccessActionStatus)
-		policyBytes, err := base64.StdEncoding.DecodeString(base64.StdEncoding.EncodeToString([]byte(pp.String())))
-		if err != nil {
-			t.Fatal(err)
-		}
+	// Run tests
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.expired {
+				// Expired already.
+				pp.SetExpires(UTCNow().AddDate(0, 0, -10))
+			} else {
+				// Expires in 10 days.
+				pp.SetExpires(UTCNow().AddDate(0, 0, 10))
+			}
 
-		postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
-		if err != nil {
-			t.Fatal(err)
-		}
+			tt.fv.Set("Policy", base64.StdEncoding.EncodeToString([]byte(pp.String())))
 
-		err = checkPostPolicy(formValues, postPolicyForm)
-		if err != nil && tt.expectedErr != nil && err.Error() != tt.expectedErr.Error() {
-			t.Fatalf("Test %d:, Expected %s, got %s", i+1, tt.expectedErr.Error(), err.Error())
-		}
+			policyBytes, err := base64.StdEncoding.DecodeString(base64.StdEncoding.EncodeToString([]byte(pp.String())))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			postPolicyForm, err := parsePostPolicyForm(bytes.NewReader(policyBytes))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			errStr := ""
+			err = checkPostPolicy(tt.fv.Header, postPolicyForm)
+			if err != nil {
+				errStr = err.Error()
+			}
+			if errStr != tt.wantErr {
+				t.Errorf("test: '%s', want error: '%s', got error: '%s'", tt.name, tt.wantErr, errStr)
+			}
+		})
 	}
 }

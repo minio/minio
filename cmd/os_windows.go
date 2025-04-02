@@ -60,20 +60,19 @@ func readDirFn(dirPath string, filter func(name string, typ os.FileMode) error) 
 		if err != nil {
 			if err == syscall.ERROR_NO_MORE_FILES {
 				break
-			} else {
-				if isSysErrPathNotFound(err) {
-					return nil
-				}
-				err = osErrToFileErr(&os.PathError{
-					Op:   "FindNextFile",
-					Path: dirPath,
-					Err:  err,
-				})
-				if err == errFileNotFound {
-					return nil
-				}
-				return err
 			}
+			if isSysErrPathNotFound(err) {
+				return nil
+			}
+			err = osErrToFileErr(&os.PathError{
+				Op:   "FindNextFile",
+				Path: dirPath,
+				Err:  err,
+			})
+			if err == errFileNotFound {
+				return nil
+			}
+			return err
 		}
 		name := syscall.UTF16ToString(data.FileName[0:])
 		if name == "" || name == "." || name == ".." { // Useless names
@@ -136,13 +135,12 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		if err != nil {
 			if err == syscall.ERROR_NO_MORE_FILES {
 				break
-			} else {
-				return nil, osErrToFileErr(&os.PathError{
-					Op:   "FindNextFile",
-					Path: dirPath,
-					Err:  err,
-				})
 			}
+			return nil, osErrToFileErr(&os.PathError{
+				Op:   "FindNextFile",
+				Path: dirPath,
+				Err:  err,
+			})
 		}
 
 		name := syscall.UTF16ToString(data.FileName[0:])
@@ -175,7 +173,6 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 
 		count--
 		entries = append(entries, name)
-
 	}
 
 	return entries, nil

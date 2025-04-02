@@ -10,7 +10,7 @@ Replication relies on immutability provided by versioning to sync objects betwee
 
 If an object meets replication rules as set in the replication configuration, `X-Amz-Replication-Status` is first set to `PENDING` as the PUT operation completes and replication is queued (unless synchronous replication is in place). After replication is performed, the metadata on the source object version changes to `COMPLETED` or `FAILED` depending on whether replication succeeded. The object version on the target shows `X-Amz-Replication-Status` of `REPLICA`
 
-All replication failures are picked up by the scanner which runs at a one minute frequency, each time scanning upto a sixteenth of the namespace. Object versions marked `PENDING` or `FAILED` are re-queued for replication.
+All replication failures are picked up by the scanner which runs at a one minute frequency, each time scanning up to a sixteenth of the namespace. Object versions marked `PENDING` or `FAILED` are re-queued for replication.
 
 Replication speed depends on the cluster load, number of objects in the object store as well as storage speed. In addition, any bandwidth limits set via `mc admin bucket remote add` could also contribute to replication speed. The number of workers used for replication defaults to 100. Based on network bandwidth and system load, the number of workers used in replication can be configured using `mc admin config set alias api` to set the `replication_workers`. The prometheus metrics exposed by MinIO can be used to plan resource allocation and bandwidth management to optimize replication speed.
 

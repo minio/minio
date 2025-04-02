@@ -89,6 +89,12 @@ var (
 			Type:        "duration",
 		},
 		config.HelpKV{
+			Key:         httpTimeout,
+			Description: `defines the maximum duration for each http request`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
 			Key:         config.Comment,
 			Description: config.DefaultComment,
 			Optional:    true,
@@ -152,6 +158,12 @@ var (
 		config.HelpKV{
 			Key:         RetryInterval,
 			Description: `sleep between each retries, allowed maximum value is '1m' e.g. '10s'`,
+			Optional:    true,
+			Type:        "duration",
+		},
+		config.HelpKV{
+			Key:         httpTimeout,
+			Description: `defines the maximum duration for each http request`,
 			Optional:    true,
 			Type:        "duration",
 		},

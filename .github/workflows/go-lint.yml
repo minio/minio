@@ -20,24 +20,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        go-version: [1.22.x]
-        os: [ubuntu-latest, Windows]
+        go-version: [1.23.x]
+        os: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
-      - name: Build on ${{ matrix.os }}
-        if: matrix.os == 'Windows'
-        env:
-          CGO_ENABLED: 0
-          GO111MODULE: on
-        run: |
-          Set-MpPreference -DisableRealtimeMonitoring $true
-          netsh int ipv4 set dynamicport tcp start=60000 num=61000
-          go build --ldflags="-s -w" -o %GOPATH%\bin\minio.exe
-          go test -v --timeout 120m ./...
       - name: Build on ${{ matrix.os }}
         if: matrix.os == 'ubuntu-latest'
         env:

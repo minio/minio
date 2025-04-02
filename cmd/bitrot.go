@@ -128,14 +128,20 @@ func closeBitrotReaders(rs []io.ReaderAt) {
 }
 
 // Close all the writers.
-func closeBitrotWriters(ws []io.Writer) {
-	for _, w := range ws {
-		if w != nil {
-			if bw, ok := w.(io.Closer); ok {
-				bw.Close()
-			}
+func closeBitrotWriters(ws []io.Writer) []error {
+	errs := make([]error, len(ws))
+	for i, w := range ws {
+		if w == nil {
+			errs[i] = errDiskNotFound
+			continue
+		}
+		if bw, ok := w.(io.Closer); ok {
+			errs[i] = bw.Close()
+		} else {
+			errs[i] = nil
 		}
 	}
+	return errs
 }
 
 // Returns hash sum for whole-bitrot, nil for streaming-bitrot.
@@ -178,7 +184,7 @@ func bitrotVerify(r io.Reader, wantSize, partSize int64, algo BitrotAlgorithm, w
 		return errFileCorrupt
 	}
 
-	bufp := xioutil.ODirectPoolSmall.Get().(*[]byte)
+	bufp := xioutil.ODirectPoolSmall.Get()
 	defer xioutil.ODirectPoolSmall.Put(bufp)
 
 	for left > 0 {

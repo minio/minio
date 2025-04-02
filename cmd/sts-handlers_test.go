@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,6 @@ import (
 	cr "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/set"
 	"github.com/minio/pkg/v3/ldap"
-	"golang.org/x/exp/slices"
 )
 
 func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
@@ -46,6 +46,7 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	suite.TestSTSWithTags(c)
 	suite.TestSTSServiceAccountsWithUsername(c)
 	suite.TestSTSWithGroupPolicy(c)
+	suite.TestSTSTokenRevoke(c)
 	suite.TearDownSuite(c)
 }
 
@@ -642,7 +643,7 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	gotBuckets := set.NewStringSet()
 	for _, b := range accInfo.Buckets {
 		gotBuckets.Add(b.Name)
-		if !(b.Access.Read && b.Access.Write) {
+		if !b.Access.Read || !b.Access.Write {
 			c.Fatalf("root user should have read and write access to bucket: %v", b.Name)
 		}
 	}
@@ -654,6 +655,129 @@ func (s *TestSuiteIAM) TestSTSForRoot(c *check) {
 	// This must fail.
 	if err := userAdmClient.AddUser(ctx, globalActiveCred.AccessKey, globalActiveCred.SecretKey); err == nil {
 		c.Fatal("AddUser() for root credential must fail via root STS creds")
+	}
+}
+
+// TestSTSTokenRevoke - tests the token revoke API
+func (s *TestSuiteIAM) TestSTSTokenRevoke(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*testDefaultTimeout)
+	defer cancel()
+
+	bucket := getRandomBucketName()
+	err := s.client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{})
+	if err != nil {
+		c.Fatalf("bucket create error: %v", err)
+	}
+
+	// Create policy, user and associate policy
+	policy := "mypolicy"
+	policyBytes := []byte(fmt.Sprintf(`{
+ "Version": "2012-10-17",
+ "Statement": [
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject",
+    "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s/*"
+   ]
+  }
+ ]
+}`, bucket))
+	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
+	if err != nil {
+		c.Fatalf("policy add error: %v", err)
+	}
+
+	accessKey, secretKey := mustGenerateCredentials(c)
+	err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
+	if err != nil {
+		c.Fatalf("Unable to set user: %v", err)
+	}
+
+	_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+		Policies: []string{policy},
+		User:     accessKey,
+	})
+	if err != nil {
+		c.Fatalf("Unable to attach policy: %v", err)
+	}
+
+	cases := []struct {
+		tokenType  string
+		fullRevoke bool
+		selfRevoke bool
+	}{
+		{"", true, false},        // Case 1
+		{"", true, true},         // Case 2
+		{"type-1", false, false}, // Case 3
+		{"type-2", false, true},  // Case 4
+		{"type-2", true, true},   // Case 5 - repeat type 2 to ensure previous revoke does not affect it.
+	}
+
+	for i, tc := range cases {
+		// Create STS user.
+		assumeRole := cr.STSAssumeRole{
+			Client:      s.TestSuiteCommon.client,
+			STSEndpoint: s.endPoint,
+			Options: cr.STSAssumeRoleOptions{
+				AccessKey:       accessKey,
+				SecretKey:       secretKey,
+				TokenRevokeType: tc.tokenType,
+			},
+		}
+
+		value, err := assumeRole.Retrieve()
+		if err != nil {
+			c.Fatalf("err calling assumeRole: %v", err)
+		}
+
+		minioClient, err := minio.New(s.endpoint, &minio.Options{
+			Creds:     cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+			Secure:    s.secure,
+			Transport: s.TestSuiteCommon.client.Transport,
+		})
+		if err != nil {
+			c.Fatalf("Error initializing client: %v", err)
+		}
+
+		// Validate that the client from sts creds can access the bucket.
+		c.mustListObjects(ctx, minioClient, bucket)
+
+		// Set up revocation
+		user := accessKey
+		tokenType := tc.tokenType
+		reqAdmClient := s.adm
+		if tc.fullRevoke {
+			tokenType = ""
+		}
+		if tc.selfRevoke {
+			user = ""
+			tokenType = ""
+			reqAdmClient, err = madmin.NewWithOptions(s.endpoint, &madmin.Options{
+				Creds:  cr.NewStaticV4(value.AccessKeyID, value.SecretAccessKey, value.SessionToken),
+				Secure: s.secure,
+			})
+			if err != nil {
+				c.Fatalf("Err creating user admin client: %v", err)
+			}
+			reqAdmClient.SetCustomTransport(s.TestSuiteCommon.client.Transport)
+		}
+
+		err = reqAdmClient.RevokeTokens(ctx, madmin.RevokeTokensReq{
+			User:            user,
+			TokenRevokeType: tokenType,
+			FullRevoke:      tc.fullRevoke,
+		})
+		if err != nil {
+			c.Fatalf("Case %d: unexpected error: %v", i+1, err)
+		}
+
+		// Validate that the client cannot access the bucket after revocation.
+		c.mustNotListObjects(ctx, minioClient, bucket)
 	}
 }
 
@@ -740,6 +864,7 @@ func TestIAMWithLDAPServerSuite(t *testing.T) {
 				suite.TestLDAPSTSServiceAccountsWithGroups(c)
 				suite.TestLDAPAttributesLookup(c)
 				suite.TestLDAPCyrillicUser(c)
+				suite.TestLDAPSlashDN(c)
 				suite.TearDownSuite(c)
 			},
 		)
@@ -770,6 +895,7 @@ func TestIAMWithLDAPNonNormalizedBaseDNConfigServerSuite(t *testing.T) {
 				suite.TestLDAPSTSServiceAccounts(c)
 				suite.TestLDAPSTSServiceAccountsWithUsername(c)
 				suite.TestLDAPSTSServiceAccountsWithGroups(c)
+				suite.TestLDAPSlashDN(c)
 				suite.TearDownSuite(c)
 			},
 		)
@@ -1441,7 +1567,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
 		idx := slices.IndexFunc(policyResult.PolicyMappings, func(e madmin.PolicyEntities) bool {
 			return e.Policy == policy && slices.Contains(e.Groups, actualGroupDN)
 		})
-		if !(idx >= 0) {
+		if idx < 0 {
 			c.Fatalf("expected groupDN (%s) to be present in mapping list: %#v", actualGroupDN, policyResult)
 		}
 	}
@@ -1604,7 +1730,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
 		idx := slices.IndexFunc(policyResult.PolicyMappings, func(e madmin.PolicyEntities) bool {
 			return e.Policy == policy && slices.Contains(e.Groups, actualGroupDN)
 		})
-		if !(idx >= 0) {
+		if idx < 0 {
 			c.Fatalf("expected groupDN (%s) to be present in mapping list: %#v", actualGroupDN, policyResult)
 		}
 	}
@@ -1997,7 +2123,7 @@ func (s *TestSuiteIAM) TestLDAPCyrillicUser(c *check) {
 		}
 
 		// Validate claims.
-		dnClaim := claims[ldapActualUser].(string)
+		dnClaim := claims.MapClaims[ldapActualUser].(string)
 		if dnClaim != testCase.dn {
 			c.Fatalf("Test %d: unexpected dn claim: %s", i+1, dnClaim)
 		}
@@ -2005,6 +2131,93 @@ func (s *TestSuiteIAM) TestLDAPCyrillicUser(c *check) {
 
 	if _, err = s.adm.DetachPolicyLDAP(ctx, userReq); err != nil {
 		c.Fatalf("Unable to detach user policy: %v", err)
+	}
+}
+
+func (s *TestSuiteIAM) TestLDAPSlashDN(c *check) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	policyReq := madmin.PolicyAssociationReq{
+		Policies: []string{"readwrite"},
+	}
+
+	cases := []struct {
+		username string
+		dn       string
+		group    string
+	}{
+		{
+			username: "slashuser",
+			dn:       "uid=slash/user,ou=people,ou=swengg,dc=min,dc=io",
+		},
+		{
+			username: "dillon",
+			dn:       "uid=dillon,ou=people,ou=swengg,dc=min,dc=io",
+			group:    "cn=project/d,ou=groups,ou=swengg,dc=min,dc=io",
+		},
+	}
+
+	conn, err := globalIAMSys.LDAPConfig.LDAP.Connect()
+	if err != nil {
+		c.Fatalf("LDAP connect failed: %v", err)
+	}
+	defer conn.Close()
+
+	for i, testCase := range cases {
+		if testCase.group != "" {
+			policyReq.Group = testCase.group
+			policyReq.User = ""
+		} else {
+			policyReq.User = testCase.dn
+			policyReq.Group = ""
+		}
+
+		if _, err := s.adm.AttachPolicyLDAP(ctx, policyReq); err != nil {
+			c.Fatalf("Unable to attach  policy: %v", err)
+		}
+
+		ldapID := cr.LDAPIdentity{
+			Client:       s.TestSuiteCommon.client,
+			STSEndpoint:  s.endPoint,
+			LDAPUsername: testCase.username,
+			LDAPPassword: testCase.username,
+		}
+
+		value, err := ldapID.Retrieve()
+		if err != nil {
+			c.Fatalf("Expected to generate STS creds, got err: %#v", err)
+		}
+
+		// Retrieve the STS account's credential object.
+		u, ok := globalIAMSys.GetUser(ctx, value.AccessKeyID)
+		if !ok {
+			c.Fatalf("Expected to find user %s", value.AccessKeyID)
+		}
+
+		if u.Credentials.AccessKey != value.AccessKeyID {
+			c.Fatalf("Expected access key %s, got %s", value.AccessKeyID, u.Credentials.AccessKey)
+		}
+
+		// Retrieve the credential's claims.
+		secret, err := getTokenSigningKey()
+		if err != nil {
+			c.Fatalf("Error getting token signing key: %v", err)
+		}
+		claims, err := getClaimsFromTokenWithSecret(value.SessionToken, secret)
+		if err != nil {
+			c.Fatalf("Error getting claims from token: %v", err)
+		}
+
+		// Validate claims.
+		dnClaim := claims.MapClaims[ldapActualUser].(string)
+		if dnClaim != testCase.dn {
+			c.Fatalf("Test %d: unexpected dn claim: %s", i+1, dnClaim)
+		}
+
+		if _, err = s.adm.DetachPolicyLDAP(ctx, policyReq); err != nil {
+			c.Fatalf("Unable to detach user policy: %v", err)
+		}
 	}
 }
 
@@ -2079,11 +2292,11 @@ func (s *TestSuiteIAM) TestLDAPAttributesLookup(c *check) {
 		}
 
 		// Validate claims. Check if the sshPublicKey claim is present.
-		dnClaim := claims[ldapActualUser].(string)
+		dnClaim := claims.MapClaims[ldapActualUser].(string)
 		if dnClaim != testCase.dn {
 			c.Fatalf("Test %d: unexpected dn claim: %s", i+1, dnClaim)
 		}
-		sshPublicKeyClaim := claims[ldapAttribPrefix+"sshPublicKey"].([]interface{})[0].(string)
+		sshPublicKeyClaim := claims.MapClaims[ldapAttribPrefix+"sshPublicKey"].([]interface{})[0].(string)
 		if sshPublicKeyClaim == "" {
 			c.Fatalf("Test %d: expected sshPublicKey claim to be present", i+1)
 		}

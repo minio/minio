@@ -30,7 +30,7 @@ import (
 	"github.com/klauspost/compress/s2"
 	"github.com/klauspost/compress/zstd"
 	gzip "github.com/klauspost/pgzip"
-	"github.com/pierrec/lz4"
+	"github.com/pierrec/lz4/v4"
 )
 
 type countUpReader struct {

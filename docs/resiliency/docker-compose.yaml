@@ -1,0 +1,125 @@
+# Settings and configurations that are common for all containers
+x-minio-common: &minio-common
+  build:
+    context: ../../.
+    dockerfile: Dockerfile
+  command: server --console-address ":9001" http://minio{1...4}/data{1...8}
+  expose:
+    - "9000"
+    - "9001"
+  environment:
+    MINIO_CI_CD: 1
+  healthcheck:
+    test: ["CMD", "mc", "ready", "local"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+# starts 4 docker containers running minio server instances.
+# using nginx reverse proxy, load balancing, you can access
+# it through port 9000.
+services:
+  minio1:
+    <<: *minio-common
+    hostname: minio1
+    volumes:
+      - data1-1:/data1
+      - data1-2:/data2
+      - data1-3:/data3
+      - data1-4:/data4
+      - data1-5:/data5
+      - data1-6:/data6
+      - data1-7:/data7
+      - data1-8:/data8
+
+  minio2:
+    <<: *minio-common
+    hostname: minio2
+    volumes:
+      - data2-1:/data1
+      - data2-2:/data2
+      - data2-3:/data3
+      - data2-4:/data4
+      - data2-5:/data5
+      - data2-6:/data6
+      - data2-7:/data7
+      - data2-8:/data8
+
+  minio3:
+    <<: *minio-common
+    hostname: minio3
+    volumes:
+      - data3-1:/data1
+      - data3-2:/data2
+      - data3-3:/data3
+      - data3-4:/data4
+      - data3-5:/data5
+      - data3-6:/data6
+      - data3-7:/data7
+      - data3-8:/data8
+
+  minio4:
+    <<: *minio-common
+    hostname: minio4
+    volumes:
+      - data4-1:/data1
+      - data4-2:/data2
+      - data4-3:/data3
+      - data4-4:/data4
+      - data4-5:/data5
+      - data4-6:/data6
+      - data4-7:/data7
+      - data4-8:/data8
+
+  nginx:
+    image: nginx:1.19.2-alpine
+    hostname: nginx
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+
+## By default this config uses default local driver,
+## For custom volumes replace with volume driver configuration.
+volumes:
+  data1-1:
+  data1-2:
+  data1-3:
+  data1-4:
+  data1-5:
+  data1-6:
+  data1-7:
+  data1-8:
+
+  data2-1:
+  data2-2:
+  data2-3:
+  data2-4:
+  data2-5:
+  data2-6:
+  data2-7:
+  data2-8:
+
+  data3-1:
+  data3-2:
+  data3-3:
+  data3-4:
+  data3-5:
+  data3-6:
+  data3-7:
+  data3-8:
+
+  data4-1:
+  data4-2:
+  data4-3:
+  data4-4:
+  data4-5:
+  data4-6:
+  data4-7:
+  data4-8:

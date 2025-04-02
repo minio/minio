@@ -120,11 +120,15 @@ func TestParseAndValidateLifecycleConfig(t *testing.T) {
 			expectedParsingErr:    errDuplicatedXMLTag,
 			expectedValidationErr: nil,
 		},
-		{ // lifecycle config with no rules
+		{ // lifecycle config without prefixes
 			inputConfig: `<LifecycleConfiguration>
+					  <Rule>
+		                          <Expiration><Days>3</Days></Expiration>
+                                          <Status>Enabled</Status>
+		                          </Rule>
 		                          </LifecycleConfiguration>`,
 			expectedParsingErr:    nil,
-			expectedValidationErr: errLifecycleNoRule,
+			expectedValidationErr: nil,
 		},
 		{ // lifecycle config with rules having overlapping prefix
 			inputConfig:           `<LifecycleConfiguration><Rule><ID>rule1</ID><Status>Enabled</Status><Filter><Prefix>/a/b</Prefix></Filter><Expiration><Days>3</Days></Expiration></Rule><Rule><ID>rule2</ID><Status>Enabled</Status><Filter><And><Prefix>/a/b/c</Prefix><Tag><Key>key1</Key><Value>val1</Value></Tag></And></Filter><Expiration><Days>3</Days></Expiration></Rule></LifecycleConfiguration> `,

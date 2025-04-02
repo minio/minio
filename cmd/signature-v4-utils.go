@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -31,7 +32,6 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/policy"
-	"golang.org/x/exp/slices"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the

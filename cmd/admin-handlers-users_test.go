@@ -160,7 +160,7 @@ func (s *TestSuiteIAM) SetUpSuite(c *check) {
 }
 
 func (s *TestSuiteIAM) RestartIAMSuite(c *check) {
-	s.TestSuiteCommon.RestartTestServer(c)
+	s.RestartTestServer(c)
 
 	s.iamSetup(c)
 }
@@ -338,16 +338,24 @@ func (s *TestSuiteIAM) TestUserPolicyEscalationBug(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -443,7 +451,7 @@ func (s *TestSuiteIAM) TestAddServiceAccountPerms(c *check) {
     "s3:ListBucket"
    ],
    "Resource": [
-    "arn:aws:s3:::testbucket/*"
+    "arn:aws:s3:::testbucket"
    ]
   }
  ]
@@ -560,16 +568,24 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -670,16 +686,24 @@ func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 
 	// Check that default policies can be overwritten.
 	err = s.adm.AddCannedPolicy(ctx, "readwrite", policyBytes)
@@ -690,6 +714,12 @@ func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
 	info, err := s.adm.InfoCannedPolicy(ctx, "readwrite")
 	if err != nil {
 		c.Fatalf("policy info err: %v", err)
+	}
+
+	// Check that policy with comma is rejected.
+	err = s.adm.AddCannedPolicy(ctx, "invalid,policy", policyBytes)
+	if err == nil {
+		c.Fatalf("invalid policy created successfully")
 	}
 
 	infoStr := string(info)
@@ -715,16 +745,24 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -879,16 +917,24 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -963,16 +1009,24 @@ func (s *TestSuiteIAM) TestServiceAccountDurationSecondsCondition(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1045,16 +1099,24 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
   {
    "Effect": "Allow",
    "Action": [
-    "s3:PutObject",
-    "s3:GetObject",
     "s3:ListBucket"
+   ],
+   "Resource": [
+    "arn:aws:s3:::%s"
+   ]
+  },
+  {
+   "Effect": "Allow",
+   "Action": [
+    "s3:PutObject",
+    "s3:GetObject"
    ],
    "Resource": [
     "arn:aws:s3:::%s/*"
    ]
   }
  ]
-}`, bucket))
+}`, bucket, bucket))
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1602,7 +1664,7 @@ func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuit
     "s3:ListBucket"
    ],
    "Resource": [
-    "arn:aws:s3:::%s/*"
+    "arn:aws:s3:::%s"
    ]
   }
  ]

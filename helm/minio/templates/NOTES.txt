@@ -1,6 +1,6 @@
 {{- if eq .Values.service.type "ClusterIP" "NodePort" }}
 MinIO can be accessed via port {{ .Values.service.port }} on the following DNS name from within your cluster:
-{{ template "minio.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+{{ template "minio.fullname" . }}.{{ .Release.Namespace }}.{{ .Values.clusterDomain }}
 
 To access MinIO from localhost, run the below commands:
 
@@ -14,9 +14,9 @@ You can now access MinIO server on http://localhost:9000. Follow the below steps
 
   1. Download the MinIO mc client - https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart
 
-  2. export MC_HOST_{{ template "minio.fullname" . }}-local=http://$(kubectl get secret --namespace {{ .Release.Namespace }} {{ template "minio.secretName" . }} -o jsonpath="{.data.rootUser}" | base64 --decode):$(kubectl get secret --namespace {{ .Release.Namespace }} {{ template "minio.secretName" . }} -o jsonpath="{.data.rootPassword}" | base64 --decode)@localhost:{{ .Values.service.port }}
+  2. export MC_HOST_{{ template "minio.fullname" . }}_local=http://$(kubectl get secret --namespace {{ .Release.Namespace }} {{ template "minio.secretName" . }} -o jsonpath="{.data.rootUser}" | base64 --decode):$(kubectl get secret --namespace {{ .Release.Namespace }} {{ template "minio.secretName" . }} -o jsonpath="{.data.rootPassword}" | base64 --decode)@localhost:{{ .Values.service.port }}
 
-  3. mc ls {{ template "minio.fullname" . }}-local
+  3. mc ls {{ template "minio.fullname" . }}_local
 
 {{- end }}
 {{- if eq .Values.service.type "LoadBalancer" }}
@@ -29,7 +29,7 @@ You can now access MinIO server on http://<External-IP>:9000. Follow the below s
 
   1. Download the MinIO mc client - https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart
 
-  2. export MC_HOST_{{ template "minio.fullname" . }}-local=http://$(kubectl get secret {{ template "minio.secretName" . }} --namespace {{ .Release.Namespace }} -o jsonpath="{.data.rootUser}" | base64 --decode):$(kubectl get secret {{ template "minio.secretName" . }} -o jsonpath="{.data.rootPassword}" | base64 --decode)@<External-IP>:{{ .Values.service.port }}
+  2. export MC_HOST_{{ template "minio.fullname" . }}_local=http://$(kubectl get secret {{ template "minio.secretName" . }} --namespace {{ .Release.Namespace }} -o jsonpath="{.data.rootUser}" | base64 --decode):$(kubectl get secret {{ template "minio.secretName" . }} -o jsonpath="{.data.rootPassword}" | base64 --decode)@<External-IP>:{{ .Values.service.port }}
 
   3. mc ls {{ template "minio.fullname" . }}
 

@@ -108,18 +108,18 @@ func (l ReplicationLastHour) merge(o ReplicationLastHour) (merged ReplicationLas
 
 // Add  a new duration data
 func (l *ReplicationLastHour) addsize(sz int64) {
-	min := time.Now().Unix() / 60
-	l.forwardTo(min)
-	winIdx := min % 60
-	l.Totals[winIdx].merge(AccElem{Total: min, Size: sz, N: 1})
-	l.LastMin = min
+	minutes := time.Now().Unix() / 60
+	l.forwardTo(minutes)
+	winIdx := minutes % 60
+	l.Totals[winIdx].merge(AccElem{Total: minutes, Size: sz, N: 1})
+	l.LastMin = minutes
 }
 
 // Merge all recorded counts of last hour into one
 func (l *ReplicationLastHour) getTotal() AccElem {
 	var res AccElem
-	min := time.Now().Unix() / 60
-	l.forwardTo(min)
+	minutes := time.Now().Unix() / 60
+	l.forwardTo(minutes)
 	for _, elem := range l.Totals[:] {
 		res.merge(elem)
 	}
@@ -310,7 +310,12 @@ type ReplQNodeStats struct {
 func (r *ReplicationStats) getNodeQueueStats(bucket string) (qs ReplQNodeStats) {
 	qs.NodeName = globalLocalNodeName
 	qs.Uptime = UTCNow().Unix() - globalBootTime.Unix()
-	qs.ActiveWorkers = globalReplicationStats.Load().ActiveWorkers()
+	grs := globalReplicationStats.Load()
+	if grs != nil {
+		qs.ActiveWorkers = grs.ActiveWorkers()
+	} else {
+		qs.ActiveWorkers = ActiveWorkerStat{}
+	}
 	qs.XferStats = make(map[RMetricName]XferStats)
 	qs.QStats = r.qCache.getBucketStats(bucket)
 	qs.TgtXferStats = make(map[string]map[RMetricName]XferStats)

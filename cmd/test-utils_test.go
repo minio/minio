@@ -226,10 +226,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 		for _, sets := range pool.erasureDisks {
 			for _, s := range sets {
 				if !s.IsLocal() {
-					for {
-						if s.IsOnline() {
-							break
-						}
+					for !s.IsOnline() {
 						time.Sleep(100 * time.Millisecond)
 						if time.Since(t) > 10*time.Second {
 							return nil, nil, errors.New("timeout waiting for disk to come online")
@@ -642,8 +639,8 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	for _, k := range headers {
 		buf.WriteString(k)
 		buf.WriteByte(':')
-		switch {
-		case k == "host":
+		switch k {
+		case "host":
 			buf.WriteString(req.URL.Host)
 			fallthrough
 		default:
@@ -794,7 +791,6 @@ func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize in
 		if n <= 0 {
 			break
 		}
-
 	}
 	req.Body = io.NopCloser(bytes.NewReader(stream))
 	return req, nil
@@ -997,8 +993,8 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	for _, k := range headers {
 		buf.WriteString(k)
 		buf.WriteByte(':')
-		switch {
-		case k == "host":
+		switch k {
+		case "host":
 			buf.WriteString(req.URL.Host)
 			fallthrough
 		default:
@@ -1090,8 +1086,8 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	// Save for subsequent use
 	var hashedPayload string
 	var md5Base64 string
-	switch {
-	case body == nil:
+	switch body {
+	case nil:
 		hashedPayload = getSHA256Hash([]byte{})
 	default:
 		payloadBytes, err := io.ReadAll(body)
@@ -1638,7 +1634,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, obj ObjectLayer, testName, bucketN
 		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accessDenied, rec.Code)))
 	}
 
-	// HEAD HTTTP request doesn't contain response body.
+	// HEAD HTTP request doesn't contain response body.
 	if anonReq.Method != http.MethodHead {
 		// read the response body.
 		var actualContent []byte
@@ -2247,12 +2243,12 @@ func getEndpointsLocalAddr(endpointServerPools EndpointServerPools) string {
 }
 
 // fetches a random number between range min-max.
-func getRandomRange(min, max int, seed int64) int {
+func getRandomRange(minN, maxN int, seed int64) int {
 	// special value -1 means no explicit seeding.
-	if seed != -1 {
-		rand.Seed(seed)
+	if seed == -1 {
+		return rand.New(rand.NewSource(time.Now().UnixNano())).Intn(maxN-minN) + minN
 	}
-	return rand.Intn(max-min) + min
+	return rand.New(rand.NewSource(seed)).Intn(maxN-minN) + minN
 }
 
 // Randomizes the order of bytes in the byte array
@@ -2394,7 +2390,7 @@ func unzipArchive(zipFilePath, targetDir string) error {
 	if err != nil {
 		return err
 	}
-	for _, file := range zipReader.Reader.File {
+	for _, file := range zipReader.File {
 		zippedFile, err := file.Open()
 		if err != nil {
 			return err

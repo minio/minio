@@ -258,8 +258,8 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 	// concurrent rebalance-start commands.
 	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
 		for nodeIdx, proxyEp := range globalProxyEndpoints {
-			if proxyEp.Endpoint.Host == ep.Host {
-				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+			if proxyEp.Host == ep.Host {
+				if proxied, success := proxyRequestByNodeIndex(ctx, w, r, nodeIdx, false); proxied && success {
 					return
 				}
 			}
@@ -329,8 +329,8 @@ func (a adminAPIHandlers) RebalanceStatus(w http.ResponseWriter, r *http.Request
 	// pools may temporarily have out of date info on the others.
 	if ep := globalEndpoints[0].Endpoints[0]; !ep.IsLocal {
 		for nodeIdx, proxyEp := range globalProxyEndpoints {
-			if proxyEp.Endpoint.Host == ep.Host {
-				if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+			if proxyEp.Host == ep.Host {
+				if proxied, success := proxyRequestByNodeIndex(ctx, w, r, nodeIdx, false); proxied && success {
 					return
 				}
 			}
@@ -383,8 +383,8 @@ func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w h
 		return
 	}
 	for nodeIdx, proxyEp := range globalProxyEndpoints {
-		if proxyEp.Endpoint.Host == host && !proxyEp.IsLocal {
-			if proxyRequestByNodeIndex(ctx, w, r, nodeIdx) {
+		if proxyEp.Host == host && !proxyEp.IsLocal {
+			if proxied, success := proxyRequestByNodeIndex(ctx, w, r, nodeIdx, false); proxied && success {
 				return true
 			}
 		}

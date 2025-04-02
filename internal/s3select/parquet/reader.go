@@ -22,10 +22,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/bcicen/jstream"
 	parquetgo "github.com/fraugster/parquet-go"
 	parquettypes "github.com/fraugster/parquet-go/parquet"
 	jsonfmt "github.com/minio/minio/internal/s3select/json"
+	"github.com/minio/minio/internal/s3select/jstream"
 	"github.com/minio/minio/internal/s3select/sql"
 )
 
@@ -56,7 +56,6 @@ func (pr *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 
 	kvs := jstream.KVS{}
 	for _, col := range pr.r.Columns() {
-
 		var value interface{}
 		if v, ok := nextRow[col.FlatName()]; ok {
 			value, err = convertFromAnnotation(col.Element(), v)

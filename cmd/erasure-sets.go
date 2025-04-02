@@ -39,6 +39,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/console"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/puzpuzpuz/xsync/v3"
 )
 
 // setsDsyncLockers is encapsulated type for Close()
@@ -85,6 +86,8 @@ type erasureSets struct {
 
 	lastConnectDisksOpTime time.Time
 }
+
+var staleUploadsCleanupIntervalChangedCh = make(chan struct{})
 
 func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 	diskMap := make(map[Endpoint]StorageAPI)
@@ -532,10 +535,11 @@ func (s *erasureSets) cleanupStaleUploads(ctx context.Context) {
 				}(set)
 			}
 			wg.Wait()
-
-			// Reset for the next interval
-			timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
+		case <-staleUploadsCleanupIntervalChangedCh:
 		}
+
+		// Reset for the next interval
+		timer.Reset(globalAPIConfig.getStaleUploadsCleanupInterval())
 	}
 }
 
@@ -567,10 +571,7 @@ func auditObjectErasureSet(ctx context.Context, api, object string, set *erasure
 
 // NewNSLock - initialize a new namespace RWLocker instance.
 func (s *erasureSets) NewNSLock(bucket string, objects ...string) RWLocker {
-	if len(objects) == 1 {
-		return s.getHashedSet(objects[0]).NewNSLock(bucket, objects...)
-	}
-	return s.getHashedSet("").NewNSLock(bucket, objects...)
+	return s.sets[0].NewNSLock(bucket, objects...)
 }
 
 // SetDriveCount returns the current drives per set.
@@ -701,9 +702,8 @@ func (s *erasureSets) getHashedSet(input string) (set *erasureObjects) {
 }
 
 // listDeletedBuckets lists deleted buckets from all disks.
-func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBuckets map[string]VolInfo, readQuorum int) error {
+func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBuckets *xsync.MapOf[string, VolInfo], readQuorum int) error {
 	g := errgroup.WithNErrs(len(storageDisks))
-	var mu sync.Mutex
 	for index := range storageDisks {
 		index := index
 		g.Go(func() error {
@@ -722,11 +722,7 @@ func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBucke
 				vi, err := storageDisks[index].StatVol(ctx, pathJoin(minioMetaBucket, bucketMetaPrefix, deletedBucketsPrefix, volName))
 				if err == nil {
 					vi.Name = strings.TrimSuffix(volName, SlashSeparator)
-					mu.Lock()
-					if _, ok := delBuckets[volName]; !ok {
-						delBuckets[volName] = vi
-					}
-					mu.Unlock()
+					delBuckets.Store(volName, vi)
 				}
 			}
 			return nil

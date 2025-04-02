@@ -41,6 +41,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/mimedb"
 	"github.com/minio/pkg/v3/sync/errgroup"
+	"github.com/minio/sio"
 )
 
 func (er erasureObjects) getUploadIDDir(bucket, object, uploadID string) string {
@@ -454,8 +455,11 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	}
 	fi.DataDir = mustGetUUID()
 
-	if userDefined[ReplicationSsecChecksumHeader] != "" {
-		fi.Checksum, _ = base64.StdEncoding.DecodeString(userDefined[ReplicationSsecChecksumHeader])
+	if ckSum := userDefined[ReplicationSsecChecksumHeader]; ckSum != "" {
+		v, err := base64.StdEncoding.DecodeString(ckSum)
+		if err == nil {
+			fi.Checksum = v
+		}
 		delete(userDefined, ReplicationSsecChecksumHeader)
 	}
 
@@ -476,6 +480,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 
 	if opts.WantChecksum != nil && opts.WantChecksum.Type.IsSet() {
 		userDefined[hash.MinIOMultipartChecksum] = opts.WantChecksum.Type.String()
+		userDefined[hash.MinIOMultipartChecksumType] = opts.WantChecksum.Type.ObjType()
 	}
 
 	modTime := opts.MTime
@@ -504,6 +509,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 	return &NewMultipartUploadResult{
 		UploadID:     uploadID,
 		ChecksumAlgo: userDefined[hash.MinIOMultipartChecksum],
+		ChecksumType: userDefined[hash.MinIOMultipartChecksumType],
 	}, nil
 }
 
@@ -522,6 +528,14 @@ func (er erasureObjects) NewMultipartUpload(ctx context.Context, bucket, object 
 
 // renamePart - renames multipart part to its relevant location under uploadID.
 func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, optsMeta []byte, writeQuorum int) ([]StorageAPI, error) {
+	paths := []string{
+		dstEntry,
+		dstEntry + ".meta",
+	}
+
+	// cleanup existing paths first across all drives.
+	er.cleanupMultipartPath(ctx, paths...)
+
 	g := errgroup.WithNErrs(len(disks))
 
 	// Rename file on all underlying storage disks.
@@ -537,11 +551,6 @@ func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, src
 
 	// Wait for all renames to finish.
 	errs := g.Wait()
-
-	paths := []string{
-		dstEntry,
-		dstEntry + ".meta",
-	}
 
 	err := reduceWriteQuorumErrs(ctx, errs, objectOpIgnoredErrs, writeQuorum)
 	if err != nil {
@@ -570,38 +579,15 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		return pi, toObjectErr(errInvalidArgument)
 	}
 
-	// Read lock for upload id.
-	// Only held while reading the upload metadata.
-	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-	rctx := rlkctx.Context()
-	defer uploadIDRLock.RUnlock(rlkctx)
-
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadID)
 	// Validates if upload ID exists.
-	fi, _, err := er.checkUploadIDExists(rctx, bucket, object, uploadID, true)
+	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, true)
 	if err != nil {
 		if errors.Is(err, errVolumeNotFound) {
 			return pi, toObjectErr(err, bucket)
 		}
 		return pi, toObjectErr(err, bucket, object, uploadID)
 	}
-
-	// Write lock for this part ID, only hold it if we are planning to read from the
-	// streamto avoid any concurrent updates.
-	//
-	// Must be held throughout this call.
-	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
-	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return PartInfo{}, err
-	}
-
-	ctx = plkctx.Context()
-	defer partIDLock.Unlock(plkctx)
 
 	onlineDisks := er.getDisks()
 	writeQuorum := fi.WriteQuorum(er.defaultWQuorum())
@@ -642,17 +628,13 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	switch size := data.Size(); {
 	case size == 0:
 		buffer = make([]byte, 1) // Allocate at least a byte to reach EOF
-	case size == -1:
-		if size := data.ActualSize(); size > 0 && size < fi.Erasure.BlockSize {
-			// Account for padding and forced compression overhead and encryption.
-			buffer = make([]byte, data.ActualSize()+256+32+32, data.ActualSize()*2+512)
+	case size >= fi.Erasure.BlockSize || size == -1:
+		if int64(globalBytePoolCap.Load().Width()) < fi.Erasure.BlockSize {
+			buffer = make([]byte, fi.Erasure.BlockSize, 2*fi.Erasure.BlockSize)
 		} else {
 			buffer = globalBytePoolCap.Load().Get()
 			defer globalBytePoolCap.Load().Put(buffer)
 		}
-	case size >= fi.Erasure.BlockSize:
-		buffer = globalBytePoolCap.Load().Get()
-		defer globalBytePoolCap.Load().Put(buffer)
 	case size < fi.Erasure.BlockSize:
 		// No need to allocate fully fi.Erasure.BlockSize buffer if the incoming data is smaller.
 		buffer = make([]byte, size, 2*size+int64(fi.Erasure.ParityBlocks+fi.Erasure.DataBlocks-1))
@@ -686,9 +668,12 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	}
 
 	n, err := erasure.Encode(ctx, toEncode, writers, buffer, writeQuorum)
-	closeBitrotWriters(writers)
+	closeErrs := closeBitrotWriters(writers)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
+	}
+	if closeErr := reduceWriteQuorumErrs(ctx, closeErrs, objectOpIgnoredErrs, writeQuorum); closeErr != nil {
+		return pi, toObjectErr(closeErr, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
@@ -716,11 +701,30 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 		index = opts.IndexCB()
 	}
 
+	actualSize := data.ActualSize()
+	if actualSize < 0 {
+		_, encrypted := crypto.IsEncrypted(fi.Metadata)
+		compressed := fi.IsCompressed()
+		switch {
+		case compressed:
+			// ... nothing changes for compressed stream.
+			// if actualSize is -1 we have no known way to
+			// determine what is the actualSize.
+		case encrypted:
+			decSize, err := sio.DecryptedSize(uint64(n))
+			if err == nil {
+				actualSize = int64(decSize)
+			}
+		default:
+			actualSize = n
+		}
+	}
+
 	partInfo := ObjectPartInfo{
 		Number:     partID,
 		ETag:       md5hex,
 		Size:       n,
-		ActualSize: data.ActualSize(),
+		ActualSize: actualSize,
 		ModTime:    UTCNow(),
 		Index:      index,
 		Checksums:  r.ContentCRC(),
@@ -730,6 +734,25 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 	if err != nil {
 		return pi, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
+
+	// Serialize concurrent part uploads.
+	partIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID, strconv.Itoa(partID)))
+	plkctx, err := partIDLock.GetLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+
+	ctx = plkctx.Context()
+	defer partIDLock.Unlock(plkctx)
+
+	// Read lock for upload id, only held while reading the upload metadata.
+	uploadIDRLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
+	rlkctx, err := uploadIDRLock.GetRLock(ctx, globalOperationTimeout)
+	if err != nil {
+		return PartInfo{}, err
+	}
+	ctx = rlkctx.Context()
+	defer uploadIDRLock.RUnlock(rlkctx)
 
 	onlineDisks, err = er.renamePart(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, partFI, writeQuorum)
 	if err != nil {
@@ -747,15 +770,16 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	// Return success.
 	return PartInfo{
-		PartNumber:     partInfo.Number,
-		ETag:           partInfo.ETag,
-		LastModified:   partInfo.ModTime,
-		Size:           partInfo.Size,
-		ActualSize:     partInfo.ActualSize,
-		ChecksumCRC32:  partInfo.Checksums["CRC32"],
-		ChecksumCRC32C: partInfo.Checksums["CRC32C"],
-		ChecksumSHA1:   partInfo.Checksums["SHA1"],
-		ChecksumSHA256: partInfo.Checksums["SHA256"],
+		PartNumber:        partInfo.Number,
+		ETag:              partInfo.ETag,
+		LastModified:      partInfo.ModTime,
+		Size:              partInfo.Size,
+		ActualSize:        partInfo.ActualSize,
+		ChecksumCRC32:     partInfo.Checksums["CRC32"],
+		ChecksumCRC32C:    partInfo.Checksums["CRC32C"],
+		ChecksumSHA1:      partInfo.Checksums["SHA1"],
+		ChecksumSHA256:    partInfo.Checksums["SHA256"],
+		ChecksumCRC64NVME: partInfo.Checksums["CRC64NVME"],
 	}, nil
 }
 
@@ -774,14 +798,6 @@ func (er erasureObjects) GetMultipartInfo(ctx context.Context, bucket, object, u
 		Object:   object,
 		UploadID: uploadID,
 	}
-
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return MultipartInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer uploadIDLock.RUnlock(lkctx)
 
 	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, false)
 	if err != nil {
@@ -862,14 +878,6 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 		auditObjectErasureSet(ctx, "ListObjectParts", object, &er)
 	}
 
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	lkctx, err := uploadIDLock.GetRLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return ListPartsInfo{}, err
-	}
-	ctx = lkctx.Context()
-	defer uploadIDLock.RUnlock(lkctx)
-
 	fi, _, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, false)
 	if err != nil {
 		return result, toObjectErr(err, bucket, object, uploadID)
@@ -893,6 +901,7 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	result.PartNumberMarker = partNumberMarker
 	result.UserDefined = cloneMSS(fi.Metadata)
 	result.ChecksumAlgorithm = fi.Metadata[hash.MinIOMultipartChecksum]
+	result.ChecksumType = fi.Metadata[hash.MinIOMultipartChecksumType]
 
 	if maxParts == 0 {
 		return result, nil
@@ -939,15 +948,16 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	count := maxParts
 	for _, objPart := range objParts {
 		result.Parts = append(result.Parts, PartInfo{
-			PartNumber:     objPart.Number,
-			LastModified:   objPart.ModTime,
-			ETag:           objPart.ETag,
-			Size:           objPart.Size,
-			ActualSize:     objPart.ActualSize,
-			ChecksumCRC32:  objPart.Checksums["CRC32"],
-			ChecksumCRC32C: objPart.Checksums["CRC32C"],
-			ChecksumSHA1:   objPart.Checksums["SHA1"],
-			ChecksumSHA256: objPart.Checksums["SHA256"],
+			PartNumber:        objPart.Number,
+			LastModified:      objPart.ModTime,
+			ETag:              objPart.ETag,
+			Size:              objPart.Size,
+			ActualSize:        objPart.ActualSize,
+			ChecksumCRC32:     objPart.Checksums["CRC32"],
+			ChecksumCRC32C:    objPart.Checksums["CRC32C"],
+			ChecksumSHA1:      objPart.Checksums["SHA1"],
+			ChecksumSHA256:    objPart.Checksums["SHA256"],
+			ChecksumCRC64NVME: objPart.Checksums["CRC64NVME"],
 		})
 		count--
 		if count == 0 {
@@ -1042,7 +1052,6 @@ func readParts(ctx context.Context, disks []StorageAPI, bucket string, partMetaP
 				PartNumber: partNumbers[pidx],
 			}.Error(),
 		}
-
 	}
 	return partInfosInQuorum, nil
 }
@@ -1092,16 +1101,6 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 	}
 
-	// Hold write locks to verify uploaded parts, also disallows any
-	// parallel PutObjectPart() requests.
-	uploadIDLock := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	wlkctx, err := uploadIDLock.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return oi, err
-	}
-	ctx = wlkctx.Context()
-	defer uploadIDLock.Unlock(wlkctx)
-
 	fi, partsMetadata, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, true)
 	if err != nil {
 		if errors.Is(err, errVolumeNotFound) {
@@ -1139,12 +1138,12 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// Checksum type set when upload started.
 	var checksumType hash.ChecksumType
 	if cs := fi.Metadata[hash.MinIOMultipartChecksum]; cs != "" {
-		checksumType = hash.NewChecksumType(cs)
+		checksumType = hash.NewChecksumType(cs, fi.Metadata[hash.MinIOMultipartChecksumType])
 		if opts.WantChecksum != nil && !opts.WantChecksum.Type.Is(checksumType) {
 			return oi, InvalidArgument{
 				Bucket: bucket,
 				Object: fi.Name,
-				Err:    fmt.Errorf("checksum type mismatch"),
+				Err:    fmt.Errorf("checksum type mismatch. got %q (%s) expected %q (%s)", checksumType.String(), checksumType.ObjType(), opts.WantChecksum.Type.String(), opts.WantChecksum.Type.ObjType()),
 			}
 		}
 	}
@@ -1154,7 +1153,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// However, in case of encryption, the persisted part ETags don't match
 	// what we have sent to the client during PutObjectPart. The reason is
 	// that ETags are encrypted. Hence, the client will send a list of complete
-	// part ETags of which non can match the ETag of any part. For example
+	// part ETags of which may not match the ETag of any part. For example
 	//   ETag (client):          30902184f4e62dd8f98f0aaff810c626
 	//   ETag (server-internal): 20000f00ce5dc16e3f3b124f586ae1d88e9caa1c598415c2759bbb50e84a59f630902184f4e62dd8f98f0aaff810c626
 	//
@@ -1224,6 +1223,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	// Allocate parts similar to incoming slice.
 	fi.Parts = make([]ObjectPartInfo, len(parts))
 
+	var checksum hash.Checksum
+	checksum.Type = checksumType
+
 	// Validate each part and then commit to disk.
 	for i, part := range parts {
 		partIdx := objectPartIndex(currentFI.Parts, part.PartNumber)
@@ -1257,10 +1259,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				}
 			}
 			wantCS := map[string]string{
-				hash.ChecksumCRC32.String():  part.ChecksumCRC32,
-				hash.ChecksumCRC32C.String(): part.ChecksumCRC32C,
-				hash.ChecksumSHA1.String():   part.ChecksumSHA1,
-				hash.ChecksumSHA256.String(): part.ChecksumSHA256,
+				hash.ChecksumCRC32.String():     part.ChecksumCRC32,
+				hash.ChecksumCRC32C.String():    part.ChecksumCRC32C,
+				hash.ChecksumSHA1.String():      part.ChecksumSHA1,
+				hash.ChecksumSHA256.String():    part.ChecksumSHA256,
+				hash.ChecksumCRC64NVME.String(): part.ChecksumCRC64NVME,
 			}
 			if wantCS[checksumType.String()] != crc {
 				return oi, InvalidPart{
@@ -1273,6 +1276,15 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			if !cs.Valid() {
 				return oi, InvalidPart{
 					PartNumber: part.PartNumber,
+				}
+			}
+			if checksumType.FullObjectRequested() {
+				if err := checksum.AddPart(*cs, expPart.ActualSize); err != nil {
+					return oi, InvalidPart{
+						PartNumber: part.PartNumber,
+						ExpETag:    "<nil>",
+						GotETag:    err.Error(),
+					}
 				}
 			}
 			checksumCombined = append(checksumCombined, cs.Raw...)
@@ -1305,20 +1317,20 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	}
 
 	if opts.WantChecksum != nil {
-		err := opts.WantChecksum.Matches(checksumCombined, len(parts))
-		if err != nil {
-			return oi, err
+		if checksumType.FullObjectRequested() {
+			if opts.WantChecksum.Encoded != checksum.Encoded {
+				err := hash.ChecksumMismatch{
+					Want: opts.WantChecksum.Encoded,
+					Got:  checksum.Encoded,
+				}
+				return oi, err
+			}
+		} else {
+			err := opts.WantChecksum.Matches(checksumCombined, len(parts))
+			if err != nil {
+				return oi, err
+			}
 		}
-	}
-
-	if !opts.NoLock {
-		lk := er.NewNSLock(bucket, object)
-		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-		if err != nil {
-			return ObjectInfo{}, err
-		}
-		ctx = lkctx.Context()
-		defer lk.Unlock(lkctx)
 	}
 
 	// Accept encrypted checksum from incoming request.
@@ -1331,14 +1343,18 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 
 	if checksumType.IsSet() {
 		checksumType |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart
-		var cs *hash.Checksum
-		cs = hash.NewChecksumFromData(checksumType, checksumCombined)
-		fi.Checksum = cs.AppendTo(nil, checksumCombined)
+		checksum.Type = checksumType
+		if !checksumType.FullObjectRequested() {
+			checksum = *hash.NewChecksumFromData(checksumType, checksumCombined)
+		}
+		fi.Checksum = checksum.AppendTo(nil, checksumCombined)
 		if opts.EncryptFn != nil {
 			fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
 		}
 	}
-	delete(fi.Metadata, hash.MinIOMultipartChecksum) // Not needed in final object.
+	// Remove superfluous internal headers.
+	delete(fi.Metadata, hash.MinIOMultipartChecksum)
+	delete(fi.Metadata, hash.MinIOMultipartChecksumType)
 
 	// Save the final object size and modtime.
 	fi.Size = objectSize
@@ -1397,6 +1413,16 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			// N.B. 1st part is not present. This part should be removed from the storage.
 			paths = append(paths, pathJoin(uploadIDPath, currentFI.DataDir, fmt.Sprintf("part.%d", curpart.Number)))
 		}
+	}
+
+	if !opts.NoLock {
+		lk := er.NewNSLock(bucket, object)
+		lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		ctx = lkctx.Context()
+		defer lk.Unlock(lkctx)
 	}
 
 	er.cleanupMultipartPath(ctx, paths...) // cleanup all part.N.meta, and skipped part.N's before final rename().
@@ -1467,14 +1493,6 @@ func (er erasureObjects) AbortMultipartUpload(ctx context.Context, bucket, objec
 	if !opts.NoAuditLog {
 		auditObjectErasureSet(ctx, "AbortMultipartUpload", object, &er)
 	}
-
-	lk := er.NewNSLock(bucket, pathJoin(object, uploadID))
-	lkctx, err := lk.GetLock(ctx, globalOperationTimeout)
-	if err != nil {
-		return err
-	}
-	ctx = lkctx.Context()
-	defer lk.Unlock(lkctx)
 
 	// Validates if upload ID exists.
 	if _, _, err = er.checkUploadIDExists(ctx, bucket, object, uploadID, false); err != nil {

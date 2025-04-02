@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS build
+FROM golang:1.23-alpine AS build
 
 ARG TARGETARCH
 ARG RELEASE
@@ -6,9 +6,12 @@ ARG RELEASE
 ENV GOPATH=/go
 ENV CGO_ENABLED=0
 
+WORKDIR /build
+
 # Install curl and minisign
 RUN apk add -U --no-cache ca-certificates && \
     apk add -U --no-cache curl && \
+    apk add -U --no-cache bash && \
     go install aead.dev/minisign/cmd/minisign@v0.2.1
 
 # Download minio binary and signature files
@@ -23,14 +26,13 @@ RUN curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc -o /go
     curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc.sha256sum -o /go/bin/mc.sha256sum && \
     chmod +x /go/bin/mc
 
-RUN if [ "$TARGETARCH" = "amd64" ]; then \
-       curl -L -s -q https://github.com/moparisthebest/static-curl/releases/latest/download/curl-${TARGETARCH} -o /go/bin/curl; \
-       chmod +x /go/bin/curl; \
-    fi
-
 # Verify binary signature using public key "RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGavRUN"
 RUN minisign -Vqm /go/bin/minio -x /go/bin/minio.minisig -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav && \
     minisign -Vqm /go/bin/mc -x /go/bin/mc.minisig -P RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav
+
+COPY dockerscripts/download-static-curl.sh /build/download-static-curl
+RUN chmod +x /build/download-static-curl && \
+    /build/download-static-curl
 
 FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 
@@ -53,12 +55,12 @@ ENV MINIO_ACCESS_KEY_FILE=access_key \
     MINIO_CONFIG_ENV_FILE=config.env \
     MC_CONFIG_DIR=/tmp/.mc
 
-RUN chmod 1777 /usr/bin
+RUN chmod -R 777 /usr/bin
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /go/bin/minio* /usr/bin/
 COPY --from=build /go/bin/mc* /usr/bin/
-COPY --from=build /go/bin/cur* /usr/bin/
+COPY --from=build /go/bin/curl* /usr/bin/
 
 COPY CREDITS /licenses/CREDITS
 COPY LICENSE /licenses/LICENSE
