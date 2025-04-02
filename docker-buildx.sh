@@ -15,7 +15,9 @@ release=$(git describe --abbrev=0 --tags)
 docker buildx build --push --no-cache \
 	--build-arg RELEASE="${release}" \
 	-t "minio/minio:latest" \
+	-t "minio/minio:latest-cicd" \
 	-t "quay.io/minio/minio:latest" \
+	-t "quay.io/minio/minio:latest-cicd" \
 	-t "minio/minio:${release}" \
 	-t "quay.io/minio/minio:${release}" \
 	--platform=linux/arm64,linux/amd64,linux/ppc64le \
