@@ -915,33 +915,29 @@ func (z *ReplicationState) DecodeMsg(dc *msgp.Reader) (err error) {
 					err = msgp.WrapError(err, "PurgeTargets")
 					return
 				}
-				{
-					var zb0004 string
-					zb0004, err = dc.ReadString()
-					if err != nil {
-						err = msgp.WrapError(err, "PurgeTargets", za0003)
-						return
-					}
-					za0004 = VersionPurgeStatusType(zb0004)
+				err = za0004.DecodeMsg(dc)
+				if err != nil {
+					err = msgp.WrapError(err, "PurgeTargets", za0003)
+					return
 				}
 				z.PurgeTargets[za0003] = za0004
 			}
 		case "ResetStatusesMap":
-			var zb0005 uint32
-			zb0005, err = dc.ReadMapHeader()
+			var zb0004 uint32
+			zb0004, err = dc.ReadMapHeader()
 			if err != nil {
 				err = msgp.WrapError(err, "ResetStatusesMap")
 				return
 			}
 			if z.ResetStatusesMap == nil {
-				z.ResetStatusesMap = make(map[string]string, zb0005)
+				z.ResetStatusesMap = make(map[string]string, zb0004)
 			} else if len(z.ResetStatusesMap) > 0 {
 				for key := range z.ResetStatusesMap {
 					delete(z.ResetStatusesMap, key)
 				}
 			}
-			for zb0005 > 0 {
-				zb0005--
+			for zb0004 > 0 {
+				zb0004--
 				var za0005 string
 				var za0006 string
 				za0005, err = dc.ReadString()
@@ -1078,7 +1074,7 @@ func (z *ReplicationState) EncodeMsg(en *msgp.Writer) (err error) {
 			err = msgp.WrapError(err, "PurgeTargets")
 			return
 		}
-		err = en.WriteString(string(za0004))
+		err = za0004.EncodeMsg(en)
 		if err != nil {
 			err = msgp.WrapError(err, "PurgeTargets", za0003)
 			return
@@ -1154,7 +1150,11 @@ func (z *ReplicationState) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.AppendMapHeader(o, uint32(len(z.PurgeTargets)))
 	for za0003, za0004 := range z.PurgeTargets {
 		o = msgp.AppendString(o, za0003)
-		o = msgp.AppendString(o, string(za0004))
+		o, err = za0004.MarshalMsg(o)
+		if err != nil {
+			err = msgp.WrapError(err, "PurgeTargets", za0003)
+			return
+		}
 	}
 	// string "ResetStatusesMap"
 	o = append(o, 0xb0, 0x52, 0x65, 0x73, 0x65, 0x74, 0x53, 0x74, 0x61, 0x74, 0x75, 0x73, 0x65, 0x73, 0x4d, 0x61, 0x70)
@@ -1279,35 +1279,31 @@ func (z *ReplicationState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "PurgeTargets")
 					return
 				}
-				{
-					var zb0004 string
-					zb0004, bts, err = msgp.ReadStringBytes(bts)
-					if err != nil {
-						err = msgp.WrapError(err, "PurgeTargets", za0003)
-						return
-					}
-					za0004 = VersionPurgeStatusType(zb0004)
+				bts, err = za0004.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "PurgeTargets", za0003)
+					return
 				}
 				z.PurgeTargets[za0003] = za0004
 			}
 		case "ResetStatusesMap":
-			var zb0005 uint32
-			zb0005, bts, err = msgp.ReadMapHeaderBytes(bts)
+			var zb0004 uint32
+			zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "ResetStatusesMap")
 				return
 			}
 			if z.ResetStatusesMap == nil {
-				z.ResetStatusesMap = make(map[string]string, zb0005)
+				z.ResetStatusesMap = make(map[string]string, zb0004)
 			} else if len(z.ResetStatusesMap) > 0 {
 				for key := range z.ResetStatusesMap {
 					delete(z.ResetStatusesMap, key)
 				}
 			}
-			for zb0005 > 0 {
+			for zb0004 > 0 {
 				var za0005 string
 				var za0006 string
-				zb0005--
+				zb0004--
 				za0005, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ResetStatusesMap")
@@ -1345,7 +1341,7 @@ func (z *ReplicationState) Msgsize() (s int) {
 	if z.PurgeTargets != nil {
 		for za0003, za0004 := range z.PurgeTargets {
 			_ = za0004
-			s += msgp.StringPrefixSize + len(za0003) + msgp.StringPrefixSize + len(string(za0004))
+			s += msgp.StringPrefixSize + len(za0003) + za0004.Msgsize()
 		}
 	}
 	s += 17 + msgp.MapHeaderSize
@@ -2505,57 +2501,5 @@ func (z *TargetReplicationResyncStatus) UnmarshalMsg(bts []byte) (o []byte, err 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *TargetReplicationResyncStatus) Msgsize() (s int) {
 	s = 1 + 3 + msgp.TimeSize + 4 + msgp.TimeSize + 3 + msgp.StringPrefixSize + len(z.ResyncID) + 4 + msgp.TimeSize + 4 + msgp.IntSize + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 3 + msgp.Int64Size + 4 + msgp.Int64Size + 4 + msgp.StringPrefixSize + len(z.Bucket) + 4 + msgp.StringPrefixSize + len(z.Object)
-	return
-}
-
-// DecodeMsg implements msgp.Decodable
-func (z *VersionPurgeStatusType) DecodeMsg(dc *msgp.Reader) (err error) {
-	{
-		var zb0001 string
-		zb0001, err = dc.ReadString()
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = VersionPurgeStatusType(zb0001)
-	}
-	return
-}
-
-// EncodeMsg implements msgp.Encodable
-func (z VersionPurgeStatusType) EncodeMsg(en *msgp.Writer) (err error) {
-	err = en.WriteString(string(z))
-	if err != nil {
-		err = msgp.WrapError(err)
-		return
-	}
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z VersionPurgeStatusType) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendString(o, string(z))
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *VersionPurgeStatusType) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	{
-		var zb0001 string
-		zb0001, bts, err = msgp.ReadStringBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = VersionPurgeStatusType(zb0001)
-	}
-	o = bts
-	return
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z VersionPurgeStatusType) Msgsize() (s int) {
-	s = msgp.StringPrefixSize + len(string(z))
 	return
 }
