@@ -29,7 +29,12 @@ import (
 // newUnsignedV4ChunkedReader returns a new s3UnsignedChunkedReader that translates the data read from r
 // out of HTTP "chunked" format before returning it.
 // The s3ChunkedReader returns io.EOF when the final 0-length chunk is read.
-func newUnsignedV4ChunkedReader(req *http.Request, trailer bool) (io.ReadCloser, APIErrorCode) {
+func newUnsignedV4ChunkedReader(req *http.Request, trailer bool, signature bool) (io.ReadCloser, APIErrorCode) {
+	if signature {
+		if errCode := doesSignatureMatch(unsignedPayloadTrailer, req, globalSite.Region(), serviceS3); errCode != ErrNone {
+			return nil, errCode
+		}
+	}
 	if trailer {
 		// Discard anything unsigned.
 		req.Trailer = make(http.Header)
