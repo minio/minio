@@ -483,6 +483,10 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 			Value: config.FormatBool(cfg.Secure),
 		},
 		config.KV{
+			Key:   target.NATSTLSHandshakeFirst,
+			Value: config.FormatBool(cfg.TLSHandshakeFirst),
+		},
+		config.KV{
 			Key:   target.NATSPingInterval,
 			Value: strconv.FormatInt(cfg.PingInterval, 10),
 		},
