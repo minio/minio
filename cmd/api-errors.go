@@ -215,6 +215,7 @@ const (
 	ErrExcessData
 	ErrPolicyInvalidName
 	ErrNoTokenRevokeType
+	ErrAdminOpenIDNotEnabled
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -566,6 +567,11 @@ var errorCodes = errorCodeMap{
 	ErrPolicyInvalidName: {
 		Code:           "PolicyInvalidName",
 		Description:    "Policy name may not contain comma",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminOpenIDNotEnabled: {
+		Code:           "OpenIDNotEnabled",
+		Description:    "No enabled OpenID Connect identity providers",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrPolicyTooLarge: {

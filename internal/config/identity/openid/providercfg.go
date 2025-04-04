@@ -48,6 +48,8 @@ type providerCfg struct {
 	ClientID           string
 	ClientSecret       string
 	RolePolicy         string
+	UserReadableClaim  string
+	UserIDClaim        string
 
 	roleArn  arn.ARN
 	provider provider.Provider
@@ -64,6 +66,8 @@ func newProviderCfgFromConfig(getCfgVal func(cfgName string) string) providerCfg
 		ClientID:           getCfgVal(ClientID),
 		ClientSecret:       getCfgVal(ClientSecret),
 		RolePolicy:         getCfgVal(RolePolicy),
+		UserReadableClaim:  getCfgVal(UserReadableClaim),
+		UserIDClaim:        getCfgVal(UserIDClaim),
 	}
 }
 
