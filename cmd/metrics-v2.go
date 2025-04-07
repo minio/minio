@@ -319,6 +319,7 @@ type MetricDescription struct {
 	Name      MetricName      `json:"MetricName"`
 	Help      string          `json:"Help"`
 	Type      MetricTypeV2    `json:"Type"`
+	Buckets   []float64       `json:"Buckets,omitempty"`
 }
 
 // MetricV2 captures the details for a metric
@@ -1543,7 +1544,8 @@ func getS3TTFBDistributionMD() MetricDescription {
 		Subsystem: ttfbSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of time to first byte across API calls",
-		Type:      gaugeMetric,
+		Type:      histogramMetric,
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
 	}
 }
 
@@ -1553,7 +1555,8 @@ func getBucketTTFBDistributionMD() MetricDescription {
 		Subsystem: ttfbSubsystem,
 		Name:      ttfbDistribution,
 		Help:      "Distribution of time to first byte across API calls per bucket",
-		Type:      gaugeMetric,
+		Type:      histogramMetric,
+		Buckets:   []float64{0.01, 0.05, 0.1, 0.5, 1.0, 2.0, 5.0},
 	}
 }
 
