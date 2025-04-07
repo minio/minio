@@ -146,6 +146,9 @@ loop:
 
 // Eval will return a lifecycle event for each object in objs
 func (e *Evaluator) Eval(objs []ObjectOpts) ([]Event, error) {
+	if len(objs) == 0 {
+		return nil, nil
+	}
 	if len(objs) != objs[0].NumVersions {
 		return nil, fmt.Errorf("number of versions mismatch, expected %d, got %d", objs[0].NumVersions, len(objs))
 	}

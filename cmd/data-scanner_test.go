@@ -245,6 +245,12 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 			wants:       nil,
 			wantExpired: []ObjectToDelete{{ObjectV: ObjectV{ObjectName: obj, VersionID: allVersExpObjInfos[0].VersionID}}},
 		},
+		{
+			// When no versions are present, in practice this could be an object with only free versions
+			objInfos:    nil,
+			wants:       nil,
+			wantExpired: nil,
+		},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("TestApplyNewerNoncurrentVersionsLimit-%d", i), func(t *testing.T) {
