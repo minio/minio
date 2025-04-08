@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"runtime"
 	"testing"
 	"time"
@@ -33,8 +32,8 @@ import (
 func TestGetSource(t *testing.T) {
 	currentSource := func() string { return getSource(2) }
 	gotSource := currentSource()
-	// Hard coded line number, 35, in the "expectedSource" value
-	expectedSource := "[namespace-lock_test.go:35:TestGetSource()]"
+	// Hard coded line number, 34, in the "expectedSource" value
+	expectedSource := "[namespace-lock_test.go:34:TestGetSource()]"
 	if gotSource != expectedSource {
 		t.Errorf("expected : %s, got : %s", expectedSource, gotSource)
 	}
@@ -44,7 +43,7 @@ func TestGetSource(t *testing.T) {
 func TestNSLockRace(t *testing.T) {
 	t.Skip("long test skip it")
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	for i := 0; i < 10000; i++ {
 		nsLk := newNSLock(false)

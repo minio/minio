@@ -26,7 +26,7 @@ import (
 )
 
 func TestServerConfig(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	objLayer, fsDir, err := prepareFS(ctx)
@@ -56,7 +56,7 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting region `us-west-1` found %s", globalSite.Region())
 	}
 
-	if err := saveServerConfig(context.Background(), objLayer, globalServerConfig); err != nil {
+	if err := saveServerConfig(t.Context(), objLayer, globalServerConfig); err != nil {
 		t.Fatalf("Unable to save updated config file %s", err)
 	}
 
