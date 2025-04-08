@@ -47,10 +47,19 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		return
 	}
 
+	if !globalIAMSys.OpenIDConfig.Enabled {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminOpenIDNotEnabled), r.URL)
+		return
+	}
+
 	userList := r.Form["users"]
 	isAll := r.Form.Get("all") == "true"
 	selfOnly := !isAll && len(userList) == 0
 	cfgName := r.Form.Get("configName")
+	allConfigs := r.Form.Get("allConfigs") == "true"
+	if cfgName == "" && !allConfigs {
+		cfgName = madmin.Default
+	}
 
 	if isAll && len(userList) > 0 {
 		// This should be checked on client side, so return generic error
@@ -85,11 +94,6 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		DenyOnly:        selfOnly,
 	}) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
-		return
-	}
-
-	if !globalIAMSys.OpenIDConfig.Enabled {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminOpenIDNotEnabled), r.URL)
 		return
 	}
 
@@ -132,7 +136,7 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 		return
 	}
 	for _, config := range configs {
-		if cfgName != "" && cfgName != config.Name {
+		if !allConfigs && cfgName != config.Name {
 			continue
 		}
 		arn := dummyRoleARN
