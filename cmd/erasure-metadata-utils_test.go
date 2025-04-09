@@ -99,11 +99,11 @@ func TestReduceErrs(t *testing.T) {
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
-		gotErr := reduceReadQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 5)
+		gotErr := reduceReadQuorumErrs(t.Context(), testCase.errs, testCase.ignoredErrs, 5)
 		if gotErr != testCase.err {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
 		}
-		gotNewErr := reduceWriteQuorumErrs(context.Background(), testCase.errs, testCase.ignoredErrs, 6)
+		gotNewErr := reduceWriteQuorumErrs(t.Context(), testCase.errs, testCase.ignoredErrs, 6)
 		if gotNewErr != errErasureWriteQuorum {
 			t.Errorf("Test %d : expected %s, got %s", i+1, errErasureWriteQuorum, gotErr)
 		}
@@ -148,7 +148,7 @@ func TestHashOrder(t *testing.T) {
 }
 
 func TestShuffleDisks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	nDisks := 16
@@ -196,7 +196,7 @@ func testShuffleDisks(t *testing.T, z *erasureServerPools) {
 
 // TestEvalDisks tests the behavior of evalDisks
 func TestEvalDisks(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	nDisks := 16

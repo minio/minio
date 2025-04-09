@@ -413,7 +413,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 }
 
 func TestCheckAdminRequestAuthType(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	objLayer, fsDir, err := prepareFS(ctx)
@@ -450,7 +450,7 @@ func TestCheckAdminRequestAuthType(t *testing.T) {
 }
 
 func TestValidateAdminSignature(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	objLayer, fsDir, err := prepareFS(ctx)

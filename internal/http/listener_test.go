@@ -18,7 +18,6 @@
 package http
 
 import (
-	"context"
 	"crypto/tls"
 	"net"
 	"runtime"
@@ -153,7 +152,7 @@ func TestNewHTTPListener(t *testing.T) {
 	}
 
 	for testIdx, testCase := range testCases {
-		listener, listenErrs := newHTTPListener(context.Background(),
+		listener, listenErrs := newHTTPListener(t.Context(),
 			testCase.serverAddrs,
 			TCPOptions{},
 		)
@@ -192,7 +191,7 @@ func TestHTTPListenerStartClose(t *testing.T) {
 
 nextTest:
 	for i, testCase := range testCases {
-		listener, errs := newHTTPListener(context.Background(),
+		listener, errs := newHTTPListener(t.Context(),
 			testCase.serverAddrs,
 			TCPOptions{},
 		)
@@ -246,7 +245,7 @@ func TestHTTPListenerAddr(t *testing.T) {
 
 nextTest:
 	for i, testCase := range testCases {
-		listener, errs := newHTTPListener(context.Background(),
+		listener, errs := newHTTPListener(t.Context(),
 			testCase.serverAddrs,
 			TCPOptions{},
 		)
@@ -297,7 +296,7 @@ func TestHTTPListenerAddrs(t *testing.T) {
 
 nextTest:
 	for i, testCase := range testCases {
-		listener, errs := newHTTPListener(context.Background(),
+		listener, errs := newHTTPListener(t.Context(),
 			testCase.serverAddrs,
 			TCPOptions{},
 		)
