@@ -639,7 +639,7 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 		SkipDecommissioned: true,
 		SkipRebalancing:    true,
 	})
-	
+
 	if err != nil && !isErrObjectNotFound(err) {
 		return -1, err
 	}
@@ -658,14 +658,12 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 			if idx < 0 {
 				return -1, toObjectErr(errDiskFull)
 			}
-		} else {
+		} else if size > pinfo.ObjInfo.Size {
 			//  unversioned object
 			// if the object is already present, we need to check the increased size
-			if size > pinfo.ObjInfo.Size {
-				idx = z.getAvailablePoolIdx(ctx, bucket, object, size-pinfo.ObjInfo.Size)
-				if idx < 0 {
-					return -1, toObjectErr(errDiskFull)
-				}
+			idx = z.getAvailablePoolIdx(ctx, bucket, object, size-pinfo.ObjInfo.Size)
+			if idx < 0 {
+				return -1, toObjectErr(errDiskFull)
 			}
 		}
 	}
