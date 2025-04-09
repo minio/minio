@@ -152,7 +152,7 @@ func TestListOnlineDisks(t *testing.T) {
 		t.Skip()
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, disks, err := prepareErasure16(ctx)
@@ -160,7 +160,7 @@ func TestListOnlineDisks(t *testing.T) {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
 	setObjectLayer(obj)
-	defer obj.Shutdown(context.Background())
+	defer obj.Shutdown(t.Context())
 	defer removeRoots(disks)
 
 	type tamperKind int
@@ -276,7 +276,7 @@ func TestListOnlineDisks(t *testing.T) {
 					// and check if that disk
 					// appears in outDatedDisks.
 					tamperedIndex = index
-					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
+					dErr := erasureDisks[index].Delete(t.Context(), bucket, pathJoin(object, fi.DataDir, "part.1"), DeleteOptions{
 						Recursive: false,
 						Immediate: false,
 					})
@@ -328,7 +328,7 @@ func TestListOnlineDisks(t *testing.T) {
 // TestListOnlineDisksSmallObjects - checks if listOnlineDisks and outDatedDisks
 // are consistent with each other.
 func TestListOnlineDisksSmallObjects(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, disks, err := prepareErasure16(ctx)
@@ -336,7 +336,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
 	setObjectLayer(obj)
-	defer obj.Shutdown(context.Background())
+	defer obj.Shutdown(t.Context())
 	defer removeRoots(disks)
 
 	type tamperKind int
@@ -456,7 +456,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 					// and check if that disk
 					// appears in outDatedDisks.
 					tamperedIndex = index
-					dErr := erasureDisks[index].Delete(context.Background(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
+					dErr := erasureDisks[index].Delete(t.Context(), bucket, pathJoin(object, xlStorageFormatFile), DeleteOptions{
 						Recursive: false,
 						Immediate: false,
 					})
@@ -507,14 +507,14 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 }
 
 func TestDisksWithAllParts(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	obj, disks, err := prepareErasure16(ctx)
 	if err != nil {
 		t.Fatalf("Prepare Erasure backend failed - %v", err)
 	}
 	setObjectLayer(obj)
-	defer obj.Shutdown(context.Background())
+	defer obj.Shutdown(t.Context())
 	defer removeRoots(disks)
 
 	bucket := "bucket"

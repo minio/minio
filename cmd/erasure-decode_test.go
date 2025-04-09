@@ -89,7 +89,7 @@ func TestErasureDecode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
-		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
+		erasure, err := NewErasure(t.Context(), test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
 		}
@@ -108,7 +108,7 @@ func TestErasureDecode(t *testing.T) {
 		for i, disk := range disks {
 			writers[i] = newBitrotWriter(disk, "", "testbucket", "object", erasure.ShardFileSize(test.data), writeAlgorithm, erasure.ShardSize())
 		}
-		n, err := erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
+		n, err := erasure.Encode(t.Context(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create erasure test file: %v", i, err)
@@ -134,7 +134,7 @@ func TestErasureDecode(t *testing.T) {
 		}
 
 		writer := bytes.NewBuffer(nil)
-		_, err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data, nil)
+		_, err = erasure.Decode(t.Context(), writer, bitrotReaders, test.offset, test.length, test.data, nil)
 		closeBitrotReaders(bitrotReaders)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
@@ -177,7 +177,7 @@ func TestErasureDecode(t *testing.T) {
 				bitrotReaders[0] = nil
 			}
 			writer.Reset()
-			_, err = erasure.Decode(context.Background(), writer, bitrotReaders, test.offset, test.length, test.data, nil)
+			_, err = erasure.Decode(t.Context(), writer, bitrotReaders, test.offset, test.length, test.data, nil)
 			closeBitrotReaders(bitrotReaders)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
@@ -211,7 +211,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 		return
 	}
 	disks := setup.disks
-	erasure, err := NewErasure(context.Background(), dataBlocks, parityBlocks, blockSize)
+	erasure, err := NewErasure(t.Context(), dataBlocks, parityBlocks, blockSize)
 	if err != nil {
 		t.Fatalf("failed to create ErasureStorage: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 
 	// Create a test file to read from.
 	buffer := make([]byte, blockSize, 2*blockSize)
-	n, err := erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
+	n, err := erasure.Encode(t.Context(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 	closeBitrotWriters(writers)
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +266,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 			tillOffset := erasure.ShardFileOffset(offset, readLen, length)
 			bitrotReaders[index] = newStreamingBitrotReader(disk, nil, "testbucket", "object", tillOffset, DefaultBitrotAlgorithm, erasure.ShardSize())
 		}
-		_, err = erasure.Decode(context.Background(), buf, bitrotReaders, offset, readLen, length, nil)
+		_, err = erasure.Decode(t.Context(), buf, bitrotReaders, offset, readLen, length, nil)
 		closeBitrotReaders(bitrotReaders)
 		if err != nil {
 			t.Fatal(err, offset, readLen)

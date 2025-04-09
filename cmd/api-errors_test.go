@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -64,7 +63,7 @@ var toAPIErrorTests = []struct {
 }
 
 func TestAPIErrCode(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for i, testCase := range toAPIErrorTests {
 		errCode := toAPIErrorCode(ctx, testCase.err)
 		if errCode != testCase.errCode {

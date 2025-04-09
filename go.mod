@@ -1,8 +1,8 @@
 module github.com/minio/minio
 
-go 1.23.0
+go 1.24.0
 
-toolchain go1.23.6
+toolchain go1.24.2
 
 replace github.com/minio/madmin-go/v3 => github.com/taran-p/madmin-go/v3 v3.0.55-0.20250325221636-f5498832320f
 

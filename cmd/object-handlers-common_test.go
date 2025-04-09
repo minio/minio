@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -108,7 +107,7 @@ func TestCheckPreconditions(t *testing.T) {
 			request.Header.Set(xhttp.IfModifiedSince, tc.ifModifiedSince)
 			request.Header.Set(xhttp.IfMatch, tc.ifMatch)
 			request.Header.Set(xhttp.IfUnmodifiedSince, tc.ifUnmodifiedSince)
-			actualFlag := checkPreconditions(context.Background(), recorder, request, tc.objInfo, ObjectOptions{})
+			actualFlag := checkPreconditions(t.Context(), recorder, request, tc.objInfo, ObjectOptions{})
 			if tc.expectedFlag != actualFlag {
 				t.Errorf("test: %s, got flag: %v, want: %v", tc.name, actualFlag, tc.expectedFlag)
 			}
@@ -170,7 +169,7 @@ func TestCheckPreconditions(t *testing.T) {
 			request.Header.Set(xhttp.IfModifiedSince, tc.ifModifiedSince)
 			request.Header.Set(xhttp.IfMatch, tc.ifMatch)
 			request.Header.Set(xhttp.IfUnmodifiedSince, tc.ifUnmodifiedSince)
-			actualFlag := checkPreconditions(context.Background(), recorder, request, tc.objInfo, ObjectOptions{})
+			actualFlag := checkPreconditions(t.Context(), recorder, request, tc.objInfo, ObjectOptions{})
 			if tc.expectedFlag != actualFlag {
 				t.Errorf("test: %s, got flag: %v, want: %v", tc.name, actualFlag, tc.expectedFlag)
 			}

@@ -1036,6 +1036,9 @@ type actionsAccountingFn func(oi ObjectInfo, sz, actualSz int64, sizeS *sizeSumm
 // The metadata will be compared to consensus on the object layer before any changes are applied.
 // If no metadata is supplied, -1 is returned if no action is taken.
 func (i *scannerItem) applyActions(ctx context.Context, objAPI ObjectLayer, objInfos []ObjectInfo, lr lock.Retention, sizeS *sizeSummary, fn actionsAccountingFn) {
+	if len(objInfos) == 0 {
+		return
+	}
 	healActions := func(oi ObjectInfo, actualSz int64) int64 {
 		size := actualSz
 		if i.heal.enabled {

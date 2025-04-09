@@ -144,6 +144,12 @@ func TestNewerNoncurrentVersions(t *testing.T) {
 			t.Fatalf("test-%d: got %v, want %v", i+1, gotEvents[i], wantEvents[i])
 		}
 	}
+
+	// Test with zero versions
+	events, err := evaluator.Eval(nil)
+	if len(events) != 0 || err != nil {
+		t.Fatal("expected no events nor error")
+	}
 }
 
 func TestEmptyEvaluator(t *testing.T) {
