@@ -650,7 +650,7 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 		if idx < 0 {
 			return -1, toObjectErr(errDiskFull)
 		}
-	} else {
+	} else if pinfo.Err == nil {
 		if pinfo.ObjInfo.VersionID != "" && pinfo.ObjInfo.VersionID != nullVersionID {
 			// versioned object
 			// will add new version for this.
