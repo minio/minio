@@ -635,18 +635,38 @@ func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, objec
 // if none are found falls back to most available space pool, this function is
 // designed to be only used by PutObject, CopyObject (newObject creation) and NewMultipartUpload.
 func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
-	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
+	pinfo, _, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, ObjectOptions{
 		SkipDecommissioned: true,
 		SkipRebalancing:    true,
 	})
+	
 	if err != nil && !isErrObjectNotFound(err) {
-		return idx, err
+		return -1, err
 	}
 
+	idx = pinfo.Index
 	if isErrObjectNotFound(err) {
 		idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
 		if idx < 0 {
 			return -1, toObjectErr(errDiskFull)
+		}
+	} else {
+		if pinfo.ObjInfo.VersionID != "" && pinfo.ObjInfo.VersionID != nullVersionID {
+			// versioned object
+			// will add new version for this.
+			idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
+			if idx < 0 {
+				return -1, toObjectErr(errDiskFull)
+			}
+		} else {
+			//  unversioned object
+			// if the object is already present, we need to check the increased size
+			if size > pinfo.ObjInfo.Size {
+				idx = z.getAvailablePoolIdx(ctx, bucket, object, size-pinfo.ObjInfo.Size)
+				if idx < 0 {
+					return -1, toObjectErr(errDiskFull)
+				}
+			}
 		}
 	}
 
@@ -1089,6 +1109,10 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 
 	object = encodeDirObject(object)
 	if z.SinglePool() {
+		_, err := z.getPoolIdx(ctx, bucket, object, data.Size())
+		if err != nil {
+			return ObjectInfo{}, err
+		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
@@ -1813,6 +1837,10 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 	}
 
 	if z.SinglePool() {
+		_, err := z.getPoolIdx(ctx, bucket, object, data.Size())
+		if err != nil {
+			return PartInfo{}, err
+		}
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
