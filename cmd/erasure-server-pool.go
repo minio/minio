@@ -645,26 +645,11 @@ func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object stri
 	}
 
 	idx = pinfo.Index
-	if isErrObjectNotFound(err) {
+	if isErrObjectNotFound(err) || pinfo.Err == nil {
+		// will generate a temp object
 		idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
 		if idx < 0 {
 			return -1, toObjectErr(errDiskFull)
-		}
-	} else if pinfo.Err == nil {
-		if pinfo.ObjInfo.VersionID != "" && pinfo.ObjInfo.VersionID != nullVersionID {
-			// versioned object
-			// will add new version for this.
-			idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
-			if idx < 0 {
-				return -1, toObjectErr(errDiskFull)
-			}
-		} else if size > pinfo.ObjInfo.Size {
-			//  unversioned object
-			// if the object is already present, we need to check the increased size
-			idx = z.getAvailablePoolIdx(ctx, bucket, object, size-pinfo.ObjInfo.Size)
-			if idx < 0 {
-				return -1, toObjectErr(errDiskFull)
-			}
 		}
 	}
 
