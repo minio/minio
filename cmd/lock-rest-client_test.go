@@ -37,7 +37,7 @@ func TestLockRESTlient(t *testing.T) {
 	}
 	endpointLocal.IsLocal = true
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	err = initGlobalLockGrid(ctx, []PoolEndpoints{{Endpoints: Endpoints{endpoint, endpointLocal}}})
 	if err != nil {
@@ -50,22 +50,22 @@ func TestLockRESTlient(t *testing.T) {
 	}
 
 	// Attempt all calls.
-	_, err = lkClient.RLock(context.Background(), dsync.LockArgs{})
+	_, err = lkClient.RLock(t.Context(), dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for Rlock to fail")
 	}
 
-	_, err = lkClient.Lock(context.Background(), dsync.LockArgs{})
+	_, err = lkClient.Lock(t.Context(), dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for Lock to fail")
 	}
 
-	_, err = lkClient.RUnlock(context.Background(), dsync.LockArgs{})
+	_, err = lkClient.RUnlock(t.Context(), dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for RUnlock to fail")
 	}
 
-	_, err = lkClient.Unlock(context.Background(), dsync.LockArgs{})
+	_, err = lkClient.Unlock(t.Context(), dsync.LockArgs{})
 	if err == nil {
 		t.Fatal("Expected for Unlock to fail")
 	}

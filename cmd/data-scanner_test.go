@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/xml"
 	"fmt"
 	"slices"
@@ -38,7 +37,7 @@ import (
 
 func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	// Prepare object layer
-	objAPI, disks, err := prepareErasure(context.Background(), 8)
+	objAPI, disks, err := prepareErasure(t.Context(), 8)
 	if err != nil {
 		t.Fatalf("Failed to initialize object layer: %v", err)
 	}
@@ -102,7 +101,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	}
 	globalBucketMetadataSys.Set(bucket, meta)
 	// Prepare lifecycle expiration workers
-	es := newExpiryState(context.Background(), objAPI, 0)
+	es := newExpiryState(t.Context(), objAPI, 0)
 	globalExpiryState = es
 
 	// Prepare object versions
@@ -276,7 +275,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 				sizeS sizeSummary
 				gots  []ObjectInfo
 			)
-			item.applyActions(context.TODO(), objAPI, test.objInfos, test.lr, &sizeS, func(oi ObjectInfo, sz, _ int64, _ *sizeSummary) {
+			item.applyActions(t.Context(), objAPI, test.objInfos, test.lr, &sizeS, func(oi ObjectInfo, sz, _ int64, _ *sizeSummary) {
 				if sz != 0 {
 					gots = append(gots, oi)
 				}
@@ -399,7 +398,7 @@ func TestEvalActionFromLifecycle(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("TestEvalAction-%d", i), func(t *testing.T) {
-			gotEvent := evalActionFromLifecycle(context.Background(), test.ilm, *test.retention, nil, test.obj)
+			gotEvent := evalActionFromLifecycle(t.Context(), test.ilm, *test.retention, nil, test.obj)
 			if gotEvent.Action != test.want {
 				t.Fatalf("Expected %v but got %v", test.want, gotEvent.Action)
 			}

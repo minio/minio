@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"os"
 	"reflect"
@@ -278,7 +277,7 @@ func Test_metacacheReader_readAll(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		readErr = r.readAll(context.Background(), objs)
+		readErr = r.readAll(t.Context(), objs)
 		wg.Done()
 	}()
 	want := loadMetacacheSampleNames

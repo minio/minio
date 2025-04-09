@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -86,7 +85,7 @@ var replicationConfigTests = []struct {
 }
 
 func TestReplicationResync(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for i, test := range replicationConfigTests {
 		if sync := test.rcfg.Resync(ctx, test.info, test.dsc, test.tgtStatuses); sync.mustResync() != test.expectedSync {
 			t.Errorf("Test%d (%s): Resync  got %t , want %t", i+1, test.name, sync.mustResync(), test.expectedSync)

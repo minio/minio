@@ -33,7 +33,7 @@ import (
 
 // Tests validate bucket LocationConstraint.
 func TestIsValidLocationConstraint(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)
@@ -163,7 +163,7 @@ func TestExtractMetadataHeaders(t *testing.T) {
 	// Validate if the extracting headers.
 	for i, testCase := range testCases {
 		metadata := make(map[string]string)
-		err := extractMetadataFromMime(context.Background(), textproto.MIMEHeader(testCase.header), metadata)
+		err := extractMetadataFromMime(t.Context(), textproto.MIMEHeader(testCase.header), metadata)
 		if err != nil && !testCase.shouldFail {
 			t.Fatalf("Test %d failed to extract metadata: %v", i+1, err)
 		}

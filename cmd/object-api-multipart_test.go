@@ -2170,7 +2170,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		testCase := testCase
 		t.(*testing.T).Run("", func(t *testing.T) {
 			opts = ObjectOptions{}
-			actualResult, actualErr := obj.CompleteMultipartUpload(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
+			actualResult, actualErr := obj.CompleteMultipartUpload(t.Context(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
 			if actualErr != nil && testCase.shouldPass {
 				t.Errorf("%s: Expected to pass, but failed with: <ERROR> %s", instanceType, actualErr)
 			}
