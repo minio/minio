@@ -2119,7 +2119,7 @@ func (a adminAPIHandlers) InfoAccessKey(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if !ok {
-		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchUser), r.URL) // TODO: Add a new error code for this
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchAccessKey), r.URL)
 		return
 	}
 
@@ -2132,11 +2132,17 @@ func (a adminAPIHandlers) InfoAccessKey(w http.ResponseWriter, r *http.Request) 
 	case targetCred.IsTemp():
 		userType = "STS"
 		_, sessionPolicy, err = globalIAMSys.GetTemporaryAccount(ctx, accessKey)
+		if err == errNoSuchTempAccount {
+			err = errNoSuchAccessKey
+		}
 	case targetCred.IsServiceAccount():
 		userType = "Service Account"
 		_, sessionPolicy, err = globalIAMSys.GetServiceAccount(ctx, accessKey)
+		if err == errNoSuchServiceAccount {
+			err = errNoSuchAccessKey
+		}
 	default:
-		err = errNoSuchAccount
+		err = errNoSuchAccessKey
 	}
 	if err != nil {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)

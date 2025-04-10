@@ -216,6 +216,7 @@ const (
 	ErrPolicyInvalidName
 	ErrNoTokenRevokeType
 	ErrAdminOpenIDNotEnabled
+	ErrAdminNoSuchAccessKey
 	// Add new error codes here.
 
 	// SSE-S3/SSE-KMS related API errors
@@ -1276,6 +1277,11 @@ var errorCodes = errorCodeMap{
 		Description:    "No token revoke type specified and one could not be inferred from the request",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrAdminNoSuchAccessKey: {
+		Code:           "XMinioAdminNoSuchAccessKey",
+		Description:    "The specified access key does not exist.",
+		HTTPStatusCode: http.StatusNotFound,
+	},
 
 	// S3 extensions.
 	ErrContentSHA256Mismatch: {
@@ -2173,6 +2179,8 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 		apiErr = ErrAdminNoSuchUserLDAPWarn
 	case errNoSuchServiceAccount:
 		apiErr = ErrAdminServiceAccountNotFound
+	case errNoSuchAccessKey:
+		apiErr = ErrAdminNoSuchAccessKey
 	case errNoSuchGroup:
 		apiErr = ErrAdminNoSuchGroup
 	case errGroupNotEmpty:
