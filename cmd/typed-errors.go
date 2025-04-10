@@ -75,6 +75,9 @@ var errNoSuchServiceAccount = errors.New("Specified service account does not exi
 // error returned when temporary account is not found
 var errNoSuchTempAccount = errors.New("Specified temporary account does not exist")
 
+// error returned when access key is not found
+var errNoSuchAccessKey = errors.New("Specified access key does not exist")
+
 // error returned in IAM subsystem when an account doesn't exist.
 var errNoSuchAccount = errors.New("Specified account does not exist")
 
