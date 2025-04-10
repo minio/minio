@@ -49,7 +49,7 @@ func TestStripStandardPorts(t *testing.T) {
 
 // Test printing server common message.
 func TestPrintServerCommonMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)
@@ -67,7 +67,7 @@ func TestPrintServerCommonMessage(t *testing.T) {
 
 // Tests print cli access message.
 func TestPrintCLIAccessMsg(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)
@@ -85,7 +85,7 @@ func TestPrintCLIAccessMsg(t *testing.T) {
 
 // Test print startup message.
 func TestPrintStartupMessage(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)

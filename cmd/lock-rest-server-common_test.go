@@ -53,7 +53,7 @@ func createLockTestServer(ctx context.Context, t *testing.T) (string, *lockRESTS
 
 // Test function to remove lock entries from map based on name & uid combination
 func TestLockRpcServerRemoveEntry(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	testPath, locker, _ := createLockTestServer(ctx, t)

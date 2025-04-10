@@ -159,7 +159,7 @@ func TestCrcHashMod(t *testing.T) {
 // TestNewErasure - tests initialization of all input disks
 // and constructs a valid `Erasure` object
 func TestNewErasureSets(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	nDisks := 16 // Maximum disks.

@@ -19,7 +19,6 @@ package kms
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"testing"
 )
@@ -30,11 +29,11 @@ func TestSingleKeyRoundtrip(t *testing.T) {
 		t.Fatalf("Failed to initialize KMS: %v", err)
 	}
 
-	key, err := KMS.GenerateKey(context.Background(), &GenerateKeyRequest{Name: "my-key"})
+	key, err := KMS.GenerateKey(t.Context(), &GenerateKeyRequest{Name: "my-key"})
 	if err != nil {
 		t.Fatalf("Failed to generate key: %v", err)
 	}
-	plaintext, err := KMS.Decrypt(context.TODO(), &DecryptRequest{
+	plaintext, err := KMS.Decrypt(t.Context(), &DecryptRequest{
 		Name:       key.KeyID,
 		Ciphertext: key.Ciphertext,
 	})
@@ -57,7 +56,7 @@ func TestDecryptKey(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d: failed to decode plaintext key: %v", i, err)
 		}
-		plaintext, err := KMS.Decrypt(context.TODO(), &DecryptRequest{
+		plaintext, err := KMS.Decrypt(t.Context(), &DecryptRequest{
 			Name:           test.KeyID,
 			Ciphertext:     []byte(test.Ciphertext),
 			AssociatedData: test.Context,

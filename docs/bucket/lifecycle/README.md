@@ -115,7 +115,7 @@ e.g, To remove noncurrent versions of all objects keeping the most recent 5 nonc
 
 This JSON rule is equivalent to the following MinIO Client command:
 ```
-mc ilm rule add --noncurrent-expire-days 30 --noncurrent-expire-newer 5 myminio/mydata
+mc ilm rule add --noncurrent-expire-days 30 --noncurrent-expire-newer 5 --prefix "user-uploads/" myminio/mydata
 ```
 
 #### 3.2.a Automatic removal of noncurrent versions keeping only most recent ones immediately (MinIO only extension)

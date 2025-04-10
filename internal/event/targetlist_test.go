@@ -18,7 +18,6 @@
 package event
 
 import (
-	"context"
 	"crypto/rand"
 	"errors"
 	"reflect"
@@ -86,14 +85,14 @@ func (target ExampleTarget) FlushQueueStore() error {
 }
 
 func TestTargetListAdd(t *testing.T) {
-	targetListCase1 := NewTargetList(context.Background())
+	targetListCase1 := NewTargetList(t.Context())
 
-	targetListCase2 := NewTargetList(context.Background())
+	targetListCase2 := NewTargetList(t.Context())
 	if err := targetListCase2.Add(&ExampleTarget{TargetID{"2", "testcase"}, false, false}); err != nil {
 		panic(err)
 	}
 
-	targetListCase3 := NewTargetList(context.Background())
+	targetListCase3 := NewTargetList(t.Context())
 	if err := targetListCase3.Add(&ExampleTarget{TargetID{"3", "testcase"}, false, false}); err != nil {
 		panic(err)
 	}
@@ -141,14 +140,14 @@ func TestTargetListAdd(t *testing.T) {
 }
 
 func TestTargetListExists(t *testing.T) {
-	targetListCase1 := NewTargetList(context.Background())
+	targetListCase1 := NewTargetList(t.Context())
 
-	targetListCase2 := NewTargetList(context.Background())
+	targetListCase2 := NewTargetList(t.Context())
 	if err := targetListCase2.Add(&ExampleTarget{TargetID{"2", "testcase"}, false, false}); err != nil {
 		panic(err)
 	}
 
-	targetListCase3 := NewTargetList(context.Background())
+	targetListCase3 := NewTargetList(t.Context())
 	if err := targetListCase3.Add(&ExampleTarget{TargetID{"3", "testcase"}, false, false}); err != nil {
 		panic(err)
 	}
@@ -173,14 +172,14 @@ func TestTargetListExists(t *testing.T) {
 }
 
 func TestTargetListList(t *testing.T) {
-	targetListCase1 := NewTargetList(context.Background())
+	targetListCase1 := NewTargetList(t.Context())
 
-	targetListCase2 := NewTargetList(context.Background())
+	targetListCase2 := NewTargetList(t.Context())
 	if err := targetListCase2.Add(&ExampleTarget{TargetID{"2", "testcase"}, false, false}); err != nil {
 		panic(err)
 	}
 
-	targetListCase3 := NewTargetList(context.Background())
+	targetListCase3 := NewTargetList(t.Context())
 	if err := targetListCase3.Add(&ExampleTarget{TargetID{"3", "testcase"}, false, false}); err != nil {
 		panic(err)
 	}
@@ -220,7 +219,7 @@ func TestTargetListList(t *testing.T) {
 }
 
 func TestNewTargetList(t *testing.T) {
-	if result := NewTargetList(context.Background()); result == nil {
+	if result := NewTargetList(t.Context()); result == nil {
 		t.Fatalf("test: result: expected: <non-nil>, got: <nil>")
 	}
 }

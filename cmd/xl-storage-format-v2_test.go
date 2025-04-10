@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -1082,7 +1081,7 @@ func Test_mergeEntryChannels(t *testing.T) {
 			entries = append(entries, ch)
 		}
 		out := make(chan metaCacheEntry, 1)
-		err := mergeEntryChannels(context.Background(), entries, out, 1)
+		err := mergeEntryChannels(t.Context(), entries, out, 1)
 		if err != nil {
 			t.Fatal(err)
 		}

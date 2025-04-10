@@ -559,7 +559,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			}, goi, opts, gerr)
 			if dsc.ReplicateAny() {
 				if object.VersionID != "" {
-					object.VersionPurgeStatus = Pending
+					object.VersionPurgeStatus = replication.VersionPurgePending
 					object.VersionPurgeStatuses = dsc.PendingStatus()
 				} else {
 					object.DeleteMarkerReplicationStatus = dsc.PendingStatus()
@@ -669,7 +669,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			continue
 		}
 
-		if replicateDeletes && (dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == Pending) {
+		if replicateDeletes && (dobj.DeleteMarkerReplicationStatus() == replication.Pending || dobj.VersionPurgeStatus() == replication.VersionPurgePending) {
 			// copy so we can re-add null ID.
 			dobj := dobj
 			if isDirObject(dobj.ObjectName) && dobj.VersionID == "" {

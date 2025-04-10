@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -34,7 +33,7 @@ func TestLocalLockerExpire(t *testing.T) {
 	rResources := make([]string, 1000)
 	quorum := 0
 	l := newLocker()
-	ctx := context.Background()
+	ctx := t.Context()
 	for i := range wResources {
 		arg := dsync.LockArgs{
 			UID:       mustGetUUID(),
@@ -112,7 +111,7 @@ func TestLocalLockerUnlock(t *testing.T) {
 	wUIDs := make([]string, n)
 	rUIDs := make([]string, 0, n*2)
 	l := newLocker()
-	ctx := context.Background()
+	ctx := t.Context()
 	quorum := 0
 	for i := range wResources {
 		names := [m]string{}
@@ -287,7 +286,7 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 
 						for i := 0; i < readers; i++ {
 							rng.Read(tmp[:])
-							ok, err := l.RLock(context.Background(), dsync.LockArgs{
+							ok, err := l.RLock(t.Context(), dsync.LockArgs{
 								UID:       uuid.NewString(),
 								Resources: res,
 								Source:    hex.EncodeToString(tmp[:8]),
@@ -374,7 +373,7 @@ func Test_localLocker_RUnlock(t *testing.T) {
 
 						for i := 0; i < readers; i++ {
 							rng.Read(tmp[:])
-							ok, err := l.RLock(context.Background(), dsync.LockArgs{
+							ok, err := l.RLock(t.Context(), dsync.LockArgs{
 								UID:       uuid.NewString(),
 								Resources: res,
 								Source:    hex.EncodeToString(tmp[:8]),
@@ -398,7 +397,7 @@ func Test_localLocker_RUnlock(t *testing.T) {
 					}
 					start := time.Now()
 					for _, lock := range toUnLock {
-						ok, err := l.ForceUnlock(context.Background(), lock)
+						ok, err := l.ForceUnlock(t.Context(), lock)
 						if err != nil || !ok {
 							t.Fatal(err)
 						}
@@ -423,7 +422,7 @@ func Test_localLocker_RUnlock(t *testing.T) {
 					}
 					start = time.Now()
 					for _, lock := range toUnLock {
-						ok, err := l.RUnlock(context.TODO(), lock)
+						ok, err := l.RUnlock(t.Context(), lock)
 						if err != nil || !ok {
 							t.Fatal(err)
 						}

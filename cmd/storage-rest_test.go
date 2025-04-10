@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"math/rand"
 	"reflect"
@@ -41,7 +40,7 @@ func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := storage.DiskInfo(context.Background(), DiskInfoOptions{Metrics: true})
+		_, err := storage.DiskInfo(t.Context(), DiskInfoOptions{Metrics: true})
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -54,7 +53,7 @@ func testStorageAPIDiskInfo(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIStatInfoFile(t *testing.T, storage StorageAPI) {
-	err := storage.AppendFile(context.Background(), "foo", pathJoin("myobject", xlStorageFormatFile), []byte("foo"))
+	err := storage.AppendFile(t.Context(), "foo", pathJoin("myobject", xlStorageFormatFile), []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -70,7 +69,7 @@ func testStorageAPIStatInfoFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		_, err := storage.StatInfoFile(context.Background(), testCase.volumeName, testCase.objectName+"/"+xlStorageFormatFile, false)
+		_, err := storage.StatInfoFile(t.Context(), testCase.volumeName, testCase.objectName+"/"+xlStorageFormatFile, false)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -80,7 +79,7 @@ func testStorageAPIStatInfoFile(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
-	err := storage.AppendFile(context.Background(), "foo", "path/to/myobject", []byte("foo"))
+	err := storage.AppendFile(t.Context(), "foo", "path/to/myobject", []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -97,7 +96,7 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.ListDir(context.Background(), "", testCase.volumeName, testCase.prefix, -1)
+		result, err := storage.ListDir(t.Context(), "", testCase.volumeName, testCase.prefix, -1)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -113,7 +112,7 @@ func testStorageAPIListDir(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIReadAll(t *testing.T, storage StorageAPI) {
-	err := storage.AppendFile(context.Background(), "foo", "myobject", []byte("foo"))
+	err := storage.AppendFile(t.Context(), "foo", "myobject", []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -130,7 +129,7 @@ func testStorageAPIReadAll(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := storage.ReadAll(context.Background(), testCase.volumeName, testCase.objectName)
+		result, err := storage.ReadAll(t.Context(), testCase.volumeName, testCase.objectName)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -146,7 +145,7 @@ func testStorageAPIReadAll(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
-	err := storage.AppendFile(context.Background(), "foo", "myobject", []byte("foo"))
+	err := storage.AppendFile(t.Context(), "foo", "myobject", []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -167,7 +166,7 @@ func testStorageAPIReadFile(t *testing.T, storage StorageAPI) {
 	result := make([]byte, 100)
 	for i, testCase := range testCases {
 		result = result[testCase.offset:3]
-		_, err := storage.ReadFile(context.Background(), testCase.volumeName, testCase.objectName, testCase.offset, result, nil)
+		_, err := storage.ReadFile(t.Context(), testCase.volumeName, testCase.objectName, testCase.offset, result, nil)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -209,7 +208,7 @@ func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
 		if testCase.ignoreIfWindows && runtime.GOOS == "windows" {
 			continue
 		}
-		err := storage.AppendFile(context.Background(), testCase.volumeName, testCase.objectName, testCase.data)
+		err := storage.AppendFile(t.Context(), testCase.volumeName, testCase.objectName, testCase.data)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -217,7 +216,7 @@ func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
 		}
 
 		if !testCase.expectErr {
-			data, err := storage.ReadAll(context.Background(), testCase.volumeName, testCase.objectName)
+			data, err := storage.ReadAll(t.Context(), testCase.volumeName, testCase.objectName)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -230,7 +229,7 @@ func testStorageAPIAppendFile(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
-	err := storage.AppendFile(context.Background(), "foo", "myobject", []byte("foo"))
+	err := storage.AppendFile(t.Context(), "foo", "myobject", []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -248,7 +247,7 @@ func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		err := storage.Delete(context.Background(), testCase.volumeName, testCase.objectName, DeleteOptions{
+		err := storage.Delete(t.Context(), testCase.volumeName, testCase.objectName, DeleteOptions{
 			Recursive: false,
 			Immediate: false,
 		})
@@ -261,12 +260,12 @@ func testStorageAPIDeleteFile(t *testing.T, storage StorageAPI) {
 }
 
 func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
-	err := storage.AppendFile(context.Background(), "foo", "myobject", []byte("foo"))
+	err := storage.AppendFile(t.Context(), "foo", "myobject", []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
 
-	err = storage.AppendFile(context.Background(), "foo", "otherobject", []byte("foo"))
+	err = storage.AppendFile(t.Context(), "foo", "otherobject", []byte("foo"))
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -285,7 +284,7 @@ func testStorageAPIRenameFile(t *testing.T, storage StorageAPI) {
 	}
 
 	for i, testCase := range testCases {
-		err := storage.RenameFile(context.Background(), testCase.volumeName, testCase.objectName, testCase.destVolumeName, testCase.destObjectName)
+		err := storage.RenameFile(t.Context(), testCase.volumeName, testCase.objectName, testCase.destVolumeName, testCase.destObjectName)
 		expectErr := (err != nil)
 
 		if expectErr != testCase.expectErr {
@@ -341,11 +340,11 @@ func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
 	registerStorageRESTHandlers(tg.Mux[1], poolEps, tg.Managers[1])
 
 	storage := globalLocalSetDrives[0][0][0]
-	if err = storage.MakeVol(context.Background(), "foo"); err != nil {
+	if err = storage.MakeVol(t.Context(), "foo"); err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
 
-	if err = storage.MakeVol(context.Background(), "bar"); err != nil {
+	if err = storage.MakeVol(t.Context(), "bar"); err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
 
@@ -355,7 +354,7 @@ func newStorageRESTHTTPServerClient(t testing.TB) *storageRESTClient {
 	}
 
 	for {
-		_, err := restClient.DiskInfo(context.Background(), DiskInfoOptions{})
+		_, err := restClient.DiskInfo(t.Context(), DiskInfoOptions{})
 		if err == nil || errors.Is(err, errUnformattedDisk) {
 			break
 		}

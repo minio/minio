@@ -78,7 +78,7 @@ func benchmarkGridRequests(b *testing.B, n int) {
 		for par := 1; par <= 32; par *= 2 {
 			b.Run("par="+strconv.Itoa(par*runtime.GOMAXPROCS(0)), func(b *testing.B) {
 				defer timeout(60 * time.Second)()
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				ctx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
 				defer cancel()
 				b.ReportAllocs()
 				b.SetBytes(int64(len(payload) * 2))
@@ -135,7 +135,7 @@ func benchmarkGridRequests(b *testing.B, n int) {
 		for par := 1; par <= 32; par *= 2 {
 			b.Run("par="+strconv.Itoa(par*runtime.GOMAXPROCS(0)), func(b *testing.B) {
 				defer timeout(60 * time.Second)()
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				ctx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
 				defer cancel()
 				b.ReportAllocs()
 				b.ResetTimer()
@@ -285,7 +285,7 @@ func benchmarkGridStreamRespOnly(b *testing.B, n int) {
 					if conn == nil {
 						b.Fatal("No connection")
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					ctx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
 					// Send the payload.
 					t := time.Now()
 					st, err := conn.NewStream(ctx, handlerTest, payload)
@@ -396,7 +396,7 @@ func benchmarkGridStreamReqOnly(b *testing.B, n int) {
 					if conn == nil {
 						b.Fatal("No connection")
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					ctx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
 					// Send the payload.
 					t := time.Now()
 					st, err := conn.NewStream(ctx, handlerTest, payload)
@@ -512,7 +512,7 @@ func benchmarkGridStreamTwoway(b *testing.B, n int) {
 					if conn == nil {
 						b.Fatal("No connection")
 					}
-					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					ctx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
 					// Send the payload.
 					t := time.Now()
 					st, err := conn.NewStream(ctx, handlerTest, payload)

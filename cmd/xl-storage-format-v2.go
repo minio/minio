@@ -1384,13 +1384,13 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 		updateVersion = fi.MarkDeleted
 	} else {
 		// for replication scenario
-		if fi.Deleted && fi.VersionPurgeStatus() != Complete {
+		if fi.Deleted && fi.VersionPurgeStatus() != replication.VersionPurgeComplete {
 			if !fi.VersionPurgeStatus().Empty() || fi.DeleteMarkerReplicationStatus().Empty() {
 				updateVersion = true
 			}
 		}
 		// object or delete-marker versioned delete is not complete
-		if !fi.VersionPurgeStatus().Empty() && fi.VersionPurgeStatus() != Complete {
+		if !fi.VersionPurgeStatus().Empty() && fi.VersionPurgeStatus() != replication.VersionPurgeComplete {
 			updateVersion = true
 		}
 	}
@@ -1458,7 +1458,7 @@ func (x *xlMetaV2) DeleteVersion(fi FileInfo) (string, error) {
 				return "", err
 			}
 			x.versions = append(x.versions[:i], x.versions[i+1:]...)
-			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != Complete)) {
+			if fi.MarkDeleted && (fi.VersionPurgeStatus().Empty() || (fi.VersionPurgeStatus() != replication.VersionPurgeComplete)) {
 				err = x.addVersion(ventry)
 			} else if fi.Deleted && uv.String() == emptyUUID {
 				return "", x.addVersion(ventry)

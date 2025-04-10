@@ -51,7 +51,7 @@ func TestDisconnect(t *testing.T) {
 	// We fake a local and remote server.
 	localHost := hosts[0]
 	remoteHost := hosts[1]
-	local, err := NewManager(context.Background(), ManagerOptions{
+	local, err := NewManager(t.Context(), ManagerOptions{
 		Dialer: ConnectWS(dialer.DialContext,
 			dummyNewToken,
 			nil),
@@ -75,7 +75,7 @@ func TestDisconnect(t *testing.T) {
 		return nil, &err
 	}))
 
-	remote, err := NewManager(context.Background(), ManagerOptions{
+	remote, err := NewManager(t.Context(), ManagerOptions{
 		Dialer: ConnectWS(dialer.DialContext,
 			dummyNewToken,
 			nil),
@@ -131,14 +131,14 @@ func TestDisconnect(t *testing.T) {
 
 	// local to remote
 	remoteConn := local.Connection(remoteHost)
-	errFatal(remoteConn.WaitForConnect(context.Background()))
+	errFatal(remoteConn.WaitForConnect(t.Context()))
 	const testPayload = "Hello Grid World!"
 
 	gotResp := make(chan struct{})
 	go func() {
 		start := time.Now()
 		t.Log("Roundtrip: sending request")
-		resp, err := remoteConn.Request(context.Background(), handlerTest, []byte(testPayload))
+		resp, err := remoteConn.Request(t.Context(), handlerTest, []byte(testPayload))
 		t.Log("Roundtrip:", time.Since(start), resp, err)
 		gotResp <- struct{}{}
 	}()
@@ -148,9 +148,9 @@ func TestDisconnect(t *testing.T) {
 	<-gotResp
 
 	// Must reconnect
-	errFatal(remoteConn.WaitForConnect(context.Background()))
+	errFatal(remoteConn.WaitForConnect(t.Context()))
 
-	stream, err := remoteConn.NewStream(context.Background(), handlerTest2, []byte(testPayload))
+	stream, err := remoteConn.NewStream(t.Context(), handlerTest2, []byte(testPayload))
 	errFatal(err)
 	go func() {
 		for resp := range stream.responses {
@@ -162,7 +162,7 @@ func TestDisconnect(t *testing.T) {
 	<-gotCall
 	remote.debugMsg(debugKillOutbound)
 	local.debugMsg(debugKillOutbound)
-	errFatal(remoteConn.WaitForConnect(context.Background()))
+	errFatal(remoteConn.WaitForConnect(t.Context()))
 
 	<-gotResp
 	// Killing should cancel the context on the request.

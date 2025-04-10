@@ -76,7 +76,7 @@ func TestServerConfigFile(t *testing.T) {
 
 // Tests initializing new object layer.
 func TestNewObjectLayer(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	// Tests for ErasureSD object layer.
 	nDisks := 1

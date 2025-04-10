@@ -30,7 +30,7 @@ import (
 )
 
 func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lrwm := NewLRWMutex()
 
 	if !lrwm.GetRLock(ctx, "", "object1", time.Second) {
@@ -87,7 +87,7 @@ func TestSimpleWriteLockTimedOut(t *testing.T) {
 }
 
 func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
-	ctx := context.Background()
+	ctx := t.Context()
 	lrwm := NewLRWMutex()
 
 	// fmt.Println("Getting initial write lock")

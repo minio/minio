@@ -18,7 +18,6 @@
 package event
 
 import (
-	"context"
 	"encoding/xml"
 	"reflect"
 	"strings"
@@ -252,9 +251,9 @@ func TestQueueValidate(t *testing.T) {
 		panic(err)
 	}
 
-	targetList1 := NewTargetList(context.Background())
+	targetList1 := NewTargetList(t.Context())
 
-	targetList2 := NewTargetList(context.Background())
+	targetList2 := NewTargetList(t.Context())
 	if err := targetList2.Add(&ExampleTarget{TargetID{"1", "webhook"}, false, false}); err != nil {
 		panic(err)
 	}
@@ -596,9 +595,9 @@ func TestConfigValidate(t *testing.T) {
 		panic(err)
 	}
 
-	targetList1 := NewTargetList(context.Background())
+	targetList1 := NewTargetList(t.Context())
 
-	targetList2 := NewTargetList(context.Background())
+	targetList2 := NewTargetList(t.Context())
 	if err := targetList2.Add(&ExampleTarget{TargetID{"1", "webhook"}, false, false}); err != nil {
 		panic(err)
 	}
@@ -928,9 +927,9 @@ func TestParseConfig(t *testing.T) {
 </NotificationConfiguration>
 `)
 
-	targetList1 := NewTargetList(context.Background())
+	targetList1 := NewTargetList(t.Context())
 
-	targetList2 := NewTargetList(context.Background())
+	targetList2 := NewTargetList(t.Context())
 	if err := targetList2.Add(&ExampleTarget{TargetID{"1", "webhook"}, false, false}); err != nil {
 		panic(err)
 	}

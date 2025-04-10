@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -32,7 +31,7 @@ import (
 func TestGetAndValidateAttributesOpts(t *testing.T) {
 	globalBucketVersioningSys = &BucketVersioningSys{}
 	bucket := minioMetaBucket
-	ctx := context.Background()
+	ctx := t.Context()
 	testCases := []struct {
 		name            string
 		headers         http.Header

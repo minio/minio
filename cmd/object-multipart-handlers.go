@@ -682,7 +682,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	case authTypeStreamingUnsignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Error = newUnsignedV4ChunkedReader(r, true)
+		reader, s3Error = newUnsignedV4ChunkedReader(r, true, r.Header.Get(xhttp.Authorization) != "")
 		if s3Error != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 			return

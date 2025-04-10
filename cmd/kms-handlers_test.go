@@ -18,7 +18,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -769,7 +768,7 @@ func TestKMSHandlerNotConfiguredOrInvalidCreds(t *testing.T) {
 }
 
 func setupKMSTest(t *testing.T, enableKMS bool) (*adminErasureTestBed, func()) {
-	adminTestBed, err := prepareAdminErasureTestBed(context.Background())
+	adminTestBed, err := prepareAdminErasureTestBed(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -810,7 +809,7 @@ func buildKMSRequest(t *testing.T, method, path, accessKey, secretKey string, qu
 // setupKMSUser is a test helper that creates a new user with the provided access key and secret key
 // and applies the given policy to the user.
 func setupKMSUser(t *testing.T, accessKey, secretKey, p string) {
-	ctx := context.Background()
+	ctx := t.Context()
 	createUserParams := madmin.AddOrUpdateUserReq{
 		SecretKey: secretKey,
 		Status:    madmin.AccountEnabled,

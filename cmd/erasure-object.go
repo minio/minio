@@ -2032,7 +2032,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus().Empty() && opts.DeleteMarkerReplicationStatus().Empty() {
 			markDelete = false
 		}
-		if opts.VersionPurgeStatus() == Complete {
+		if opts.VersionPurgeStatus() == replication.VersionPurgeComplete {
 			markDelete = false
 		}
 		// now, since VersionPurgeStatus() is already set, we can let the

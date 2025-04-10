@@ -37,7 +37,7 @@ func getTokenString(accessKey, secretKey string) (string, error) {
 
 // Tests web request authenticator.
 func TestWebRequestAuthenticate(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)
@@ -94,7 +94,7 @@ func TestWebRequestAuthenticate(t *testing.T) {
 }
 
 func BenchmarkParseJWTStandardClaims(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(b.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)
@@ -125,7 +125,7 @@ func BenchmarkParseJWTStandardClaims(b *testing.B) {
 }
 
 func BenchmarkParseJWTMapClaims(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(b.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)
@@ -158,7 +158,7 @@ func BenchmarkParseJWTMapClaims(b *testing.B) {
 }
 
 func BenchmarkAuthenticateNode(b *testing.B) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(b.Context())
 	defer cancel()
 
 	obj, fsDir, err := prepareFS(ctx)

@@ -947,7 +947,7 @@ func TestIAMExportImportWithLDAP(t *testing.T) {
 }
 
 func TestIAMImportAssetWithLDAP(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	ctx, cancel := context.WithTimeout(t.Context(), testDefaultTimeout)
 	defer cancel()
 
 	exportContentStrings := map[string]string{

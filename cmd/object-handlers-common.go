@@ -378,7 +378,7 @@ func setPutObjHeaders(w http.ResponseWriter, objInfo ObjectInfo, del bool, h htt
 	hash.AddChecksumHeader(w, cs)
 }
 
-func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete, lcEvent lifecycle.Event) {
+func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toDel []ObjectToDelete, lcEvent []lifecycle.Event) {
 	for remaining := toDel; len(remaining) > 0; toDel = remaining {
 		if len(toDel) > maxDeleteList {
 			remaining = toDel[maxDeleteList:]
@@ -399,8 +399,7 @@ func deleteObjectVersions(ctx context.Context, o ObjectLayer, bucket string, toD
 				VersionID: dobj.VersionID,
 			}
 			traceFn := globalLifecycleSys.trace(oi)
-			// Note: NewerNoncurrentVersions action is performed only scanner today
-			tags := newLifecycleAuditEvent(lcEventSrc_Scanner, lcEvent).Tags()
+			tags := newLifecycleAuditEvent(lcEventSrc_Scanner, lcEvent[i]).Tags()
 
 			// Send audit for the lifecycle delete operation
 			auditLogLifecycle(

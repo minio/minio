@@ -19,7 +19,6 @@ package openid
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -148,7 +147,7 @@ func TestJWTHMACType(t *testing.T) {
 	}
 
 	var claims jwtgo.MapClaims
-	if err = cfg.Validate(context.Background(), DummyRoleARN, token, "", "", claims); err != nil {
+	if err = cfg.Validate(t.Context(), DummyRoleARN, token, "", "", claims); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -200,7 +199,7 @@ func TestJWT(t *testing.T) {
 	}
 
 	var claims jwtgo.MapClaims
-	if err = cfg.Validate(context.Background(), DummyRoleARN, u.Query().Get("Token"), "", "", claims); err == nil {
+	if err = cfg.Validate(t.Context(), DummyRoleARN, u.Query().Get("Token"), "", "", claims); err == nil {
 		t.Fatal(err)
 	}
 }

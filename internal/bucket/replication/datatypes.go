@@ -51,3 +51,27 @@ func (s StatusType) String() string {
 func (s StatusType) Empty() bool {
 	return string(s) == ""
 }
+
+// VersionPurgeStatusType represents status of a versioned delete or permanent delete w.r.t bucket replication
+type VersionPurgeStatusType string
+
+const (
+	// VersionPurgePending - versioned delete replication is pending.
+	VersionPurgePending VersionPurgeStatusType = "PENDING"
+
+	// VersionPurgeComplete - versioned delete replication is now complete, erase version on disk.
+	VersionPurgeComplete VersionPurgeStatusType = "COMPLETE"
+
+	// VersionPurgeFailed - versioned delete replication failed.
+	VersionPurgeFailed VersionPurgeStatusType = "FAILED"
+)
+
+// Empty returns true if purge status was not set.
+func (v VersionPurgeStatusType) Empty() bool {
+	return string(v) == ""
+}
+
+// Pending returns true if the version is pending purge.
+func (v VersionPurgeStatusType) Pending() bool {
+	return v == VersionPurgePending || v == VersionPurgeFailed
+}

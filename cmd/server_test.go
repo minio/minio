@@ -37,6 +37,7 @@ import (
 	"github.com/dustin/go-humanize"
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio-go/v7/pkg/set"
+	"github.com/minio/minio-go/v7/pkg/signer"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/pkg/v3/policy"
 )
@@ -126,6 +127,7 @@ func runAllTests(suite *TestSuiteCommon, c *check) {
 	suite.TestMetricsV3Handler(c)
 	suite.TestBucketSQSNotificationWebHook(c)
 	suite.TestBucketSQSNotificationAMQP(c)
+	suite.TestUnsignedCVE(c)
 	suite.TearDownSuite(c)
 }
 
@@ -352,6 +354,59 @@ func (s *TestSuiteCommon) TestObjectDir(c *check) {
 
 	c.Assert(err, nil)
 	c.Assert(response.StatusCode, http.StatusNoContent)
+}
+
+func (s *TestSuiteCommon) TestUnsignedCVE(c *check) {
+	c.Helper()
+
+	// generate a random bucket Name.
+	bucketName := getRandomBucketName()
+
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest(http.MethodPut, getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, nil)
+
+	// execute the request.
+	response, err := s.client.Do(request)
+	c.Assert(err, nil)
+
+	// assert the http response status code.
+	c.Assert(response.StatusCode, http.StatusOK)
+
+	req, err := http.NewRequest(http.MethodPut, getPutObjectURL(s.endPoint, bucketName, "test-cve-object.txt"), nil)
+	c.Assert(err, nil)
+
+	req.Body = io.NopCloser(bytes.NewReader([]byte("foobar!\n")))
+	req.Trailer = http.Header{}
+	req.Trailer.Set("x-amz-checksum-crc32", "rK0DXg==")
+
+	now := UTCNow()
+
+	req = signer.StreamingUnsignedV4(req, "", 8, now)
+
+	maliciousHeaders := http.Header{
+		"Authorization":                []string{fmt.Sprintf("AWS4-HMAC-SHA256 Credential=%s/%s/us-east-1/s3/aws4_request, SignedHeaders=invalidheader, Signature=deadbeefdeadbeefdeadbeeddeadbeeddeadbeefdeadbeefdeadbeefdeadbeef", s.accessKey, now.Format(yyyymmdd))},
+		"User-Agent":                   []string{"A malicious request"},
+		"X-Amz-Decoded-Content-Length": []string{"8"},
+		"Content-Encoding":             []string{"aws-chunked"},
+		"X-Amz-Trailer":                []string{"x-amz-checksum-crc32"},
+		"x-amz-content-sha256":         []string{unsignedPayloadTrailer},
+	}
+
+	for k, v := range maliciousHeaders {
+		req.Header.Set(k, v[0])
+	}
+
+	// execute the request.
+	response, err = s.client.Do(req)
+	c.Assert(err, nil)
+
+	// out, err = httputil.DumpResponse(response, true)
+	// fmt.Println("RESPONSE ===\n", string(out), err)
+
+	// assert the http response status code.
+	c.Assert(response.StatusCode, http.StatusBadRequest)
 }
 
 func (s *TestSuiteCommon) TestBucketSQSNotificationAMQP(c *check) {

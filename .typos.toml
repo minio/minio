@@ -14,6 +14,7 @@ extend-ignore-re = [
     'http\.Header\{"X-Amz-Server-Side-Encryptio":',
     "ZoEoZdLlzVbOlT9rbhD7ZN7TLyiYXSAlB79uGEge",
     "ERRO:",
+    "(?Rm)^.*(#|//)\\s*spellchecker:disable-line$", # ignore line
 ]
 
 [default.extend-words]

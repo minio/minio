@@ -163,14 +163,14 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 					testCase.prefix, "marker:", testCase.marker, "delimiter:",
 					testCase.delimiter, "maxkeys:", testCase.maxKeys)
 
-				resultV, err = obj.ListObjectVersions(context.Background(), testCase.bucketName,
+				resultV, err = obj.ListObjectVersions(t.Context(), testCase.bucketName,
 					testCase.prefix, testCase.marker, "", testCase.delimiter, testCase.maxKeys)
 			} else {
 				t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:",
 					testCase.prefix, "marker:", testCase.marker, "delimiter:",
 					testCase.delimiter, "maxkeys:", testCase.maxKeys)
 
-				resultL, err = obj.ListObjects(context.Background(), testCase.bucketName,
+				resultL, err = obj.ListObjects(t.Context(), testCase.bucketName,
 					testCase.prefix, testCase.marker, testCase.delimiter, testCase.maxKeys)
 			}
 			if err != nil && testCase.shouldPass {
@@ -944,7 +944,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:", testCase.prefix, "marker:", testCase.marker, "delimiter:", testCase.delimiter, "maxkeys:", testCase.maxKeys)
-			result, err := obj.ListObjects(context.Background(), testCase.bucketName,
+			result, err := obj.ListObjects(t.Context(), testCase.bucketName,
 				testCase.prefix, testCase.marker, testCase.delimiter, int(testCase.maxKeys))
 			if err != nil && testCase.shouldPass {
 				t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
@@ -1675,7 +1675,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 	for i, testCase := range testCases {
 		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
-			result, err := obj.ListObjectVersions(context.Background(), testCase.bucketName,
+			result, err := obj.ListObjectVersions(t.Context(), testCase.bucketName,
 				testCase.prefix, testCase.marker, "", testCase.delimiter, int(testCase.maxKeys))
 			if err != nil && testCase.shouldPass {
 				t.Errorf("%s:  Expected to pass, but failed with: <ERROR> %s", instanceType, err.Error())
@@ -1830,7 +1830,7 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 			var foundPrefixes []string
 			marker := ""
 			for {
-				result, err := obj.ListObjects(context.Background(), testCase.bucketName,
+				result, err := obj.ListObjects(t.Context(), testCase.bucketName,
 					testCase.prefix, marker, testCase.delimiter, testCase.page)
 				if err != nil {
 					t.Fatalf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
@@ -1905,7 +1905,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
+	err := obj.MakeBucket(b.Context(), bucket, MakeBucketOptions{})
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -1913,7 +1913,7 @@ func BenchmarkListObjects(b *testing.B) {
 	// Insert objects to be listed and benchmarked later.
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(context.Background(), bucket, key, mustGetPutObjReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), ObjectOptions{})
+		_, err = obj.PutObject(b.Context(), bucket, key, mustGetPutObjReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), ObjectOptions{})
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -1923,7 +1923,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	// List the buckets over and over and over.
 	for i := 0; i < b.N; i++ {
-		_, err = obj.ListObjects(context.Background(), bucket, "", "obj9000", "", -1)
+		_, err = obj.ListObjects(b.Context(), bucket, "", "obj9000", "", -1)
 		if err != nil {
 			b.Fatal(err)
 		}
