@@ -55,10 +55,6 @@ func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string,
 		return errors.New("listAndHeal: No non-healing drives found")
 	}
 
-	expectedDisks := len(disks)/2 + 1
-	fallbackDisks := disks[expectedDisks:]
-	disks = disks[:expectedDisks]
-
 	// How to resolve partial results.
 	resolver := metadataResolutionParams{
 		dirQuorum: 1,
@@ -75,7 +71,6 @@ func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string,
 
 	lopts := listPathRawOptions{
 		disks:          disks,
-		fallbackDisks:  fallbackDisks,
 		bucket:         bucket,
 		path:           path,
 		filterPrefix:   filterPrefix,
@@ -943,12 +938,12 @@ func isObjectDirDangling(errs []error) (ok bool) {
 	var foundNotEmpty int
 	var otherFound int
 	for _, readErr := range errs {
-		switch {
-		case readErr == nil:
+		switch readErr {
+		case nil:
 			found++
-		case readErr == errFileNotFound || readErr == errVolumeNotFound:
+		case errFileNotFound, errVolumeNotFound:
 			notFound++
-		case readErr == errVolumeNotEmpty:
+		case errVolumeNotEmpty:
 			foundNotEmpty++
 		default:
 			otherFound++

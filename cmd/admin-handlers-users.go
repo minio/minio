@@ -197,12 +197,7 @@ func (a adminAPIHandlers) GetUserInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checkDenyOnly := false
-	if name == cred.AccessKey {
-		// Check that there is no explicit deny - otherwise it's allowed
-		// to view one's own info.
-		checkDenyOnly = true
-	}
+	checkDenyOnly := name == cred.AccessKey
 
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
@@ -493,12 +488,7 @@ func (a adminAPIHandlers) AddUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	checkDenyOnly := false
-	if accessKey == cred.AccessKey {
-		// Check that there is no explicit deny - otherwise it's allowed
-		// to change one's own password.
-		checkDenyOnly = true
-	}
+	checkDenyOnly := accessKey == cred.AccessKey
 
 	if !globalIAMSys.IsAllowed(policy.Args{
 		AccountName:     cred.AccessKey,
@@ -689,10 +679,7 @@ func (a adminAPIHandlers) AddServiceAccount(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Check if we are creating svc account for request sender.
-	isSvcAccForRequestor := false
-	if targetUser == requestorUser || targetUser == requestorParentUser {
-		isSvcAccForRequestor = true
-	}
+	isSvcAccForRequestor := targetUser == requestorUser || targetUser == requestorParentUser
 
 	// If we are creating svc account for request sender, ensure
 	// that targetUser is a real user (i.e. not derived
@@ -2003,6 +1990,84 @@ func (a adminAPIHandlers) AttachDetachPolicyBuiltin(w http.ResponseWriter, r *ht
 	writeSuccessResponseJSON(w, encryptedData)
 }
 
+// RevokeTokens - POST /minio/admin/v3/revoke-tokens/{userProvider}
+func (a adminAPIHandlers) RevokeTokens(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	userProvider := mux.Vars(r)["userProvider"]
+
+	user := r.Form.Get("user")
+	tokenRevokeType := r.Form.Get("tokenRevokeType")
+	fullRevoke := r.Form.Get("fullRevoke") == "true"
+	isTokenSelfRevoke := user == ""
+	if !isTokenSelfRevoke {
+		var err error
+		user, err = getUserWithProvider(ctx, userProvider, user, false)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+	}
+
+	if (user != "" && tokenRevokeType == "" && !fullRevoke) || (tokenRevokeType != "" && fullRevoke) {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrInvalidRequest), r.URL)
+		return
+	}
+
+	adminPrivilege := globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.RemoveServiceAccountAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+	})
+
+	if !adminPrivilege || isTokenSelfRevoke {
+		parentUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			parentUser = cred.ParentUser
+		}
+		if !isTokenSelfRevoke && user != parentUser {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+		user = parentUser
+	}
+
+	// Infer token revoke type from the request if requestor is STS.
+	if isTokenSelfRevoke && tokenRevokeType == "" && !fullRevoke {
+		if cred.IsTemp() {
+			tokenRevokeType, _ = cred.Claims[tokenRevokeTypeClaim].(string)
+		}
+		if tokenRevokeType == "" {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrNoTokenRevokeType), r.URL)
+			return
+		}
+	}
+
+	err := globalIAMSys.RevokeTokens(ctx, user, tokenRevokeType)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessNoContent(w)
+}
+
 const (
 	allPoliciesFile           = "policies.json"
 	allUsersFile              = "users.json"
@@ -2673,7 +2738,7 @@ func addExpirationToCondValues(exp *time.Time, condValues map[string][]string) e
 	if exp == nil || exp.IsZero() || exp.Equal(timeSentinel) {
 		return nil
 	}
-	dur := exp.Sub(time.Now())
+	dur := time.Until(*exp)
 	if dur <= 0 {
 		return errors.New("unsupported expiration time")
 	}

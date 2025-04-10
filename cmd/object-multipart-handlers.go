@@ -130,7 +130,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 				break
 			}
 		}
-		if !(ssecRep && sourceReplReq) {
+		if !ssecRep || !sourceReplReq {
 			if err = setEncryptionMetadata(r, bucket, object, encMetadata); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return
@@ -682,7 +682,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 	case authTypeStreamingUnsignedTrailer:
 		// Initialize stream signature verifier.
-		reader, s3Error = newUnsignedV4ChunkedReader(r, true)
+		reader, s3Error = newUnsignedV4ChunkedReader(r, true, r.Header.Get(xhttp.Authorization) != "")
 		if s3Error != ErrNone {
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(s3Error), r.URL)
 			return
@@ -803,7 +803,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 		}
 
-		if !(sourceReplReq && crypto.SSEC.IsEncrypted(mi.UserDefined)) {
+		if !sourceReplReq || !crypto.SSEC.IsEncrypted(mi.UserDefined) {
 			// Calculating object encryption key
 			key, err = decryptObjectMeta(key, bucket, object, mi.UserDefined)
 			if err != nil {

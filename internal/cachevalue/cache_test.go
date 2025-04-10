@@ -46,7 +46,7 @@ func TestCacheCtx(t *testing.T) {
 		},
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel() // cancel context to test.
 
 	_, err := cache.GetWithCtx(ctx)
@@ -54,7 +54,7 @@ func TestCacheCtx(t *testing.T) {
 		t.Fatalf("expected context.Canceled err, got %v", err)
 	}
 
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 
 	t1, err := cache.GetWithCtx(ctx)

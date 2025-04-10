@@ -96,7 +96,7 @@ func isRequestSignStreamingTrailerV4(r *http.Request) bool {
 // Verify if the request has AWS Streaming Signature Version '4', with unsigned content and trailer.
 func isRequestUnsignedTrailerV4(r *http.Request) bool {
 	return r.Header.Get(xhttp.AmzContentSha256) == unsignedPayloadTrailer &&
-		r.Method == http.MethodPut && strings.Contains(r.Header.Get(xhttp.ContentEncoding), streamingContentEncoding)
+		r.Method == http.MethodPut
 }
 
 // Authorization type.
@@ -363,7 +363,7 @@ func authenticateRequest(ctx context.Context, r *http.Request, action policy.Act
 	var cred auth.Credentials
 	var owner bool
 	switch getRequestAuthType(r) {
-	case authTypeUnknown, authTypeStreamingSigned:
+	case authTypeUnknown, authTypeStreamingSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
 		return ErrSignatureVersionNotSupported
 	case authTypePresignedV2, authTypeSignedV2:
 		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
@@ -674,32 +674,6 @@ func setAuthMiddleware(h http.Handler) http.Handler {
 	})
 }
 
-func validateSignature(atype authType, r *http.Request) (auth.Credentials, bool, APIErrorCode) {
-	var cred auth.Credentials
-	var owner bool
-	var s3Err APIErrorCode
-	switch atype {
-	case authTypeUnknown, authTypeStreamingSigned:
-		return cred, owner, ErrSignatureVersionNotSupported
-	case authTypeSignedV2, authTypePresignedV2:
-		if s3Err = isReqAuthenticatedV2(r); s3Err != ErrNone {
-			return cred, owner, s3Err
-		}
-		cred, owner, s3Err = getReqAccessKeyV2(r)
-	case authTypePresigned, authTypeSigned:
-		region := globalSite.Region()
-		if s3Err = isReqAuthenticated(GlobalContext, r, region, serviceS3); s3Err != ErrNone {
-			return cred, owner, s3Err
-		}
-		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
-	}
-	if s3Err != ErrNone {
-		return cred, owner, s3Err
-	}
-
-	return cred, owner, ErrNone
-}
-
 func isPutRetentionAllowed(bucketName, objectName string, retDays int, retDate time.Time, retMode objectlock.RetMode, byPassSet bool, r *http.Request, cred auth.Credentials, owner bool) (s3Err APIErrorCode) {
 	var retSet bool
 	if cred.AccessKey == "" {
@@ -754,8 +728,14 @@ func isPutActionAllowed(ctx context.Context, atype authType, bucketName, objectN
 		return ErrSignatureVersionNotSupported
 	case authTypeSignedV2, authTypePresignedV2:
 		cred, owner, s3Err = getReqAccessKeyV2(r)
-	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer, authTypeStreamingUnsignedTrailer:
+	case authTypeStreamingSigned, authTypePresigned, authTypeSigned, authTypeStreamingSignedTrailer:
 		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+	case authTypeStreamingUnsignedTrailer:
+		cred, owner, s3Err = getReqAccessKeyV4(r, region, serviceS3)
+		if s3Err == ErrMissingFields {
+			// Could be anonymous. cred + owner is zero value.
+			s3Err = ErrNone
+		}
 	}
 	if s3Err != ErrNone {
 		return s3Err

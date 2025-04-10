@@ -19,7 +19,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"io"
 	"os"
@@ -75,7 +74,7 @@ func TestErasureHeal(t *testing.T) {
 			t.Fatalf("Test %d: failed to setup Erasure environment: %v", i, err)
 		}
 		disks := setup.disks
-		erasure, err := NewErasure(context.Background(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
+		erasure, err := NewErasure(t.Context(), test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
 		}
@@ -88,7 +87,7 @@ func TestErasureHeal(t *testing.T) {
 		for i, disk := range disks {
 			writers[i] = newBitrotWriter(disk, "", "testbucket", "testobject", erasure.ShardFileSize(test.size), test.algorithm, erasure.ShardSize())
 		}
-		_, err = erasure.Encode(context.Background(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
+		_, err = erasure.Encode(t.Context(), bytes.NewReader(data), writers, buffer, erasure.dataBlocks+1)
 		closeBitrotWriters(writers)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
@@ -132,7 +131,7 @@ func TestErasureHeal(t *testing.T) {
 		}
 
 		// test case setup is complete - now call Heal()
-		err = erasure.Heal(context.Background(), staleWriters, readers, test.size, nil)
+		err = erasure.Heal(t.Context(), staleWriters, readers, test.size, nil)
 		closeBitrotReaders(readers)
 		closeBitrotWriters(staleWriters)
 		if err != nil && !test.shouldFail {

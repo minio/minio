@@ -208,8 +208,8 @@ func (o *ObjectOptions) SetDeleteReplicationState(dsc ReplicateDecision, vID str
 	o.DeleteReplication = ReplicationState{
 		ReplicateDecisionStr: dsc.String(),
 	}
-	switch {
-	case o.VersionID == "":
+	switch o.VersionID {
+	case "":
 		o.DeleteReplication.ReplicationStatusInternal = dsc.PendingStatus()
 		o.DeleteReplication.Targets = replicationStatusesMap(o.DeleteReplication.ReplicationStatusInternal)
 	default:

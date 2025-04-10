@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2023 MinIO, Inc.
+// Copyright (c) 2015-2025 MinIO, Inc.
 //
 // This file is part of MinIO Object Storage stack
 //
@@ -928,7 +928,19 @@ func (er erasureObjects) ListObjectParts(ctx context.Context, bucket, object, up
 	}
 
 	start := objectPartIndexNums(partNums, partNumberMarker)
-	if start != -1 {
+	if partNumberMarker > 0 && start == -1 {
+		// Marker not present among what is present on the
+		// server, we return an empty list.
+		return result, nil
+	}
+
+	if partNumberMarker > 0 && start != -1 {
+		if start+1 >= len(partNums) {
+			// Marker indicates that we are the end
+			// of the list, so we simply return empty
+			return result, nil
+		}
+
 		partNums = partNums[start+1:]
 	}
 

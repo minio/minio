@@ -226,10 +226,7 @@ func prepareErasure(ctx context.Context, nDisks int) (ObjectLayer, []string, err
 		for _, sets := range pool.erasureDisks {
 			for _, s := range sets {
 				if !s.IsLocal() {
-					for {
-						if s.IsOnline() {
-							break
-						}
+					for !s.IsOnline() {
 						time.Sleep(100 * time.Millisecond)
 						if time.Since(t) > 10*time.Second {
 							return nil, nil, errors.New("timeout waiting for disk to come online")
@@ -642,8 +639,8 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	for _, k := range headers {
 		buf.WriteString(k)
 		buf.WriteByte(':')
-		switch {
-		case k == "host":
+		switch k {
+		case "host":
 			buf.WriteString(req.URL.Host)
 			fallthrough
 		default:
@@ -996,8 +993,8 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	for _, k := range headers {
 		buf.WriteString(k)
 		buf.WriteByte(':')
-		switch {
-		case k == "host":
+		switch k {
+		case "host":
 			buf.WriteString(req.URL.Host)
 			fallthrough
 		default:
@@ -1089,8 +1086,8 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	// Save for subsequent use
 	var hashedPayload string
 	var md5Base64 string
-	switch {
-	case body == nil:
+	switch body {
+	case nil:
 		hashedPayload = getSHA256Hash([]byte{})
 	default:
 		payloadBytes, err := io.ReadAll(body)
@@ -1935,7 +1932,7 @@ func ExecObjectLayerTestWithDirs(t TestErrHandler, objTest objTestTypeWithDirs) 
 // ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
 // disks in between tests. Creates Erasure ObjectLayer instance and runs test for Erasure layer.
 func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundType) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	objLayer, fsDirs, err := prepareErasure16(ctx)
@@ -1959,7 +1956,7 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 // ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
 // files/directories under .minio/tmp.  Creates Erasure ObjectLayer instance and runs test for Erasure layer.
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	nDisks := 16
@@ -2277,7 +2274,7 @@ func TestToErrIsNil(t *testing.T) {
 	if toStorageErr(nil) != nil {
 		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", toStorageErr(nil))
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	if toAPIError(ctx, nil) != noError {
 		t.Errorf("Test expected error code to be ErrNone, failed instead provided %s", toAPIError(ctx, nil).Code)
 	}
@@ -2393,7 +2390,7 @@ func unzipArchive(zipFilePath, targetDir string) error {
 	if err != nil {
 		return err
 	}
-	for _, file := range zipReader.Reader.File {
+	for _, file := range zipReader.File {
 		zippedFile, err := file.Open()
 		if err != nil {
 			return err

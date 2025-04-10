@@ -424,6 +424,9 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// -- Health API --
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/healthinfo").
 			HandlerFunc(adminMiddleware(adminAPI.HealthInfoHandler))
+
+		// STS Revocation
+		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/revoke-tokens/{userProvider}").HandlerFunc(adminMiddleware(adminAPI.RevokeTokens))
 	}
 
 	// If none of the routes match add default error handler routes

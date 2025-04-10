@@ -1378,6 +1378,24 @@ func testListObjectPartsStale(obj ObjectLayer, instanceType string, disks []stri
 				},
 			},
 		},
+		// partinfos - 4.
+		{
+			Bucket:           bucketNames[0],
+			Object:           objectNames[0],
+			MaxParts:         2,
+			IsTruncated:      false,
+			UploadID:         uploadIDs[0],
+			PartNumberMarker: 4,
+		},
+		// partinfos - 5.
+		{
+			Bucket:           bucketNames[0],
+			Object:           objectNames[0],
+			MaxParts:         2,
+			IsTruncated:      false,
+			UploadID:         uploadIDs[0],
+			PartNumberMarker: 100,
+		},
 	}
 
 	// Collection of non-exhaustive ListObjectParts test cases, valid errors
@@ -1412,10 +1430,14 @@ func testListObjectPartsStale(obj ObjectLayer, instanceType string, disks []stri
 		{bucketNames[0], objectNames[0], uploadIDs[0], 0, 10, partInfos[0], nil, true},
 		// Test case with maxParts set to less than number of parts (Test number 13).
 		{bucketNames[0], objectNames[0], uploadIDs[0], 0, 3, partInfos[1], nil, true},
-		// Test case with partNumberMarker set (Test number 14)-.
+		// Test case with partNumberMarker set (Test number 14).
 		{bucketNames[0], objectNames[0], uploadIDs[0], 0, 2, partInfos[2], nil, true},
-		// Test case with partNumberMarker set (Test number 15)-.
+		// Test case with partNumberMarker set (Test number 15).
 		{bucketNames[0], objectNames[0], uploadIDs[0], 3, 2, partInfos[3], nil, true},
+		// Test case with partNumberMarker set (Test number 16).
+		{bucketNames[0], objectNames[0], uploadIDs[0], 4, 2, partInfos[4], nil, true},
+		// Test case with partNumberMarker set (Test number 17).
+		{bucketNames[0], objectNames[0], uploadIDs[0], 100, 2, partInfos[5], nil, true},
 	}
 
 	for i, testCase := range testCases {
@@ -2148,7 +2170,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		testCase := testCase
 		t.(*testing.T).Run("", func(t *testing.T) {
 			opts = ObjectOptions{}
-			actualResult, actualErr := obj.CompleteMultipartUpload(context.Background(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
+			actualResult, actualErr := obj.CompleteMultipartUpload(t.Context(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})
 			if actualErr != nil && testCase.shouldPass {
 				t.Errorf("%s: Expected to pass, but failed with: <ERROR> %s", instanceType, actualErr)
 			}

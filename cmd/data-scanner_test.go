@@ -18,61 +18,67 @@
 package cmd
 
 import (
-	"context"
 	"encoding/xml"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/minio/minio/internal/amztime"
 	"github.com/minio/minio/internal/bucket/lifecycle"
-	"github.com/minio/minio/internal/bucket/object/lock"
+	objectlock "github.com/minio/minio/internal/bucket/object/lock"
+	"github.com/minio/minio/internal/bucket/replication"
 	"github.com/minio/minio/internal/bucket/versioning"
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
-	objAPI, disks, err := prepareErasure(context.Background(), 8)
+	// Prepare object layer
+	objAPI, disks, err := prepareErasure(t.Context(), 8)
 	if err != nil {
 		t.Fatalf("Failed to initialize object layer: %v", err)
 	}
 	defer removeRoots(disks)
 	setObjectLayer(objAPI)
+
+	// Prepare bucket metadata
 	globalBucketMetadataSys = NewBucketMetadataSys()
 	globalBucketObjectLockSys = &BucketObjectLockSys{}
 	globalBucketVersioningSys = &BucketVersioningSys{}
-	es := newExpiryState(context.Background(), objAPI, 0)
-	workers := []chan expiryOp{make(chan expiryOp)}
-	es.workers.Store(&workers)
-	globalExpiryState = es
-	var wg sync.WaitGroup
-	wg.Add(1)
-	expired := make([]ObjectToDelete, 0, 5)
-	go func() {
-		defer wg.Done()
-		workers := globalExpiryState.workers.Load()
-		for t := range (*workers)[0] {
-			if t, ok := t.(newerNoncurrentTask); ok {
-				expired = append(expired, t.versions...)
-			}
-		}
-	}()
-	lc := lifecycle.Lifecycle{
-		Rules: []lifecycle.Rule{
-			{
-				ID:     "max-versions",
-				Status: "Enabled",
-				NoncurrentVersionExpiration: lifecycle.NoncurrentVersionExpiration{
-					NewerNoncurrentVersions: 1,
-				},
-			},
-		},
-	}
-	lcXML, err := xml.Marshal(lc)
+
+	lcXML := `
+<LifecycleConfiguration>
+       <Rule>
+               <ID>max-versions</ID>
+               <Status>Enabled</Status>
+               <NoncurrentVersionExpiration>
+                       <NewerNoncurrentVersions>2</NewerNoncurrentVersions>
+               </NoncurrentVersionExpiration>
+       </Rule>
+       <Rule>
+               <ID>delete-all-versions</ID>
+               <Status>Enabled</Status>
+               <Filter>
+                       <Tag>
+                       <Key>del-all</Key>
+                       <Value>true</Value>
+                       </Tag>
+               </Filter>
+               <Expiration>
+                       <Days>1</Days>
+	               <ExpiredObjectAllVersions>true</ExpiredObjectAllVersions>
+               </Expiration>
+       </Rule>
+</LifecycleConfiguration>
+`
+	lc, err := lifecycle.ParseLifecycleConfig(strings.NewReader(lcXML))
 	if err != nil {
-		t.Fatalf("Failed to marshal lifecycle config: %v", err)
+		t.Fatalf("Failed to unmarshal lifecycle config: %v", err)
 	}
+
 	vcfg := versioning.Versioning{
 		Status: "Enabled",
 	}
@@ -82,33 +88,45 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 	}
 
 	bucket := "bucket"
-	obj := "obj-1"
 	now := time.Now()
 	meta := BucketMetadata{
 		Name:                      bucket,
 		Created:                   now,
-		LifecycleConfigXML:        lcXML,
+		LifecycleConfigXML:        []byte(lcXML),
 		VersioningConfigXML:       vcfgXML,
 		VersioningConfigUpdatedAt: now,
 		LifecycleConfigUpdatedAt:  now,
-		lifecycleConfig:           &lc,
+		lifecycleConfig:           lc,
 		versioningConfig:          &vcfg,
 	}
 	globalBucketMetadataSys.Set(bucket, meta)
-	item := scannerItem{
-		Path:       obj,
-		bucket:     bucket,
-		prefix:     "",
-		objectName: obj,
-		lifeCycle:  &lc,
-	}
+	// Prepare lifecycle expiration workers
+	es := newExpiryState(t.Context(), objAPI, 0)
+	globalExpiryState = es
 
-	modTime := time.Now()
+	// Prepare object versions
+	obj := "obj-1"
+	// Simulate objects uploaded 30 hours ago
+	modTime := now.Add(-48 * time.Hour)
 	uuids := make([]uuid.UUID, 5)
 	for i := range uuids {
 		uuids[i] = uuid.UUID([16]byte{15: uint8(i + 1)})
 	}
 	fivs := make([]FileInfo, 5)
+	objInfos := make([]ObjectInfo, 5)
+	objRetentionMeta := make(map[string]string)
+	objRetentionMeta[strings.ToLower(xhttp.AmzObjectLockMode)] = string(objectlock.RetCompliance)
+	// Set retain until date 12 hours into the future
+	objRetentionMeta[strings.ToLower(xhttp.AmzObjectLockRetainUntilDate)] = amztime.ISO8601Format(now.Add(12 * time.Hour))
+	/*
+		objInfos:
+		version stack for obj-1
+		v5 uuid-5 modTime
+		v4 uuid-4 modTime -1m
+		v3 uuid-3 modTime -2m
+		v2 uuid-2 modTime -3m
+		v1 uuid-1 modTime -4m
+	*/
 	for i := 0; i < 5; i++ {
 		fivs[i] = FileInfo{
 			Volume:      bucket,
@@ -119,41 +137,189 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 			Size:        1 << 10,
 			NumVersions: 5,
 		}
+		objInfos[i] = fivs[i].ToObjectInfo(bucket, obj, true)
 	}
-	versioned := vcfg.Status == "Enabled"
-	wants := make([]ObjectInfo, 2)
-	for i, fi := range fivs[:2] {
-		wants[i] = fi.ToObjectInfo(bucket, obj, versioned)
+	/*
+		lrObjInfos: objInfos with following modifications
+		version stack for obj-1
+		v2 uuid-2 modTime -3m objRetentionMeta
+	*/
+	lrObjInfos := slices.Clone(objInfos)
+	lrObjInfos[3].UserDefined = objRetentionMeta
+	var lrWants []ObjectInfo
+	lrWants = append(lrWants, lrObjInfos[:4]...)
+
+	/*
+		replObjInfos: objInfos with following modifications
+		version stack for obj-1
+		v1 uuid-1 modTime -4m	"VersionPurgeStatus: replication.VersionPurgePending"
+	*/
+	replObjInfos := slices.Clone(objInfos)
+	replObjInfos[4].VersionPurgeStatus = replication.VersionPurgePending
+	var replWants []ObjectInfo
+	replWants = append(replWants, replObjInfos[:3]...)
+	replWants = append(replWants, replObjInfos[4])
+
+	allVersExpObjInfos := slices.Clone(objInfos)
+	allVersExpObjInfos[0].UserTags = "del-all=true"
+
+	replCfg := replication.Config{
+		Rules: []replication.Rule{
+			{
+				ID:       "",
+				Status:   "Enabled",
+				Priority: 1,
+				Destination: replication.Destination{
+					ARN:    "arn:minio:replication:::dest-bucket",
+					Bucket: "dest-bucket",
+				},
+			},
+		},
 	}
-	gots, err := item.applyNewerNoncurrentVersionLimit(context.TODO(), objAPI, fivs, es)
-	if err != nil {
-		t.Fatalf("Failed with err: %v", err)
-	}
-	if len(gots) != len(wants) {
-		t.Fatalf("Expected %d objects but got %d", len(wants), len(gots))
+	lr := objectlock.Retention{
+		Mode:        objectlock.RetCompliance,
+		Validity:    12 * time.Hour,
+		LockEnabled: true,
 	}
 
-	// Close expiry state's channel to inspect object versions enqueued for expiration
-	close(workers[0])
-	wg.Wait()
-	for _, obj := range expired {
-		switch obj.ObjectV.VersionID {
-		case uuids[2].String(), uuids[3].String(), uuids[4].String():
-		default:
-			t.Errorf("Unexpected versionID being expired: %#v\n", obj)
+	expiryWorker := func(wg *sync.WaitGroup, readyCh chan<- struct{}, taskCh <-chan expiryOp, gotExpired *[]ObjectToDelete) {
+		defer wg.Done()
+		// signal the calling goroutine that the worker is ready tor receive tasks
+		close(readyCh)
+		var expired []ObjectToDelete
+		for t := range taskCh {
+			switch v := t.(type) {
+			case noncurrentVersionsTask:
+				expired = append(expired, v.versions...)
+			case expiryTask:
+				expired = append(expired, ObjectToDelete{
+					ObjectV: ObjectV{
+						ObjectName: v.objInfo.Name,
+						VersionID:  v.objInfo.VersionID,
+					},
+				})
+			}
 		}
+		if len(expired) > 0 {
+			*gotExpired = expired
+		}
+	}
+	tests := []struct {
+		replCfg     replicationConfig
+		lr          objectlock.Retention
+		objInfos    []ObjectInfo
+		wants       []ObjectInfo
+		wantExpired []ObjectToDelete
+	}{
+		{
+			// With replication configured, version(s) with PENDING purge status
+			replCfg:  replicationConfig{Config: &replCfg},
+			objInfos: replObjInfos,
+			wants:    replWants,
+			wantExpired: []ObjectToDelete{
+				{ObjectV: ObjectV{ObjectName: obj, VersionID: objInfos[3].VersionID}},
+			},
+		},
+		{
+			// With lock retention configured and version(s) with retention metadata
+			lr:       lr,
+			objInfos: lrObjInfos,
+			wants:    lrWants,
+			wantExpired: []ObjectToDelete{
+				{ObjectV: ObjectV{ObjectName: obj, VersionID: objInfos[4].VersionID}},
+			},
+		},
+		{
+			// With replication configured, but no versions with PENDING purge status
+			replCfg:  replicationConfig{Config: &replCfg},
+			objInfos: objInfos,
+			wants:    objInfos[:3],
+			wantExpired: []ObjectToDelete{
+				{ObjectV: ObjectV{ObjectName: obj, VersionID: objInfos[3].VersionID}},
+				{ObjectV: ObjectV{ObjectName: obj, VersionID: objInfos[4].VersionID}},
+			},
+		},
+		{
+			objInfos:    allVersExpObjInfos,
+			wants:       nil,
+			wantExpired: []ObjectToDelete{{ObjectV: ObjectV{ObjectName: obj, VersionID: allVersExpObjInfos[0].VersionID}}},
+		},
+		{
+			// When no versions are present, in practice this could be an object with only free versions
+			objInfos:    nil,
+			wants:       nil,
+			wantExpired: nil,
+		},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("TestApplyNewerNoncurrentVersionsLimit-%d", i), func(t *testing.T) {
+			workers := []chan expiryOp{make(chan expiryOp)}
+			es.workers.Store(&workers)
+			workerReady := make(chan struct{})
+			var wg sync.WaitGroup
+			wg.Add(1)
+			var gotExpired []ObjectToDelete
+			go expiryWorker(&wg, workerReady, workers[0], &gotExpired)
+			<-workerReady
+
+			item := scannerItem{
+				Path:        obj,
+				bucket:      bucket,
+				prefix:      "",
+				objectName:  obj,
+				lifeCycle:   lc,
+				replication: test.replCfg,
+			}
+
+			var (
+				sizeS sizeSummary
+				gots  []ObjectInfo
+			)
+			item.applyActions(t.Context(), objAPI, test.objInfos, test.lr, &sizeS, func(oi ObjectInfo, sz, _ int64, _ *sizeSummary) {
+				if sz != 0 {
+					gots = append(gots, oi)
+				}
+			})
+
+			if len(gots) != len(test.wants) {
+				t.Fatalf("Expected %d objects but got %d", len(test.wants), len(gots))
+			}
+			if slices.CompareFunc(gots, test.wants, func(g, w ObjectInfo) int {
+				if g.VersionID == w.VersionID {
+					return 0
+				}
+				return -1
+			}) != 0 {
+				t.Fatalf("Expected %v but got %v", test.wants, gots)
+			}
+			// verify the objects to be deleted
+			close(workers[0])
+			wg.Wait()
+			if len(gotExpired) != len(test.wantExpired) {
+				t.Fatalf("Expected expiry of %d objects but got %d", len(test.wantExpired), len(gotExpired))
+			}
+			if slices.CompareFunc(gotExpired, test.wantExpired, func(g, w ObjectToDelete) int {
+				if g.VersionID == w.VersionID {
+					return 0
+				}
+				return -1
+			}) != 0 {
+				t.Fatalf("Expected %v but got %v", test.wantExpired, gotExpired)
+			}
+		})
 	}
 }
 
 func TestEvalActionFromLifecycle(t *testing.T) {
 	// Tests cover only ExpiredObjectDeleteAllVersions and DelMarkerExpiration actions
+	numVersions := 4
 	obj := ObjectInfo{
 		Name:        "foo",
 		ModTime:     time.Now().Add(-31 * 24 * time.Hour),
 		Size:        100 << 20,
 		VersionID:   uuid.New().String(),
 		IsLatest:    true,
-		NumVersions: 4,
+		NumVersions: numVersions,
 	}
 	delMarker := ObjectInfo{
 		Name:         "foo-deleted",
@@ -162,8 +328,9 @@ func TestEvalActionFromLifecycle(t *testing.T) {
 		VersionID:    uuid.New().String(),
 		IsLatest:     true,
 		DeleteMarker: true,
-		NumVersions:  4,
+		NumVersions:  numVersions,
 	}
+
 	deleteAllILM := `<LifecycleConfiguration>
 			    <Rule>
 		               <Expiration>
@@ -195,35 +362,35 @@ func TestEvalActionFromLifecycle(t *testing.T) {
 	}
 	tests := []struct {
 		ilm       lifecycle.Lifecycle
-		retention lock.Retention
+		retention *objectlock.Retention
 		obj       ObjectInfo
 		want      lifecycle.Action
 	}{
 		{
 			// with object locking
 			ilm:       *deleteAllLc,
-			retention: lock.Retention{LockEnabled: true},
+			retention: &objectlock.Retention{LockEnabled: true},
 			obj:       obj,
 			want:      lifecycle.NoneAction,
 		},
 		{
 			// without object locking
 			ilm:       *deleteAllLc,
-			retention: lock.Retention{},
+			retention: &objectlock.Retention{},
 			obj:       obj,
 			want:      lifecycle.DeleteAllVersionsAction,
 		},
 		{
 			// with object locking
 			ilm:       *delMarkerLc,
-			retention: lock.Retention{LockEnabled: true},
+			retention: &objectlock.Retention{LockEnabled: true},
 			obj:       delMarker,
 			want:      lifecycle.NoneAction,
 		},
 		{
 			// without object locking
 			ilm:       *delMarkerLc,
-			retention: lock.Retention{},
+			retention: &objectlock.Retention{},
 			obj:       delMarker,
 			want:      lifecycle.DelMarkerDeleteAllVersionsAction,
 		},
@@ -231,8 +398,9 @@ func TestEvalActionFromLifecycle(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("TestEvalAction-%d", i), func(t *testing.T) {
-			if got := evalActionFromLifecycle(context.TODO(), test.ilm, test.retention, nil, test.obj); got.Action != test.want {
-				t.Fatalf("Expected %v but got %v", test.want, got)
+			gotEvent := evalActionFromLifecycle(t.Context(), test.ilm, *test.retention, nil, test.obj)
+			if gotEvent.Action != test.want {
+				t.Fatalf("Expected %v but got %v", test.want, gotEvent.Action)
 			}
 		})
 	}

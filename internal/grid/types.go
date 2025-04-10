@@ -132,9 +132,7 @@ func (m *MSS) Msgsize() int {
 // NewMSS returns a new MSS.
 func NewMSS() *MSS {
 	m := MSS(mssPool.Get())
-	for k := range m {
-		delete(m, k)
-	}
+	clear(m)
 	return &m
 }
 
@@ -387,15 +385,14 @@ func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (u URLValues) Msgsize() (s int) {
 	s = msgp.MapHeaderSize
-	if u != nil {
-		for zb0006, zb0007 := range u {
-			_ = zb0007
-			s += msgp.StringPrefixSize + len(zb0006) + msgp.ArrayHeaderSize
-			for zb0008 := range zb0007 {
-				s += msgp.StringPrefixSize + len(zb0007[zb0008])
-			}
+	for zb0006, zb0007 := range u {
+		_ = zb0007
+		s += msgp.StringPrefixSize + len(zb0006) + msgp.ArrayHeaderSize
+		for zb0008 := range zb0007 {
+			s += msgp.StringPrefixSize + len(zb0007[zb0008])
 		}
 	}
+
 	return
 }
 

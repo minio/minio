@@ -9,9 +9,9 @@ import (
 // MarshalMsg implements msgp.Marshaler
 func (z *MetricDescription) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
-	// map header, size 5
+	// map header, size 6
 	// string "Namespace"
-	o = append(o, 0x85, 0xa9, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65)
+	o = append(o, 0x86, 0xa9, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65)
 	o = msgp.AppendString(o, string(z.Namespace))
 	// string "Subsystem"
 	o = append(o, 0xa9, 0x53, 0x75, 0x62, 0x73, 0x79, 0x73, 0x74, 0x65, 0x6d)
@@ -25,6 +25,12 @@ func (z *MetricDescription) MarshalMsg(b []byte) (o []byte, err error) {
 	// string "Type"
 	o = append(o, 0xa4, 0x54, 0x79, 0x70, 0x65)
 	o = msgp.AppendString(o, string(z.Type))
+	// string "Buckets"
+	o = append(o, 0xa7, 0x42, 0x75, 0x63, 0x6b, 0x65, 0x74, 0x73)
+	o = msgp.AppendArrayHeader(o, uint32(len(z.Buckets)))
+	for za0001 := range z.Buckets {
+		o = msgp.AppendFloat64(o, z.Buckets[za0001])
+	}
 	return
 }
 
@@ -92,6 +98,25 @@ func (z *MetricDescription) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 				z.Type = MetricTypeV2(zb0005)
 			}
+		case "Buckets":
+			var zb0006 uint32
+			zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Buckets")
+				return
+			}
+			if cap(z.Buckets) >= int(zb0006) {
+				z.Buckets = (z.Buckets)[:zb0006]
+			} else {
+				z.Buckets = make([]float64, zb0006)
+			}
+			for za0001 := range z.Buckets {
+				z.Buckets[za0001], bts, err = msgp.ReadFloat64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Buckets", za0001)
+					return
+				}
+			}
 		default:
 			bts, err = msgp.Skip(bts)
 			if err != nil {
@@ -106,7 +131,7 @@ func (z *MetricDescription) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *MetricDescription) Msgsize() (s int) {
-	s = 1 + 10 + msgp.StringPrefixSize + len(string(z.Namespace)) + 10 + msgp.StringPrefixSize + len(string(z.Subsystem)) + 5 + msgp.StringPrefixSize + len(string(z.Name)) + 5 + msgp.StringPrefixSize + len(z.Help) + 5 + msgp.StringPrefixSize + len(string(z.Type))
+	s = 1 + 10 + msgp.StringPrefixSize + len(string(z.Namespace)) + 10 + msgp.StringPrefixSize + len(string(z.Subsystem)) + 5 + msgp.StringPrefixSize + len(string(z.Name)) + 5 + msgp.StringPrefixSize + len(z.Help) + 5 + msgp.StringPrefixSize + len(string(z.Type)) + 8 + msgp.ArrayHeaderSize + (len(z.Buckets) * (msgp.Float64Size))
 	return
 }
 

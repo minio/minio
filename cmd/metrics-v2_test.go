@@ -76,10 +76,8 @@ func TestGetHistogramMetrics_BucketCount(t *testing.T) {
 		// Send observations once every 1ms, to simulate delay between
 		// observations. This is to test the channel based
 		// synchronization used internally.
-		select {
-		case <-ticker.C:
-			ttfbHist.With(prometheus.Labels{"api": obs.label}).Observe(obs.val)
-		}
+		<-ticker.C
+		ttfbHist.With(prometheus.Labels{"api": obs.label}).Observe(obs.val)
 	}
 
 	metrics := getHistogramMetrics(ttfbHist, getBucketTTFBDistributionMD(), false, false)
@@ -137,10 +135,8 @@ func TestGetHistogramMetrics_Values(t *testing.T) {
 		// Send observations once every 1ms, to simulate delay between
 		// observations. This is to test the channel based
 		// synchronization used internally.
-		select {
-		case <-ticker.C:
-			ttfbHist.With(prometheus.Labels{"api": obs.label}).Observe(obs.val)
-		}
+		<-ticker.C
+		ttfbHist.With(prometheus.Labels{"api": obs.label}).Observe(obs.val)
 	}
 
 	// Accumulate regular-cased API label metrics for 'PutObject' for deeper verification

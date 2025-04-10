@@ -26,7 +26,7 @@ import (
 //go:generate stringer -type lcEventSrc -trimprefix lcEventSrc_ $GOFILE
 type lcEventSrc uint8
 
-//revive:disable:var-naming Underscores is used here to indicate where common prefix ends and the enumeration name begins
+//nolint:staticcheck,revive // Underscores are used here to indicate where common prefix ends and the enumeration name begins
 const (
 	lcEventSrc_None lcEventSrc = iota
 	lcEventSrc_Heal

@@ -813,8 +813,6 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 				PoolIndex: er.poolIndex,
 			})
 		}
-
-		return
 	}()
 
 	validResp := 0
@@ -1634,7 +1632,7 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 func (er erasureObjects) DeleteObjects(ctx context.Context, bucket string, objects []ObjectToDelete, opts ObjectOptions) ([]DeletedObject, []error) {
 	if !opts.NoAuditLog {
 		for _, obj := range objects {
-			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectV.ObjectName, &er)
+			auditObjectErasureSet(ctx, "DeleteObjects", obj.ObjectName, &er)
 		}
 	}
 
@@ -2034,7 +2032,7 @@ func (er erasureObjects) DeleteObject(ctx context.Context, bucket, object string
 		if opts.VersionPurgeStatus().Empty() && opts.DeleteMarkerReplicationStatus().Empty() {
 			markDelete = false
 		}
-		if opts.VersionPurgeStatus() == Complete {
+		if opts.VersionPurgeStatus() == replication.VersionPurgeComplete {
 			markDelete = false
 		}
 		// now, since VersionPurgeStatus() is already set, we can let the

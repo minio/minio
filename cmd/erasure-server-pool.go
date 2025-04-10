@@ -45,6 +45,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/sync/errgroup"
 	"github.com/minio/pkg/v3/wildcard"
+	"github.com/minio/pkg/v3/workers"
 	"github.com/puzpuzpuz/xsync/v3"
 )
 
@@ -2467,7 +2468,7 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var poolErrs [][]error
+	poolErrs := make([][]error, len(z.serverPools))
 	for idx, erasureSet := range z.serverPools {
 		if opts.Pool != nil && *opts.Pool != idx {
 			continue
@@ -2476,20 +2477,20 @@ func (z *erasureServerPools) HealObjects(ctx context.Context, bucket, prefix str
 			continue
 		}
 		errs := make([]error, len(erasureSet.sets))
-		var wg sync.WaitGroup
+		wk, _ := workers.New(3)
 		for idx, set := range erasureSet.sets {
 			if opts.Set != nil && *opts.Set != idx {
 				continue
 			}
-			wg.Add(1)
+			wk.Take()
 			go func(idx int, set *erasureObjects) {
-				defer wg.Done()
+				defer wk.Give()
 
 				errs[idx] = set.listAndHeal(ctx, bucket, prefix, opts.Recursive, opts.ScanMode, healEntry)
 			}(idx, set)
 		}
-		wg.Wait()
-		poolErrs = append(poolErrs, errs)
+		wk.Wait()
+		poolErrs[idx] = errs
 	}
 	for _, errs := range poolErrs {
 		for _, err := range errs {

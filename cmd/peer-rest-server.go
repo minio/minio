@@ -39,7 +39,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio/internal/bucket/bandwidth"
-	b "github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/event"
 	"github.com/minio/minio/internal/grid"
 	xioutil "github.com/minio/minio/internal/ioutil"
@@ -1035,7 +1034,7 @@ func (s *peerRESTServer) IsValid(w http.ResponseWriter, r *http.Request) bool {
 // GetBandwidth gets the bandwidth for the buckets requested.
 func (s *peerRESTServer) GetBandwidth(params *grid.URLValues) (*bandwidth.BucketBandwidthReport, *grid.RemoteErr) {
 	buckets := params.Values().Get("buckets")
-	selectBuckets := b.SelectBuckets(buckets)
+	selectBuckets := bandwidth.SelectBuckets(buckets)
 	return globalBucketMonitor.GetReport(selectBuckets), nil
 }
 

@@ -263,7 +263,7 @@ func buildAdminRequest(queryVal url.Values, method, path string,
 }
 
 func TestAdminServerInfo(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	adminTestBed, err := prepareAdminErasureTestBed(ctx)

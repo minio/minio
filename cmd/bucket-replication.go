@@ -390,7 +390,7 @@ func checkReplicateDelete(ctx context.Context, bucket string, dobj ObjectToDelet
 			// can be the case that other cluster is down and duplicate `mc rm --vid`
 			// is issued - this still needs to be replicated back to the other target
 			if !oi.VersionPurgeStatus.Empty() {
-				replicate = oi.VersionPurgeStatus == Pending || oi.VersionPurgeStatus == Failed
+				replicate = oi.VersionPurgeStatus == replication.VersionPurgePending || oi.VersionPurgeStatus == replication.VersionPurgeFailed
 				dsc.Set(newReplicateTargetDecision(tgtArn, replicate, sync))
 			}
 			continue
@@ -618,7 +618,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		rinfo.ReplicationStatus = rinfo.PrevReplicationStatus
 		return
 	}
-	if dobj.VersionID != "" && rinfo.VersionPurgeStatus == Complete {
+	if dobj.VersionID != "" && rinfo.VersionPurgeStatus == replication.VersionPurgeComplete {
 		return
 	}
 	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
@@ -638,7 +638,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		if dobj.VersionID == "" {
 			rinfo.ReplicationStatus = replication.Failed
 		} else {
-			rinfo.VersionPurgeStatus = Failed
+			rinfo.VersionPurgeStatus = replication.VersionPurgeFailed
 		}
 		return
 	}
@@ -662,7 +662,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		case isErrObjectNotFound(serr), isErrVersionNotFound(serr):
 			// version being purged is already not found on target.
 			if !rinfo.VersionPurgeStatus.Empty() {
-				rinfo.VersionPurgeStatus = Complete
+				rinfo.VersionPurgeStatus = replication.VersionPurgeComplete
 				return
 			}
 		case isErrReadQuorum(serr), isErrWriteQuorum(serr):
@@ -695,7 +695,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		if dobj.VersionID == "" {
 			rinfo.ReplicationStatus = replication.Failed
 		} else {
-			rinfo.VersionPurgeStatus = Failed
+			rinfo.VersionPurgeStatus = replication.VersionPurgeFailed
 		}
 		replLogIf(ctx, fmt.Errorf("unable to replicate delete marker to %s: %s/%s(%s): %w", tgt.EndpointURL(), tgt.Bucket, dobj.ObjectName, versionID, rmErr))
 		if rmErr != nil && minio.IsNetworkOrHostDown(rmErr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
@@ -705,7 +705,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 		if dobj.VersionID == "" {
 			rinfo.ReplicationStatus = replication.Completed
 		} else {
-			rinfo.VersionPurgeStatus = Complete
+			rinfo.VersionPurgeStatus = replication.VersionPurgeComplete
 		}
 	}
 	return
@@ -3363,7 +3363,7 @@ func getReplicationDiff(ctx context.Context, objAPI ObjectLayer, bucket string, 
 				}
 				for arn, st := range roi.TargetPurgeStatuses {
 					if opts.ARN == "" || opts.ARN == arn {
-						if !opts.Verbose && st == Complete {
+						if !opts.Verbose && st == replication.VersionPurgeComplete {
 							continue
 						}
 						t, ok := tgtsMap[arn]
@@ -3462,7 +3462,7 @@ func queueReplicationHeal(ctx context.Context, bucket string, oi ObjectInfo, rcf
 		// heal delete marker replication failure or versioned delete replication failure
 		if roi.ReplicationStatus == replication.Pending ||
 			roi.ReplicationStatus == replication.Failed ||
-			roi.VersionPurgeStatus == Failed || roi.VersionPurgeStatus == Pending {
+			roi.VersionPurgeStatus == replication.VersionPurgeFailed || roi.VersionPurgeStatus == replication.VersionPurgePending {
 			globalReplicationPool.Get().queueReplicaDeleteTask(dv)
 			return
 		}
@@ -3750,7 +3750,7 @@ func (p *ReplicationPool) queueMRFHeal() error {
 }
 
 func (p *ReplicationPool) initialized() bool {
-	return !(p == nil || p.objLayer == nil)
+	return p != nil && p.objLayer != nil
 }
 
 // getMRF returns MRF entries for this node.
