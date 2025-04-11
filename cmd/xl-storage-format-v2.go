@@ -825,7 +825,7 @@ func decodeXLHeaders(buf []byte) (versions int, headerV, metaV uint8, b []byte, 
 		return 0, 0, 0, buf, err
 	}
 	if hdrVer > xlHeaderVersion {
-		return 0, 0, 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl header version %d", metaVer)
+		return 0, 0, 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl header version %d", hdrVer)
 	}
 	if metaVer > xlMetaVersion {
 		return 0, 0, 0, buf, fmt.Errorf("decodeXLHeaders: Unknown xl meta version %d", metaVer)
