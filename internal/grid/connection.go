@@ -1634,10 +1634,9 @@ func (c *Connection) handleMuxServerMsg(ctx context.Context, m message) {
 	}
 	if m.Flags&FlagEOF != 0 {
 		if v.cancelFn != nil && m.Flags&FlagPayloadIsErr == 0 {
-			// We must obtain the lock before calling cancelFn
+			// We must obtain the lock before closing
 			// Otherwise others may pick up the error before close is called.
 			v.respMu.Lock()
-			v.cancelFn(errStreamEOF)
 			v.closeLocked()
 			v.respMu.Unlock()
 		} else {
