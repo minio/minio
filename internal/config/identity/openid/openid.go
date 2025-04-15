@@ -43,13 +43,15 @@ import (
 
 // OpenID keys and envs.
 const (
-	ClientID      = "client_id"
-	ClientSecret  = "client_secret"
-	ConfigURL     = "config_url"
-	ClaimName     = "claim_name"
-	ClaimUserinfo = "claim_userinfo"
-	RolePolicy    = "role_policy"
-	DisplayName   = "display_name"
+	ClientID          = "client_id"
+	ClientSecret      = "client_secret"
+	ConfigURL         = "config_url"
+	ClaimName         = "claim_name"
+	ClaimUserinfo     = "claim_userinfo"
+	RolePolicy        = "role_policy"
+	DisplayName       = "display_name"
+	UserReadableClaim = "user_readable_claim"
+	UserIDClaim       = "user_id_claim"
 
 	Scopes             = "scopes"
 	RedirectURI        = "redirect_uri"
@@ -128,6 +130,14 @@ var (
 		},
 		config.KV{
 			Key:   KeyCloakAdminURL,
+			Value: "",
+		},
+		config.KV{
+			Key:   UserReadableClaim,
+			Value: "",
+		},
+		config.KV{
+			Key:   UserIDClaim,
 			Value: "",
 		},
 	}
@@ -627,4 +637,26 @@ func GetDefaultExpiration(dsecs string) (time.Duration, error) {
 	}
 
 	return defaultExpiryDuration, nil
+}
+
+// GetUserReadableClaim returns the human readable claim name for the given
+// configuration name.
+func (r Config) GetUserReadableClaim(cfgName string) string {
+	pCfg, ok := r.ProviderCfgs[cfgName]
+	if ok {
+		return pCfg.UserReadableClaim
+	}
+	return ""
+}
+
+// GetUserIDClaim returns the user ID claim for the given configuration name, or "sub" if not set.
+func (r Config) GetUserIDClaim(cfgName string) string {
+	pCfg, ok := r.ProviderCfgs[cfgName]
+	if ok {
+		if pCfg.UserIDClaim != "" {
+			return pCfg.UserIDClaim
+		}
+		return "sub"
+	}
+	return "" // an incorrect config should be handled outside this function
 }
