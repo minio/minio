@@ -1156,7 +1156,7 @@ func checkDiskFatalErrs(errs []error) error {
 	}
 
 	if countErrs(errs, errFileAccessDenied) == len(errs) {
-		return errDiskAccessDenied
+		return errFileAccessDenied
 	}
 
 	if countErrs(errs, errDiskNotDir) == len(errs) {
