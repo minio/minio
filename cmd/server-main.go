@@ -745,6 +745,7 @@ func serverMain(ctx *cli.Context) {
 
 	var warnings []string
 
+	MaxZIPDirectorySize = ctx.Int("max-zip-directory-size")
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go handleSignals()

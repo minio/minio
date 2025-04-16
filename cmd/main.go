@@ -76,6 +76,12 @@ var GlobalFlags = []cli.Flag{
 		Usage:  "disable strict S3 compatibility by turning on certain performance optimizations",
 		Hidden: true,
 	},
+	cli.IntFlag{
+		Name:  "max-zip-directory-size",
+		Value: 100 << 20, // 100MB default
+		Usage: "maximum size for ZIP directory in bytes",
+		Hidden: false,
+	},
 }
 
 // Help template for minio.

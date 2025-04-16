@@ -36,6 +36,12 @@ import (
 	"github.com/minio/zipindex"
 )
 
+// Package level variables
+var (
+	// MaxZIPDirectorySize maximum size for ZIP directory in bytes (default 100MB)
+	MaxZIPDirectorySize = int(100 << 20)
+)
+
 const (
 	archiveType            = "zip"
 	archiveTypeEnc         = "zip-enc"
@@ -352,7 +358,7 @@ func getFilesListFromZIPObject(ctx context.Context, objectAPI ObjectLayer, bucke
 		var terr zipindex.ErrNeedMoreData
 		if errors.As(err, &terr) {
 			size = int(terr.FromEnd)
-			if size <= 0 || size > 100<<20 {
+			if size <= 0 || size > MaxZIPDirectorySize {
 				return nil, ObjectInfo{}, errors.New("zip directory too large")
 			}
 		} else {
