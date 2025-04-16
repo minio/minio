@@ -2068,6 +2068,149 @@ func (a adminAPIHandlers) RevokeTokens(w http.ResponseWriter, r *http.Request) {
 	writeSuccessNoContent(w)
 }
 
+// InfoAccessKey - GET /minio/admin/v3/info-access-key?access-key=<access-key>
+func (a adminAPIHandlers) InfoAccessKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil || globalNotificationSys == nil {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrServerNotInitialized), r.URL)
+		return
+	}
+
+	cred, owner, s3Err := validateAdminSignature(ctx, r, "")
+	if s3Err != ErrNone {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(s3Err), r.URL)
+		return
+	}
+
+	accessKey := mux.Vars(r)["accessKey"]
+	if accessKey == "" {
+		accessKey = cred.AccessKey
+	}
+
+	u, ok := globalIAMSys.GetUser(ctx, accessKey)
+	targetCred := u.Credentials
+
+	if !globalIAMSys.IsAllowed(policy.Args{
+		AccountName:     cred.AccessKey,
+		Groups:          cred.Groups,
+		Action:          policy.ListServiceAccountsAdminAction,
+		ConditionValues: getConditionValues(r, "", cred),
+		IsOwner:         owner,
+		Claims:          cred.Claims,
+	}) {
+		// If requested user does not exist and requestor is not allowed to list service accounts, return access denied.
+		if !ok {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+
+		requestUser := cred.AccessKey
+		if cred.ParentUser != "" {
+			requestUser = cred.ParentUser
+		}
+
+		if requestUser != targetCred.ParentUser {
+			writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+			return
+		}
+	}
+
+	if !ok {
+		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminNoSuchAccessKey), r.URL)
+		return
+	}
+
+	var (
+		sessionPolicy *policy.Policy
+		err           error
+		userType      string
+	)
+	switch {
+	case targetCred.IsTemp():
+		userType = "STS"
+		_, sessionPolicy, err = globalIAMSys.GetTemporaryAccount(ctx, accessKey)
+		if err == errNoSuchTempAccount {
+			err = errNoSuchAccessKey
+		}
+	case targetCred.IsServiceAccount():
+		userType = "Service Account"
+		_, sessionPolicy, err = globalIAMSys.GetServiceAccount(ctx, accessKey)
+		if err == errNoSuchServiceAccount {
+			err = errNoSuchAccessKey
+		}
+	default:
+		err = errNoSuchAccessKey
+	}
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	// if session policy is nil or empty, then it is implied policy
+	impliedPolicy := sessionPolicy == nil || (sessionPolicy.Version == "" && len(sessionPolicy.Statements) == 0)
+
+	var svcAccountPolicy policy.Policy
+
+	if !impliedPolicy {
+		svcAccountPolicy = *sessionPolicy
+	} else {
+		policiesNames, err := globalIAMSys.PolicyDBGet(targetCred.ParentUser, targetCred.Groups...)
+		if err != nil {
+			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+			return
+		}
+		svcAccountPolicy = globalIAMSys.GetCombinedPolicy(policiesNames...)
+	}
+
+	policyJSON, err := json.MarshalIndent(svcAccountPolicy, "", " ")
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	var expiration *time.Time
+	if !targetCred.Expiration.IsZero() && !targetCred.Expiration.Equal(timeSentinel) {
+		expiration = &targetCred.Expiration
+	}
+
+	userProvider := guessUserProvider(targetCred)
+
+	infoResp := madmin.InfoAccessKeyResp{
+		AccessKey: accessKey,
+		InfoServiceAccountResp: madmin.InfoServiceAccountResp{
+			ParentUser:    targetCred.ParentUser,
+			Name:          targetCred.Name,
+			Description:   targetCred.Description,
+			AccountStatus: targetCred.Status,
+			ImpliedPolicy: impliedPolicy,
+			Policy:        string(policyJSON),
+			Expiration:    expiration,
+		},
+
+		UserType:     userType,
+		UserProvider: userProvider,
+	}
+
+	populateProviderInfoFromClaims(targetCred.Claims, userProvider, &infoResp)
+
+	data, err := json.Marshal(infoResp)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	encryptedData, err := madmin.EncryptData(cred.SecretKey, data)
+	if err != nil {
+		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, encryptedData)
+}
+
 const (
 	allPoliciesFile           = "policies.json"
 	allUsersFile              = "users.json"

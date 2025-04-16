@@ -1246,6 +1246,20 @@ func (sys *IAMSys) ListSTSAccounts(ctx context.Context, accessKey string) ([]aut
 	}
 }
 
+// ListAllAccessKeys - lists all access keys (sts/service accounts)
+func (sys *IAMSys) ListAllAccessKeys(ctx context.Context) ([]auth.Credentials, error) {
+	if !sys.Initialized() {
+		return nil, errServerNotInitialized
+	}
+
+	select {
+	case <-sys.configLoaded:
+		return sys.store.ListAccessKeys(ctx)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // GetServiceAccount - wrapper method to get information about a service account
 func (sys *IAMSys) GetServiceAccount(ctx context.Context, accessKey string) (auth.Credentials, *policy.Policy, error) {
 	sa, embeddedPolicy, err := sys.getServiceAccount(ctx, accessKey)
