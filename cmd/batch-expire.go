@@ -624,7 +624,6 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 		prevObj       ObjectInfo
 		matchedFilter BatchJobExpireFilter
 		versionsCount int
-		firstObject   bool
 		toDel         []expireObjInfo
 		failed        bool
 		done          bool
@@ -686,10 +685,6 @@ func (r *BatchJobExpire) Start(ctx context.Context, api ObjectLayer, job BatchJo
 					continue
 				}
 
-				if firstObject {
-					prevObj = result.Item
-					firstObject = false
-				}
 				if prevObj.Name != result.Item.Name {
 					// switch the object
 					pushToExpire()
