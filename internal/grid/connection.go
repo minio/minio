@@ -1625,23 +1625,28 @@ func (c *Connection) handleMuxServerMsg(ctx context.Context, m message) {
 			Msg: nil,
 			Err: RemoteErr(m.Payload),
 		})
+		if v.cancelFn != nil {
+			v.cancelFn(RemoteErr(m.Payload))
+		}
 		PutByteBuffer(m.Payload)
-	} else if m.Payload != nil {
+		v.close()
+		c.outgoing.Delete(m.MuxID)
+		return
+	}
+	// Return payload.
+	if m.Payload != nil {
 		v.response(m.Seq, Response{
 			Msg: m.Payload,
 			Err: nil,
 		})
 	}
+	// Close when EOF.
 	if m.Flags&FlagEOF != 0 {
-		if v.cancelFn != nil && m.Flags&FlagPayloadIsErr == 0 {
-			// We must obtain the lock before closing
-			// Otherwise others may pick up the error before close is called.
-			v.respMu.Lock()
-			v.closeLocked()
-			v.respMu.Unlock()
-		} else {
-			v.close()
-		}
+		// We must obtain the lock before closing
+		// Otherwise others may pick up the error before close is called.
+		v.respMu.Lock()
+		v.closeLocked()
+		v.respMu.Unlock()
 		if debugReqs {
 			fmt.Println(m.MuxID, c.String(), "handleMuxServerMsg: DELETING MUX")
 		}
