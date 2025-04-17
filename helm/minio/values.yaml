@@ -591,6 +591,6 @@ etcd:
   corednsPathPrefix: ""
   clientCert: ""
   clientCertKey: ""
-## Provide a domain to happend at the end of every host specified in the ingress hosts value
+## Provide a domain to append at the end of every host specified in the ingress hosts value
 ##
 domain: ''
