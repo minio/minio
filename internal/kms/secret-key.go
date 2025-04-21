@@ -211,8 +211,11 @@ func (s secretKey) Decrypt(_ context.Context, req *DecryptRequest) ([]byte, erro
 	return plaintext, nil
 }
 
-func (secretKey) MAC(context.Context, *MACRequest) ([]byte, error) {
-	return nil, ErrNotSupported
+// MAC generate hmac for the request
+func (s secretKey) MAC(_ context.Context, req *MACRequest) ([]byte, error) {
+	mac := hmac.New(sha256.New, s.key)
+	mac.Write(req.Message)
+	return mac.Sum(make([]byte, 0, mac.Size())), nil
 }
 
 // parseCiphertext parses and converts a ciphertext into
