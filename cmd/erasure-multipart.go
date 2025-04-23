@@ -756,6 +756,9 @@ func (er erasureObjects) PutObjectPart(ctx context.Context, bucket, object, uplo
 
 	onlineDisks, err = er.renamePart(ctx, onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, partFI, writeQuorum)
 	if err != nil {
+		if errors.Is(err, errUploadIDNotFound) {
+			return pi, toObjectErr(errUploadIDNotFound, bucket, object, uploadID)
+		}
 		if errors.Is(err, errFileNotFound) {
 			// An in-quorum errFileNotFound means that client stream
 			// prematurely closed and we do not find any xl.meta or
