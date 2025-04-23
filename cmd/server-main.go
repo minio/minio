@@ -47,6 +47,7 @@ import (
 	"github.com/minio/minio/internal/bucket/bandwidth"
 	"github.com/minio/minio/internal/color"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
@@ -792,10 +793,6 @@ func serverMain(ctx *cli.Context) {
 	// Handle all server environment vars.
 	serverHandleEnvVars()
 
-	// Load the root credentials from the shell environment or from
-	// the config file if not defined, set the default one.
-	loadRootCredentials()
-
 	// Perform any self-tests
 	bootstrapTrace("selftests", func() {
 		bitrotSelfTest()
@@ -805,6 +802,29 @@ func serverMain(ctx *cli.Context) {
 
 	// Initialize KMS configuration
 	bootstrapTrace("handleKMSConfig", handleKMSConfig)
+
+	// Load the root credentials from the shell environment or from
+	// the config file if not defined, set the default one.
+	bootstrapTrace("rootCredentials", func() {
+		cred := loadRootCredentials()
+		if !cred.IsValid() && (env.Get(api.EnvAPIRootAccess, config.EnableOn) == config.EnableOff) {
+			// Generate KMS based credentials if root access is disabled
+			// and no ENV is set.
+			cred = autoGenerateRootCredentials()
+		}
+
+		if !cred.IsValid() {
+			cred = auth.DefaultCredentials
+		}
+
+		var err error
+		globalNodeAuthToken, err = authenticateNode(cred.AccessKey, cred.SecretKey)
+		if err != nil {
+			logger.Fatal(err, "Unable to generate internode credentials")
+		}
+
+		globalActiveCred = cred
+	})
 
 	// Initialize all help
 	bootstrapTrace("initHelp", initHelp)
