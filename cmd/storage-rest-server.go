@@ -728,7 +728,7 @@ func (s *storageRESTServer) RenamePartHandler(p *RenamePartHandlerParams) (grid.
 	if !s.checkID(p.DiskID) {
 		return grid.NewNPErr(errDiskNotFound)
 	}
-	return grid.NewNPErr(s.getStorage().RenamePart(context.Background(), p.SrcVolume, p.SrcFilePath, p.DstVolume, p.DstFilePath, p.Meta))
+	return grid.NewNPErr(s.getStorage().RenamePart(context.Background(), p.SrcVolume, p.SrcFilePath, p.DstVolume, p.DstFilePath, p.Meta, p.SkipParent))
 }
 
 // CleanAbandonedDataHandler - Clean unused data directories.
