@@ -246,6 +246,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 
 		// Access key (service account/STS) operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/list-access-keys-bulk").HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysBulk)).Queries("listType", "{listType:.*}")
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-access-key").HandlerFunc(adminMiddleware(adminAPI.InfoAccessKey)).Queries("accessKey", "{accessKey:.*}")
 
 		// Info policy IAM latest
 		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/info-canned-policy").HandlerFunc(adminMiddleware(adminAPI.InfoCannedPolicy)).Queries("name", "{name:.*}")
@@ -312,6 +313,11 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		// LDAP IAM operations
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp/ldap/policy-entities").HandlerFunc(adminMiddleware(adminAPI.ListLDAPPolicyMappingEntities))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp/ldap/policy/{operation}").HandlerFunc(adminMiddleware(adminAPI.AttachDetachPolicyLDAP))
+
+		// OpenID specific service accounts ops
+		adminRouter.Methods(http.MethodGet).Path(adminVersion+"/idp/openid/list-access-keys-bulk").
+			HandlerFunc(adminMiddleware(adminAPI.ListAccessKeysOpenIDBulk)).Queries("listType", "{listType:.*}")
+
 		// -- END IAM APIs --
 
 		// GetBucketQuotaConfig

@@ -2777,6 +2777,31 @@ func (store *IAMStoreSys) ListSTSAccounts(ctx context.Context, accessKey string)
 	return stsAccounts, nil
 }
 
+// ListAccessKeys - lists all access keys (sts/service accounts)
+func (store *IAMStoreSys) ListAccessKeys(ctx context.Context) ([]auth.Credentials, error) {
+	cache := store.rlock()
+	defer store.runlock()
+
+	accessKeys := store.getSTSAndServiceAccounts(cache)
+	for i, accessKey := range accessKeys {
+		accessKeys[i].SecretKey = ""
+		if accessKey.IsTemp() {
+			secret, err := getTokenSigningKey()
+			if err != nil {
+				return nil, err
+			}
+			claims, err := getClaimsFromTokenWithSecret(accessKey.SessionToken, secret)
+			if err != nil {
+				continue // ignore invalid session tokens
+			}
+			accessKeys[i].Claims = claims.MapClaims
+		}
+		accessKeys[i].SessionToken = ""
+	}
+
+	return accessKeys, nil
+}
+
 // AddUser - adds/updates long term user account to storage.
 func (store *IAMStoreSys) AddUser(ctx context.Context, accessKey string, ureq madmin.AddOrUpdateUserReq) (updatedAt time.Time, err error) {
 	cache := store.lock()
@@ -2839,6 +2864,10 @@ func (store *IAMStoreSys) GetSTSAndServiceAccounts() []auth.Credentials {
 	cache := store.rlock()
 	defer store.runlock()
 
+	return store.getSTSAndServiceAccounts(cache)
+}
+
+func (store *IAMStoreSys) getSTSAndServiceAccounts(cache *iamCache) []auth.Credentials {
 	var res []auth.Credentials
 	for _, u := range cache.iamUsersMap {
 		cred := u.Credentials
