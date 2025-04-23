@@ -48,6 +48,30 @@ func TestNatsConnTLSCustomCA(t *testing.T) {
 	defer con.Close()
 }
 
+func TestNatsConnTLSCustomCAHandshakeFirst(t *testing.T) {
+	s, opts := natsserver.RunServerWithConfig(filepath.Join("testdata", "contrib", "nats_tls_handshake_first.conf"))
+	defer s.Shutdown()
+
+	clientConfig := &NATSArgs{
+		Enable: true,
+		Address: xnet.Host{
+			Name:      "localhost",
+			Port:      (xnet.Port(opts.Port)),
+			IsPortSet: true,
+		},
+		Subject:           "test",
+		Secure:            true,
+		CertAuthority:     path.Join("testdata", "contrib", "certs", "root_ca_cert.pem"),
+		TLSHandshakeFirst: true,
+	}
+
+	con, err := clientConfig.connectNats()
+	if err != nil {
+		t.Errorf("Could not connect to nats: %v", err)
+	}
+	defer con.Close()
+}
+
 func TestNatsConnTLSClientAuthorization(t *testing.T) {
 	s, opts := natsserver.RunServerWithConfig(filepath.Join("testdata", "contrib", "nats_tls_client_cert.conf"))
 	defer s.Shutdown()

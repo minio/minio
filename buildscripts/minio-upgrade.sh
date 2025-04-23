@@ -69,8 +69,10 @@ __init__() {
 
 	## this is needed because github actions don't have
 	## docker-compose on all runners
-	go install github.com/docker/compose/v2/cmd@latest
-	mv -v /tmp/gopath/bin/cmd /tmp/gopath/bin/docker-compose
+	COMPOSE_VERSION=v2.35.1
+	mkdir -p /tmp/gopath/bin/
+	wget -O /tmp/gopath/bin/docker-compose https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64
+	chmod +x /tmp/gopath/bin/docker-compose
 
 	cleanup
 
