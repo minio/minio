@@ -989,6 +989,11 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			tokenEnv = tokenEnv + config.Default + k
 		}
 
+		nKeySeedEnv := target.EnvNATSNKeySeed
+		if k != config.Default {
+			nKeySeedEnv = nKeySeedEnv + config.Default + k
+		}
+
 		queueDirEnv := target.EnvNATSQueueDir
 		if k != config.Default {
 			queueDirEnv = queueDirEnv + config.Default + k
@@ -1025,6 +1030,7 @@ func GetNotifyNATS(natsKVS map[string]config.KVS, rootCAs *x509.CertPool) (map[s
 			ClientCert:        env.Get(clientCertEnv, kv.Get(target.NATSClientCert)),
 			ClientKey:         env.Get(clientKeyEnv, kv.Get(target.NATSClientKey)),
 			Token:             env.Get(tokenEnv, kv.Get(target.NATSToken)),
+			NKeySeed:          env.Get(nKeySeedEnv, kv.Get(target.NATSNKeySeed)),
 			TLS:               env.Get(tlsEnv, kv.Get(target.NATSTLS)) == config.EnableOn,
 			TLSSkipVerify:     env.Get(tlsSkipVerifyEnv, kv.Get(target.NATSTLSSkipVerify)) == config.EnableOn,
 			TLSHandshakeFirst: env.Get(tlsHandshakeFirstEnv, kv.Get(target.NATSTLSHandshakeFirst)) == config.EnableOn,
