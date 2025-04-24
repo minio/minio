@@ -11,6 +11,7 @@ tool (
 )
 
 require (
+	aead.dev/mtls v0.2.1
 	cloud.google.com/go/storage v1.52.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.9.0
@@ -56,7 +57,7 @@ require (
 	github.com/minio/dperf v0.6.3
 	github.com/minio/highwayhash v1.0.3
 	github.com/minio/kms-go/kes v0.3.1
-	github.com/minio/kms-go/kms v0.4.0
+	github.com/minio/kms-go/kms v0.5.1-0.20250225090116-4e64ce8d0f35
 	github.com/minio/madmin-go/v3 v3.0.109
 	github.com/minio/minio-go/v7 v7.0.91
 	github.com/minio/mux v1.9.2
