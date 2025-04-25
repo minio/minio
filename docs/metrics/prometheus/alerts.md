@@ -108,7 +108,7 @@ To verify the above sample alert follow below steps
   },
   "commonAnnotations": {
     "description": "MinIO instance 127.0.0.1:9000 of job minio-job has lost quorum on pool 0 on set 0 for more than 5 minutes.",
-    "summary": "Instance 127.0.0.1:9000 has lot quorum on pool 0 on set 0"
+    "summary": "Instance 127.0.0.1:9000 has lost quorum on pool 0 on set 0"
   },
   "externalURL": "http://fedora-minio:9093",
   "version": "4",

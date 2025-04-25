@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"aead.dev/mtls"
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/kms-go/kms"
 	"github.com/minio/pkg/v3/certs"
@@ -131,7 +132,7 @@ func Connect(ctx context.Context, opts *ConnectionOptions) (*KMS, error) {
 			return nil, err
 		}
 
-		key, err := kms.ParseAPIKey(env.Get(EnvKMSAPIKey, ""))
+		key, err := mtls.ParsePrivateKey(env.Get(EnvKMSAPIKey, ""))
 		if err != nil {
 			return nil, err
 		}
