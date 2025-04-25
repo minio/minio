@@ -2964,7 +2964,8 @@ func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolum
 	if err = checkPathLength(dstFilePath); err != nil {
 		return err
 	}
-
+	// when skipParent is from rpc. it‘s ok for not adding another rpc HandlerID like HandlerRenamePart2
+	// For this case, skipParent is empty, destBaseDir is equal to dstVolumeDir, that behavior is the same as the previous one
 	destBaseDir := pathutil.Join(dstVolumeDir, skipParent)
 	if err = checkPathLength(destBaseDir); err != nil {
 		return err
