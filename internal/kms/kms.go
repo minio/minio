@@ -335,15 +335,14 @@ func (c *kmsConn) ListKeys(ctx context.Context, req *ListRequest) ([]madmin.KMSK
 	for i, v := range resp.Items {
 		keyInfos[i].Name = v.Name
 		keyInfos[i].CreatedAt = v.CreatedAt
-		keyInfos[i].CreatedBy = string(v.CreatedBy)
+		keyInfos[i].CreatedBy = v.CreatedBy.String()
 	}
 	return keyInfos, resp.ContinueAt, nil
 }
 
 func (c *kmsConn) CreateKey(ctx context.Context, req *CreateKeyRequest) error {
-	if err := c.client.CreateKey(ctx, &kms.CreateKeyRequest{
-		Enclave: c.enclave,
-		Name:    req.Name,
+	if err := c.client.CreateKey(ctx, c.enclave, &kms.CreateKeyRequest{
+		Name: req.Name,
 	}); err != nil {
 		if errors.Is(err, kms.ErrKeyExists) {
 			return ErrKeyExists
@@ -367,8 +366,7 @@ func (c *kmsConn) GenerateKey(ctx context.Context, req *GenerateKeyRequest) (DEK
 		name = c.defaultKey
 	}
 
-	resp, err := c.client.GenerateKey(ctx, &kms.GenerateKeyRequest{
-		Enclave:        c.enclave,
+	resp, err := c.client.GenerateKey(ctx, c.enclave, &kms.GenerateKeyRequest{
 		Name:           name,
 		AssociatedData: aad,
 		Length:         32,
@@ -385,9 +383,9 @@ func (c *kmsConn) GenerateKey(ctx context.Context, req *GenerateKeyRequest) (DEK
 
 	return DEK{
 		KeyID:      name,
-		Version:    resp.Version,
-		Plaintext:  resp.Plaintext,
-		Ciphertext: resp.Ciphertext,
+		Version:    resp[0].Version,
+		Plaintext:  resp[0].Plaintext,
+		Ciphertext: resp[0].Ciphertext,
 	}, nil
 }
 
@@ -398,8 +396,7 @@ func (c *kmsConn) Decrypt(ctx context.Context, req *DecryptRequest) ([]byte, err
 	}
 
 	ciphertext, _ := parseCiphertext(req.Ciphertext)
-	resp, err := c.client.Decrypt(ctx, &kms.DecryptRequest{
-		Enclave:        c.enclave,
+	resp, err := c.client.Decrypt(ctx, c.enclave, &kms.DecryptRequest{
 		Name:           req.Name,
 		Ciphertext:     ciphertext,
 		AssociatedData: aad,
@@ -413,7 +410,7 @@ func (c *kmsConn) Decrypt(ctx context.Context, req *DecryptRequest) ([]byte, err
 		}
 		return nil, errDecryptionFailed(err)
 	}
-	return resp.Plaintext, nil
+	return resp[0].Plaintext, nil
 }
 
 // MAC generates the checksum of the given req.Message using the key
