@@ -2591,11 +2591,11 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 		}
 		targets, terr := globalBucketTargetSys.ListBucketTargets(ctx, t.SourceBucket)
 		if terr != nil {
-			return err
+			return terr
 		}
 		tgtBytes, terr := json.Marshal(&targets)
 		if terr != nil {
-			return err
+			return terr
 		}
 		if _, err = globalBucketMetadataSys.Update(ctx, t.SourceBucket, bucketTargetsFile, tgtBytes); err != nil {
 			return err
