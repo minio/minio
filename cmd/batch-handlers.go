@@ -997,7 +997,16 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 // a single action. e.g batch-expire has an option to expire all versions of an
 // object which matches the given filters.
 func (ri *batchJobInfo) trackMultipleObjectVersions(info expireObjInfo, success bool) {
+	if ri == nil {
+		return
+	}
+
+	ri.mu.Lock()
+	defer ri.mu.Unlock()
+
 	if success {
+		ri.Bucket = info.Bucket
+		ri.Object = info.Name
 		ri.Objects += int64(info.NumVersions) - info.DeleteMarkerCount
 		ri.DeleteMarkers += info.DeleteMarkerCount
 	} else {
