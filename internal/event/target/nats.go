@@ -45,6 +45,7 @@ const (
 	NATSUsername          = "username"
 	NATSPassword          = "password"
 	NATSToken             = "token"
+	NATSNKeySeed          = "nkey_seed"
 	NATSTLS               = "tls"
 	NATSTLSSkipVerify     = "tls_skip_verify"
 	NATSTLSHandshakeFirst = "tls_handshake_first"
@@ -71,6 +72,7 @@ const (
 	NATSUserCredentials      = "MINIO_NOTIFY_NATS_USER_CREDENTIALS"
 	EnvNATSPassword          = "MINIO_NOTIFY_NATS_PASSWORD"
 	EnvNATSToken             = "MINIO_NOTIFY_NATS_TOKEN"
+	EnvNATSNKeySeed          = "MINIO_NOTIFY_NATS_NKEY_SEED"
 	EnvNATSTLS               = "MINIO_NOTIFY_NATS_TLS"
 	EnvNATSTLSSkipVerify     = "MINIO_NOTIFY_NATS_TLS_SKIP_VERIFY"
 	EnvNatsTLSHandshakeFirst = "MINIO_NOTIFY_NATS_TLS_HANDSHAKE_FIRST"
@@ -100,6 +102,7 @@ type NATSArgs struct {
 	UserCredentials   string    `json:"userCredentials"`
 	Password          string    `json:"password"`
 	Token             string    `json:"token"`
+	NKeySeed          string    `json:"nKeySeed"`
 	TLS               bool      `json:"tls"`
 	TLSSkipVerify     bool      `json:"tlsSkipVerify"`
 	TLSHandshakeFirst bool      `json:"tlsHandshakeFirst"`
@@ -177,6 +180,13 @@ func (n NATSArgs) connectNats() (*nats.Conn, error) {
 	}
 	if n.Token != "" {
 		connOpts = append(connOpts, nats.Token(n.Token))
+	}
+	if n.NKeySeed != "" {
+		nkeyOpt, err := nats.NkeyOptionFromSeed(n.NKeySeed)
+		if err != nil {
+			return nil, err
+		}
+		connOpts = append(connOpts, nkeyOpt)
 	}
 	if n.Secure || n.TLS && n.TLSSkipVerify {
 		connOpts = append(connOpts, nats.Secure(nil))
