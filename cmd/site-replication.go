@@ -2614,12 +2614,11 @@ func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient,
 	if globalBucketTargetSys.isOffline(epURL) {
 		return nil, RemoteTargetConnectionErr{Endpoint: epURL.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", epURL.String())}
 	}
-	client, err := madmin.New(epURL.Host, accessKey, secretKey, epURL.Scheme == "https")
-	if err != nil {
-		return nil, err
-	}
-	client.SetCustomTransport(globalRemoteTargetTransport)
-	return client, nil
+	return madmin.NewWithOptions(epURL.Host, &madmin.Options{
+		Creds:     credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure:    epURL.Scheme == "https",
+		Transport: globalRemoteTargetTransport,
+	})
 }
 
 func getS3Client(pc madmin.PeerSite) (*minio.Client, error) {
