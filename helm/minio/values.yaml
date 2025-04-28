@@ -585,7 +585,8 @@ networkPolicy:
 ##
 podDisruptionBudget:
   enabled: false
-  maxUnavailable: 1
+  maxUnavailable: ~
+  minAvailable: ~
 
 ## Specify the service account to use for the MinIO pods. If 'create' is set to 'false'
 ## and 'name' is left unspecified, the account 'default' will be used.
