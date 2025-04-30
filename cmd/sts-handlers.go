@@ -872,15 +872,34 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		}
 	}
 
-	// We map the X.509 subject common name to the policy. So, a client
-	// with the common name "foo" will be associated with the policy "foo".
-	// Other mapping functions - e.g. public-key hash based mapping - are
-	// possible but not implemented.
-	//
-	// Group mapping is not possible with standard X.509 certificates.
-	if certificate.Subject.CommonName == "" {
-		writeSTSErrorResponse(ctx, w, ErrSTSMissingParameter, errors.New("certificate subject CN cannot be empty"))
-		return
+	var tlsSubKey string
+
+	if !globalIAMSys.STSTLSConfig.TLSSubjectUseSanURI {
+		// We map the X.509 subject common name to the policy. So, a client
+		// with the common name "foo" will be associated with the policy "foo".
+		// Other mapping functions - e.g. public-key hash based mapping - are
+		// possible but not implemented.
+		//
+		// Group mapping is not possible with standard X.509 certificates.
+		if certificate.Subject.CommonName == "" {
+			writeSTSErrorResponse(ctx, w, ErrSTSMissingParameter, errors.New("certificate subject CN cannot be empty"))
+			return
+		}
+		tlsSubKey = certificate.Subject.CommonName
+	} else {
+		// We map the X.509 san uri to the policy. So, a client
+		// with the san uri "http://myapp" will be associated with the policy "http://myapp".
+		// Other mapping functions - e.g. public-key hash based mapping - are
+		// possible but not implemented.
+		//
+		// Group mapping is not possible with standard X.509 certificates.
+		if len(certificate.URIs) == 0 {
+			writeSTSErrorResponse(ctx, w, ErrSTSMissingParameter, errors.New("SAN URI not present in the certificate"))
+			return
+		}
+
+		// Pick first SAN URI
+		tlsSubKey = certificate.URIs[0].String()
 	}
 
 	expiry, err := globalIAMSys.STSTLSConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
@@ -898,13 +917,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Associate any service accounts to the certificate CN
-	parentUser := "tls" + getKeySeparator() + certificate.Subject.CommonName
+	parentUser := "tls" + getKeySeparator() + tlsSubKey
 
 	claims[expClaim] = UTCNow().Add(expiry).Unix()
-	claims[subClaim] = certificate.Subject.CommonName
+	claims[subClaim] = tlsSubKey
 	claims[audClaim] = certificate.Subject.Organization
 	claims[issClaim] = certificate.Issuer.CommonName
 	claims[parentClaim] = parentUser
+
 	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
 	if tokenRevokeType != "" {
 		claims[tokenRevokeTypeClaim] = tokenRevokeType
@@ -922,7 +942,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	policyName := certificate.Subject.CommonName
+	policyName := tlsSubKey
 	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
