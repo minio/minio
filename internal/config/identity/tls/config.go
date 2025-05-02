@@ -43,9 +43,9 @@ const (
 	EnvIdentityTLSSkipVerify = "MINIO_IDENTITY_TLS_SKIP_VERIFY"
 
 	// EnvIdentityTLSSubjectSanURI is an environmental variable that is used to select
-	// Subject for verfied certificate identity in JWT Claim.
+	// Subject for verified certificate identity in JWT Claim.
 	// This claim is sent to Authorization Engine.
-	// If set to True, First URI will be used as subject instead of CommonName
+	// If set to true, First URI will be used as subject instead of CommonName
 	// Valid values for this field are true and false
 	// By default, it will be false. Thus Common Name will be used
 	EnvIdentityTLSSubjectSanURI = "MINIO_IDENTITY_TLS_SUBJECT_USE_SANURI"
@@ -113,7 +113,6 @@ func Lookup(kvs config.KVS) (Config, error) {
 		return Config{}, err
 	}
 
-	// SAN URI Flag
 	cfg.TLSSubjectUseSanURI, err = config.ParseBool(env.Get(EnvIdentityTLSSubjectSanURI, kvs.Get(tlsSubjectUseSanURI)))
 	if err != nil {
 		return Config{}, err
@@ -124,7 +123,6 @@ func Lookup(kvs config.KVS) (Config, error) {
 
 const (
 	skipVerify          = "skip_verify"
-	tlsSubject          = "common_name"
 	tlsSubjectUseSanURI = "tls_subject_use_san_uri"
 )
 
@@ -137,7 +135,7 @@ var DefaultKVS = config.KVS{
 	},
 	config.KV{
 		Key:   tlsSubjectUseSanURI,
-		Value: "tls_subject_use_san_uri",
+		Value: "off",
 	},
 }
 
@@ -151,8 +149,8 @@ var Help = config.HelpKVS{
 	},
 	config.HelpKV{
 		Key:         tlsSubjectUseSanURI,
-		Description: `use san uri from certifcate instead common name (default: 'false')`,
+		Description: `use first san uri from client certificate instead common name (default: 'off')`,
 		Optional:    true,
-		Type:        "true|false",
+		Type:        "on|off",
 	},
 }
