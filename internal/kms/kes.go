@@ -206,6 +206,7 @@ func (c *kesConn) GenerateKey(ctx context.Context, req *GenerateKeyRequest) (DEK
 		KeyID:      name,
 		Plaintext:  dek.Plaintext,
 		Ciphertext: dek.Ciphertext,
+		Version:    dek.Version,
 	}, nil
 }
 
@@ -235,7 +236,7 @@ func (c *kesConn) Decrypt(ctx context.Context, req *DecryptRequest) ([]byte, err
 		return nil, err
 	}
 
-	plaintext, err := c.client.Decrypt(context.Background(), req.Name, req.Ciphertext, aad)
+	plaintext, err := c.client.Decrypt(ctx, req.Name, req.Version, req.Ciphertext, aad)
 	if err != nil {
 		if errors.Is(err, kes.ErrKeyNotFound) {
 			return nil, ErrKeyNotFound

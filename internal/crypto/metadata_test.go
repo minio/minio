@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/minio/minio/internal/kms"
 	"github.com/minio/minio/internal/logger"
 )
 
@@ -306,7 +307,7 @@ var s3CreateMetadataTests = []struct {
 	SealedDataKey []byte
 	SealedKey     SealedKey
 }{
-	{KeyID: "", SealedDataKey: nil, SealedKey: SealedKey{Algorithm: SealAlgorithm}},
+	{KeyID: "foo", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "my-minio-key", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "cafebabe", SealedDataKey: make([]byte, 48), SealedKey: SealedKey{Algorithm: SealAlgorithm}},
 	{KeyID: "deadbeef", SealedDataKey: make([]byte, 32), SealedKey: SealedKey{IV: [32]byte{0xf7}, Key: [64]byte{0xea}, Algorithm: SealAlgorithm}},
@@ -316,7 +317,7 @@ func TestS3CreateMetadata(t *testing.T) {
 	defer func(l bool) { logger.DisableLog = l }(logger.DisableLog)
 	logger.DisableLog = true
 	for i, test := range s3CreateMetadataTests {
-		metadata := S3.CreateMetadata(nil, test.KeyID, test.SealedDataKey, test.SealedKey)
+		metadata := S3.CreateMetadata(nil, kms.DEK{KeyID: test.KeyID, Ciphertext: test.SealedDataKey}, test.SealedKey)
 		keyID, kmsKey, sealedKey, err := S3.ParseMetadata(metadata)
 		if err != nil {
 			t.Errorf("Test %d: failed to parse metadata: %v", i, err)
@@ -344,7 +345,7 @@ func TestS3CreateMetadata(t *testing.T) {
 			t.Errorf("Expected '%s' panic for invalid seal algorithm but got '%s'", logger.ErrCritical, err)
 		}
 	}()
-	_ = S3.CreateMetadata(nil, "", []byte{}, SealedKey{Algorithm: InsecureSealAlgorithm})
+	_ = S3.CreateMetadata(nil, kms.DEK{}, SealedKey{Algorithm: InsecureSealAlgorithm})
 }
 
 var ssecCreateMetadataTests = []struct {

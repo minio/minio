@@ -280,6 +280,7 @@ func (a kmsAPIHandlers) KMSKeyStatusHandler(w http.ResponseWriter, r *http.Reque
 	// 2. Verify that we can indeed decrypt the (encrypted) key
 	decryptedKey, err := GlobalKMS.Decrypt(ctx, &kms.DecryptRequest{
 		Name:           key.KeyID,
+		Version:        key.Version,
 		Ciphertext:     key.Ciphertext,
 		AssociatedData: kmsContext,
 	})

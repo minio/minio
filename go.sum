@@ -436,8 +436,8 @@ github.com/minio/filepath v1.0.0/go.mod h1:/nRZA2ldl5z6jT9/KQuvZcQlxZIMQoFFQPvEX
 github.com/minio/highwayhash v1.0.2/go.mod h1:BQskDq+xkJ12lmlUUi7U0M5Swg3EWR+dLTk+kldvVxY=
 github.com/minio/highwayhash v1.0.3 h1:kbnuUMoHYyVl7szWjSxJnxw11k2U709jqFPPmIUyD6Q=
 github.com/minio/highwayhash v1.0.3/go.mod h1:GGYsuwP/fPD6Y9hMiXuapVvlIUEhFhMTh0rxU3ik1LQ=
-github.com/minio/kms-go/kes v0.3.1 h1:K3sPFAvFbJx33XlCTUBnQo8JRmSZyDvT6T2/MQ2iC3A=
-github.com/minio/kms-go/kes v0.3.1/go.mod h1:Q9Ct0KUAuN9dH0hSVa0eva45Jg99cahbZpPxeqR9rOQ=
+github.com/minio/kms-go/kes v0.3.2-0.20250505160844-240efef6bb74 h1:iUY0/rQ66zmowoB94yGBTk3I2ljOoD5jSIKwkhxkwe4=
+github.com/minio/kms-go/kes v0.3.2-0.20250505160844-240efef6bb74/go.mod h1:Q9Ct0KUAuN9dH0hSVa0eva45Jg99cahbZpPxeqR9rOQ=
 github.com/minio/kms-go/kms v0.5.1-0.20250225090116-4e64ce8d0f35 h1:ISNz42SPD+heeHhpl9bwMRRusPTCsbYKd1YoED265E0=
 github.com/minio/kms-go/kms v0.5.1-0.20250225090116-4e64ce8d0f35/go.mod h1:JFQu2srrnWxMn6KcwS5347oTwNKW7nkewgBlrodjF9k=
 github.com/minio/madmin-go/v3 v3.0.109 h1:hRHlJ6yaIB3tlIj5mz9L9mGcyLC37S9qL1WtFrRtyQ0=

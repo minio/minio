@@ -293,7 +293,7 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 			return err
 		}
 		sealedKey = objectKey.Seal(newKey.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, newKey.KeyID, newKey.Ciphertext, sealedKey)
+		crypto.S3.CreateMetadata(metadata, newKey, sealedKey)
 		return nil
 	case crypto.S3KMS:
 		if GlobalKMS == nil {
@@ -333,7 +333,7 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		}
 
 		sealedKey := objectKey.Seal(newKey.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3KMS.String(), bucket, object)
-		crypto.S3KMS.CreateMetadata(metadata, newKey.KeyID, newKey.Ciphertext, sealedKey, cryptoCtx)
+		crypto.S3KMS.CreateMetadata(metadata, newKey, sealedKey, cryptoCtx)
 		return nil
 	case crypto.SSEC:
 		sealedKey, err := crypto.SSEC.ParseMetadata(metadata)
@@ -376,7 +376,7 @@ func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key
 
 		objectKey := crypto.GenerateKey(key.Plaintext, rand.Reader)
 		sealedKey = objectKey.Seal(key.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, object)
-		crypto.S3.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey)
+		crypto.S3.CreateMetadata(metadata, key, sealedKey)
 		return objectKey, nil
 	case crypto.S3KMS:
 		if GlobalKMS == nil {
@@ -409,7 +409,7 @@ func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key
 
 		objectKey := crypto.GenerateKey(key.Plaintext, rand.Reader)
 		sealedKey = objectKey.Seal(key.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3KMS.String(), bucket, object)
-		crypto.S3KMS.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey, cryptoCtx)
+		crypto.S3KMS.CreateMetadata(metadata, key, sealedKey, cryptoCtx)
 		return objectKey, nil
 	case crypto.SSEC:
 		objectKey := crypto.GenerateKey(key, rand.Reader)

@@ -92,6 +92,7 @@ func Encrypt(k *kms.KMS, plaintext io.Reader, ctx kms.Context) (io.Reader, error
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	metadata, err := json.Marshal(encryptedObject{
 		KeyID:     key.KeyID,
+		Version:   key.Version,
 		KMSKey:    key.Ciphertext,
 		Algorithm: algorithm,
 		Nonce:     nonce,
@@ -151,6 +152,7 @@ func Decrypt(k *kms.KMS, ciphertext io.Reader, associatedData kms.Context) (io.R
 
 	key, err := k.Decrypt(context.TODO(), &kms.DecryptRequest{
 		Name:           metadata.KeyID,
+		Version:        metadata.Version,
 		Ciphertext:     metadata.KMSKey,
 		AssociatedData: associatedData,
 	})
@@ -168,8 +170,9 @@ func Decrypt(k *kms.KMS, ciphertext io.Reader, associatedData kms.Context) (io.R
 }
 
 type encryptedObject struct {
-	KeyID  string `json:"keyid"`
-	KMSKey []byte `json:"kmskey"`
+	KeyID   string `json:"keyid"`
+	Version string `json:"version"`
+	KMSKey  []byte `json:"kmskey"`
 
 	Algorithm sio.Algorithm `json:"algorithm"`
 	Nonce     []byte        `json:"nonce"`

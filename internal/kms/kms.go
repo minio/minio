@@ -22,6 +22,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -90,7 +91,7 @@ type DecryptRequest struct {
 	// Version is the version of the master used for
 	// decryption. If empty, the latest key version
 	// is used.
-	Version int
+	Version string
 
 	// Ciphertext is the encrypted data that gets
 	// decrypted.
@@ -383,7 +384,7 @@ func (c *kmsConn) GenerateKey(ctx context.Context, req *GenerateKeyRequest) (DEK
 
 	return DEK{
 		KeyID:      name,
-		Version:    resp[0].Version,
+		Version:    strconv.Itoa(resp[0].Version),
 		Plaintext:  resp[0].Plaintext,
 		Ciphertext: resp[0].Ciphertext,
 	}, nil
@@ -395,9 +396,17 @@ func (c *kmsConn) Decrypt(ctx context.Context, req *DecryptRequest) ([]byte, err
 		return nil, err
 	}
 
+	version := 1
+	if req.Version != "" {
+		if version, err = strconv.Atoi(req.Version); err != nil {
+			return nil, err
+		}
+	}
+
 	ciphertext, _ := parseCiphertext(req.Ciphertext)
 	resp, err := c.client.Decrypt(ctx, c.enclave, &kms.DecryptRequest{
 		Name:           req.Name,
+		Version:        version,
 		Ciphertext:     ciphertext,
 		AssociatedData: aad,
 	})

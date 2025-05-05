@@ -19,11 +19,8 @@ package kms
 
 import (
 	"context"
-	"encoding"
-	"encoding/json"
 	"strconv"
 
-	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v3"
 )
 
@@ -121,47 +118,7 @@ type Status struct {
 // storage.
 type DEK struct {
 	KeyID      string // Name of the master key
-	Version    int    // Version of the master key (MinKMS only)
+	Version    string // Version of the master key
 	Plaintext  []byte // Paintext of the data encryption key
 	Ciphertext []byte // Ciphertext of the data encryption key
-}
-
-var (
-	_ encoding.TextMarshaler   = (*DEK)(nil)
-	_ encoding.TextUnmarshaler = (*DEK)(nil)
-)
-
-// MarshalText encodes the DEK's key ID and ciphertext
-// as JSON.
-func (d DEK) MarshalText() ([]byte, error) {
-	type JSON struct {
-		KeyID      string `json:"keyid"`
-		Version    uint32 `json:"version,omitempty"`
-		Ciphertext []byte `json:"ciphertext"`
-	}
-	return json.Marshal(JSON{
-		KeyID:      d.KeyID,
-		Version:    uint32(d.Version),
-		Ciphertext: d.Ciphertext,
-	})
-}
-
-// UnmarshalText tries to decode text as JSON representation
-// of a DEK and sets DEK's key ID and ciphertext to the
-// decoded values.
-//
-// It sets DEK's plaintext to nil.
-func (d *DEK) UnmarshalText(text []byte) error {
-	type JSON struct {
-		KeyID      string `json:"keyid"`
-		Version    uint32 `json:"version"`
-		Ciphertext []byte `json:"ciphertext"`
-	}
-	var v JSON
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(text, &v); err != nil {
-		return err
-	}
-	d.KeyID, d.Version, d.Plaintext, d.Ciphertext = v.KeyID, int(v.Version), nil, v.Ciphertext
-	return nil
 }

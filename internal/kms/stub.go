@@ -103,7 +103,7 @@ func (s StubKMS) GenerateKey(_ context.Context, req *GenerateKeyRequest) (DEK, e
 	}
 	return DEK{
 		KeyID:      req.Name,
-		Version:    0,
+		Version:    "0",
 		Plaintext:  []byte("stubplaincharswhichare32bytelong"),
 		Ciphertext: []byte("stubplaincharswhichare32bytelong"),
 	}, nil

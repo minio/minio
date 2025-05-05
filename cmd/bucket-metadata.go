@@ -555,7 +555,7 @@ func encryptBucketMetadata(ctx context.Context, bucket string, input []byte, kms
 	outbuf := bytes.NewBuffer(nil)
 	objectKey := crypto.GenerateKey(key.Plaintext, rand.Reader)
 	sealedKey := objectKey.Seal(key.Plaintext, crypto.GenerateIV(rand.Reader), crypto.S3.String(), bucket, "")
-	crypto.S3.CreateMetadata(metadata, key.KeyID, key.Ciphertext, sealedKey)
+	crypto.S3.CreateMetadata(metadata, key, sealedKey)
 	_, err = sio.Encrypt(outbuf, bytes.NewBuffer(input), sio.Config{Key: objectKey[:], MinVersion: sio.Version20, CipherSuites: fips.DARECiphers()})
 	if err != nil {
 		return output, metabytes, err

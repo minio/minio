@@ -154,7 +154,6 @@ func (s secretKey) GenerateKey(_ context.Context, req *GenerateKeyRequest) (DEK,
 	ciphertext = append(ciphertext, random...)
 	return DEK{
 		KeyID:      req.Name,
-		Version:    0,
 		Plaintext:  plaintext,
 		Ciphertext: ciphertext,
 	}, nil

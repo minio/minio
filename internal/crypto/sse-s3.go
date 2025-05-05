@@ -119,20 +119,15 @@ func (s3 sses3) UnsealObjectKeys(ctx context.Context, k *kms.KMS, metadata []map
 // the modified metadata. If the keyID and the kmsKey is not empty it encodes
 // both into the metadata as well. It allocates a new metadata map if metadata
 // is nil.
-func (sses3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []byte, sealedKey SealedKey) map[string]string {
+func (sses3) CreateMetadata(metadata map[string]string, dek kms.DEK, sealedKey SealedKey) map[string]string {
 	if sealedKey.Algorithm != SealAlgorithm {
 		logger.CriticalIf(context.Background(), Errorf("The seal algorithm '%s' is invalid for SSE-S3", sealedKey.Algorithm))
 	}
-
-	// There are two possibilities:
-	// - We use a KMS -> There must be non-empty key ID and a KMS data key.
-	// - We use a K/V -> There must be no key ID and no KMS data key.
-	// Otherwise, the caller has passed an invalid argument combination.
-	if keyID == "" && len(kmsKey) != 0 {
-		logger.CriticalIf(context.Background(), errors.New("The key ID must not be empty if a KMS data key is present"))
+	if dek.KeyID == "" {
+		logger.CriticalIf(context.Background(), errors.New("The key ID must not be empty"))
 	}
-	if keyID != "" && len(kmsKey) == 0 {
-		logger.CriticalIf(context.Background(), errors.New("The KMS data key must not be empty if a key ID is present"))
+	if len(dek.Ciphertext) == 0 {
+		logger.CriticalIf(context.Background(), errors.New("The DEK must not be empty"))
 	}
 
 	if metadata == nil {
@@ -142,9 +137,10 @@ func (sses3) CreateMetadata(metadata map[string]string, keyID string, kmsKey []b
 	metadata[MetaAlgorithm] = sealedKey.Algorithm
 	metadata[MetaIV] = base64.StdEncoding.EncodeToString(sealedKey.IV[:])
 	metadata[MetaSealedKeyS3] = base64.StdEncoding.EncodeToString(sealedKey.Key[:])
-	if len(kmsKey) > 0 && keyID != "" { // We use a KMS -> Store key ID and sealed KMS data key.
-		metadata[MetaKeyID] = keyID
-		metadata[MetaDataEncryptionKey] = base64.StdEncoding.EncodeToString(kmsKey)
+	metadata[MetaKeyID] = dek.KeyID
+	metadata[MetaDataEncryptionKey] = base64.StdEncoding.EncodeToString(dek.Ciphertext)
+	if dek.Version != "" {
+		metadata[MetaKeyVersion] = dek.Version
 	}
 	return metadata
 }

@@ -48,6 +48,12 @@ const (
 	// the KMS.
 	MetaDataEncryptionKey = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Sealed-Key"
 
+	// MetaKeyVersion is the version of the KMS master key used to generate/encrypt
+	// the data encryption key (DEK). When a MinKMS master key is "rotated", it
+	// adds another key version. MinIO has to remember which key version has been
+	// used to encrypt an object.
+	MetaKeyVersion = "X-Minio-Internal-Server-Side-Encryption-S3-Kms-Key-Version"
+
 	// MetaSsecCRC is the encrypted checksum of the SSE-C encrypted object.
 	MetaSsecCRC = "X-Minio-Replication-Ssec-Crc"
 
@@ -108,6 +114,7 @@ func RemoveInternalEntries(metadata map[string]string) {
 	delete(metadata, MetaSealedKeyS3)
 	delete(metadata, MetaSealedKeyKMS)
 	delete(metadata, MetaKeyID)
+	delete(metadata, MetaKeyVersion)
 	delete(metadata, MetaDataEncryptionKey)
 	delete(metadata, MetaSsecCRC)
 }
@@ -148,6 +155,9 @@ func IsEncrypted(metadata map[string]string) (Type, bool) {
 		return nil, true
 	}
 	if _, ok := metadata[MetaKeyID]; ok {
+		return nil, true
+	}
+	if _, ok := metadata[MetaKeyVersion]; ok {
 		return nil, true
 	}
 	if _, ok := metadata[MetaDataEncryptionKey]; ok {
