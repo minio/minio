@@ -392,9 +392,6 @@ func registerAPIRouter(router *mux.Router) {
 			HeadersRegexp(xhttp.AmzWriteOffsetBytes, "").
 			HandlerFunc(s3APIMiddleware(errorResponseHandler))
 
-		router.Methods(http.MethodPut).Path("/{object:.+}").
-			HandlerFunc(s3APIMiddleware(api.PutObjectHandler, traceHdrsS3HFlag))
-
 		// PutObject
 		router.Methods(http.MethodPut).Path("/{object:.+}").
 			HandlerFunc(s3APIMiddleware(api.PutObjectHandler, traceHdrsS3HFlag))
