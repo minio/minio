@@ -16,11 +16,51 @@ spec:
   ingress:
     - ports:
         - port: {{ .Values.minioAPIPort }}
+          protocol: TCP
         - port: {{ .Values.minioConsolePort }}
+          protocol: TCP
       {{- if not .Values.networkPolicy.allowExternal }}
       from:
         - podSelector:
             matchLabels:
               {{ template "minio.name" . }}-client: "true"
       {{- end }}
+  {{- if .Values.networkPolicy.egress.enabled }}
+  egress:
+    - ports:
+        {{ .Values.networkPolicy.egress.ports | toJson }}
+      {{- with .Values.networkPolicy.egress.to }}
+      to:
+        {{- toYaml . | nindent 12 }}
+      {{- end }}
+  {{- end }}
+---
+kind: NetworkPolicy
+apiVersion: {{ template "minio.networkPolicy.apiVersion" . }}
+metadata:
+  name: {{ template "minio.fullname" . }}-post-job
+  labels:
+    app: {{ template "minio.name" . }}-post-job
+    chart: {{ template "minio.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ template "minio.name" . }}-job
+      release: {{ .Release.Name }}
+  egress:
+    - ports:
+        - port: {{ .Values.minioAPIPort }}
+          protocol: TCP
+        - port: {{ .Values.minioConsolePort }}
+          protocol: TCP
+    {{- if .Values.networkPolicy.egress.enabled }}
+    - ports:
+        {{ .Values.networkPolicy.egress.ports | toJson }}
+      {{- with .Values.networkPolicy.egress.to }}
+      to:
+        {{- toYaml . | nindent 12 }}
+      {{- end }}
+    {{- end }}
 {{- end }}
