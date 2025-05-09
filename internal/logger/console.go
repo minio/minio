@@ -26,6 +26,7 @@ import (
 
 	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio/internal/color"
+	"github.com/minio/minio/internal/config"
 )
 
 // ConsoleLoggerTgt is a stringified value to represent console logging
@@ -77,6 +78,10 @@ func fatal(err error, msg string, data ...interface{}) {
 		}
 	} else {
 		msg = fmt.Sprintf(msg, data...)
+	}
+	if errorFmtFunc == nil {
+		consoleLog(fatalMessage, config.FmtError(msg, err, jsonFlag))
+		return
 	}
 	consoleLog(fatalMessage, errorFmtFunc(msg, err, jsonFlag))
 }
