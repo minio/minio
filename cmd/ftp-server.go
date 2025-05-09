@@ -75,6 +75,7 @@ func startFTPServer(args []string) {
 		portRange     string
 		tlsPrivateKey string
 		tlsPublicCert string
+		forceTLS      bool
 	)
 
 	var err error
@@ -103,6 +104,11 @@ func startFTPServer(args []string) {
 			tlsPrivateKey = tokens[1]
 		case "tls-public-cert":
 			tlsPublicCert = tokens[1]
+		case "force-tls":
+			forceTLS, err = strconv.ParseBool(tokens[1])
+			if err != nil {
+				logger.Fatal(fmt.Errorf("invalid arguments passed to --ftp=%s (%v)", arg, err), "unable to start FTP server")
+			}
 		}
 	}
 
@@ -129,6 +135,10 @@ func startFTPServer(args []string) {
 
 	tls := tlsPrivateKey != "" && tlsPublicCert != ""
 
+	if forceTLS && !tls {
+		logger.Fatal(fmt.Errorf("invalid TLS arguments provided. force-tls, but missing private key --ftp=\"tls-private-key=path/to/private.key\""), "unable to start FTP server")
+	}
+
 	name := "MinIO FTP Server"
 	if tls {
 		name = "MinIO FTP(Secure) Server"
@@ -147,6 +157,7 @@ func startFTPServer(args []string) {
 		Logger:         &minioLogger{},
 		PassivePorts:   portRange,
 		PublicIP:       publicIP,
+		ForceTLS:       forceTLS,
 	})
 	if err != nil {
 		logger.Fatal(err, "unable to initialize FTP server")
