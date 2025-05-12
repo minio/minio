@@ -200,9 +200,11 @@ service:
 ingress:
   enabled: false
   ingressClassName: ~
-  labels: {}
+  labels:
+    {}
     # node-role.kubernetes.io/ingress: platform
-  annotations: {}
+  annotations:
+    {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
     # kubernetes.io/ingress.allow-http: "false"
@@ -241,9 +243,11 @@ consoleService:
 consoleIngress:
   enabled: false
   ingressClassName: ~
-  labels: {}
+  labels:
+    {}
     # node-role.kubernetes.io/ingress: platform
-  annotations: {}
+  annotations:
+    {}
     # kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
     # kubernetes.io/ingress.allow-http: "false"
@@ -391,7 +395,8 @@ makeUserJob:
 
 ## List of service accounts to be created after minio install
 ##
-svcaccts: []
+svcaccts:
+  []
   ## accessKey, secretKey and parent user to be assigned to the service accounts
   ## Add new service accounts as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management/minio-user-management.html#service-accounts
   # - accessKey: console-svcacct
@@ -430,7 +435,8 @@ makeServiceAccountJob:
 
 ## List of buckets to be created after minio install
 ##
-buckets: []
+buckets:
+  []
   #   # Name of the bucket
   # - name: bucket1
   #   # Policy to be set on the
@@ -479,13 +485,15 @@ customCommandJob:
     requests:
       memory: 128Mi
   ## Additional volumes to add to the post-job.
-  extraVolumes: []
+  extraVolumes:
+    []
     # - name: extra-policies
     #   configMap:
     #     name: my-extra-policies-cm
   ## Additional volumeMounts to add to the custom commands container when
   ## running the post-job.
-  extraVolumeMounts: []
+  extraVolumeMounts:
+    []
     # - name: extra-policies
     #   mountPath: /mnt/extras/
   # Command to run after the main command on exit
@@ -542,10 +550,35 @@ networkPolicy:
   # Specifies whether the policies created will be standard Network Policies (flavor: kubernetes)
   # or Cilium Network Policies (flavor: cilium)
   flavor: kubernetes
+  # allows external access to the minio api
   allowExternal: true
+  ## @params networkPolicy.egress configuration of the egress traffic
+  egress:
+    ## @param networkPolicy.egress.enabled When enabled, an egress network policy will be
+    ## created allowing minio to connect to external data sources from kubernetes cluster.
+    ##
+    enabled: false
+    ## @param networkPolicy.egress.ports Add individual ports to be allowed by the egress
+    ## Add ports to the egress by specifying - port: <port number>
+    ## E.X.
+    ## - port: 80
+    ## - port: 443
+    ## - port: 53
+    ##   protocol: UDP
+    ##
+    ports: []
+    ## @param networkPolicy.egress.to Allow egress traffic to specific destinations
+    ## Add destinations to the egress by specifying - ipBlock: <CIDR>
+    ## E.X.
+    ## to:
+    ##  - namespaceSelector:
+    ##    matchExpressions:
+    ##    - {key: role, operator: In, values: [minio]}
+    ##
+    to: []
   # only when using flavor: cilium
   egressEntities:
-   - kube-apiserver
+    - kube-apiserver
 
 ## PodDisruptionBudget settings
 ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
@@ -573,7 +606,8 @@ metrics:
     # for node metrics
     relabelConfigs: {}
     # for cluster metrics
-    relabelConfigsCluster: {}
+    relabelConfigsCluster:
+      {}
       # metricRelabelings:
       #   - regex: (server|pod)
       #     action: labeldrop
