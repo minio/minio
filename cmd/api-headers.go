@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -168,6 +169,15 @@ func setObjectHeaders(ctx context.Context, w http.ResponseWriter, objInfo Object
 			if !stringsHasPrefixFold(k, userMetadataPrefix) {
 				continue
 			}
+			// check the doc https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html
+			if needsMimeEncoding(v) {
+				// see https://github.com/golang/go/blob/release-branch.go1.24/src/net/mail/message.go#L325
+				if strings.ContainsAny(v, "\"#$%&'(),.:;<>@[]^`{|}~") {
+					v = mime.BEncoding.Encode("UTF-8", v)
+				} else {
+					v = mime.QEncoding.Encode("UTF-8", v)
+				}
+			}
 			w.Header()[strings.ToLower(k)] = []string{v}
 			isSet = true
 			break
@@ -228,4 +238,15 @@ func setObjectHeaders(ctx context.Context, w http.ResponseWriter, objInfo Object
 	}
 
 	return nil
+}
+
+// needsEncoding reports whether s contains any bytes that need to be encoded.
+// see mime.needsEncoding
+func needsMimeEncoding(s string) bool {
+	for _, b := range s {
+		if (b < ' ' || b > '~') && b != '\t' {
+			return true
+		}
+	}
+	return false
 }
