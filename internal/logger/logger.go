@@ -36,7 +36,6 @@ import (
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/madmin-go/v3/logger/log"
 	"github.com/minio/minio/internal/color"
-	"github.com/minio/minio/internal/config"
 	xhttp "github.com/minio/minio/internal/http"
 )
 
@@ -77,7 +76,9 @@ var (
 	quietFlag, jsonFlag, anonFlag bool
 	// Custom function to format error
 	// can be registered by RegisterError
-	errorFmtFunc = config.FmtError
+	errorFmtFunc = func(introMsg string, err error, jsonFlag bool) string {
+		return fmt.Sprintf("msg: %s\n err:%s", introMsg, err)
+	}
 )
 
 // EnableQuiet - turns quiet option on.
