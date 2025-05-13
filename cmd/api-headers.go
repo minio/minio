@@ -170,6 +170,23 @@ func setObjectHeaders(ctx context.Context, w http.ResponseWriter, objInfo Object
 				continue
 			}
 			// check the doc https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html
+			// For metadata values like "ö", "ÄMÄZÕÑ S3", and "öha, das sollte eigentlich
+			// funktionieren", tested against a real AWS S3 bucket, S3 may encode incorrectly. For
+			// example, "ö" was encoded as =?UTF-8?B?w4PCtg==?=, producing invalid UTF-8 instead
+			// of =?UTF-8?B?w7Y=?=. This mirrors errors like the ä½ in another string.
+			//
+			// S3 uses B-encoding (Base64) for non-ASCII-heavy metadata and Q-encoding
+			// (quoted-printable) for mostly ASCII strings. Long strings are split at word
+			// boundaries to fit RFC 2047’s 75-character limit, ensuring HTTP parser
+			// compatibility.
+			//
+			// However, this splitting increases header size and can introduce errors, unlike Go’s
+			// mime package in MinIO, which correctly encodes strings with fixed B/Q encodings,
+			// avoiding S3’s heuristic-driven issues.
+			//
+			// For MinIO developers, decode S3 metadata with mime.WordDecoder, validate outputs,
+			// report encoding bugs to AWS, and use ASCII-only metadata to ensure reliable S3 API
+			// compatibility.
 			if needsMimeEncoding(v) {
 				// see https://github.com/golang/go/blob/release-branch.go1.24/src/net/mail/message.go#L325
 				if strings.ContainsAny(v, "\"#$%&'(),.:;<>@[]^`{|}~") {
