@@ -211,6 +211,7 @@ ingress:
     # nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     # nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0
   path: /
+  pathType: Prefix
   hosts:
     - minio-example.local
   tls: []
@@ -252,6 +253,7 @@ consoleIngress:
     # nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     # nginx.ingress.kubernetes.io/whitelist-source-range: 0.0.0.0/0
   path: /
+  pathType: Prefix
   hosts:
     - console.minio-example.local
   tls: []
