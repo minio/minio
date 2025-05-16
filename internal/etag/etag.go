@@ -117,7 +117,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/sio"
@@ -346,8 +345,7 @@ func Decrypt(key []byte, etag ETag) (ETag, error) {
 
 	plaintext := make([]byte, 0, 16)
 	etag, err := sio.DecryptBuffer(plaintext, etag, sio.Config{
-		Key:          decryptionKey,
-		CipherSuites: fips.DARECiphers(),
+		Key: decryptionKey,
 	})
 	if err != nil {
 		return nil, err
