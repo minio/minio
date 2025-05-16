@@ -26,7 +26,7 @@ import (
 
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
-	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/pkg/v3/ldap"
 )
 
@@ -197,7 +197,7 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 			MinVersion:         tls.VersionTLS12,
 			NextProtos:         []string{"h2", "http/1.1"},
 			ClientSessionCache: tls.NewLRUClientSessionCache(100),
-			CipherSuites:       fips.TLSCiphersBackwardCompatible(), // Contains RSA key exchange
+			CipherSuites:       crypto.TLSCiphersBackwardCompatible(), // Contains RSA key exchange
 			RootCAs:            rootCAs,
 		},
 	}

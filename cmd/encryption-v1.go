@@ -37,7 +37,6 @@ import (
 	"github.com/minio/kms-go/kes"
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/etag"
-	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
@@ -427,7 +426,7 @@ func newEncryptReader(ctx context.Context, content io.Reader, kind crypto.Type, 
 		return nil, crypto.ObjectKey{}, err
 	}
 
-	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20, CipherSuites: fips.DARECiphers()})
+	reader, err := sio.EncryptReader(content, sio.Config{Key: objectEncryptionKey[:], MinVersion: sio.Version20})
 	if err != nil {
 		return nil, crypto.ObjectKey{}, crypto.ErrInvalidCustomerKey
 	}
@@ -570,7 +569,6 @@ func newDecryptReaderWithObjectKey(client io.Reader, objectEncryptionKey []byte,
 	reader, err := sio.DecryptReader(client, sio.Config{
 		Key:            objectEncryptionKey,
 		SequenceNumber: seqNumber,
-		CipherSuites:   fips.DARECiphers(),
 	})
 	if err != nil {
 		return nil, crypto.ErrInvalidCustomerKey
@@ -1062,7 +1060,7 @@ func metadataEncrypter(key crypto.ObjectKey) objectMetaEncryptFn {
 		var buffer bytes.Buffer
 		mac := hmac.New(sha256.New, key[:])
 		mac.Write([]byte(baseKey))
-		if _, err := sio.Encrypt(&buffer, bytes.NewReader(data), sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()}); err != nil {
+		if _, err := sio.Encrypt(&buffer, bytes.NewReader(data), sio.Config{Key: mac.Sum(nil)}); err != nil {
 			logger.CriticalIf(context.Background(), errors.New("unable to encrypt using object key"))
 		}
 		return buffer.Bytes()
@@ -1085,7 +1083,7 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 		}
 		mac := hmac.New(sha256.New, key)
 		mac.Write([]byte(baseKey))
-		return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil), CipherSuites: fips.DARECiphers()})
+		return sio.DecryptBuffer(nil, input, sio.Config{Key: mac.Sum(nil)})
 	}
 }
 
