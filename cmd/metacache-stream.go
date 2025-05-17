@@ -758,7 +758,7 @@ func (r *metacacheReader) Close() error {
 	return nil
 }
 
-// metacacheBlockWriter collects blocks and provides a callaback to store them.
+// metacacheBlockWriter collects blocks and provides a callback to store them.
 type metacacheBlockWriter struct {
 	wg           sync.WaitGroup
 	streamErr    error

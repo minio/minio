@@ -51,7 +51,7 @@ require (
 	github.com/lithammer/shortuuid/v4 v4.2.0
 	github.com/miekg/dns v1.1.65
 	github.com/minio/cli v1.24.2
-	github.com/minio/console v1.7.6
+	github.com/minio/console v1.7.7-0.20250507213720-ee974a59612f
 	github.com/minio/csvparser v1.0.0
 	github.com/minio/dnscache v0.1.1
 	github.com/minio/dperf v0.6.3
@@ -212,7 +212,7 @@ require (
 	github.com/minio/colorjson v1.0.8 // indirect
 	github.com/minio/crc64nvme v1.0.1 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
-	github.com/minio/mc v0.0.0-20250312172924-c1d5d4cbb4ca // indirect
+	github.com/minio/mc v0.0.0-20250313080218-cf909e1063a9 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/minio/websocket v1.6.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect

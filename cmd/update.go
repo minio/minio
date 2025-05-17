@@ -50,8 +50,13 @@ const (
 	updateTimeout     = 10 * time.Second
 )
 
-// For windows our files have .exe additionally.
-var minioReleaseWindowsInfoURL = MinioReleaseURL + "minio.exe.sha256sum"
+var (
+	// Newer official download info URLs appear earlier below.
+	minioReleaseInfoURL = MinioReleaseURL + "minio.sha256sum"
+
+	// For windows our files have .exe additionally.
+	minioReleaseWindowsInfoURL = MinioReleaseURL + "minio.exe.sha256sum"
+)
 
 // minioVersionToReleaseTime - parses a standard official release
 // MinIO version string.

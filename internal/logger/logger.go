@@ -75,7 +75,10 @@ var matchingFuncNames = [...]string{
 var (
 	quietFlag, jsonFlag, anonFlag bool
 	// Custom function to format error
-	errorFmtFunc func(string, error, bool) string
+	// can be registered by RegisterError
+	errorFmtFunc = func(introMsg string, err error, jsonFlag bool) string {
+		return fmt.Sprintf("msg: %s\n err:%s", introMsg, err)
+	}
 )
 
 // EnableQuiet - turns quiet option on.
