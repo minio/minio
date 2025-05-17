@@ -41,6 +41,14 @@ const (
 	// clients to obtain temp. credentials with arbitrary policy
 	// permissions - including admin permissions.
 	EnvIdentityTLSSkipVerify = "MINIO_IDENTITY_TLS_SKIP_VERIFY"
+
+	// EnvIdentityTLSSubjectSanURI is an environmental variable that is used to select
+	// Subject for verified certificate identity in JWT Claim.
+	// This claim is sent to Authorization Engine.
+	// If set to true, First URI will be used as subject instead of CommonName
+	// Valid values for this field are true and false
+	// By default, it will be false. Thus Common Name will be used
+	EnvIdentityTLSSubjectSanURI = "MINIO_IDENTITY_TLS_SUBJECT_USE_SANURI"
 )
 
 // Config contains the STS TLS configuration for generating temp.
@@ -52,6 +60,11 @@ type Config struct {
 	// certificate verification. It should only be set for
 	// debugging or testing purposes.
 	InsecureSkipVerify bool `json:"skip_verify"`
+
+	// TLSSubjectUseSANUri, if set to true, uses first SAN URI from
+	// the client certificate as subject. This is done instead of
+	// using Common Name.
+	TLSSubjectUseSanURI bool `json:"use_san_uri"`
 }
 
 const (
@@ -99,11 +112,18 @@ func Lookup(kvs config.KVS) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+
+	cfg.TLSSubjectUseSanURI, err = config.ParseBool(env.Get(EnvIdentityTLSSubjectSanURI, kvs.Get(tlsSubjectUseSanURI)))
+	if err != nil {
+		return Config{}, err
+	}
+
 	return cfg, nil
 }
 
 const (
-	skipVerify = "skip_verify"
+	skipVerify          = "skip_verify"
+	tlsSubjectUseSanURI = "tls_subject_use_san_uri"
 )
 
 // DefaultKVS is the default K/V config system for
@@ -113,6 +133,10 @@ var DefaultKVS = config.KVS{
 		Key:   skipVerify,
 		Value: "off",
 	},
+	config.KV{
+		Key:   tlsSubjectUseSanURI,
+		Value: "off",
+	},
 }
 
 // Help is the help and description for the STS API K/V configuration.
@@ -120,6 +144,12 @@ var Help = config.HelpKVS{
 	config.HelpKV{
 		Key:         skipVerify,
 		Description: `trust client certificates without verification (default: 'off')`,
+		Optional:    true,
+		Type:        "on|off",
+	},
+	config.HelpKV{
+		Key:         tlsSubjectUseSanURI,
+		Description: `use first san uri from client certificate instead common name (default: 'off')`,
 		Optional:    true,
 		Type:        "on|off",
 	},
