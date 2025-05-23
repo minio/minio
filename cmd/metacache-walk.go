@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sort"
 	"strings"
@@ -68,6 +69,7 @@ const (
 // WalkDir will traverse a directory and return all entries found.
 // On success a sorted meta cache stream will be returned.
 // Metadata has data stripped, if any.
+// The function tries to quit as fast as the context is canceled to avoid further drive IO
 func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writer) (err error) {
 	legacyFS := s.fsType != xfs && s.fsType != ext4
 
@@ -146,6 +148,13 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 	var scanDir func(path string) error
 
 	scanDir = func(current string) error {
+		if contextCanceled(ctx) {
+			return ctx.Err()
+		}
+		if opts.Limit > 0 && objsReturned >= opts.Limit {
+			return nil
+		}
+
 		// Skip forward, if requested...
 		sb := bytebufferpool.Get()
 		defer func() {
@@ -160,12 +169,6 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 			if idx := strings.IndexByte(forward, '/'); idx > 0 {
 				forward = forward[:idx]
 			}
-		}
-		if contextCanceled(ctx) {
-			return ctx.Err()
-		}
-		if opts.Limit > 0 && objsReturned >= opts.Limit {
-			return nil
 		}
 
 		if s.walkMu != nil {
@@ -197,6 +200,9 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		// Avoid a bunch of cleanup when joining.
 		current = strings.Trim(current, SlashSeparator)
 		for i, entry := range entries {
+			if contextCanceled(ctx) {
+				return ctx.Err()
+			}
 			if opts.Limit > 0 && objsReturned >= opts.Limit {
 				return nil
 			}
@@ -292,14 +298,14 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 		}
 
 		for _, entry := range entries {
+			if contextCanceled(ctx) {
+				return ctx.Err()
+			}
 			if opts.Limit > 0 && objsReturned >= opts.Limit {
 				return nil
 			}
 			if entry == "" {
 				continue
-			}
-			if contextCanceled(ctx) {
-				return ctx.Err()
 			}
 			meta := metaCacheEntry{name: pathJoinBuf(sb, current, entry)}
 
@@ -314,7 +320,10 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				if opts.Recursive {
 					// Scan folder we found. Should be in correct sort order where we are.
 					err := scanDir(pop)
-					if err != nil && !IsErrIgnored(err, context.Canceled) {
+					if err != nil {
+						if errors.Is(err, context.Canceled) {
+							return err
+						}
 						internalLogIf(ctx, err)
 					}
 				}

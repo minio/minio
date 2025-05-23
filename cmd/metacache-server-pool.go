@@ -223,7 +223,11 @@ func (z *erasureServerPools) listPath(ctx context.Context, o *listPathOptions) (
 
 	go func(o listPathOptions) {
 		defer wg.Done()
-		o.StopDiskAtLimit = true
+		if o.Lifecycle == nil {
+			// No filtering ahead, ask drives to stop
+			// listing exactly at a specific limit.
+			o.StopDiskAtLimit = true
+		}
 		listErr = z.listMerged(listCtx, o, filterCh)
 		o.debugln("listMerged returned with", listErr)
 	}(*o)
@@ -422,6 +426,9 @@ func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions
 	go func() {
 		var returned bool
 		for entry := range inCh {
+			if o.shouldSkip(ctx, entry) {
+				continue
+			}
 			if !returned {
 				funcReturnedMu.Lock()
 				returned = funcReturned
