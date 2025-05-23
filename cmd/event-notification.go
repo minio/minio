@@ -212,6 +212,7 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 				Key:       keyName,
 				VersionID: args.Object.VersionID,
 				Sequencer: uniqueID,
+				Size:      args.Object.Size,
 			},
 		},
 		Source: event.Source{
