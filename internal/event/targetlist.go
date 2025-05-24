@@ -357,7 +357,7 @@ func (list *TargetList) startSendWorkers(workerCount int) {
 	if err != nil {
 		panic(err)
 	}
-	for i := 0; i < workerCount; i++ {
+	for range workerCount {
 		wk.Take()
 		go func() {
 			defer wk.Give()
