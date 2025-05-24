@@ -504,7 +504,7 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 
 	// count the number of offline disks
 	offline := 0
-	for i := 0; i < len(errs); i++ {
+	for i := range len(errs) {
 		var found bool
 		switch {
 		case errors.Is(errs[i], errDiskNotFound):
@@ -1221,7 +1221,7 @@ func (er erasureObjects) putMetacacheObject(ctx context.Context, key string, r *
 		partsMetadata[index].SetInlineData()
 	}
 
-	for i := 0; i < len(onlineDisks); i++ {
+	for i := range len(onlineDisks) {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
 			// the first meta from online disk
@@ -1557,7 +1557,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	for i := 0; i < len(onlineDisks); i++ {
+	for i := range len(onlineDisks) {
 		if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 			// Object info is the same in all disks, so we can pick
 			// the first meta from online disk
@@ -1574,7 +1574,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if len(versions) == 0 {
 			// Whether a disk was initially or becomes offline
 			// during this upload, send it to the MRF list.
-			for i := 0; i < len(onlineDisks); i++ {
+			for i := range len(onlineDisks) {
 				if onlineDisks[i] != nil && onlineDisks[i].IsOnline() {
 					continue
 				}
