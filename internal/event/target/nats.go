@@ -40,19 +40,21 @@ import (
 
 // NATS related constants
 const (
-	NATSAddress       = "address"
-	NATSSubject       = "subject"
-	NATSUsername      = "username"
-	NATSPassword      = "password"
-	NATSToken         = "token"
-	NATSTLS           = "tls"
-	NATSTLSSkipVerify = "tls_skip_verify"
-	NATSPingInterval  = "ping_interval"
-	NATSQueueDir      = "queue_dir"
-	NATSQueueLimit    = "queue_limit"
-	NATSCertAuthority = "cert_authority"
-	NATSClientCert    = "client_cert"
-	NATSClientKey     = "client_key"
+	NATSAddress           = "address"
+	NATSSubject           = "subject"
+	NATSUsername          = "username"
+	NATSPassword          = "password"
+	NATSToken             = "token"
+	NATSNKeySeed          = "nkey_seed"
+	NATSTLS               = "tls"
+	NATSTLSSkipVerify     = "tls_skip_verify"
+	NATSTLSHandshakeFirst = "tls_handshake_first"
+	NATSPingInterval      = "ping_interval"
+	NATSQueueDir          = "queue_dir"
+	NATSQueueLimit        = "queue_limit"
+	NATSCertAuthority     = "cert_authority"
+	NATSClientCert        = "client_cert"
+	NATSClientKey         = "client_key"
 
 	// Streaming constants - deprecated
 	NATSStreaming                   = "streaming"
@@ -63,21 +65,23 @@ const (
 	// JetStream constants
 	NATSJetStream = "jetstream"
 
-	EnvNATSEnable        = "MINIO_NOTIFY_NATS_ENABLE"
-	EnvNATSAddress       = "MINIO_NOTIFY_NATS_ADDRESS"
-	EnvNATSSubject       = "MINIO_NOTIFY_NATS_SUBJECT"
-	EnvNATSUsername      = "MINIO_NOTIFY_NATS_USERNAME"
-	NATSUserCredentials  = "MINIO_NOTIFY_NATS_USER_CREDENTIALS"
-	EnvNATSPassword      = "MINIO_NOTIFY_NATS_PASSWORD"
-	EnvNATSToken         = "MINIO_NOTIFY_NATS_TOKEN"
-	EnvNATSTLS           = "MINIO_NOTIFY_NATS_TLS"
-	EnvNATSTLSSkipVerify = "MINIO_NOTIFY_NATS_TLS_SKIP_VERIFY"
-	EnvNATSPingInterval  = "MINIO_NOTIFY_NATS_PING_INTERVAL"
-	EnvNATSQueueDir      = "MINIO_NOTIFY_NATS_QUEUE_DIR"
-	EnvNATSQueueLimit    = "MINIO_NOTIFY_NATS_QUEUE_LIMIT"
-	EnvNATSCertAuthority = "MINIO_NOTIFY_NATS_CERT_AUTHORITY"
-	EnvNATSClientCert    = "MINIO_NOTIFY_NATS_CLIENT_CERT"
-	EnvNATSClientKey     = "MINIO_NOTIFY_NATS_CLIENT_KEY"
+	EnvNATSEnable            = "MINIO_NOTIFY_NATS_ENABLE"
+	EnvNATSAddress           = "MINIO_NOTIFY_NATS_ADDRESS"
+	EnvNATSSubject           = "MINIO_NOTIFY_NATS_SUBJECT"
+	EnvNATSUsername          = "MINIO_NOTIFY_NATS_USERNAME"
+	NATSUserCredentials      = "MINIO_NOTIFY_NATS_USER_CREDENTIALS"
+	EnvNATSPassword          = "MINIO_NOTIFY_NATS_PASSWORD"
+	EnvNATSToken             = "MINIO_NOTIFY_NATS_TOKEN"
+	EnvNATSNKeySeed          = "MINIO_NOTIFY_NATS_NKEY_SEED"
+	EnvNATSTLS               = "MINIO_NOTIFY_NATS_TLS"
+	EnvNATSTLSSkipVerify     = "MINIO_NOTIFY_NATS_TLS_SKIP_VERIFY"
+	EnvNatsTLSHandshakeFirst = "MINIO_NOTIFY_NATS_TLS_HANDSHAKE_FIRST"
+	EnvNATSPingInterval      = "MINIO_NOTIFY_NATS_PING_INTERVAL"
+	EnvNATSQueueDir          = "MINIO_NOTIFY_NATS_QUEUE_DIR"
+	EnvNATSQueueLimit        = "MINIO_NOTIFY_NATS_QUEUE_LIMIT"
+	EnvNATSCertAuthority     = "MINIO_NOTIFY_NATS_CERT_AUTHORITY"
+	EnvNATSClientCert        = "MINIO_NOTIFY_NATS_CLIENT_CERT"
+	EnvNATSClientKey         = "MINIO_NOTIFY_NATS_CLIENT_KEY"
 
 	// Streaming constants - deprecated
 	EnvNATSStreaming                   = "MINIO_NOTIFY_NATS_STREAMING"
@@ -91,23 +95,25 @@ const (
 
 // NATSArgs - NATS target arguments.
 type NATSArgs struct {
-	Enable          bool      `json:"enable"`
-	Address         xnet.Host `json:"address"`
-	Subject         string    `json:"subject"`
-	Username        string    `json:"username"`
-	UserCredentials string    `json:"userCredentials"`
-	Password        string    `json:"password"`
-	Token           string    `json:"token"`
-	TLS             bool      `json:"tls"`
-	TLSSkipVerify   bool      `json:"tlsSkipVerify"`
-	Secure          bool      `json:"secure"`
-	CertAuthority   string    `json:"certAuthority"`
-	ClientCert      string    `json:"clientCert"`
-	ClientKey       string    `json:"clientKey"`
-	PingInterval    int64     `json:"pingInterval"`
-	QueueDir        string    `json:"queueDir"`
-	QueueLimit      uint64    `json:"queueLimit"`
-	JetStream       struct {
+	Enable            bool      `json:"enable"`
+	Address           xnet.Host `json:"address"`
+	Subject           string    `json:"subject"`
+	Username          string    `json:"username"`
+	UserCredentials   string    `json:"userCredentials"`
+	Password          string    `json:"password"`
+	Token             string    `json:"token"`
+	NKeySeed          string    `json:"nKeySeed"`
+	TLS               bool      `json:"tls"`
+	TLSSkipVerify     bool      `json:"tlsSkipVerify"`
+	TLSHandshakeFirst bool      `json:"tlsHandshakeFirst"`
+	Secure            bool      `json:"secure"`
+	CertAuthority     string    `json:"certAuthority"`
+	ClientCert        string    `json:"clientCert"`
+	ClientKey         string    `json:"clientKey"`
+	PingInterval      int64     `json:"pingInterval"`
+	QueueDir          string    `json:"queueDir"`
+	QueueLimit        uint64    `json:"queueLimit"`
+	JetStream         struct {
 		Enable bool `json:"enable"`
 	} `json:"jetStream"`
 	Streaming struct {
@@ -175,10 +181,20 @@ func (n NATSArgs) connectNats() (*nats.Conn, error) {
 	if n.Token != "" {
 		connOpts = append(connOpts, nats.Token(n.Token))
 	}
+	if n.NKeySeed != "" {
+		nkeyOpt, err := nats.NkeyOptionFromSeed(n.NKeySeed)
+		if err != nil {
+			return nil, err
+		}
+		connOpts = append(connOpts, nkeyOpt)
+	}
 	if n.Secure || n.TLS && n.TLSSkipVerify {
 		connOpts = append(connOpts, nats.Secure(nil))
 	} else if n.TLS {
 		connOpts = append(connOpts, nats.Secure(&tls.Config{RootCAs: n.RootCAs}))
+	}
+	if n.TLSHandshakeFirst {
+		connOpts = append(connOpts, nats.TLSHandshakeFirst())
 	}
 	if n.CertAuthority != "" {
 		connOpts = append(connOpts, nats.RootCAs(n.CertAuthority))

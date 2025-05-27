@@ -2917,7 +2917,7 @@ func (s *xlStorage) RenameData(ctx context.Context, srcVolume, srcPath string, f
 
 // RenamePart - rename part path to destination path atomically, this is meant to be used
 // only with multipart API
-func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string, meta []byte) (err error) {
+func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolume, dstPath string, meta []byte, skipParent string) (err error) {
 	srcVolumeDir, err := s.getVolDir(srcVolume)
 	if err != nil {
 		return err
@@ -2964,12 +2964,22 @@ func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolum
 	if err = checkPathLength(dstFilePath); err != nil {
 		return err
 	}
+	// when skipParent is from rpc. it’s ok for not adding another rpc HandlerID like HandlerRenamePart2
+	// For this case, skipParent is empty, destBaseDir is equal to dstVolumeDir, that behavior is the same as the previous one
+	destBaseDir := pathutil.Join(dstVolumeDir, skipParent)
+	if err = checkPathLength(destBaseDir); err != nil {
+		return err
+	}
 
-	if err = renameAll(srcFilePath, dstFilePath, dstVolumeDir); err != nil {
+	if err = renameAll(srcFilePath, dstFilePath, destBaseDir); err != nil {
 		if isSysErrNotEmpty(err) || isSysErrNotDir(err) {
 			return errFileAccessDenied
 		}
-		return osErrToFileErr(err)
+		err = osErrToFileErr(err)
+		if errors.Is(err, errFileNotFound) {
+			return errUploadIDNotFound
+		}
+		return err
 	}
 
 	if err = s.WriteAll(ctx, dstVolume, dstPath+".meta", meta); err != nil {

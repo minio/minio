@@ -463,6 +463,10 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 			Value: cfg.Token,
 		},
 		config.KV{
+			Key:   target.NATSNKeySeed,
+			Value: cfg.NKeySeed,
+		},
+		config.KV{
 			Key:   target.NATSCertAuthority,
 			Value: cfg.CertAuthority,
 		},
@@ -481,6 +485,10 @@ func SetNotifyNATS(s config.Config, natsName string, cfg target.NATSArgs) error 
 		config.KV{
 			Key:   target.NATSTLSSkipVerify,
 			Value: config.FormatBool(cfg.Secure),
+		},
+		config.KV{
+			Key:   target.NATSTLSHandshakeFirst,
+			Value: config.FormatBool(cfg.TLSHandshakeFirst),
 		},
 		config.KV{
 			Key:   target.NATSPingInterval,

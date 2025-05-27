@@ -139,6 +139,7 @@ remote_transport_deadline       (duration)  set the deadline for API requests on
 list_quorum                     (string)    set the acceptable quorum expected for list operations e.g. "optimal", "reduced", "disk", "strict", "auto" (default: 'strict')
 replication_priority            (string)    set replication priority (default: 'auto')
 replication_max_workers         (number)    set the maximum number of replication workers (default: '500')
+replication_max_lrg_workers     (number)    set the maximum number of replication workers MinIO uses to replicate large objects between sites. (default: '10')
 transition_workers              (number)    set the number of transition workers (default: '100')
 stale_uploads_expiry            (duration)  set to expire stale multipart uploads older than this values (default: '24h')
 stale_uploads_cleanup_interval  (duration)  set to change intervals when stale multipart uploads are expired (default: '6h')

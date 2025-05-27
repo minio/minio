@@ -181,6 +181,9 @@ const (
 	AmzChecksumTypeFullObject = "FULL_OBJECT"
 	AmzChecksumTypeComposite  = "COMPOSITE"
 
+	// S3 Express API related constant reject it.
+	AmzWriteOffsetBytes = "x-amz-write-offset-bytes"
+
 	// Post Policy related
 	AmzMetaUUID = "X-Amz-Meta-Uuid"
 	AmzMetaName = "X-Amz-Meta-Name"

@@ -42,7 +42,6 @@ import (
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/etag"
 	"github.com/minio/minio/internal/event"
-	"github.com/minio/minio/internal/fips"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
 	"github.com/minio/minio/internal/hash/sha256"
@@ -527,9 +526,8 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 
 		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
 		encReader, err := sio.EncryptReader(reader, sio.Config{
-			Key:          partEncryptionKey[:],
-			CipherSuites: fips.DARECiphers(),
-			Nonce:        &nonce,
+			Key:   partEncryptionKey[:],
+			Nonce: &nonce,
 		})
 		if err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
@@ -825,9 +823,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			copy(nonce[:], tmp[:12])
 
 			reader, err = sio.EncryptReader(in, sio.Config{
-				Key:          partEncryptionKey[:],
-				CipherSuites: fips.DARECiphers(),
-				Nonce:        &nonce,
+				Key:   partEncryptionKey[:],
+				Nonce: &nonce,
 			})
 			if err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)

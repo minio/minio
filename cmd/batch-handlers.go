@@ -881,21 +881,23 @@ func (ri *batchJobInfo) clone() *batchJobInfo {
 	defer ri.mu.RUnlock()
 
 	return &batchJobInfo{
-		Version:          ri.Version,
-		JobID:            ri.JobID,
-		JobType:          ri.JobType,
-		RetryAttempts:    ri.RetryAttempts,
-		Complete:         ri.Complete,
-		Failed:           ri.Failed,
-		StartTime:        ri.StartTime,
-		LastUpdate:       ri.LastUpdate,
-		Bucket:           ri.Bucket,
-		Object:           ri.Object,
-		Objects:          ri.Objects,
-		ObjectsFailed:    ri.ObjectsFailed,
-		BytesTransferred: ri.BytesTransferred,
-		BytesFailed:      ri.BytesFailed,
-		Attempts:         ri.Attempts,
+		Version:             ri.Version,
+		JobID:               ri.JobID,
+		JobType:             ri.JobType,
+		RetryAttempts:       ri.RetryAttempts,
+		Complete:            ri.Complete,
+		Failed:              ri.Failed,
+		StartTime:           ri.StartTime,
+		LastUpdate:          ri.LastUpdate,
+		Bucket:              ri.Bucket,
+		Object:              ri.Object,
+		Objects:             ri.Objects,
+		ObjectsFailed:       ri.ObjectsFailed,
+		DeleteMarkers:       ri.DeleteMarkers,
+		DeleteMarkersFailed: ri.DeleteMarkersFailed,
+		BytesTransferred:    ri.BytesTransferred,
+		BytesFailed:         ri.BytesFailed,
+		Attempts:            ri.Attempts,
 	}
 }
 
@@ -994,11 +996,22 @@ func (ri *batchJobInfo) updateAfter(ctx context.Context, api ObjectLayer, durati
 // Note: to be used only with batch jobs that affect multiple versions through
 // a single action. e.g batch-expire has an option to expire all versions of an
 // object which matches the given filters.
-func (ri *batchJobInfo) trackMultipleObjectVersions(info ObjectInfo, success bool) {
+func (ri *batchJobInfo) trackMultipleObjectVersions(info expireObjInfo, success bool) {
+	if ri == nil {
+		return
+	}
+
+	ri.mu.Lock()
+	defer ri.mu.Unlock()
+
 	if success {
-		ri.Objects += int64(info.NumVersions)
+		ri.Bucket = info.Bucket
+		ri.Object = info.Name
+		ri.Objects += int64(info.NumVersions) - info.DeleteMarkerCount
+		ri.DeleteMarkers += info.DeleteMarkerCount
 	} else {
-		ri.ObjectsFailed += int64(info.NumVersions)
+		ri.ObjectsFailed += int64(info.NumVersions) - info.DeleteMarkerCount
+		ri.DeleteMarkersFailed += info.DeleteMarkerCount
 	}
 }
 
@@ -2134,12 +2147,14 @@ func (ri *batchJobInfo) metric() madmin.JobMetric {
 	switch ri.JobType {
 	case string(madmin.BatchJobReplicate):
 		m.Replicate = &madmin.ReplicateInfo{
-			Bucket:           ri.Bucket,
-			Object:           ri.Object,
-			Objects:          ri.Objects,
-			ObjectsFailed:    ri.ObjectsFailed,
-			BytesTransferred: ri.BytesTransferred,
-			BytesFailed:      ri.BytesFailed,
+			Bucket:              ri.Bucket,
+			Object:              ri.Object,
+			Objects:             ri.Objects,
+			DeleteMarkers:       ri.DeleteMarkers,
+			ObjectsFailed:       ri.ObjectsFailed,
+			DeleteMarkersFailed: ri.DeleteMarkersFailed,
+			BytesTransferred:    ri.BytesTransferred,
+			BytesFailed:         ri.BytesFailed,
 		}
 	case string(madmin.BatchJobKeyRotate):
 		m.KeyRotate = &madmin.KeyRotationInfo{
@@ -2150,10 +2165,12 @@ func (ri *batchJobInfo) metric() madmin.JobMetric {
 		}
 	case string(madmin.BatchJobExpire):
 		m.Expired = &madmin.ExpirationInfo{
-			Bucket:        ri.Bucket,
-			Object:        ri.Object,
-			Objects:       ri.Objects,
-			ObjectsFailed: ri.ObjectsFailed,
+			Bucket:              ri.Bucket,
+			Object:              ri.Object,
+			Objects:             ri.Objects,
+			DeleteMarkers:       ri.DeleteMarkers,
+			ObjectsFailed:       ri.ObjectsFailed,
+			DeleteMarkersFailed: ri.DeleteMarkersFailed,
 		}
 	}
 

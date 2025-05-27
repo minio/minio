@@ -52,7 +52,7 @@ import (
 	"github.com/minio/minio/internal/config/api"
 	xtls "github.com/minio/minio/internal/config/identity/tls"
 	"github.com/minio/minio/internal/config/storageclass"
-	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/handlers"
 	"github.com/minio/minio/internal/hash"
 	xhttp "github.com/minio/minio/internal/http"
@@ -612,8 +612,8 @@ func NewInternodeHTTPTransport(maxIdleConnsPerHost int) func() http.RoundTripper
 		LookupHost:       globalDNSCache.LookupHost,
 		DialTimeout:      rest.DefaultTimeout,
 		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.TLSCiphers(),
-		CurvePreferences: fips.TLSCurveIDs(),
+		CipherSuites:     crypto.TLSCiphers(),
+		CurvePreferences: crypto.TLSCurveIDs(),
 		EnableHTTP2:      false,
 		TCPOptions:       globalTCPOptions,
 	}.NewInternodeHTTPTransport(maxIdleConnsPerHost)
@@ -626,8 +626,8 @@ func NewHTTPTransportWithClientCerts(clientCert, clientKey string) http.RoundTri
 		LookupHost:       globalDNSCache.LookupHost,
 		DialTimeout:      defaultDialTimeout,
 		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
-		CurvePreferences: fips.TLSCurveIDs(),
+		CipherSuites:     crypto.TLSCiphersBackwardCompatible(),
+		CurvePreferences: crypto.TLSCurveIDs(),
 		TCPOptions:       globalTCPOptions,
 		EnableHTTP2:      false,
 	}
@@ -665,8 +665,8 @@ func NewHTTPTransportWithTimeout(timeout time.Duration) *http.Transport {
 		DialTimeout:      defaultDialTimeout,
 		RootCAs:          globalRootCAs,
 		TCPOptions:       globalTCPOptions,
-		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
-		CurvePreferences: fips.TLSCurveIDs(),
+		CipherSuites:     crypto.TLSCiphersBackwardCompatible(),
+		CurvePreferences: crypto.TLSCurveIDs(),
 		EnableHTTP2:      false,
 	}.NewHTTPTransportWithTimeout(timeout)
 }
@@ -677,8 +677,8 @@ func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 	return xhttp.ConnSettings{
 		LookupHost:       globalDNSCache.LookupHost,
 		RootCAs:          globalRootCAs,
-		CipherSuites:     fips.TLSCiphersBackwardCompatible(),
-		CurvePreferences: fips.TLSCurveIDs(),
+		CipherSuites:     crypto.TLSCiphersBackwardCompatible(),
+		CurvePreferences: crypto.TLSCurveIDs(),
 		TCPOptions:       globalTCPOptions,
 		EnableHTTP2:      false,
 	}.NewRemoteTargetHTTPTransport(insecure)
@@ -986,11 +986,11 @@ func newTLSConfig(getCert certs.GetCertificateFunc) *tls.Config {
 	}
 
 	if secureCiphers := env.Get(api.EnvAPISecureCiphers, config.EnableOn) == config.EnableOn; secureCiphers {
-		tlsConfig.CipherSuites = fips.TLSCiphers()
+		tlsConfig.CipherSuites = crypto.TLSCiphers()
 	} else {
-		tlsConfig.CipherSuites = fips.TLSCiphersBackwardCompatible()
+		tlsConfig.CipherSuites = crypto.TLSCiphersBackwardCompatible()
 	}
-	tlsConfig.CurvePreferences = fips.TLSCurveIDs()
+	tlsConfig.CurvePreferences = crypto.TLSCurveIDs()
 	return tlsConfig
 }
 

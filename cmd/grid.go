@@ -22,7 +22,7 @@ import (
 	"crypto/tls"
 	"sync/atomic"
 
-	"github.com/minio/minio/internal/fips"
+	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/grid"
 	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/rest"
@@ -52,8 +52,8 @@ func initGlobalGrid(ctx context.Context, eps EndpointServerPools) error {
 			newCachedAuthToken(),
 			&tls.Config{
 				RootCAs:          globalRootCAs,
-				CipherSuites:     fips.TLSCiphers(),
-				CurvePreferences: fips.TLSCurveIDs(),
+				CipherSuites:     crypto.TLSCiphers(),
+				CurvePreferences: crypto.TLSCurveIDs(),
 			}),
 		Local:        local,
 		Hosts:        hosts,
@@ -85,8 +85,8 @@ func initGlobalLockGrid(ctx context.Context, eps EndpointServerPools) error {
 			newCachedAuthToken(),
 			&tls.Config{
 				RootCAs:          globalRootCAs,
-				CipherSuites:     fips.TLSCiphers(),
-				CurvePreferences: fips.TLSCurveIDs(),
+				CipherSuites:     crypto.TLSCiphers(),
+				CurvePreferences: crypto.TLSCurveIDs(),
 			}, grid.RouteLockPath),
 		Local:        local,
 		Hosts:        hosts,

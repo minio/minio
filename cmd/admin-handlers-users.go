@@ -2959,7 +2959,7 @@ func commonAddServiceAccount(r *http.Request, ldap bool) (context.Context, auth.
 	denyOnly := (targetUser == cred.AccessKey || targetUser == cred.ParentUser)
 	if ldap && !denyOnly {
 		res, _ := globalIAMSys.LDAPConfig.GetValidatedDNForUsername(targetUser)
-		if res.NormDN == cred.ParentUser {
+		if res != nil && res.NormDN == cred.ParentUser {
 			denyOnly = true
 		}
 	}
