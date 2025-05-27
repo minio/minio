@@ -147,6 +147,7 @@ delete_cleanup_interval         (duration)  set to change intervals when deleted
 odirect                         (boolean)   set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
 root_access                     (boolean)   turn 'off' root credential access for all API calls including s3, admin operations (default: 'on')
 sync_events                     (boolean)   set to enable synchronous bucket notifications (default: 'off')
+replication_events              (boolean)   set to enable bucket notifications on events from replication (default: 'off')
 object_max_versions             (number)    set max allowed number of versions per object (default: '9223372036854775807')
 ```
 
@@ -167,6 +168,7 @@ MINIO_API_DELETE_CLEANUP_INTERVAL         (duration)  set to change intervals wh
 MINIO_API_ODIRECT                         (boolean)   set to enable or disable O_DIRECT for writes under special conditions. NOTE: do not disable O_DIRECT without prior testing (default: 'on')
 MINIO_API_ROOT_ACCESS                     (boolean)   turn 'off' root credential access for all API calls including s3, admin operations (default: 'on')
 MINIO_API_SYNC_EVENTS                     (boolean)   set to enable synchronous bucket notifications (default: 'off')
+MINIO_API_REPLICATION_EVENTS              (boolean)   set to enable bucket notifications on events from replication (default: 'off')
 MINIO_API_OBJECT_MAX_VERSIONS             (number)    set max allowed number of versions per object (default: '9223372036854775807')
 ```
 

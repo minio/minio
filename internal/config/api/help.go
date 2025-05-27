@@ -111,6 +111,12 @@ var (
 			Type:        "boolean",
 		},
 		config.HelpKV{
+			Key:         apiReplicationEvents,
+			Description: "set to enable bucket notifications on events from replication" + defaultHelpPostfix(apiReplicationEvents),
+			Optional:    true,
+			Type:        "boolean",
+		},
+		config.HelpKV{
 			Key:         apiObjectMaxVersions,
 			Description: "set max allowed number of versions per object" + defaultHelpPostfix(apiObjectMaxVersions),
 			Optional:    true,
