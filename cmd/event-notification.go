@@ -241,9 +241,12 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 }
 
 func sendEvent(args eventArgs) {
-	// avoid generating a notification for REPLICA creation event.
+	// avoid generating a notification for REPLICA creation event unless
+	// replication events have been explicitly enabled.
 	if _, ok := args.ReqParams[xhttp.MinIOSourceReplicationRequest]; ok {
-		return
+		if !globalAPIConfig.isReplicationEventsEnabled() {
+			return
+		}
 	}
 
 	args.Object.Size, _ = args.Object.GetActualSize()
