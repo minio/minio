@@ -452,7 +452,9 @@ func initAllSubsystems(ctx context.Context) {
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
 	// Create new notification system
-	globalEventNotifier = NewEventNotifier(GlobalContext)
+	if globalEventNotifier == nil {
+		globalEventNotifier = NewEventNotifier(GlobalContext)
+	}
 
 	// Create new bucket metadata system.
 	if globalBucketMetadataSys == nil {
