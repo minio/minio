@@ -248,7 +248,7 @@ func (r *BatchJobReplicateV1) copyWithMultipartfromSource(ctx context.Context, a
 		pInfo PartInfo
 	)
 
-	for i := 0; i < partsCount; i++ {
+	for i := range partsCount {
 		gopts := minio.GetObjectOptions{
 			VersionID:  srcObjInfo.VersionID,
 			PartNumber: i + 1,

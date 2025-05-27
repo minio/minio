@@ -149,7 +149,7 @@ func (z *erasureServerPools) findIndex(index int) int {
 	if z.rebalMeta == nil {
 		return 0
 	}
-	for i := 0; i < len(z.rebalMeta.PoolStats); i++ {
+	for i := range len(z.rebalMeta.PoolStats) {
 		if i == index {
 			return index
 		}

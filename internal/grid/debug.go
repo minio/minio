@@ -143,7 +143,7 @@ func (t *TestGrid) WaitAllConnect(ctx context.Context) {
 }
 
 func getHosts(n int) (hosts []string, listeners []net.Listener, err error) {
-	for i := 0; i < n; i++ {
+	for range n {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			if l, err = net.Listen("tcp6", "[::1]:0"); err != nil {

@@ -128,7 +128,7 @@ func IsValidBucketName(bucket string) bool {
 		// 'label' in AWS terminology and if the bucket looks
 		// like an IP address.
 		isNotNumber := false
-		for i := 0; i < len(piece); i++ {
+		for i := range len(piece) {
 			switch {
 			case (piece[i] >= 'a' && piece[i] <= 'z' ||
 				piece[i] == '-'):
@@ -254,11 +254,11 @@ func concat(ss ...string) string {
 	}
 	// create & allocate the memory in advance.
 	n := 0
-	for i := 0; i < length; i++ {
+	for i := range length {
 		n += len(ss[i])
 	}
 	b := make([]byte, 0, n)
-	for i := 0; i < length; i++ {
+	for i := range length {
 		b = append(b, ss[i]...)
 	}
 	return unsafe.String(unsafe.SliceData(b), n)

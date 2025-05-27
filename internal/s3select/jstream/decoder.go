@@ -332,7 +332,7 @@ func (d *Decoder) u4() rune {
 	// logic taken from:
 	// github.com/buger/jsonparser/blob/master/escape.go#L20
 	var h [4]int
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		c := d.next()
 		switch {
 		case c >= '0' && c <= '9':
