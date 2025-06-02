@@ -46,6 +46,14 @@ const (
 	// Subject for verified certificate identity in JWT Claim.
 	// This claim is sent to Authorization Engine.
 	// If set to true, First URI will be used as subject instead of CommonName
+	// The URI will be converted into suitable policy name by following operations
+	// 1. remove protocol name (or scheme name) from URI
+	// 2. Replace all Path separators (ie /) from the Path in URI, this results in CleanedPath
+	// 3. Join Host+CleanedPath
+	// 4. If the above string becomes greater than 128 characters in length, then
+	// a proper error is thrown
+	// As example, http://my.domain:10000/my/app/path will be converted to
+	// my.domain:10000+my+app+path
 	// Valid values for this field are true and false
 	// By default, it will be false. Thus Common Name will be used
 	EnvIdentityTLSSubjectSanURI = "MINIO_IDENTITY_TLS_SUBJECT_USE_SANURI"
@@ -149,7 +157,7 @@ var Help = config.HelpKVS{
 	},
 	config.HelpKV{
 		Key:         tlsSubjectUseSanURI,
-		Description: `use first san uri from client certificate instead common name (default: 'off')`,
+		Description: `use cleaned value of first san uri from client certificate instead common name. cleaning results in stripping scheme, replacing path separator with plus sign in uri path and joining it with host name (default: 'off')`,
 		Optional:    true,
 		Type:        "on|off",
 	},

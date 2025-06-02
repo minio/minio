@@ -762,6 +762,24 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
+func extractPolicyName(sanURI string) (string, error) {
+
+	parsedURL, err := url.Parse(sanURI)
+
+	if err != nil {
+		return "", err
+	}
+
+	key := parsedURL.Host + strings.ReplaceAll(parsedURL.Path, "/", "+")
+
+	if len(key) > 128 {
+		return "", errors.New("Policy URL " + key + " is more than 128 characters long.")
+	}
+
+	return key, nil
+
+}
+
 // AssumeRoleWithCertificate implements user authentication with client certificates.
 // It verifies the client-provided X.509 certificate, maps the certificate to an S3 policy
 // and returns temp. S3 credentials to the client.
@@ -899,7 +917,17 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		}
 
 		// Pick first SAN URI
-		tlsSubKey = certificate.URIs[0].String()
+		// Extract Policy Name From SAN URI
+		// Set Policy Name as Subject Key
+		policyName, err := extractPolicyName(certificate.URIs[0].String())
+
+		if err != nil {
+			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, errors.New("Unable to convert from SAN URI to Policy Name"))
+			return
+		}
+
+		tlsSubKey = policyName
+
 	}
 
 	expiry, err := globalIAMSys.STSTLSConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
