@@ -56,6 +56,7 @@ type apiConfig struct {
 	gzipObjects                 bool
 	rootAccess                  bool
 	syncEvents                  bool
+	replicationEvents           bool
 	objectMaxVersions           int64
 }
 
@@ -186,6 +187,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	t.gzipObjects = cfg.GzipObjects
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
+	t.replicationEvents = cfg.ReplicationEvents
 	t.objectMaxVersions = cfg.ObjectMaxVersions
 
 	if t.staleUploadsCleanupInterval != cfg.StaleUploadsCleanupInterval {
@@ -405,6 +407,13 @@ func (t *apiConfig) isSyncEventsEnabled() bool {
 	defer t.mu.RUnlock()
 
 	return t.syncEvents
+}
+
+func (t *apiConfig) isReplicationEventsEnabled() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	return t.replicationEvents
 }
 
 func (t *apiConfig) getObjectMaxVersions() int64 {

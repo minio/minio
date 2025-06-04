@@ -50,6 +50,7 @@ const (
 	apiGzipObjects                 = "gzip_objects"
 	apiRootAccess                  = "root_access"
 	apiSyncEvents                  = "sync_events"
+	apiReplicationEvents           = "replication_events"
 	apiObjectMaxVersions           = "object_max_versions"
 
 	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
@@ -71,8 +72,9 @@ const (
 	EnvAPIODirect                     = "MINIO_API_ODIRECT"
 	EnvAPIDisableODirect              = "MINIO_API_DISABLE_ODIRECT"
 	EnvAPIGzipObjects                 = "MINIO_API_GZIP_OBJECTS"
-	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS" // default config.EnableOn
-	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS" // default "off"
+	EnvAPIRootAccess                  = "MINIO_API_ROOT_ACCESS"        // default config.EnableOn
+	EnvAPISyncEvents                  = "MINIO_API_SYNC_EVENTS"        // default "off"
+	EnvAPIReplicationEvents           = "MINIO_API_REPLICATION_EVENTS" // default "off"
 	EnvAPIObjectMaxVersions           = "MINIO_API_OBJECT_MAX_VERSIONS"
 	EnvAPIObjectMaxVersionsLegacy     = "_MINIO_OBJECT_MAX_VERSIONS"
 )
@@ -158,6 +160,10 @@ var (
 			Value: config.EnableOff,
 		},
 		config.KV{
+			Key:   apiReplicationEvents,
+			Value: config.EnableOff,
+		},
+		config.KV{
 			Key:   apiObjectMaxVersions,
 			Value: "9223372036854775807",
 		},
@@ -182,6 +188,7 @@ type Config struct {
 	GzipObjects                 bool          `json:"gzip_objects"`
 	RootAccess                  bool          `json:"root_access"`
 	SyncEvents                  bool          `json:"sync_events"`
+	ReplicationEvents           bool          `json:"replication_events"`
 	ObjectMaxVersions           int64         `json:"object_max_versions"`
 }
 
@@ -323,6 +330,7 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	cfg.StaleUploadsExpiry = staleUploadsExpiry
 
 	cfg.SyncEvents = env.Get(EnvAPISyncEvents, kvs.Get(apiSyncEvents)) == config.EnableOn
+	cfg.ReplicationEvents = env.Get(EnvAPIReplicationEvents, kvs.Get(apiReplicationEvents)) == config.EnableOn
 
 	maxVerStr := env.Get(EnvAPIObjectMaxVersions, "")
 	if maxVerStr == "" {
