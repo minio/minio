@@ -49,61 +49,61 @@ const (
 var (
 	bucketReplLastHrFailedBytesMD = NewGaugeMD(bucketReplLastHrFailedBytes,
 		"Total number of bytes failed at least once to replicate in the last hour on a bucket",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplLastHrFailedCountMD = NewGaugeMD(bucketReplLastHrFailedCount,
 		"Total number of objects which failed replication in the last hour on a bucket",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplLastMinFailedBytesMD = NewGaugeMD(bucketReplLastMinFailedBytes,
 		"Total number of bytes failed at least once to replicate in the last full minute on a bucket",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplLastMinFailedCountMD = NewGaugeMD(bucketReplLastMinFailedCount,
 		"Total number of objects which failed replication in the last full minute on a bucket",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplLatencyMsMD = NewGaugeMD(bucketReplLatencyMs,
 		"Replication latency on a bucket in milliseconds",
 		bucketL, operationL, rangeL, targetArnL)
 	bucketReplProxiedDeleteTaggingRequestsTotalMD = NewCounterMD(bucketReplProxiedDeleteTaggingRequestsTotal,
 		"Number of DELETE tagging requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedGetRequestsFailuresMD = NewCounterMD(bucketReplProxiedGetRequestsFailures,
 		"Number of failures in GET requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedGetRequestsTotalMD = NewCounterMD(bucketReplProxiedGetRequestsTotal,
 		"Number of GET requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedGetTaggingRequestsFailuresMD = NewCounterMD(bucketReplProxiedGetTaggingRequestsFailures,
 		"Number of failures in GET tagging requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedGetTaggingRequestsTotalMD = NewCounterMD(bucketReplProxiedGetTaggingRequestsTotal,
 		"Number of GET tagging requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedHeadRequestsFailuresMD = NewCounterMD(bucketReplProxiedHeadRequestsFailures,
 		"Number of failures in HEAD requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedHeadRequestsTotalMD = NewCounterMD(bucketReplProxiedHeadRequestsTotal,
 		"Number of HEAD requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedPutTaggingRequestsFailuresMD = NewCounterMD(bucketReplProxiedPutTaggingRequestsFailures,
 		"Number of failures in PUT tagging requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedPutTaggingRequestsTotalMD = NewCounterMD(bucketReplProxiedPutTaggingRequestsTotal,
 		"Number of PUT tagging requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplSentBytesMD = NewCounterMD(bucketReplSentBytes,
 		"Total number of bytes replicated to the target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplSentCountMD = NewCounterMD(bucketReplSentCount,
 		"Total number of objects replicated to the target",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplTotalFailedBytesMD = NewCounterMD(bucketReplTotalFailedBytes,
 		"Total number of bytes failed at least once to replicate since server start",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplTotalFailedCountMD = NewCounterMD(bucketReplTotalFailedCount,
 		"Total number of objects which failed replication since server start",
-		bucketL)
+		bucketL, targetArnL)
 	bucketReplProxiedDeleteTaggingRequestsFailuresMD = NewCounterMD(bucketReplProxiedDeleteTaggingRequestsFailures,
 		"Number of failures in DELETE tagging requests proxied to replication target",
-		bucketL)
+		bucketL, targetArnL)
 )
 
 // loadBucketReplicationMetrics - `BucketMetricsLoaderFn` for bucket replication metrics
@@ -121,11 +121,11 @@ func loadBucketReplicationMetrics(ctx context.Context, m MetricValues, c *metric
 
 	bucketReplStats := globalReplicationStats.Load().getAllLatest(dataUsageInfo.BucketsUsage)
 	for _, bucket := range buckets {
-		labels := []string{bucketL, bucket}
 		if s, ok := bucketReplStats[bucket]; ok {
 			stats := s.ReplicationStats
 			if stats.hasReplicationUsage() {
 				for arn, stat := range stats.Stats {
+					labels := []string{bucketL, bucket, targetArnL, arn}
 					m.Set(bucketReplLastHrFailedBytes, float64(stat.Failed.LastHour.Bytes), labels...)
 					m.Set(bucketReplLastHrFailedCount, float64(stat.Failed.LastHour.Count), labels...)
 					m.Set(bucketReplLastMinFailedBytes, float64(stat.Failed.LastMinute.Bytes), labels...)
