@@ -163,6 +163,7 @@ func newWarmBackendS3(conf madmin.TierS3, tier string) (*warmBackendS3, error) {
 		Creds:     creds,
 		Secure:    u.Scheme == "https",
 		Transport: globalRemoteTargetTransport,
+		Region:    conf.Region,
 	}
 	client, err := minio.New(u.Host, opts)
 	if err != nil {
