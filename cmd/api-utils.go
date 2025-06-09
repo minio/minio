@@ -43,7 +43,7 @@ func shouldEscape(c byte) bool {
 //   - Force encoding of '~'
 func s3URLEncode(s string) string {
 	spaceCount, hexCount := 0, 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if shouldEscape(c) {
 			if c == ' ' {
@@ -70,7 +70,7 @@ func s3URLEncode(s string) string {
 
 	if hexCount == 0 {
 		copy(t, s)
-		for i := 0; i < len(s); i++ {
+		for i := range len(s) {
 			if s[i] == ' ' {
 				t[i] = '+'
 			}
@@ -79,7 +79,7 @@ func s3URLEncode(s string) string {
 	}
 
 	j := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		switch c := s[i]; {
 		case c == ' ':
 			t[j] = '+'

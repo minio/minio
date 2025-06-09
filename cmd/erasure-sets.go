@@ -95,7 +95,7 @@ func (s *erasureSets) getDiskMap() map[Endpoint]StorageAPI {
 	s.erasureDisksMu.RLock()
 	defer s.erasureDisksMu.RUnlock()
 
-	for i := 0; i < s.setCount; i++ {
+	for i := range s.setCount {
 		for j := 0; j < s.setDriveCount; j++ {
 			disk := s.erasureDisks[i][j]
 			if disk == OfflineDisk {
@@ -150,7 +150,7 @@ func findDiskIndexByDiskID(refFormat *formatErasureV3, diskID string) (int, int,
 	if diskID == offlineDiskUUID {
 		return -1, -1, fmt.Errorf("DriveID: %s is offline", diskID)
 	}
-	for i := 0; i < len(refFormat.Erasure.Sets); i++ {
+	for i := range len(refFormat.Erasure.Sets) {
 		for j := 0; j < len(refFormat.Erasure.Sets[0]); j++ {
 			if refFormat.Erasure.Sets[i][j] == diskID {
 				return i, j, nil
@@ -174,7 +174,7 @@ func findDiskIndex(refFormat, format *formatErasureV3) (int, int, error) {
 		return -1, -1, fmt.Errorf("DriveID: %s is offline", format.Erasure.This)
 	}
 
-	for i := 0; i < len(refFormat.Erasure.Sets); i++ {
+	for i := range len(refFormat.Erasure.Sets) {
 		for j := 0; j < len(refFormat.Erasure.Sets[0]); j++ {
 			if refFormat.Erasure.Sets[i][j] == format.Erasure.This {
 				return i, j, nil
@@ -377,7 +377,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 	mutex := newNSLock(globalIsDistErasure)
 
-	for i := 0; i < setCount; i++ {
+	for i := range setCount {
 		s.erasureDisks[i] = make([]StorageAPI, setDriveCount)
 	}
 
@@ -390,7 +390,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 
 	var wg sync.WaitGroup
 	var lk sync.Mutex
-	for i := 0; i < setCount; i++ {
+	for i := range setCount {
 		lockerEpSet := set.NewStringSet()
 		for j := 0; j < setDriveCount; j++ {
 			wg.Add(1)
@@ -409,7 +409,7 @@ func newErasureSets(ctx context.Context, endpoints PoolEndpoints, storageDisks [
 	}
 	wg.Wait()
 
-	for i := 0; i < setCount; i++ {
+	for i := range setCount {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

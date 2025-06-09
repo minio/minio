@@ -1938,6 +1938,10 @@ func TestListObjectsWithILM(t *testing.T) {
 }
 
 func testListObjectsWithILM(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
+	// Prepare lifecycle expiration workers
+	es := newExpiryState(t1.Context(), obj, 0)
+	globalExpiryState = es
+
 	t, _ := t1.(*testing.T)
 
 	objContent := "test-content"
@@ -1977,7 +1981,12 @@ func testListObjectsWithILM(obj ObjectLayer, instanceType string, t1 TestErrHand
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
 
-		globalBucketMetadataSys.Set(upload.bucket, BucketMetadata{lifecycleConfig: lifecycleConfig})
+		metadata, err := globalBucketMetadataSys.Get(upload.bucket)
+		if err != nil {
+			t.Fatal(err)
+		}
+		metadata.lifecycleConfig = lifecycleConfig
+		globalBucketMetadataSys.Set(upload.bucket, metadata)
 		defer globalBucketMetadataSys.Remove(upload.bucket)
 
 		// Upload objects which modtime as one week ago, supposed to be expired by ILM

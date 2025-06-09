@@ -851,7 +851,7 @@ func lcp(strs []string, pre bool) string {
 		// compare letters
 		if pre {
 			// prefix, iterate left to right
-			for i := 0; i < maxl; i++ {
+			for i := range maxl {
 				if xfix[i] != str[i] {
 					xfix = xfix[:i]
 					break
@@ -859,7 +859,7 @@ func lcp(strs []string, pre bool) string {
 			}
 		} else {
 			// suffix, iterate right to left
-			for i := 0; i < maxl; i++ {
+			for i := range maxl {
 				xi := xfixl - i - 1
 				si := strl - i - 1
 				if xfix[xi] != str[si] {
