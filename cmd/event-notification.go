@@ -21,13 +21,13 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/minio/minio/internal/crypto"
 	"github.com/minio/minio/internal/event"
-	xhttp "github.com/minio/minio/internal/http"
 	"github.com/minio/minio/internal/pubsub"
 	"github.com/minio/pkg/v3/policy"
 )
@@ -241,9 +241,12 @@ func (args eventArgs) ToEvent(escape bool) event.Event {
 }
 
 func sendEvent(args eventArgs) {
-	// avoid generating a notification for REPLICA creation event.
-	if _, ok := args.ReqParams[xhttp.MinIOSourceReplicationRequest]; ok {
-		return
+	// Check if replica event notifications are enabled via _MINIO_EVENT_REPLICA
+	if strings.ToLower(os.Getenv("_MINIO_EVENT_REPLICA")) != "on" {
+		// Default is OFF. Skip REPLICA events if this env is not explicitly set to "on"
+		if _, ok := args.ReqParams["X-Minio-Source-Replication-Request"]; ok {
+			return
+		}
 	}
 
 	args.Object.Size, _ = args.Object.GetActualSize()
