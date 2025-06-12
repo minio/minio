@@ -1709,7 +1709,9 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		}
 
 		z.mpCache.Range(func(_ string, mp MultipartInfo) bool {
-			poolResult.Uploads = append(poolResult.Uploads, mp)
+			if mp.Bucket == bucket {
+				poolResult.Uploads = append(poolResult.Uploads, mp)
+			}
 			return true
 		})
 		sort.Slice(poolResult.Uploads, func(i int, j int) bool {
