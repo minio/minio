@@ -2976,7 +2976,7 @@ func (s *xlStorage) RenamePart(ctx context.Context, srcVolume, srcPath, dstVolum
 			return errFileAccessDenied
 		}
 		err = osErrToFileErr(err)
-		if errors.Is(err, errFileNotFound) {
+		if errors.Is(err, errFileNotFound) || errors.Is(err, errFileAccessDenied) {
 			return errUploadIDNotFound
 		}
 		return err
