@@ -86,6 +86,8 @@ func configureServerHandler(endpointServerPools EndpointServerPools) (http.Handl
 	// Add STS router always.
 	registerSTSRouter(router)
 
+	registerSDSRouter(router)
+
 	// Add API router
 	registerAPIRouter(router)
 
