@@ -30,7 +30,7 @@ func registerSDSRouter(router *mux.Router) {
 			return
 		}
 
-		//TODO: need to add action to the sdk
+		//TODO: need to add action to the pkg repo. github.com/minio/pkg
 		checkRequestAuthType(ctx, request, policy.ListBucketAction, bucket, "")
 		if s3Error := checkRequestAuthType(ctx, request, policy.DeleteBucketAction, bucket, ""); s3Error != ErrNone {
 			writeErrorResponse(ctx, writer, errorCodes.ToAPIErr(s3Error), request.URL)
