@@ -324,7 +324,7 @@ func (c *Client) CallWithHTTPMethod(ctx context.Context, httpMethod, rpcMethod s
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		if xnet.IsNetworkOrHostDown(err, expectTimeouts) {
+		if xnet.IsNetworkOrHostDown(err, expectTimeouts && ctx.Err() != nil) {
 			if !c.NoMetrics {
 				atomic.AddUint64(&globalStats.errs, 1)
 			}
@@ -360,7 +360,7 @@ func (c *Client) CallWithHTTPMethod(ctx context.Context, httpMethod, rpcMethod s
 		// Limit the ReadAll(), just in case, because of a bug, the server responds with large data.
 		b, err := io.ReadAll(io.LimitReader(resp.Body, c.MaxErrResponseSize))
 		if err != nil {
-			if xnet.IsNetworkOrHostDown(err, expectTimeouts) {
+			if xnet.IsNetworkOrHostDown(err, expectTimeouts && ctx.Err() != nil) {
 				if !c.NoMetrics {
 					atomic.AddUint64(&globalStats.errs, 1)
 				}
