@@ -448,6 +448,9 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 }
 
 func initAllSubsystems(ctx context.Context) {
+	// Initialize minimum part size configuration
+	initMinPartSize()
+
 	// Initialize notification peer targets
 	globalNotificationSys = NewNotificationSys(globalEndpoints)
 
