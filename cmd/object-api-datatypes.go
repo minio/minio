@@ -654,6 +654,7 @@ type objectAttributesChecksum struct {
 	ChecksumSHA1      string `xml:",omitempty"`
 	ChecksumSHA256    string `xml:",omitempty"`
 	ChecksumCRC64NVME string `xml:",omitempty"`
+	ChecksumType      string `xml:",omitempty"`
 }
 
 type objectAttributesParts struct {

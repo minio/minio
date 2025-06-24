@@ -641,6 +641,7 @@ func (api objectAPIHandlers) getObjectAttributesHandler(ctx context.Context, obj
 				ChecksumSHA1:      strings.Split(chkSums["SHA1"], "-")[0],
 				ChecksumSHA256:    strings.Split(chkSums["SHA256"], "-")[0],
 				ChecksumCRC64NVME: strings.Split(chkSums["CRC64NVME"], "-")[0],
+				ChecksumType:      chkSums[xhttp.AmzChecksumType],
 			}
 		}
 	}
@@ -1465,6 +1466,46 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			targetSize, _ = srcInfo.DecryptedSize()
 		}
 
+		// Client can request that a different type of checksum is computed server-side for the
+		// destination object using the x-amz-checksum-algorithm header.
+		headerChecksumType := hash.NewChecksumHeader(r.Header)
+		if headerChecksumType.IsSet() {
+			dstOpts.WantServerSideChecksumType = headerChecksumType.Base()
+			srcInfo.Reader.AddServerSideChecksumHasher(headerChecksumType)
+			dstOpts.WantChecksum = nil
+		} else {
+			// Check the source object for checksum.
+			// If Checksum is not encrypted, decryptChecksum will be a no-op and return
+			// the already unencrypted value.
+			srcChecksumDecrypted, err := srcInfo.decryptChecksum(r.Header)
+			if err != nil {
+				encLogOnceIf(GlobalContext,
+					fmt.Errorf("Unable to decryptChecksum for object: %s/%s, error: %w", srcBucket, srcObject, err),
+					"copy-object-decrypt-checksums-"+srcBucket+srcObject)
+			}
+
+			// The source object has a checksum set, we need the destination to have one too.
+			if srcChecksumDecrypted != nil {
+				dstOpts.WantChecksum = hash.ChecksumFromBytes(srcChecksumDecrypted)
+
+				// When an object is being copied from a source that is multipart, the destination will
+				// no longer be multipart, and thus the checksum becomes full-object instead. Since
+				// the CopyObject API does not require that the caller send us this final checksum, we need
+				// to compute it server-side, with the same type as the source object.
+				if dstOpts.WantChecksum != nil && dstOpts.WantChecksum.Type.IsMultipartComposite() {
+					dstOpts.WantServerSideChecksumType = dstOpts.WantChecksum.Type.Base()
+					srcInfo.Reader.AddServerSideChecksumHasher(dstOpts.WantServerSideChecksumType)
+					dstOpts.WantChecksum = nil
+				}
+			} else {
+				// S3: All copied objects without checksums and specified destination checksum algorithms
+				// automatically gain a CRC-64NVME checksum algorithm.
+				dstOpts.WantServerSideChecksumType = hash.ChecksumCRC64NVME
+				srcInfo.Reader.AddServerSideChecksumHasher(dstOpts.WantServerSideChecksumType)
+				dstOpts.WantChecksum = nil
+			}
+		}
+
 		if isTargetEncrypted {
 			var encReader io.Reader
 			kind, _ := crypto.IsRequested(r.Header)
@@ -1498,6 +1539,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			if dstOpts.IndexCB != nil {
 				dstOpts.IndexCB = compressionIndexEncrypter(objEncKey, dstOpts.IndexCB)
 			}
+			dstOpts.EncryptFn = metadataEncrypter(objEncKey)
 		}
 	}
 
@@ -1633,6 +1675,13 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// After we've checked for an invalid copy (above), if a server-side checksum type
+	// is requested, we need to read the source to recompute the checksum.
+	if dstOpts.WantServerSideChecksumType.IsSet() {
+		srcInfo.metadataOnly = false
+	}
+
+	// Federation only.
 	remoteCallRequired := isRemoteCopyRequired(ctx, srcBucket, dstBucket, objectAPI)
 
 	var objInfo ObjectInfo

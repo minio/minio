@@ -86,6 +86,8 @@ type ObjectOptions struct {
 
 	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 
+	WantServerSideChecksumType hash.ChecksumType // if set, we compute a server-side checksum of this type
+
 	NoDecryption                        bool      // indicates if the stream must be decrypted.
 	PreserveETag                        string    // preserves this etag during a PUT call.
 	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
