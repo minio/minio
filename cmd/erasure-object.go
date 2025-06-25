@@ -1470,7 +1470,17 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			actualSize = n
 		}
 	}
-	if fi.Checksum == nil {
+	// If ServerSideChecksum is wanted for this object, it takes precedence
+	// over opts.WantChecksum.
+	if opts.WantServerSideChecksumType.IsSet() {
+		serverSideChecksum := r.RawServerSideChecksumResult()
+		if serverSideChecksum != nil {
+			fi.Checksum = serverSideChecksum.AppendTo(nil, nil)
+			if opts.EncryptFn != nil {
+				fi.Checksum = opts.EncryptFn("object-checksum", fi.Checksum)
+			}
+		}
+	} else if fi.Checksum == nil && opts.WantChecksum != nil {
 		// Trailing headers checksums should now be filled.
 		fi.Checksum = opts.WantChecksum.AppendTo(nil, nil)
 		if opts.EncryptFn != nil {
