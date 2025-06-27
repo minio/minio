@@ -1074,8 +1074,16 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 			return input, nil
 		}
 		var key []byte
-		if k, err := crypto.SSEC.ParseHTTP(h); err == nil {
-			key = k[:]
+		if crypto.SSECopy.IsRequested(h) {
+			sseCopyKey, err := crypto.SSECopy.ParseHTTP(h)
+			if err != nil {
+				return nil, err
+			}
+			key = sseCopyKey[:]
+		} else {
+			if k, err := crypto.SSEC.ParseHTTP(h); err == nil {
+				key = k[:]
+			}
 		}
 		key, err := decryptObjectMeta(key, o.Bucket, o.Name, o.UserDefined)
 		if err != nil {
@@ -1087,7 +1095,8 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 	}
 }
 
-// decryptPartsChecksums will attempt to decode checksums and return it/them if set.
+// decryptPartsChecksums will attempt to decrypt and decode part checksums, and save
+// only the decrypted part checksum values on ObjectInfo directly.
 // if part > 0, and we have the checksum for the part that will be returned.
 func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 	data := o.Checksum
@@ -1110,6 +1119,23 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 			o.Parts[i].Checksums = cs[i]
 		}
 	}
+}
+
+// decryptChecksum will attempt to decrypt the ObjectInfo.Checksum, returns the decrypted value
+// An error is only returned if it was encrypted and the decryption failed.
+func (o *ObjectInfo) decryptChecksum(h http.Header) ([]byte, error) {
+	data := o.Checksum
+	if len(data) == 0 {
+		return data, nil
+	}
+	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
+		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+	return data, nil
 }
 
 // metadataEncryptFn provides an encryption function for metadata.

@@ -230,6 +230,11 @@ func (c ChecksumType) FullObjectRequested() bool {
 	return c&(ChecksumFullObject) == ChecksumFullObject || c.Is(ChecksumCRC64NVME)
 }
 
+// IsMultipartComposite returns true if the checksum is multipart and full object was not requested.
+func (c ChecksumType) IsMultipartComposite() bool {
+	return c.Is(ChecksumMultipart) && !c.FullObjectRequested()
+}
+
 // ObjType returns a string to return as x-amz-checksum-type.
 func (c ChecksumType) ObjType() string {
 	if c.FullObjectRequested() {
@@ -269,7 +274,7 @@ func (c ChecksumType) Trailing() bool {
 	return c.Is(ChecksumTrailing)
 }
 
-// NewChecksumFromData returns a new checksum from specified algorithm and base64 encoded value.
+// NewChecksumFromData returns a new Checksum, using specified algorithm type on data.
 func NewChecksumFromData(t ChecksumType, data []byte) *Checksum {
 	if !t.IsSet() {
 		return nil
@@ -311,8 +316,6 @@ func ReadCheckSums(b []byte, part int) (cs map[string]string, isMP bool) {
 			}
 			if !typ.FullObjectRequested() {
 				cs = fmt.Sprintf("%s-%d", cs, t)
-			} else if part <= 0 {
-				res[xhttp.AmzChecksumType] = xhttp.AmzChecksumTypeFullObject
 			}
 			b = b[n:]
 			if part > 0 {
@@ -337,6 +340,13 @@ func ReadCheckSums(b []byte, part int) (cs map[string]string, isMP bool) {
 		}
 		if cs != "" {
 			res[typ.String()] = cs
+			res[xhttp.AmzChecksumType] = typ.ObjType()
+			if !typ.Is(ChecksumMultipart) {
+				// Single part PUTs are always FULL_OBJECT checksum
+				// Refer https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
+				// **For PutObject uploads, the checksum type is always FULL_OBJECT.**
+				res[xhttp.AmzChecksumType] = ChecksumFullObject.ObjType()
+			}
 		}
 	}
 	if len(res) == 0 {
@@ -468,6 +478,65 @@ func (c *Checksum) AppendTo(b []byte, parts []byte) []byte {
 	return b
 }
 
+// ChecksumFromBytes reconstructs a Checksum struct from the serialized bytes created in AppendTo()
+// Returns nil if the bytes are invalid or empty.
+// AppendTo() can append a serialized Checksum to another already-serialized Checksum,
+// however, in practice, we only use one at a time.
+// ChecksumFromBytes only returns the first one and no part checksums.
+func ChecksumFromBytes(b []byte) *Checksum {
+	if len(b) == 0 {
+		return nil
+	}
+
+	// Read checksum type
+	t, n := binary.Uvarint(b)
+	if n <= 0 {
+		return nil
+	}
+	b = b[n:]
+
+	typ := ChecksumType(t)
+	length := typ.RawByteLen()
+	if length == 0 || len(b) < length {
+		return nil
+	}
+
+	// Read raw checksum bytes
+	raw := make([]byte, length)
+	copy(raw, b[:length])
+	b = b[length:]
+
+	c := &Checksum{
+		Type:    typ,
+		Raw:     raw,
+		Encoded: base64.StdEncoding.EncodeToString(raw),
+	}
+
+	// Handle multipart checksums
+	if typ.Is(ChecksumMultipart) {
+		parts, n := binary.Uvarint(b)
+		if n <= 0 {
+			return nil
+		}
+		b = b[n:]
+
+		c.WantParts = int(parts)
+
+		if typ.Is(ChecksumIncludesMultipart) {
+			wantLen := int(parts) * length
+			if len(b) < wantLen {
+				return nil
+			}
+		}
+	}
+
+	if !c.Valid() {
+		return nil
+	}
+
+	return c
+}
+
 // Valid returns whether checksum is valid.
 func (c Checksum) Valid() bool {
 	if c.Type == ChecksumInvalid {
@@ -506,12 +575,26 @@ func (c Checksum) Matches(content []byte, parts int) error {
 	return nil
 }
 
-// AsMap returns the
+// AsMap returns the checksum as a map[string]string.
 func (c *Checksum) AsMap() map[string]string {
 	if c == nil || !c.Valid() {
 		return nil
 	}
-	return map[string]string{c.Type.String(): c.Encoded}
+	return map[string]string{
+		c.Type.String():       c.Encoded,
+		xhttp.AmzChecksumType: c.Type.ObjType(),
+	}
+}
+
+// Equal returns whether two checksum structs are equal in all their fields.
+func (c *Checksum) Equal(s *Checksum) bool {
+	if c == nil || s == nil {
+		return c == s
+	}
+	return c.Type == s.Type &&
+		c.Encoded == s.Encoded &&
+		bytes.Equal(c.Raw, s.Raw) &&
+		c.WantParts == s.WantParts
 }
 
 // TransferChecksumHeader will transfer any checksum value that has been checked.

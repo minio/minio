@@ -266,7 +266,7 @@ func (m *mrfState) healRoutine(z *erasureServerPools) {
 				if len(u.Versions) > 0 {
 					vers := len(u.Versions) / 16
 					if vers > 0 {
-						for i := 0; i < vers; i++ {
+						for i := range vers {
 							healObject(u.Bucket, u.Object, uuid.UUID(u.Versions[16*i:]).String(), scan)
 						}
 					}

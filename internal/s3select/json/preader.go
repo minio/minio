@@ -173,7 +173,7 @@ func (r *PReader) startReaders() {
 	}()
 
 	// Start parsers
-	for i := 0; i < runtime.GOMAXPROCS(0); i++ {
+	for range runtime.GOMAXPROCS(0) {
 		go func() {
 			for in := range r.input {
 				if len(in.input) == 0 {

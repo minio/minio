@@ -102,7 +102,7 @@ func objectSpeedTest(ctx context.Context, opts speedTestOpts) chan madmin.SpeedT
 			var totalUploadTimes madmin.TimeDurations
 			var totalDownloadTimes madmin.TimeDurations
 			var totalDownloadTTFB madmin.TimeDurations
-			for i := 0; i < len(throughputHighestResults); i++ {
+			for i := range len(throughputHighestResults) {
 				errStr := ""
 				if throughputHighestResults[i].Error != "" {
 					errStr = throughputHighestResults[i].Error

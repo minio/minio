@@ -51,10 +51,17 @@ type Reader struct {
 	checksum      etag.ETag
 	contentSHA256 []byte
 
-	// Content checksum
+	// Client-provided content checksum
 	contentHash   Checksum
 	contentHasher hash.Hash
 	disableMD5    bool
+
+	// Server side computed checksum. In some cases, like CopyObject, a new checksum
+	// needs to be computed and saved on the destination object, but the client
+	// does not provide it. Not calculated if client-side contentHash is set.
+	ServerSideChecksumType   ChecksumType
+	ServerSideHasher         hash.Hash
+	ServerSideChecksumResult *Checksum
 
 	trailer http.Header
 
@@ -247,6 +254,16 @@ func (r *Reader) AddNonTrailingChecksum(cs *Checksum, ignoreValue bool) error {
 	return nil
 }
 
+// AddServerSideChecksumHasher adds a new hasher for computing the server-side checksum.
+func (r *Reader) AddServerSideChecksumHasher(t ChecksumType) {
+	h := t.Hasher()
+	if h == nil {
+		return
+	}
+	r.ServerSideHasher = h
+	r.ServerSideChecksumType = t
+}
+
 func (r *Reader) Read(p []byte) (int, error) {
 	n, err := r.src.Read(p)
 	r.bytesRead += int64(n)
@@ -255,6 +272,8 @@ func (r *Reader) Read(p []byte) (int, error) {
 	}
 	if r.contentHasher != nil {
 		r.contentHasher.Write(p[:n])
+	} else if r.ServerSideHasher != nil {
+		r.ServerSideHasher.Write(p[:n])
 	}
 
 	if err == io.EOF { // Verify content SHA256, if set.
@@ -293,6 +312,9 @@ func (r *Reader) Read(p []byte) (int, error) {
 				}
 				return n, err
 			}
+		} else if r.ServerSideHasher != nil {
+			sum := r.ServerSideHasher.Sum(nil)
+			r.ServerSideChecksumResult = NewChecksumWithType(r.ServerSideChecksumType, base64.StdEncoding.EncodeToString(sum))
 		}
 	}
 	if err != nil && err != io.EOF {

@@ -157,7 +157,7 @@ func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
 	format.Erasure.DistributionAlgo = formatErasureVersionV3DistributionAlgoV3
 	format.Erasure.Sets = make([][]string, numSets)
 
-	for i := 0; i < numSets; i++ {
+	for i := range numSets {
 		format.Erasure.Sets[i] = make([]string, setLen)
 		for j := 0; j < setLen; j++ {
 			format.Erasure.Sets[i][j] = mustGetUUID()
@@ -514,7 +514,7 @@ func formatErasureV3Check(reference *formatErasureV3, format *formatErasureV3) e
 	}
 
 	// Make sure that the diskID is found in the set.
-	for i := 0; i < len(tmpFormat.Erasure.Sets); i++ {
+	for i := range len(tmpFormat.Erasure.Sets) {
 		for j := 0; j < len(tmpFormat.Erasure.Sets[i]); j++ {
 			if this == tmpFormat.Erasure.Sets[i][j] {
 				return nil
@@ -639,7 +639,7 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 		return nil, err
 	}
 
-	for i := 0; i < setCount; i++ {
+	for i := range setCount {
 		hostCount := make(map[string]int, setDriveCount)
 		for j := 0; j < setDriveCount; j++ {
 			disk := storageDisks[i*setDriveCount+j]

@@ -846,7 +846,7 @@ func decodeXLHeaders(buf []byte) (versions int, headerV, metaV uint8, b []byte, 
 // Any non-nil error is returned.
 func decodeVersions(buf []byte, versions int, fn func(idx int, hdr, meta []byte) error) (err error) {
 	var tHdr, tMeta []byte // Zero copy bytes
-	for i := 0; i < versions; i++ {
+	for i := range versions {
 		tHdr, buf, err = msgp.ReadBytesZC(buf)
 		if err != nil {
 			return err

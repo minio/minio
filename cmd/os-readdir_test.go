@@ -77,7 +77,7 @@ func setupTestReadDirEmpty(t *testing.T) (testResults []result) {
 func setupTestReadDirFiles(t *testing.T) (testResults []result) {
 	dir := t.TempDir()
 	entries := []string{}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		name := fmt.Sprintf("file-%d", i)
 		if err := os.WriteFile(filepath.Join(dir, name), []byte{}, os.ModePerm); err != nil {
 			// For cleanup, its required to add these entries into test results.
@@ -102,7 +102,7 @@ func setupTestReadDirGeneric(t *testing.T) (testResults []result) {
 		t.Fatalf("Unable to create prefix directory \"mydir\", %s", err)
 	}
 	entries := []string{"mydir/"}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		name := fmt.Sprintf("file-%d", i)
 		if err := os.WriteFile(filepath.Join(dir, "mydir", name), []byte{}, os.ModePerm); err != nil {
 			// For cleanup, its required to add these entries into test results.
@@ -126,7 +126,7 @@ func setupTestReadDirSymlink(t *testing.T) (testResults []result) {
 	}
 	dir := t.TempDir()
 	entries := []string{}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		name1 := fmt.Sprintf("file-%d", i)
 		name2 := fmt.Sprintf("file-%d", i+10)
 		if err := os.WriteFile(filepath.Join(dir, name1), []byte{}, os.ModePerm); err != nil {

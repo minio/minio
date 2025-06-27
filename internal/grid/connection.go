@@ -1041,7 +1041,7 @@ func (c *Connection) readStream(ctx context.Context, conn net.Conn, cancel conte
 		// Handle merged messages.
 		messages := int(m.Seq)
 		c.inMessages.Add(int64(messages))
-		for i := 0; i < messages; i++ {
+		for range messages {
 			if atomic.LoadUint32((*uint32)(&c.state)) != StateConnected {
 				return
 			}

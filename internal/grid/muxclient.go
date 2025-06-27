@@ -574,7 +574,7 @@ func (m *muxClient) ack(seq uint32) {
 		return
 	}
 	available := cap(m.outBlock)
-	for i := 0; i < available; i++ {
+	for range available {
 		m.outBlock <- struct{}{}
 	}
 	m.acked = true

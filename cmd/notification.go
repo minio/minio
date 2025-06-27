@@ -123,7 +123,7 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 		}
 
 		retryCount := g.retryCount
-		for i := 0; i < retryCount; i++ {
+		for i := range retryCount {
 			g.errs[index].Err = nil
 			if err := f(); err != nil {
 				g.errs[index].Err = err

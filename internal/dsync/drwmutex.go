@@ -381,7 +381,7 @@ func refreshLock(ctx context.Context, ds *Dsync, id, source string, quorum int) 
 	lockNotFound, lockRefreshed := 0, 0
 	done := false
 
-	for i := 0; i < len(restClnts); i++ {
+	for range len(restClnts) {
 		select {
 		case refreshResult := <-ch:
 			if refreshResult.offline {

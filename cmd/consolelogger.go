@@ -113,7 +113,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan log.Info, doneCh <-chan st
 	sys.RUnlock()
 	// send last n console log messages in order filtered by node
 	if cnt > 0 {
-		for i := 0; i < last; i++ {
+		for i := range last {
 			entry := lastN[(cnt+i)%last]
 			if (entry == log.Info{}) {
 				continue

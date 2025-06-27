@@ -332,7 +332,7 @@ func scanDataFolder(ctx context.Context, disks []StorageAPI, drive *xlStorage, c
 	}
 
 	var skipHeal atomic.Bool
-	if globalIsErasure || cache.Info.SkipHealing {
+	if !globalIsErasure || cache.Info.SkipHealing {
 		skipHeal.Store(true)
 	}
 
