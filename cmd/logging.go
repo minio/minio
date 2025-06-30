@@ -152,6 +152,10 @@ func encLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "encryption", err, errKind...)
 }
 
+func encLogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+	logger.LogOnceIf(ctx, "encryption", err, id, errKind...)
+}
+
 func storageLogIf(ctx context.Context, err error, errKind ...interface{}) {
 	logger.LogIf(ctx, "storage", err, errKind...)
 }

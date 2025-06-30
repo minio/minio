@@ -1340,12 +1340,15 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 	}
 
 	putOpts := ObjectOptions{
-		ServerSideEncryption: dstOpts.ServerSideEncryption,
-		UserDefined:          srcInfo.UserDefined,
-		Versioned:            dstOpts.Versioned,
-		VersionID:            dstOpts.VersionID,
-		MTime:                dstOpts.MTime,
-		NoLock:               true,
+		ServerSideEncryption:       dstOpts.ServerSideEncryption,
+		UserDefined:                srcInfo.UserDefined,
+		Versioned:                  dstOpts.Versioned,
+		VersionID:                  dstOpts.VersionID,
+		MTime:                      dstOpts.MTime,
+		NoLock:                     true,
+		EncryptFn:                  dstOpts.EncryptFn,
+		WantChecksum:               dstOpts.WantChecksum,
+		WantServerSideChecksumType: dstOpts.WantServerSideChecksumType,
 	}
 
 	return z.serverPools[poolIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)

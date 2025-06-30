@@ -1096,6 +1096,16 @@ func NewPutObjReader(rawReader *hash.Reader) *PutObjReader {
 	return &PutObjReader{Reader: rawReader, rawReader: rawReader}
 }
 
+// RawServerSideChecksumResult returns the ServerSideChecksumResult from the
+// underlying rawReader, since the PutObjReader might be encrypted data and
+// thus any checksum from that would be incorrect.
+func (p *PutObjReader) RawServerSideChecksumResult() *hash.Checksum {
+	if p.rawReader != nil {
+		return p.rawReader.ServerSideChecksumResult
+	}
+	return nil
+}
+
 func sealETag(encKey crypto.ObjectKey, md5CurrSum []byte) []byte {
 	var emptyKey [32]byte
 	if bytes.Equal(encKey[:], emptyKey[:]) {
