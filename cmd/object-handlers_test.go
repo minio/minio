@@ -2432,7 +2432,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			copyModifiedHeader: "Mon, 02 Jan 2217 15:04:05 +00:00",
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			expectedRespStatus: http.StatusOK,
+			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 15, copy metadata from newObject1 with satisfying unmodified header.
 		15: {
@@ -2462,7 +2462,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			copyUnmodifiedHeader: "Mon, 02 Jan 2007 15:04:05 +00:00",
 			accessKey:            credentials.AccessKey,
 			secretKey:            credentials.SecretKey,
-			expectedRespStatus:   http.StatusOK,
+			expectedRespStatus:   http.StatusBadRequest,
 		},
 		// Test case - 18, copy metadata from newObject1 with null versionId
 		18: {
