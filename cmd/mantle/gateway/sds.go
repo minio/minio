@@ -146,3 +146,33 @@ func Recovery(root string) {
 		fmt.Printf("Done file %d out of %d\n", idx+1, fileCount)
 	}
 }
+
+type StorageStatus struct {
+	Host   string `json:"host"`
+	Status string `json:"status"`
+	Region string `json:"region"`
+}
+
+func Health() ([]StorageStatus, error) {
+	client := &http.Client{}
+	resp, err := network.Get(client, urlJoin("health"), setMantleHeaders(""))
+	if err != nil {
+		return []StorageStatus{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response body:", err)
+		return []StorageStatus{}, err
+	}
+
+	healthCheck := []StorageStatus{}
+	err = json.Unmarshal(body, &healthCheck)
+	if err != nil {
+		fmt.Println("Error parsing JSON:", err)
+		return []StorageStatus{}, err
+	}
+
+	return healthCheck, nil
+}
