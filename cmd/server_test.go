@@ -1496,9 +1496,7 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *check) {
 	request.Header.Set("If-Unmodified-Since", "Mon, 02 Jan 2006 15:04:05 +00:00")
 	response, err = s.client.Do(request)
 	c.Assert(err, nil)
-	// Since the "If-Modified-Since" header was ahead in time compared to the actual
-	// modified time of the object expecting the response status to be http.StatusNotModified.
-	c.Assert(response.StatusCode, http.StatusOK)
+	c.Assert(response.StatusCode, http.StatusBadRequest)
 }
 
 // TestHeadOnBucket - Validates response for HEAD on the bucket.
