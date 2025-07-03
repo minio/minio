@@ -45,6 +45,8 @@ linters:
         text: should have a package comment
       - path: (.+)\.go$
         text: error strings should not be capitalized or end with punctuation or a newline
+      - path: (.+)\.go$
+        text: avoid meaningless package names
     paths:
       - third_party$
       - builtin$
