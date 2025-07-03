@@ -55,7 +55,9 @@ var httpTimeFormats = []string{
 	// situations where for example aws-sdk-java doesn't
 	// send the correct format.
 	http.TimeFormat,
+	time.RFC1123, // Same, but allows all timezones.
 	"Mon, 2 Jan 2006 15:04:05 GMT",
+	"Mon, 2 Jan 2006 15:04:05 MST",
 }
 
 // ParseHeader parses http.TimeFormat with an acceptable

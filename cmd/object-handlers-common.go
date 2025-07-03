@@ -54,7 +54,7 @@ func checkCopyObjectPartPreconditions(ctx context.Context, w http.ResponseWriter
 //	x-amz-copy-source-if-match
 //	x-amz-copy-source-if-none-match
 func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
-	// Return false for methods other than GET and HEAD.
+	// Return false for methods other than PUT.
 	if r.Method != http.MethodPut {
 		return false
 	}
@@ -88,6 +88,10 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 				return true
 			}
+		} else {
+			// If the time is not parsable, return a 400 Bad Request.
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+			return true
 		}
 	}
 
@@ -102,6 +106,10 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 				return true
 			}
+		} else {
+			// If the time is not parsable, return a 400 Bad Request.
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+			return true
 		}
 	}
 
@@ -294,6 +302,10 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				w.WriteHeader(http.StatusNotModified)
 				return true
 			}
+		} else {
+			// If the time is not parsable, return a 400 Bad Request.
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+			return true
 		}
 	}
 
@@ -307,12 +319,13 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 			return true
 		}
+		return false
 	}
 
 	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
 	// time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get(xhttp.IfUnmodifiedSince)
-	if ifUnmodifiedSinceHeader != "" && ifMatchETagHeader == "" {
+	if ifUnmodifiedSinceHeader != "" {
 		if givenTime, err := amztime.ParseHeader(ifUnmodifiedSinceHeader); err == nil {
 			if ifModifiedSince(objInfo.ModTime, givenTime) {
 				// If the object is modified since the specified time.
@@ -320,6 +333,10 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
 				return true
 			}
+		} else {
+			// If the time is not parsable, return a 400 Bad Request.
+			writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrBadRequest), r.URL)
+			return true
 		}
 	}
 
