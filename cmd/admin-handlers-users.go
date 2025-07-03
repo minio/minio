@@ -1827,16 +1827,18 @@ func (a adminAPIHandlers) SetPolicyForUserOrGroup(w http.ResponseWriter, r *http
 				iamLogIf(ctx, err)
 			} else if foundGroupDN == nil || !underBaseDN {
 				err = errNoSuchGroup
+			} else {
+				entityName = foundGroupDN.NormDN
 			}
-			entityName = foundGroupDN.NormDN
 		} else {
 			var foundUserDN *xldap.DNSearchResult
 			if foundUserDN, err = globalIAMSys.LDAPConfig.GetValidatedDNForUsername(entityName); err != nil {
 				iamLogIf(ctx, err)
 			} else if foundUserDN == nil {
 				err = errNoSuchUser
+			} else {
+				entityName = foundUserDN.NormDN
 			}
-			entityName = foundUserDN.NormDN
 		}
 		if err != nil {
 			writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
