@@ -25,7 +25,7 @@ import (
 
 	"github.com/minio/minio/internal/logger/target/http"
 	"github.com/minio/minio/internal/logger/target/kafka"
-	"github.com/minio/minio/internal/logger/target/types"
+	types "github.com/minio/minio/internal/logger/target/loggertypes"
 )
 
 // Target is the entity that we will receive

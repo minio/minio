@@ -35,7 +35,7 @@ import (
 	saramatls "github.com/IBM/sarama/tools/tls"
 
 	xioutil "github.com/minio/minio/internal/ioutil"
-	"github.com/minio/minio/internal/logger/target/types"
+	types "github.com/minio/minio/internal/logger/target/loggertypes"
 	"github.com/minio/minio/internal/once"
 	"github.com/minio/minio/internal/store"
 	xnet "github.com/minio/pkg/v3/net"
