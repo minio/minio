@@ -23,6 +23,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/klauspost/compress/gzhttp"
@@ -39,7 +41,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 )
 
-func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Request) (levent.Event, error) {
+var getLambdaEventData = func(bucket, object string, cred auth.Credentials, r *http.Request) (levent.Event, error) {
 	host := globalLocalNodeName
 	secure := globalIsTLS
 	if globalMinioEndpointURL != nil {
@@ -100,80 +102,6 @@ func getLambdaEventData(bucket, object string, cred auth.Credentials, r *http.Re
 	return eventData, nil
 }
 
-var statusTextToCode = map[string]int{
-	"Continue":                        http.StatusContinue,
-	"Switching Protocols":             http.StatusSwitchingProtocols,
-	"Processing":                      http.StatusProcessing,
-	"Early Hints":                     http.StatusEarlyHints,
-	"OK":                              http.StatusOK,
-	"Created":                         http.StatusCreated,
-	"Accepted":                        http.StatusAccepted,
-	"Non-Authoritative Information":   http.StatusNonAuthoritativeInfo,
-	"No Content":                      http.StatusNoContent,
-	"Reset Content":                   http.StatusResetContent,
-	"Partial Content":                 http.StatusPartialContent,
-	"Multi-Status":                    http.StatusMultiStatus,
-	"Already Reported":                http.StatusAlreadyReported,
-	"IM Used":                         http.StatusIMUsed,
-	"Multiple Choices":                http.StatusMultipleChoices,
-	"Moved Permanently":               http.StatusMovedPermanently,
-	"Found":                           http.StatusFound,
-	"See Other":                       http.StatusSeeOther,
-	"Not Modified":                    http.StatusNotModified,
-	"Use Proxy":                       http.StatusUseProxy,
-	"Temporary Redirect":              http.StatusTemporaryRedirect,
-	"Permanent Redirect":              http.StatusPermanentRedirect,
-	"Bad Request":                     http.StatusBadRequest,
-	"Unauthorized":                    http.StatusUnauthorized,
-	"Payment Required":                http.StatusPaymentRequired,
-	"Forbidden":                       http.StatusForbidden,
-	"Not Found":                       http.StatusNotFound,
-	"Method Not Allowed":              http.StatusMethodNotAllowed,
-	"Not Acceptable":                  http.StatusNotAcceptable,
-	"Proxy Authentication Required":   http.StatusProxyAuthRequired,
-	"Request Timeout":                 http.StatusRequestTimeout,
-	"Conflict":                        http.StatusConflict,
-	"Gone":                            http.StatusGone,
-	"Length Required":                 http.StatusLengthRequired,
-	"Precondition Failed":             http.StatusPreconditionFailed,
-	"Request Entity Too Large":        http.StatusRequestEntityTooLarge,
-	"Request URI Too Long":            http.StatusRequestURITooLong,
-	"Unsupported Media Type":          http.StatusUnsupportedMediaType,
-	"Requested Range Not Satisfiable": http.StatusRequestedRangeNotSatisfiable,
-	"Expectation Failed":              http.StatusExpectationFailed,
-	"I'm a teapot":                    http.StatusTeapot,
-	"Misdirected Request":             http.StatusMisdirectedRequest,
-	"Unprocessable Entity":            http.StatusUnprocessableEntity,
-	"Locked":                          http.StatusLocked,
-	"Failed Dependency":               http.StatusFailedDependency,
-	"Too Early":                       http.StatusTooEarly,
-	"Upgrade Required":                http.StatusUpgradeRequired,
-	"Precondition Required":           http.StatusPreconditionRequired,
-	"Too Many Requests":               http.StatusTooManyRequests,
-	"Request Header Fields Too Large": http.StatusRequestHeaderFieldsTooLarge,
-	"Unavailable For Legal Reasons":   http.StatusUnavailableForLegalReasons,
-	"Internal Server Error":           http.StatusInternalServerError,
-	"Not Implemented":                 http.StatusNotImplemented,
-	"Bad Gateway":                     http.StatusBadGateway,
-	"Service Unavailable":             http.StatusServiceUnavailable,
-	"Gateway Timeout":                 http.StatusGatewayTimeout,
-	"HTTP Version Not Supported":      http.StatusHTTPVersionNotSupported,
-	"Variant Also Negotiates":         http.StatusVariantAlsoNegotiates,
-	"Insufficient Storage":            http.StatusInsufficientStorage,
-	"Loop Detected":                   http.StatusLoopDetected,
-	"Not Extended":                    http.StatusNotExtended,
-	"Network Authentication Required": http.StatusNetworkAuthenticationRequired,
-}
-
-// StatusCode returns a HTTP Status code for the HTTP text. It returns -1
-// if the text is unknown.
-func StatusCode(text string) int {
-	if code, ok := statusTextToCode[text]; ok {
-		return code
-	}
-	return -1
-}
-
 func fwdHeadersToS3(h http.Header, w http.ResponseWriter) {
 	const trim = "x-amz-fwd-header-"
 	for k, v := range h {
@@ -183,19 +111,26 @@ func fwdHeadersToS3(h http.Header, w http.ResponseWriter) {
 	}
 }
 
-func fwdStatusToAPIError(resp *http.Response) *APIError {
-	if status := resp.Header.Get(xhttp.AmzFwdStatus); status != "" && StatusCode(status) > -1 {
-		apiErr := &APIError{
-			HTTPStatusCode: StatusCode(status),
-			Description:    resp.Header.Get(xhttp.AmzFwdErrorMessage),
-			Code:           resp.Header.Get(xhttp.AmzFwdErrorCode),
-		}
-		if apiErr.HTTPStatusCode == http.StatusOK {
-			return nil
-		}
-		return apiErr
+func fwdStatusToAPIError(statusCode int, resp *http.Response) *APIError {
+	if statusCode < http.StatusBadRequest {
+		return nil
 	}
-	return nil
+	desc := resp.Header.Get(xhttp.AmzFwdErrorMessage)
+	if strings.TrimSpace(desc) == "" {
+		apiErr := errorCodes.ToAPIErr(ErrInvalidRequest)
+		return &apiErr
+	}
+	code := resp.Header.Get(xhttp.AmzFwdErrorCode)
+	if strings.TrimSpace(code) == "" {
+		apiErr := errorCodes.ToAPIErr(ErrInvalidRequest)
+		apiErr.Description = desc
+		return &apiErr
+	}
+	return &APIError{
+		HTTPStatusCode: statusCode,
+		Description:    desc,
+		Code:           code,
+	}
 }
 
 // GetObjectLambdaHandler - GET Object with transformed data via lambda functions
@@ -262,20 +197,24 @@ func (api objectAPIHandlers) GetObjectLambdaHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	statusCode := resp.StatusCode
+	if status := resp.Header.Get(xhttp.AmzFwdStatus); status != "" {
+		statusCode, err = strconv.Atoi(status)
+		if err != nil {
+			writeErrorResponse(ctx, w, APIError{
+				Code:           "LambdaFunctionStatusError",
+				HTTPStatusCode: http.StatusBadRequest,
+				Description:    err.Error(),
+			}, r.URL)
+			return
+		}
+	}
+
 	// Set all the relevant lambda forward headers if found.
 	fwdHeadersToS3(resp.Header, w)
 
-	if apiErr := fwdStatusToAPIError(resp); apiErr != nil {
+	if apiErr := fwdStatusToAPIError(statusCode, resp); apiErr != nil {
 		writeErrorResponse(ctx, w, *apiErr, r.URL)
-		return
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		writeErrorResponse(ctx, w, APIError{
-			Code:           "LambdaFunctionError",
-			HTTPStatusCode: resp.StatusCode,
-			Description:    "unexpected failure reported from lambda function",
-		}, r.URL)
 		return
 	}
 
@@ -283,5 +222,6 @@ func (api objectAPIHandlers) GetObjectLambdaHandler(w http.ResponseWriter, r *ht
 		w.Header().Set(gzhttp.HeaderNoCompression, "true")
 	}
 
+	w.WriteHeader(statusCode)
 	io.Copy(w, resp.Body)
 }
