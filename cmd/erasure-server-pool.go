@@ -1185,6 +1185,13 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return z.deleteObjectFromAllPools(ctx, bucket, object, opts, noReadQuorumPools)
 	}
 
+	// All replication requests needs to go to pool with the object.
+	if opts.ReplicationRequest {
+		objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
+		objInfo.Name = decodeDirObject(object)
+		return objInfo, err
+	}
+
 	for _, pool := range z.serverPools {
 		objInfo, err := pool.DeleteObject(ctx, bucket, object, opts)
 		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
