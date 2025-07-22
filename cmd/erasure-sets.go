@@ -593,7 +593,6 @@ func (s *erasureSets) StorageInfo(ctx context.Context) StorageInfo {
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
-		index := index
 		g.Go(func() error {
 			storageInfos[index] = s.sets[index].StorageInfo(ctx)
 			return nil
@@ -618,7 +617,6 @@ func (s *erasureSets) LocalStorageInfo(ctx context.Context, metrics bool) Storag
 
 	g := errgroup.WithNErrs(len(s.sets))
 	for index := range s.sets {
-		index := index
 		g.Go(func() error {
 			storageInfos[index] = s.sets[index].LocalStorageInfo(ctx, metrics)
 			return nil
@@ -641,7 +639,6 @@ func (s *erasureSets) Shutdown(ctx context.Context) error {
 	g := errgroup.WithNErrs(len(s.sets))
 
 	for index := range s.sets {
-		index := index
 		g.Go(func() error {
 			return s.sets[index].Shutdown(ctx)
 		}, index)
@@ -705,7 +702,6 @@ func (s *erasureSets) getHashedSet(input string) (set *erasureObjects) {
 func listDeletedBuckets(ctx context.Context, storageDisks []StorageAPI, delBuckets *xsync.MapOf[string, VolInfo], readQuorum int) error {
 	g := errgroup.WithNErrs(len(storageDisks))
 	for index := range storageDisks {
-		index := index
 		g.Go(func() error {
 			if storageDisks[index] == nil {
 				// we ignore disk not found errors

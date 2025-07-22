@@ -223,7 +223,7 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 				if failedClients[idx] {
 					continue
 				}
-				client := client
+
 				ng.Go(ctx, func() error {
 					return client.CommitBinary(ctx)
 				}, idx, *client.host)
@@ -269,7 +269,6 @@ func (a adminAPIHandlers) ServerUpdateV2Handler(w http.ResponseWriter, r *http.R
 			if failedClients[idx] {
 				continue
 			}
-			client := client
 			ng.Go(ctx, func() error {
 				prs, ok := peerResults[client.String()]
 				// We restart only on success, not for any failures.

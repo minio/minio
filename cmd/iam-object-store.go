@@ -294,7 +294,6 @@ func (iamOS *IAMObjectStore) loadUserConcurrent(ctx context.Context, userType IA
 	g := errgroup.WithNErrs(len(users))
 
 	for index := range users {
-		index := index
 		g.Go(func() error {
 			userName := path.Dir(users[index])
 			user, err := iamOS.loadUserIdentity(ctx, userName, userType)
@@ -413,7 +412,6 @@ func (iamOS *IAMObjectStore) loadMappedPolicyConcurrent(ctx context.Context, use
 	g := errgroup.WithNErrs(len(users))
 
 	for index := range users {
-		index := index
 		g.Go(func() error {
 			userName := strings.TrimSuffix(users[index], ".json")
 			userMP, err := iamOS.loadMappedPolicyInternal(ctx, userName, userType, isGroup)
@@ -538,7 +536,6 @@ func (iamOS *IAMObjectStore) loadPolicyDocConcurrent(ctx context.Context, polici
 	g := errgroup.WithNErrs(len(policies))
 
 	for index := range policies {
-		index := index
 		g.Go(func() error {
 			policyName := path.Dir(policies[index])
 			policyDoc, err := iamOS.loadPolicy(ctx, policyName)

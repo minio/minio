@@ -155,7 +155,6 @@ func (g *NotificationGroup) Go(ctx context.Context, f func() error, index int, a
 func (sys *NotificationSys) DeletePolicy(ctx context.Context, policyName string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -170,7 +169,6 @@ func (sys *NotificationSys) DeletePolicy(ctx context.Context, policyName string)
 func (sys *NotificationSys) LoadPolicy(ctx context.Context, policyName string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -185,7 +183,6 @@ func (sys *NotificationSys) LoadPolicy(ctx context.Context, policyName string) [
 func (sys *NotificationSys) LoadPolicyMapping(ctx context.Context, userOrGroup string, userType IAMUserType, isGroup bool) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -200,7 +197,6 @@ func (sys *NotificationSys) LoadPolicyMapping(ctx context.Context, userOrGroup s
 func (sys *NotificationSys) DeleteUser(ctx context.Context, accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -215,7 +211,6 @@ func (sys *NotificationSys) DeleteUser(ctx context.Context, accessKey string) []
 func (sys *NotificationSys) LoadUser(ctx context.Context, accessKey string, temp bool) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -230,7 +225,6 @@ func (sys *NotificationSys) LoadUser(ctx context.Context, accessKey string, temp
 func (sys *NotificationSys) LoadGroup(ctx context.Context, group string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -245,7 +239,6 @@ func (sys *NotificationSys) LoadGroup(ctx context.Context, group string) []Notif
 func (sys *NotificationSys) DeleteServiceAccount(ctx context.Context, accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -260,7 +253,6 @@ func (sys *NotificationSys) DeleteServiceAccount(ctx context.Context, accessKey 
 func (sys *NotificationSys) LoadServiceAccount(ctx context.Context, accessKey string) []NotificationPeerErr {
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	for idx, client := range sys.peerClients {
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -276,8 +268,6 @@ func (sys *NotificationSys) BackgroundHealStatus(ctx context.Context) ([]madmin.
 	ng := WithNPeers(len(sys.peerClients))
 	states := make([]madmin.BgHealState, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
-		idx := idx
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -301,7 +291,7 @@ func (sys *NotificationSys) StartProfiling(ctx context.Context, profiler string)
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.StartProfiling(ctx, profiler)
 		}, idx, *client.host)
@@ -409,7 +399,7 @@ func (sys *NotificationSys) VerifyBinary(ctx context.Context, u *url.URL, sha256
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.VerifyBinary(ctx, u, sha256Sum, releaseInfo, bytes.NewReader(bin))
 		}, idx, *client.host)
@@ -424,7 +414,7 @@ func (sys *NotificationSys) CommitBinary(ctx context.Context) []NotificationPeer
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.CommitBinary(ctx)
 		}, idx, *client.host)
@@ -439,7 +429,7 @@ func (sys *NotificationSys) SignalConfigReload(subSys string) []NotificationPeer
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(GlobalContext, func() error {
 			return client.SignalService(serviceReloadDynamic, subSys, false, nil)
 		}, idx, *client.host)
@@ -454,7 +444,7 @@ func (sys *NotificationSys) SignalService(sig serviceSignal) []NotificationPeerE
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(GlobalContext, func() error {
 			// force == true preserves the current behavior
 			return client.SignalService(sig, "", false, nil)
@@ -470,7 +460,7 @@ func (sys *NotificationSys) SignalServiceV2(sig serviceSignal, dryRun bool, exec
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(GlobalContext, func() error {
 			return client.SignalService(sig, "", dryRun, execAt)
 		}, idx, *client.host)
@@ -485,8 +475,6 @@ func (sys *NotificationSys) GetLocks(ctx context.Context, r *http.Request) []*Pe
 	locksResp := make([]*PeerLocks, len(sys.peerClients))
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for index, client := range sys.peerClients {
-		index := index
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -522,7 +510,7 @@ func (sys *NotificationSys) LoadBucketMetadata(ctx context.Context, bucketName s
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.LoadBucketMetadata(ctx, bucketName)
 		}, idx, *client.host)
@@ -552,7 +540,7 @@ func (sys *NotificationSys) DeleteBucketMetadata(ctx context.Context, bucketName
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.DeleteBucketMetadata(ctx, bucketName)
 		}, idx, *client.host)
@@ -570,8 +558,6 @@ func (sys *NotificationSys) GetClusterAllBucketStats(ctx context.Context) []Buck
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	replicationStats := make([]BucketStatsMap, len(sys.peerClients))
 	for index, client := range sys.peerClients {
-		index := index
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -612,8 +598,6 @@ func (sys *NotificationSys) GetClusterBucketStats(ctx context.Context, bucketNam
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	bucketStats := make([]BucketStats, len(sys.peerClients))
 	for index, client := range sys.peerClients {
-		index := index
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -647,8 +631,6 @@ func (sys *NotificationSys) GetClusterSiteMetrics(ctx context.Context) []SRMetri
 	ng := WithNPeers(len(sys.peerClients)).WithRetries(1)
 	siteStats := make([]SRMetricsSummary, len(sys.peerClients))
 	for index, client := range sys.peerClients {
-		index := index
-		client := client
 		ng.Go(ctx, func() error {
 			if client == nil {
 				return errPeerNotReachable
@@ -678,7 +660,7 @@ func (sys *NotificationSys) ReloadPoolMeta(ctx context.Context) {
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.ReloadPoolMeta(ctx)
 		}, idx, *client.host)
@@ -699,7 +681,7 @@ func (sys *NotificationSys) DeleteUploadID(ctx context.Context, uploadID string)
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.DeleteUploadID(ctx, uploadID)
 		}, idx, *client.host)
@@ -726,7 +708,7 @@ func (sys *NotificationSys) StopRebalance(ctx context.Context) {
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.StopRebalance(ctx)
 		}, idx, *client.host)
@@ -752,7 +734,7 @@ func (sys *NotificationSys) LoadRebalanceMeta(ctx context.Context, startRebalanc
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.LoadRebalanceMeta(ctx, startRebalance)
 		}, idx, *client.host)
@@ -773,7 +755,7 @@ func (sys *NotificationSys) LoadTransitionTierConfig(ctx context.Context) {
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(ctx, func() error {
 			return client.LoadTransitionTierConfig(ctx)
 		}, idx, *client.host)
@@ -795,7 +777,7 @@ func (sys *NotificationSys) GetCPUs(ctx context.Context) []madmin.CPUs {
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetCPUs(ctx)
@@ -820,7 +802,7 @@ func (sys *NotificationSys) GetNetInfo(ctx context.Context) []madmin.NetInfo {
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetNetInfo(ctx)
@@ -845,7 +827,7 @@ func (sys *NotificationSys) GetPartitions(ctx context.Context) []madmin.Partitio
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetPartitions(ctx)
@@ -870,7 +852,7 @@ func (sys *NotificationSys) GetOSInfo(ctx context.Context) []madmin.OSInfo {
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetOSInfo(ctx)
@@ -902,7 +884,6 @@ func (sys *NotificationSys) GetMetrics(ctx context.Context, t madmin.MetricType,
 			}
 		}
 
-		index := index
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetMetrics(ctx, t, opts)
@@ -926,7 +907,6 @@ func (sys *NotificationSys) GetResourceMetrics(ctx context.Context) <-chan Metri
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	peerChannels := make([]<-chan MetricV2, len(sys.peerClients))
 	for index := range sys.peerClients {
-		index := index
 		g.Go(func() error {
 			if sys.peerClients[index] == nil {
 				return errPeerNotReachable
@@ -949,7 +929,7 @@ func (sys *NotificationSys) GetSysConfig(ctx context.Context) []madmin.SysConfig
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetSysConfig(ctx)
@@ -975,7 +955,7 @@ func (sys *NotificationSys) GetSysServices(ctx context.Context) []madmin.SysServ
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetSELinuxInfo(ctx)
@@ -1009,7 +989,7 @@ func (sys *NotificationSys) GetSysErrors(ctx context.Context) []madmin.SysErrors
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetSysErrors(ctx)
@@ -1034,7 +1014,7 @@ func (sys *NotificationSys) GetMemInfo(ctx context.Context) []madmin.MemInfo {
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetMemInfo(ctx)
@@ -1059,7 +1039,7 @@ func (sys *NotificationSys) GetProcInfo(ctx context.Context) []madmin.ProcInfo {
 		if client == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reply[index], err = sys.peerClients[index].GetProcInfo(ctx)
@@ -1214,7 +1194,7 @@ func (sys *NotificationSys) GetBandwidthReports(ctx context.Context, buckets ...
 		if sys.peerClients[index] == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			reports[index], err = sys.peerClients[index].MonitorBandwidth(ctx, buckets)
@@ -1302,7 +1282,6 @@ func (sys *NotificationSys) GetBucketMetrics(ctx context.Context) <-chan MetricV
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	peerChannels := make([]<-chan MetricV2, len(sys.peerClients))
 	for index := range sys.peerClients {
-		index := index
 		g.Go(func() error {
 			if sys.peerClients[index] == nil {
 				return errPeerNotReachable
@@ -1323,7 +1302,6 @@ func (sys *NotificationSys) GetClusterMetrics(ctx context.Context) <-chan Metric
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	peerChannels := make([]<-chan MetricV2, len(sys.peerClients))
 	for index := range sys.peerClients {
-		index := index
 		g.Go(func() error {
 			if sys.peerClients[index] == nil {
 				return errPeerNotReachable
@@ -1353,7 +1331,7 @@ func (sys *NotificationSys) ServiceFreeze(ctx context.Context, freeze bool) []No
 		if client == nil {
 			continue
 		}
-		client := client
+
 		ng.Go(GlobalContext, func() error {
 			return client.SignalService(serviceSig, "", false, nil)
 		}, idx, *client.host)
@@ -1580,7 +1558,7 @@ func (sys *NotificationSys) GetReplicationMRF(ctx context.Context, bucket, node 
 		if host != node && node != "all" {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			var err error
 			peerChannels[index], err = sys.peerClients[index].GetReplicationMRF(ctx, bucket)

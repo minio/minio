@@ -400,7 +400,6 @@ func (c *iamCache) policyDBGetGroups(store *IAMStoreSys, userPolicyPresent bool,
 	g := errgroup.WithNErrs(len(groups)).WithConcurrency(10) // load like 10 groups at a time.
 
 	for index := range groups {
-		index := index
 		g.Go(func() error {
 			err := store.loadMappedPolicy(context.TODO(), groups[index], regUser, true, c.iamGroupPolicyMap)
 			if err != nil && !errors.Is(err, errNoSuchPolicy) {

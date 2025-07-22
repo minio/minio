@@ -154,7 +154,6 @@ func initFederatorBackend(buckets []string, objLayer ObjectLayer) {
 	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice)).WithConcurrency(50)
 
 	for index := range bucketsToBeUpdatedSlice {
-		index := index
 		g.Go(func() error {
 			return globalDNSConfig.Put(bucketsToBeUpdatedSlice[index])
 		}, index)
