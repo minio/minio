@@ -545,6 +545,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 				writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, err)
 				return
 			}
+			if newGlobalAuthZPluginFn() == nil {
+				// if authZ is not set - we expect the policies to be present.
+				if globalIAMSys.CurrentPolicies(p) == "" {
+					writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+						fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", p))
+					return
+				}
+			}
 		}
 
 		if !globalIAMSys.doesPolicyAllow(p, policy.Args{
@@ -1001,6 +1009,20 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("Error processing parameter %s: %v", stsRoleArn, err))
 		return
+	}
+
+	_, policyName, err := globalIAMSys.GetRolePolicy(roleArnStr)
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, err)
+		return
+	}
+
+	if newGlobalAuthZPluginFn() == nil { // if authZ is not set - we expect the policyname to be present.
+		if globalIAMSys.CurrentPolicies(policyName) == "" {
+			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+				fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", policyName))
+			return
+		}
 	}
 
 	res, err := authn.Authenticate(roleArn, token)
