@@ -828,6 +828,13 @@ func (er erasureObjects) getObjectFileInfo(ctx context.Context, bucket, object s
 		minDisks = er.setDriveCount - er.defaultParityCount
 	}
 
+	if minDisks == er.setDriveCount/2 {
+		// when data and parity are same we must atleast
+		// wait for response from 1 extra drive to avoid
+		// split-brain.
+		minDisks++
+	}
+
 	calcQuorum := func(metaArr []FileInfo, errs []error) (FileInfo, []FileInfo, []StorageAPI, time.Time, string, error) {
 		readQuorum, _, err := objectQuorumFromMeta(ctx, metaArr, errs, er.defaultParityCount)
 		if err != nil {
