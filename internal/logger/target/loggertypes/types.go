@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package types
+package loggertypes
 
 // TargetType indicates type of the target e.g. console, http, kafka
 type TargetType uint8

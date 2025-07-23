@@ -635,15 +635,18 @@ func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, objec
 // if none are found falls back to most available space pool, this function is
 // designed to be only used by PutObject, CopyObject (newObject creation) and NewMultipartUpload.
 func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
-	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
+	pinfo, _, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, ObjectOptions{
 		SkipDecommissioned: true,
 		SkipRebalancing:    true,
 	})
+
 	if err != nil && !isErrObjectNotFound(err) {
-		return idx, err
+		return -1, err
 	}
 
-	if isErrObjectNotFound(err) {
+	idx = pinfo.Index
+	if isErrObjectNotFound(err) || pinfo.Err == nil {
+		// will generate a temp object
 		idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
 		if idx < 0 {
 			return -1, toObjectErr(errDiskFull)
@@ -1089,6 +1092,10 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 
 	object = encodeDirObject(object)
 	if z.SinglePool() {
+		_, err := z.getPoolIdx(ctx, bucket, object, data.Size())
+		if err != nil {
+			return ObjectInfo{}, err
+		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
@@ -1176,6 +1183,13 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 	// Delete concurrently in all server pools with read quorum error for unversioned objects.
 	if len(noReadQuorumPools) > 0 && !opts.Versioned && !opts.VersionSuspended {
 		return z.deleteObjectFromAllPools(ctx, bucket, object, opts, noReadQuorumPools)
+	}
+
+	// All replication requests needs to go to pool with the object.
+	if opts.ReplicationRequest {
+		objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
+		objInfo.Name = decodeDirObject(object)
+		return objInfo, err
 	}
 
 	for _, pool := range z.serverPools {
@@ -1816,6 +1830,10 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 	}
 
 	if z.SinglePool() {
+		_, err := z.getPoolIdx(ctx, bucket, object, data.Size())
+		if err != nil {
+			return PartInfo{}, err
+		}
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
