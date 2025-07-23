@@ -331,7 +331,7 @@ func checkPreconditions(ctx context.Context, w http.ResponseWriter, r *http.Requ
 func ifModifiedSince(objTime time.Time, givenTime time.Time) bool {
 	// The Date-Modified header truncates sub-second precision, so
 	// use mtime < t+1s instead of mtime <= t to check for unmodified.
-	return objTime.After(givenTime.Add(1 * time.Second))
+	return !objTime.Before(givenTime.Add(1 * time.Second))
 }
 
 // canonicalizeETag returns ETag with leading and trailing double-quotes removed,
