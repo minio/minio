@@ -160,8 +160,7 @@ func (e *metaCacheEntry) matches(other *metaCacheEntry, strict bool) (prefer *me
 func (e metaCacheEntry) isInDir(dir, separator string) bool {
 	if len(dir) == 0 {
 		// Root
-		idx := strings.Index(e.name, separator)
-		return idx == -1 || idx == len(e.name)-len(separator)
+		return true
 	}
 	ext := strings.TrimPrefix(e.name, dir)
 	if len(ext) != len(e.name) {

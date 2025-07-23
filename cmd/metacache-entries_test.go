@@ -210,6 +210,34 @@ func Test_metaCacheEntry_isInDir(t *testing.T) {
 			sep:      slashSeparator,
 			want:     true,
 		},
+		{
+			testName: "root-subdir-file",
+			entry:    "documents/file1.txt",
+			dir:      "",
+			sep:      slashSeparator,
+			want:     true,
+		},
+		{
+			testName: "root-subdir-deeper-file",
+			entry:    "documents/subfolder/file3.txt",
+			dir:      "",
+			sep:      slashSeparator,
+			want:     true,
+		},
+		{
+			testName: "root-images-file",
+			entry:    "images/photo1.jpg",
+			dir:      "",
+			sep:      slashSeparator,
+			want:     true,
+		},
+		{
+			testName: "root-videos-file",
+			entry:    "videos/movie1.mp4",
+			dir:      "",
+			sep:      slashSeparator,
+			want:     true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
