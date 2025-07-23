@@ -2050,3 +2050,72 @@ func testListObjectsWithILM(obj ObjectLayer, instanceType string, t1 TestErrHand
 		}
 	}
 }
+
+// TestListObjectsV2EmptyPrefixCommonPrefix tests ListObjectsV2 with empty prefix and delimiter
+func TestListObjectsV2EmptyPrefixCommonPrefix(t *testing.T) {
+	ExecObjectLayerTest(t, testListObjectsV2EmptyPrefixCommonPrefix)
+}
+
+func testListObjectsV2EmptyPrefixCommonPrefix(obj ObjectLayer, instanceType string, t1 TestErrHandler) {
+	t, _ := t1.(*testing.T)
+	
+	bucket := "test-bucket-empty-prefix-common-prefix"
+	err := obj.MakeBucket(context.Background(), bucket, MakeBucketOptions{})
+	if err != nil {
+		t.Fatalf("%s: %s", instanceType, err.Error())
+	}
+
+	testObjects := []string{
+		"documents/file1.txt",
+		"documents/file2.txt", 
+		"images/photo1.jpg",
+		"images/photo2.jpg",
+		"videos/movie1.mp4",
+		"root-file.txt",
+	}
+
+	for _, objName := range testObjects {
+		_, err := obj.PutObject(context.Background(), bucket, objName,
+			mustGetPutObjReader(t, bytes.NewBufferString("test content"),
+				int64(len("test content")), "", ""), ObjectOptions{})
+		if err != nil {
+			t.Fatalf("%s: %s", instanceType, err.Error())
+		}
+	}
+	
+	result, err := obj.ListObjectsV2(context.Background(), bucket, "", "", "/", 1000, false, "")
+	if err != nil {
+		t.Fatalf("%s: Expected to pass, but failed with: %s", instanceType, err.Error())
+	}
+
+	expectedPrefixes := []string{"documents/", "images/", "videos/"}
+	expectedObjects := []string{"root-file.txt"}
+	
+	if len(result.Prefixes) != len(expectedPrefixes) {
+		t.Errorf("%s: Expected %d prefixes, got %d. Expected: %v, Got: %v", 
+			instanceType, len(expectedPrefixes), len(result.Prefixes), expectedPrefixes, result.Prefixes)
+	}
+
+	for i, expectedPrefix := range expectedPrefixes {
+		if i >= len(result.Prefixes) || result.Prefixes[i] != expectedPrefix {
+			t.Errorf("%s: Expected prefix %d to be '%s', but got '%s'", 
+				instanceType, i, expectedPrefix, 
+				func() string { if i < len(result.Prefixes) { return result.Prefixes[i] }; return "<missing>" }())
+		}
+	}
+
+	if len(result.Objects) != len(expectedObjects) {
+		t.Errorf("%s: Expected %d objects, got %d", instanceType, len(expectedObjects), len(result.Objects))
+	}
+
+	for i, expectedObj := range expectedObjects {
+		if i >= len(result.Objects) || result.Objects[i].Name != expectedObj {
+			t.Errorf("%s: Expected object %d to be '%s', but got '%s'", 
+				instanceType, i, expectedObj,
+				func() string { if i < len(result.Objects) { return result.Objects[i].Name }; return "<missing>" }())
+		}
+	}
+
+	t.Logf("%s: ListObjectsV2 empty prefix test passed. Found %d prefixes and %d objects", 
+		instanceType, len(result.Prefixes), len(result.Objects))
+}
