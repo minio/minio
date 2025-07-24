@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"path"
 	"sort"
@@ -366,14 +367,11 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	sys.rolesMap = make(map[arn.ARN]string)
 
 	// From OpenID
-	if riMap := sys.OpenIDConfig.GetRoleInfo(); riMap != nil {
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
-	}
+	maps.Copy(sys.rolesMap, sys.OpenIDConfig.GetRoleInfo())
 
 	// From AuthN plugin if enabled.
 	if authn := newGlobalAuthNPluginFn(); authn != nil {
-		riMap := authn.GetRoleInfo()
-		sys.validateAndAddRolePolicyMappings(ctx, riMap)
+		maps.Copy(sys.rolesMap, authn.GetRoleInfo())
 	}
 
 	sys.printIAMRoles()
@@ -498,33 +496,6 @@ func (sys *IAMSys) periodicRoutines(ctx context.Context, baseInterval time.Durat
 		case <-ctx.Done():
 			return
 		}
-	}
-}
-
-func (sys *IAMSys) validateAndAddRolePolicyMappings(ctx context.Context, m map[arn.ARN]string) {
-	// Validate that policies associated with roles are defined. If
-	// authZ plugin is set, role policies are just claims sent to
-	// the plugin and they need not exist.
-	//
-	// If some mapped policies do not exist, we print some error
-	// messages but continue any way - they can be fixed in the
-	// running server by creating the policies after start up.
-	for arn, rolePolicies := range m {
-		specifiedPoliciesSet := newMappedPolicy(rolePolicies).policySet()
-		validPolicies, _ := sys.store.MergePolicies(rolePolicies)
-		knownPoliciesSet := newMappedPolicy(validPolicies).policySet()
-		unknownPoliciesSet := specifiedPoliciesSet.Difference(knownPoliciesSet)
-		if len(unknownPoliciesSet) > 0 {
-			authz := newGlobalAuthZPluginFn()
-			if authz == nil {
-				// Print a warning that some policies mapped to a role are not defined.
-				errMsg := fmt.Errorf(
-					"The policies \"%s\" mapped to role ARN %s are not defined - this role may not work as expected.",
-					unknownPoliciesSet.ToSlice(), arn.String())
-				authZLogIf(ctx, errMsg, logger.WarningKind)
-			}
-		}
-		sys.rolesMap[arn] = rolePolicies
 	}
 }
 
