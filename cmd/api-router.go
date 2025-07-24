@@ -668,7 +668,7 @@ func (w *corsCredentialsWrapper) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
-func hasWildcardConfig() bool {
+func configHasWildcard() bool {
 	for _, o := range globalAPIConfig.getCorsAllowOrigins() {
 		if o == "*" {
 			return true
@@ -686,7 +686,7 @@ func (w *corsCredentialsWrapper) fixCORSCredentialsViolation() {
 	}
 
 	// CORS spec compliance: never allow credentials with wildcard origins
-	if hdr.Get("Access-Control-Allow-Origin") == "*" || hasWildcardConfig() {
+	if hdr.Get("Access-Control-Allow-Origin") == "*" || configHasWildcard() {
 		hdr.Del("Access-Control-Allow-Credentials")
 	}
 }
