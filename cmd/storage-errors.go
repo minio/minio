@@ -70,8 +70,11 @@ var errDiskAccessDenied = StorageErr("drive access denied")
 // errFileNotFound - cannot find the file.
 var errFileNotFound = StorageErr("file not found")
 
-// errFileNotFound - cannot find requested file version.
+// errFileVersionNotFound - cannot find requested file version.
 var errFileVersionNotFound = StorageErr("file version not found")
+
+// errFolderNotEmpty - folder/directory is not empty and cannot be deleted.
+var errFolderNotEmpty = StorageErr("folder not empty")
 
 // errTooManyOpenFiles - too many open files.
 var errTooManyOpenFiles = StorageErr("too many open files, please increase 'ulimit -n'")

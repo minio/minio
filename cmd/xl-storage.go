@@ -2424,6 +2424,61 @@ func (s *xlStorage) CheckParts(ctx context.Context, volume string, path string, 
 	return &resp, nil
 }
 
+// canRemoveDirectory checks if a directory can be safely removed.
+// It returns true if the directory is empty or contains only MinIO metadata files.
+func (s *xlStorage) canRemoveDirectory(dirPath string) bool {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return false // If we can't read it, we can't safely remove it
+	}
+	
+	// Empty directory can be removed
+	if len(entries) == 0 {
+		return true
+	}
+	
+	// Check if all entries are MinIO metadata files that can be safely cleaned
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return false // Contains subdirectories, not safe to remove
+		}
+		
+		name := entry.Name()
+		// Allow only known MinIO metadata files
+		if name != xlStorageFormatFile && name != xlStorageFormatFileV1 {
+			return false // Contains unknown files, not safe to remove
+		}
+	}
+	
+	return true // Only contains MinIO metadata files
+}
+
+// removeDirectoryContents attempts to remove MinIO metadata files from a directory.
+// This is only used for cleanup of directories that should be empty.
+func (s *xlStorage) removeDirectoryContents(dirPath string) error {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return err
+	}
+	
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip subdirectories
+		}
+		
+		name := entry.Name()
+		if name == xlStorageFormatFile || name == xlStorageFormatFileV1 {
+			// Only remove known MinIO metadata files
+			filePath := pathJoin(dirPath, name)
+			if err := Remove(filePath); err != nil && !osIsNotExist(err) {
+				return err
+			}
+		}
+	}
+	
+	return nil
+}
+
 // deleteFile deletes a file or a directory if its empty unless recursive
 // is set to true. If the target is successfully deleted, it will recursively
 // move up the tree, deleting empty parent directories until it finds one
@@ -2450,9 +2505,24 @@ func (s *xlStorage) deleteFile(basePath, deletePath string, recursive, immediate
 		switch {
 		case isSysErrNotEmpty(err):
 			// if object is a directory, but if its not empty
-			// return FileNotFound to indicate its an empty prefix.
 			if HasSuffix(deletePath, SlashSeparator) {
-				return errFileNotFound
+				// For directory objects (folders), attempt smart cleanup
+				// Check if this is a directory that should be removable
+				// (i.e., contains only metadata files or is truly empty)
+				if s.canRemoveDirectory(deletePath) {
+					// Attempt recursive cleanup of metadata files
+					if cleanupErr := s.removeDirectoryContents(deletePath); cleanupErr == nil {
+						// Try removing the directory again after cleanup
+						if removeErr := Remove(deletePath); removeErr == nil {
+							// Successfully removed after cleanup
+							break
+						}
+					}
+				}
+				
+				// If we can't remove it safely, return a proper error
+				// instead of pretending it was deleted
+				return errFolderNotEmpty
 			}
 			// if we have .DS_Store only on macOS
 			if runtime.GOOS == globalMacOSName {

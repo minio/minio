@@ -110,6 +110,15 @@ func toObjectErr(oerr error, params ...string) error {
 			apiErr.Object = decodeDirObject(params[1])
 		}
 		return apiErr
+	case errFolderNotEmpty.Error():
+		apiErr := ObjectExistsAsDirectory{}
+		if len(params) >= 1 {
+			apiErr.Bucket = params[0]
+		}
+		if len(params) >= 2 {
+			apiErr.Object = decodeDirObject(params[1])
+		}
+		return apiErr
 	case errUploadIDNotFound.Error():
 		apiErr := InvalidUploadID{}
 		if len(params) >= 1 {
