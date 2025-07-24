@@ -646,6 +646,51 @@ func registerAPIRouter(router *mux.Router) {
 	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(methodNotAllowedHandler("S3")))
 }
 
+// corsCredentialsWrapper wraps http.ResponseWriter to post-process CORS headers
+type corsCredentialsWrapper struct {
+	http.ResponseWriter
+	headerWritten bool
+}
+
+func (w *corsCredentialsWrapper) WriteHeader(code int) {
+	if !w.headerWritten {
+		w.fixCORSCredentialsViolation()
+		w.headerWritten = true
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *corsCredentialsWrapper) Write(b []byte) (int, error) {
+	if !w.headerWritten {
+		w.fixCORSCredentialsViolation()
+		w.headerWritten = true
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func hasWildcardConfig() bool {
+	for _, o := range globalAPIConfig.getCorsAllowOrigins() {
+		if o == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *corsCredentialsWrapper) fixCORSCredentialsViolation() {
+	hdr := w.ResponseWriter.Header()
+
+	// Only run if CORS actually ran
+	if hdr.Get("Access-Control-Allow-Origin") == "" {
+		return
+	}
+
+	// CORS spec compliance: never allow credentials with wildcard origins
+	if hdr.Get("Access-Control-Allow-Origin") == "*" || hasWildcardConfig() {
+		hdr.Del("Access-Control-Allow-Credentials")
+	}
+}
+
 // corsHandler handler for CORS (Cross Origin Resource Sharing)
 func corsHandler(handler http.Handler) http.Handler {
 	commonS3Headers := []string{
@@ -691,5 +736,12 @@ func corsHandler(handler http.Handler) http.Handler {
 		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
 	}
-	return cors.New(opts).Handler(handler)
+
+	corsMiddleware := cors.New(opts)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Wrap response writer to post-process CORS headers
+		wrapper := &corsCredentialsWrapper{ResponseWriter: w}
+		corsMiddleware.Handler(handler).ServeHTTP(wrapper, r)
+	})
 }
