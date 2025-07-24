@@ -93,7 +93,7 @@ func TestCORSCredentialsWithSpecificOrigin(t *testing.T) {
 	}()
 
 	// Setup specific origin CORS config
-	allowedOrigin := "https://myapp.com"
+	allowedOrigin := "https://example.com"
 	globalAPIConfig.mu.Lock()
 	globalAPIConfig.corsAllowOrigins = []string{allowedOrigin}
 	globalAPIConfig.mu.Unlock()
@@ -153,7 +153,7 @@ func TestCORSUnauthorizedOrigin(t *testing.T) {
 	}()
 
 	// Setup specific origin CORS config (no wildcard)
-	allowedOrigin := "https://myapp.com"
+	allowedOrigin := "https://example.com"
 	globalAPIConfig.mu.Lock()
 	globalAPIConfig.corsAllowOrigins = []string{allowedOrigin}
 	globalAPIConfig.mu.Unlock()
@@ -196,7 +196,7 @@ func TestCORSMixedConfiguration(t *testing.T) {
 
 	// Setup mixed CORS config (wildcard + specific origins)
 	globalAPIConfig.mu.Lock()
-	globalAPIConfig.corsAllowOrigins = []string{"*", "https://e-corp.com"}
+	globalAPIConfig.corsAllowOrigins = []string{"*", "https://example.com"}
 	globalAPIConfig.mu.Unlock()
 
 	// Create a simple handler
@@ -209,15 +209,15 @@ func TestCORSMixedConfiguration(t *testing.T) {
 
 	// Test request that should match wildcard
 	req := httptest.NewRequest("OPTIONS", "/", nil)
-	req.Header.Set("Origin", "https://random-site.com")
+	req.Header.Set("Origin", "https://example.com")
 	req.Header.Set("Access-Control-Request-Method", "GET")
 
 	rr := httptest.NewRecorder()
 	corsWrappedHandler.ServeHTTP(rr, req)
 
 	// The rs/cors library echoes back the specific origin even with wildcard config
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://random-site.com" {
-		t.Errorf("Expected Access-Control-Allow-Origin: https://random-site.com, got: %s", got)
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Errorf("Expected Access-Control-Allow-Origin: https://example.com, got: %s", got)
 	}
 
 	// Verify credentials header is NOT present due to wildcard in config
