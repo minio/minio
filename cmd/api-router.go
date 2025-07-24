@@ -678,7 +678,7 @@ func configHasWildcard() bool {
 }
 
 func (w *corsCredentialsWrapper) fixCORSCredentialsViolation() {
-	hdr := w.ResponseWriter.Header()
+	hdr := w.Header()
 
 	// Only run if CORS actually ran
 	if hdr.Get("Access-Control-Allow-Origin") == "" {
