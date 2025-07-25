@@ -68,7 +68,7 @@ type GetObjectContext struct {
 //	    "principalId": "AIDAJF5MO57RFXQCE5ZNC",
 //	    "arn": "...",
 //	    "accountId": "...",
-//	    "accessKeyId": "AKIA3WNQJCXE2DYPAU7R"
+//	    "accessKeyId": "os.Getenv("AWS_ACCESS_KEY_ID")"
 //	  },
 //	  "protocolVersion": "1.00"
 //	}
