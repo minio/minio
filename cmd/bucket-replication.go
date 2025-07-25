@@ -2555,7 +2555,7 @@ func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *t
 		if tgt.disableProxy {
 			continue
 		}
-		idx := idx
+
 		wg.Add(1)
 		go func(idx int, tgt *TargetClient) {
 			defer wg.Done()
@@ -2624,7 +2624,7 @@ func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts
 		if tgt.disableProxy {
 			continue
 		}
-		idx := idx
+
 		wg.Add(1)
 		go func(idx int, tgt *TargetClient) {
 			defer wg.Done()
