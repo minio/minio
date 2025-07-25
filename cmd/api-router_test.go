@@ -168,7 +168,7 @@ func TestCORSUnauthorizedOrigin(t *testing.T) {
 
 	// Test preflight request from unauthorized origin
 	req := httptest.NewRequest("OPTIONS", "/", nil)
-	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Origin", "https://example.org")  // This origin is NOT in the allowed list
 	req.Header.Set("Access-Control-Request-Method", "GET")
 
 	rr := httptest.NewRecorder()
