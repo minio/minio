@@ -9,7 +9,6 @@
 {{ $subPath := .Values.persistence.subPath }}
 {{ $penabled := .Values.persistence.enabled }}
 {{ $accessMode := .Values.persistence.accessMode }}
-{{ $storageClass := .Values.persistence.storageClass }}
 {{ $psize := .Values.persistence.size }}
 apiVersion: v1
 kind: Service
@@ -239,12 +238,10 @@ spec:
         {{- end }}
       spec:
         accessModes: [ {{ $accessMode | quote }} ]
-        {{- if $storageClass }}
-        storageClassName: {{ $storageClass }}
-        {{- end }}
         resources:
           requests:
             storage: {{ $psize }}
+        {{- include "minio.persistence.storageClass" ( dict "persistence" $.Values.persistence "global" $.Values.global) | nindent 8 }}
     {{- end }}
     {{- else }}
     - apiVersion: v1
@@ -256,12 +253,10 @@ spec:
         {{- end }}
       spec:
         accessModes: [ {{ $accessMode | quote }} ]
-        {{- if $storageClass }}
-        storageClassName: {{ $storageClass }}
-        {{- end }}
         resources:
           requests:
             storage: {{ $psize }}
+        {{- include "minio.persistence.storageClass" ( dict "persistence" .Values.persistence "global" .Values.global) | nindent 8 }}
     {{- end }}
   {{- end }}
 {{- end }}
