@@ -683,7 +683,8 @@ func corsHandler(handler http.Handler) http.Handler {
 		// Configure CORS dynamically based on current settings
 		// This ensures we handle configuration changes and wildcard security properly
 		hasWildcard := configHasWildcard()
-		
+		allowCredentialsWithWildcard := globalAPIConfig.getCorsAllowCredentialsWithWildcard()
+
 		opts := cors.Options{
 			AllowOriginFunc: func(origin string) bool {
 				for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
@@ -702,11 +703,12 @@ func corsHandler(handler http.Handler) http.Handler {
 				http.MethodOptions,
 				http.MethodPatch,
 			},
-			AllowedHeaders:   commonS3Headers,
-			ExposedHeaders:   commonS3Headers,
+			AllowedHeaders: commonS3Headers,
+			ExposedHeaders: commonS3Headers,
 			// CORS spec compliance: disable credentials when wildcard origins are configured
+			// Unless explicitly overridden by administrator (for backward compatibility)
 			// This prevents the security vulnerability where any website can make credentialed requests
-			AllowCredentials: !hasWildcard,
+			AllowCredentials: !hasWildcard || allowCredentialsWithWildcard,
 		}
 
 		// Use rs/cors directly without custom wrapper to avoid interface issues

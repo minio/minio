@@ -27,59 +27,83 @@ import (
 func TestCORSCredentialsWithWildcard(t *testing.T) {
 	// Save original config and restore after test
 	originalOrigins := globalAPIConfig.getCorsAllowOrigins()
+	originalAllowCredentialsWithWildcard := globalAPIConfig.getCorsAllowCredentialsWithWildcard()
 	defer func() {
 		globalAPIConfig.mu.Lock()
 		globalAPIConfig.corsAllowOrigins = originalOrigins
+		globalAPIConfig.corsAllowCredentialsWithWildcard = originalAllowCredentialsWithWildcard
 		globalAPIConfig.mu.Unlock()
 	}()
 
-	// Setup wildcard CORS config
-	globalAPIConfig.mu.Lock()
-	globalAPIConfig.corsAllowOrigins = []string{"*"}
-	globalAPIConfig.mu.Unlock()
+	// Test 1: Default secure behavior (wildcard without credentials)
+	t.Run("Secure Default", func(t *testing.T) {
+		// Setup wildcard CORS config with default secure behavior
+		globalAPIConfig.mu.Lock()
+		globalAPIConfig.corsAllowOrigins = []string{"*"}
+		globalAPIConfig.corsAllowCredentialsWithWildcard = false // default secure behavior
+		globalAPIConfig.mu.Unlock()
 
-	// Create a simple handler
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		// Create a simple handler
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		// Wrap with CORS handler
+		corsWrappedHandler := corsHandler(handler)
+
+		// Test preflight request
+		req := httptest.NewRequest("OPTIONS", "/", nil)
+		req.Header.Set("Origin", "https://example.com")
+		req.Header.Set("Access-Control-Request-Method", "GET")
+
+		rr := httptest.NewRecorder()
+		corsWrappedHandler.ServeHTTP(rr, req)
+
+		// Verify specific origin is echoed back (rs/cors library behavior)
+		if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+			t.Errorf("Expected Access-Control-Allow-Origin: https://example.com, got: %s", got)
+		}
+
+		// Verify credentials header is NOT present (security fix)
+		if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+			t.Errorf("Expected no Access-Control-Allow-Credentials header with wildcard origin, got: %s", got)
+		}
 	})
 
-	// Wrap with CORS handler
-	corsWrappedHandler := corsHandler(handler)
+	// Test 2: Backward compatibility opt-out (wildcard with credentials - insecure)
+	t.Run("Backward Compatibility Opt-out", func(t *testing.T) {
+		// Setup wildcard CORS config with explicit opt-out for backward compatibility
+		globalAPIConfig.mu.Lock()
+		globalAPIConfig.corsAllowOrigins = []string{"*"}
+		globalAPIConfig.corsAllowCredentialsWithWildcard = true // explicitly allow insecure behavior
+		globalAPIConfig.mu.Unlock()
 
-	// Test preflight request
-	req := httptest.NewRequest("OPTIONS", "/", nil)
-	req.Header.Set("Origin", "https://example.com")
-	req.Header.Set("Access-Control-Request-Method", "GET")
+		// Create a simple handler
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
 
-	rr := httptest.NewRecorder()
-	corsWrappedHandler.ServeHTTP(rr, req)
+		// Wrap with CORS handler
+		corsWrappedHandler := corsHandler(handler)
 
-	// Verify specific origin is echoed back (rs/cors library behavior)
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
-		t.Errorf("Expected Access-Control-Allow-Origin: https://example.com, got: %s", got)
-	}
+		// Test preflight request
+		req := httptest.NewRequest("OPTIONS", "/", nil)
+		req.Header.Set("Origin", "https://example.com")
+		req.Header.Set("Access-Control-Request-Method", "GET")
 
-	// Verify credentials header is NOT present (security fix)
-	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "" {
-		t.Errorf("Expected no Access-Control-Allow-Credentials header with wildcard origin, got: %s", got)
-	}
+		rr := httptest.NewRecorder()
+		corsWrappedHandler.ServeHTTP(rr, req)
 
-	// Test actual GET request
-	req = httptest.NewRequest("GET", "/", nil)
-	req.Header.Set("Origin", "https://example.com")
+		// Verify specific origin is echoed back (rs/cors library behavior)
+		if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+			t.Errorf("Expected Access-Control-Allow-Origin: https://example.com, got: %s", got)
+		}
 
-	rr = httptest.NewRecorder()
-	corsWrappedHandler.ServeHTTP(rr, req)
-
-	// Verify specific origin is echoed back (rs/cors library behavior)
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
-		t.Errorf("Expected Access-Control-Allow-Origin: https://example.com, got: %s", got)
-	}
-
-	// Verify credentials header is NOT present
-	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "" {
-		t.Errorf("Expected no Access-Control-Allow-Credentials header with wildcard origin, got: %s", got)
-	}
+		// Verify credentials header IS present (backward compatibility)
+		if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
+			t.Errorf("Expected Access-Control-Allow-Credentials: true with opt-out enabled, got: %s", got)
+		}
+	})
 }
 
 // Test that CORS credentials are allowed for specific origins
@@ -168,7 +192,7 @@ func TestCORSUnauthorizedOrigin(t *testing.T) {
 
 	// Test preflight request from unauthorized origin
 	req := httptest.NewRequest("OPTIONS", "/", nil)
-	req.Header.Set("Origin", "https://example.org")  // This origin is NOT in the allowed list
+	req.Header.Set("Origin", "https://example.org") // This origin is NOT in the allowed list
 	req.Header.Set("Access-Control-Request-Method", "GET")
 
 	rr := httptest.NewRecorder()
@@ -188,15 +212,18 @@ func TestCORSUnauthorizedOrigin(t *testing.T) {
 func TestCORSMixedConfiguration(t *testing.T) {
 	// Save original config and restore after test
 	originalOrigins := globalAPIConfig.getCorsAllowOrigins()
+	originalAllowCredentialsWithWildcard := globalAPIConfig.getCorsAllowCredentialsWithWildcard()
 	defer func() {
 		globalAPIConfig.mu.Lock()
 		globalAPIConfig.corsAllowOrigins = originalOrigins
+		globalAPIConfig.corsAllowCredentialsWithWildcard = originalAllowCredentialsWithWildcard
 		globalAPIConfig.mu.Unlock()
 	}()
 
-	// Setup mixed CORS config (wildcard + specific origins)
+	// Setup mixed CORS config (wildcard + specific origins) with default secure behavior
 	globalAPIConfig.mu.Lock()
 	globalAPIConfig.corsAllowOrigins = []string{"*", "https://example.com"}
+	globalAPIConfig.corsAllowCredentialsWithWildcard = false // default secure behavior
 	globalAPIConfig.mu.Unlock()
 
 	// Create a simple handler
@@ -220,7 +247,7 @@ func TestCORSMixedConfiguration(t *testing.T) {
 		t.Errorf("Expected Access-Control-Allow-Origin: https://example.com, got: %s", got)
 	}
 
-	// Verify credentials header is NOT present due to wildcard in config
+	// Verify credentials header is NOT present due to wildcard in config (secure default)
 	if got := rr.Header().Get("Access-Control-Allow-Credentials"); got != "" {
 		t.Errorf("Expected no Access-Control-Allow-Credentials header with wildcard in config, got: %s", got)
 	}
