@@ -46,7 +46,7 @@ var (
 		},
 		config.HelpKV{
 			Key:         apiCorsAllowCredentialsWithWildcard,
-			Description: `allow CORS requests with credentials when wildcard origins are configured (set to 'off' for enhanced security)` + defaultHelpPostfix(apiCorsAllowCredentialsWithWildcard),
+			Description: `allow credentials with wildcard CORS origins (default: 'on' for backward compatibility, 'off' for enhanced security compliance)` + defaultHelpPostfix(apiCorsAllowCredentialsWithWildcard),
 			Optional:    true,
 			Type:        "on|off",
 		},
