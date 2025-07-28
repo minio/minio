@@ -414,9 +414,13 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	//
 	// Currently, we do not support multiple claim based IDPs, as there is no
 	// defined parameter to disambiguate the intended IDP in this STS request.
+	//
+	// Skip RoleArn existence check when policy mapping is based on a JWT claim.
+	// This is required to support clients (like the AWS CLI or SDKs) that enforce providing a RoleArn,
+	// even though it's not used in claim-based identity mode.
 	roleArn := openid.DummyRoleARN
 	roleArnStr := r.Form.Get(stsRoleArn)
-	if roleArnStr != "" {
+	if roleArnStr != "" && strings.TrimSpace(iamPolicyClaimNameOpenID()) == "" {
 		var err error
 		roleArn, _, err = globalIAMSys.GetRolePolicy(roleArnStr)
 		if err != nil {
@@ -451,7 +455,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	var policyName string
-	if roleArnStr != "" && globalIAMSys.HasRolePolicy() {
+	if roleArnStr != "" && globalIAMSys.HasRolePolicy() && strings.TrimSpace(iamPolicyClaimNameOpenID()) == "" {
 		// If roleArn is used, we set it as a claim, and use the
 		// associated policy when credentials are used.
 		claims[roleArnClaim] = roleArn.String()
