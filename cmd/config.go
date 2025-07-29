@@ -148,9 +148,9 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) 
 	return saveConfig(ctx, objAPI, configFile, data)
 }
 
-// applySECUREAPIDefaults updates API configuration defaults for fresh installations
+// applyFreshInstallAPIDefaults updates API configuration defaults for fresh installations
 // to use secure CORS settings (disables credentials with wildcard origins).
-func applySECUREAPIDefaults(srvCfg config.Config) {
+func applyFreshInstallAPIDefaults(srvCfg config.Config) {
 	// For fresh installs, use secure API defaults
 	srvCfg[config.APISubSys][config.Default] = api.GetSecureDefaultKVS()
 }
