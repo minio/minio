@@ -170,6 +170,24 @@ var (
 	}
 )
 
+// GetSecureDefaultKVS returns API configuration defaults with secure CORS settings
+// for fresh installations (disables credentials with wildcard origins).
+func GetSecureDefaultKVS() config.KVS {
+	// Start with standard defaults and modify only the security-sensitive setting
+	secureDefaults := make(config.KVS, len(DefaultKVS))
+	copy(secureDefaults, DefaultKVS)
+	
+	// Override the CORS credentials setting for security
+	for i, kv := range secureDefaults {
+		if kv.Key == apiCorsAllowCredentialsWithWildcard {
+			secureDefaults[i].Value = config.EnableOff
+			break
+		}
+	}
+	
+	return secureDefaults
+}
+
 // Config storage class configuration
 type Config struct {
 	RequestsMax                      int           `json:"requests_max"`
