@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/minio/minio/internal/useragent"
 	"github.com/minio/pkg/v3/certs"
 )
 
@@ -181,5 +182,25 @@ func (s ConnSettings) NewRemoteTargetHTTPTransport(insecure bool) func() *http.T
 
 	return func() *http.Transport {
 		return tr
+	}
+}
+
+// uaTransport - User-Agent  transport
+type uaTransport struct {
+	ua string
+	rt http.RoundTripper
+}
+
+func (u *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req2 := req.Clone(req.Context())
+	req2.Header.Set("User-Agent", u.ua)
+	return u.rt.RoundTrip(req2)
+}
+
+// WithUserAgent wraps an existing transport with custom User-Agent
+func WithUserAgent(rt http.RoundTripper) http.RoundTripper {
+	return &uaTransport{
+		ua: useragent.Get(),
+		rt: rt,
 	}
 }

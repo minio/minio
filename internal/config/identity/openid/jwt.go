@@ -30,6 +30,7 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
+	xhttp "github.com/minio/minio/internal/http"
 	xnet "github.com/minio/pkg/v3/net"
 	"github.com/minio/pkg/v3/policy"
 )
@@ -268,7 +269,7 @@ func parseDiscoveryDoc(u *xnet.URL, transport http.RoundTripper, closeRespFn fun
 		return d, err
 	}
 	clnt := http.Client{
-		Transport: transport,
+		Transport: xhttp.WithUserAgent(transport),
 	}
 	resp, err := clnt.Do(req)
 	if err != nil {
