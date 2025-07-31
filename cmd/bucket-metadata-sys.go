@@ -511,7 +511,6 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []stri
 	g := errgroup.WithNErrs(len(buckets))
 	bucketMetas := make([]BucketMetadata, len(buckets))
 	for index := range buckets {
-		index := index
 		g.Go(func() error {
 			// Sleep and stagger to avoid blocked CPU and thundering
 			// herd upon start up sequence.
