@@ -4155,28 +4155,25 @@
       },
       {
         "current": {
-          "selected": true,
-          "text": "minio-job-bucket",
-          "value": "minio-job-bucket"
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
         "definition": "label_values(job)",
-        "hide": 0,
         "includeAll": false,
-        "multi": false,
         "name": "scrape_jobs",
         "options": [],
         "query": {
+          "qryType": 1,
           "query": "label_values(job)",
-          "refId": "StandardVariableQuery"
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
-        "sort": 0,
         "type": "query"
       }
     ]
