@@ -20,10 +20,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"math/rand"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/minio/minio/internal/kms"
@@ -430,6 +433,46 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		}
 		if result.Objects[1].Name != "newPrefix2" {
 			t.Errorf("%s: Expected the object name to be `%s`, but instead found `%s`", instanceType, "newPrefix2", result.Objects[0].Name)
+		}
+	}
+
+	// check paging works.
+	ag := []string{"a", "b", "c", "d", "e", "f", "g"}
+	checkObjCount := make(map[string]int)
+	for i := 0; i < 7; i++ {
+		dirName := strings.Repeat(ag[i], 3)
+		key := fmt.Sprintf("testPrefix/%s/obj%s", dirName, dirName)
+		checkObjCount[key]++
+		_, err = obj.PutObject(context.Background(), "bucket", key, mustGetPutObjReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), opts)
+		if err != nil {
+			t.Fatalf("%s: <ERROR> %s", instanceType, err)
+		}
+	}
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+		token := ""
+		for ctx.Err() == nil {
+			result, err := obj.ListObjectsV2(ctx, "bucket", "testPrefix", token, "", 2, false, "")
+			if err != nil {
+				t.Fatalf("%s: <ERROR> %s", instanceType, err)
+			}
+			token = result.NextContinuationToken
+			if len(result.Objects) == 0 {
+				break
+			}
+			for _, obj := range result.Objects {
+				checkObjCount[obj.Name]--
+			}
+			if token == "" {
+				break
+			}
+		}
+		for key, value := range checkObjCount {
+			if value != 0 {
+				t.Errorf("%s: Expected value of objects to be %d, instead found to be %d", instanceType, 0, value)
+			}
+			delete(checkObjCount, key)
 		}
 	}
 }

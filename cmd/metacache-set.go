@@ -225,7 +225,10 @@ func (o *listPathOptions) gatherResults(ctx context.Context, in <-chan metaCache
 				continue
 			}
 			if yes := o.shouldSkip(ctx, entry); yes {
-				results.lastSkippedEntry = entry.name
+				// when we have not enough results, record the skipped entry
+				if o.Limit > 0 && results.len() < o.Limit {
+					results.lastSkippedEntry = entry.name
+				}
 				continue
 			}
 			if o.Limit > 0 && results.len() >= o.Limit {
