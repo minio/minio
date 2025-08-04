@@ -355,7 +355,9 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.IdentityOpenIDSubSys:
 		if _, err := openid.LookupConfig(s,
-			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region()); err != nil {
+			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region(), func() string {
+				return getUserAgent(getMinioMode())
+			}); err != nil {
 			return err
 		}
 	case config.IdentityLDAPSubSys:

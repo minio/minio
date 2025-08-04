@@ -262,14 +262,14 @@ type DiscoveryDoc struct {
 	CodeChallengeMethodsSupported    []string `json:"code_challenge_methods_supported,omitempty"`
 }
 
-func parseDiscoveryDoc(u *xnet.URL, transport http.RoundTripper, closeRespFn func(io.ReadCloser)) (DiscoveryDoc, error) {
+func parseDiscoveryDoc(u *xnet.URL, transport http.RoundTripper, closeRespFn func(io.ReadCloser), getUA func() string) (DiscoveryDoc, error) {
 	d := DiscoveryDoc{}
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return d, err
 	}
 	clnt := http.Client{
-		Transport: xhttp.WithUserAgent(transport),
+		Transport: xhttp.WithUserAgent(transport, getUA),
 	}
 	resp, err := clnt.Do(req)
 	if err != nil {

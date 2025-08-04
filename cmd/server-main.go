@@ -53,7 +53,6 @@ import (
 	xhttp "github.com/minio/minio/internal/http"
 	xioutil "github.com/minio/minio/internal/ioutil"
 	"github.com/minio/minio/internal/logger"
-	"github.com/minio/minio/internal/useragent"
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
 	"gopkg.in/yaml.v2"
@@ -754,10 +753,6 @@ func serverMain(ctx *cli.Context) {
 	go handleSignals()
 
 	setDefaultProfilerRates()
-
-	useragent.Register(func() string {
-		return getUserAgent(getMinioMode())
-	})
 
 	// Initialize globalConsoleSys system
 	bootstrapTrace("newConsoleLogger", func() {

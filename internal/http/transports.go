@@ -25,7 +25,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/minio/minio/internal/useragent"
 	"github.com/minio/pkg/v3/certs"
 )
 
@@ -198,9 +197,9 @@ func (u *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 // WithUserAgent wraps an existing transport with custom User-Agent
-func WithUserAgent(rt http.RoundTripper) http.RoundTripper {
+func WithUserAgent(rt http.RoundTripper, getUA func() string) http.RoundTripper {
 	return &uaTransport{
-		ua: useragent.Get(),
+		ua: getUA(),
 		rt: rt,
 	}
 }
