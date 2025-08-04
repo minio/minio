@@ -14,19 +14,26 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 package useragent
 
-var provider = func() string {
-	return "Go-http-client/1.1"
-}
+import (
+	"sync/atomic"
+)
+
+type providerFunc func() string
+
+var provider atomic.Pointer[providerFunc]
 
 // Register sets a custom function to provide the User-Agent string.
 func Register(f func() string) {
-	provider = f
+	p := providerFunc(f)
+	provider.Store(&p)
 }
 
 // Get returns the current User-Agent string.
 func Get() string {
-	return provider()
+	if fn := provider.Load(); fn != nil {
+		return (*fn)()
+	}
+	return "minio/go-http"
 }
