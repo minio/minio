@@ -15,16 +15,6 @@
       }
     ]
   },
- "__inputs": [
-    { 
-      "name": "DS_PROMETHEUS",
-      "label": "Prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    } 
-  ],    
   "description": "MinIO Grafana Dashboard - https://min.io/",
   "editable": true,
   "fiscalYearStartMonth": 0,
@@ -2335,7 +2325,20 @@
     "list": [
       {
         "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
         },
+        "label": "Data source",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "current": {},
         "datasource": {
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
