@@ -89,6 +89,7 @@ type epHealth struct {
 	Endpoint        string
 	Scheme          string
 	Online          bool
+	disableSSL      bool
 	lastOnline      time.Time
 	lastHCAt        time.Time
 	offlineDuration time.Duration
@@ -97,13 +98,13 @@ type epHealth struct {
 
 // isOffline returns current liveness result of remote target. Add endpoint to
 // healthCheck map if missing and default to online status
-func (sys *BucketTargetSys) isOffline(ep *url.URL) bool {
+func (sys *BucketTargetSys) isOffline(ep *url.URL, disableSSL bool) bool {
 	sys.hMutex.RLock()
 	defer sys.hMutex.RUnlock()
 	if h, ok := sys.hc[ep.Host]; ok {
 		return !h.Online
 	}
-	go sys.initHC(ep)
+	go sys.initHC(ep, disableSSL)
 	return false
 }
 
@@ -117,12 +118,13 @@ func (sys *BucketTargetSys) markOffline(ep *url.URL) {
 	}
 }
 
-func (sys *BucketTargetSys) initHC(ep *url.URL) {
+func (sys *BucketTargetSys) initHC(ep *url.URL, disableSSL bool) {
 	sys.hMutex.Lock()
 	sys.hc[ep.Host] = epHealth{
-		Endpoint: ep.Host,
-		Scheme:   ep.Scheme,
-		Online:   true,
+		Endpoint:   ep.Host,
+		Scheme:     ep.Scheme,
+		Online:     true,
+		disableSSL: disableSSL,
 	}
 	sys.hMutex.Unlock()
 }
@@ -143,6 +145,50 @@ func newHCClient(insecure bool) *madmin.AnonymousClient {
 	return clnt
 }
 
+func (sys *BucketTargetSys) checkClientAlive(ctx context.Context, eps []madmin.ServerProperties, hcClient *madmin.AnonymousClient, newEpHealthMap map[string]epHealth) {
+	if len(eps) <= 0 {
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	start := time.Now()
+	for result := range hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
+		var lastOnline time.Time
+		var offline time.Duration
+		//	var deploymentID string
+		sys.hMutex.RLock()
+		prev, ok := sys.hc[result.Endpoint.Host]
+		sys.hMutex.RUnlock()
+		if ok {
+			if prev.Online != result.Online || !result.Online {
+				if !prev.lastHCAt.IsZero() {
+					offline = time.Since(prev.lastHCAt) + prev.offlineDuration
+				} else {
+					offline = prev.offlineDuration
+				}
+			} else if result.Online {
+				offline = prev.offlineDuration
+			}
+		}
+		lastOnline = prev.lastOnline
+		if result.Online {
+			lastOnline = time.Now()
+		}
+		l := prev.latency
+		l.update(time.Since(start))
+		newEpHealthMap[result.Endpoint.Host] = epHealth{
+			Endpoint:        result.Endpoint.Host,
+			Scheme:          result.Endpoint.Scheme,
+			Online:          result.Online,
+			lastOnline:      lastOnline,
+			offlineDuration: offline,
+			lastHCAt:        time.Now(),
+			latency:         l,
+			disableSSL:      prev.disableSSL,
+		}
+	}
+	cancel()
+}
+
 // heartBeat performs liveness check on remote endpoints.
 func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 	hcTimer := time.NewTimer(defaultHealthCheckDuration)
@@ -151,56 +197,25 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 		select {
 		case <-hcTimer.C:
 			sys.hMutex.RLock()
-			eps := make([]madmin.ServerProperties, 0, len(sys.hc))
+			sslEps := make([]madmin.ServerProperties, 0, len(sys.hc))
+			insecureEps := make([]madmin.ServerProperties, 0, len(sys.hc))
 			for _, ep := range sys.hc {
-				eps = append(eps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
+				if ep.disableSSL {
+					insecureEps = append(insecureEps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
+				} else {
+					sslEps = append(sslEps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
+				}
 			}
 			sys.hMutex.RUnlock()
+			newEpHealthMap := make(map[string]epHealth, len(sys.hc))
+			// Perform endpoint health checks with SSL.
+			sys.checkClientAlive(ctx, sslEps, sys.hcClient, newEpHealthMap)
+			// Perform endpoint health checks without SSL.
+			sys.checkClientAlive(ctx, insecureEps, sys.insecureHcClient, newEpHealthMap)
+			sys.hMutex.Lock()
+			sys.hc = newEpHealthMap
+			sys.hMutex.Unlock()
 
-			if len(eps) > 0 {
-				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				m := make(map[string]epHealth, len(eps))
-				start := time.Now()
-
-				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
-					var lastOnline time.Time
-					var offline time.Duration
-					//	var deploymentID string
-					sys.hMutex.RLock()
-					prev, ok := sys.hc[result.Endpoint.Host]
-					sys.hMutex.RUnlock()
-					if ok {
-						if prev.Online != result.Online || !result.Online {
-							if !prev.lastHCAt.IsZero() {
-								offline = time.Since(prev.lastHCAt) + prev.offlineDuration
-							} else {
-								offline = prev.offlineDuration
-							}
-						} else if result.Online {
-							offline = prev.offlineDuration
-						}
-					}
-					lastOnline = prev.lastOnline
-					if result.Online {
-						lastOnline = time.Now()
-					}
-					l := prev.latency
-					l.update(time.Since(start))
-					m[result.Endpoint.Host] = epHealth{
-						Endpoint:        result.Endpoint.Host,
-						Scheme:          result.Endpoint.Scheme,
-						Online:          result.Online,
-						lastOnline:      lastOnline,
-						offlineDuration: offline,
-						lastHCAt:        time.Now(),
-						latency:         l,
-					}
-				}
-				cancel()
-				sys.hMutex.Lock()
-				sys.hc = m
-				sys.hMutex.Unlock()
-			}
 			hcTimer.Reset(defaultHealthCheckDuration)
 		case <-ctx.Done():
 			return
@@ -683,6 +698,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		ResetID:             tcfg.ResetID,
 		Endpoint:            tcfg.Endpoint,
 		Secure:              tcfg.Secure,
+		DisableSSL:          tcfg.DisableSSL,
 	}
 	return tc, nil
 }
@@ -787,4 +803,5 @@ type TargetClient struct {
 	ResetID             string
 	Endpoint            string
 	Secure              bool
+	DisableSSL          bool
 }
