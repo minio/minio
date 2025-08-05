@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -55,13 +56,14 @@ type arnErrs struct {
 // BucketTargetSys represents bucket targets subsystem
 type BucketTargetSys struct {
 	sync.RWMutex
-	arnRemotesMap map[string]arnTarget
-	targetsMap    map[string][]madmin.BucketTarget
-	hMutex        sync.RWMutex
-	hc            map[string]epHealth
-	hcClient      *madmin.AnonymousClient
-	aMutex        sync.RWMutex
-	arnErrsMap    map[string]arnErrs // map of ARN to error count of failures to get target
+	arnRemotesMap    map[string]arnTarget
+	targetsMap       map[string][]madmin.BucketTarget
+	hMutex           sync.RWMutex
+	hc               map[string]epHealth
+	hcClient         *madmin.AnonymousClient
+	insecureHcClient *madmin.AnonymousClient
+	aMutex           sync.RWMutex
+	arnErrsMap       map[string]arnErrs // map of ARN to error count of failures to get target
 }
 
 type latencyStat struct {
@@ -126,13 +128,18 @@ func (sys *BucketTargetSys) initHC(ep *url.URL) {
 }
 
 // newHCClient initializes an anonymous client for performing health check on the remote endpoints
-func newHCClient() *madmin.AnonymousClient {
+func newHCClient(insecure bool) *madmin.AnonymousClient {
 	clnt, e := madmin.NewAnonymousClientNoEndpoint()
 	if e != nil {
 		bugLogIf(GlobalContext, errors.New("Unable to initialize health check client"))
 		return nil
 	}
-	clnt.SetCustomTransport(globalRemoteTargetTransport)
+	if insecure {
+		clnt.SetCustomTransport(globalRemoteInsecureTransport)
+	} else {
+		clnt.SetCustomTransport(globalRemoteTargetTransport)
+	}
+
 	return clnt
 }
 
@@ -357,7 +364,14 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	if tgt.Secure {
 		scheme = "https"
 	}
-	result := <-sys.hcClient.Alive(hcCtx, madmin.AliveOpts{}, madmin.ServerProperties{
+
+	var hcClient *madmin.AnonymousClient
+	if tgt.DisableSSL {
+		hcClient = sys.insecureHcClient
+	} else {
+		hcClient = sys.hcClient
+	}
+	result := <-hcClient.Alive(hcCtx, madmin.AliveOpts{}, madmin.ServerProperties{
 		Endpoint: tgt.Endpoint,
 		Scheme:   scheme,
 	})
@@ -552,11 +566,12 @@ func (sys *BucketTargetSys) GetRemoteBucketTargetByArn(ctx context.Context, buck
 // NewBucketTargetSys - creates new replication system.
 func NewBucketTargetSys(ctx context.Context) *BucketTargetSys {
 	sys := &BucketTargetSys{
-		arnRemotesMap: make(map[string]arnTarget),
-		targetsMap:    make(map[string][]madmin.BucketTarget),
-		arnErrsMap:    make(map[string]arnErrs),
-		hc:            make(map[string]epHealth),
-		hcClient:      newHCClient(),
+		arnRemotesMap:    make(map[string]arnTarget),
+		targetsMap:       make(map[string][]madmin.BucketTarget),
+		arnErrsMap:       make(map[string]arnErrs),
+		hc:               make(map[string]epHealth),
+		hcClient:         newHCClient(false),
+		insecureHcClient: newHCClient(true),
 	}
 	// reload healthCheck endpoints map periodically to remove stale endpoints from the map.
 	go func() {
@@ -636,11 +651,17 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 
+	var remoteTransport http.RoundTripper
+	if tcfg.DisableSSL {
+		remoteTransport = globalRemoteInsecureTransport
+	} else {
+		remoteTransport = globalRemoteTargetTransport
+	}
 	api, err := minio.New(tcfg.Endpoint, &minio.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,
 		Region:    tcfg.Region,
-		Transport: globalRemoteTargetTransport,
+		Transport: remoteTransport,
 	})
 	if err != nil {
 		return nil, err

@@ -428,6 +428,7 @@ func serverHandleCmdArgs(ctxt serverCtxt) {
 	// allow transport to be HTTP/1.1 for proxying.
 	globalInternodeTransport = NewInternodeHTTPTransport(ctxt.MaxIdleConnsPerHost)()
 	globalRemoteTargetTransport = NewRemoteTargetHTTPTransport(false)()
+	globalRemoteInsecureTransport = NewRemoteTargetHTTPTransport(true)()
 	globalProxyEndpoints = GetProxyEndpoints(globalEndpoints, globalRemoteTargetTransport)
 
 	globalForwarder = handlers.NewForwarder(&handlers.Forwarder{
