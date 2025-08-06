@@ -420,7 +420,7 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	nSets := make([]int, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
-		index := index
+
 		// Skip suspended pools or pools participating in rebalance for any new
 		// I/O.
 		if z.IsSuspended(index) || z.IsPoolRebalancing(index) {
@@ -660,7 +660,6 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	for index := range z.serverPools {
-		index := index
 		g.Go(func() error {
 			return z.serverPools[index].Shutdown(ctx)
 		}, index)
@@ -712,7 +711,6 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool)
 	storageInfos := make([]StorageInfo, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
-		index := index
 		g.Go(func() error {
 			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx, metrics)
 			return nil

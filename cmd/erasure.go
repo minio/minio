@@ -175,7 +175,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			di := madmin.Disk{
 				Endpoint:  endpoints[index].String(),
