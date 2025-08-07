@@ -83,7 +83,7 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 	}
 
 	var updatedAt time.Time
-	// Remove the bucket quota configuration when the quota type is not set.
+	// Remove the bucket quota configuration when the quota type is not set(from: mc quota clear alias/bucket).
 	if quotaConfig.Size == 0 && quotaConfig.Quota == 0 {
 		updatedAt, err = globalBucketMetadataSys.Delete(ctx, bucket, bucketQuotaConfigFile)
 		if err != nil {
