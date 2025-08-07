@@ -82,10 +82,21 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	updatedAt, err := globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
-	if err != nil {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return
+	var updatedAt time.Time
+	// Remove the bucket quota configuration when the quota type is not set.
+	if quotaConfig.Size == 0 && quotaConfig.Quota == 0 {
+		updatedAt, err = globalBucketMetadataSys.Delete(ctx, bucket, bucketQuotaConfigFile)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
+		data = nil
+	} else {
+		updatedAt, err = globalBucketMetadataSys.Update(ctx, bucket, bucketQuotaConfigFile, data)
+		if err != nil {
+			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
+			return
+		}
 	}
 
 	bucketMeta := madmin.SRBucketMeta{
@@ -93,9 +104,6 @@ func (a adminAPIHandlers) PutBucketQuotaConfigHandler(w http.ResponseWriter, r *
 		Bucket:    bucket,
 		Quota:     data,
 		UpdatedAt: updatedAt,
-	}
-	if quotaConfig.Size == 0 && quotaConfig.Quota == 0 {
-		bucketMeta.Quota = nil
 	}
 
 	// Call site replication hook.
