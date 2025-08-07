@@ -94,6 +94,8 @@ createBucket() {
 				echo "Suspending versioning for '$BUCKET'"
 				${MC} version suspend myminio/$BUCKET
 			fi
+		else
+		    echo "No versioning action for '$BUCKET'" 
 		fi
 	else
 		echo "Bucket '$BUCKET' versioning unchanged."
@@ -117,6 +119,5 @@ connectToMinio $scheme
 {{ $global := . }}
 # Create the buckets
 {{- range .Values.buckets }}
-createBucket {{ tpl .name $global }} {{ .policy | default "none" | quote }} {{ .purge | default false }} {{ .versioning | default false }} {{ .objectlocking | default false }}
-{{- end }}
+createBucket {{ tpl .name $global }} {{ .policy | default "none" | quote }} {{ .purge | default false }} {{ .versioning | default "" }} {{ .objectlocking | default false }}{{- end }}
 {{- end }}
