@@ -36,20 +36,20 @@ For optimal production setup MinIO recommends Linux kernel version 4.x and later
 
 > NOTE:  While MinIO does not implement an upper boundary on buckets, your cluster's hardware has natural limits that depend on the workload and its scaling patterns. We strongly recommend [MinIO SUBNET](https://min.io/pricing) for architecture and sizing guidance for your production use case.
 
-## List of Amazon S3 API's not supported on MinIO
+## List of Amazon S3 APIs not supported on MinIO
 
 We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please consider opening a [GitHub issue](https://github.com/minio/minio/issues) with relevant details on why MinIO must implement them.
 
-### List of Amazon S3 Bucket API's not supported on MinIO
+### List of Amazon S3 Bucket APIs not supported on MinIO
 
-- BucketACL (Use [bucket policies](https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html) instead)
+- BucketACL (Use [bucket policies](https://docs.min.io/community/minio-object-store/administration/identity-access-management/policy-based-access-control.html) instead)
 - BucketCORS (CORS enabled by default on all buckets for all HTTP verbs, you can optionally restrict the CORS domains)
 - BucketWebsite (Use [`caddy`](https://github.com/caddyserver/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
-- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://min.io/docs/minio/linux/administration/monitoring/bucket-notifications.html) APIs)
+- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](https://docs.min.io/community/minio-object-store/administration/monitoring/bucket-notifications.html) APIs)
 
-### List of Amazon S3 Object API's not supported on MinIO
+### List of Amazon S3 Object APIs not supported on MinIO
 
-- ObjectACL (Use [bucket policies](https://min.io/docs/minio/linux/administration/identity-access-management/policy-based-access-control.html) instead)
+- ObjectACL (Use [bucket policies](https://docs.min.io/community/minio-object-store/administration/identity-access-management/policy-based-access-control.html) instead)
 
 ## Object name restrictions on MinIO
 

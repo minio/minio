@@ -106,13 +106,13 @@ var (
 	ErrInvalidErasureEndpoints = newErrFn(
 		"Invalid endpoint(s) in erasure mode",
 		"Please provide correct combination of local/remote paths",
-		"For more information, please refer to https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html",
+		"For more information, please refer to https://docs.min.io/community/minio-object-store/operations/concepts/erasure-coding.html",
 	)
 
 	ErrInvalidNumberOfErasureEndpoints = newErrFn(
 		"Invalid total number of endpoints for erasure mode",
 		"Please provide number of endpoints greater or equal to 2",
-		"For more information, please refer to https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html",
+		"For more information, please refer to https://docs.min.io/community/minio-object-store/operations/concepts/erasure-coding.html",
 	)
 
 	ErrStorageClassValue = newErrFn(
@@ -192,7 +192,7 @@ Examples:
 	ErrNoCertsAndHTTPSEndpoints = newErrFn(
 		"HTTPS specified in endpoints, but no TLS certificate is found on the local machine",
 		"Please add TLS certificate or use HTTP endpoints only",
-		"Refer to https://min.io/docs/minio/linux/operations/network-encryption.html for information about how to load a TLS certificate in your server",
+		"Refer to https://docs.min.io/community/minio-object-store/operations/network-encryption.html for information about how to load a TLS certificate in your server",
 	)
 
 	ErrCertsAndHTTPEndpoints = newErrFn(
