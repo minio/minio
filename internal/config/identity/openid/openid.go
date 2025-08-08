@@ -199,7 +199,7 @@ func (r *Config) Clone() Config {
 }
 
 // LookupConfig lookup jwks from config, override with any ENVs.
-func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func(io.ReadCloser), serverRegion string, getUA func() string) (c Config, err error) {
+func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func(io.ReadCloser), serverRegion string) (c Config, err error) {
 	openIDClientTransport := http.DefaultTransport
 	if transport != nil {
 		openIDClientTransport = transport
@@ -297,7 +297,7 @@ func LookupConfig(s config.Config, transport http.RoundTripper, closeRespFn func
 			return c, err
 		}
 		configURLDomain := p.URL.Hostname()
-		p.DiscoveryDoc, err = parseDiscoveryDoc(p.URL, transport, closeRespFn, getUA)
+		p.DiscoveryDoc, err = parseDiscoveryDoc(p.URL, transport, closeRespFn)
 		if err != nil {
 			return c, err
 		}

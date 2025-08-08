@@ -30,7 +30,6 @@ import (
 	jwtgo "github.com/golang-jwt/jwt/v4"
 	"github.com/minio/minio/internal/arn"
 	"github.com/minio/minio/internal/auth"
-	xhttp "github.com/minio/minio/internal/http"
 	xnet "github.com/minio/pkg/v3/net"
 	"github.com/minio/pkg/v3/policy"
 )
@@ -262,14 +261,14 @@ type DiscoveryDoc struct {
 	CodeChallengeMethodsSupported    []string `json:"code_challenge_methods_supported,omitempty"`
 }
 
-func parseDiscoveryDoc(u *xnet.URL, transport http.RoundTripper, closeRespFn func(io.ReadCloser), getUA func() string) (DiscoveryDoc, error) {
+func parseDiscoveryDoc(u *xnet.URL, transport http.RoundTripper, closeRespFn func(io.ReadCloser)) (DiscoveryDoc, error) {
 	d := DiscoveryDoc{}
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return d, err
 	}
 	clnt := http.Client{
-		Transport: xhttp.WithUserAgent(transport, getUA),
+		Transport: transport,
 	}
 	resp, err := clnt.Do(req)
 	if err != nil {
