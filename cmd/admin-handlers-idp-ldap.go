@@ -445,8 +445,10 @@ func (a adminAPIHandlers) ListAccessKeysLDAP(w http.ResponseWriter, r *http.Requ
 	for _, svc := range serviceAccounts {
 		expiryTime := svc.Expiration
 		serviceAccountList = append(serviceAccountList, madmin.ServiceAccountInfo{
-			AccessKey:  svc.AccessKey,
-			Expiration: &expiryTime,
+			AccessKey:   svc.AccessKey,
+			Expiration:  &expiryTime,
+			Name:        svc.Name,
+			Description: svc.Description,
 		})
 	}
 	for _, sts := range stsKeys {
@@ -625,8 +627,10 @@ func (a adminAPIHandlers) ListAccessKeysLDAPBulk(w http.ResponseWriter, r *http.
 			}
 			for _, svc := range serviceAccounts {
 				accessKeys.ServiceAccounts = append(accessKeys.ServiceAccounts, madmin.ServiceAccountInfo{
-					AccessKey:  svc.AccessKey,
-					Expiration: &svc.Expiration,
+					AccessKey:   svc.AccessKey,
+					Expiration:  &svc.Expiration,
+					Name:        svc.Name,
+					Description: svc.Description,
 				})
 			}
 			// if only service accounts, skip if user has no service accounts
