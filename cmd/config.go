@@ -29,6 +29,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/madmin-go/v3"
 	"github.com/minio/minio/internal/config"
+	"github.com/minio/minio/internal/config/api"
 	"github.com/minio/minio/internal/kms"
 )
 
@@ -145,6 +146,13 @@ func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) 
 		}
 	}
 	return saveConfig(ctx, objAPI, configFile, data)
+}
+
+// applyFreshInstallAPIDefaults updates API configuration defaults for fresh installations
+// to use secure CORS settings (disables credentials with wildcard origins).
+func applyFreshInstallAPIDefaults(srvCfg config.Config) {
+	// For fresh installs, use secure API defaults
+	srvCfg[config.APISubSys][config.Default] = api.GetSecureDefaultKVS()
 }
 
 // data is optional. If nil it will be loaded from backend.

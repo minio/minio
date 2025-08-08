@@ -646,6 +646,16 @@ func registerAPIRouter(router *mux.Router) {
 	apiRouter.MethodNotAllowedHandler = collectAPIStats("methodnotallowed", httpTraceAll(methodNotAllowedHandler("S3")))
 }
 
+// configHasWildcard checks if any configured CORS origin is a wildcard
+func configHasWildcard() bool {
+	for _, o := range globalAPIConfig.getCorsAllowOrigins() {
+		if o == "*" {
+			return true
+		}
+	}
+	return false
+}
+
 // corsHandler handler for CORS (Cross Origin Resource Sharing)
 func corsHandler(handler http.Handler) http.Handler {
 	commonS3Headers := []string{
@@ -669,27 +679,39 @@ func corsHandler(handler http.Handler) http.Handler {
 		"x-amz*",
 		"*",
 	}
-	opts := cors.Options{
-		AllowOriginFunc: func(origin string) bool {
-			for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
-				if wildcard.MatchSimple(allowedOrigin, origin) {
-					return true
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Configure CORS dynamically based on current settings
+		// This ensures we handle configuration changes and wildcard security properly
+		hasWildcard := configHasWildcard()
+		allowCredentialsWithWildcard := globalAPIConfig.getCorsAllowCredentialsWithWildcard()
+
+		opts := cors.Options{
+			AllowOriginFunc: func(origin string) bool {
+				for _, allowedOrigin := range globalAPIConfig.getCorsAllowOrigins() {
+					if wildcard.MatchSimple(allowedOrigin, origin) {
+						return true
+					}
 				}
-			}
-			return false
-		},
-		AllowedMethods: []string{
-			http.MethodGet,
-			http.MethodPut,
-			http.MethodHead,
-			http.MethodPost,
-			http.MethodDelete,
-			http.MethodOptions,
-			http.MethodPatch,
-		},
-		AllowedHeaders:   commonS3Headers,
-		ExposedHeaders:   commonS3Headers,
-		AllowCredentials: true,
-	}
-	return cors.New(opts).Handler(handler)
+				return false
+			},
+			AllowedMethods: []string{
+				http.MethodGet,
+				http.MethodPut,
+				http.MethodHead,
+				http.MethodPost,
+				http.MethodDelete,
+				http.MethodOptions,
+				http.MethodPatch,
+			},
+			AllowedHeaders: commonS3Headers,
+			ExposedHeaders: commonS3Headers,
+			// CORS spec compliance: disable credentials when wildcard origins are configured
+			// Unless explicitly overridden by administrator (for backward compatibility)
+			// This prevents the security vulnerability where any website can make credentialed requests
+			AllowCredentials: !hasWildcard || allowCredentialsWithWildcard,
+		}
+
+		// Use rs/cors directly without custom wrapper to avoid interface issues
+		cors.New(opts).Handler(handler).ServeHTTP(w, r)
+	})
 }
