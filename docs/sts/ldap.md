@@ -319,5 +319,5 @@ $ go run ldap.go -u foouser -p foopassword
 
 ## Explore Further
 
-- [MinIO Admin Complete Guide](https://min.io/docs/minio/linux/reference/minio-mc-admin.html)
-- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)
+- [MinIO Admin Complete Guide](https://docs.min.io/community/minio-object-store/reference/minio-mc-admin.html)
+- [The MinIO documentation website](https://docs.min.io/community/minio-object-store/index.html)

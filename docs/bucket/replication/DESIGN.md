@@ -156,5 +156,5 @@ If 3 or more targets are participating in active-active replication, the replica
 
 ## Explore Further
 
-- [MinIO Bucket Versioning Implementation](https://min.io/docs/minio/linux/administration/object-management/object-versioning.html)
-- [MinIO Client Quickstart Guide](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart)
+- [MinIO Bucket Versioning Implementation](https://docs.min.io/community/minio-object-store/administration/object-management/object-versioning.html)
+- [MinIO Client Quickstart Guide](https://docs.min.io/community/minio-object-store/reference/minio-mc.html#quickstart)
