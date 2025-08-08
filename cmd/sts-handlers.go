@@ -414,19 +414,28 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	//
 	// Currently, we do not support multiple claim based IDPs, as there is no
 	// defined parameter to disambiguate the intended IDP in this STS request.
-	//
-	// Skip RoleArn existence check when policy mapping is based on a JWT claim.
-	// This is required to support clients (like the AWS CLI or SDKs) that enforce providing a RoleArn,
-	// even though it's not used in claim-based identity mode.
 	roleArn := openid.DummyRoleARN
 	roleArnStr := r.Form.Get(stsRoleArn)
-	if roleArnStr != "" && strings.TrimSpace(iamPolicyClaimNameOpenID()) == "" {
+	isRolePolicyProvider := roleArnStr != ""
+	if isRolePolicyProvider {
 		var err error
 		roleArn, _, err = globalIAMSys.GetRolePolicy(roleArnStr)
 		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
-				fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
-			return
+			// If there is no claim-based provider configured, then an
+			// unrecognized roleArn is an error
+			if strings.TrimSpace(iamPolicyClaimNameOpenID()) == "" {
+				writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+					fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
+				return
+			}
+			// If there *is* a claim-based provider configured, then
+			// treat an unrecognized roleArn the same as no roleArn
+			// at all.  This is to support clients like the AWS SDKs
+			// or CLI that will not allow an AssumeRoleWithWebIdentity
+			// call without a RoleARN parameter - for these cases the
+			// user can supply a dummy ARN, which Minio will ignore.
+			roleArn = openid.DummyRoleARN
+			isRolePolicyProvider = false
 		}
 	}
 
@@ -455,7 +464,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	var policyName string
-	if roleArnStr != "" && globalIAMSys.HasRolePolicy() && strings.TrimSpace(iamPolicyClaimNameOpenID()) == "" {
+	if isRolePolicyProvider {
 		// If roleArn is used, we set it as a claim, and use the
 		// associated policy when credentials are used.
 		claims[roleArnClaim] = roleArn.String()
