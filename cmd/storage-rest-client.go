@@ -88,6 +88,8 @@ func toStorageErr(err error) error {
 	}
 
 	switch err.Error() {
+	case errUploadIDNotFound.Error():
+		return errUploadIDNotFound
 	case errFaultyDisk.Error():
 		return errFaultyDisk
 	case errFaultyRemoteDisk.Error():
