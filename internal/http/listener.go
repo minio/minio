@@ -38,46 +38,39 @@ type httpListener struct {
 	opts        TCPOptions
 	listeners   []net.Listener    // underlying TCP listeners.
 	acceptCh    chan acceptResult // channel where all TCP listeners write accepted connection.
-	ctx         context.Context
+	ctxDoneCh   <-chan struct{}
 	ctxCanceler context.CancelFunc
 }
 
 // start - starts separate goroutine for each TCP listener.  A valid new connection is passed to httpListener.acceptCh.
 func (listener *httpListener) start() {
-	// Closure to send acceptResult to acceptCh.
-	// It returns true if the result is sent else false if returns when doneCh is closed.
-	send := func(result acceptResult) bool {
-		select {
-		case listener.acceptCh <- result:
-			// Successfully written to acceptCh
-			return true
-		case <-listener.ctx.Done():
-			return false
-		}
-	}
-
-	// Closure to handle TCPListener until done channel is closed.
-	handleListener := func(idx int, listener net.Listener) {
+	// Closure to handle listener until httpListener.ctxDoneCh channel is closed.
+	handleListener := func(idx int, ln net.Listener) {
 		for {
-			conn, err := listener.Accept()
-			send(acceptResult{conn, err, idx})
+			conn, err := ln.Accept()
+			select {
+			case listener.acceptCh <- acceptResult{conn, err, idx}:
+			case <-listener.ctxDoneCh:
+				return
+			}
 		}
 	}
 
-	// Start separate goroutine for each TCP listener to handle connection.
-	for idx, tcpListener := range listener.listeners {
-		go handleListener(idx, tcpListener)
+	// Start separate goroutine for each listener to handle connection.
+	for idx, ln := range listener.listeners {
+		go handleListener(idx, ln)
 	}
 }
 
 // Accept - reads from httpListener.acceptCh for one of previously accepted TCP connection and returns the same.
 func (listener *httpListener) Accept() (conn net.Conn, err error) {
 	select {
-	case result, ok := <-listener.acceptCh:
-		if ok {
-			return deadlineconn.New(result.conn).WithReadDeadline(listener.opts.IdleTimeout).WithWriteDeadline(listener.opts.IdleTimeout), result.err
+	case result := <-listener.acceptCh:
+		if result.err != nil {
+			return nil, result.err
 		}
-	case <-listener.ctx.Done():
+		return deadlineconn.New(result.conn).WithReadDeadline(listener.opts.IdleTimeout).WithWriteDeadline(listener.opts.IdleTimeout), result.err
+	case <-listener.ctxDoneCh:
 	}
 	return nil, syscall.EINVAL
 }
@@ -87,10 +80,12 @@ func (listener *httpListener) Close() (err error) {
 	listener.ctxCanceler()
 
 	for i := range listener.listeners {
-		listener.listeners[i].Close()
+		if cerr := listener.listeners[i].Close(); cerr != nil && err == nil {
+			err = cerr
+		}
 	}
 
-	return nil
+	return err
 }
 
 // Addr - net.Listener interface compatible method returns net.Addr.  In case of multiple TCP listeners, it returns '0.0.0.0' as IP address.
@@ -113,6 +108,7 @@ func (listener *httpListener) Addr() (addr net.Addr) {
 
 // Addrs - returns all address information of TCP listeners.
 func (listener *httpListener) Addrs() (addrs []net.Addr) {
+	addrs = make([]net.Addr, 0, len(listener.listeners))
 	for i := range listener.listeners {
 		addrs = append(addrs, listener.listeners[i].Addr())
 	}
@@ -154,6 +150,10 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	listeners := make([]net.Listener, 0, len(serverAddrs))
 	listenErrs = make([]error, len(serverAddrs))
 
+	if opts.Trace == nil {
+		opts.Trace = func(msg string) {} // Noop if not defined.
+	}
+
 	// Unix listener with special TCP options.
 	listenCfg := net.ListenConfig{
 		Control: setTCPParametersFn(opts),
@@ -162,17 +162,12 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	for i, serverAddr := range serverAddrs {
 		l, e := listenCfg.Listen(ctx, "tcp", serverAddr)
 		if e != nil {
-			if opts.Trace != nil {
-				opts.Trace(fmt.Sprint("listenCfg.Listen: ", e))
-			}
+			opts.Trace("listenCfg.Listen: " + e.Error())
 
 			listenErrs[i] = e
 			continue
 		}
-
-		if opts.Trace != nil {
-			opts.Trace(fmt.Sprint("adding listener to ", l.Addr()))
-		}
+		opts.Trace("adding listener to " + l.Addr().String())
 
 		listeners = append(listeners, l)
 	}
@@ -182,15 +177,15 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		return
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
 	listener = &httpListener{
-		listeners: listeners,
-		acceptCh:  make(chan acceptResult, len(listeners)),
-		opts:      opts,
+		listeners:   listeners,
+		acceptCh:    make(chan acceptResult, len(listeners)),
+		opts:        opts,
+		ctxDoneCh:   ctx.Done(),
+		ctxCanceler: cancel,
 	}
-	listener.ctx, listener.ctxCanceler = context.WithCancel(ctx)
-	if opts.Trace != nil {
-		opts.Trace(fmt.Sprint("opening ", len(listener.listeners), " listeners"))
-	}
+	opts.Trace(fmt.Sprintf("opening %d listeners", len(listener.listeners)))
 	listener.start()
 
 	return
