@@ -80,12 +80,10 @@ func (listener *httpListener) Close() (err error) {
 	listener.ctxCanceler()
 
 	for i := range listener.listeners {
-		if cerr := listener.listeners[i].Close(); cerr != nil && err == nil {
-			err = cerr
-		}
+		listener.listeners[i].Close()
 	}
 
-	return err
+	return nil
 }
 
 // Addr - net.Listener interface compatible method returns net.Addr.  In case of multiple TCP listeners, it returns '0.0.0.0' as IP address.
