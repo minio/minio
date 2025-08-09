@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"slices"
 	"syscall"
 	"time"
 
@@ -94,12 +95,11 @@ func (listener *httpListener) Addr() (addr net.Addr) {
 	}
 
 	if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-		if ip := net.ParseIP("0.0.0.0"); ip != nil {
-			tcpAddr.IP = ip
+		return &net.TCPAddr{
+			IP:   net.IPv4zero,
+			Port: tcpAddr.Port,
+			Zone: tcpAddr.Zone,
 		}
-
-		addr = tcpAddr
-		return addr
 	}
 	panic("unknown address type on listener")
 }
@@ -174,6 +174,7 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 		// No listeners initialized, no need to continue
 		return
 	}
+	listeners = slices.Clip(listeners)
 
 	ctx, cancel := context.WithCancel(ctx)
 	listener = &httpListener{
