@@ -32,6 +32,7 @@ spec:
     {{- end }}
   {{- end }}
   rules:
+    {{- $domain := include "minio.domain" . -}}
     {{- range .Values.consoleIngress.hosts }}
     - http:
         paths:
@@ -41,7 +42,7 @@ spec:
             backend:
               service:
                 name: {{ $fullName }}
-                port: 
+                port:
                   number: {{ $servicePort }}
             {{- else }}
             backend:
@@ -49,7 +50,9 @@ spec:
               servicePort: {{ $servicePort }}
             {{- end }}
       {{- if . }}
-      host: {{ tpl . $ | quote }}
+        {{- $host := . }}
+        {{- $hostWithDomain := printf "%s%s" $host $domain }}
+        host: {{ $hostWithDomain | quote }}
       {{- end }}
     {{- end }}
 {{- end }}
