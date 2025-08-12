@@ -326,6 +326,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		noFilename         bool
 		corruptedBase64    bool
 		corruptedMultipart bool
+		chunked            bool
 	}{
 		// Success case.
 		{
@@ -347,6 +348,17 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"],["eq", "$x-amz-meta-uuid", "1234"],["eq", "$content-encoding", "gzip"]]}`,
 			noFilename:         true,
+		},
+		// Success case, chunked request.
+		{
+			objectName:         "test",
+			data:               []byte("Hello, World"),
+			expectedRespStatus: http.StatusNoContent,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			dates:              []interface{}{curTimePlus5Min.Format(iso8601TimeFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"],["eq", "$x-amz-meta-uuid", "1234"],["eq", "$content-encoding", "gzip"]]}`,
+			chunked:            true,
 		},
 		// Success case, big body.
 		{
@@ -420,7 +432,8 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		testCase.policy = fmt.Sprintf(testCase.policy, testCase.dates...)
 
 		req, perr := newPostRequestV4Generic("", bucketName, testCase.objectName, testCase.data, testCase.accessKey,
-			testCase.secretKey, region, curTime, []byte(testCase.policy), nil, testCase.noFilename, testCase.corruptedBase64, testCase.corruptedMultipart)
+			testCase.secretKey, region, curTime, []byte(testCase.policy), nil, testCase.noFilename,
+			testCase.corruptedBase64, testCase.corruptedMultipart, testCase.chunked)
 		if perr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
 		}
@@ -560,7 +573,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// Create a new POST request with success_action_redirect field specified
 	req, perr := newPostRequestV4Generic("", bucketName, keyName, []byte("objData"),
 		credentials.AccessKey, credentials.SecretKey, region, curTime,
-		[]byte(policy), map[string]string{"success_action_redirect": redirectURL.String()}, false, false, false)
+		[]byte(policy), map[string]string{"success_action_redirect": redirectURL.String()}, false, false, false, false)
 
 	if perr != nil {
 		t.Fatalf("%s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", instanceType, perr)
@@ -669,7 +682,7 @@ func buildGenericPolicy(t time.Time, accessKey, region, bucketName, objectName s
 }
 
 func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string, region string,
-	t time.Time, policy []byte, addFormData map[string]string, noFilename bool, corruptedB64 bool, corruptedMultipart bool,
+	t time.Time, policy []byte, addFormData map[string]string, noFilename bool, corruptedB64 bool, corruptedMultipart bool, chunked bool,
 ) (*http.Request, error) {
 	// Get the user credential.
 	credStr := getCredentialString(accessKey, region, t)
@@ -743,6 +756,12 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 		return nil, err
 	}
 
+	// Test chunked request alongside no content range policy.
+	if chunked {
+		req.ContentLength = -1
+		req.TransferEncoding = []string{"chunked"}
+	}
+
 	// Set form content-type.
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	return req, nil
@@ -752,12 +771,12 @@ func newPostRequestV4WithContentLength(endPoint, bucketName, objectName string, 
 	t := UTCNow()
 	region := "us-east-1"
 	policy := buildGenericPolicy(t, accessKey, region, bucketName, objectName, true)
-	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, region, t, policy, nil, false, false, false)
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, region, t, policy, nil, false, false, false, false)
 }
 
 func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	t := UTCNow()
 	region := "us-east-1"
 	policy := buildGenericPolicy(t, accessKey, region, bucketName, objectName, false)
-	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, region, t, policy, nil, false, false, false)
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, region, t, policy, nil, false, false, false, false)
 }

@@ -943,7 +943,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	if r.ContentLength <= 0 {
+	if r.ContentLength == 0 {
 		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrEmptyRequestBody), r.URL)
 		return
 	}
