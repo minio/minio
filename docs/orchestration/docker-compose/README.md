@@ -50,10 +50,10 @@ Distributed instances are now accessible on the host using the Minio CLI on port
   * Update the command section in each service.
   * Add a new MinIO server instance to the upstream directive in the Nginx configuration file.
 
-  Read more about distributed MinIO [here](https://min.io/docs/minio/container/operations/install-deploy-manage/deploy-minio-single-node-multi-drive.html).
+  Read more about distributed MinIO [here](https://docs.min.io/community/minio-object-store/operations/deployments/baremetal-deploy-minio-as-a-container.html).
 
 ### Explore Further
 
 * [Overview of Docker Compose](https://docs.docker.com/compose/overview/)
-* [MinIO Docker Quickstart Guide](https://min.io/docs/minio/container/index.html#quickstart-for-containers)
-* [MinIO Erasure Code QuickStart Guide](https://min.io/docs/minio/container/operations/concepts/erasure-coding.html)
+* [MinIO Docker Quickstart Guide](https://docs.min.io/community/minio-object-store/operations/deployments/baremetal-deploy-minio-as-a-container.html)
+* [MinIO Erasure Code QuickStart Guide](https://docs.min.io/community/minio-object-store/operations/concepts/erasure-coding.html)

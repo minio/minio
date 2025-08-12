@@ -2,7 +2,7 @@
 
 MinIO server supports storage class in erasure coding mode. This allows configurable data and parity drives per object.
 
-This page is intended as a summary of MinIO Erasure Coding. For a more complete explanation, see <https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html>.
+This page is intended as a summary of MinIO Erasure Coding. For a more complete explanation, see <https://docs.min.io/community/minio-object-store/operations/concepts/erasure-coding.html>.
 
 ## Overview
 
@@ -53,7 +53,7 @@ The default value for the `STANDARD` storage class depends on the number of volu
 | 6-7              |                 EC:3  |
 | 8 or more        |                 EC:4  |
 
-For more complete documentation on Erasure Set sizing, see the [MinIO Documentation on Erasure Sets](https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html#erasure-sets).
+For more complete documentation on Erasure Set sizing, see the [MinIO Documentation on Erasure Sets](https://docs.min.io/community/minio-object-store/operations/concepts/erasure-coding.html#erasure-sets).
 
 ### Allowed values for REDUCED_REDUNDANCY storage class
 
