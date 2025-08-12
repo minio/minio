@@ -23,9 +23,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/dustin/go-humanize"
 )
 
 // Tests maximum object size.
@@ -227,7 +230,7 @@ func TestDumpRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.RequestURI = "/?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=USWUXHGYZQYFYFFIT3RE%2F20170529%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20170529T190139Z&X-Amz-Expires=600&X-Amz-Signature=19b58080999df54b446fc97304eb8dda60d3df1812ae97f3e8783351bfd9781d&X-Amz-SignedHeaders=host&prefix=Hello%2AWorld%2A"
+	req.RequestURI = "/?" + req.URL.RawQuery
 	req.Header.Set("content-md5", "====test")
 	jsonReq := dumpRequest(req)
 	type jsonResult struct {
@@ -246,15 +249,9 @@ func TestDumpRequest(t *testing.T) {
 	}
 
 	// Look for expected query values
-	expectedQuery := url.Values{}
-	expectedQuery.Set("prefix", "Hello*World*")
-	expectedQuery.Set("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
-	expectedQuery.Set("X-Amz-Credential", "USWUXHGYZQYFYFFIT3RE/20170529/us-east-1/s3/aws4_request")
-	expectedQuery.Set("X-Amz-Date", "20170529T190139Z")
-	expectedQuery.Set("X-Amz-Expires", "600")
-	expectedQuery.Set("X-Amz-SignedHeaders", "host")
+	expectedQuery := req.URL.Query()
 	expectedQuery.Set("X-Amz-Signature", "19b58080999df54b446fc97304eb8dda60d3df1812ae97f3e8783351bfd9781d")
-	expectedRequestURI := "/?" + expectedQuery.Encode()
+	expectedRequestURI := req.URL.Path + "?" + expectedQuery.Encode()
 	if !reflect.DeepEqual(res.RequestURI, expectedRequestURI) {
 		t.Fatalf("Expected %#v, got %#v", expectedRequestURI, res.RequestURI)
 	}
@@ -398,4 +395,44 @@ func TestGetMinioMode(t *testing.T) {
 
 	globalIsDistErasure, globalIsErasure = false, false
 	testMinioMode(globalMinioModeFS)
+}
+
+// Test initMinPartSize function
+func TestInitMinPartSize(t *testing.T) {
+	// Save original value
+	originalValue := globalMinPartSize
+
+	// Test case 1: No environment variable set, should use default
+	os.Unsetenv("MINIO_MIN_PART_SIZE")
+	initMinPartSize()
+	expectedDefault := int64(5 * humanize.MiByte)
+	if globalMinPartSize != expectedDefault {
+		t.Errorf("Expected default value %d, got %d", expectedDefault, globalMinPartSize)
+	}
+
+	// Test case 2: Valid environment variable set
+	os.Setenv("MINIO_MIN_PART_SIZE", "10MiB")
+	initMinPartSize()
+	expectedFromEnv := int64(10 * humanize.MiByte)
+	if globalMinPartSize != expectedFromEnv {
+		t.Errorf("Expected value from env %d, got %d", expectedFromEnv, globalMinPartSize)
+	}
+
+	// Test case 3: Invalid environment variable set, should fallback to default
+	os.Setenv("MINIO_MIN_PART_SIZE", "invalid-size")
+	initMinPartSize()
+	if globalMinPartSize != expectedDefault {
+		t.Errorf("Expected fallback to default %d, got %d", expectedDefault, globalMinPartSize)
+	}
+
+	// Test case 4: Large value
+	os.Setenv("MINIO_MIN_PART_SIZE", "100MiB")
+	initMinPartSize()
+	expectedLarge := int64(100 * humanize.MiByte)
+	if globalMinPartSize != expectedLarge {
+		t.Errorf("Expected large value %d, got %d", expectedLarge, globalMinPartSize)
+	}
+
+	// Restore original value
+	globalMinPartSize = originalValue
 }
