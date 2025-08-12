@@ -204,7 +204,6 @@ func readAllFileInfo(ctx context.Context, disks []StorageAPI, origbucket string,
 	g := errgroup.WithNErrs(len(disks))
 	// Read `xl.meta` in parallel across disks.
 	for index := range disks {
-		index := index
 		g.Go(func() (err error) {
 			if disks[index] == nil {
 				return errDiskNotFound

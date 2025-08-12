@@ -324,7 +324,6 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 
 	// Load format from each disk in parallel
 	for index := range storageDisks {
-		index := index
 		g.Go(func() error {
 			if storageDisks[index] == nil {
 				return errDiskNotFound
@@ -530,7 +529,6 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 
 	// Write `format.json` to all disks.
 	for index := range storageDisks {
-		index := index
 		g.Go(func() error {
 			if formats[index] == nil {
 				return errDiskNotFound
@@ -566,7 +564,6 @@ func initStorageDisksWithErrors(endpoints Endpoints, opts storageOpts) ([]Storag
 	storageDisks := make([]StorageAPI, len(endpoints))
 	g := errgroup.WithNErrs(len(endpoints))
 	for index := range endpoints {
-		index := index
 		g.Go(func() (err error) {
 			storageDisks[index], err = newStorageAPI(endpoints[index], opts)
 			return err
