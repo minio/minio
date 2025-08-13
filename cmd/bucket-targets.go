@@ -89,7 +89,7 @@ type epHealth struct {
 	Endpoint        string
 	Scheme          string
 	Online          bool
-	disableSSL      bool
+	insecureTLS     bool
 	lastOnline      time.Time
 	lastHCAt        time.Time
 	offlineDuration time.Duration
@@ -98,13 +98,13 @@ type epHealth struct {
 
 // isOffline returns current liveness result of remote target. Add endpoint to
 // healthCheck map if missing and default to online status
-func (sys *BucketTargetSys) isOffline(ep *url.URL, disableSSL bool) bool {
+func (sys *BucketTargetSys) isOffline(ep *url.URL, InsecureTLS bool) bool {
 	sys.hMutex.RLock()
 	defer sys.hMutex.RUnlock()
 	if h, ok := sys.hc[ep.Host]; ok {
 		return !h.Online
 	}
-	go sys.initHC(ep, disableSSL)
+	go sys.initHC(ep, InsecureTLS)
 	return false
 }
 
@@ -118,13 +118,13 @@ func (sys *BucketTargetSys) markOffline(ep *url.URL) {
 	}
 }
 
-func (sys *BucketTargetSys) initHC(ep *url.URL, disableSSL bool) {
+func (sys *BucketTargetSys) initHC(ep *url.URL, insecureTLS bool) {
 	sys.hMutex.Lock()
 	sys.hc[ep.Host] = epHealth{
-		Endpoint:   ep.Host,
-		Scheme:     ep.Scheme,
-		Online:     true,
-		disableSSL: disableSSL,
+		Endpoint:    ep.Host,
+		Scheme:      ep.Scheme,
+		Online:      true,
+		insecureTLS: insecureTLS,
 	}
 	sys.hMutex.Unlock()
 }
@@ -183,7 +183,7 @@ func (sys *BucketTargetSys) checkClientAlive(ctx context.Context, eps []madmin.S
 			offlineDuration: offline,
 			lastHCAt:        time.Now(),
 			latency:         l,
-			disableSSL:      prev.disableSSL,
+			insecureTLS:     prev.insecureTLS,
 		}
 	}
 	cancel()
@@ -200,7 +200,7 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 			sslEps := make([]madmin.ServerProperties, 0, len(sys.hc))
 			insecureEps := make([]madmin.ServerProperties, 0, len(sys.hc))
 			for _, ep := range sys.hc {
-				if ep.disableSSL {
+				if ep.insecureTLS {
 					insecureEps = append(insecureEps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
 				} else {
 					sslEps = append(sslEps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
@@ -381,7 +381,7 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	}
 
 	var hcClient *madmin.AnonymousClient
-	if tgt.DisableSSL {
+	if tgt.InsecureTLS {
 		hcClient = sys.insecureHcClient
 	} else {
 		hcClient = sys.hcClient
@@ -667,7 +667,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 
 	var remoteTransport http.RoundTripper
-	if tcfg.DisableSSL {
+	if tcfg.InsecureTLS {
 		remoteTransport = globalRemoteInsecureTransport
 	} else {
 		remoteTransport = globalRemoteTargetTransport
@@ -698,7 +698,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		ResetID:             tcfg.ResetID,
 		Endpoint:            tcfg.Endpoint,
 		Secure:              tcfg.Secure,
-		DisableSSL:          tcfg.DisableSSL,
+		InsecureTLS:         tcfg.InsecureTLS,
 	}
 	return tc, nil
 }
@@ -803,5 +803,5 @@ type TargetClient struct {
 	ResetID             string
 	Endpoint            string
 	Secure              bool
-	DisableSSL          bool
+	InsecureTLS         bool
 }
