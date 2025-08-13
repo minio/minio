@@ -4,7 +4,7 @@ MinIO's Object Lambda implementation allows for transforming your data to serve 
 
 MinIO's Object Lambda, enables application developers to process data retrieved from MinIO before returning it to an application. You can register a Lambda Function target on MinIO, once successfully registered it can be used to transform the data for application GET requests on demand.
 
-This document focuses on showing a working example on how to use Object Lambda with MinIO, you must have [MinIO deployed in your environment](https://min.io/docs/minio/linux/operations/installation.html) before you can start using external lambda functions. You also must install Python version 3.8 or later for the lambda handlers to work.
+This document focuses on showing a working example on how to use Object Lambda with MinIO, you must have [MinIO deployed in your environment](https://docs.min.io/community/minio-object-store/operations/installation.html) before you can start using external lambda functions. You also must install Python version 3.8 or later for the lambda handlers to work.
 
 ## Example Lambda handler
 
@@ -134,7 +134,7 @@ mc cp testobject myminio/functionbucket/
 
 ## Invoke Lambda transformation via PresignedGET
 
-Following example shows how you can use [`minio-go` PresignedGetObject](https://min.io/docs/minio/linux/developers/go/API.html#presignedgetobject-ctx-context-context-bucketname-objectname-string-expiry-time-duration-reqparams-url-values-url-url-error)
+Following example shows how you can use [`minio-go` PresignedGetObject](https://docs.min.io/community/minio-object-store/developers/go/API.html#presignedgetobject-ctx-context-context-bucketname-objectname-string-expiry-time-duration-reqparams-url-values-url-url-error)
 ```go
 package main
 

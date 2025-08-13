@@ -277,7 +277,9 @@ func (sys *IAMSys) Init(ctx context.Context, objAPI ObjectLayer, etcdClient *etc
 	for {
 		if !openidInit {
 			openidConfig, err := openid.LookupConfig(s,
-				NewHTTPTransport(), xhttp.DrainBody, globalSite.Region())
+				xhttp.WithUserAgent(NewHTTPTransport(), func() string {
+					return getUserAgent(getMinioMode())
+				}), xhttp.DrainBody, globalSite.Region())
 			if err != nil {
 				iamLogIf(ctx, fmt.Errorf("Unable to initialize OpenID: %w", err), logger.WarningKind)
 			} else {
