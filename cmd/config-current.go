@@ -819,7 +819,10 @@ func GetHelp(subSys, key string, envOnly bool) (Help, error) {
 }
 
 func newServerConfig() config.Config {
-	return config.New()
+	srvCfg := config.New()
+	// For fresh installs, apply secure API defaults
+	applyFreshInstallAPIDefaults(srvCfg)
+	return srvCfg
 }
 
 // newSrvConfig - initialize a new server config, saves env parameters if
