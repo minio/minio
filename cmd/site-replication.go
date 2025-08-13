@@ -2306,7 +2306,7 @@ func (c *SiteReplicationSys) concDo(selfActionFn func() error, peerActionFn func
 		if errs[i] != nil && minio.IsNetworkOrHostDown(errs[i], true) {
 			ep := c.state.Peers[depID].Endpoint
 			epURL, _ := url.Parse(ep)
-			if !globalBucketTargetSys.isOffline(epURL) {
+			if !globalBucketTargetSys.isOffline(epURL, false) {
 				globalBucketTargetSys.markOffline(epURL)
 			}
 		}
@@ -2611,7 +2611,7 @@ func getAdminClient(endpoint, accessKey, secretKey string) (*madmin.AdminClient,
 	if err != nil {
 		return nil, err
 	}
-	if globalBucketTargetSys.isOffline(epURL) {
+	if globalBucketTargetSys.isOffline(epURL, false) {
 		return nil, RemoteTargetConnectionErr{Endpoint: epURL.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", epURL.String())}
 	}
 	return madmin.NewWithOptions(epURL.Host, &madmin.Options{
@@ -2626,7 +2626,7 @@ func getS3Client(pc madmin.PeerSite) (*minio.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if globalBucketTargetSys.isOffline(ep) {
+	if globalBucketTargetSys.isOffline(ep, false) {
 		return nil, RemoteTargetConnectionErr{Endpoint: ep.String(), Err: fmt.Errorf("remote target is offline for endpoint %s", ep.String())}
 	}
 
