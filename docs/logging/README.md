@@ -17,7 +17,7 @@ Console target is on always and cannot be disabled.
 
 HTTP target logs to a generic HTTP endpoint in JSON format and is not enabled by default. To enable HTTP target logging you would have to update your MinIO server configuration using `mc admin config set` command.
 
-Assuming `mc` is already [configured](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart)
+Assuming `mc` is already [configured](https://docs.min.io/community/minio-object-store/reference/minio-mc.html#quickstart)
 
 ```
 mc admin config get myminio/ logger_webhook
@@ -42,7 +42,7 @@ minio server /mnt/data
 
 ## Audit Targets
 
-Assuming `mc` is already [configured](https://min.io/docs/minio/linux/reference/minio-mc.html#quickstart)
+Assuming `mc` is already [configured](https://docs.min.io/community/minio-object-store/reference/minio-mc.html#quickstart)
 
 ### Audit HTTP Target
 
@@ -224,5 +224,5 @@ NOTE:
 
 ## Explore Further
 
-- [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#quickstart-for-linux)
-- [Configure MinIO Server with TLS](https://min.io/docs/minio/linux/operations/network-encryption.html)
+- [MinIO Quickstart Guide](https://docs.min.io/community/minio-object-store/operations/deployments/baremetal-deploy-minio-on-redhat-linux.html)
+- [Configure MinIO Server with TLS](https://docs.min.io/community/minio-object-store/operations/network-encryption.html)
