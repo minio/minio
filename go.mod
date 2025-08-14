@@ -10,7 +10,7 @@ tool (
 	golang.org/x/tools/cmd/stringer
 )
 
-replace github.com/minio/pkg/v3 => github.com/0xMALVEE/pkg/v3 bdf1872b5b0181499826a2fc326a1dfb607cef75
+replace github.com/minio/pkg/v3 => github.com/0xMALVEE/pkg/v3 v3.0.0-20250814112042-bdf1872b5b01
 
 require (
 	aead.dev/mtls v0.2.1
@@ -34,6 +34,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/felixge/fgprof v0.9.5
 	github.com/fraugster/parquet-go v0.12.0
+	github.com/gabriel-vasile/mimetype v1.4.9
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/go-openapi/loads v0.22.0
 	github.com/go-sql-driver/mysql v1.9.2
@@ -151,7 +152,6 @@ require (
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.9 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.0 // indirect
