@@ -10,7 +10,7 @@ tool (
 	golang.org/x/tools/cmd/stringer
 )
 
-replace github.com/minio/pkg/v3 => ../pkg
+replace github.com/minio/pkg/v3 => github.com/0xMALVEE/pkg/v3 bdf1872b5b0181499826a2fc326a1dfb607cef75
 
 require (
 	aead.dev/mtls v0.2.1
