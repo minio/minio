@@ -64,6 +64,8 @@ import (
 	"github.com/minio/pkg/v3/certs"
 	"github.com/minio/pkg/v3/env"
 	xnet "github.com/minio/pkg/v3/net"
+	"github.com/minio/pkg/v3/policy"
+	policyCondition "github.com/minio/pkg/v3/policy/condition"
 	"golang.org/x/oauth2"
 )
 
@@ -1192,4 +1194,26 @@ func mapKeysSorted[Map ~map[K]V, K ordered, V any](m Map) []K {
 		return res[i] < res[j]
 	})
 	return res
+}
+
+// isS3ContentTypeUsed returns true if the s3:content-type key is used in bucket policy
+func isS3ContentTypeUsed(bucket string) bool {
+	bucketPolicy, _ := globalPolicySys.Get(bucket)
+	if bucketPolicy == nil {
+		return false
+	}
+
+	for _, statement := range bucketPolicy.Statements {
+		for policyAction := range statement.Actions {
+			if policyAction != policy.PutObjectAction {
+				continue
+			}
+			for _, condition := range statement.Conditions {
+				if strings.Contains(condition.String(), policyCondition.S3ContentType.Name()) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

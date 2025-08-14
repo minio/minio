@@ -40,6 +40,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/google/uuid"
 	"github.com/minio/mux"
 	"github.com/valyala/bytebufferpool"
@@ -1135,6 +1136,34 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		formValues.Set("Key", strings.ReplaceAll(formValues.Get("Key"), "${filename}", fileName))
 	}
 	object := trimLeadingSlash(formValues.Get("Key"))
+
+	// If the bucket policy explicitly includes the "s3:content-type" condition,
+	// verify the object's actual MIME type (detected from its content) instead of
+	// trusting the user-provided Content-Type header.
+	// This ensures uploads match the policy's allowed types before storing the object.
+	if isS3ContentTypeUsed(bucket) {
+		buf := new(bytes.Buffer)
+		mtype, _ := mimetype.DetectReader(io.TeeReader(reader, buf))
+
+		if mtype != nil {
+			var cred auth.Credentials
+			if !globalPolicySys.IsAllowed(policy.BucketPolicyArgs{
+				AccountName: cred.AccessKey,
+				Groups:      cred.Groups,
+				Action:      policy.PutObjectAction,
+				BucketName:  bucket,
+				ConditionValues: map[string][]string{
+					"Content-Type": {mtype.String()},
+				},
+				IsOwner:    false,
+				ObjectName: object,
+			}) {
+				writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrAccessDenied), r.URL)
+				return
+			}
+			reader = io.MultiReader(buf, reader)
+		}
+	}
 
 	successRedirect := formValues.Get("success_action_redirect")
 	successStatus := formValues.Get("success_action_status")
