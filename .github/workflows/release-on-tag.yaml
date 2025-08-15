@@ -1,0 +1,24 @@
+name: Release on tag
+
+on:
+  push:
+    # remove
+    branches:
+      - feature/ga
+    tags:
+      - 'v*'
+
+jobs:
+  call-shared:
+    uses: MantleTechnologies/project-pilote/.github/workflows/release-on-tag.yaml@master
+    with:
+      image_name: matricial-sharding
+      deploy_mode: docker-compose
+    secrets:
+      WG_PRIVATE_KEY:     ${{ secrets.WG_PRIVATE_KEY }}
+      WG_PEER_PUBLIC_KEY: ${{ secrets.WG_PEER_PUBLIC_KEY }}
+      WG_ENDPOINT:        ${{ secrets.WG_ENDPOINT }}
+      REGISTRY_USERNAME:  ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD:  ${{ secrets.REGISTRY_PASSWORD }}
+      CI_DEPLOY:          ${{ secrets.CI_DEPLOY }}
+      CI_DEPLOY_PUB:      ${{ secrets.CI_DEPLOY_PUB }}
