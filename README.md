@@ -1,12 +1,39 @@
 # MinIO Quickstart Guide
 
+MinIO is a High Performance Object Storage released under GNU Affero General Public License v3.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
+
+This README provides quickstart instructions on running MinIO on bare metal hardware, including container-based installations. For Kubernetes environments, use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md).
+
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
 
 [![MinIO](https://raw.githubusercontent.com/minio/minio/master/.github/logo.svg?sanitize=true)](https://min.io)
 
-MinIO is a High Performance Object Storage released under GNU Affero General Public License v3.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
+## Simplest Configuration
 
-This README provides quickstart instructions on running MinIO on bare metal hardware, including container-based installations. For Kubernetes environments, use the [MinIO Kubernetes Operator](https://github.com/minio/operator/blob/master/README.md).
+1.  ```sh
+    git clone git@github.com:mantle-labs/minio.git
+    ```
+2. Create a directory where you want to store your files
+3. ***If you have a MinIO serve in a Docker container running***
+    1. Go to the clone : `cd {PATH}/minio`
+    2. The ports must be different from those used by the MinIO server in the Docker container: 
+    ```sh
+    go run ./main.go server {PATH_TO_DIRECTORY_FILES} --address ":XXXX" --console-address ":XXXX"
+    ```
+4. ***If you don't have any MinIO server running***
+    1. Create a directory for storing the shards
+    2. Start a minIO server: 
+    ```sh
+    minio server {PATH_TO_DIRECTORY_SHARDS}
+    ```
+    3. Create a bucket the same name as the <u>config</u> file in [Matricial-sharding](https://github.com/MantleTechnologies/Matricial-sharding)
+    4. Go to the clone : `cd {PATH}/minio`
+    5. The ports can be anything, if you are in a different network interface than the MinIO server:    
+    ```sh 
+    go run ./main.go server {PATH_TO_DIRECTORY_FILES} --address ":XXXX" --console-address ":XXXX" 
+    ```
+- The files are going to be in the directory create in step 2 and use by the clone and the shards are going to be in the directory where you have your MinIO server running.
+- This configuration is going to start the Minio-console on the port given at --console-address
 
 ## Container Installation
 
@@ -17,7 +44,7 @@ require distributed deploying MinIO with Erasure Coding. For extended developmen
 with a *minimum* of 4 drives per MinIO server. See [MinIO Erasure Code Quickstart Guide](https://docs.min.io/docs/minio-erasure-code-quickstart-guide.html)
 for more complete documentation.
 
-### Stable
+### MinIO Stable Version
 
 Run the following command to run the latest stable image of MinIO as a container using an ephemeral data volume:
 
@@ -216,11 +243,13 @@ MinIO redirects browser access requests to the configured server port (i.e. `127
 
 For deployments behind a load balancer, proxy, or ingress rule where the MinIO host IP address or port is not public, use the `MINIO_BROWSER_REDIRECT_URL` environment variable to specify the external hostname for the redirect. The LB/Proxy must have rules for directing traffic to the Console port specifically.
 
-For example, consider a MinIO deployment behind a proxy `https://minio.example.net`, `https://console.minio.example.net` with rules for forwarding traffic on port :9000 and :9001 to MinIO and the MinIO Console respectively on the internal network. Set `MINIO_BROWSER_REDIRECT_URL` to `https://console.minio.example.net` to ensure the browser receives a valid reachable URL.
+Example:<br>
+If MinIO is accessible at a proxy `https://minio.example.net`, `https://console.minio.example.net` with rules for forwarding traffic on port :9000 and :9001 to MinIO and the MinIO Console respectively on the internal network. Set `MINIO_BROWSER_REDIRECT_URL` to `https://console.minio.example.net` to ensure the browser receives a valid reachable URL.
 
 Similarly, if your TLS certificates do not have the IP SAN for the MinIO server host, the MinIO Console may fail to validate the connection to the server. Use the `MINIO_SERVER_URL` environment variable  and specify the proxy-accessible hostname of the MinIO server to allow the Console to use the MinIO server API using the TLS certificate.
 
-For example: `export MINIO_SERVER_URL="https://minio.example.net"`
+Example:<br> 
+`export MINIO_SERVER_URL="https://minio.example.net"`
 
 | Dashboard                                                                                   | Creating a bucket                                                                           |
 | -------------                                                                               | -------------                                                                               |
