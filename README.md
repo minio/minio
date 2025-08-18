@@ -14,7 +14,7 @@ This README provides quickstart instructions on running MinIO on bare metal hard
     git clone git@github.com:mantle-labs/minio.git
     ```
 2. Create a directory where you want to store your files
-3. ***If you have a MinIO serve in a Docker container running***
+3. ***If you have a MinIO server in a Docker container running***
     1. Go to the clone : `cd {PATH}/minio`
     2. The ports must be different from those used by the MinIO server in the Docker container: 
     ```sh
@@ -26,7 +26,7 @@ This README provides quickstart instructions on running MinIO on bare metal hard
     ```sh
     minio server {PATH_TO_DIRECTORY_SHARDS}
     ```
-    3. Create a bucket the same name as the <u>config</u> file in [Matricial-sharding](https://github.com/MantleTechnologies/Matricial-sharding)
+    3. Create a bucket the same name as the `config` file in [Matricial-sharding](https://github.com/MantleTechnologies/Matricial-sharding)
     4. Go to the clone : `cd {PATH}/minio`
     5. The ports can be anything, if you are in a different network interface than the MinIO server:    
     ```sh 
