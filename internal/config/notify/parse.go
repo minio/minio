@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/env"
 	xnet "github.com/minio/pkg/v3/net"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 const (
@@ -1705,7 +1706,7 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		if k != config.Default {
 			urlEnv = urlEnv + config.Default + k
 		}
-		url, err := xnet.ParseURL(env.Get(urlEnv, kv.Get(target.AmqpURL)))
+		url, err := amqp091.ParseURI(env.Get(urlEnv, kv.Get(target.AmqpURL)))
 		if err != nil {
 			return nil, err
 		}
@@ -1771,7 +1772,7 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		}
 		amqpArgs := target.AMQPArgs{
 			Enable:            enabled,
-			URL:               *url,
+			URL:               url,
 			Exchange:          env.Get(exchangeEnv, kv.Get(target.AmqpExchange)),
 			RoutingKey:        env.Get(routingKeyEnv, kv.Get(target.AmqpRoutingKey)),
 			ExchangeType:      env.Get(exchangeTypeEnv, kv.Get(target.AmqpExchangeType)),
