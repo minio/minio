@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"sort"
 	"sync"
@@ -519,12 +520,10 @@ func (h *healSequence) getScannedItemsMap() map[madmin.HealItemType]int64 {
 	defer h.mutex.RUnlock()
 
 	// Make a copy before returning the value
-	retMap := make(map[madmin.HealItemType]int64, len(h.scannedItemsMap))
-	for k, v := range h.scannedItemsMap {
-		retMap[k] = v
+	if retMap := maps.Clone(h.scannedItemsMap); retMap != nil {
+		return retMap
 	}
-
-	return retMap
+	return make(map[madmin.HealItemType]int64)
 }
 
 // getHealedItemsMap - returns the map of all healed items against type
@@ -533,12 +532,10 @@ func (h *healSequence) getHealedItemsMap() map[madmin.HealItemType]int64 {
 	defer h.mutex.RUnlock()
 
 	// Make a copy before returning the value
-	retMap := make(map[madmin.HealItemType]int64, len(h.healedItemsMap))
-	for k, v := range h.healedItemsMap {
-		retMap[k] = v
+	if retMap := maps.Clone(h.healedItemsMap); retMap != nil {
+		return retMap
 	}
-
-	return retMap
+	return make(map[madmin.HealItemType]int64)
 }
 
 // getHealFailedItemsMap - returns map of all items where heal failed against
