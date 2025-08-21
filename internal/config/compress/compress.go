@@ -93,9 +93,12 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		return cfg, err
 	}
 
-	compress := env.Get(EnvCompressState, kvs.Get(config.Enable))
+	compress := env.Get(EnvCompressState, "")
 	if compress == "" {
-		compress = env.Get(EnvCompress, "")
+		compress = env.Get(EnvCompressEnableLegacy, "")
+		if compress == "" {
+			compress = env.Get(EnvCompress, kvs.Get(config.Enable))
+		}
 	}
 	cfg.Enabled, err = config.ParseBool(compress)
 	if err != nil {
@@ -109,9 +112,9 @@ func LookupConfig(kvs config.KVS) (Config, error) {
 		return cfg, nil
 	}
 
-	allowEnc := env.Get(EnvCompressAllowEncryption, kvs.Get(AllowEncrypted))
+	allowEnc := env.Get(EnvCompressAllowEncryption, "")
 	if allowEnc == "" {
-		allowEnc = env.Get(EnvCompressAllowEncryptionLegacy, "")
+		allowEnc = env.Get(EnvCompressAllowEncryptionLegacy, kvs.Get(AllowEncrypted))
 	}
 
 	cfg.AllowEncrypted, err = config.ParseBool(allowEnc)
