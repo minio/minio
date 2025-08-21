@@ -38,21 +38,21 @@ import (
 
 // AMQPArgs - AMQP target arguments.
 type AMQPArgs struct {
-	Enable            bool     `json:"enable"`
-	URL               xnet.URL `json:"url"`
-	Exchange          string   `json:"exchange"`
-	RoutingKey        string   `json:"routingKey"`
-	ExchangeType      string   `json:"exchangeType"`
-	DeliveryMode      uint8    `json:"deliveryMode"`
-	Mandatory         bool     `json:"mandatory"`
-	Immediate         bool     `json:"immediate"`
-	Durable           bool     `json:"durable"`
-	Internal          bool     `json:"internal"`
-	NoWait            bool     `json:"noWait"`
-	AutoDeleted       bool     `json:"autoDeleted"`
-	PublisherConfirms bool     `json:"publisherConfirms"`
-	QueueDir          string   `json:"queueDir"`
-	QueueLimit        uint64   `json:"queueLimit"`
+	Enable            bool        `json:"enable"`
+	URL               amqp091.URI `json:"url"`
+	Exchange          string      `json:"exchange"`
+	RoutingKey        string      `json:"routingKey"`
+	ExchangeType      string      `json:"exchangeType"`
+	DeliveryMode      uint8       `json:"deliveryMode"`
+	Mandatory         bool        `json:"mandatory"`
+	Immediate         bool        `json:"immediate"`
+	Durable           bool        `json:"durable"`
+	Internal          bool        `json:"internal"`
+	NoWait            bool        `json:"noWait"`
+	AutoDeleted       bool        `json:"autoDeleted"`
+	PublisherConfirms bool        `json:"publisherConfirms"`
+	QueueDir          string      `json:"queueDir"`
+	QueueLimit        uint64      `json:"queueLimit"`
 }
 
 // AMQP input constants.
