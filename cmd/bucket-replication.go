@@ -3797,14 +3797,13 @@ func getCRCMeta(oi ObjectInfo, partNum int, h http.Header) (cs map[string]string
 	meta := make(map[string]string)
 	cs, isMP = oi.decryptChecksums(partNum, h)
 	for k, v := range cs {
-		cksum := hash.NewChecksumString(k, v)
-		if cksum == nil {
+		if k == xhttp.AmzChecksumType {
 			continue
 		}
-		if cksum.Valid() {
-			meta[cksum.Type.Key()] = v
-			meta[xhttp.AmzChecksumType] = cs[xhttp.AmzChecksumType]
-			meta[xhttp.AmzChecksumAlgo] = cksum.Type.String()
+		cktype := hash.ChecksumStringToType(k)
+		if cktype.IsSet() {
+			meta[cktype.Key()] = v
+			meta[xhttp.AmzChecksumAlgo] = cktype.String()
 		}
 	}
 	return meta, isMP

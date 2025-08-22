@@ -221,6 +221,10 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		opts.WantChecksum = &hash.Checksum{Type: checksumType}
 	}
 
+	if opts.WantChecksum != nil {
+		opts.WantChecksum.Type |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart
+	}
+
 	newMultipartUpload := objectAPI.NewMultipartUpload
 
 	res, err := newMultipartUpload(ctx, bucket, object, opts)
