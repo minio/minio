@@ -121,7 +121,7 @@ func (er erasureObjects) cleanupMultipartPath(ctx context.Context, paths ...stri
 		if disk == nil {
 			continue
 		}
-		index := index
+
 		g.Go(func() error {
 			_ = storageDisks[index].DeleteBulk(ctx, minioMetaMultipartBucket, paths...)
 			return nil
@@ -540,7 +540,6 @@ func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, src
 
 	// Rename file on all underlying storage disks.
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -820,7 +819,6 @@ func (er erasureObjects) listParts(ctx context.Context, onlineDisks []StorageAPI
 	objectParts := make([][]string, len(onlineDisks))
 	// List uploaded parts from drives.
 	for index := range onlineDisks {
-		index := index
 		g.Go(func() (err error) {
 			if onlineDisks[index] == nil {
 				return errDiskNotFound
@@ -995,7 +993,6 @@ func readParts(ctx context.Context, disks []StorageAPI, bucket string, partMetaP
 	objectPartInfos := make([][]*ObjectPartInfo, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
-		index := index
 		g.Go(func() (err error) {
 			if disks[index] == nil {
 				return errDiskNotFound

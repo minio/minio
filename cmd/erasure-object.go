@@ -542,7 +542,6 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -575,7 +574,6 @@ func readAllRawFileInfo(ctx context.Context, disks []StorageAPI, bucket, object 
 	rawFileInfos := make([]RawFileInfo, len(disks))
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() (err error) {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1029,7 +1027,6 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	dataDirs := make([]string, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1065,7 +1062,7 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 			if nerr != nil {
 				continue
 			}
-			index := index
+
 			// When we are going to return error, attempt to delete success
 			// on some of the drives, if we cannot we do not have to notify
 			// caller this dangling object will be now scheduled to be removed
@@ -1631,7 +1628,6 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1836,7 +1832,6 @@ func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object
 	}
 	g := errgroup.WithNErrs(len(onlineDisks))
 	for index := range onlineDisks {
-		index := index
 		g.Go(func() error {
 			if onlineDisks[index] == nil {
 				return nil
@@ -1862,7 +1857,6 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return nil
@@ -2314,7 +2308,6 @@ func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, o
 
 	// Start writing `xl.meta` to all disks in parallel.
 	for index := range onlineDisks {
-		index := index
 		g.Go(func() error {
 			if onlineDisks[index] == nil {
 				return errDiskNotFound
