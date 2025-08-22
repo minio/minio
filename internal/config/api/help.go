@@ -45,6 +45,12 @@ var (
 			Type:        "csv",
 		},
 		config.HelpKV{
+			Key:         apiCorsAllowCredentialsWithWildcard,
+			Description: `allow credentials with wildcard CORS origins (default: 'on' for backward compatibility, 'off' for enhanced security compliance)` + defaultHelpPostfix(apiCorsAllowCredentialsWithWildcard),
+			Optional:    true,
+			Type:        "on|off",
+		},
+		config.HelpKV{
 			Key:         apiRemoteTransportDeadline,
 			Description: `set the deadline for API requests on remote transports while proxying between federated instances e.g. "2h"` + defaultHelpPostfix(apiRemoteTransportDeadline),
 			Optional:    true,

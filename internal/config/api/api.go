@@ -32,14 +32,15 @@ import (
 
 // API sub-system constants
 const (
-	apiRequestsMax             = "requests_max"
-	apiClusterDeadline         = "cluster_deadline"
-	apiCorsAllowOrigin         = "cors_allow_origin"
-	apiRemoteTransportDeadline = "remote_transport_deadline"
-	apiListQuorum              = "list_quorum"
-	apiReplicationPriority     = "replication_priority"
-	apiReplicationMaxWorkers   = "replication_max_workers"
-	apiReplicationMaxLWorkers  = "replication_max_lrg_workers"
+	apiRequestsMax                      = "requests_max"
+	apiClusterDeadline                  = "cluster_deadline"
+	apiCorsAllowOrigin                  = "cors_allow_origin"
+	apiCorsAllowCredentialsWithWildcard = "cors_allow_credentials_with_wildcard"
+	apiRemoteTransportDeadline          = "remote_transport_deadline"
+	apiListQuorum                       = "list_quorum"
+	apiReplicationPriority              = "replication_priority"
+	apiReplicationMaxWorkers            = "replication_max_workers"
+	apiReplicationMaxLWorkers           = "replication_max_lrg_workers"
 
 	apiTransitionWorkers           = "transition_workers"
 	apiStaleUploadsCleanupInterval = "stale_uploads_cleanup_interval"
@@ -52,17 +53,18 @@ const (
 	apiSyncEvents                  = "sync_events"
 	apiObjectMaxVersions           = "object_max_versions"
 
-	EnvAPIRequestsMax             = "MINIO_API_REQUESTS_MAX"
-	EnvAPIRequestsDeadline        = "MINIO_API_REQUESTS_DEADLINE"
-	EnvAPIClusterDeadline         = "MINIO_API_CLUSTER_DEADLINE"
-	EnvAPICorsAllowOrigin         = "MINIO_API_CORS_ALLOW_ORIGIN"
-	EnvAPIRemoteTransportDeadline = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
-	EnvAPITransitionWorkers       = "MINIO_API_TRANSITION_WORKERS"
-	EnvAPIListQuorum              = "MINIO_API_LIST_QUORUM"
-	EnvAPISecureCiphers           = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
-	EnvAPIReplicationPriority     = "MINIO_API_REPLICATION_PRIORITY"
-	EnvAPIReplicationMaxWorkers   = "MINIO_API_REPLICATION_MAX_WORKERS"
-	EnvAPIReplicationMaxLWorkers  = "MINIO_API_REPLICATION_MAX_LRG_WORKERS"
+	EnvAPIRequestsMax                      = "MINIO_API_REQUESTS_MAX"
+	EnvAPIRequestsDeadline                 = "MINIO_API_REQUESTS_DEADLINE"
+	EnvAPIClusterDeadline                  = "MINIO_API_CLUSTER_DEADLINE"
+	EnvAPICorsAllowOrigin                  = "MINIO_API_CORS_ALLOW_ORIGIN"
+	EnvAPICorsAllowCredentialsWithWildcard = "MINIO_API_CORS_ALLOW_CREDENTIALS_WITH_WILDCARD"
+	EnvAPIRemoteTransportDeadline          = "MINIO_API_REMOTE_TRANSPORT_DEADLINE"
+	EnvAPITransitionWorkers                = "MINIO_API_TRANSITION_WORKERS"
+	EnvAPIListQuorum                       = "MINIO_API_LIST_QUORUM"
+	EnvAPISecureCiphers                    = "MINIO_API_SECURE_CIPHERS" // default config.EnableOn
+	EnvAPIReplicationPriority              = "MINIO_API_REPLICATION_PRIORITY"
+	EnvAPIReplicationMaxWorkers            = "MINIO_API_REPLICATION_MAX_WORKERS"
+	EnvAPIReplicationMaxLWorkers           = "MINIO_API_REPLICATION_MAX_LRG_WORKERS"
 
 	EnvAPIStaleUploadsCleanupInterval = "MINIO_API_STALE_UPLOADS_CLEANUP_INTERVAL"
 	EnvAPIStaleUploadsExpiry          = "MINIO_API_STALE_UPLOADS_EXPIRY"
@@ -99,6 +101,10 @@ var (
 		config.KV{
 			Key:   apiCorsAllowOrigin,
 			Value: "*",
+		},
+		config.KV{
+			Key:   apiCorsAllowCredentialsWithWildcard,
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   apiRemoteTransportDeadline,
@@ -164,25 +170,44 @@ var (
 	}
 )
 
+// GetSecureDefaultKVS returns API configuration defaults with secure CORS settings
+// for fresh installations (disables credentials with wildcard origins).
+func GetSecureDefaultKVS() config.KVS {
+	// Start with standard defaults and modify only the security-sensitive setting
+	secureDefaults := make(config.KVS, len(DefaultKVS))
+	copy(secureDefaults, DefaultKVS)
+	
+	// Override the CORS credentials setting for security
+	for i, kv := range secureDefaults {
+		if kv.Key == apiCorsAllowCredentialsWithWildcard {
+			secureDefaults[i].Value = config.EnableOff
+			break
+		}
+	}
+	
+	return secureDefaults
+}
+
 // Config storage class configuration
 type Config struct {
-	RequestsMax                 int           `json:"requests_max"`
-	ClusterDeadline             time.Duration `json:"cluster_deadline"`
-	CorsAllowOrigin             []string      `json:"cors_allow_origin"`
-	RemoteTransportDeadline     time.Duration `json:"remote_transport_deadline"`
-	ListQuorum                  string        `json:"list_quorum"`
-	ReplicationPriority         string        `json:"replication_priority"`
-	ReplicationMaxWorkers       int           `json:"replication_max_workers"`
-	ReplicationMaxLWorkers      int           `json:"replication_max_lrg_workers"`
-	TransitionWorkers           int           `json:"transition_workers"`
-	StaleUploadsCleanupInterval time.Duration `json:"stale_uploads_cleanup_interval"`
-	StaleUploadsExpiry          time.Duration `json:"stale_uploads_expiry"`
-	DeleteCleanupInterval       time.Duration `json:"delete_cleanup_interval"`
-	EnableODirect               bool          `json:"enable_odirect"`
-	GzipObjects                 bool          `json:"gzip_objects"`
-	RootAccess                  bool          `json:"root_access"`
-	SyncEvents                  bool          `json:"sync_events"`
-	ObjectMaxVersions           int64         `json:"object_max_versions"`
+	RequestsMax                      int           `json:"requests_max"`
+	ClusterDeadline                  time.Duration `json:"cluster_deadline"`
+	CorsAllowOrigin                  []string      `json:"cors_allow_origin"`
+	CorsAllowCredentialsWithWildcard bool          `json:"cors_allow_credentials_with_wildcard"`
+	RemoteTransportDeadline          time.Duration `json:"remote_transport_deadline"`
+	ListQuorum                       string        `json:"list_quorum"`
+	ReplicationPriority              string        `json:"replication_priority"`
+	ReplicationMaxWorkers            int           `json:"replication_max_workers"`
+	ReplicationMaxLWorkers           int           `json:"replication_max_lrg_workers"`
+	TransitionWorkers                int           `json:"transition_workers"`
+	StaleUploadsCleanupInterval      time.Duration `json:"stale_uploads_cleanup_interval"`
+	StaleUploadsExpiry               time.Duration `json:"stale_uploads_expiry"`
+	DeleteCleanupInterval            time.Duration `json:"delete_cleanup_interval"`
+	EnableODirect                    bool          `json:"enable_odirect"`
+	GzipObjects                      bool          `json:"gzip_objects"`
+	RootAccess                       bool          `json:"root_access"`
+	SyncEvents                       bool          `json:"sync_events"`
+	ObjectMaxVersions                int64         `json:"object_max_versions"`
 }
 
 // UnmarshalJSON - Validate SS and RRS parity when unmarshalling JSON.
@@ -211,11 +236,13 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 	enableODirect := env.Get(EnvAPIODirect, kvs.Get(apiODirect)) == config.EnableOn
 	gzipObjects := env.Get(EnvAPIGzipObjects, kvs.Get(apiGzipObjects)) == config.EnableOn
 	rootAccess := env.Get(EnvAPIRootAccess, kvs.Get(apiRootAccess)) == config.EnableOn
+	corsAllowCredentialsWithWildcard := env.Get(EnvAPICorsAllowCredentialsWithWildcard, kvs.Get(apiCorsAllowCredentialsWithWildcard)) == config.EnableOn
 
 	cfg = Config{
-		EnableODirect: enableODirect || !disableODirect,
-		GzipObjects:   gzipObjects,
-		RootAccess:    rootAccess,
+		EnableODirect:                    enableODirect || !disableODirect,
+		GzipObjects:                      gzipObjects,
+		RootAccess:                       rootAccess,
+		CorsAllowCredentialsWithWildcard: corsAllowCredentialsWithWildcard,
 	}
 
 	var corsAllowOrigin []string

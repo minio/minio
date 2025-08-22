@@ -49,14 +49,15 @@ type apiConfig struct {
 	replicationMaxLWorkers int
 	transitionWorkers      int
 
-	staleUploadsExpiry          time.Duration
-	staleUploadsCleanupInterval time.Duration
-	deleteCleanupInterval       time.Duration
-	enableODirect               bool
-	gzipObjects                 bool
-	rootAccess                  bool
-	syncEvents                  bool
-	objectMaxVersions           int64
+	staleUploadsExpiry               time.Duration
+	staleUploadsCleanupInterval      time.Duration
+	deleteCleanupInterval            time.Duration
+	enableODirect                    bool
+	gzipObjects                      bool
+	rootAccess                       bool
+	syncEvents                       bool
+	objectMaxVersions                int64
+	corsAllowCredentialsWithWildcard bool
 }
 
 const (
@@ -187,6 +188,7 @@ func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {
 	t.rootAccess = cfg.RootAccess
 	t.syncEvents = cfg.SyncEvents
 	t.objectMaxVersions = cfg.ObjectMaxVersions
+	t.corsAllowCredentialsWithWildcard = cfg.CorsAllowCredentialsWithWildcard
 
 	if t.staleUploadsCleanupInterval != cfg.StaleUploadsCleanupInterval {
 		t.staleUploadsCleanupInterval = cfg.StaleUploadsCleanupInterval
@@ -242,6 +244,12 @@ func (t *apiConfig) getCorsAllowOrigins() []string {
 	corsAllowOrigins := make([]string, len(t.corsAllowOrigins))
 	copy(corsAllowOrigins, t.corsAllowOrigins)
 	return corsAllowOrigins
+}
+
+func (t *apiConfig) getCorsAllowCredentialsWithWildcard() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.corsAllowCredentialsWithWildcard
 }
 
 func (t *apiConfig) getStaleUploadsCleanupInterval() time.Duration {
