@@ -30,6 +30,7 @@ const (
 
 	// These envs were wrong but we supported them for a long time
 	// so keep them here to support existing deployments.
+	EnvCompressEnableLegacy          = "MINIO_COMPRESS_ENABLE"
 	EnvCompressAllowEncryptionLegacy = "MINIO_COMPRESS_ALLOW_ENCRYPTION"
 	EnvCompressExtensionsLegacy      = "MINIO_COMPRESS_EXTENSIONS"
 	EnvCompressMimeTypesLegacy2      = "MINIO_COMPRESS_MIME_TYPES"
