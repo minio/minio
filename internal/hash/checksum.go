@@ -145,6 +145,26 @@ func (c ChecksumType) IsSet() bool {
 	return !c.Is(ChecksumInvalid) && !c.Base().Is(ChecksumNone)
 }
 
+// ChecksumStringToType is like NewChecksumType but without the `mode`
+func ChecksumStringToType(alg string) ChecksumType {
+	switch strings.ToUpper(alg) {
+	case "CRC32":
+		return ChecksumCRC32
+	case "CRC32C":
+		return ChecksumCRC32C
+	case "SHA1":
+		return ChecksumSHA1
+	case "SHA256":
+		return ChecksumSHA256
+	case "CRC64NVME":
+		// AWS seems to ignore full value, and just assume it.
+		return ChecksumCRC64NVME
+	case "":
+		return ChecksumNone
+	}
+	return ChecksumInvalid
+}
+
 // NewChecksumType returns a checksum type based on the algorithm string and obj type.
 func NewChecksumType(alg, objType string) ChecksumType {
 	full := ChecksumFullObject
@@ -238,6 +258,12 @@ func (c ChecksumType) IsMultipartComposite() bool {
 // ObjType returns a string to return as x-amz-checksum-type.
 func (c ChecksumType) ObjType() string {
 	if c.FullObjectRequested() {
+		return xhttp.AmzChecksumTypeFullObject
+	}
+	if c.IsMultipartComposite() {
+		return xhttp.AmzChecksumTypeComposite
+	}
+	if !c.Is(ChecksumMultipart) {
 		return xhttp.AmzChecksumTypeFullObject
 	}
 	if c.IsSet() {
@@ -340,12 +366,8 @@ func ReadCheckSums(b []byte, part int) (cs map[string]string, isMP bool) {
 		}
 		if cs != "" {
 			res[typ.String()] = cs
-			res[xhttp.AmzChecksumType] = typ.ObjType()
-			if !typ.Is(ChecksumMultipart) {
-				// Single part PUTs are always FULL_OBJECT checksum
-				// Refer https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html
-				// **For PutObject uploads, the checksum type is always FULL_OBJECT.**
-				res[xhttp.AmzChecksumType] = ChecksumFullObject.ObjType()
+			if ckType := typ.ObjType(); ckType != "" {
+				res[xhttp.AmzChecksumType] = ckType
 			}
 		}
 	}
