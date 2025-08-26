@@ -404,12 +404,14 @@ func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) 
 
 	vars := mux.Vars(r)
 	status := vars["status"]
-	var objectAPI ObjectLayer
-	var creds auth.Credentials
-	if madmin.AccountStatus(status) == madmin.AccountEnabled {
-		objectAPI, creds = validateAdminReq(ctx, w, r, policy.EnableUserAdminAction)
-	} else {
-		objectAPI, creds = validateAdminReq(ctx, w, r, policy.DisableUserAdminAction)
+	objectAPI, creds := validateAdminReq(ctx, w, r, policy.EnableUserAdminAction)
+	if objectAPI == nil {
+		if madmin.AccountStatus(status) == madmin.AccountEnabled {
+			return
+		}
+		if madmin.AccountStatus(status) == madmin.AccountDisabled {
+			objectAPI, creds = validateAdminReq(ctx, w, r, policy.DisableUserAdminAction)
+		}
 	}
 
 	if objectAPI == nil {
