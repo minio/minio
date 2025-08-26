@@ -1161,6 +1161,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				Err:    fmt.Errorf("checksum type mismatch. got %q (%s) expected %q (%s)", checksumType.String(), checksumType.ObjType(), opts.WantChecksum.Type.String(), opts.WantChecksum.Type.ObjType()),
 			}
 		}
+		checksumType |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart
 	}
 
 	var checksumCombined []byte

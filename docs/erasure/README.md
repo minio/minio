@@ -26,7 +26,7 @@ MinIO's erasure coded backend uses high speed [HighwayHash](https://github.com/m
 
 MinIO divides the drives you provide into erasure-coding sets of *2 to 16* drives.  Therefore, the number of drives you present must be a multiple of one of these numbers.  Each object is written to a single erasure-coding set.
 
-Minio uses the largest possible EC set size which divides into the number of drives given. For example, *18 drives* are configured as *2 sets of 9 drives*, and *24 drives* are configured as *2 sets of 12 drives*.  This is true for scenarios when running MinIO as a standalone erasure coded deployment. In [distributed setup however node (affinity) based](https://min.io/docs/minio/linux/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html) erasure stripe sizes are chosen.
+Minio uses the largest possible EC set size which divides into the number of drives given. For example, *18 drives* are configured as *2 sets of 9 drives*, and *24 drives* are configured as *2 sets of 12 drives*.  This is true for scenarios when running MinIO as a standalone erasure coded deployment. In [distributed setup however node (affinity) based](https://docs.min.io/community/minio-object-store/operations/install-deploy-manage/deploy-minio-multi-node-multi-drive.html) erasure stripe sizes are chosen.
 
 The drives should all be of approximately the same size.
 
@@ -34,7 +34,7 @@ The drives should all be of approximately the same size.
 
 ### 1. Prerequisites
 
-Install MinIO - [MinIO Quickstart Guide](https://min.io/docs/minio/linux/index.html#quickstart-for-linux)
+Install MinIO - [MinIO Quickstart Guide](https://docs.min.io/community/minio-object-store/operations/deployments/baremetal-deploy-minio-on-redhat-linux.html)
 
 ### 2. Run MinIO Server with Erasure Code
 

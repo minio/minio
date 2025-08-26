@@ -172,5 +172,5 @@ These credentials can now be used to perform MinIO API operations.
 
 ## Explore Further
 
-- [MinIO STS Quickstart Guide](https://min.io/docs/minio/linux/developers/security-token-service.html)
-- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)
+- [MinIO STS Quickstart Guide](https://docs.min.io/community/minio-object-store/developers/security-token-service.html)
+- [The MinIO documentation website](https://docs.min.io/community/minio-object-store/index.html)
