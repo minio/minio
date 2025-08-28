@@ -113,8 +113,6 @@ func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin
 	g := errgroup.WithNErrs(len(sys.peerClients))
 
 	for idx, client := range sys.peerClients {
-		idx := idx
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerOffline
@@ -148,8 +146,6 @@ func (sys *S3PeerSys) HealBucket(ctx context.Context, bucket string, opts madmin
 	g = errgroup.WithNErrs(len(sys.peerClients))
 	healBucketResults := make([]madmin.HealResultItem, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
-		idx := idx
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerOffline
@@ -207,8 +203,6 @@ func (sys *S3PeerSys) ListBuckets(ctx context.Context, opts BucketOptions) ([]Bu
 	nodeBuckets := make([][]BucketInfo, len(sys.peerClients))
 
 	for idx, client := range sys.peerClients {
-		idx := idx
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerOffline
@@ -295,8 +289,6 @@ func (sys *S3PeerSys) GetBucketInfo(ctx context.Context, bucket string, opts Buc
 
 	bucketInfos := make([]BucketInfo, len(sys.peerClients))
 	for idx, client := range sys.peerClients {
-		idx := idx
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerOffline
@@ -401,7 +393,6 @@ func (client *remotePeerS3Client) GetBucketInfo(ctx context.Context, bucket stri
 func (sys *S3PeerSys) MakeBucket(ctx context.Context, bucket string, opts MakeBucketOptions) error {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerOffline
@@ -448,7 +439,6 @@ func (client *remotePeerS3Client) MakeBucket(ctx context.Context, bucket string,
 func (sys *S3PeerSys) DeleteBucket(ctx context.Context, bucket string, opts DeleteBucketOptions) error {
 	g := errgroup.WithNErrs(len(sys.peerClients))
 	for idx, client := range sys.peerClients {
-		client := client
 		g.Go(func() error {
 			if client == nil {
 				return errPeerOffline
