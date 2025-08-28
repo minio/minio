@@ -788,7 +788,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 	}
 
 	for setIdx, set := range pool.sets {
-
 		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 			if lc == nil {
 				return false

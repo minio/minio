@@ -134,24 +134,21 @@ func (f fatalMsg) pretty(msg string, args ...any) {
 			break
 		}
 
-		for {
-			// Save the attributes of the current cursor helps
-			// us save the text color of the passed error message
-			ansiSaveAttributes()
-			// Print banner with or without the log tag
-			if !tagPrinted {
-				fmt.Fprint(Output, logBanner)
-				tagPrinted = true
-			} else {
-				fmt.Fprint(Output, emptyBanner)
-			}
-			// Restore the text color of the error message
-			ansiRestoreAttributes()
-			ansiMoveRight(bannerWidth)
-			// Continue  error message printing
-			fmt.Fprintln(Output, line)
-			break
+		// Save the attributes of the current cursor helps
+		// us save the text color of the passed error message
+		ansiSaveAttributes()
+		// Print banner with or without the log tag
+		if !tagPrinted {
+			fmt.Fprint(Output, logBanner)
+			tagPrinted = true
+		} else {
+			fmt.Fprint(Output, emptyBanner)
 		}
+		// Restore the text color of the error message
+		ansiRestoreAttributes()
+		ansiMoveRight(bannerWidth)
+		// Continue  error message printing
+		fmt.Fprintln(Output, line)
 	}
 
 	// Exit because this is a fatal error message

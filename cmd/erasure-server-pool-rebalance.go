@@ -580,7 +580,6 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	}
 
 	for setIdx, set := range pool.sets {
-
 		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 			if lc == nil {
 				return false
@@ -593,7 +592,6 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
 			}
-
 			return false
 		}
 
