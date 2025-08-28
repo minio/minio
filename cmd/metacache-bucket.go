@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"maps"
 	"runtime/debug"
 	"sort"
 	"sync"
@@ -70,7 +71,7 @@ func newBucketMetacache(bucket string, cleanup bool) *bucketMetacache {
 	}
 }
 
-func (b *bucketMetacache) debugf(format string, data ...interface{}) {
+func (b *bucketMetacache) debugf(format string, data ...any) {
 	if serverDebugLog {
 		console.Debugf(format+"\n", data...)
 	}
@@ -195,9 +196,7 @@ func (b *bucketMetacache) cloneCaches() (map[string]metacache, map[string][]stri
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	dst := make(map[string]metacache, len(b.caches))
-	for k, v := range b.caches {
-		dst[k] = v
-	}
+	maps.Copy(dst, b.caches)
 	// Copy indexes
 	dst2 := make(map[string][]string, len(b.cachesRoot))
 	for k, v := range b.cachesRoot {

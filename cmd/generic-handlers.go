@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"path"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -396,18 +397,16 @@ func setRequestValidityMiddleware(h http.Handler) http.Handler {
 			if k == "delimiter" { // delimiters are allowed to have `.` or `..`
 				continue
 			}
-			for _, v := range vv {
-				if hasBadPathComponent(v) {
-					if ok {
-						tc.FuncName = "handler.ValidRequest"
-						tc.ResponseRecorder.LogErrBody = true
-					}
-
-					defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
-					writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
-					atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
-					return
+			if slices.ContainsFunc(vv, hasBadPathComponent) {
+				if ok {
+					tc.FuncName = "handler.ValidRequest"
+					tc.ResponseRecorder.LogErrBody = true
 				}
+
+				defer logger.AuditLog(r.Context(), w, r, mustGetClaimsFromToken(r))
+				writeErrorResponse(r.Context(), w, errorCodes.ToAPIErr(ErrInvalidResourceName), r.URL)
+				atomic.AddUint64(&globalHTTPStats.rejectedRequestsInvalid, 1)
+				return
 			}
 		}
 		if hasMultipleAuth(r) {

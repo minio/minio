@@ -163,7 +163,6 @@ func TestPath2BucketObjectName(t *testing.T) {
 
 	// Validate all test cases.
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			bucketName, objectName := path2BucketObject(testCase.path)
 			if bucketName != testCase.bucket {

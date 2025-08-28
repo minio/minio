@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/url"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
@@ -122,9 +123,7 @@ func possibleSetCountsWithSymmetry(setCounts []uint64, argPatterns []ellipses.Ar
 	// eyes that we prefer a sorted setCount slice for the
 	// subsequent function to figure out the right common
 	// divisor, it avoids loops.
-	sort.Slice(setCounts, func(i, j int) bool {
-		return setCounts[i] < setCounts[j]
-	})
+	slices.Sort(setCounts)
 
 	return setCounts
 }

@@ -419,7 +419,7 @@ func IsPresent() (bool, error) {
 
 func expandEndpoints(s string) ([]string, error) {
 	var endpoints []string
-	for _, endpoint := range strings.Split(s, ",") {
+	for endpoint := range strings.SplitSeq(s, ",") {
 		endpoint = strings.TrimSpace(endpoint)
 		if endpoint == "" {
 			continue

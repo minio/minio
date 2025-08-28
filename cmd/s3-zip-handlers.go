@@ -180,10 +180,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	if file.UncompressedSize64 > 0 {
 		// There may be number of header bytes before the content.
 		// Reading 64K extra. This should more than cover name and any "extra" details.
-		end := file.Offset + int64(file.CompressedSize64) + 64<<10
-		if end > zipObjInfo.Size {
-			end = zipObjInfo.Size
-		}
+		end := min(file.Offset+int64(file.CompressedSize64)+64<<10, zipObjInfo.Size)
 		rs := &HTTPRangeSpec{Start: file.Offset, End: end}
 		gr, err := objectAPI.GetObjectNInfo(ctx, bucket, zipPath, rs, nil, opts)
 		if err != nil {

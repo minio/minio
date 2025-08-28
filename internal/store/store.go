@@ -32,7 +32,7 @@ const (
 	retryInterval = 3 * time.Second
 )
 
-type logger = func(ctx context.Context, err error, id string, errKind ...interface{})
+type logger = func(ctx context.Context, err error, id string, errKind ...any)
 
 // ErrNotConnected - indicates that the target connection is not active.
 var ErrNotConnected = errors.New("not connected to target server/service")

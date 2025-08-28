@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/url"
 	"sync"
 	"time"
@@ -236,9 +237,7 @@ func (sys *BucketTargetSys) healthStats() map[string]epHealth {
 	sys.hMutex.RLock()
 	defer sys.hMutex.RUnlock()
 	m := make(map[string]epHealth, len(sys.hc))
-	for k, v := range sys.hc {
-		m[k] = v
-	}
+	maps.Copy(m, sys.hc)
 	return m
 }
 

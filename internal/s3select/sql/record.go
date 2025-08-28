@@ -63,16 +63,16 @@ type Record interface {
 	Reset()
 
 	// Returns underlying representation
-	Raw() (SelectObjectFormat, interface{})
+	Raw() (SelectObjectFormat, any)
 
 	// Replaces the underlying data
-	Replace(k interface{}) error
+	Replace(k any) error
 }
 
 // IterToValue converts a simdjson Iter to its underlying value.
 // Objects are returned as simdjson.Object
 // Arrays are returned as []interface{} with parsed values.
-func IterToValue(iter simdjson.Iter) (interface{}, error) {
+func IterToValue(iter simdjson.Iter) (any, error) {
 	switch iter.Type() {
 	case simdjson.TypeString:
 		v, err := iter.String()
@@ -118,7 +118,7 @@ func IterToValue(iter simdjson.Iter) (interface{}, error) {
 			return nil, err
 		}
 		iter := arr.Iter()
-		var dst []interface{}
+		var dst []any
 		var next simdjson.Iter
 		for {
 			typ, err := iter.AdvanceIter(&next)

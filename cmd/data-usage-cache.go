@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net/http"
 	"path"
@@ -99,9 +100,7 @@ func (ats *allTierStats) clone() *allTierStats {
 	}
 	dst := *ats
 	dst.Tiers = make(map[string]tierStats, len(ats.Tiers))
-	for tier, st := range ats.Tiers {
-		dst.Tiers[tier] = st
-	}
+	maps.Copy(dst.Tiers, ats.Tiers)
 	return &dst
 }
 
@@ -347,9 +346,7 @@ func (e dataUsageEntry) clone() dataUsageEntry {
 	// We operate on a copy from the receiver.
 	if e.Children != nil {
 		ch := make(dataUsageHashMap, len(e.Children))
-		for k, v := range e.Children {
-			ch[k] = v
-		}
+		maps.Copy(ch, e.Children)
 		e.Children = ch
 	}
 

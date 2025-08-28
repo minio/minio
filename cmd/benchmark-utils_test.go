@@ -51,8 +51,8 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
 	// the actual benchmark for PutObject starts here. Reset the benchmark timer.
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		// insert the object.
 		objInfo, err := obj.PutObject(b.Context(), bucket, "object"+strconv.Itoa(i),
 			mustGetPutObjReader(b, bytes.NewReader(textData), int64(len(textData)), md5hex, sha256hex), ObjectOptions{})
@@ -101,11 +101,11 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
 	// the actual benchmark for PutObjectPart starts here. Reset the benchmark timer.
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		// insert the object.
 		totalPartsNR := int(math.Ceil(float64(objSize) / float64(partSize)))
-		for j := 0; j < totalPartsNR; j++ {
+		for j := range totalPartsNR {
 			if j < totalPartsNR-1 {
 				textPartData = textData[j*partSize : (j+1)*partSize-1]
 			} else {

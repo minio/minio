@@ -11,8 +11,7 @@ func BenchmarkRingBuffer_Sync(b *testing.B) {
 	data := []byte(strings.Repeat("a", 512))
 	buf := make([]byte, 512)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Write(data)
 		rb.Read(buf)
 	}
@@ -30,8 +29,7 @@ func BenchmarkRingBuffer_AsyncRead(b *testing.B) {
 		}
 	}()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Write(data)
 	}
 }
@@ -50,8 +48,7 @@ func BenchmarkRingBuffer_AsyncReadBlocking(b *testing.B) {
 		}
 	}()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Write(data)
 	}
 }
@@ -67,8 +64,7 @@ func BenchmarkRingBuffer_AsyncWrite(b *testing.B) {
 		}
 	}()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Read(buf)
 	}
 }
@@ -87,8 +83,7 @@ func BenchmarkRingBuffer_AsyncWriteBlocking(b *testing.B) {
 		}
 	}()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Read(buf)
 	}
 }
@@ -104,8 +99,7 @@ func BenchmarkIoPipeReader(b *testing.B) {
 		}
 	}()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		pr.Read(buf)
 	}
 }

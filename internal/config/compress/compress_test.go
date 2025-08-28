@@ -41,7 +41,6 @@ func TestParseCompressIncludes(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.str, func(t *testing.T) {
 			gotPatterns, err := parseCompressIncludes(testCase.str)
 			if !testCase.success && err == nil {

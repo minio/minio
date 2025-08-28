@@ -191,7 +191,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, t TestErrH
 	if err != nil {
 		t.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		randomPerm := rand.Perm(100)
 		randomString := ""
 		for _, num := range randomPerm {
@@ -256,7 +256,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	uploadContent := "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed."
 	var opts ObjectOptions
 	// check before paging occurs.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject(context.Background(), "bucket", key, mustGetPutObjReader(t, bytes.NewBufferString(uploadContent), int64(len(uploadContent)), "", ""), opts)
 		if err != nil {
@@ -439,7 +439,7 @@ func testPaging(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// check paging works.
 	ag := []string{"a", "b", "c", "d", "e", "f", "g"}
 	checkObjCount := make(map[string]int)
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		dirName := strings.Repeat(ag[i], 3)
 		key := fmt.Sprintf("testPrefix/%s/obj%s", dirName, dirName)
 		checkObjCount[key]++

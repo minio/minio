@@ -88,7 +88,7 @@ func BenchmarkPReader(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			var record sql.Record
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				r := NewPReader(io.NopCloser(bytes.NewBuffer(f)), &ReaderArgs{})
 				for {
 					record, err = r.Read(record)

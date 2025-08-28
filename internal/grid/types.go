@@ -411,7 +411,7 @@ func NewJSONPool[T any]() *JSONPool[T] {
 	}
 	return &JSONPool[T]{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				var t T
 				return &t
 			},
@@ -700,7 +700,7 @@ func (j *Array[T]) UnmarshalMsg(bytes []byte) ([]byte, error) {
 	} else {
 		j.val = j.val[:0]
 	}
-	for i := uint32(0); i < l; i++ {
+	for range l {
 		v := j.p.newE()
 		bytes, err = v.UnmarshalMsg(bytes)
 		if err != nil {

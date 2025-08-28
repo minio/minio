@@ -329,7 +329,7 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 				lris, ok := l.lockMap[resource]
 				if !ok {
 					// Just to be safe, delete uuids.
-					for idx := 0; idx < maxDeleteList; idx++ {
+					for idx := range maxDeleteList {
 						mapID := formatUUID(uid, idx)
 						if _, ok := l.lockUID[mapID]; !ok {
 							break

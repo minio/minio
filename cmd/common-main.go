@@ -105,7 +105,7 @@ func init() {
 	gob.Register(madmin.TimeInfo{})
 	gob.Register(madmin.XFSErrorConfigs{})
 	gob.Register(map[string]string{})
-	gob.Register(map[string]interface{}{})
+	gob.Register(map[string]any{})
 
 	// All minio-go and madmin-go API operations shall be performed only once,
 	// another way to look at this is we are turning off retries.
@@ -258,7 +258,7 @@ func initConsoleServer() (*consoleapi.Server, error) {
 
 	if !serverDebugLog {
 		// Disable console logging if server debug log is not enabled
-		noLog := func(string, ...interface{}) {}
+		noLog := func(string, ...any) {}
 
 		consoleapi.LogInfo = noLog
 		consoleapi.LogError = noLog
@@ -761,7 +761,7 @@ func serverHandleEnvVars() {
 
 	domains := env.Get(config.EnvDomain, "")
 	if len(domains) != 0 {
-		for _, domainName := range strings.Split(domains, config.ValueSeparator) {
+		for domainName := range strings.SplitSeq(domains, config.ValueSeparator) {
 			if _, ok := dns2.IsDomainName(domainName); !ok {
 				logger.Fatal(config.ErrInvalidDomainValue(nil).Msgf("Unknown value `%s`", domainName),
 					"Invalid MINIO_DOMAIN value in environment variable")
@@ -1059,6 +1059,6 @@ func (a bgCtx) Deadline() (deadline time.Time, ok bool) {
 	return time.Time{}, false
 }
 
-func (a bgCtx) Value(key interface{}) interface{} {
+func (a bgCtx) Value(key any) any {
 	return a.parent.Value(key)
 }

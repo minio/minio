@@ -33,7 +33,7 @@ func Benchmark_bucketMetacache_findCache(b *testing.B) {
 	for i := range pathNames[:] {
 		pathNames[i] = fmt.Sprintf("prefix/%d", i)
 	}
-	for i := 0; i < elements; i++ {
+	for i := range elements {
 		bm.findCache(listPathOptions{
 			ID:           mustGetUUID(),
 			Bucket:       "",
@@ -49,8 +49,8 @@ func Benchmark_bucketMetacache_findCache(b *testing.B) {
 		})
 	}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		bm.findCache(listPathOptions{
 			ID:           mustGetUUID(),
 			Bucket:       "",

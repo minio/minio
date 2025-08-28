@@ -48,7 +48,7 @@ func TestFixFormatV3(t *testing.T) {
 	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 8)
 
-	for j := 0; j < 8; j++ {
+	for j := range 8 {
 		newFormat := format.Clone()
 		newFormat.Erasure.This = format.Erasure.Sets[0][j]
 		formats[j] = newFormat
@@ -79,7 +79,7 @@ func TestFormatErasureEmpty(t *testing.T) {
 	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 16)
 
-	for j := 0; j < 16; j++ {
+	for j := range 16 {
 		newFormat := format.Clone()
 		newFormat.Erasure.This = format.Erasure.Sets[0][j]
 		formats[j] = newFormat
@@ -276,8 +276,8 @@ func TestGetFormatErasureInQuorumCheck(t *testing.T) {
 	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 32)
 
-	for i := 0; i < setCount; i++ {
-		for j := 0; j < setDriveCount; j++ {
+	for i := range setCount {
+		for j := range setDriveCount {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
 			formats[i*setDriveCount+j] = newFormat
@@ -390,18 +390,17 @@ func BenchmarkGetFormatErasureInQuorumOld(b *testing.B) {
 	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 15*200)
 
-	for i := 0; i < setCount; i++ {
-		for j := 0; j < setDriveCount; j++ {
+	for i := range setCount {
+		for j := range setDriveCount {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
 			formats[i*setDriveCount+j] = newFormat
 		}
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = getFormatErasureInQuorumOld(formats)
 	}
 }
@@ -414,18 +413,17 @@ func BenchmarkGetFormatErasureInQuorum(b *testing.B) {
 	format.Erasure.DistributionAlgo = formatErasureVersionV2DistributionAlgoV1
 	formats := make([]*formatErasureV3, 15*200)
 
-	for i := 0; i < setCount; i++ {
-		for j := 0; j < setDriveCount; j++ {
+	for i := range setCount {
+		for j := range setDriveCount {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
 			formats[i*setDriveCount+j] = newFormat
 		}
 	}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = getFormatErasureInQuorum(formats)
 	}
 }
@@ -440,8 +438,8 @@ func TestNewFormatSets(t *testing.T) {
 	formats := make([]*formatErasureV3, 32)
 	errs := make([]error, 32)
 
-	for i := 0; i < setCount; i++ {
-		for j := 0; j < setDriveCount; j++ {
+	for i := range setCount {
+		for j := range setDriveCount {
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
 			formats[i*setDriveCount+j] = newFormat

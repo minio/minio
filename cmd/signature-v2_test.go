@@ -32,7 +32,7 @@ func TestResourceListSorting(t *testing.T) {
 	sortedResourceList := make([]string, len(resourceList))
 	copy(sortedResourceList, resourceList)
 	sort.Strings(sortedResourceList)
-	for i := 0; i < len(resourceList); i++ {
+	for i := range resourceList {
 		if resourceList[i] != sortedResourceList[i] {
 			t.Errorf("Expected resourceList[%d] = \"%s\", resourceList is not correctly sorted.", i, sortedResourceList[i])
 			break

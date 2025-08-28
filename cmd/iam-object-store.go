@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"strings"
 	"sync"
@@ -80,7 +81,7 @@ func (iamOS *IAMObjectStore) getUsersSysType() UsersSysType {
 	return iamOS.usersSysType
 }
 
-func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item interface{}, objPath string, opts ...options) error {
+func (iamOS *IAMObjectStore) saveIAMConfig(ctx context.Context, item any, objPath string, opts ...options) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	data, err := json.Marshal(item)
 	if err != nil {
@@ -135,7 +136,7 @@ func (iamOS *IAMObjectStore) loadIAMConfigBytesWithMetadata(ctx context.Context,
 	return data, meta, nil
 }
 
-func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item interface{}, objPath string) error {
+func (iamOS *IAMObjectStore) loadIAMConfig(ctx context.Context, item any, objPath string) error {
 	data, _, err := iamOS.loadIAMConfigBytesWithMetadata(ctx, objPath)
 	if err != nil {
 		return err
@@ -294,7 +295,6 @@ func (iamOS *IAMObjectStore) loadUserConcurrent(ctx context.Context, userType IA
 	g := errgroup.WithNErrs(len(users))
 
 	for index := range users {
-		index := index
 		g.Go(func() error {
 			userName := path.Dir(users[index])
 			user, err := iamOS.loadUserIdentity(ctx, userName, userType)
@@ -413,7 +413,6 @@ func (iamOS *IAMObjectStore) loadMappedPolicyConcurrent(ctx context.Context, use
 	g := errgroup.WithNErrs(len(users))
 
 	for index := range users {
-		index := index
 		g.Go(func() error {
 			userName := strings.TrimSuffix(users[index], ".json")
 			userMP, err := iamOS.loadMappedPolicyInternal(ctx, userName, userType, isGroup)
@@ -538,7 +537,6 @@ func (iamOS *IAMObjectStore) loadPolicyDocConcurrent(ctx context.Context, polici
 	g := errgroup.WithNErrs(len(policies))
 
 	for index := range policies {
-		index := index
 		g.Go(func() error {
 			policyName := path.Dir(policies[index])
 			policyDoc, err := iamOS.loadPolicy(ctx, policyName)
@@ -776,9 +774,7 @@ func (iamOS *IAMObjectStore) loadAllFromObjStore(ctx context.Context, cache *iam
 	}
 
 	// Copy svcUsersMap to cache.iamUsersMap
-	for k, v := range svcUsersMap {
-		cache.iamUsersMap[k] = v
-	}
+	maps.Copy(cache.iamUsersMap, svcUsersMap)
 
 	cache.buildUserGroupMemberships()
 

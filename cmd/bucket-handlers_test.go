@@ -657,7 +657,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 	sha256sum := ""
 	var objectNames []string
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		contentBytes := []byte("hello")
 		objectName := "test-object-" + strconv.Itoa(i)
 		if i == 0 {
@@ -687,7 +687,7 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 	// The following block will create a bucket policy with delete object to 'public/*'. This is
 	// to test a mixed response of a successful & failure while deleting objects in a single request
-	policyBytes := []byte(fmt.Sprintf(`{"Id": "Policy1637752602639", "Version": "2012-10-17", "Statement": [{"Sid": "Stmt1637752600730", "Action": "s3:DeleteObject", "Effect": "Allow", "Resource": "arn:aws:s3:::%s/public/*", "Principal": "*"}]}`, bucketName))
+	policyBytes := fmt.Appendf(nil, `{"Id": "Policy1637752602639", "Version": "2012-10-17", "Statement": [{"Sid": "Stmt1637752600730", "Action": "s3:DeleteObject", "Effect": "Allow", "Resource": "arn:aws:s3:::%s/public/*", "Principal": "*"}]}`, bucketName)
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4(http.MethodPut, getPutPolicyURL("", bucketName), int64(len(policyBytes)), bytes.NewReader(policyBytes),
 		credentials.AccessKey, credentials.SecretKey, nil)

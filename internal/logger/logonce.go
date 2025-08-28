@@ -25,7 +25,7 @@ import (
 )
 
 // LogOnce provides the function type for logger.LogOnceIf() function
-type LogOnce func(ctx context.Context, err error, id string, errKind ...interface{})
+type LogOnce func(ctx context.Context, err error, id string, errKind ...any)
 
 type onceErr struct {
 	Err   error
@@ -38,7 +38,7 @@ type logOnceType struct {
 	sync.Mutex
 }
 
-func (l *logOnceType) logOnceConsoleIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
+func (l *logOnceType) logOnceConsoleIf(ctx context.Context, subsystem string, err error, id string, errKind ...any) {
 	if err == nil {
 		return
 	}
@@ -92,7 +92,7 @@ func unwrapErrs(err error) (leafErr error) {
 }
 
 // One log message per error.
-func (l *logOnceType) logOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
+func (l *logOnceType) logOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...any) {
 	if err == nil {
 		return
 	}
@@ -142,7 +142,7 @@ var logOnce = newLogOnceType()
 // LogOnceIf - Logs notification errors - once per error.
 // id is a unique identifier for related log messages, refer to cmd/notification.go
 // on how it is used.
-func LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
+func LogOnceIf(ctx context.Context, subsystem string, err error, id string, errKind ...any) {
 	if logIgnoreError(err) {
 		return
 	}
@@ -150,7 +150,7 @@ func LogOnceIf(ctx context.Context, subsystem string, err error, id string, errK
 }
 
 // LogOnceConsoleIf - similar to LogOnceIf but exclusively only logs to console target.
-func LogOnceConsoleIf(ctx context.Context, subsystem string, err error, id string, errKind ...interface{}) {
+func LogOnceConsoleIf(ctx context.Context, subsystem string, err error, id string, errKind ...any) {
 	if logIgnoreError(err) {
 		return
 	}

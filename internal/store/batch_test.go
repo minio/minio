@@ -41,7 +41,7 @@ func TestBatchCommit(t *testing.T) {
 		Limit:         limit,
 		Store:         store,
 		CommitTimeout: 5 * time.Minute,
-		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
+		Log: func(ctx context.Context, err error, id string, errKind ...any) {
 			t.Log(err)
 		},
 	})
@@ -106,7 +106,7 @@ func TestBatchCommitOnExit(t *testing.T) {
 		Limit:         limit,
 		Store:         store,
 		CommitTimeout: 5 * time.Minute,
-		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
+		Log: func(ctx context.Context, err error, id string, errKind ...any) {
 			t.Log([]any{err, id, errKind}...)
 		},
 	})
@@ -163,7 +163,7 @@ func TestBatchWithConcurrency(t *testing.T) {
 		Limit:         limit,
 		Store:         store,
 		CommitTimeout: 5 * time.Minute,
-		Log: func(ctx context.Context, err error, id string, errKind ...interface{}) {
+		Log: func(ctx context.Context, err error, id string, errKind ...any) {
 			t.Log(err)
 		},
 	})

@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"path"
 	"runtime"
@@ -542,7 +543,6 @@ func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object st
 	disks := er.getDisks()
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -575,7 +575,6 @@ func readAllRawFileInfo(ctx context.Context, disks []StorageAPI, bucket, object 
 	rawFileInfos := make([]RawFileInfo, len(disks))
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() (err error) {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1029,7 +1028,6 @@ func renameData(ctx context.Context, disks []StorageAPI, srcBucket, srcEntry str
 	dataDirs := make([]string, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1631,7 +1629,6 @@ func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1836,7 +1833,6 @@ func (er erasureObjects) commitRenameDataDir(ctx context.Context, bucket, object
 	}
 	g := errgroup.WithNErrs(len(onlineDisks))
 	for index := range onlineDisks {
-		index := index
 		g.Go(func() error {
 			if onlineDisks[index] == nil {
 				return nil
@@ -1862,7 +1858,6 @@ func (er erasureObjects) deletePrefix(ctx context.Context, bucket, prefix string
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return nil
@@ -2222,9 +2217,7 @@ func (er erasureObjects) PutObjectMetadata(ctx context.Context, bucket, object s
 			return ObjectInfo{}, err
 		}
 	}
-	for k, v := range objInfo.UserDefined {
-		fi.Metadata[k] = v
-	}
+	maps.Copy(fi.Metadata, objInfo.UserDefined)
 	fi.ModTime = opts.MTime
 	fi.VersionID = opts.VersionID
 
@@ -2294,9 +2287,7 @@ func (er erasureObjects) PutObjectTags(ctx context.Context, bucket, object strin
 
 	fi.Metadata[xhttp.AmzObjectTagging] = tags
 	fi.ReplicationState = opts.PutReplicationState()
-	for k, v := range opts.UserDefined {
-		fi.Metadata[k] = v
-	}
+	maps.Copy(fi.Metadata, opts.UserDefined)
 
 	if err = er.updateObjectMeta(ctx, bucket, object, fi, onlineDisks); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -2314,7 +2305,6 @@ func (er erasureObjects) updateObjectMetaWithOpts(ctx context.Context, bucket, o
 
 	// Start writing `xl.meta` to all disks in parallel.
 	for index := range onlineDisks {
-		index := index
 		g.Go(func() error {
 			if onlineDisks[index] == nil {
 				return errDiskNotFound

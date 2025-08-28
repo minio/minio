@@ -47,7 +47,6 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range localDrives {
-		index := index
 		g.Go(func() (serr error) {
 			if localDrives[index] == nil {
 				beforeState[index] = madmin.DriveStateOffline
@@ -111,7 +110,6 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 	if !isMinioMetaBucketName(bucket) && !isAllBucketsNotFound(errs) && opts.Remove {
 		g := errgroup.WithNErrs(len(localDrives))
 		for index := range localDrives {
-			index := index
 			g.Go(func() error {
 				if localDrives[index] == nil {
 					return errDiskNotFound
@@ -131,7 +129,6 @@ func healBucketLocal(ctx context.Context, bucket string, opts madmin.HealOpts) (
 
 		// Make a volume entry on all underlying storage disks.
 		for index := range localDrives {
-			index := index
 			g.Go(func() error {
 				if beforeState[index] == madmin.DriveStateMissing {
 					err := localDrives[index].MakeVol(ctx, bucket)
@@ -225,7 +222,6 @@ func getBucketInfoLocal(ctx context.Context, bucket string, opts BucketOptions) 
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range localDrives {
-		index := index
 		g.Go(func() error {
 			if localDrives[index] == nil {
 				return errDiskNotFound
@@ -273,7 +269,6 @@ func deleteBucketLocal(ctx context.Context, bucket string, opts DeleteBucketOpti
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range localDrives {
-		index := index
 		g.Go(func() error {
 			if localDrives[index] == nil {
 				return errDiskNotFound
@@ -294,7 +289,6 @@ func makeBucketLocal(ctx context.Context, bucket string, opts MakeBucketOptions)
 
 	// Make a volume entry on all underlying storage disks.
 	for index := range localDrives {
-		index := index
 		g.Go(func() error {
 			if localDrives[index] == nil {
 				return errDiskNotFound

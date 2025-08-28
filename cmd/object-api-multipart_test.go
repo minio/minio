@@ -369,7 +369,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		// Initiate Multipart Upload on bucketNames[1] for the same object 3 times.
 		//  Used to test the listing for the case of multiple uploadID's for a given object.
 		res, err = obj.NewMultipartUpload(context.Background(), bucketNames[1], objectNames[0], opts)
@@ -392,7 +392,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	}
 	// Initiate Multipart Upload on bucketNames[2].
 	//  Used to test the listing for the case of multiple objects for a given bucket.
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		res, err = obj.NewMultipartUpload(context.Background(), bucketNames[2], objectNames[i], opts)
 		if err != nil {
 			// Failed to create NewMultipartUpload, abort.
@@ -2167,7 +2167,6 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.(*testing.T).Run("", func(t *testing.T) {
 			opts = ObjectOptions{}
 			actualResult, actualErr := obj.CompleteMultipartUpload(t.Context(), testCase.bucket, testCase.object, testCase.uploadID, testCase.parts, ObjectOptions{})

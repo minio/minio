@@ -201,7 +201,6 @@ func TestCheckLocalServerAddr(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			err := CheckLocalServerAddr(testCase.serverAddr)
 			switch {
@@ -273,7 +272,6 @@ func TestSameLocalAddrs(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			sameAddr, err := sameLocalAddrs(testCase.addr1, testCase.addr2)
 			if testCase.expectedErr != nil && err == nil {

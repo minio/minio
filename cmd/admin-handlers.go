@@ -954,7 +954,7 @@ func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Requ
 
 	var args dsync.LockArgs
 	var lockers []dsync.NetLocker
-	for _, path := range strings.Split(vars["paths"], ",") {
+	for path := range strings.SplitSeq(vars["paths"], ",") {
 		if path == "" {
 			continue
 		}
@@ -1193,7 +1193,7 @@ type dummyFileInfo struct {
 	mode    os.FileMode
 	modTime time.Time
 	isDir   bool
-	sys     interface{}
+	sys     any
 }
 
 func (f dummyFileInfo) Name() string       { return f.name }
@@ -1201,7 +1201,7 @@ func (f dummyFileInfo) Size() int64        { return f.size }
 func (f dummyFileInfo) Mode() os.FileMode  { return f.mode }
 func (f dummyFileInfo) ModTime() time.Time { return f.modTime }
 func (f dummyFileInfo) IsDir() bool        { return f.isDir }
-func (f dummyFileInfo) Sys() interface{}   { return f.sys }
+func (f dummyFileInfo) Sys() any           { return f.sys }
 
 // DownloadProfilingHandler - POST /minio/admin/v3/profiling/download
 // ----------

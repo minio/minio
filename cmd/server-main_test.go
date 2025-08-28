@@ -52,7 +52,6 @@ func TestServerConfigFile(t *testing.T) {
 			expectedErr: true,
 		},
 	} {
-		testcase := testcase
 		t.Run(testcase.config, func(t *testing.T) {
 			sctx := &serverCtxt{}
 			err := mergeServerCtxtFromConfigFile(testcase.config, sctx)

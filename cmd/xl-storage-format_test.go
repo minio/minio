@@ -136,7 +136,7 @@ func getSampleXLMeta(totalParts int) xlMetaV1Object {
 	xlMeta.Erasure.Checksums = make([]ChecksumInfo, totalParts)
 	// total number of parts.
 	xlMeta.Parts = make([]ObjectPartInfo, totalParts)
-	for i := 0; i < totalParts; i++ {
+	for i := range totalParts {
 		// hard coding hash and algo value for the checksum, Since we are benchmarking the parsing of xl.meta the magnitude doesn't affect the test,
 		// The magnitude doesn't make a difference, only the size does.
 		xlMeta.AddTestObjectCheckSum(i+1, BLAKE2b512, "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a")
@@ -378,7 +378,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 		b.Run(fmt.Sprint(size, "-versions"), func(b *testing.B) {
 			var xl xlMetaV2
 			ids := make([]string, size)
-			for i := 0; i < size; i++ {
+			for i := range size {
 				fi.VersionID = mustGetUUID()
 				fi.DataDir = mustGetUUID()
 				ids[i] = fi.VersionID
@@ -397,7 +397,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Load...
 					xl = xlMetaV2{}
 					err := xl.Load(enc)
@@ -424,7 +424,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Load...
 					xl = xlMetaV2{}
 					err := xl.Load(enc)
@@ -449,7 +449,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Load...
 					xl = xlMetaV2{}
 					err := xl.Load(enc)
@@ -476,7 +476,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Load...
 					xl = xlMetaV2{}
 					err := xl.Load(enc)
@@ -494,7 +494,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					// Load...
 					xl = xlMetaV2{}
 					err := xl.Load(enc)
@@ -512,7 +512,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					buf, _, _ := isIndexedMetaV2(enc)
 					if buf == nil {
 						b.Fatal("buf == nil")
@@ -527,7 +527,7 @@ func BenchmarkXlMetaV2Shallow(b *testing.B) {
 				b.SetBytes(int64(size))
 				b.ResetTimer()
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for b.Loop() {
 					buf, _, _ := isIndexedMetaV2(enc)
 					if buf == nil {
 						b.Fatal("buf == nil")

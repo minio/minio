@@ -57,7 +57,6 @@ func TestMetadataReplicate(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		tc := tc
 		t.Run(fmt.Sprintf("Test_%d", i+1), func(t *testing.T) {
 			cfg, err := ParseConfig(bytes.NewReader([]byte(tc.inputConfig)))
 			if err != nil {

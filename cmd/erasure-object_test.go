@@ -112,7 +112,6 @@ func TestErasureDeleteObjectBasic(t *testing.T) {
 		t.Fatalf("Erasure Object upload failed: <ERROR> %s", err)
 	}
 	for _, test := range testCases {
-		test := test
 		t.Run("", func(t *testing.T) {
 			_, err := xl.GetObjectInfo(ctx, "bucket", "dir/obj", ObjectOptions{})
 			if err != nil {
@@ -625,7 +624,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for f := 0; f < 2; f++ {
+	for f := range 2 {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
@@ -774,7 +773,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	// in a 16 disk Erasure setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
 	// invocations, where f - [0,4)
-	for f := 0; f < 2; f++ {
+	for f := range 2 {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
@@ -837,7 +836,7 @@ func TestPutObjectNoQuorumSmall(t *testing.T) {
 	// in a 16 disk Erasure setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
 	// invocations, where f - [0,2)
-	for f := 0; f < 2; f++ {
+	for f := range 2 {
 		t.Run("exec-"+strconv.Itoa(f), func(t *testing.T) {
 			diskErrors := make(map[int]error)
 			for i := 0; i <= f; i++ {
@@ -1109,7 +1108,6 @@ func testObjectQuorumFromMeta(obj ObjectLayer, instanceType string, dirs []strin
 		{parts7, errs7, 11, 11, parts7SC, nil},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.(*testing.T).Run("", func(t *testing.T) {
 			globalStorageClass.Update(tt.storageClassCfg)
 			actualReadQuorum, actualWriteQuorum, err := objectQuorumFromMeta(ctx, tt.parts, tt.errs, storageclass.DefaultParityBlocks(len(erasureDisks)))

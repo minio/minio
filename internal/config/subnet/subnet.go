@@ -95,7 +95,7 @@ func (c Config) submitPost(r *http.Request) (string, error) {
 }
 
 // Post submit 'payload' to specified URL
-func (c Config) Post(reqURL string, payload interface{}) (string, error) {
+func (c Config) Post(reqURL string, payload any) (string, error) {
 	if !c.Registered() {
 		return "", errors.New("Deployment is not registered with SUBNET. Please register the deployment via 'mc license register ALIAS'")
 	}

@@ -20,6 +20,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/tinylib/msgp/msgp"
 )
@@ -56,7 +57,7 @@ func (x xlMetaInlineData) find(key string) []byte {
 	if err != nil || sz == 0 {
 		return nil
 	}
-	for i := uint32(0); i < sz; i++ {
+	for range sz {
 		var found []byte
 		found, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil || sz == 0 {
@@ -91,7 +92,7 @@ func (x xlMetaInlineData) validate() error {
 		return fmt.Errorf("xlMetaInlineData: %w", err)
 	}
 
-	for i := uint32(0); i < sz; i++ {
+	for i := range sz {
 		var key []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
@@ -131,7 +132,7 @@ func (x *xlMetaInlineData) repair() {
 	// Remove all current data
 	keys := make([][]byte, 0, sz)
 	vals := make([][]byte, 0, sz)
-	for i := uint32(0); i < sz; i++ {
+	for range sz {
 		var key, val []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
@@ -165,7 +166,7 @@ func (x xlMetaInlineData) list() ([]string, error) {
 		return nil, err
 	}
 	keys := make([]string, 0, sz)
-	for i := uint32(0); i < sz; i++ {
+	for i := range sz {
 		var key []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
@@ -231,7 +232,7 @@ func (x *xlMetaInlineData) replace(key string, value []byte) {
 	// Version plus header...
 	plSize := 1 + msgp.MapHeaderSize
 	replaced := false
-	for i := uint32(0); i < sz; i++ {
+	for range sz {
 		var found, foundVal []byte
 		var err error
 		found, buf, err = msgp.ReadMapKeyZC(buf)
@@ -276,7 +277,7 @@ func (x *xlMetaInlineData) rename(oldKey, newKey string) bool {
 	// Version plus header...
 	plSize := 1 + msgp.MapHeaderSize
 	found := false
-	for i := uint32(0); i < sz; i++ {
+	for range sz {
 		var foundKey, foundVal []byte
 		var err error
 		foundKey, buf, err = msgp.ReadMapKeyZC(buf)
@@ -329,19 +330,14 @@ func (x *xlMetaInlineData) remove(keys ...string) bool {
 		}
 	} else {
 		removeKey = func(s []byte) bool {
-			for _, key := range keys {
-				if key == string(s) {
-					return true
-				}
-			}
-			return false
+			return slices.Contains(keys, string(s))
 		}
 	}
 
 	// Version plus header...
 	plSize := 1 + msgp.MapHeaderSize
 	found := false
-	for i := uint32(0); i < sz; i++ {
+	for range sz {
 		var foundKey, foundVal []byte
 		var err error
 		foundKey, buf, err = msgp.ReadMapKeyZC(buf)

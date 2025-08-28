@@ -39,7 +39,7 @@ type Target interface {
 	Init(ctx context.Context) error
 	IsOnline(ctx context.Context) bool
 	Cancel()
-	Send(ctx context.Context, entry interface{}) error
+	Send(ctx context.Context, entry any) error
 	Type() types.TargetType
 }
 

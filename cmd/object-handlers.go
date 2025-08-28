@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
@@ -1642,15 +1643,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		srcInfo.UserDefined[ReservedMetadataPrefixLower+ReplicationTimestamp] = UTCNow().Format(time.RFC3339Nano)
 	}
 	// Store the preserved compression metadata.
-	for k, v := range compressMetadata {
-		srcInfo.UserDefined[k] = v
-	}
+	maps.Copy(srcInfo.UserDefined, compressMetadata)
 
 	// We need to preserve the encryption headers set in EncryptRequest,
 	// so we do not want to override them, copy them instead.
-	for k, v := range encMetadata {
-		srcInfo.UserDefined[k] = v
-	}
+	maps.Copy(srcInfo.UserDefined, encMetadata)
 
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(srcInfo.UserDefined)
@@ -2408,8 +2405,8 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 				if k == "minio.versionId" {
 					continue
 				}
-				if strings.HasPrefix(k, "minio.metadata.") {
-					k = strings.TrimPrefix(k, "minio.metadata.")
+				if after, ok0 := strings.CutPrefix(k, "minio.metadata."); ok0 {
+					k = after
 					hdrs.Set(k, v)
 				}
 			}
@@ -2417,9 +2414,7 @@ func (api objectAPIHandlers) PutObjectExtractHandler(w http.ResponseWriter, r *h
 			if err != nil {
 				return err
 			}
-			for k, v := range m {
-				metadata[k] = v
-			}
+			maps.Copy(metadata, m)
 		} else {
 			versionID = r.Form.Get(xhttp.VersionID)
 			hdrs = r.Header

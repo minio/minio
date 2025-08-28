@@ -45,7 +45,7 @@ func TestNSLockRace(t *testing.T) {
 
 	ctx := t.Context()
 
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		nsLk := newNSLock(false)
 
 		// lk1; ref=1

@@ -213,7 +213,7 @@ func (o *osMetrics) report() madmin.OSMetrics {
 	var m madmin.OSMetrics
 	m.CollectedAt = time.Now()
 	m.LifeTimeOps = make(map[string]uint64, osMetricLast)
-	for i := osMetric(0); i < osMetricLast; i++ {
+	for i := range osMetricLast {
 		if n := atomic.LoadUint64(&o.operations[i]); n > 0 {
 			m.LifeTimeOps[i.String()] = n
 		}
@@ -223,7 +223,7 @@ func (o *osMetrics) report() madmin.OSMetrics {
 	}
 
 	m.LastMinute.Operations = make(map[string]madmin.TimedAction, osMetricLast)
-	for i := osMetric(0); i < osMetricLast; i++ {
+	for i := range osMetricLast {
 		lm := o.latency[i].total()
 		if lm.N > 0 {
 			m.LastMinute.Operations[i.String()] = lm.asTimedAction()

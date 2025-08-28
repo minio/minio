@@ -65,7 +65,6 @@ func TestParsePostPolicyForm(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			_, err := parsePostPolicyForm(strings.NewReader(testCase.policy))
 			if testCase.success && err != nil {

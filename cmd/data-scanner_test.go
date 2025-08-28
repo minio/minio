@@ -127,7 +127,7 @@ func TestApplyNewerNoncurrentVersionsLimit(t *testing.T) {
 		v2 uuid-2 modTime -3m
 		v1 uuid-1 modTime -4m
 	*/
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		fivs[i] = FileInfo{
 			Volume:      bucket,
 			Name:        obj,

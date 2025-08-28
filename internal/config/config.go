@@ -21,7 +21,9 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -61,7 +63,7 @@ type ErrConfigNotFound struct {
 func Error[T ErrorConfig, PT interface {
 	*T
 	setMsg(string)
-}](format string, vals ...interface{},
+}](format string, vals ...any,
 ) T {
 	pt := PT(new(T))
 	pt.setMsg(fmt.Sprintf(format, vals...))
@@ -69,7 +71,7 @@ func Error[T ErrorConfig, PT interface {
 }
 
 // Errorf formats an error and returns it as a generic config error
-func Errorf(format string, vals ...interface{}) ErrConfigGeneric {
+func Errorf(format string, vals ...any) ErrConfigGeneric {
 	return Error[ErrConfigGeneric](format, vals...)
 }
 
@@ -238,9 +240,7 @@ var DefaultKVS = map[string]KVS{}
 // globally, this should be called only once preferably
 // during `init()`.
 func RegisterDefaultKVS(kvsMap map[string]KVS) {
-	for subSys, kvs := range kvsMap {
-		DefaultKVS[subSys] = kvs
-	}
+	maps.Copy(DefaultKVS, kvsMap)
 }
 
 // HelpSubSysMap - help for all individual KVS for each sub-systems
@@ -253,9 +253,7 @@ var HelpSubSysMap = map[string]HelpKVS{}
 // this function should be called only once
 // preferably in during `init()`.
 func RegisterHelpSubSys(helpKVSMap map[string]HelpKVS) {
-	for subSys, hkvs := range helpKVSMap {
-		HelpSubSysMap[subSys] = hkvs
-	}
+	maps.Copy(HelpSubSysMap, helpKVSMap)
 }
 
 // HelpDeprecatedSubSysMap - help for all deprecated sub-systems, that may be
@@ -265,9 +263,7 @@ var HelpDeprecatedSubSysMap = map[string]HelpKV{}
 // RegisterHelpDeprecatedSubSys - saves input help KVS for deprecated
 // sub-systems globally. Should be called only once at init.
 func RegisterHelpDeprecatedSubSys(helpDeprecatedKVMap map[string]HelpKV) {
-	for k, v := range helpDeprecatedKVMap {
-		HelpDeprecatedSubSysMap[k] = v
-	}
+	maps.Copy(HelpDeprecatedSubSysMap, helpDeprecatedKVMap)
 }
 
 // KV - is a shorthand of each key value.
@@ -353,9 +349,7 @@ func Merge(cfgKVS map[string]KVS, envname string, defaultKVS KVS) map[string]KVS
 		}
 		newCfgKVS[tgt] = defaultKVS
 	}
-	for tgt, kv := range cfgKVS {
-		newCfgKVS[tgt] = kv
-	}
+	maps.Copy(newCfgKVS, cfgKVS)
 	return newCfgKVS
 }
 
@@ -642,11 +636,8 @@ func CheckValidKeys(subSys string, kv KVS, validKVS KVS, deprecatedKeys ...strin
 			continue
 		}
 		var skip bool
-		for _, deprecatedKey := range deprecatedKeys {
-			if kv.Key == deprecatedKey {
-				skip = true
-				break
-			}
+		if slices.Contains(deprecatedKeys, kv.Key) {
+			skip = true
 		}
 		if skip {
 			continue
@@ -852,7 +843,7 @@ func (c Config) DelKVS(s string) error {
 	if len(inputs) == 2 {
 		currKVS := ck.Clone()
 		defKVS := DefaultKVS[subSys]
-		for _, delKey := range strings.Fields(inputs[1]) {
+		for delKey := range strings.FieldsSeq(inputs[1]) {
 			_, ok := currKVS.Lookup(delKey)
 			if !ok {
 				return Error[ErrConfigNotFound]("key %s doesn't exist", delKey)
@@ -1407,13 +1398,7 @@ func (c Config) GetSubsysInfo(subSys, target string, redactSecrets bool) ([]Subs
 	}
 
 	if target != "" {
-		found := false
-		for _, t := range targets {
-			if t == target {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(targets, target)
 		if !found {
 			return nil, Errorf("there is no target `%s` for subsystem `%s`", target, subSys)
 		}

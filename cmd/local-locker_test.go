@@ -279,12 +279,12 @@ func Test_localLocker_expireOldLocksExpire(t *testing.T) {
 				}
 				t.Run(fmt.Sprintf("%d-read", readers), func(t *testing.T) {
 					l := newLocker()
-					for i := 0; i < locks; i++ {
+					for range locks {
 						var tmp [16]byte
 						rng.Read(tmp[:])
 						res := []string{hex.EncodeToString(tmp[:])}
 
-						for i := 0; i < readers; i++ {
+						for range readers {
 							rng.Read(tmp[:])
 							ok, err := l.RLock(t.Context(), dsync.LockArgs{
 								UID:       uuid.NewString(),
@@ -366,12 +366,12 @@ func Test_localLocker_RUnlock(t *testing.T) {
 				}
 				t.Run(fmt.Sprintf("%d-read", readers), func(t *testing.T) {
 					l := newLocker()
-					for i := 0; i < locks; i++ {
+					for range locks {
 						var tmp [16]byte
 						rng.Read(tmp[:])
 						res := []string{hex.EncodeToString(tmp[:])}
 
-						for i := 0; i < readers; i++ {
+						for range readers {
 							rng.Read(tmp[:])
 							ok, err := l.RLock(t.Context(), dsync.LockArgs{
 								UID:       uuid.NewString(),

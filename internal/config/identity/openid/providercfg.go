@@ -113,7 +113,7 @@ func (p *providerCfg) GetRoleArn() string {
 // claims as part of the normal oauth2 flow, instead rely
 // on service providers making calls to IDP to fetch additional
 // claims available from the UserInfo endpoint
-func (p *providerCfg) UserInfo(ctx context.Context, accessToken string, transport http.RoundTripper) (map[string]interface{}, error) {
+func (p *providerCfg) UserInfo(ctx context.Context, accessToken string, transport http.RoundTripper) (map[string]any, error) {
 	if p.JWKS.URL == nil || p.JWKS.URL.String() == "" {
 		return nil, errors.New("openid not configured")
 	}
@@ -147,7 +147,7 @@ func (p *providerCfg) UserInfo(ctx context.Context, accessToken string, transpor
 		return nil, errors.New(resp.Status)
 	}
 
-	claims := map[string]interface{}{}
+	claims := map[string]any{}
 	if err = json.NewDecoder(resp.Body).Decode(&claims); err != nil {
 		// uncomment this for debugging when needed.
 		// reqBytes, _ := httputil.DumpRequest(req, false)

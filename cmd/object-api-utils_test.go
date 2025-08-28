@@ -61,14 +61,14 @@ func benchmark(b *testing.B, data []string) {
 	b.Run("concat naive", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			concatNaive(data...)
 		}
 	})
 	b.Run("concat fast", func(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			concat(data...)
 		}
 	})
@@ -77,7 +77,7 @@ func benchmark(b *testing.B, data []string) {
 func BenchmarkConcatImplementation(b *testing.B) {
 	data := make([]string, 2)
 	rng := rand.New(rand.NewSource(0))
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		var tmp [16]byte
 		rng.Read(tmp[:])
 		data[i] = hex.EncodeToString(tmp[:])
@@ -91,7 +91,7 @@ func BenchmarkPathJoinOld(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			pathJoinOld("volume", "path/path/path")
 		}
 	})
@@ -102,7 +102,7 @@ func BenchmarkPathJoin(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			pathJoin("volume", "path/path/path")
 		}
 	})

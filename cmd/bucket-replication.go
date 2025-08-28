@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -803,9 +804,7 @@ func putReplicationOpts(ctx context.Context, sc string, objInfo ObjectInfo) (put
 		} else {
 			cs, mp := getCRCMeta(objInfo, 0, nil)
 			// Set object checksum.
-			for k, v := range cs {
-				meta[k] = v
-			}
+			maps.Copy(meta, cs)
 			isMP = mp
 			if !objInfo.isMultipart() && cs[xhttp.AmzChecksumType] == xhttp.AmzChecksumTypeFullObject {
 				// For objects where checksum is full object, it will be the same.
@@ -969,9 +968,7 @@ func getReplicationAction(oi1 ObjectInfo, oi2 minio.ObjectInfo, opType replicati
 
 	t, _ := tags.ParseObjectTags(oi1.UserTags)
 	oi2Map := make(map[string]string)
-	for k, v := range oi2.UserTags {
-		oi2Map[k] = v
-	}
+	maps.Copy(oi2Map, oi2.UserTags)
 	if (oi2.UserTagCount > 0 && !reflect.DeepEqual(oi2Map, t.ToMap())) || (oi2.UserTagCount != len(t.ToMap())) {
 		return replicateMetadata
 	}
@@ -1770,9 +1767,7 @@ func filterReplicationStatusMetadata(metadata map[string]string) map[string]stri
 		}
 		if !copied {
 			dst = make(map[string]string, len(metadata))
-			for k, v := range metadata {
-				dst[k] = v
-			}
+			maps.Copy(dst, metadata)
 			copied = true
 		}
 		delete(dst, key)
@@ -2954,7 +2949,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 	}()
 
 	var wg sync.WaitGroup
-	for i := 0; i < resyncParallelRoutines; i++ {
+	for i := range resyncParallelRoutines {
 		wg.Add(1)
 		workers[i] = make(chan ReplicateObjectInfo, 100)
 		i := i
@@ -3063,7 +3058,7 @@ func (s *replicationResyncer) resyncBucket(ctx context.Context, objectAPI Object
 			workers[h%uint64(resyncParallelRoutines)] <- roi
 		}
 	}
-	for i := 0; i < resyncParallelRoutines; i++ {
+	for i := range resyncParallelRoutines {
 		xioutil.SafeClose(workers[i])
 	}
 	wg.Wait()
@@ -3193,11 +3188,9 @@ func (p *ReplicationPool) startResyncRoutine(ctx context.Context, buckets []stri
 			<-ctx.Done()
 			return
 		}
-		duration := time.Duration(r.Float64() * float64(time.Minute))
-		if duration < time.Second {
+		duration := max(time.Duration(r.Float64()*float64(time.Minute)),
 			// Make sure to sleep at least a second to avoid high CPU ticks.
-			duration = time.Second
-		}
+			time.Second)
 		time.Sleep(duration)
 	}
 }
