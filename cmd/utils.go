@@ -38,7 +38,6 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"

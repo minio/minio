@@ -23,7 +23,6 @@ import (
 	"net/url"
 	"runtime"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/cespare/xxhash/v2"
