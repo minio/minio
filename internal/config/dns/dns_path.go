@@ -49,16 +49,9 @@ func dnsJoin(labels ...string) string {
 
 // msgUnPath converts a etcd path to domainName.
 func msgUnPath(s string) string {
-	l := strings.Split(s, etcdPathSeparator)
-	if l[len(l)-1] == "" {
-		l = l[:len(l)-1]
+	ks := strings.Split(strings.Trim(s, etcdPathSeparator), etcdPathSeparator)
+	for i, j := 0, len(ks)-1; i < j; i, j = i+1, j-1 {
+		ks[i], ks[j] = ks[j], ks[i]
 	}
-	if len(l) < 2 {
-		return s
-	}
-	// start with 1, to strip /skydns
-	for i, j := 1, len(l)-1; i < j; i, j = i+1, j-1 {
-		l[i], l[j] = l[j], l[i]
-	}
-	return dnsJoin(l[1 : len(l)-1]...)
+	return strings.Join(ks, ".")
 }

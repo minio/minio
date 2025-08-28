@@ -48,12 +48,27 @@ func TestPath(t *testing.T) {
 
 func TestUnPath(t *testing.T) {
 	result1 := msgUnPath("/skydns/local/cluster/staging/service/")
-	if result1 != "service.staging.cluster.local." {
+	if result1 != "service.staging.cluster.local.skydns" {
 		t.Errorf("Failure to get domain from etcd key (with a trailing '/'), expect: 'service.staging.cluster.local.', actually get: '%s'", result1)
 	}
 
 	result2 := msgUnPath("/skydns/local/cluster/staging/service")
-	if result2 != "service.staging.cluster.local." {
+	if result2 != "service.staging.cluster.local.skydns" {
 		t.Errorf("Failure to get domain from etcd key (without trailing '/'), expect: 'service.staging.cluster.local.' actually get: '%s'", result2)
+	}
+
+	result3 := msgUnPath("/singleleveldomain/")
+	if result3 != "singleleveldomain" {
+		t.Errorf("Failure to get domain from etcd key (with leading and trailing '/'), expect: 'singleleveldomain.' actually get: '%s'", result3)
+	}
+
+	result4 := msgUnPath("/singleleveldomain")
+	if result4 != "singleleveldomain" {
+		t.Errorf("Failure to get domain from etcd key (without trailing '/'), expect: 'singleleveldomain.' actually get: '%s'", result4)
+	}
+
+	result5 := msgUnPath("singleleveldomain")
+	if result5 != "singleleveldomain" {
+		t.Errorf("Failure to get domain from etcd key (without leading and trailing '/'), expect: 'singleleveldomain.' actually get: '%s'", result5)
 	}
 }
