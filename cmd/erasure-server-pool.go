@@ -964,7 +964,7 @@ func (z *erasureServerPools) GetObjectNInfo(ctx context.Context, bucket, object 
 	}
 
 	// check preconditions before reading the stream.
-	if checkPrecondFn != nil && checkPrecondFn(objInfo) {
+	if checkPrecondFn != nil && checkPrecondFn(objInfo, err) {
 		return nil, PreConditionFailed{}
 	}
 

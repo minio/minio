@@ -127,7 +127,7 @@ func (api objectAPIHandlers) getObjectInArchiveFileHandler(ctx context.Context, 
 	}
 
 	// Validate pre-conditions if any.
-	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+	opts.CheckPrecondFn = func(oi ObjectInfo, _ error) bool {
 		if _, err := DecryptObjectInfo(&oi, r); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return true
@@ -414,7 +414,7 @@ func (api objectAPIHandlers) headObjectInArchiveFileHandler(ctx context.Context,
 	}
 
 	// Validate pre-conditions if any.
-	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+	opts.CheckPrecondFn = func(oi ObjectInfo, _ error) bool {
 		return checkPreconditions(ctx, w, r, oi, opts)
 	}
 

@@ -387,7 +387,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		}
 
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if err == nil && opts.CheckPrecondFn(obj) {
+		if err == nil && opts.CheckPrecondFn(obj, err) {
 			return nil, PreConditionFailed{}
 		}
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
@@ -1105,7 +1105,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		}
 
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if err == nil && opts.CheckPrecondFn(obj) {
+		if err == nil && opts.CheckPrecondFn(obj, err) {
 			return ObjectInfo{}, PreConditionFailed{}
 		}
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {

@@ -774,7 +774,7 @@ func (g *GetObjectReader) WithCleanupFuncs(fns ...func()) *GetObjectReader {
 // NewGetObjectReaderFromReader sets up a GetObjectReader with a given
 // reader. This ignores any object properties.
 func NewGetObjectReaderFromReader(r io.Reader, oi ObjectInfo, opts ObjectOptions, cleanupFns ...func()) (*GetObjectReader, error) {
-	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi, nil) {
 		// Call the cleanup funcs
 		for i := len(cleanupFns) - 1; i >= 0; i-- {
 			cleanupFns[i]()
@@ -801,7 +801,7 @@ type ObjReaderFn func(inputReader io.Reader, h http.Header, cleanupFns ...func()
 func NewGetObjectReader(rs *HTTPRangeSpec, oi ObjectInfo, opts ObjectOptions, h http.Header) (
 	fn ObjReaderFn, off, length int64, err error,
 ) {
-	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi) {
+	if opts.CheckPrecondFn != nil && opts.CheckPrecondFn(oi, nil) {
 		return nil, 0, 0, PreConditionFailed{}
 	}
 

@@ -203,12 +203,12 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
 		r.Header.Get(xhttp.IfNoneMatch) != "" {
-		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+		opts.CheckPrecondFn = func(oi ObjectInfo, err error) bool {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return true
 			}
-			return checkPreconditionsPUT(ctx, w, r, oi, opts)
+			return checkPreconditionsPUT(ctx, w, r, oi, opts, err)
 		}
 	}
 
@@ -359,7 +359,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	checkCopyPartPrecondFn := func(o ObjectInfo) bool {
+	checkCopyPartPrecondFn := func(o ObjectInfo, _ error) bool {
 		if _, err := DecryptObjectInfo(&o, r); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return true
@@ -1017,12 +1017,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
 		r.Header.Get(xhttp.IfNoneMatch) != "" {
-		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
+		opts.CheckPrecondFn = func(oi ObjectInfo, err error) bool {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return true
 			}
-			return checkPreconditionsPUT(ctx, w, r, oi, opts)
+			return checkPreconditionsPUT(ctx, w, r, oi, opts, err)
 		}
 	}
 
