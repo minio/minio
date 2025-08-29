@@ -341,7 +341,8 @@ func (r *rebalanceMeta) save(ctx context.Context, store objectIO) error {
 	return r.saveWithOpts(ctx, store, ObjectOptions{})
 }
 
-func (z *erasureServerPools) IsRebalanceStarted() bool {
+func (z *erasureServerPools) IsRebalanceStarted(ctx context.Context) bool {
+	_ = z.loadRebalanceMeta(ctx)
 	z.rebalMu.RLock()
 	defer z.rebalMu.RUnlock()
 
@@ -394,12 +395,14 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		var (
 			quit     bool
 			traceMsg string
+			notify   bool // if status changed, notify nodes to reload rebalance metadata
 		)
 
 		for {
 			select {
 			case rebalErr := <-doneCh:
 				quit = true
+				notify = true
 				now := time.Now()
 				var status rebalStatus
 
@@ -421,12 +424,16 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 				z.rebalMu.Unlock()
 
 			case <-timer.C:
+				notify = false
 				traceMsg = fmt.Sprintf("saved at %s", time.Now())
 			}
 
 			stopFn := globalRebalanceMetrics.log(rebalanceMetricSaveMetadata, poolIdx, traceMsg)
 			err := z.saveRebalanceStats(GlobalContext, poolIdx, rebalSaveStats)
 			stopFn(0, err)
+			if err == nil && notify {
+				globalNotificationSys.LoadRebalanceMeta(GlobalContext, false)
+			}
 			rebalanceLogIf(GlobalContext, err)
 
 			if quit {
@@ -803,12 +810,19 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 	ctx = lkCtx.Context()
 	noLockOpts := ObjectOptions{NoLock: true}
 	r := &rebalanceMeta{}
-	if err := r.loadWithOpts(ctx, z.serverPools[0], noLockOpts); err != nil {
+	err = r.loadWithOpts(ctx, z.serverPools[0], noLockOpts)
+	if err != nil && !errors.Is(err, errConfigNotFound) {
 		return err
 	}
 
 	z.rebalMu.Lock()
 	defer z.rebalMu.Unlock()
+
+	// if not found, we store the memory metadata back
+	// when rebalance status changed, will notify all nodes update status to memory, we can treat the memory metadata is the latest status
+	if errors.Is(err, errConfigNotFound) {
+		r = z.rebalMeta
+	}
 
 	switch opts {
 	case rebalSaveStoppedAt:
