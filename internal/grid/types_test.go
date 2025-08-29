@@ -81,8 +81,8 @@ func TestMarshalUnmarshalMSSNil(t *testing.T) {
 func BenchmarkMarshalMsgMSS(b *testing.B) {
 	v := MSS{"abc": "def", "ghi": "jkl"}
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		v.MarshalMsg(nil)
 	}
 }
@@ -93,8 +93,8 @@ func BenchmarkAppendMsgMSS(b *testing.B) {
 	bts, _ = v.MarshalMsg(bts[0:0])
 	b.SetBytes(int64(len(bts)))
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		bts, _ = v.MarshalMsg(bts[0:0])
 	}
 }
@@ -104,8 +104,8 @@ func BenchmarkUnmarshalMSS(b *testing.B) {
 	bts, _ := v.MarshalMsg(nil)
 	b.ReportAllocs()
 	b.SetBytes(int64(len(bts)))
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := v.UnmarshalMsg(bts)
 		if err != nil {
 			b.Fatal(err)

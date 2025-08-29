@@ -88,7 +88,6 @@ func TestKVFields(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run("", func(t *testing.T) {
 			gotFields := kvFields(test.input, test.keys)
 			if len(gotFields) != len(test.expectedFields) {

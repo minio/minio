@@ -159,7 +159,7 @@ func newFormatErasureV3(numSets int, setLen int) *formatErasureV3 {
 
 	for i := range numSets {
 		format.Erasure.Sets[i] = make([]string, setLen)
-		for j := 0; j < setLen; j++ {
+		for j := range setLen {
 			format.Erasure.Sets[i][j] = mustGetUUID()
 		}
 	}
@@ -324,7 +324,6 @@ func loadFormatErasureAll(storageDisks []StorageAPI, heal bool) ([]*formatErasur
 
 	// Load format from each disk in parallel
 	for index := range storageDisks {
-		index := index
 		g.Go(func() error {
 			if storageDisks[index] == nil {
 				return errDiskNotFound
@@ -530,7 +529,6 @@ func saveFormatErasureAll(ctx context.Context, storageDisks []StorageAPI, format
 
 	// Write `format.json` to all disks.
 	for index := range storageDisks {
-		index := index
 		g.Go(func() error {
 			if formats[index] == nil {
 				return errDiskNotFound
@@ -566,7 +564,6 @@ func initStorageDisksWithErrors(endpoints Endpoints, opts storageOpts) ([]Storag
 	storageDisks := make([]StorageAPI, len(endpoints))
 	g := errgroup.WithNErrs(len(endpoints))
 	for index := range endpoints {
-		index := index
 		g.Go(func() (err error) {
 			storageDisks[index], err = newStorageAPI(endpoints[index], opts)
 			return err
@@ -600,7 +597,6 @@ func formatErasureV3ThisEmpty(formats []*formatErasureV3) bool {
 func fixFormatErasureV3(storageDisks []StorageAPI, endpoints Endpoints, formats []*formatErasureV3) error {
 	g := errgroup.WithNErrs(len(formats))
 	for i := range formats {
-		i := i
 		g.Go(func() error {
 			if formats[i] == nil || !endpoints[i].IsLocal {
 				return nil
@@ -641,7 +637,7 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 
 	for i := range setCount {
 		hostCount := make(map[string]int, setDriveCount)
-		for j := 0; j < setDriveCount; j++ {
+		for j := range setDriveCount {
 			disk := storageDisks[i*setDriveCount+j]
 			newFormat := format.Clone()
 			newFormat.Erasure.This = format.Erasure.Sets[i][j]
@@ -662,7 +658,7 @@ func initFormatErasure(ctx context.Context, storageDisks []StorageAPI, setCount,
 						return
 					}
 					logger.Info(" * Set %v:", i+1)
-					for j := 0; j < setDriveCount; j++ {
+					for j := range setDriveCount {
 						disk := storageDisks[i*setDriveCount+j]
 						logger.Info("   - Drive: %s", disk.String())
 					}

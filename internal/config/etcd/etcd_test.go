@@ -49,7 +49,6 @@ func TestParseEndpoints(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.s, func(t *testing.T) {
 			endpoints, secure, err := parseEndpoints(testCase.s)
 			if err != nil && testCase.success {

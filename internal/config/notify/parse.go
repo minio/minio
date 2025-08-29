@@ -45,7 +45,7 @@ const (
 	logSubsys = "notify"
 )
 
-func logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func logOnceIf(ctx context.Context, err error, id string, errKind ...any) {
 	logger.LogOnceIf(ctx, logSubsys, err, id, errKind...)
 }
 
@@ -412,7 +412,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if len(kafkaBrokers) == 0 {
 			return nil, config.Errorf("kafka 'brokers' cannot be empty")
 		}
-		for _, s := range strings.Split(kafkaBrokers, config.ValueSeparator) {
+		for s := range strings.SplitSeq(kafkaBrokers, config.ValueSeparator) {
 			var host *xnet.Host
 			host, err = xnet.ParseHost(s)
 			if err != nil {

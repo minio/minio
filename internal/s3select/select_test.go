@@ -630,7 +630,7 @@ func TestJSONQueries(t *testing.T) {
 			if len(testReq) == 0 {
 				var escaped bytes.Buffer
 				xml.EscapeText(&escaped, []byte(testCase.query))
-				testReq = []byte(fmt.Sprintf(defRequest, escaped.String()))
+				testReq = fmt.Appendf(nil, defRequest, escaped.String())
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {
@@ -676,7 +676,7 @@ func TestJSONQueries(t *testing.T) {
 			if len(testReq) == 0 {
 				var escaped bytes.Buffer
 				xml.EscapeText(&escaped, []byte(testCase.query))
-				testReq = []byte(fmt.Sprintf(defRequest, escaped.String()))
+				testReq = fmt.Appendf(nil, defRequest, escaped.String())
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {
@@ -761,7 +761,7 @@ func TestCSVQueries(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
-				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+				testReq = fmt.Appendf(nil, defRequest, testCase.query)
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {
@@ -944,7 +944,7 @@ func TestCSVQueries2(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
-				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+				testReq = fmt.Appendf(nil, defRequest, testCase.query)
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {
@@ -1088,7 +1088,7 @@ true`,
 		t.Run(testCase.name, func(t *testing.T) {
 			testReq := testCase.requestXML
 			if len(testReq) == 0 {
-				testReq = []byte(fmt.Sprintf(defRequest, testCase.query))
+				testReq = fmt.Appendf(nil, defRequest, testCase.query)
 			}
 			s3Select, err := NewS3Select(bytes.NewReader(testReq))
 			if err != nil {

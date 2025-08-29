@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/textproto"
 	"strings"
@@ -601,9 +602,7 @@ func FilterObjectLockMetadata(metadata map[string]string, filterRetention, filte
 		}
 		if !copied {
 			dst = make(map[string]string, len(metadata))
-			for k, v := range metadata {
-				dst[k] = v
-			}
+			maps.Copy(dst, metadata)
 			copied = true
 		}
 		delete(dst, key)

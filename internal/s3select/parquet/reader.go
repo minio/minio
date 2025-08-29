@@ -56,7 +56,7 @@ func (pr *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 
 	kvs := jstream.KVS{}
 	for _, col := range pr.r.Columns() {
-		var value interface{}
+		var value any
 		if v, ok := nextRow[col.FlatName()]; ok {
 			value, err = convertFromAnnotation(col.Element(), v)
 			if err != nil {
@@ -80,12 +80,12 @@ func (pr *Reader) Read(dst sql.Record) (rec sql.Record, rerr error) {
 // annotations. LogicalType annotations if present override the deprecated
 // ConvertedType annotations. Ref:
 // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md
-func convertFromAnnotation(se *parquettypes.SchemaElement, v interface{}) (interface{}, error) {
+func convertFromAnnotation(se *parquettypes.SchemaElement, v any) (any, error) {
 	if se == nil {
 		return v, nil
 	}
 
-	var value interface{}
+	var value any
 	switch val := v.(type) {
 	case []byte:
 		// TODO: only strings are supported in s3select output (not

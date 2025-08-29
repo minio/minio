@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sync/atomic"
 	"time"
@@ -221,9 +222,7 @@ func (brs BucketReplicationStats) Clone() (c BucketReplicationStats) {
 		}
 		if s.Failed.ErrCounts == nil {
 			s.Failed.ErrCounts = make(map[string]int)
-			for k, v := range st.Failed.ErrCounts {
-				s.Failed.ErrCounts[k] = v
-			}
+			maps.Copy(s.Failed.ErrCounts, st.Failed.ErrCounts)
 		}
 		c.Stats[arn] = &s
 	}

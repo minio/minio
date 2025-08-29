@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"sort"
@@ -183,9 +184,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 
 	// We need to preserve the encryption headers set in EncryptRequest,
 	// so we do not want to override them, copy them instead.
-	for k, v := range encMetadata {
-		metadata[k] = v
-	}
+	maps.Copy(metadata, encMetadata)
 
 	// Ensure that metadata does not contain sensitive information
 	crypto.RemoveSensitiveEntries(metadata)
@@ -525,7 +524,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		copy(objectEncryptionKey[:], key)
 
 		var nonce [12]byte
-		tmp := sha256.Sum256([]byte(fmt.Sprint(uploadID, partID)))
+		tmp := sha256.Sum256(fmt.Append(nil, uploadID, partID))
 		copy(nonce[:], tmp[:12])
 
 		partEncryptionKey := objectEncryptionKey.DerivePartKey(uint32(partID))
@@ -823,7 +822,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			}
 
 			var nonce [12]byte
-			tmp := sha256.Sum256([]byte(fmt.Sprint(uploadID, partID)))
+			tmp := sha256.Sum256(fmt.Append(nil, uploadID, partID))
 			copy(nonce[:], tmp[:12])
 
 			reader, err = sio.EncryptReader(in, sio.Config{

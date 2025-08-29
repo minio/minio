@@ -375,7 +375,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		}
 		info := info
 		wg.Add(connectionsPerPeer)
-		for i := 0; i < connectionsPerPeer; i++ {
+		for range connectionsPerPeer {
 			go func() {
 				defer wg.Done()
 				ctx, cancel := context.WithTimeout(ctx, duration+10*time.Second)

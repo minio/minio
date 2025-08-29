@@ -217,7 +217,7 @@ func TestValue_CSVString(t *testing.T) {
 
 func TestValue_bytesToInt(t *testing.T) {
 	type fields struct {
-		value interface{}
+		value any
 	}
 	tests := []struct {
 		name   string
@@ -367,7 +367,7 @@ func TestValue_bytesToInt(t *testing.T) {
 
 func TestValue_bytesToFloat(t *testing.T) {
 	type fields struct {
-		value interface{}
+		value any
 	}
 	tests := []struct {
 		name   string
@@ -569,7 +569,7 @@ func TestValue_bytesToFloat(t *testing.T) {
 
 func TestValue_bytesToBool(t *testing.T) {
 	type fields struct {
-		value interface{}
+		value any
 	}
 	tests := []struct {
 		name    string

@@ -35,7 +35,7 @@ const (
 	logSubsys = "notify"
 )
 
-func logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func logOnceIf(ctx context.Context, err error, id string, errKind ...any) {
 	logger.LogOnceIf(ctx, logSubsys, err, id, errKind...)
 }
 

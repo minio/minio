@@ -170,7 +170,7 @@ func (o *Opa) IsAllowed(args policy.Args) (bool, error) {
 	}
 
 	// OPA input
-	body := make(map[string]interface{})
+	body := make(map[string]any)
 	body["input"] = args
 
 	inputBytes, err := json.Marshal(body)

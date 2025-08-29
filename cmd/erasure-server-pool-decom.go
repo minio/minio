@@ -25,6 +25,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -117,12 +118,7 @@ func (pd *PoolDecommissionInfo) bucketPop(bucket string) bool {
 }
 
 func (pd *PoolDecommissionInfo) isBucketDecommissioned(bucket string) bool {
-	for _, b := range pd.DecommissionedBuckets {
-		if b == bucket {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(pd.DecommissionedBuckets, bucket)
 }
 
 func (pd *PoolDecommissionInfo) bucketPush(bucket decomBucketInfo) {
@@ -792,8 +788,6 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 	}
 
 	for setIdx, set := range pool.sets {
-		set := set
-
 		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 			if lc == nil {
 				return false
@@ -901,7 +895,7 @@ func (z *erasureServerPools) decommissionPool(ctx context.Context, idx int, pool
 				}
 
 				// gr.Close() is ensured by decommissionObject().
-				for try := 0; try < 3; try++ {
+				for range 3 {
 					if version.IsRemote() {
 						if err := z.DecomTieredObject(ctx, bi.Name, version.Name, version, ObjectOptions{
 							VersionID:    versionID,

@@ -1056,7 +1056,7 @@ type newServiceAccountOpts struct {
 	expiration                 *time.Time
 	allowSiteReplicatorAccount bool // allow creating internal service account for site-replication.
 
-	claims map[string]interface{}
+	claims map[string]any
 }
 
 // NewServiceAccount - create a new service account
@@ -1099,7 +1099,7 @@ func (sys *IAMSys) NewServiceAccount(ctx context.Context, parentUser string, gro
 	if siteReplicatorSvcAcc == opts.accessKey && !opts.allowSiteReplicatorAccount {
 		return auth.Credentials{}, time.Time{}, errIAMActionNotAllowed
 	}
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	m[parentClaim] = parentUser
 
 	if len(policyBuf) > 0 {
@@ -1345,7 +1345,7 @@ func (sys *IAMSys) getAccountWithClaims(ctx context.Context, accessKey string) (
 }
 
 // GetClaimsForSvcAcc - gets the claims associated with the service account.
-func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (map[string]interface{}, error) {
+func (sys *IAMSys) GetClaimsForSvcAcc(ctx context.Context, accessKey string) (map[string]any, error) {
 	if !sys.Initialized() {
 		return nil, errServerNotInitialized
 	}
@@ -1696,10 +1696,8 @@ func (sys *IAMSys) NormalizeLDAPAccessKeypairs(ctx context.Context, accessKeyMap
 		return skippedAccessKeys, fmt.Errorf("errors validating LDAP DN: %w", errors.Join(collectedErrors...))
 	}
 
-	for k, v := range updatedKeysMap {
-		// Replace the map values with the updated ones
-		accessKeyMap[k] = v
-	}
+	// Replace the map values with the updated ones
+	maps.Copy(accessKeyMap, updatedKeysMap)
 
 	return skippedAccessKeys, nil
 }

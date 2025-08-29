@@ -46,7 +46,7 @@ var (
 // the type may not be determined yet. In these cases, a byte-slice is
 // used.
 type Value struct {
-	value interface{}
+	value any
 }
 
 // Missing is used to indicate a non-existing value.

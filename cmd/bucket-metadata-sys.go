@@ -472,7 +472,7 @@ func (sys *BucketMetadataSys) GetConfig(ctx context.Context, bucket string) (met
 		return meta, reloaded, nil
 	}
 
-	val, err, _ := sys.group.Do(bucket, func() (val interface{}, err error) {
+	val, err, _ := sys.group.Do(bucket, func() (val any, err error) {
 		meta, err = loadBucketMetadata(ctx, objAPI, bucket)
 		if err != nil {
 			if !sys.Initialized() {
@@ -511,7 +511,6 @@ func (sys *BucketMetadataSys) concurrentLoad(ctx context.Context, buckets []stri
 	g := errgroup.WithNErrs(len(buckets))
 	bucketMetas := make([]BucketMetadata, len(buckets))
 	for index := range buckets {
-		index := index
 		g.Go(func() error {
 			// Sleep and stagger to avoid blocked CPU and thundering
 			// herd upon start up sequence.

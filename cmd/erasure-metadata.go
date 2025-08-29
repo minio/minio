@@ -408,7 +408,6 @@ func writeAllMetadataWithRevert(ctx context.Context, disks []StorageAPI, origbuc
 
 	// Start writing `xl.meta` to all disks in parallel.
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound

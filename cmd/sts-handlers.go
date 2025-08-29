@@ -93,7 +93,7 @@ const (
 	maxSTSSessionPolicySize = 2048
 )
 
-type stsClaims map[string]interface{}
+type stsClaims map[string]any
 
 func (c stsClaims) populateSessionPolicy(form url.Values) error {
 	if len(form) == 0 {
@@ -791,7 +791,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithCertificate")
 
-	claims := make(map[string]interface{})
+	claims := make(map[string]any)
 	defer logger.AuditLog(ctx, w, r, claims)
 
 	if !globalIAMSys.Initialized() {
@@ -977,7 +977,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithCustomToken")
 
-	claims := make(map[string]interface{})
+	claims := make(map[string]any)
 
 	auditLogFilterKeys := []string{stsToken}
 	defer logger.AuditLog(ctx, w, r, claims, auditLogFilterKeys...)

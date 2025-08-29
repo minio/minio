@@ -149,13 +149,13 @@ func (lh *lockServerHandler) RLockHandler(w http.ResponseWriter, r *http.Request
 }
 
 func stopLockServers() {
-	for i := 0; i < numberOfNodes; i++ {
+	for i := range numberOfNodes {
 		nodes[i].Close()
 	}
 }
 
 func startLockServers() {
-	for i := 0; i < numberOfNodes; i++ {
+	for i := range numberOfNodes {
 		lsrv := &lockServer{
 			mutex:   sync.Mutex{},
 			lockMap: make(map[string]int64),

@@ -69,7 +69,7 @@ func TestQueueStorePut(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	// Put 100 items.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
@@ -93,7 +93,7 @@ func TestQueueStoreGet(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	// Put 10 items
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
@@ -127,7 +127,7 @@ func TestQueueStoreDel(t *testing.T) {
 		t.Fatal("Failed to create a queue store ", err)
 	}
 	// Put 20 items.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
@@ -163,7 +163,7 @@ func TestQueueStoreLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
@@ -185,7 +185,7 @@ func TestQueueStoreListN(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create a queue store ", err)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if _, err := store.Put(testItem); err != nil {
 			t.Fatal("Failed to put to queue store ", err)
 		}
@@ -237,7 +237,7 @@ func TestMultiplePutGetRaw(t *testing.T) {
 	}
 	// TestItem{Name: "test-item", Property: "property"}
 	var items []TestItem
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		items = append(items, TestItem{
 			Name:     fmt.Sprintf("test-item-%d", i),
 			Property: "property",
@@ -303,7 +303,7 @@ func TestMultiplePutGets(t *testing.T) {
 	}
 	// TestItem{Name: "test-item", Property: "property"}
 	var items []TestItem
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		items = append(items, TestItem{
 			Name:     fmt.Sprintf("test-item-%d", i),
 			Property: "property",
@@ -359,7 +359,7 @@ func TestMixedPutGets(t *testing.T) {
 	}
 	// TestItem{Name: "test-item", Property: "property"}
 	var items []TestItem
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		items = append(items, TestItem{
 			Name:     fmt.Sprintf("test-item-%d", i),
 			Property: "property",

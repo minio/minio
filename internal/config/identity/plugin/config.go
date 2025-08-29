@@ -333,9 +333,9 @@ func New(shutdownCtx context.Context, args Args) *AuthNPlugin {
 // AuthNSuccessResponse - represents the response from the authentication plugin
 // service.
 type AuthNSuccessResponse struct {
-	User               string                 `json:"user"`
-	MaxValiditySeconds int                    `json:"maxValiditySeconds"`
-	Claims             map[string]interface{} `json:"claims"`
+	User               string         `json:"user"`
+	MaxValiditySeconds int            `json:"maxValiditySeconds"`
+	Claims             map[string]any `json:"claims"`
 }
 
 // AuthNErrorResponse - represents an error response from the authN plugin.

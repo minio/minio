@@ -32,7 +32,7 @@ type Error struct {
 
 // Errorf - formats according to a format specifier and returns
 // the string as a value that satisfies error of type crypto.Error
-func Errorf(format string, a ...interface{}) error {
+func Errorf(format string, a ...any) error {
 	e := fmt.Errorf(format, a...)
 	ee := Error{}
 	ee.msg = e.Error()

@@ -238,7 +238,7 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 		return nil, errSFTPUserHasNoPolicies
 	}
 
-	claims := make(map[string]interface{})
+	claims := make(map[string]any)
 	for attribKey, attribValue := range lookupResult.Attributes {
 		// we skip multi-value attributes here, as they cannot
 		// be stored in the critical options.

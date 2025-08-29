@@ -129,7 +129,7 @@ func saveServerConfigHistory(ctx context.Context, objAPI ObjectLayer, kv []byte)
 	return saveConfig(ctx, objAPI, historyFile, kv)
 }
 
-func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg interface{}) error {
+func saveServerConfig(ctx context.Context, objAPI ObjectLayer, cfg any) error {
 	data, err := json.Marshal(cfg)
 	if err != nil {
 		return err

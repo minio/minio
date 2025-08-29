@@ -216,7 +216,7 @@ func getSessionToken(r *http.Request) (token string) {
 
 // Fetch claims in the security token returned by the client, doesn't return
 // errors - upon errors the returned claims map will be empty.
-func mustGetClaimsFromToken(r *http.Request) map[string]interface{} {
+func mustGetClaimsFromToken(r *http.Request) map[string]any {
 	claims, _ := getClaimsFromToken(getSessionToken(r))
 	return claims
 }
@@ -266,7 +266,7 @@ func getClaimsFromTokenWithSecret(token, secret string) (*xjwt.MapClaims, error)
 }
 
 // Fetch claims in the security token returned by the client.
-func getClaimsFromToken(token string) (map[string]interface{}, error) {
+func getClaimsFromToken(token string) (map[string]any, error) {
 	jwtClaims, err := getClaimsFromTokenWithSecret(token, globalActiveCred.SecretKey)
 	if err != nil {
 		return nil, err
@@ -275,7 +275,7 @@ func getClaimsFromToken(token string) (map[string]interface{}, error) {
 }
 
 // Fetch claims in the security token returned by the client and validate the token.
-func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]interface{}, APIErrorCode) {
+func checkClaimsFromToken(r *http.Request, cred auth.Credentials) (map[string]any, APIErrorCode) {
 	token := getSessionToken(r)
 	if token != "" && cred.AccessKey == "" {
 		// x-amz-security-token is not allowed for anonymous access.

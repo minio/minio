@@ -172,17 +172,16 @@ func benchmarkErasureEncode(data, parity, dataDown, parityDown int, size int64, 
 	buffer := make([]byte, blockSizeV2, 2*blockSizeV2)
 	content := make([]byte, size)
 
-	for i := 0; i < dataDown; i++ {
+	for i := range dataDown {
 		disks[i] = OfflineDisk
 	}
 	for i := data; i < data+parityDown; i++ {
 		disks[i] = OfflineDisk
 	}
 
-	b.ResetTimer()
 	b.SetBytes(size)
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		writers := make([]io.Writer, len(disks))
 		for i, disk := range disks {
 			if disk == OfflineDisk {

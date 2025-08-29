@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -311,7 +312,7 @@ func parseReplicateDecision(ctx context.Context, bucket, s string) (r ReplicateD
 	if len(s) == 0 {
 		return
 	}
-	for _, p := range strings.Split(s, ",") {
+	for p := range strings.SplitSeq(s, ",") {
 		if p == "" {
 			continue
 		}
@@ -735,9 +736,7 @@ type BucketReplicationResyncStatus struct {
 
 func (rs *BucketReplicationResyncStatus) cloneTgtStats() (m map[string]TargetReplicationResyncStatus) {
 	m = make(map[string]TargetReplicationResyncStatus)
-	for arn, st := range rs.TargetsMap {
-		m[arn] = st
-	}
+	maps.Copy(m, rs.TargetsMap)
 	return
 }
 

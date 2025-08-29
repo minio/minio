@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"errors"
+	"maps"
 	"net/http"
 	"time"
 
@@ -110,9 +111,7 @@ func metricsRequestAuthenticate(req *http.Request) (*xjwt.MapClaims, []string, b
 			return nil, nil, false, errAuthentication
 		}
 
-		for k, v := range eclaims {
-			claims.MapClaims[k] = v
-		}
+		maps.Copy(claims.MapClaims, eclaims)
 
 		// if root access is disabled, disable all its service accounts and temporary credentials.
 		if ucred.ParentUser == globalActiveCred.AccessKey && !globalAPIConfig.permitRootAccess() {

@@ -31,6 +31,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -309,7 +310,7 @@ FLAGS:
 			if ndjson {
 				return buf.Bytes(), nil
 			}
-			var msi map[string]interface{}
+			var msi map[string]any
 			dec := json.NewDecoder(buf)
 			// Use number to preserve integers.
 			dec.UseNumber()
@@ -390,7 +391,7 @@ FLAGS:
 						if err != nil {
 							return err
 						}
-						var tmp map[string]interface{}
+						var tmp map[string]any
 						if err := json.Unmarshal(b2, &tmp); err == nil {
 							if b3, err := json.Marshal(tmp); err == nil {
 								b2 = b3
@@ -578,7 +579,7 @@ func (x xlMetaInlineData) json(value bool) ([]byte, error) {
 	}
 	res := []byte("{")
 
-	for i := uint32(0); i < sz; i++ {
+	for i := range sz {
 		var key, val []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
@@ -643,7 +644,7 @@ func (x xlMetaInlineData) files(fn func(name string, data []byte)) error {
 		return err
 	}
 
-	for i := uint32(0); i < sz; i++ {
+	for i := range sz {
 		var key, val []byte
 		key, buf, err = msgp.ReadMapKeyZC(buf)
 		if err != nil {
@@ -703,7 +704,7 @@ func decodeXLHeaders(buf []byte) (x xlHeaders, b []byte, err error) {
 // Any non-nil error is returned.
 func decodeVersions(buf []byte, versions int, fn func(idx int, hdr, meta []byte) error) (err error) {
 	var tHdr, tMeta []byte // Zero copy bytes
-	for i := 0; i < versions; i++ {
+	for i := range versions {
 		tHdr, buf, err = msgp.ReadBytesZC(buf)
 		if err != nil {
 			return err
@@ -985,12 +986,9 @@ func combine(files []string, out string) error {
 			}
 			ok := len(splitFilled)
 			for i, sh := range splitFilled {
-				for _, v := range sh {
-					if v == 0 {
-						split[i] = nil
-						ok--
-						break
-					}
+				if slices.Contains(sh, 0) {
+					split[i] = nil
+					ok--
 				}
 			}
 			hasParity := 0
@@ -1246,7 +1244,7 @@ func combineCrossVer(all map[string][]string, baseName string) error {
 						}
 						// Fill padding...
 						padding := len(splitFilled[0])*k - len(m.filled)
-						for i := 0; i < padding; i++ {
+						for i := range padding {
 							arr := splitFilled[k-1]
 							arr[len(arr)-i-1] = 1
 						}

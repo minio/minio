@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -224,10 +225,8 @@ func LookupConfig(kvs config.KVS) (cfg Config, err error) {
 		corsAllowOrigin = []string{"*"} // defaults to '*'
 	} else {
 		corsAllowOrigin = strings.Split(corsList, ",")
-		for _, cors := range corsAllowOrigin {
-			if cors == "" {
-				return cfg, errors.New("invalid cors value")
-			}
+		if slices.Contains(corsAllowOrigin, "") {
+			return cfg, errors.New("invalid cors value")
 		}
 	}
 	cfg.CorsAllowOrigin = corsAllowOrigin

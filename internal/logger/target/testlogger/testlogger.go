@@ -113,7 +113,7 @@ func (t *testLogger) Cancel() {
 	t.current.Store(nil)
 }
 
-func (t *testLogger) Send(ctx context.Context, entry interface{}) error {
+func (t *testLogger) Send(ctx context.Context, entry any) error {
 	tb := t.current.Load()
 	var logf func(format string, args ...any)
 	if tb != nil {

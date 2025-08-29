@@ -190,7 +190,7 @@ func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
   "Version": "2012-10-17",
   "Statement": [
    {
@@ -222,7 +222,7 @@ func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {
    }
   ]
  }
-`, bucket, bucket))
+`, bucket, bucket)
 
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
@@ -289,7 +289,7 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
   "Version": "2012-10-17",
   "Statement": [
     {
@@ -327,7 +327,7 @@ func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
       }
     }
   ]
-}`, bucket, bucket, bucket, bucket))
+}`, bucket, bucket, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -403,7 +403,7 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -418,7 +418,7 @@ func (s *TestSuiteIAM) TestSTS(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -488,7 +488,7 @@ func (s *TestSuiteIAM) TestSTSWithGroupPolicy(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -503,7 +503,7 @@ func (s *TestSuiteIAM) TestSTSWithGroupPolicy(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -671,7 +671,7 @@ func (s *TestSuiteIAM) TestSTSTokenRevoke(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -686,7 +686,7 @@ func (s *TestSuiteIAM) TestSTSTokenRevoke(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1303,7 +1303,7 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
 
 	// Create policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1318,7 +1318,7 @@ func (s *TestSuiteIAM) TestLDAPSTS(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1449,7 +1449,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
 
 	// Create policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1464,7 +1464,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariationsLegacyAPI(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1601,7 +1601,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
 
 	// Create policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1616,7 +1616,7 @@ func (s *TestSuiteIAM) TestLDAPUnicodeVariations(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1768,7 +1768,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
 
 	// Create policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1783,7 +1783,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccounts(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1970,7 +1970,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
 
 	// Create policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1985,7 +1985,7 @@ func (s *TestSuiteIAM) TestLDAPSTSServiceAccountsWithGroups(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -2296,7 +2296,7 @@ func (s *TestSuiteIAM) TestLDAPAttributesLookup(c *check) {
 		if dnClaim != testCase.dn {
 			c.Fatalf("Test %d: unexpected dn claim: %s", i+1, dnClaim)
 		}
-		sshPublicKeyClaim := claims.MapClaims[ldapAttribPrefix+"sshPublicKey"].([]interface{})[0].(string)
+		sshPublicKeyClaim := claims.MapClaims[ldapAttribPrefix+"sshPublicKey"].([]any)[0].(string)
 		if sshPublicKeyClaim == "" {
 			c.Fatalf("Test %d: expected sshPublicKey claim to be present", i+1)
 		}
@@ -2421,7 +2421,7 @@ func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
 	// Create policy - with name as one of the groups in OpenID the user is
 	// a member of.
 	policy := "projecta"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -2436,7 +2436,7 @@ func (s *TestSuiteIAM) TestOpenIDSTS(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -2526,7 +2526,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSDurationSeconds(c *check) {
 		{60, true},
 		{1800, false},
 	} {
-		policyBytes := []byte(fmt.Sprintf(policyTmpl, testCase.durSecs, bucket))
+		policyBytes := fmt.Appendf(nil, policyTmpl, testCase.durSecs, bucket)
 		err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 		if err != nil {
 			c.Fatalf("Test %d: policy add error: %v", i+1, err)
@@ -2586,7 +2586,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSAddUser(c *check) {
 	// Create policy - with name as one of the groups in OpenID the user is
 	// a member of.
 	policy := "projecta"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -2601,7 +2601,7 @@ func (s *TestSuiteIAM) TestOpenIDSTSAddUser(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -2676,7 +2676,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
 	// Create policy - with name as one of the groups in OpenID the user is
 	// a member of.
 	policy := "projecta"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -2691,7 +2691,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAcc(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -3452,7 +3452,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicyUnderAMP(c *check) {
 		svcAK, svcSK := mustGenerateCredentials(c)
 
 		// This policy does not allow listing objects.
-		policyBytes := []byte(fmt.Sprintf(`{
+		policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -3466,7 +3466,7 @@ func (s *TestSuiteIAM) TestOpenIDServiceAccWithRolePolicyUnderAMP(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 			Policy:     policyBytes,
 			TargetUser: value.AccessKeyID,

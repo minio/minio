@@ -60,7 +60,7 @@ func GetAuditEntry(ctx context.Context) *audit.Entry {
 }
 
 // AuditLog - logs audit logs to all audit targets.
-func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqClaims map[string]interface{}, filterKeys ...string) {
+func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqClaims map[string]any, filterKeys ...string) {
 	auditTgts := AuditTargets()
 	if len(auditTgts) == 0 {
 		return
@@ -124,7 +124,7 @@ func AuditLog(ctx context.Context, w http.ResponseWriter, r *http.Request, reqCl
 		entry.API.TimeToResponse = strconv.FormatInt(timeToResponse.Nanoseconds(), 10) + "ns"
 		entry.API.TimeToResponseInNS = strconv.FormatInt(timeToResponse.Nanoseconds(), 10)
 		// We hold the lock, so we cannot call reqInfo.GetTagsMap().
-		tags := make(map[string]interface{}, len(reqInfo.tags))
+		tags := make(map[string]any, len(reqInfo.tags))
 		for _, t := range reqInfo.tags {
 			tags[t.Key] = t.Val
 		}

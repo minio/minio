@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"path"
 	"strconv"
@@ -117,10 +118,7 @@ func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 		names    = make([]string, 0, BatchSize)
 	)
 	for len(objects) > 0 {
-		N := BatchSize
-		if len(objects) < BatchSize {
-			N = len(objects)
-		}
+		N := min(len(objects), BatchSize)
 		batch := objects[:N]
 
 		// We have to decrypt only ETags of SSE-S3 single-part
@@ -317,9 +315,7 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		// of the client provided context and add the bucket
 		// key, if not present.
 		kmsCtx := kms.Context{}
-		for k, v := range cryptoCtx {
-			kmsCtx[k] = v
-		}
+		maps.Copy(kmsCtx, cryptoCtx)
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
@@ -389,9 +385,7 @@ func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key
 		// of the client provided context and add the bucket
 		// key, if not present.
 		kmsCtx := kms.Context{}
-		for k, v := range cryptoCtx {
-			kmsCtx[k] = v
-		}
+		maps.Copy(kmsCtx, cryptoCtx)
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}

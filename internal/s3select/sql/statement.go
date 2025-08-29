@@ -174,7 +174,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) ([]*Record, erro
 		case jstream.KVS:
 			kvs = v
 
-		case []interface{}:
+		case []any:
 			recs := make([]*Record, len(v))
 			for i, val := range v {
 				tmpRec := input.Clone(nil)
@@ -207,7 +207,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) ([]*Record, erro
 				return nil, err
 			}
 
-		case []interface{}:
+		case []any:
 			recs := make([]*Record, len(v))
 			for i, val := range v {
 				tmpRec := input.Clone(nil)

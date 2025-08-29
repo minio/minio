@@ -39,7 +39,7 @@ import (
 
 func TestUpdateClaimsExpiry(t *testing.T) {
 	testCases := []struct {
-		exp             interface{}
+		exp             any
 		dsecs           string
 		expectedFailure bool
 	}{
@@ -58,9 +58,8 @@ func TestUpdateClaimsExpiry(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
-			claims := map[string]interface{}{}
+			claims := map[string]any{}
 			claims["exp"] = testCase.exp
 			err := updateClaimsExpiry(testCase.dsecs, claims)
 			if err != nil && !testCase.expectedFailure {
@@ -99,7 +98,7 @@ func TestJWTHMACType(t *testing.T) {
 			ExpiresAt: 253428928061,
 			Audience:  "76b95ae5-33ef-4283-97b7-d2a85dc2d8f4",
 		},
-		Header: map[string]interface{}{
+		Header: map[string]any{
 			"typ": "JWT",
 			"alg": jwtgo.SigningMethodHS256.Alg(),
 			"kid": "76b95ae5-33ef-4283-97b7-d2a85dc2d8f4",
@@ -119,7 +118,7 @@ func TestJWTHMACType(t *testing.T) {
 
 	pubKeys := publicKeys{
 		RWMutex: &sync.RWMutex{},
-		pkMap:   map[string]interface{}{},
+		pkMap:   map[string]any{},
 	}
 	pubKeys.add("76b95ae5-33ef-4283-97b7-d2a85dc2d8f4", []byte("WNGvKVyyNmXq0TraSvjaDN9CtpFgx35IXtGEffMCPR0"))
 
@@ -165,7 +164,7 @@ func TestJWT(t *testing.T) {
 
 	pubKeys := publicKeys{
 		RWMutex: &sync.RWMutex{},
-		pkMap:   map[string]interface{}{},
+		pkMap:   map[string]any{},
 	}
 	err := pubKeys.parseAndAdd(bytes.NewBuffer([]byte(jsonkey)))
 	if err != nil {

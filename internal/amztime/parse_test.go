@@ -44,7 +44,6 @@ func TestParse(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.timeStr, func(t *testing.T) {
 			gott, goterr := Parse(testCase.timeStr)
 			if !errors.Is(goterr, testCase.expectedErr) {

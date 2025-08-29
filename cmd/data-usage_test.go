@@ -179,7 +179,7 @@ func TestDataUsageUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Changed dir must be picked up in this many cycles.
-	for i := 0; i < dataUsageUpdateDirCycles; i++ {
+	for range dataUsageUpdateDirCycles {
 		got, err = scanDataFolder(t.Context(), nil, &xls, got, getSize, 0, weSleep)
 		got.Info.NextCycle++
 		if err != nil {
@@ -428,7 +428,7 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Changed dir must be picked up in this many cycles.
-	for i := 0; i < dataUsageUpdateDirCycles; i++ {
+	for range dataUsageUpdateDirCycles {
 		got, err = scanDataFolder(t.Context(), nil, &xls, got, getSize, 0, weSleep)
 		got.Info.NextCycle++
 		if err != nil {
@@ -526,13 +526,13 @@ func createUsageTestFiles(t *testing.T, base, bucket string, files []usageTestFi
 // generateUsageTestFiles create nFolders * nFiles files of size bytes each.
 func generateUsageTestFiles(t *testing.T, base, bucket string, nFolders, nFiles, size int) {
 	pl := make([]byte, size)
-	for i := 0; i < nFolders; i++ {
+	for i := range nFolders {
 		name := filepath.Join(base, bucket, fmt.Sprint(i), "0.txt")
 		err := os.MkdirAll(filepath.Dir(name), os.ModePerm)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for j := 0; j < nFiles; j++ {
+		for j := range nFiles {
 			name := filepath.Join(base, bucket, fmt.Sprint(i), fmt.Sprint(j)+".txt")
 			err = os.WriteFile(name, pl, os.ModePerm)
 			if err != nil {
@@ -618,7 +618,7 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 }
 
 // equalAsJSON returns whether the values are equal when encoded as JSON.
-func equalAsJSON(a, b interface{}) bool {
+func equalAsJSON(a, b any) bool {
 	aj, err := json.Marshal(a)
 	if err != nil {
 		panic(err)

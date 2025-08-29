@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"runtime"
@@ -431,15 +432,9 @@ func (m *MetricV2) clone() MetricV2 {
 		VariableLabels:       make(map[string]string, len(m.VariableLabels)),
 		Histogram:            make(map[string]uint64, len(m.Histogram)),
 	}
-	for k, v := range m.StaticLabels {
-		metric.StaticLabels[k] = v
-	}
-	for k, v := range m.VariableLabels {
-		metric.VariableLabels[k] = v
-	}
-	for k, v := range m.Histogram {
-		metric.Histogram[k] = v
-	}
+	maps.Copy(metric.StaticLabels, m.StaticLabels)
+	maps.Copy(metric.VariableLabels, m.VariableLabels)
+	maps.Copy(metric.Histogram, m.Histogram)
 	return metric
 }
 
@@ -2492,10 +2487,7 @@ func getReplicationNodeMetrics(opts MetricsGroupOpts) *MetricsGroupV2 {
 					"endpoint": ep,
 				},
 			}
-			dwntime := currDowntime
-			if health.offlineDuration > currDowntime {
-				dwntime = health.offlineDuration
-			}
+			dwntime := max(health.offlineDuration, currDowntime)
 			downtimeDuration.Value = float64(dwntime / time.Second)
 			ml = append(ml, downtimeDuration)
 		}

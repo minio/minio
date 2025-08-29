@@ -292,7 +292,7 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 		return contentEnc
 	}
 	var newEncs []string
-	for _, enc := range strings.Split(contentEnc, ",") {
+	for enc := range strings.SplitSeq(contentEnc, ",") {
 		if enc != streamingContentEncoding {
 			newEncs = append(newEncs, enc)
 		}

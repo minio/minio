@@ -90,7 +90,7 @@ var isHTTPHeaderSizeTooLargeTests = []struct {
 
 func generateHeader(size, usersize int) http.Header {
 	header := http.Header{}
-	for i := 0; i < size; i++ {
+	for i := range size {
 		header.Set(strconv.Itoa(i), "")
 	}
 	userlength := 0
@@ -136,7 +136,6 @@ var containsReservedMetadataTests = []struct {
 
 func TestContainsReservedMetadata(t *testing.T) {
 	for _, test := range containsReservedMetadataTests {
-		test := test
 		t.Run("", func(t *testing.T) {
 			contains := containsReservedMetadata(test.header)
 			if contains && !test.shouldFail {
@@ -201,7 +200,7 @@ func Benchmark_hasBadPathComponent(t *testing.B) {
 		t.Run(tt.name, func(b *testing.B) {
 			b.SetBytes(int64(len(tt.input)))
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				if got := hasBadPathComponent(tt.input); got != tt.want {
 					t.Fatalf("hasBadPathComponent() = %v, want %v", got, tt.want)
 				}

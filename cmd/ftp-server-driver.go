@@ -98,7 +98,7 @@ func (m *minioFileInfo) IsDir() bool {
 	return m.isDir
 }
 
-func (m *minioFileInfo) Sys() interface{} {
+func (m *minioFileInfo) Sys() any {
 	return nil
 }
 
@@ -316,7 +316,7 @@ func (driver *ftpDriver) getMinIOClient(ctx *ftp.Context) (*minio.Client, error)
 			if err != nil {
 				return nil, err
 			}
-			claims := make(map[string]interface{})
+			claims := make(map[string]any)
 			claims[expClaim] = UTCNow().Add(expiryDur).Unix()
 
 			claims[ldapUser] = lookupResult.NormDN

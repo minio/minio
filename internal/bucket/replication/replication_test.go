@@ -296,7 +296,6 @@ func TestReplicate(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.opts.Name, func(t *testing.T) {
 			result := testCase.c.Replicate(testCase.opts)
 			if result != testCase.expectedResult {
@@ -352,7 +351,6 @@ func TestHasActiveRules(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		tc := tc
 		t.Run(fmt.Sprintf("Test_%d", i+1), func(t *testing.T) {
 			cfg, err := ParseConfig(bytes.NewReader([]byte(tc.inputConfig)))
 			if err != nil {
@@ -402,7 +400,6 @@ func TestFilterActionableRules(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		cfg, err := ParseConfig(bytes.NewReader([]byte(tc.inputConfig)))
 		if err != nil {
 			t.Fatalf("Got unexpected error: %v", err)

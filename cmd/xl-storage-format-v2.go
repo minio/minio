@@ -786,10 +786,7 @@ func readXLMetaNoData(r io.Reader, size int64) ([]byte, error) {
 			}
 
 			// CRC is variable length, so we need to truncate exactly that.
-			wantMax := want + msgp.Uint32Size
-			if wantMax > size {
-				wantMax = size
-			}
+			wantMax := min(want+msgp.Uint32Size, size)
 			if err := readMore(wantMax); err != nil {
 				return nil, err
 			}

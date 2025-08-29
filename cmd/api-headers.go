@@ -65,7 +65,7 @@ func setCommonHeaders(w http.ResponseWriter) {
 }
 
 // Encodes the response headers into XML format.
-func encodeResponse(response interface{}) []byte {
+func encodeResponse(response any) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(xml.Header)
 	if err := xml.NewEncoder(&buf).Encode(response); err != nil {
@@ -83,7 +83,7 @@ func encodeResponse(response interface{}) []byte {
 // Do not use this function for anything other than ListObjects()
 // variants, please open a github discussion if you wish to use
 // this in other places.
-func encodeResponseList(response interface{}) []byte {
+func encodeResponseList(response any) []byte {
 	var buf bytes.Buffer
 	buf.WriteString(xxml.Header)
 	if err := xxml.NewEncoder(&buf).Encode(response); err != nil {
@@ -94,7 +94,7 @@ func encodeResponseList(response interface{}) []byte {
 }
 
 // Encodes the response headers into JSON format.
-func encodeResponseJSON(response interface{}) []byte {
+func encodeResponseJSON(response any) []byte {
 	var bytesBuffer bytes.Buffer
 	e := json.NewEncoder(&bytesBuffer)
 	e.Encode(response)

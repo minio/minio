@@ -17,15 +17,15 @@
 
 package event
 
+import "maps"
+
 // TargetIDSet - Set representation of TargetIDs.
 type TargetIDSet map[TargetID]struct{}
 
 // Clone - returns copy of this set.
 func (set TargetIDSet) Clone() TargetIDSet {
 	setCopy := NewTargetIDSet()
-	for k, v := range set {
-		setCopy[k] = v
-	}
+	maps.Copy(setCopy, set)
 	return setCopy
 }
 

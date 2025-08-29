@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"path"
 	"sort"
 	"strings"
@@ -159,7 +160,7 @@ func getMappedPolicyPath(name string, userType IAMUserType, isGroup bool) string
 type UserIdentity struct {
 	Version     int              `json:"version"`
 	Credentials auth.Credentials `json:"credentials"`
-	UpdatedAt   time.Time        `json:"updatedAt,omitempty"`
+	UpdatedAt   time.Time        `json:"updatedAt"`
 }
 
 func newUserIdentity(cred auth.Credentials) UserIdentity {
@@ -171,7 +172,7 @@ type GroupInfo struct {
 	Version   int       `json:"version"`
 	Status    string    `json:"status"`
 	Members   []string  `json:"members"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func newGroupInfo(members []string) GroupInfo {
@@ -182,7 +183,7 @@ func newGroupInfo(members []string) GroupInfo {
 type MappedPolicy struct {
 	Version   int       `json:"version"`
 	Policies  string    `json:"policy"`
-	UpdatedAt time.Time `json:"updatedAt,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // mappedPoliciesToMap copies the map of mapped policies to a regular map.
@@ -198,7 +199,7 @@ func mappedPoliciesToMap(m *xsync.MapOf[string, MappedPolicy]) map[string]Mapped
 // converts a mapped policy into a slice of distinct policies
 func (mp MappedPolicy) toSlice() []string {
 	var policies []string
-	for _, policy := range strings.Split(mp.Policies, ",") {
+	for policy := range strings.SplitSeq(mp.Policies, ",") {
 		if strings.TrimSpace(policy) == "" {
 			continue
 		}
@@ -219,8 +220,8 @@ func newMappedPolicy(policy string) MappedPolicy {
 type PolicyDoc struct {
 	Version    int `json:",omitempty"`
 	Policy     policy.Policy
-	CreateDate time.Time `json:",omitempty"`
-	UpdateDate time.Time `json:",omitempty"`
+	CreateDate time.Time
+	UpdateDate time.Time
 }
 
 func newPolicyDoc(p policy.Policy) PolicyDoc {
@@ -400,7 +401,6 @@ func (c *iamCache) policyDBGetGroups(store *IAMStoreSys, userPolicyPresent bool,
 	g := errgroup.WithNErrs(len(groups)).WithConcurrency(10) // load like 10 groups at a time.
 
 	for index := range groups {
-		index := index
 		g.Go(func() error {
 			err := store.loadMappedPolicy(context.TODO(), groups[index], regUser, true, c.iamGroupPolicyMap)
 			if err != nil && !errors.Is(err, errNoSuchPolicy) {
@@ -610,8 +610,8 @@ type IAMStorageAPI interface {
 	loadMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error
 	loadMappedPolicyWithRetry(ctx context.Context, name string, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy], retries int) error
 	loadMappedPolicies(ctx context.Context, userType IAMUserType, isGroup bool, m *xsync.MapOf[string, MappedPolicy]) error
-	saveIAMConfig(ctx context.Context, item interface{}, path string, opts ...options) error
-	loadIAMConfig(ctx context.Context, item interface{}, path string) error
+	saveIAMConfig(ctx context.Context, item any, path string, opts ...options) error
+	loadIAMConfig(ctx context.Context, item any, path string) error
 	deleteIAMConfig(ctx context.Context, path string) error
 	savePolicyDoc(ctx context.Context, policyName string, p PolicyDoc) error
 	saveMappedPolicy(ctx context.Context, name string, userType IAMUserType, isGroup bool, mp MappedPolicy, opts ...options) error
@@ -839,7 +839,7 @@ func (store *IAMStoreSys) PolicyDBGet(name string, groups ...string) ([]string, 
 		return policies, nil
 	}
 	if store.policy != nil {
-		val, err, _ := store.policy.Do(name, func() (interface{}, error) {
+		val, err, _ := store.policy.Do(name, func() (any, error) {
 			return getPolicies()
 		})
 		if err != nil {
@@ -1614,9 +1614,7 @@ func (store *IAMStoreSys) MergePolicies(policyName string) (string, policy.Polic
 		}
 
 		cache := store.lock()
-		for policy, p := range m {
-			cache.iamPolicyDocsMap[policy] = p
-		}
+		maps.Copy(cache.iamPolicyDocsMap, m)
 		store.unlock()
 
 		for policy, p := range m {
@@ -2909,7 +2907,7 @@ func (store *IAMStoreSys) UpdateUserIdentity(ctx context.Context, cred auth.Cred
 func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error {
 	groupLoad := env.Get("_MINIO_IAM_GROUP_REFRESH", config.EnableOff) == config.EnableOn
 
-	newCachePopulate := func() (val interface{}, err error) {
+	newCachePopulate := func() (val any, err error) {
 		newCache := newIamCache()
 
 		// Check for service account first
@@ -2975,7 +2973,7 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 	}
 
 	var (
-		val interface{}
+		val any
 		err error
 	)
 	if store.group != nil {
@@ -3007,30 +3005,20 @@ func (store *IAMStoreSys) LoadUser(ctx context.Context, accessKey string) error 
 		return true
 	})
 
-	for k, v := range newCache.iamGroupsMap {
-		cache.iamGroupsMap[k] = v
-	}
+	maps.Copy(cache.iamGroupsMap, newCache.iamGroupsMap)
 
-	for k, v := range newCache.iamPolicyDocsMap {
-		cache.iamPolicyDocsMap[k] = v
-	}
+	maps.Copy(cache.iamPolicyDocsMap, newCache.iamPolicyDocsMap)
 
-	for k, v := range newCache.iamUserGroupMemberships {
-		cache.iamUserGroupMemberships[k] = v
-	}
+	maps.Copy(cache.iamUserGroupMemberships, newCache.iamUserGroupMemberships)
 
 	newCache.iamUserPolicyMap.Range(func(k string, v MappedPolicy) bool {
 		cache.iamUserPolicyMap.Store(k, v)
 		return true
 	})
 
-	for k, v := range newCache.iamUsersMap {
-		cache.iamUsersMap[k] = v
-	}
+	maps.Copy(cache.iamUsersMap, newCache.iamUsersMap)
 
-	for k, v := range newCache.iamSTSAccountsMap {
-		cache.iamSTSAccountsMap[k] = v
-	}
+	maps.Copy(cache.iamSTSAccountsMap, newCache.iamSTSAccountsMap)
 
 	newCache.iamSTSPolicyMap.Range(func(k string, v MappedPolicy) bool {
 		cache.iamSTSPolicyMap.Store(k, v)

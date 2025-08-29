@@ -46,7 +46,7 @@ func genSampleCSVData(count int) []byte {
 	csvWriter := csv.NewWriter(buf)
 	csvWriter.Write([]string{"id", "name", "age", "city"})
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		csvWriter.Write([]string{
 			strconv.Itoa(i),
 			newRandString(10),

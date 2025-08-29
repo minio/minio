@@ -38,8 +38,8 @@ func (o *listPathOptions) parseMarker() {
 	o.Marker = s[:start]
 	end := strings.LastIndex(s, "]")
 	tag := strings.Trim(s[start:end], "[]")
-	tags := strings.Split(tag, ",")
-	for _, tag := range tags {
+	tags := strings.SplitSeq(tag, ",")
+	for tag := range tags {
 		kv := strings.Split(tag, ":")
 		if len(kv) < 2 {
 			continue

@@ -429,7 +429,7 @@ func Benchmark_mergeXLV2Versions(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.SetBytes(855) // number of versions...
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			mergeXLV2Versions(8, false, 0, vers...)
 		}
 	})
@@ -438,7 +438,7 @@ func Benchmark_mergeXLV2Versions(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.SetBytes(855) // number of versions...
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			mergeXLV2Versions(8, false, 1, vers...)
 		}
 	})
@@ -447,7 +447,7 @@ func Benchmark_mergeXLV2Versions(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.SetBytes(855) // number of versions...
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			mergeXLV2Versions(8, false, 1, vers...)
 		}
 	})
@@ -469,7 +469,7 @@ func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.SetBytes(855) // number of versions...
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err = xl.Load(data)
 			if err != nil {
 				b.Fatal(err)
@@ -490,7 +490,7 @@ func Benchmark_xlMetaV2Shallow_Load(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		b.SetBytes(855) // number of versions...
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			err = xl.Load(data)
 			if err != nil {
 				b.Fatal(err)
@@ -1018,7 +1018,7 @@ func Test_mergeXLV2Versions2(t *testing.T) {
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			// Run multiple times, shuffling the input order.
-			for i := int64(0); i < 50; i++ {
+			for i := range int64(50) {
 				t.Run(fmt.Sprint(i), func(t *testing.T) {
 					rng := rand.New(rand.NewSource(i))
 					rng.Shuffle(len(test.input), func(i, j int) {
@@ -1067,7 +1067,7 @@ func Test_mergeEntryChannels(t *testing.T) {
 	}
 
 	// Shuffle...
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		rng := rand.New(rand.NewSource(int64(i)))
 		rng.Shuffle(len(vers), func(i, j int) {
 			vers[i], vers[j] = vers[j], vers[i]
@@ -1174,7 +1174,7 @@ func benchmarkManyPartsOptionally(b *testing.B, allParts bool) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_, err = buf.ToFileInfo("volume", "path", "", allParts)
 			if err != nil {
 				b.Fatal(err)

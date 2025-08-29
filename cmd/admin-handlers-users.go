@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"slices"
@@ -157,9 +158,7 @@ func (a adminAPIHandlers) ListUsers(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponseJSON(ctx, w, toAdminAPIErr(ctx, err), r.URL)
 		return
 	}
-	for k, v := range ldapUsers {
-		allCredentials[k] = v
-	}
+	maps.Copy(allCredentials, ldapUsers)
 
 	// Marshal the response
 	data, err := json.Marshal(allCredentials)
@@ -2949,7 +2948,7 @@ func commonAddServiceAccount(r *http.Request, ldap bool) (context.Context, auth.
 		name:        createReq.Name,
 		description: description,
 		expiration:  createReq.Expiration,
-		claims:      make(map[string]interface{}),
+		claims:      make(map[string]any),
 	}
 
 	condValues := getConditionValues(r, "", cred)

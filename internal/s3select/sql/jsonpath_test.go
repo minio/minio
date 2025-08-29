@@ -30,9 +30,9 @@ import (
 	"github.com/minio/minio/internal/s3select/jstream"
 )
 
-func getJSONStructs(b []byte) ([]interface{}, error) {
+func getJSONStructs(b []byte) ([]any, error) {
 	dec := jstream.NewDecoder(bytes.NewBuffer(b), 0).ObjectAsKVS().MaxDepth(100)
-	var result []interface{}
+	var result []any
 	for parsedVal := range dec.Stream() {
 		result = append(result, parsedVal.Value)
 	}
@@ -60,13 +60,13 @@ func TestJsonpathEval(t *testing.T) {
 	)
 	cases := []struct {
 		str string
-		res []interface{}
+		res []any
 	}{
-		{"s.title", []interface{}{"Murder on the Orient Express", "The Robots of Dawn", "Pigs Have Wings"}},
-		{"s.authorInfo.yearRange", []interface{}{[]interface{}{1890.0, 1976.0}, []interface{}{1920.0, 1992.0}, []interface{}{1881.0, 1975.0}}},
-		{"s.authorInfo.name", []interface{}{"Agatha Christie", "Isaac Asimov", "P. G. Wodehouse"}},
-		{"s.authorInfo.yearRange[0]", []interface{}{1890.0, 1920.0, 1881.0}},
-		{"s.publicationHistory[0].pages", []interface{}{256.0, 336.0, Missing{}}},
+		{"s.title", []any{"Murder on the Orient Express", "The Robots of Dawn", "Pigs Have Wings"}},
+		{"s.authorInfo.yearRange", []any{[]any{1890.0, 1976.0}, []any{1920.0, 1992.0}, []any{1881.0, 1975.0}}},
+		{"s.authorInfo.name", []any{"Agatha Christie", "Isaac Asimov", "P. G. Wodehouse"}},
+		{"s.authorInfo.yearRange[0]", []any{1890.0, 1920.0, 1881.0}},
+		{"s.publicationHistory[0].pages", []any{256.0, 336.0, Missing{}}},
 	}
 	for i, tc := range cases {
 		t.Run(tc.str, func(t *testing.T) {

@@ -304,7 +304,7 @@ func (a adminAPIHandlers) SRPeerGetIDPSettings(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func parseJSONBody(ctx context.Context, body io.Reader, v interface{}, encryptionKey string) error {
+func parseJSONBody(ctx context.Context, body io.Reader, v any, encryptionKey string) error {
 	data, err := io.ReadAll(body)
 	if err != nil {
 		return SRError{

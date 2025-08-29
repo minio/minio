@@ -36,12 +36,12 @@ var ExitFunc = os.Exit
 
 // Logger interface describes the methods that need to be implemented to satisfy the interface requirements.
 type Logger interface {
-	json(msg string, args ...interface{})
-	quiet(msg string, args ...interface{})
-	pretty(msg string, args ...interface{})
+	json(msg string, args ...any)
+	quiet(msg string, args ...any)
+	pretty(msg string, args ...any)
 }
 
-func consoleLog(console Logger, msg string, args ...interface{}) {
+func consoleLog(console Logger, msg string, args ...any) {
 	switch {
 	case jsonFlag:
 		// Strip escape control characters from json message
@@ -64,11 +64,11 @@ func consoleLog(console Logger, msg string, args ...interface{}) {
 
 // Fatal prints only fatal error message with no stack trace
 // it will be called for input validation failures
-func Fatal(err error, msg string, data ...interface{}) {
+func Fatal(err error, msg string, data ...any) {
 	fatal(err, msg, data...)
 }
 
-func fatal(err error, msg string, data ...interface{}) {
+func fatal(err error, msg string, data ...any) {
 	if msg == "" {
 		if len(data) > 0 {
 			msg = fmt.Sprint(data...)
@@ -85,7 +85,7 @@ var fatalMessage fatalMsg
 
 type fatalMsg struct{}
 
-func (f fatalMsg) json(msg string, args ...interface{}) {
+func (f fatalMsg) json(msg string, args ...any) {
 	var message string
 	if msg != "" {
 		message = fmt.Sprintf(msg, args...)
@@ -105,7 +105,7 @@ func (f fatalMsg) json(msg string, args ...interface{}) {
 	ExitFunc(1)
 }
 
-func (f fatalMsg) quiet(msg string, args ...interface{}) {
+func (f fatalMsg) quiet(msg string, args ...any) {
 	f.pretty(msg, args...)
 }
 
@@ -116,7 +116,7 @@ var (
 	bannerWidth = len(logTag) + 1
 )
 
-func (f fatalMsg) pretty(msg string, args ...interface{}) {
+func (f fatalMsg) pretty(msg string, args ...any) {
 	// Build the passed error message
 	errMsg := fmt.Sprintf(msg, args...)
 
@@ -128,30 +128,27 @@ func (f fatalMsg) pretty(msg string, args ...interface{}) {
 	// message itself contains some colored text, we needed
 	// to use some ANSI control escapes to cursor color state
 	// and freely move in the screen.
-	for _, line := range strings.Split(errMsg, "\n") {
+	for line := range strings.SplitSeq(errMsg, "\n") {
 		if len(line) == 0 {
 			// No more text to print, just quit.
 			break
 		}
 
-		for {
-			// Save the attributes of the current cursor helps
-			// us save the text color of the passed error message
-			ansiSaveAttributes()
-			// Print banner with or without the log tag
-			if !tagPrinted {
-				fmt.Fprint(Output, logBanner)
-				tagPrinted = true
-			} else {
-				fmt.Fprint(Output, emptyBanner)
-			}
-			// Restore the text color of the error message
-			ansiRestoreAttributes()
-			ansiMoveRight(bannerWidth)
-			// Continue  error message printing
-			fmt.Fprintln(Output, line)
-			break
+		// Save the attributes of the current cursor helps
+		// us save the text color of the passed error message
+		ansiSaveAttributes()
+		// Print banner with or without the log tag
+		if !tagPrinted {
+			fmt.Fprint(Output, logBanner)
+			tagPrinted = true
+		} else {
+			fmt.Fprint(Output, emptyBanner)
 		}
+		// Restore the text color of the error message
+		ansiRestoreAttributes()
+		ansiMoveRight(bannerWidth)
+		// Continue  error message printing
+		fmt.Fprintln(Output, line)
 	}
 
 	// Exit because this is a fatal error message
@@ -162,7 +159,7 @@ type infoMsg struct{}
 
 var info infoMsg
 
-func (i infoMsg) json(msg string, args ...interface{}) {
+func (i infoMsg) json(msg string, args ...any) {
 	var message string
 	if msg != "" {
 		message = fmt.Sprintf(msg, args...)
@@ -180,10 +177,10 @@ func (i infoMsg) json(msg string, args ...interface{}) {
 	fmt.Fprintln(Output, string(logJSON))
 }
 
-func (i infoMsg) quiet(msg string, args ...interface{}) {
+func (i infoMsg) quiet(msg string, args ...any) {
 }
 
-func (i infoMsg) pretty(msg string, args ...interface{}) {
+func (i infoMsg) pretty(msg string, args ...any) {
 	if msg == "" {
 		fmt.Fprintln(Output, args...)
 	} else {
@@ -195,7 +192,7 @@ type errorMsg struct{}
 
 var errorMessage errorMsg
 
-func (i errorMsg) json(msg string, args ...interface{}) {
+func (i errorMsg) json(msg string, args ...any) {
 	var message string
 	if msg != "" {
 		message = fmt.Sprintf(msg, args...)
@@ -214,11 +211,11 @@ func (i errorMsg) json(msg string, args ...interface{}) {
 	fmt.Fprintln(Output, string(logJSON))
 }
 
-func (i errorMsg) quiet(msg string, args ...interface{}) {
+func (i errorMsg) quiet(msg string, args ...any) {
 	i.pretty(msg, args...)
 }
 
-func (i errorMsg) pretty(msg string, args ...interface{}) {
+func (i errorMsg) pretty(msg string, args ...any) {
 	if msg == "" {
 		fmt.Fprintln(Output, args...)
 	} else {
@@ -227,7 +224,7 @@ func (i errorMsg) pretty(msg string, args ...interface{}) {
 }
 
 // Error :
-func Error(msg string, data ...interface{}) {
+func Error(msg string, data ...any) {
 	if DisableLog {
 		return
 	}
@@ -235,7 +232,7 @@ func Error(msg string, data ...interface{}) {
 }
 
 // Info :
-func Info(msg string, data ...interface{}) {
+func Info(msg string, data ...any) {
 	if DisableLog {
 		return
 	}
@@ -243,7 +240,7 @@ func Info(msg string, data ...interface{}) {
 }
 
 // Startup :
-func Startup(msg string, data ...interface{}) {
+func Startup(msg string, data ...any) {
 	if DisableLog {
 		return
 	}
@@ -254,7 +251,7 @@ type startupMsg struct{}
 
 var startup startupMsg
 
-func (i startupMsg) json(msg string, args ...interface{}) {
+func (i startupMsg) json(msg string, args ...any) {
 	var message string
 	if msg != "" {
 		message = fmt.Sprintf(msg, args...)
@@ -272,10 +269,10 @@ func (i startupMsg) json(msg string, args ...interface{}) {
 	fmt.Fprintln(Output, string(logJSON))
 }
 
-func (i startupMsg) quiet(msg string, args ...interface{}) {
+func (i startupMsg) quiet(msg string, args ...any) {
 }
 
-func (i startupMsg) pretty(msg string, args ...interface{}) {
+func (i startupMsg) pretty(msg string, args ...any) {
 	if msg == "" {
 		fmt.Fprintln(Output, args...)
 	} else {
@@ -287,7 +284,7 @@ type warningMsg struct{}
 
 var warningMessage warningMsg
 
-func (i warningMsg) json(msg string, args ...interface{}) {
+func (i warningMsg) json(msg string, args ...any) {
 	var message string
 	if msg != "" {
 		message = fmt.Sprintf(msg, args...)
@@ -306,11 +303,11 @@ func (i warningMsg) json(msg string, args ...interface{}) {
 	fmt.Fprintln(Output, string(logJSON))
 }
 
-func (i warningMsg) quiet(msg string, args ...interface{}) {
+func (i warningMsg) quiet(msg string, args ...any) {
 	i.pretty(msg, args...)
 }
 
-func (i warningMsg) pretty(msg string, args ...interface{}) {
+func (i warningMsg) pretty(msg string, args ...any) {
 	if msg == "" {
 		fmt.Fprintln(Output, args...)
 	} else {
@@ -319,7 +316,7 @@ func (i warningMsg) pretty(msg string, args ...interface{}) {
 }
 
 // Warning :
-func Warning(msg string, data ...interface{}) {
+func Warning(msg string, data ...any) {
 	if DisableLog {
 		return
 	}

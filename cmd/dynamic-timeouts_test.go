@@ -30,7 +30,7 @@ func TestDynamicTimeoutSingleIncrease(t *testing.T) {
 
 	initial := timeout.Timeout()
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		timeout.LogFailure()
 	}
 
@@ -46,13 +46,13 @@ func TestDynamicTimeoutDualIncrease(t *testing.T) {
 
 	initial := timeout.Timeout()
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		timeout.LogFailure()
 	}
 
 	adjusted := timeout.Timeout()
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		timeout.LogFailure()
 	}
 
@@ -68,7 +68,7 @@ func TestDynamicTimeoutSingleDecrease(t *testing.T) {
 
 	initial := timeout.Timeout()
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		timeout.LogSuccess(20 * time.Second)
 	}
 
@@ -84,13 +84,13 @@ func TestDynamicTimeoutDualDecrease(t *testing.T) {
 
 	initial := timeout.Timeout()
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		timeout.LogSuccess(20 * time.Second)
 	}
 
 	adjusted := timeout.Timeout()
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		timeout.LogSuccess(20 * time.Second)
 	}
 
@@ -107,8 +107,8 @@ func TestDynamicTimeoutManyDecreases(t *testing.T) {
 	initial := timeout.Timeout()
 
 	const successTimeout = 20 * time.Second
-	for l := 0; l < 100; l++ {
-		for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range 100 {
+		for range dynamicTimeoutLogSize {
 			timeout.LogSuccess(successTimeout)
 		}
 	}
@@ -129,8 +129,8 @@ func TestDynamicTimeoutConcurrent(t *testing.T) {
 		rng := rand.New(rand.NewSource(int64(i)))
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
-				for j := 0; j < 100; j++ {
+			for range 100 {
+				for range 100 {
 					timeout.LogSuccess(time.Duration(float64(time.Second) * rng.Float64()))
 				}
 				to := timeout.Timeout()
@@ -150,8 +150,8 @@ func TestDynamicTimeoutHitMinimum(t *testing.T) {
 	initial := timeout.Timeout()
 
 	const successTimeout = 20 * time.Second
-	for l := 0; l < 100; l++ {
-		for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range 100 {
+		for range dynamicTimeoutLogSize {
 			timeout.LogSuccess(successTimeout)
 		}
 	}
@@ -166,13 +166,9 @@ func TestDynamicTimeoutHitMinimum(t *testing.T) {
 func testDynamicTimeoutAdjust(t *testing.T, timeout *dynamicTimeout, f func() float64) {
 	const successTimeout = 20 * time.Second
 
-	for i := 0; i < dynamicTimeoutLogSize; i++ {
+	for range dynamicTimeoutLogSize {
 		rnd := f()
-		duration := time.Duration(float64(successTimeout) * rnd)
-
-		if duration < 100*time.Millisecond {
-			duration = 100 * time.Millisecond
-		}
+		duration := max(time.Duration(float64(successTimeout)*rnd), 100*time.Millisecond)
 		if duration >= time.Minute {
 			timeout.LogFailure()
 		} else {
@@ -188,7 +184,7 @@ func TestDynamicTimeoutAdjustExponential(t *testing.T) {
 
 	initial := timeout.Timeout()
 
-	for try := 0; try < 10; try++ {
+	for range 10 {
 		testDynamicTimeoutAdjust(t, timeout, rand.ExpFloat64)
 	}
 
@@ -205,7 +201,7 @@ func TestDynamicTimeoutAdjustNormalized(t *testing.T) {
 
 	initial := timeout.Timeout()
 
-	for try := 0; try < 10; try++ {
+	for range 10 {
 		testDynamicTimeoutAdjust(t, timeout, func() float64 {
 			return 1.0 + rand.NormFloat64()
 		})

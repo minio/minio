@@ -57,11 +57,9 @@ func initCallhome(ctx context.Context, objAPI ObjectLayer) {
 
 			// callhome running on a different node.
 			// sleep for some time and try again.
-			duration := time.Duration(r.Float64() * float64(globalCallhomeConfig.FrequencyDur()))
-			if duration < time.Second {
+			duration := max(time.Duration(r.Float64()*float64(globalCallhomeConfig.FrequencyDur())),
 				// Make sure to sleep at least a second to avoid high CPU ticks.
-				duration = time.Second
-			}
+				time.Second)
 			time.Sleep(duration)
 		}
 	}()

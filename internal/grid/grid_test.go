@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"runtime"
 	"strconv"
@@ -266,9 +267,7 @@ func TestSingleRoundtripGenericsRecycle(t *testing.T) {
 	// Handles incoming requests, returns a response
 	handler1 := func(req *MSS) (resp *MSS, err *RemoteErr) {
 		resp = h1.NewResponse()
-		for k, v := range *req {
-			(*resp)[k] = v
-		}
+		maps.Copy((*resp), *req)
 		return resp, nil
 	}
 	// Return error
@@ -708,7 +707,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, request <-chan []byte, resp chan<- []byte) *RemoteErr {
 				// Send many responses.
 				// Test that this doesn't block.
-				for i := byte(0); i < 100; i++ {
+				for i := range byte(100) {
 					select {
 					case resp <- []byte{i}:
 					// ok
@@ -744,7 +743,7 @@ func testServerOutCongestion(t *testing.T, local, remote *Manager) {
 	<-serverSent
 
 	// Now do 100 other requests to ensure that the server doesn't block.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, err := remoteConn.Request(ctx, handlerTest2, []byte(testPayload))
 		errFatal(err)
 	}
@@ -820,13 +819,13 @@ func testServerInCongestion(t *testing.T, local, remote *Manager) {
 
 	// Start sending requests.
 	go func() {
-		for i := byte(0); i < 100; i++ {
+		for i := range byte(100) {
 			st.Requests <- []byte{i}
 		}
 		close(st.Requests)
 	}()
 	// Now do 100 other requests to ensure that the server doesn't block.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		_, err := remoteConn.Request(ctx, handlerTest2, []byte(testPayload))
 		errFatal(err)
 	}
@@ -897,7 +896,7 @@ func testGenericsStreamRoundtrip(t *testing.T, local, remote *Manager) {
 	errFatal(err)
 	go func() {
 		defer close(stream.Requests)
-		for i := 0; i < payloads; i++ {
+		for i := range payloads {
 			// t.Log("sending new client request")
 			stream.Requests <- &testRequest{Num: i, String: testPayload}
 		}
@@ -974,7 +973,7 @@ func testGenericsStreamRoundtripSubroute(t *testing.T, local, remote *Manager) {
 	errFatal(err)
 	go func() {
 		defer close(stream.Requests)
-		for i := 0; i < payloads; i++ {
+		for i := range payloads {
 			// t.Log("sending new client request")
 			stream.Requests <- &testRequest{Num: i, String: testPayload}
 		}
@@ -1019,7 +1018,7 @@ func testServerStreamResponseBlocked(t *testing.T, local, remote *Manager) {
 			Handle: func(ctx context.Context, payload []byte, _ <-chan []byte, resp chan<- []byte) *RemoteErr {
 				// Send many responses.
 				// Test that this doesn't block.
-				for i := byte(0); i < 100; i++ {
+				for i := range byte(100) {
 					select {
 					case resp <- []byte{i}:
 					// ok

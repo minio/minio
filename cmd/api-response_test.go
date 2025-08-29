@@ -100,7 +100,6 @@ func TestObjectLocation(t *testing.T) {
 		},
 	}
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			gotLocation := getObjectLocation(testCase.request, testCase.domains, testCase.bucket, testCase.object)
 			if testCase.expectedLocation != gotLocation {
