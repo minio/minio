@@ -1275,7 +1275,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 			return objInfo, PreConditionFailed{}
 		}
 		if err != nil {
-			if opts.ReplicationRequest && !(isErrVersionNotFound(err) || isErrObjectNotFound(err) || isErrReadQuorum(err)) {
+			if opts.ReplicationRequest && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
 				return objInfo, err
 			}
 			if !opts.ReplicationRequest && !isErrReadQuorum(err) {
