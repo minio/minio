@@ -1271,10 +1271,15 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		obj, err := er.getObjectInfo(ctx, bucket, object, opts)
-		if opts.CheckPrecondFn(obj, err) {
+		if err == nil && opts.CheckPrecondFn(obj) {
 			return objInfo, PreConditionFailed{}
 		}
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
+			return objInfo, err
+		}
+
+		// if object doesn't exist and not a replication request return error for conditional requests
+		if err != nil && !opts.ReplicationRequest {
 			return objInfo, err
 		}
 	}

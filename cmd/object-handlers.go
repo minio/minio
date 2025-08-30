@@ -381,7 +381,7 @@ func (api objectAPIHandlers) getObjectHandler(ctx context.Context, objectAPI Obj
 	}
 
 	// Validate pre-conditions if any.
-	opts.CheckPrecondFn = func(oi ObjectInfo, _ error) bool {
+	opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 		if _, err := DecryptObjectInfo(&oi, r); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return true
@@ -1268,7 +1268,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	getObjectNInfo := objectAPI.GetObjectNInfo
 
-	checkCopyPrecondFn := func(o ObjectInfo, _ error) bool {
+	checkCopyPrecondFn := func(o ObjectInfo) bool {
 		if _, err := DecryptObjectInfo(&o, r); err != nil {
 			writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 			return true
@@ -2017,12 +2017,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
 		r.Header.Get(xhttp.IfNoneMatch) != "" {
-		opts.CheckPrecondFn = func(oi ObjectInfo, err error) bool {
+		opts.CheckPrecondFn = func(oi ObjectInfo) bool {
 			if _, err := DecryptObjectInfo(&oi, r); err != nil {
 				writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 				return true
 			}
-			return checkPreconditionsPUT(ctx, w, r, oi, opts, err)
+			return checkPreconditionsPUT(ctx, w, r, oi, opts)
 		}
 	}
 

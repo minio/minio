@@ -37,7 +37,7 @@ import (
 //msgp:ignore ObjectOptions TransitionOptions DeleteBucketOptions
 
 // CheckPreconditionFn returns true if precondition check failed.
-type CheckPreconditionFn func(o ObjectInfo, err error) bool
+type CheckPreconditionFn func(o ObjectInfo) bool
 
 // EvalMetadataFn validates input objInfo and GetObjectInfo error and returns an updated metadata and replication decision if any
 type EvalMetadataFn func(o *ObjectInfo, gerr error) (ReplicateDecision, error)

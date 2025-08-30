@@ -137,17 +137,12 @@ func checkCopyObjectPreconditions(ctx context.Context, w http.ResponseWriter, r 
 //
 //	x-minio-source-mtime
 //	x-minio-source-etag
-func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions, err error) bool {
+func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.Request, objInfo ObjectInfo, opts ObjectOptions) bool {
 	// Return false for methods other than PUT.
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		return false
 	}
 
-	// if object doesn't exist and not a replication request return error for conditional requests
-	if err != nil && !opts.ReplicationRequest {
-		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
-		return true
-	}
 	// If the object doesn't have a modtime (IsZero), or the modtime
 	// is obviously garbage (Unix time == 0), then ignore modtimes
 	// and don't process the If-Modified-Since header.
