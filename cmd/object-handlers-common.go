@@ -142,7 +142,6 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 	if r.Method != http.MethodPut && r.Method != http.MethodPost {
 		return false
 	}
-
 	// If the object doesn't have a modtime (IsZero), or the modtime
 	// is obviously garbage (Unix time == 0), then ignore modtimes
 	// and don't process the If-Modified-Since header.
