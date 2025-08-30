@@ -145,7 +145,7 @@ func checkPreconditionsPUT(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	// if object doesn't exist and not a replication request return error for conditional requests
 	if err != nil && !opts.ReplicationRequest {
-		writeErrorResponse(ctx, w, errorCodes.ToAPIErr(ErrPreconditionFailed), r.URL)
+		writeErrorResponse(ctx, w, toAPIError(ctx, err), r.URL)
 		return true
 	}
 	// If the object doesn't have a modtime (IsZero), or the modtime
