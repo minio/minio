@@ -61,7 +61,7 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if z.IsRebalanceStarted() {
+	if z.IsRebalanceStarted(ctx) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
 	}
@@ -277,7 +277,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if pools.IsRebalanceStarted() {
+	if pools.IsRebalanceStarted(ctx) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
 	}
