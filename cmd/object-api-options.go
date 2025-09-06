@@ -414,12 +414,16 @@ func putOptsFromHeaders(ctx context.Context, hdr http.Header, metadata map[strin
 		if err != nil {
 			return ObjectOptions{}, err
 		}
-		return ObjectOptions{
+		op := ObjectOptions{
 			ServerSideEncryption: sseKms,
 			UserDefined:          metadata,
 			MTime:                mtime,
 			PreserveETag:         etag,
-		}, nil
+		}
+		if _, ok := hdr[xhttp.MinIOSourceReplicationRequest]; ok {
+			op.ReplicationRequest = true
+		}
+		return op, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
 	opts, err = getDefaultOpts(hdr, false, metadata)

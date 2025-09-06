@@ -1277,6 +1277,11 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
 			return objInfo, err
 		}
+
+		// if object doesn't exist and not a replication request return error for conditional requests
+		if err != nil && !opts.ReplicationRequest {
+			return objInfo, err
+		}
 	}
 
 	// Validate input data size and it can never be less than -1.
