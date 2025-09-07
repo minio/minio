@@ -2014,6 +2014,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	pReader := NewPutObjReader(rawReader)
 	opts.IndexCB = idxCb
 
+	if r.Header.Get(xhttp.IfMatch) != "" {
+		opts.HasIfMatch = true
+	}
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
 		r.Header.Get(xhttp.IfNoneMatch) != "" {

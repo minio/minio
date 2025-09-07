@@ -394,8 +394,9 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 			return nil, err
 		}
 
-		// if object doesn't exist and not a replication request return error for conditional requests
-		if err != nil && !opts.ReplicationRequest && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
+		// if object doesn't exist and not a replication request return error for If-Match conditional requests
+		// If-None-Match should be allowed to proceed for non-existent objects
+		if err != nil && !opts.ReplicationRequest && opts.HasIfMatch && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
 			return nil, err
 		}
 	}
@@ -1117,8 +1118,9 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			return ObjectInfo{}, err
 		}
 
-		// if object doesn't exist and not a replication request return error for conditional requests
-		if err != nil && !opts.ReplicationRequest && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
+		// if object doesn't exist and not a replication request return error for If-Match conditional requests
+		// If-None-Match should be allowed to proceed for non-existent objects
+		if err != nil && !opts.ReplicationRequest && opts.HasIfMatch && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
 			return ObjectInfo{}, err
 		}
 	}

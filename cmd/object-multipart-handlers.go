@@ -200,6 +200,9 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	if r.Header.Get(xhttp.IfMatch) != "" {
+		opts.HasIfMatch = true
+	}
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
 		r.Header.Get(xhttp.IfNoneMatch) != "" {
@@ -1014,6 +1017,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	multipartETag := etag.Multipart(completeETags...)
 	opts.UserDefined["etag"] = multipartETag.String()
 
+	if r.Header.Get(xhttp.IfMatch) != "" {
+		opts.HasIfMatch = true
+	}
 	if opts.PreserveETag != "" ||
 		r.Header.Get(xhttp.IfMatch) != "" ||
 		r.Header.Get(xhttp.IfNoneMatch) != "" {
