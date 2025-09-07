@@ -91,6 +91,7 @@ type ObjectOptions struct {
 	NoDecryption                        bool      // indicates if the stream must be decrypted.
 	PreserveETag                        string    // preserves this etag during a PUT call.
 	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
+	HasIfMatch                          bool      // indicates if the request has If-Match header
 	ProxyRequest                        bool      // only set for GET/HEAD in active-active replication scenario
 	ProxyHeaderSet                      bool      // only set for GET/HEAD in active-active replication scenario
 	ReplicationRequest                  bool      // true only if replication request
