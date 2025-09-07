@@ -393,6 +393,11 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
 			return nil, err
 		}
+
+		// if object doesn't exist and not a replication request return error for conditional requests
+		if err != nil && !opts.ReplicationRequest && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
+			return nil, err
+		}
 	}
 
 	userDefined := cloneMSS(opts.UserDefined)
@@ -1109,6 +1114,11 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 			return ObjectInfo{}, PreConditionFailed{}
 		}
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
+			return ObjectInfo{}, err
+		}
+
+		// if object doesn't exist and not a replication request return error for conditional requests
+		if err != nil && !opts.ReplicationRequest && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
 			return ObjectInfo{}, err
 		}
 	}

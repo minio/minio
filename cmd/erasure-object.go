@@ -1279,7 +1279,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 		}
 
 		// if object doesn't exist and not a replication request return error for conditional requests
-		if err != nil && !opts.ReplicationRequest {
+		if err != nil && !opts.ReplicationRequest && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
 			return objInfo, err
 		}
 	}
