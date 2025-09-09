@@ -401,14 +401,23 @@ func (a adminAPIHandlers) SetGroupStatus(w http.ResponseWriter, r *http.Request)
 func (a adminAPIHandlers) SetUserStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	vars := mux.Vars(r)
+	status := vars["status"]
 	objectAPI, creds := validateAdminReq(ctx, w, r, policy.EnableUserAdminAction)
+	if objectAPI == nil {
+		if madmin.AccountStatus(status) == madmin.AccountEnabled {
+			return
+		}
+		if madmin.AccountStatus(status) == madmin.AccountDisabled {
+			objectAPI, creds = validateAdminReq(ctx, w, r, policy.DisableUserAdminAction)
+		}
+	}
+
 	if objectAPI == nil {
 		return
 	}
 
-	vars := mux.Vars(r)
 	accessKey := vars["accessKey"]
-	status := vars["status"]
 
 	// you cannot enable or disable yourself.
 	if accessKey == creds.AccessKey {
