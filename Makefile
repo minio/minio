@@ -215,6 +215,10 @@ docker: build ## builds minio docker container
 	@echo "Building minio docker image '$(TAG)'"
 	@docker build -q --no-cache -t $(TAG) . -f Dockerfile
 
+test-federation: build
+	@echo "Running federation tests"
+	@(DOCKER_COMPOSE_FILE=$(PWD)/docs/federation/docker-compose.yaml env bash $(PWD)/docs/federation/federation-tests.sh)
+	
 test-resiliency: build
 	@echo "Running resiliency tests"
 	@(DOCKER_COMPOSE_FILE=$(PWD)/docs/resiliency/docker-compose.yaml env bash $(PWD)/docs/resiliency/resiliency-tests.sh)
