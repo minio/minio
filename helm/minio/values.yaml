@@ -296,6 +296,65 @@ resources:
   requests:
     memory: 16Gi
 
+## Configure extra options for liveness probe
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+## livenessProbe.enabled Enable livenessProbe
+## livenessProbe.initialDelaySeconds Initial delay seconds for livenessProbe
+## livenessProbe.periodSeconds Period seconds for livenessProbe
+## livenessProbe.timeoutSeconds Timeout seconds for livenessProbe
+## livenessProbe.failureThreshold Failure threshold for livenessProbe
+## livenessProbe.successThreshold Success threshold for livenessProbe
+##
+livenessProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+## Configure extra options for readiness probe
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+## readinessProbe.enabled Enable readinessProbe
+## readinessProbe.initialDelaySeconds Initial delay seconds for readinessProbe
+## readinessProbe.periodSeconds Period seconds for readinessProbe
+## readinessProbe.timeoutSeconds Timeout seconds for readinessProbe
+## readinessProbe.failureThreshold Failure threshold for readinessProbe
+## readinessProbe.successThreshold Success threshold for readinessProbe
+##
+readinessProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 5
+## Configure extra options for startupProbe probe
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
+## startupProbe.enabled Enable startupProbe
+## startupProbe.initialDelaySeconds Initial delay seconds for startupProbe
+## startupProbe.periodSeconds Period seconds for startupProbe
+## startupProbe.timeoutSeconds Timeout seconds for startupProbe
+## startupProbe.failureThreshold Failure threshold for startupProbe
+## startupProbe.successThreshold Success threshold for startupProbe
+##
+startupProbe:
+  enabled: false
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 60
+
+## customLivenessProbe Override default liveness probe
+##
+customLivenessProbe: {}
+## customReadinessProbe Override default readiness probe
+##
+customReadinessProbe: {}
+## customStartupProbe Override default startup probe
+##
+customStartupProbe: {}
+
 ## List of policies to be created after minio install
 ##
 ## In addition to default policies [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
