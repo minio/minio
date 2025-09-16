@@ -377,12 +377,12 @@ type HTTPStats struct {
 	rejectedRequestsTime    uint64
 	rejectedRequestsHeader  uint64
 	rejectedRequestsInvalid uint64
-	currentS3Requests       HTTPAPIStats
-	totalS3Requests         HTTPAPIStats
-	totalS3Errors           HTTPAPIStats
-	totalS34xxErrors        HTTPAPIStats
-	totalS35xxErrors        HTTPAPIStats
-	totalS3Canceled         HTTPAPIStats
+	currentS3Requests       *HTTPAPIStats
+	totalS3Requests         *HTTPAPIStats
+	totalS3Errors           *HTTPAPIStats
+	totalS34xxErrors        *HTTPAPIStats
+	totalS35xxErrors        *HTTPAPIStats
+	totalS3Canceled         *HTTPAPIStats
 }
 
 func (st *HTTPStats) loadRequestsInQueue() int32 {
@@ -454,5 +454,12 @@ func (st *HTTPStats) updateStats(api string, w *xhttp.ResponseRecorder) {
 
 // Prepare new HTTPStats structure
 func newHTTPStats() *HTTPStats {
-	return &HTTPStats{}
+	return &HTTPStats{
+		currentS3Requests: &HTTPAPIStats{},
+		totalS3Requests:   &HTTPAPIStats{},
+		totalS3Errors:     &HTTPAPIStats{},
+		totalS34xxErrors:  &HTTPAPIStats{},
+		totalS35xxErrors:  &HTTPAPIStats{},
+		totalS3Canceled:   &HTTPAPIStats{},
+	}
 }
