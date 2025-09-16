@@ -28,7 +28,7 @@ import (
 // TestHTTPStatsRaceCondition tests the race condition fix for HTTPStats.
 // This test specifically addresses the race between:
 // - Write operations via updateStats.
-// - Read operations via toServerHTTPStats.
+// - Read operations via toServerHTTPStats(false).
 func TestHTTPStatsRaceCondition(t *testing.T) {
 	httpStats := newHTTPStats()
 	// Simulate the concurrent scenario from the original race condition:
