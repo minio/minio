@@ -94,19 +94,13 @@ spec:
   {{- if .Values.metrics.serviceMonitor.relabelConfigsCluster }}
     {{- toYaml .Values.metrics.serviceMonitor.relabelConfigsCluster | nindent 2 }}
   {{- end }}
+  {{- if not .Values.metrics.serviceMonitor.public }}
+  bearerTokenSecret:
+    name: {{ template "minio.fullname" . }}-prometheus
+    key: token
+  {{- end }}
   targets:
     staticConfig:
       static:
       - {{ template "minio.fullname" . }}.{{ .Release.Namespace }}
-      {{- if not .Values.metrics.serviceMonitor.public }}
-      {{- if .Values.metrics.serviceMonitor.interval }}
-      interval: {{ .Values.metrics.serviceMonitor.interval }}
-      {{- end }}
-      {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
-      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
-      {{- end }}
-      bearerTokenSecret:
-        name: {{ template "minio.fullname" . }}-prometheus
-        key: token
-      {{- end }}
 {{- end }}
