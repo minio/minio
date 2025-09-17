@@ -563,11 +563,14 @@ func newPoolMeta(z *erasureServerPools, prevMeta poolMeta) poolMeta {
 	// or this is a fresh installation (or an existing
 	// installation with pool removed)
 	newMeta.Version = poolMetaVersion
-	for idx, pool := range z.serverPools {
+	idx := -1
+	for _, pool := range z.serverPools {
 		var skip bool
 		for _, currentPool := range prevMeta.Pools {
 			// Preserve any current pool status.
 			if currentPool.CmdLine == pool.endpoints.CmdLine {
+				idx++
+				currentPool.ID = idx
 				newMeta.Pools = append(newMeta.Pools, currentPool)
 				skip = true
 				break
@@ -576,6 +579,7 @@ func newPoolMeta(z *erasureServerPools, prevMeta poolMeta) poolMeta {
 		if skip {
 			continue
 		}
+		idx++
 		newMeta.Pools = append(newMeta.Pools, PoolStatus{
 			CmdLine:    pool.endpoints.CmdLine,
 			ID:         idx,
