@@ -75,6 +75,12 @@ metadata:
     {{- end }}
 spec:
   jobName: {{ template "minio.fullname" . }}
+  {{- if .Values.metrics.serviceMonitor.interval }}
+  interval: {{ .Values.metrics.serviceMonitor.interval }}
+  {{- end }}
+  {{- if .Values.metrics.serviceMonitor.scrapeTimeout }}
+  scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+  {{- end }}
   {{- if .Values.tls.enabled }}
   tlsConfig:
     ca:
