@@ -568,6 +568,7 @@ func newPoolMeta(z *erasureServerPools, prevMeta poolMeta) poolMeta {
 		for _, currentPool := range prevMeta.Pools {
 			// Preserve any current pool status.
 			if currentPool.CmdLine == pool.endpoints.CmdLine {
+				currentPool.ID = idx
 				newMeta.Pools = append(newMeta.Pools, currentPool)
 				skip = true
 				break
