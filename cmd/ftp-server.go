@@ -18,12 +18,15 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
+	"github.com/minio/minio/internal/config"
 	"github.com/minio/minio/internal/logger"
+	"github.com/minio/pkg/v3/certs"
 	ftp "goftp.io/server/v2"
 )
 
@@ -126,22 +129,39 @@ func startFTPServer(args []string) {
 		}
 	}
 
+	var getCerts func(*tls.ClientHelloInfo) (*tls.Certificate, error)
 	// If no TLS certs were provided, server is running in TLS for S3 API
 	// we automatically make FTP also run under TLS mode.
 	if globalIsTLS && tlsPrivateKey == "" && tlsPublicCert == "" {
+		getCerts = globalTLSCerts.GetCertificate
 		tlsPrivateKey = getPrivateKeyFile()
 		tlsPublicCert = getPublicCertFile()
 	}
 
-	tls := tlsPrivateKey != "" && tlsPublicCert != ""
+	isTLS := tlsPrivateKey != "" && tlsPublicCert != ""
 
-	if forceTLS && !tls {
+	if forceTLS && !isTLS {
 		logger.Fatal(fmt.Errorf("invalid TLS arguments provided. force-tls, but missing private key --ftp=\"tls-private-key=path/to/private.key\""), "unable to start FTP server")
 	}
 
 	name := "MinIO FTP Server"
-	if tls {
+	var manager *certs.Manager
+	var tlsConfig *tls.Config
+	if isTLS {
 		name = "MinIO FTP(Secure) Server"
+		if getCerts == nil {
+			manager, err = certs.NewManager(GlobalContext, tlsPublicCert, tlsPrivateKey, config.LoadX509KeyPair)
+			if err != nil {
+				logger.Fatal(err, "unable to start FTP server")
+			}
+			getCerts = manager.GetCertificate
+		}
+		tlsConfig = &tls.Config{
+			PreferServerCipherSuites: true,
+			MinVersion:               tls.VersionTLS12,
+			NextProtos:               []string{"ftp"},
+			GetCertificate:           getCerts,
+		}
 	}
 
 	ftpServer, err := ftp.NewServer(&ftp.Options{
@@ -150,10 +170,9 @@ func startFTPServer(args []string) {
 		Driver:         NewFTPDriver(),
 		Port:           port,
 		Perm:           ftp.NewSimplePerm("nobody", "nobody"),
-		TLS:            tls,
-		KeyFile:        tlsPrivateKey,
-		CertFile:       tlsPublicCert,
-		ExplicitFTPS:   tls,
+		TLS:            isTLS,
+		TLSConfig:      tlsConfig,
+		ExplicitFTPS:   isTLS,
 		Logger:         &minioLogger{},
 		PassivePorts:   portRange,
 		PublicIP:       publicIP,
