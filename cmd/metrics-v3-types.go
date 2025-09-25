@@ -455,7 +455,10 @@ func (mg *MetricsGroup) Collect(ch chan<- prometheus.Metric) {
 
 	var err error
 	if mg.IsBucketMetricsGroup() {
-		err = mg.bucketLoader(GlobalContext, metricValues, mg.cache, mg.buckets)
+		mg.bucketsLock.Lock()
+		buckets := mg.buckets
+		mg.bucketsLock.Unlock()
+		err = mg.bucketLoader(GlobalContext, metricValues, mg.cache, buckets)
 	} else {
 		err = mg.loader(GlobalContext, metricValues, mg.cache)
 	}
