@@ -197,7 +197,7 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	if err != nil {
 		host = ldapServer
 	}
-	
+
 	l.LDAP = ldap.Config{
 		ServerAddr:    ldapServer,
 		SRVRecordName: getCfgVal(SRVRecordName),
