@@ -210,13 +210,13 @@ type respBodyMonitor struct {
 func (r *respBodyMonitor) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
 	r.errorStatus(err)
-	return
+	return n, err
 }
 
 func (r *respBodyMonitor) Close() (err error) {
 	err = r.ReadCloser.Close()
 	r.errorStatus(err)
-	return
+	return err
 }
 
 func (r *respBodyMonitor) errorStatus(err error) {

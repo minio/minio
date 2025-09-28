@@ -257,5 +257,5 @@ func lockFileEx(h syscall.Handle, flags, locklow, lockhigh uint32, ol *syscall.O
 			err = syscall.EINVAL
 		}
 	}
-	return
+	return err
 }

@@ -521,7 +521,7 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = metadata.Erasure.ParityBlocks
 		}
 	}
-	return
+	return parities
 }
 
 // Returns per object readQuorum and writeQuorum

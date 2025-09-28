@@ -69,7 +69,7 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 		drwm3.Unlock(t.Context())
 	}
 	// fmt.Println("Write lock failed due to timeout")
-	return
+	return locked
 }
 
 func TestSimpleWriteLockAcquired(t *testing.T) {
@@ -116,7 +116,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 		drwm2.Unlock(t.Context())
 	}
 	// fmt.Println("2nd write lock failed due to timeout")
-	return
+	return locked
 }
 
 func TestDualWriteLockAcquired(t *testing.T) {

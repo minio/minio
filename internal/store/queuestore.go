@@ -151,7 +151,7 @@ func (store *QueueStore[I]) multiWrite(key Key, items []I) (err error) {
 	// Increment the item count.
 	store.entries[key.String()] = time.Now().UnixNano()
 
-	return
+	return err
 }
 
 // write - writes an item to the directory.
@@ -235,7 +235,7 @@ func (store *QueueStore[I]) GetRaw(key Key) (raw []byte, err error) {
 
 	raw, err = os.ReadFile(filepath.Join(store.directory, key.String()))
 	if err != nil {
-		return
+		return raw, err
 	}
 
 	if len(raw) == 0 {
@@ -246,7 +246,7 @@ func (store *QueueStore[I]) GetRaw(key Key) (raw []byte, err error) {
 		raw, err = s2.Decode(nil, raw)
 	}
 
-	return
+	return raw, err
 }
 
 // Get - gets an item from the store.
@@ -274,7 +274,7 @@ func (store *QueueStore[I]) GetMultiple(key Key) (items []I, err error) {
 		items = append(items, item)
 	}
 
-	return
+	return items, err
 }
 
 // Del - Deletes an entry from the store.

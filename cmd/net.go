@@ -88,7 +88,7 @@ func mustGetLocalLoopbacks() (ipList set.StringSet) {
 			ipList.Add(ip.String())
 		}
 	}
-	return
+	return ipList
 }
 
 // mustGetLocalIP4 returns IPv4 addresses of localhost.  It panics on error.
@@ -99,7 +99,7 @@ func mustGetLocalIP4() (ipList set.StringSet) {
 			ipList.Add(ip.String())
 		}
 	}
-	return
+	return ipList
 }
 
 // mustGetLocalIP6 returns IPv6 addresses of localhost.  It panics on error.
@@ -110,7 +110,7 @@ func mustGetLocalIP6() (ipList set.StringSet) {
 			ipList.Add(ip.String())
 		}
 	}
-	return
+	return ipList
 }
 
 // getHostIP returns IP address of given host.

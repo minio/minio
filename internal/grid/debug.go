@@ -154,7 +154,7 @@ func getHosts(n int) (hosts []string, listeners []net.Listener, err error) {
 		hosts = append(hosts, "http://"+addr.String())
 		listeners = append(listeners, l)
 	}
-	return
+	return hosts, listeners, err
 }
 
 func startHTTPServer(listener net.Listener, handler http.Handler) (server *httptest.Server) {
