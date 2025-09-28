@@ -79,7 +79,7 @@ func (e *SelectExpression) analyze(s *Select) (result qProp) {
 	for _, ex := range e.Expressions {
 		result.combine(ex.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *AliasedExpression) analyze(s *Select) qProp {
@@ -90,14 +90,14 @@ func (e *Expression) analyze(s *Select) (result qProp) {
 	for _, ac := range e.And {
 		result.combine(ac.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *AndCondition) analyze(s *Select) (result qProp) {
 	for _, ac := range e.Condition {
 		result.combine(ac.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *Condition) analyze(s *Select) (result qProp) {
@@ -106,14 +106,14 @@ func (e *Condition) analyze(s *Select) (result qProp) {
 	} else {
 		result = e.Not.analyze(s)
 	}
-	return
+	return result
 }
 
 func (e *ListExpr) analyze(s *Select) (result qProp) {
 	for _, ac := range e.Elements {
 		result.combine(ac.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *ConditionOperand) analyze(s *Select) (result qProp) {
@@ -123,7 +123,7 @@ func (e *ConditionOperand) analyze(s *Select) (result qProp) {
 		result.combine(e.Operand.analyze(s))
 		result.combine(e.ConditionRHS.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *ConditionRHS) analyze(s *Select) (result qProp) {
@@ -143,7 +143,7 @@ func (e *ConditionRHS) analyze(s *Select) (result qProp) {
 	default:
 		result = qProp{err: errUnexpectedInvalidNode}
 	}
-	return
+	return result
 }
 
 func (e *In) analyze(s *Select) (result qProp) {
@@ -153,7 +153,7 @@ func (e *In) analyze(s *Select) (result qProp) {
 		if len(e.JPathExpr.PathExpr) > 0 {
 			if e.JPathExpr.BaseKey.String() != s.From.As && !strings.EqualFold(e.JPathExpr.BaseKey.String(), baseTableName) {
 				result = qProp{err: errInvalidKeypath}
-				return
+				return result
 			}
 		}
 		result = qProp{isRowFunc: true}
@@ -162,7 +162,7 @@ func (e *In) analyze(s *Select) (result qProp) {
 	default:
 		result = qProp{err: errUnexpectedInvalidNode}
 	}
-	return
+	return result
 }
 
 func (e *Operand) analyze(s *Select) (result qProp) {
@@ -170,7 +170,7 @@ func (e *Operand) analyze(s *Select) (result qProp) {
 	for _, r := range e.Right {
 		result.combine(r.Right.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *MultOp) analyze(s *Select) (result qProp) {
@@ -178,7 +178,7 @@ func (e *MultOp) analyze(s *Select) (result qProp) {
 	for _, r := range e.Right {
 		result.combine(r.Right.analyze(s))
 	}
-	return
+	return result
 }
 
 func (e *UnaryTerm) analyze(s *Select) (result qProp) {
@@ -187,7 +187,7 @@ func (e *UnaryTerm) analyze(s *Select) (result qProp) {
 	} else {
 		result = e.Primary.analyze(s)
 	}
-	return
+	return result
 }
 
 func (e *PrimaryTerm) analyze(s *Select) (result qProp) {
@@ -200,7 +200,7 @@ func (e *PrimaryTerm) analyze(s *Select) (result qProp) {
 		if len(e.JPathExpr.PathExpr) > 0 {
 			if e.JPathExpr.BaseKey.String() != s.From.As && !strings.EqualFold(e.JPathExpr.BaseKey.String(), baseTableName) {
 				result = qProp{err: errInvalidKeypath}
-				return
+				return result
 			}
 		}
 		result = qProp{isRowFunc: true}
@@ -217,7 +217,7 @@ func (e *PrimaryTerm) analyze(s *Select) (result qProp) {
 	default:
 		result = qProp{err: errUnexpectedInvalidNode}
 	}
-	return
+	return result
 }
 
 func (e *FuncExpr) analyze(s *Select) (result qProp) {

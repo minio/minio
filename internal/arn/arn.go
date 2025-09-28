@@ -86,40 +86,40 @@ func Parse(arnStr string) (arn ARN, err error) {
 	ps := strings.Split(arnStr, ":")
 	if len(ps) != 6 || ps[0] != string(arnPrefixArn) {
 		err = errors.New("invalid ARN string format")
-		return
+		return arn, err
 	}
 
 	if ps[1] != string(arnPartitionMinio) {
 		err = errors.New("invalid ARN - bad partition field")
-		return
+		return arn, err
 	}
 
 	if ps[2] != string(arnServiceIAM) {
 		err = errors.New("invalid ARN - bad service field")
-		return
+		return arn, err
 	}
 
 	// ps[3] is region and is not validated here. If the region is invalid,
 	// the ARN would not match any configured ARNs in the server.
 	if ps[4] != "" {
 		err = errors.New("invalid ARN - unsupported account-id field")
-		return
+		return arn, err
 	}
 
 	res := strings.SplitN(ps[5], "/", 2)
 	if len(res) != 2 {
 		err = errors.New("invalid ARN - resource does not contain a \"/\"")
-		return
+		return arn, err
 	}
 
 	if res[0] != string(arnResourceTypeRole) {
 		err = errors.New("invalid ARN: resource type is invalid")
-		return
+		return arn, err
 	}
 
 	if !validResourceIDRegex.MatchString(res[1]) {
 		err = fmt.Errorf("invalid resource ID: %s", res[1])
-		return
+		return arn, err
 	}
 
 	arn = ARN{
@@ -129,5 +129,5 @@ func Parse(arnStr string) (arn ARN, err error) {
 		ResourceType: arnResourceTypeRole,
 		ResourceID:   res[1],
 	}
-	return
+	return arn, err
 }

@@ -40,7 +40,7 @@ type collectMetricsOpts struct {
 
 func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if types == madmin.MetricsNone {
-		return
+		return m
 	}
 
 	byHostName := globalMinioAddr
@@ -51,7 +51,7 @@ func collectLocalMetrics(types madmin.MetricType, opts collectMetricsOpts) (m ma
 		if _, ok := opts.hosts[server.Endpoint]; ok {
 			byHostName = server.Endpoint
 		} else {
-			return
+			return m
 		}
 	}
 
@@ -221,7 +221,7 @@ func collectLocalDisksMetrics(disks map[string]struct{}) map[string]madmin.DiskM
 
 func collectRemoteMetrics(ctx context.Context, types madmin.MetricType, opts collectMetricsOpts) (m madmin.RealtimeMetrics) {
 	if !globalIsDistErasure {
-		return
+		return m
 	}
 	all := globalNotificationSys.GetMetrics(ctx, types, opts)
 	for _, remote := range all {

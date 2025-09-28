@@ -965,7 +965,7 @@ func danglingMetaErrsCount(cerrs []error) (notFoundCount int, nonActionableCount
 			nonActionableCount++
 		}
 	}
-	return
+	return notFoundCount, nonActionableCount
 }
 
 func danglingPartErrsCount(results []int) (notFoundCount int, nonActionableCount int) {
@@ -980,7 +980,7 @@ func danglingPartErrsCount(results []int) (notFoundCount int, nonActionableCount
 			nonActionableCount++
 		}
 	}
-	return
+	return notFoundCount, nonActionableCount
 }
 
 // Object is considered dangling/corrupted if and only

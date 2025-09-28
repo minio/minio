@@ -46,7 +46,7 @@ func parseSQLTimestamp(s string) (t time.Time, err error) {
 			break
 		}
 	}
-	return
+	return t, err
 }
 
 // FormatSQLTimestamp - returns the a string representation of the
