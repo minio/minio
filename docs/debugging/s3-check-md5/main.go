@@ -142,7 +142,7 @@ func main() {
 			if versions {
 				fpath += ":" + obj.VersionID
 			}
-			return
+			return fpath
 		}
 
 		// List all objects from a bucket-name with a matching prefix.

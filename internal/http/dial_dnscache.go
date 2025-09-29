@@ -75,6 +75,6 @@ func DialContextWithLookupHost(lookupHost LookupHost, baseDialCtx DialContext) D
 			}
 		}
 
-		return
+		return conn, err
 	}
 }

@@ -69,7 +69,7 @@ func NewErasure(ctx context.Context, dataBlocks, parityBlocks int, blockSize int
 		})
 		return enc
 	}
-	return
+	return e, err
 }
 
 // EncodeData encodes the given data and returns the erasure-coded data.

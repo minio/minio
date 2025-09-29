@@ -178,7 +178,7 @@ func (h *Target) initQueueStore(ctx context.Context) (err error) {
 	h.store = queueStore
 	h.storeCtxCancel = cancel
 	store.StreamItems(h.store, h, ctx.Done(), h.kconfig.LogOnce)
-	return
+	return err
 }
 
 func (h *Target) startKafkaLogger() {
@@ -355,7 +355,7 @@ func (h *Target) SendFromStore(key store.Key) (err error) {
 	err = h.send(auditEntry)
 	if err != nil {
 		atomic.AddInt64(&h.failedMessages, 1)
-		return
+		return err
 	}
 	// Delete the event from store.
 	return h.store.Del(key)

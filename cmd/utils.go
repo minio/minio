@@ -689,7 +689,7 @@ func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 func ceilFrac(numerator, denominator int64) (ceil int64) {
 	if denominator == 0 {
 		// do nothing on invalid input
-		return
+		return ceil
 	}
 	// Make denominator positive
 	if denominator < 0 {
@@ -700,7 +700,7 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	if numerator > 0 && numerator%denominator != 0 {
 		ceil++
 	}
-	return
+	return ceil
 }
 
 // cleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal

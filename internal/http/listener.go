@@ -172,7 +172,7 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 
 	if len(listeners) == 0 {
 		// No listeners initialized, no need to continue
-		return
+		return listener, listenErrs
 	}
 	listeners = slices.Clip(listeners)
 
@@ -187,5 +187,5 @@ func newHTTPListener(ctx context.Context, serverAddrs []string, opts TCPOptions)
 	opts.Trace(fmt.Sprintf("opening %d listeners", len(listener.listeners)))
 	listener.start()
 
-	return
+	return listener, listenErrs
 }

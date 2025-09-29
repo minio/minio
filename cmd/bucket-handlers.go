@@ -592,7 +592,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			output[idx] = obj
 			idx++
 		}
-		return
+		return output
 	}
 
 	// Disable timeouts and cancellation

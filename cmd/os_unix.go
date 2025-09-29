@@ -136,7 +136,7 @@ func parseDirEnt(buf []byte) (consumed int, name []byte, typ os.FileMode, err er
 	}
 	consumed = int(dirent.Reclen)
 	if direntInode(dirent) == 0 { // File absent in directory.
-		return
+		return consumed, name, typ, err
 	}
 	switch dirent.Type {
 	case syscall.DT_REG:
@@ -349,7 +349,7 @@ func readDirWithOpts(dirPath string, opts readDirOpts) (entries []string, err er
 		entries = append(entries, nameStr)
 	}
 
-	return
+	return entries, err
 }
 
 func globalSync() {

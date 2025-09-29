@@ -65,7 +65,7 @@ func testSimpleWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 	} else {
 		t.Log("Write lock failed due to timeout")
 	}
-	return
+	return locked
 }
 
 func TestSimpleWriteLockAcquired(t *testing.T) {
@@ -111,7 +111,7 @@ func testDualWriteLock(t *testing.T, duration time.Duration) (locked bool) {
 	} else {
 		t.Log("2nd write lock failed due to timeout")
 	}
-	return
+	return locked
 }
 
 func TestDualWriteLockAcquired(t *testing.T) {

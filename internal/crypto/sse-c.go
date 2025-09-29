@@ -98,7 +98,7 @@ func (ssec) ParseHTTP(h http.Header) (key [32]byte, err error) {
 func (s3 ssec) UnsealObjectKey(h http.Header, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	clientKey, err := s3.ParseHTTP(h)
 	if err != nil {
-		return
+		return key, err
 	}
 	return unsealObjectKey(clientKey[:], metadata, bucket, object)
 }

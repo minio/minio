@@ -67,7 +67,7 @@ func (bp *BytePoolCap) Get() (b []byte) {
 		// create new aligned buffer
 		b = reedsolomon.AllocAligned(1, bp.wcap)[0][:bp.w]
 	}
-	return
+	return b
 }
 
 // Put returns the given Buffer to the BytePool.

@@ -390,7 +390,7 @@ func getDiskInfo(drivePath string) (di disk.Info, rootDrive bool, err error) {
 		err = errFaultyDisk
 	}
 
-	return
+	return di, rootDrive, err
 }
 
 // Implements stringer compatible interface.
@@ -2374,23 +2374,23 @@ func (s *xlStorage) checkPart(volumeDir, path, dataDir string, partNum int, expe
 					if osIsNotExist(verr) {
 						resp = checkPartVolumeNotFound
 					}
-					return
+					return resp
 				}
 			}
 		}
 		if osErrToFileErr(err) == errFileNotFound {
 			resp = checkPartFileNotFound
 		}
-		return
+		return resp
 	}
 	if st.Mode().IsDir() {
 		resp = checkPartFileNotFound
-		return
+		return resp
 	}
 	// Check if shard is truncated.
 	if st.Size() < expectedSize {
 		resp = checkPartFileCorrupt
-		return
+		return resp
 	}
 	return checkPartSuccess
 }

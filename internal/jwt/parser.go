@@ -271,7 +271,7 @@ func (c *MapClaims) Lookup(key string) (value string, ok bool) {
 	if ok {
 		value, ok = vinterface.(string)
 	}
-	return
+	return value, ok
 }
 
 // SetExpiry sets expiry in unix epoch secs

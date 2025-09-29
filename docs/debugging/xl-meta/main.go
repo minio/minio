@@ -735,7 +735,7 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return o, err
 	}
 	want := uint32(5)
 	if hdrVer > 2 {
@@ -743,29 +743,29 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 	}
 	if zb0001 != want {
 		err = msgp.ArrayError{Wanted: want, Got: zb0001}
-		return
+		return o, err
 	}
 	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "VersionID")
-		return
+		return o, err
 	}
 	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
-		return
+		return o, err
 	}
 	bts, err = msgp.ReadExactBytes(bts, (z.Signature)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "Signature")
-		return
+		return o, err
 	}
 	{
 		var zb0002 uint8
 		zb0002, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Type")
-			return
+			return o, err
 		}
 		z.Type = zb0002
 	}
@@ -774,7 +774,7 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 		zb0003, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Flags")
-			return
+			return o, err
 		}
 		z.Flags = zb0003
 	}
@@ -785,7 +785,7 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 			zb0004, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "EcN")
-				return
+				return o, err
 			}
 			z.EcN = zb0004
 		}
@@ -794,13 +794,13 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte, hdrVer uint) (o []byt
 			zb0005, bts, err = msgp.ReadUint8Bytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "EcM")
-				return
+				return o, err
 			}
 			z.EcM = zb0005
 		}
 	}
 	o = bts
-	return
+	return o, err
 }
 
 func (z xlMetaV2VersionHeaderV2) MarshalJSON() (o []byte, err error) {
@@ -1540,7 +1540,7 @@ func bitrot(val []byte, startOffset, shardSize int) ([]byte, error) {
 func shardSize(blockSize, dataBlocks int) (sz int) {
 	if dataBlocks == 0 {
 		// do nothing on invalid input
-		return
+		return sz
 	}
 	// Make denominator positive
 	if dataBlocks < 0 {
@@ -1551,7 +1551,7 @@ func shardSize(blockSize, dataBlocks int) (sz int) {
 	if blockSize > 0 && blockSize%dataBlocks != 0 {
 		sz++
 	}
-	return
+	return sz
 }
 
 //nolint:staticcheck

@@ -390,7 +390,7 @@ func (c *SiteReplicationSys) getSiteStatuses(ctx context.Context, sites ...madmi
 			self:         info.DeploymentID == globalDeploymentID(),
 		})
 	}
-	return
+	return psi, err
 }
 
 // AddPeerClusters - add cluster sites for replication configuration.
@@ -756,7 +756,7 @@ func (c *SiteReplicationSys) Netperf(ctx context.Context, duration time.Duration
 		}()
 	}
 	wg.Wait()
-	return
+	return results, err
 }
 
 // GetClusterInfo - returns site replication information.
@@ -2600,7 +2600,7 @@ func (c *SiteReplicationSys) RemoveRemoteTargetsForEndpoint(ctx context.Context,
 			return err
 		}
 	}
-	return
+	return err
 }
 
 // Other helpers
@@ -2772,7 +2772,7 @@ func (c *SiteReplicationSys) SiteReplicationStatus(ctx context.Context, objAPI O
 		}
 	}
 
-	return
+	return info, err
 }
 
 const (
@@ -3372,7 +3372,7 @@ func (c *SiteReplicationSys) siteReplicationStatus(ctx context.Context, objAPI O
 	info.MaxGroups = len(groupDescStats)
 	info.MaxPolicies = len(policyStats)
 	info.MaxILMExpiryRules = len(ilmExpiryRuleStats)
-	return
+	return info, err
 }
 
 // isReplicated returns true if count of replicated matches the number of

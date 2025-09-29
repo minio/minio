@@ -146,7 +146,7 @@ func readDriveStats(statsFile string) (iostats IOStats, err error) {
 		iostats.DiscardSectors = stats[13]
 		iostats.DiscardTicks = stats[14]
 	}
-	return
+	return iostats, err
 }
 
 func readStat(fileName string) (stats []uint64, err error) {

@@ -97,7 +97,7 @@ func parseBucketQuota(bucket string, data []byte) (quotaCfg *madmin.BucketQuota,
 		}
 		return quotaCfg, fmt.Errorf("Invalid quota config %#v", quotaCfg)
 	}
-	return
+	return quotaCfg, err
 }
 
 func (sys *BucketQuotaSys) enforceQuotaHard(ctx context.Context, bucket string, size int64) error {

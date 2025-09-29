@@ -1128,7 +1128,7 @@ func (store *IAMStoreSys) listGroups(ctx context.Context) (res []string, err err
 			return true
 		})
 	}
-	return
+	return res, err
 }
 
 // PolicyDBUpdate - adds or removes given policies to/from the user or group's
@@ -1139,7 +1139,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 ) {
 	if name == "" {
 		err = errInvalidArgument
-		return
+		return updatedAt, addedOrRemoved, effectivePolicies, err
 	}
 
 	cache := store.lock()
@@ -1163,12 +1163,12 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 			g, ok := cache.iamGroupsMap[name]
 			if !ok {
 				err = errNoSuchGroup
-				return
+				return updatedAt, addedOrRemoved, effectivePolicies, err
 			}
 
 			if g.Status == statusDisabled {
 				err = errGroupDisabled
-				return
+				return updatedAt, addedOrRemoved, effectivePolicies, err
 			}
 		}
 		mp, _ = cache.iamGroupPolicyMap.Load(name)
@@ -1186,7 +1186,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		for _, p := range policiesToUpdate.ToSlice() {
 			if _, found := cache.iamPolicyDocsMap[p]; !found {
 				err = errNoSuchPolicy
-				return
+				return updatedAt, addedOrRemoved, effectivePolicies, err
 			}
 		}
 		newPolicySet = existingPolicySet.Union(policiesToUpdate)
@@ -1198,7 +1198,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	// We return an error if the requested policy update will have no effect.
 	if policiesToUpdate.IsEmpty() {
 		err = errNoPolicyToAttachOrDetach
-		return
+		return updatedAt, addedOrRemoved, effectivePolicies, err
 	}
 
 	newPolicies := newPolicySet.ToSlice()
@@ -1210,7 +1210,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 	// in this case, we delete the mapping from the store.
 	if len(newPolicies) == 0 {
 		if err = store.deleteMappedPolicy(ctx, name, userType, isGroup); err != nil && !errors.Is(err, errNoSuchPolicy) {
-			return
+			return updatedAt, addedOrRemoved, effectivePolicies, err
 		}
 		if !isGroup {
 			if userType == stsUser {
@@ -1223,7 +1223,7 @@ func (store *IAMStoreSys) PolicyDBUpdate(ctx context.Context, name string, isGro
 		}
 	} else {
 		if err = store.saveMappedPolicy(ctx, name, userType, isGroup, newPolicyMapping); err != nil {
-			return
+			return updatedAt, addedOrRemoved, effectivePolicies, err
 		}
 		if !isGroup {
 			if userType == stsUser {
@@ -3052,7 +3052,7 @@ func extractJWTClaims(u UserIdentity) (jwtClaims *jwt.MapClaims, err error) {
 			break
 		}
 	}
-	return
+	return jwtClaims, err
 }
 
 func validateSvcExpirationInUTC(expirationInUTC time.Time) error {

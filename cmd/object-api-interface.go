@@ -225,11 +225,11 @@ func (o *ObjectOptions) SetDeleteReplicationState(dsc ReplicateDecision, vID str
 func (o *ObjectOptions) PutReplicationState() (r ReplicationState) {
 	rstatus, ok := o.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus]
 	if !ok {
-		return
+		return r
 	}
 	r.ReplicationStatusInternal = rstatus
 	r.Targets = replicationStatusesMap(rstatus)
-	return
+	return r
 }
 
 // SetEvalMetadataFn sets the metadata evaluation function

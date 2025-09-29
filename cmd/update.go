@@ -445,7 +445,7 @@ func getLatestReleaseTime(u *url.URL, timeout time.Duration, mode string) (sha25
 	}
 
 	sha256Sum, releaseTime, _, err = parseReleaseData(data)
-	return
+	return sha256Sum, releaseTime, err
 }
 
 const (

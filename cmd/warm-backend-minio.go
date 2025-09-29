@@ -61,7 +61,7 @@ func optimalPartSize(objectSize int64) (partSize int64, err error) {
 	// object size is larger than supported maximum.
 	if objectSize > maxMultipartPutObjectSize {
 		err = errors.New("entity too large")
-		return
+		return partSize, err
 	}
 
 	configuredPartSize := minPartSize

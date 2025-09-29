@@ -87,7 +87,7 @@ func (d *DummyDataGen) Read(b []byte) (n int, err error) {
 		}
 		err = io.EOF
 	}
-	return
+	return n, err
 }
 
 func (d *DummyDataGen) Seek(offset int64, whence int) (int64, error) {

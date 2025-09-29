@@ -2662,7 +2662,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 				return err
 			}
 		}
-		return
+		return err
 	})
 
 	deleteObject := objectAPI.DeleteObject

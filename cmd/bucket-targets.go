@@ -285,7 +285,7 @@ func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType str
 			}
 		}
 	}
-	return
+	return targets
 }
 
 // ListBucketTargets - gets list of bucket targets for this bucket.
@@ -668,7 +668,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 // getRemoteARN gets existing ARN for an endpoint or generates a new one.
 func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget, deplID string) (arn string, exists bool) {
 	if target == nil {
-		return
+		return arn, exists
 	}
 	sys.RLock()
 	defer sys.RUnlock()
@@ -682,7 +682,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 		}
 	}
 	if !target.Type.IsValid() {
-		return
+		return arn, exists
 	}
 	return generateARN(target, deplID), false
 }

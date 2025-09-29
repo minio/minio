@@ -81,7 +81,7 @@ func Requested(h http.Header) bool {
 func (sse ssecCopy) UnsealObjectKey(h http.Header, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	clientKey, err := sse.ParseHTTP(h)
 	if err != nil {
-		return
+		return key, err
 	}
 	return unsealObjectKey(clientKey[:], metadata, bucket, object)
 }
@@ -91,10 +91,10 @@ func (sse ssecCopy) UnsealObjectKey(h http.Header, metadata map[string]string, b
 func unsealObjectKey(clientKey []byte, metadata map[string]string, bucket, object string) (key ObjectKey, err error) {
 	sealedKey, err := SSEC.ParseMetadata(metadata)
 	if err != nil {
-		return
+		return key, err
 	}
 	err = key.Unseal(clientKey, sealedKey, SSEC.String(), bucket, object)
-	return
+	return key, err
 }
 
 // EncryptSinglePart encrypts an io.Reader which must be the

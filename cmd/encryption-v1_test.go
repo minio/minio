@@ -483,7 +483,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			cumulativeSum += v
 			cumulativeEncSum += getEncSize(v)
 		}
-		return
+		return o, l, skip, sn, ps
 	}
 
 	for i, test := range testMPs {

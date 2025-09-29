@@ -161,7 +161,7 @@ func (b BucketMetadata) lastUpdate() (t time.Time) {
 		t = b.BucketTargetsConfigMetaUpdatedAt
 	}
 
-	return
+	return t
 }
 
 // Versioning returns true if versioning is enabled
@@ -542,13 +542,13 @@ func (b *BucketMetadata) migrateTargetConfig(ctx context.Context, objectAPI Obje
 func encryptBucketMetadata(ctx context.Context, bucket string, input []byte, kmsContext kms.Context) (output, metabytes []byte, err error) {
 	if GlobalKMS == nil {
 		output = input
-		return
+		return output, metabytes, err
 	}
 
 	metadata := make(map[string]string)
 	key, err := GlobalKMS.GenerateKey(ctx, &kms.GenerateKeyRequest{AssociatedData: kmsContext})
 	if err != nil {
-		return
+		return output, metabytes, err
 	}
 
 	outbuf := bytes.NewBuffer(nil)
@@ -561,7 +561,7 @@ func encryptBucketMetadata(ctx context.Context, bucket string, input []byte, kms
 	}
 	metabytes, err = json.Marshal(metadata)
 	if err != nil {
-		return
+		return output, metabytes, err
 	}
 	return outbuf.Bytes(), metabytes, nil
 }

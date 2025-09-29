@@ -56,13 +56,13 @@ func TestDataUsageUpdate(t *testing.T) {
 			var s os.FileInfo
 			s, err = os.Stat(item.Path)
 			if err != nil {
-				return
+				return sizeS, err
 			}
 			sizeS.totalSize = s.Size()
 			sizeS.versions++
 			return sizeS, nil
 		}
-		return
+		return sizeS, err
 	}
 	xls := xlStorage{drivePath: base, diskInfoCache: cachevalue.New[DiskInfo]()}
 	xls.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{}, func(ctx context.Context) (DiskInfo, error) {
@@ -279,13 +279,13 @@ func TestDataUsageUpdatePrefix(t *testing.T) {
 			var s os.FileInfo
 			s, err = os.Stat(item.Path)
 			if err != nil {
-				return
+				return sizeS, err
 			}
 			sizeS.totalSize = s.Size()
 			sizeS.versions++
-			return
+			return sizeS, err
 		}
-		return
+		return sizeS, err
 	}
 
 	weSleep := func() bool { return false }
@@ -569,13 +569,13 @@ func TestDataUsageCacheSerialize(t *testing.T) {
 			var s os.FileInfo
 			s, err = os.Stat(item.Path)
 			if err != nil {
-				return
+				return sizeS, err
 			}
 			sizeS.versions++
 			sizeS.totalSize = s.Size()
-			return
+			return sizeS, err
 		}
-		return
+		return sizeS, err
 	}
 	xls := xlStorage{drivePath: base, diskInfoCache: cachevalue.New[DiskInfo]()}
 	xls.diskInfoCache.InitOnce(time.Second, cachevalue.Opts{}, func(ctx context.Context) (DiskInfo, error) {

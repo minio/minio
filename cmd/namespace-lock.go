@@ -126,7 +126,7 @@ func (n *nsLockMap) lock(ctx context.Context, volume string, path string, lockSo
 		n.lockMapMutex.Unlock()
 	}
 
-	return
+	return locked
 }
 
 // Unlock the namespace resource.

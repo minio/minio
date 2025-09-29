@@ -339,7 +339,7 @@ func triggerExpiryAndRepl(ctx context.Context, o listPathOptions, obj metaCacheE
 	if !o.Versioned && !o.V1 {
 		fi, err := obj.fileInfo(o.Bucket)
 		if err != nil {
-			return
+			return skip
 		}
 		objInfo := fi.ToObjectInfo(o.Bucket, obj.name, versioned)
 		if o.Lifecycle != nil {
@@ -350,7 +350,7 @@ func triggerExpiryAndRepl(ctx context.Context, o listPathOptions, obj metaCacheE
 
 	fiv, err := obj.fileInfoVersions(o.Bucket)
 	if err != nil {
-		return
+		return skip
 	}
 
 	// Expire all versions if needed, if not attempt to queue for replication.
@@ -369,7 +369,7 @@ func triggerExpiryAndRepl(ctx context.Context, o listPathOptions, obj metaCacheE
 
 		queueReplicationHeal(ctx, o.Bucket, objInfo, o.Replication, 0)
 	}
-	return
+	return skip
 }
 
 func (z *erasureServerPools) listAndSave(ctx context.Context, o *listPathOptions) (entries metaCacheEntriesSorted, err error) {

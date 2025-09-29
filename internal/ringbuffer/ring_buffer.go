@@ -196,7 +196,7 @@ func (r *RingBuffer) read(p []byte) (n int, err error) {
 		n = min(r.w-r.r, len(p))
 		copy(p, r.buf[r.r:r.r+n])
 		r.r = (r.r + n) % r.size
-		return
+		return n, err
 	}
 
 	n = min(r.size-r.r+r.w, len(p))

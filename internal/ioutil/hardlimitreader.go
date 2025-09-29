@@ -52,5 +52,5 @@ func (l *HardLimitedReader) Read(p []byte) (n int, err error) {
 	if l.N < 0 {
 		return 0, ErrOverread
 	}
-	return
+	return n, err
 }

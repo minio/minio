@@ -295,7 +295,7 @@ func (fi FileInfo) ShallowCopy() (n FileInfo) {
 	n.VersionID = fi.VersionID
 	n.Deleted = fi.Deleted
 	n.Erasure = fi.Erasure
-	return
+	return n
 }
 
 // WriteQuorum returns expected write quorum for this FileInfo

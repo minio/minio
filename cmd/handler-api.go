@@ -94,18 +94,18 @@ func availableMemory() (available uint64) {
 		if limit > 0 {
 			// A valid value is found, return its 90%
 			available = (limit * 9) / 10
-			return
+			return available
 		}
 	} // for all other platforms limits are based on virtual memory.
 
 	memStats, err := mem.VirtualMemory()
 	if err != nil {
-		return
+		return available
 	}
 
 	// A valid value is available return its 90%
 	available = (memStats.Available * 9) / 10
-	return
+	return available
 }
 
 func (t *apiConfig) init(cfg api.Config, setDriveCounts []int, legacy bool) {

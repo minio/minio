@@ -159,5 +159,5 @@ func pickRelevantGoroutines() (gs []string) {
 		gs = append(gs, g)
 	}
 	sort.Strings(gs)
-	return
+	return gs
 }

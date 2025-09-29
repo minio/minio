@@ -702,7 +702,7 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 
 	b.StandardSCParity = scParity
 	b.RRSCParity = rrSCParity
-	return
+	return b
 }
 
 func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {

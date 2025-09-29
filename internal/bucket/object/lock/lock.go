@@ -587,7 +587,7 @@ func ParseObjectLegalHold(reader io.Reader) (hold *ObjectLegalHold, err error) {
 	if !hold.Status.Valid() {
 		return nil, ErrMalformedXML
 	}
-	return
+	return hold, err
 }
 
 // FilterObjectLockMetadata filters object lock metadata if s3:GetObjectRetention permission is denied or if isCopy flag set.

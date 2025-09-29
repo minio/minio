@@ -344,7 +344,7 @@ func validateClientKeyIsTrusted(c ssh.ConnMetadata, clientKey ssh.PublicKey) (er
 	}
 
 	_, err = checker.Authenticate(c, clientKey)
-	return
+	return err
 }
 
 type sftpLogger struct{}

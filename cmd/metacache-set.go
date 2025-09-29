@@ -653,7 +653,7 @@ func calcCommonWritesDeletes(infos []DiskInfo, readQuorum int) (commonWrite, com
 
 	commonWrite = filter(writes)
 	commonDelete = filter(deletes)
-	return
+	return commonWrite, commonDelete
 }
 
 func calcCommonCounter(infos []DiskInfo, readQuorum int) (commonCount uint64) {

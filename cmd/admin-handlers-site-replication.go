@@ -70,7 +70,7 @@ func (a adminAPIHandlers) SiteReplicationAdd(w http.ResponseWriter, r *http.Requ
 
 func getSRAddOptions(r *http.Request) (opts madmin.SRAddOptions) {
 	opts.ReplicateILMExpiry = r.Form.Get("replicateILMExpiry") == "true"
-	return
+	return opts
 }
 
 // SRPeerJoin - PUT /minio/admin/v3/site-replication/join
@@ -422,7 +422,7 @@ func (a adminAPIHandlers) SiteReplicationEdit(w http.ResponseWriter, r *http.Req
 func getSREditOptions(r *http.Request) (opts madmin.SREditOptions) {
 	opts.DisableILMExpiryReplication = r.Form.Get("disableILMExpiryReplication") == "true"
 	opts.EnableILMExpiryReplication = r.Form.Get("enableILMExpiryReplication") == "true"
-	return
+	return opts
 }
 
 // SRPeerEdit - PUT /minio/admin/v3/site-replication/peer/edit
@@ -484,7 +484,7 @@ func getSRStatusOptions(r *http.Request) (opts madmin.SRStatusOptions) {
 	opts.EntityValue = q.Get("entityvalue")
 	opts.ShowDeleted = q.Get("showDeleted") == "true"
 	opts.Metrics = q.Get("metrics") == "true"
-	return
+	return opts
 }
 
 // SiteReplicationRemove - PUT /minio/admin/v3/site-replication/remove

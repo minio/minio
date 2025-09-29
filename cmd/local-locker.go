@@ -162,7 +162,7 @@ func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool
 			reply = l.removeEntry(resource, args, &lri) || reply
 		}
 	}
-	return
+	return reply, err
 }
 
 // removeEntry based on the uid of the lock message, removes a single entry from the
