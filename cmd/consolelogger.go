@@ -167,7 +167,7 @@ func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 	})
 	sys.RUnlock()
 
-	return
+	return logs
 }
 
 // Cancel - cancels the target

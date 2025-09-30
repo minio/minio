@@ -116,7 +116,7 @@ func diskErrToDriveState(err error) (state string) {
 		state = fmt.Sprintf("%s (cause: %s)", madmin.DriveStateUnknown, err)
 	}
 
-	return
+	return state
 }
 
 func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDisks madmin.BackendDisks) {

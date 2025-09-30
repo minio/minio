@@ -98,12 +98,10 @@ type rebalanceInfo struct {
 
 // rebalanceMeta contains information pertaining to an ongoing rebalance operation.
 type rebalanceMeta struct {
-	cancel          context.CancelFunc `msg:"-"` // to be invoked on rebalance-stop
-	lastRefreshedAt time.Time          `msg:"-"`
-	StoppedAt       time.Time          `msg:"stopTs"` // Time when rebalance-stop was issued.
-	ID              string             `msg:"id"`     // ID of the ongoing rebalance operation
-	PercentFreeGoal float64            `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
-	PoolStats       []*rebalanceStats  `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
+	StoppedAt       time.Time         `msg:"stopTs"` // Time when rebalance-stop was issued.
+	ID              string            `msg:"id"`     // ID of the ongoing rebalance operation
+	PercentFreeGoal float64           `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
+	PoolStats       []*rebalanceStats `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
 }
 
 var errRebalanceNotStarted = errors.New("rebalance not started")
@@ -313,8 +311,6 @@ func (r *rebalanceMeta) loadWithOpts(ctx context.Context, store objectIO, opts O
 		return err
 	}
 
-	r.lastRefreshedAt = time.Now()
-
 	return nil
 }
 
@@ -450,7 +446,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		select {
 		case <-ctx.Done():
 			doneCh <- ctx.Err()
-			return
+			return err
 		default:
 		}
 
@@ -468,7 +464,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			}
 			rebalanceLogIf(GlobalContext, err)
 			doneCh <- err
-			return
+			return err
 		}
 		stopFn(0, nil)
 		z.bucketRebalanceDone(bucket, poolIdx)
@@ -944,7 +940,7 @@ func (z *erasureServerPools) StartRebalance() {
 		return
 	}
 	ctx, cancel := context.WithCancel(GlobalContext)
-	z.rebalMeta.cancel = cancel // to be used when rebalance-stop is called
+	z.rebalCancel = cancel // to be used when rebalance-stop is called
 	z.rebalMu.Unlock()
 
 	z.rebalMu.RLock()
@@ -987,10 +983,9 @@ func (z *erasureServerPools) StopRebalance() error {
 		return nil
 	}
 
-	if cancel := r.cancel; cancel != nil {
-		// cancel != nil only on pool leaders
-		r.cancel = nil
+	if cancel := z.rebalCancel; cancel != nil {
 		cancel()
+		z.rebalCancel = nil
 	}
 	return nil
 }

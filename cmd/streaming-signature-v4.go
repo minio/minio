@@ -663,5 +663,5 @@ func parseHexUint(v []byte) (n uint64, err error) {
 		n <<= 4
 		n |= uint64(b)
 	}
-	return
+	return n, err
 }

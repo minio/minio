@@ -99,7 +99,7 @@ func BitrotAlgorithmFromString(s string) (a BitrotAlgorithm) {
 			return alg
 		}
 	}
-	return
+	return a
 }
 
 func newBitrotWriter(disk StorageAPI, origvolume, volume, filePath string, length int64, algo BitrotAlgorithm, shardSize int64) io.Writer {

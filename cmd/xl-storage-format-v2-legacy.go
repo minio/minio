@@ -44,28 +44,28 @@ func (x *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return o, err
 	}
 	if zb0001 != 4 {
 		err = msgp.ArrayError{Wanted: 4, Got: zb0001}
-		return
+		return o, err
 	}
 	bts, err = msgp.ReadExactBytes(bts, (x.VersionID)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "VersionID")
-		return
+		return o, err
 	}
 	x.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
-		return
+		return o, err
 	}
 	{
 		var zb0002 uint8
 		zb0002, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Type")
-			return
+			return o, err
 		}
 		x.Type = VersionType(zb0002)
 	}
@@ -74,12 +74,12 @@ func (x *xlMetaV2VersionHeader) unmarshalV1(bts []byte) (o []byte, err error) {
 		zb0003, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Flags")
-			return
+			return o, err
 		}
 		x.Flags = xlFlags(zb0003)
 	}
 	o = bts
-	return
+	return o, err
 }
 
 // unmarshalV unmarshals with a specific metadata version.
@@ -139,33 +139,33 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, err error)
 	zb0001, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return o, err
 	}
 	if zb0001 != 5 {
 		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
-		return
+		return o, err
 	}
 	bts, err = msgp.ReadExactBytes(bts, (z.VersionID)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "VersionID")
-		return
+		return o, err
 	}
 	z.ModTime, bts, err = msgp.ReadInt64Bytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
-		return
+		return o, err
 	}
 	bts, err = msgp.ReadExactBytes(bts, (z.Signature)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "Signature")
-		return
+		return o, err
 	}
 	{
 		var zb0002 uint8
 		zb0002, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Type")
-			return
+			return o, err
 		}
 		z.Type = VersionType(zb0002)
 	}
@@ -174,12 +174,12 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, err error)
 		zb0003, bts, err = msgp.ReadUint8Bytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Flags")
-			return
+			return o, err
 		}
 		z.Flags = xlFlags(zb0003)
 	}
 	o = bts
-	return
+	return o, err
 }
 
 // DecodeMsg implements msgp.Decodable
@@ -189,33 +189,33 @@ func (z *xlMetaV2VersionHeaderV2) DecodeMsg(dc *msgp.Reader) (err error) {
 	zb0001, err = dc.ReadArrayHeader()
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return err
 	}
 	if zb0001 != 5 {
 		err = msgp.ArrayError{Wanted: 5, Got: zb0001}
-		return
+		return err
 	}
 	err = dc.ReadExactBytes((z.VersionID)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "VersionID")
-		return
+		return err
 	}
 	z.ModTime, err = dc.ReadInt64()
 	if err != nil {
 		err = msgp.WrapError(err, "ModTime")
-		return
+		return err
 	}
 	err = dc.ReadExactBytes((z.Signature)[:])
 	if err != nil {
 		err = msgp.WrapError(err, "Signature")
-		return
+		return err
 	}
 	{
 		var zb0002 uint8
 		zb0002, err = dc.ReadUint8()
 		if err != nil {
 			err = msgp.WrapError(err, "Type")
-			return
+			return err
 		}
 		z.Type = VersionType(zb0002)
 	}
@@ -224,9 +224,9 @@ func (z *xlMetaV2VersionHeaderV2) DecodeMsg(dc *msgp.Reader) (err error) {
 		zb0003, err = dc.ReadUint8()
 		if err != nil {
 			err = msgp.WrapError(err, "Flags")
-			return
+			return err
 		}
 		z.Flags = xlFlags(zb0003)
 	}
-	return
+	return err
 }
