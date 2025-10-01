@@ -170,7 +170,7 @@ func splitTargets(targets []Target, t types.TargetType) (group1 []Target, group2
 			group2 = append(group2, target)
 		}
 	}
-	return
+	return group1, group2
 }
 
 func cancelTargets(targets []Target) {

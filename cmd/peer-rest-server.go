@@ -146,7 +146,7 @@ func (s *peerRESTServer) DeletePolicyHandler(mss *grid.MSS) (np grid.NoPayload, 
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // LoadPolicyHandler - reloads a policy on the server.
@@ -165,7 +165,7 @@ func (s *peerRESTServer) LoadPolicyHandler(mss *grid.MSS) (np grid.NoPayload, ne
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // LoadPolicyMappingHandler - reloads a policy mapping on the server.
@@ -189,7 +189,7 @@ func (s *peerRESTServer) LoadPolicyMappingHandler(mss *grid.MSS) (np grid.NoPayl
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // DeleteServiceAccountHandler - deletes a service account on the server.
@@ -208,7 +208,7 @@ func (s *peerRESTServer) DeleteServiceAccountHandler(mss *grid.MSS) (np grid.NoP
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // LoadServiceAccountHandler - reloads a service account on the server.
@@ -227,7 +227,7 @@ func (s *peerRESTServer) LoadServiceAccountHandler(mss *grid.MSS) (np grid.NoPay
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // DeleteUserHandler - deletes a user on the server.
@@ -246,7 +246,7 @@ func (s *peerRESTServer) DeleteUserHandler(mss *grid.MSS) (np grid.NoPayload, ne
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // LoadUserHandler - reloads a user on the server.
@@ -275,7 +275,7 @@ func (s *peerRESTServer) LoadUserHandler(mss *grid.MSS) (np grid.NoPayload, nerr
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // LoadGroupHandler - reloads group along with members list.
@@ -295,7 +295,7 @@ func (s *peerRESTServer) LoadGroupHandler(mss *grid.MSS) (np grid.NoPayload, ner
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 // StartProfilingHandler - Issues the start profiling command.
@@ -479,7 +479,7 @@ func (s *peerRESTServer) DeleteBucketMetadataHandler(mss *grid.MSS) (np grid.NoP
 	if localMetacacheMgr != nil {
 		localMetacacheMgr.deleteBucketCache(bucketName)
 	}
-	return
+	return np, nerr
 }
 
 // GetAllBucketStatsHandler - fetches bucket replication stats for all buckets from this peer.
@@ -554,7 +554,7 @@ func (s *peerRESTServer) LoadBucketMetadataHandler(mss *grid.MSS) (np grid.NoPay
 		globalBucketTargetSys.UpdateAllTargets(bucketName, meta.bucketTargetConfig)
 	}
 
-	return
+	return np, nerr
 }
 
 func (s *peerRESTServer) GetMetacacheListingHandler(opts *listPathOptions) (*metacache, *grid.RemoteErr) {
@@ -885,7 +885,7 @@ func (s *peerRESTServer) ReloadSiteReplicationConfigHandler(mss *grid.MSS) (np g
 	}
 
 	peersLogIf(context.Background(), globalSiteReplicationSys.Init(context.Background(), objAPI))
-	return
+	return np, nerr
 }
 
 func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -896,14 +896,14 @@ func (s *peerRESTServer) ReloadPoolMetaHandler(mss *grid.MSS) (np grid.NoPayload
 
 	pools, ok := objAPI.(*erasureServerPools)
 	if !ok {
-		return
+		return np, nerr
 	}
 
 	if err := pools.ReloadPoolMeta(context.Background()); err != nil {
 		return np, grid.NewRemoteErr(err)
 	}
 
-	return
+	return np, nerr
 }
 
 func (s *peerRESTServer) HandlerClearUploadID(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -914,7 +914,7 @@ func (s *peerRESTServer) HandlerClearUploadID(mss *grid.MSS) (np grid.NoPayload,
 
 	pools, ok := objAPI.(*erasureServerPools)
 	if !ok {
-		return
+		return np, nerr
 	}
 
 	// No need to return errors, this is not a highly strict operation.
@@ -923,7 +923,7 @@ func (s *peerRESTServer) HandlerClearUploadID(mss *grid.MSS) (np grid.NoPayload,
 		pools.ClearUploadID(uploadID)
 	}
 
-	return
+	return np, nerr
 }
 
 func (s *peerRESTServer) StopRebalanceHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -938,7 +938,7 @@ func (s *peerRESTServer) StopRebalanceHandler(mss *grid.MSS) (np grid.NoPayload,
 	}
 
 	pools.StopRebalance()
-	return
+	return np, nerr
 }
 
 func (s *peerRESTServer) LoadRebalanceMetaHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -965,7 +965,7 @@ func (s *peerRESTServer) LoadRebalanceMetaHandler(mss *grid.MSS) (np grid.NoPayl
 		go pools.StartRebalance()
 	}
 
-	return
+	return np, nerr
 }
 
 func (s *peerRESTServer) LoadTransitionTierConfigHandler(mss *grid.MSS) (np grid.NoPayload, nerr *grid.RemoteErr) {
@@ -981,7 +981,7 @@ func (s *peerRESTServer) LoadTransitionTierConfigHandler(mss *grid.MSS) (np grid
 		}
 	}()
 
-	return
+	return np, nerr
 }
 
 // ConsoleLogHandler sends console logs of this node back to peer rest client

@@ -375,7 +375,7 @@ func (sys *NotificationSys) DownloadProfilingData(ctx context.Context, writer io
 		internalLogIf(ctx, err)
 	}
 
-	return
+	return profilingDataFound
 }
 
 // VerifyBinary - asks remote peers to verify the checksum
@@ -1180,7 +1180,7 @@ func (sys *NotificationSys) GetPeerOnlineCount() (nodesOnline, nodesOffline int)
 			nodesOffline++
 		}
 	}
-	return
+	return nodesOnline, nodesOffline
 }
 
 // NewNotificationSys - creates new notification system object.

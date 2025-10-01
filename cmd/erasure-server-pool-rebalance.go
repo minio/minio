@@ -446,7 +446,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		select {
 		case <-ctx.Done():
 			doneCh <- ctx.Err()
-			return
+			return err
 		default:
 		}
 
@@ -464,7 +464,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			}
 			rebalanceLogIf(GlobalContext, err)
 			doneCh <- err
-			return
+			return err
 		}
 		stopFn(0, nil)
 		z.bucketRebalanceDone(bucket, poolIdx)

@@ -352,33 +352,33 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, e error) {
 	zb0001, bts, e = msgp.ReadArrayHeaderBytes(bts)
 	if e != nil {
 		e = msgp.WrapError(e)
-		return
+		return o, e
 	}
 	if zb0001 != 5 {
 		e = msgp.ArrayError{Wanted: 5, Got: zb0001}
-		return
+		return o, e
 	}
 	bts, e = msgp.ReadExactBytes(bts, (z.VersionID)[:])
 	if e != nil {
 		e = msgp.WrapError(e, "VersionID")
-		return
+		return o, e
 	}
 	z.ModTime, bts, e = msgp.ReadInt64Bytes(bts)
 	if e != nil {
 		e = msgp.WrapError(e, "ModTime")
-		return
+		return o, e
 	}
 	bts, e = msgp.ReadExactBytes(bts, (z.Signature)[:])
 	if e != nil {
 		e = msgp.WrapError(e, "Signature")
-		return
+		return o, e
 	}
 	{
 		var zb0002 uint8
 		zb0002, bts, e = msgp.ReadUint8Bytes(bts)
 		if e != nil {
 			e = msgp.WrapError(e, "Type")
-			return
+			return o, e
 		}
 		z.Type = zb0002
 	}
@@ -387,12 +387,12 @@ func (z *xlMetaV2VersionHeaderV2) UnmarshalMsg(bts []byte) (o []byte, e error) {
 		zb0003, bts, e = msgp.ReadUint8Bytes(bts)
 		if e != nil {
 			e = msgp.WrapError(e, "Flags")
-			return
+			return o, e
 		}
 		z.Flags = zb0003
 	}
 	o = bts
-	return
+	return o, e
 }
 
 func (z xlMetaV2VersionHeaderV2) MarshalJSON() (o []byte, e error) {
