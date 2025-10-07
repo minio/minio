@@ -28,6 +28,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"github.com/minio/minio/internal/auth"
 	"github.com/minio/minio/internal/hash/sha256"
 	xhttp "github.com/minio/minio/internal/http"
+	"github.com/minio/pkg/v3/env"
 )
 
 // Streaming AWS Signature Version '4' constants.
@@ -183,8 +185,17 @@ var errLineTooLong = errors.New("header line too long")
 // malformed encoding is generated when chunk header is wrongly formed.
 var errMalformedEncoding = errors.New("malformed chunked encoding")
 
-// chunk is considered too big if its bigger than > 16MiB.
-var errChunkTooBig = errors.New("chunk too big: choose chunk size <= 16MiB")
+// getChunkTooBigError returns an error indicating the chunk size limit was exceeded.
+// We generate the error dynamically to include the current configured limit.
+func getChunkTooBigError() error {
+	return fmt.Errorf("chunk size exceeds configured maximum of %s (%d bytes). "+
+		"This limit can be adjusted via MINIO_API_MAX_CHUNK_SIZE environment variable (max: %s)",
+		humanize.IBytes(uint64(maxChunkSize)), maxChunkSize,
+		humanize.IBytes(uint64(absoluteMaxChunkSize)))
+}
+
+// Legacy error for backward compatibility
+var errChunkTooBig = errors.New("chunk too big")
 
 // newSignV4ChunkedReader returns a new s3ChunkedReader that translates the data read from r
 // out of HTTP "chunked" format before returning it.
@@ -247,9 +258,13 @@ func (cr *s3ChunkedReader) Close() (err error) {
 //
 //	<chunk-size-as-hex> + ";chunk-signature=" + <signature-as-hex> + "\r\n" + <payload> + "\r\n"
 //
-// First, we read the chunk size but fail if it is larger
-// than 16 MiB. We must not accept arbitrary large chunks.
-// One 16 MiB is a reasonable max limit.
+// We limit the maximum chunk size to prevent memory exhaustion attacks where malicious
+// clients send extremely large chunk sizes. The limit is set generously to ensure
+// compatibility with AWS SDK and other S3 clients while protecting server resources.
+//
+// AWS SDK typically uses chunk sizes between 64 KiB and 256 KiB, but can vary based on
+// SDK version, configuration, and client implementation. We set the default to 256 MiB,
+// which provides ample headroom for all legitimate use cases.
 //
 // Then we read the signature and payload data. We compute the SHA256 checksum
 // of the payload and verify that it matches the expected signature value.
@@ -257,7 +272,52 @@ func (cr *s3ChunkedReader) Close() (err error) {
 // The last chunk is *always* 0-sized. So, we must only return io.EOF if we have encountered
 // a chunk with a chunk size = 0. However, this chunk still has a signature and we must
 // verify it.
-const maxChunkSize = 16 << 20 // 16 MiB
+//
+// Security note: Each chunk is buffered in memory for signature verification.
+// Larger maxChunkSize values increase memory usage per request. Consider your server's
+// memory capacity when adjusting this value.
+const (
+	// Default maximum chunk size. This value balances AWS SDK compatibility with memory safety.
+	// Can be overridden via MINIO_API_MAX_CHUNK_SIZE environment variable.
+	defaultMaxChunkSize = 256 * humanize.MiByte // 256 MiB
+
+	// Absolute maximum to prevent configuration errors that could exhaust memory.
+	// Even with this limit, monitor memory usage in high-concurrency scenarios.
+	absoluteMaxChunkSize = 1 * humanize.GiByte // 1 GiB
+)
+
+var maxChunkSize = defaultMaxChunkSize
+
+func init() {
+	// Allow administrators to configure the maximum chunk size via environment variable.
+	// This provides flexibility for different deployment scenarios while maintaining safety.
+	if envMaxChunkSize := env.Get("MINIO_API_MAX_CHUNK_SIZE", ""); envMaxChunkSize != "" {
+		size, err := strconv.ParseInt(envMaxChunkSize, 10, 64)
+		if err != nil {
+			// Log warning but don't fail startup
+			fmt.Printf("Warning: Invalid MINIO_API_MAX_CHUNK_SIZE value '%s', using default %d bytes\n",
+				envMaxChunkSize, defaultMaxChunkSize)
+			return
+		}
+
+		// Validate the configured size
+		if size < 64*humanize.KiByte {
+			fmt.Printf("Warning: MINIO_API_MAX_CHUNK_SIZE too small (%d bytes), minimum is 64 KiB, using default\n", size)
+			return
+		}
+
+		if size > absoluteMaxChunkSize {
+			fmt.Printf("Warning: MINIO_API_MAX_CHUNK_SIZE too large (%d bytes), maximum is %d bytes (%s), using maximum\n",
+				size, absoluteMaxChunkSize, humanize.IBytes(uint64(absoluteMaxChunkSize)))
+			maxChunkSize = absoluteMaxChunkSize
+			return
+		}
+
+		maxChunkSize = int(size)
+		fmt.Printf("Info: Setting maximum chunk size to %s (%d bytes)\n",
+			humanize.IBytes(uint64(maxChunkSize)), maxChunkSize)
+	}
+}
 
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
@@ -317,7 +377,7 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			return n, cr.err
 		}
 		if size > maxChunkSize {
-			cr.err = errChunkTooBig
+			cr.err = getChunkTooBigError()
 			return n, cr.err
 		}
 	}
