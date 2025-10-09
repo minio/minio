@@ -245,7 +245,7 @@ func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucke
 		for _, l := range oi.partLengths {
 			sum += l
 		}
-		return
+		return sum
 	}
 
 	// set of inputs for uploading the objects before tests for
@@ -677,7 +677,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		for _, l := range oi.partLengths {
 			sum += l
 		}
-		return
+		return sum
 	}
 
 	// set of inputs for uploading the objects before tests for

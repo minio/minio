@@ -248,19 +248,19 @@ func proxyRequestByToken(ctx context.Context, w http.ResponseWriter, r *http.Req
 	if subToken, nodeIndex = parseRequestToken(token); nodeIndex >= 0 {
 		proxied, success = proxyRequestByNodeIndex(ctx, w, r, nodeIndex, returnErr)
 	}
-	return
+	return subToken, proxied, success
 }
 
 func proxyRequestByNodeIndex(ctx context.Context, w http.ResponseWriter, r *http.Request, index int, returnErr bool) (proxied, success bool) {
 	if len(globalProxyEndpoints) == 0 {
-		return
+		return proxied, success
 	}
 	if index < 0 || index >= len(globalProxyEndpoints) {
-		return
+		return proxied, success
 	}
 	ep := globalProxyEndpoints[index]
 	if ep.IsLocal {
-		return
+		return proxied, success
 	}
 	return true, proxyRequest(ctx, w, r, ep, returnErr)
 }

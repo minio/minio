@@ -450,7 +450,7 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 		}
 	}
 	_, err = newEncryptMetadata(r.Context(), kind, keyID, key, bucket, object, metadata, kmsCtx)
-	return
+	return err
 }
 
 // EncryptRequest takes the client provided content and encrypts the data
@@ -855,7 +855,7 @@ func tryDecryptETag(key []byte, encryptedETag string, sses3 bool) string {
 func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, skipLen int64, seqNumber uint32, partStart int, err error) {
 	if _, ok := crypto.IsEncrypted(o.UserDefined); !ok {
 		err = errors.New("Object is not encrypted")
-		return
+		return encOff, encLength, skipLen, seqNumber, partStart, err
 	}
 
 	if rs == nil {
@@ -873,7 +873,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 			partSize, err = sio.DecryptedSize(uint64(part.Size))
 			if err != nil {
 				err = errObjectTampered
-				return
+				return encOff, encLength, skipLen, seqNumber, partStart, err
 			}
 			sizes[i] = int64(partSize)
 			decObjSize += int64(partSize)
@@ -883,7 +883,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 		partSize, err = sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered
-			return
+			return encOff, encLength, skipLen, seqNumber, partStart, err
 		}
 		sizes = []int64{int64(partSize)}
 		decObjSize = sizes[0]
@@ -892,7 +892,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	var off, length int64
 	off, length, err = rs.GetOffsetLength(decObjSize)
 	if err != nil {
-		return
+		return encOff, encLength, skipLen, seqNumber, partStart, err
 	}
 
 	// At this point, we have:

@@ -1243,17 +1243,17 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 		if hip.objPrefix != "" {
 			// Bucket is required if object-prefix is given
 			err = ErrHealMissingBucket
-			return
+			return hip, err
 		}
 	} else if isReservedOrInvalidBucket(hip.bucket, false) {
 		err = ErrInvalidBucketName
-		return
+		return hip, err
 	}
 
 	// empty prefix is valid.
 	if !IsValidObjectPrefix(hip.objPrefix) {
 		err = ErrInvalidObjectName
-		return
+		return hip, err
 	}
 
 	if len(qParams[mgmtClientToken]) > 0 {
@@ -1275,7 +1275,7 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 	if (hip.forceStart && hip.forceStop) ||
 		(hip.clientToken != "" && (hip.forceStart || hip.forceStop)) {
 		err = ErrInvalidRequest
-		return
+		return hip, err
 	}
 
 	// ignore body if clientToken is provided
@@ -1284,12 +1284,12 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 		if jerr != nil {
 			adminLogIf(GlobalContext, jerr, logger.ErrorKind)
 			err = ErrRequestBodyParse
-			return
+			return hip, err
 		}
 	}
 
 	err = ErrNone
-	return
+	return hip, err
 }
 
 // HealHandler - POST /minio/admin/v3/heal/
@@ -2022,7 +2022,7 @@ func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err err
 		opts.OS = true
 		// Older mc - cannot deal with more types...
 	}
-	return
+	return opts, err
 }
 
 // TraceHandler - POST /minio/admin/v3/trace

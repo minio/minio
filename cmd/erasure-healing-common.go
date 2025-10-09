@@ -283,7 +283,7 @@ func countPartNotSuccess(partErrs []int) (c int) {
 			c++
 		}
 	}
-	return
+	return c
 }
 
 // checkObjectWithAllParts sets partsMetadata and onlineDisks when xl.meta is inexistant/corrupted or outdated
@@ -436,5 +436,5 @@ func checkObjectWithAllParts(ctx context.Context, onlineDisks []StorageAPI, part
 			dataErrsByDisk[disk][part] = dataErrsByPart[part][disk]
 		}
 	}
-	return
+	return dataErrsByDisk, dataErrsByPart
 }
