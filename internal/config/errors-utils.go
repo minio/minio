@@ -65,7 +65,7 @@ func (u Err) Msg(m string) Err {
 }
 
 // Msgf - Replace the current error's message
-func (u Err) Msgf(m string, args ...interface{}) Err {
+func (u Err) Msgf(m string, args ...any) Err {
 	e := u.Clone()
 	if len(args) == 0 {
 		e.msg = m
@@ -76,7 +76,7 @@ func (u Err) Msgf(m string, args ...interface{}) Err {
 }
 
 // Hint - Replace the current error's message
-func (u Err) Hint(m string, args ...interface{}) Err {
+func (u Err) Hint(m string, args ...any) Err {
 	e := u.Clone()
 	e.hint = fmt.Sprintf(m, args...)
 	return e

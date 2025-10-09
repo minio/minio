@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"net/http"
 	"path"
@@ -495,9 +496,7 @@ func (config *TierConfigMgr) Reload(ctx context.Context, objAPI ObjectLayer) err
 	// Remove existing tier configs
 	clear(config.Tiers)
 	// Copy over the new tier configs
-	for tier, cfg := range newConfig.Tiers {
-		config.Tiers[tier] = cfg
-	}
+	maps.Copy(config.Tiers, newConfig.Tiers)
 	config.lastRefreshedAt = UTCNow()
 	return nil
 }

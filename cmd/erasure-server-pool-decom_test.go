@@ -176,7 +176,6 @@ func TestPoolMetaValidate(t *testing.T) {
 
 	t.Parallel()
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			update, err := testCase.meta.validate(testCase.pools)
 			if testCase.expectedErr {

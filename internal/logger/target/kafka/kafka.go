@@ -75,7 +75,7 @@ type Config struct {
 	QueueDir  string `json:"queueDir"`
 
 	// Custom logger
-	LogOnce func(ctx context.Context, err error, id string, errKind ...interface{}) `json:"-"`
+	LogOnce func(ctx context.Context, err error, id string, errKind ...any) `json:"-"`
 }
 
 // Target - Kafka target.
@@ -90,12 +90,12 @@ type Target struct {
 	// Channel of log entries.
 	// Reading logCh must hold read lock on logChMu (to avoid read race)
 	// Sending a value on logCh must hold read lock on logChMu (to avoid closing)
-	logCh   chan interface{}
+	logCh   chan any
 	logChMu sync.RWMutex
 
 	// store to persist and replay the logs to the target
 	// to avoid missing events when the target is down.
-	store          store.Store[interface{}]
+	store          store.Store[any]
 	storeCtxCancel context.CancelFunc
 
 	initKafkaOnce      once.Init
@@ -170,7 +170,7 @@ func (h *Target) Init(ctx context.Context) error {
 
 func (h *Target) initQueueStore(ctx context.Context) (err error) {
 	queueDir := filepath.Join(h.kconfig.QueueDir, h.Name())
-	queueStore := store.NewQueueStore[interface{}](queueDir, uint64(h.kconfig.QueueSize), kafkaLoggerExtension)
+	queueStore := store.NewQueueStore[any](queueDir, uint64(h.kconfig.QueueSize), kafkaLoggerExtension)
 	if err = queueStore.Open(); err != nil {
 		return fmt.Errorf("unable to initialize the queue store of %s webhook: %w", h.Name(), err)
 	}
@@ -178,7 +178,7 @@ func (h *Target) initQueueStore(ctx context.Context) (err error) {
 	h.store = queueStore
 	h.storeCtxCancel = cancel
 	store.StreamItems(h.store, h, ctx.Done(), h.kconfig.LogOnce)
-	return
+	return err
 }
 
 func (h *Target) startKafkaLogger() {
@@ -202,7 +202,7 @@ func (h *Target) startKafkaLogger() {
 	}
 }
 
-func (h *Target) logEntry(entry interface{}) {
+func (h *Target) logEntry(entry any) {
 	atomic.AddInt64(&h.totalMessages, 1)
 	if err := h.send(entry); err != nil {
 		atomic.AddInt64(&h.failedMessages, 1)
@@ -210,7 +210,7 @@ func (h *Target) logEntry(entry interface{}) {
 	}
 }
 
-func (h *Target) send(entry interface{}) error {
+func (h *Target) send(entry any) error {
 	if err := h.initKafkaOnce.Do(h.init); err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func (h *Target) IsOnline(_ context.Context) bool {
 }
 
 // Send log message 'e' to kafka target.
-func (h *Target) Send(ctx context.Context, entry interface{}) error {
+func (h *Target) Send(ctx context.Context, entry any) error {
 	if h.store != nil {
 		// save the entry to the queue store which will be replayed to the target.
 		_, err := h.store.Put(entry)
@@ -355,7 +355,7 @@ func (h *Target) SendFromStore(key store.Key) (err error) {
 	err = h.send(auditEntry)
 	if err != nil {
 		atomic.AddInt64(&h.failedMessages, 1)
-		return
+		return err
 	}
 	// Delete the event from store.
 	return h.store.Del(key)
@@ -391,7 +391,7 @@ func (h *Target) Cancel() {
 // sends log over http to the specified endpoint
 func New(config Config) *Target {
 	target := &Target{
-		logCh:   make(chan interface{}, config.QueueSize),
+		logCh:   make(chan any, config.QueueSize),
 		kconfig: config,
 		status:  statusOffline,
 	}

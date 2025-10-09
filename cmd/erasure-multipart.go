@@ -322,7 +322,7 @@ func (er erasureObjects) ListMultipartUploads(ctx context.Context, bucket, objec
 		uploads = append(uploads, MultipartInfo{
 			Bucket:    bucket,
 			Object:    object,
-			UploadID:  base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadID))),
+			UploadID:  base64.RawURLEncoding.EncodeToString(fmt.Appendf(nil, "%s.%s", globalDeploymentID(), uploadID)),
 			Initiated: startTime,
 		})
 		populatedUploadIDs.Add(uploadID)
@@ -391,6 +391,12 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 			return nil, PreConditionFailed{}
 		}
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
+			return nil, err
+		}
+
+		// if object doesn't exist return error for If-Match conditional requests
+		// If-None-Match should be allowed to proceed for non-existent objects
+		if err != nil && opts.HasIfMatch && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
 			return nil, err
 		}
 	}
@@ -498,7 +504,7 @@ func (er erasureObjects) newMultipartUpload(ctx context.Context, bucket string, 
 		partsMetadata[index].Metadata = userDefined
 	}
 	uploadUUID := fmt.Sprintf("%sx%d", mustGetUUID(), modTime.UnixNano())
-	uploadID := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("%s.%s", globalDeploymentID(), uploadUUID)))
+	uploadID := base64.RawURLEncoding.EncodeToString(fmt.Appendf(nil, "%s.%s", globalDeploymentID(), uploadUUID))
 	uploadIDPath := er.getUploadIDDir(bucket, object, uploadUUID)
 
 	// Write updated `xl.meta` to all disks.
@@ -540,7 +546,6 @@ func (er erasureObjects) renamePart(ctx context.Context, disks []StorageAPI, src
 
 	// Rename file on all underlying storage disks.
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -820,7 +825,6 @@ func (er erasureObjects) listParts(ctx context.Context, onlineDisks []StorageAPI
 	objectParts := make([][]string, len(onlineDisks))
 	// List uploaded parts from drives.
 	for index := range onlineDisks {
-		index := index
 		g.Go(func() (err error) {
 			if onlineDisks[index] == nil {
 				return errDiskNotFound
@@ -995,7 +999,6 @@ func readParts(ctx context.Context, disks []StorageAPI, bucket string, partMetaP
 	objectPartInfos := make([][]*ObjectPartInfo, len(disks))
 	// Rename file on all underlying storage disks.
 	for index := range disks {
-		index := index
 		g.Go(func() (err error) {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -1114,6 +1117,12 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 		if err != nil && !isErrVersionNotFound(err) && !isErrObjectNotFound(err) && !isErrReadQuorum(err) {
 			return ObjectInfo{}, err
 		}
+
+		// if object doesn't exist return error for If-Match conditional requests
+		// If-None-Match should be allowed to proceed for non-existent objects
+		if err != nil && opts.HasIfMatch && (isErrObjectNotFound(err) || isErrVersionNotFound(err)) {
+			return ObjectInfo{}, err
+		}
 	}
 
 	fi, partsMetadata, err := er.checkUploadIDExists(ctx, bucket, object, uploadID, true)
@@ -1161,6 +1170,7 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 				Err:    fmt.Errorf("checksum type mismatch. got %q (%s) expected %q (%s)", checksumType.String(), checksumType.ObjType(), opts.WantChecksum.Type.String(), opts.WantChecksum.Type.ObjType()),
 			}
 		}
+		checksumType |= hash.ChecksumMultipart | hash.ChecksumIncludesMultipart
 	}
 
 	var checksumCombined []byte

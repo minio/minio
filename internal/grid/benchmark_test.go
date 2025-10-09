@@ -231,7 +231,7 @@ func benchmarkGridStreamRespOnly(b *testing.B, n int) {
 		errFatal(remote.RegisterStreamingHandler(handlerTest, StreamHandler{
 			// Send 10x response.
 			Handle: func(ctx context.Context, payload []byte, _ <-chan []byte, out chan<- []byte) *RemoteErr {
-				for i := 0; i < responses; i++ {
+				for i := range responses {
 					toSend := GetByteBuffer()[:0]
 					toSend = append(toSend, byte(i))
 					toSend = append(toSend, payload...)
@@ -407,7 +407,7 @@ func benchmarkGridStreamReqOnly(b *testing.B, n int) {
 						b.Fatal(err.Error())
 					}
 					got := 0
-					for i := 0; i < requests; i++ {
+					for range requests {
 						got++
 						st.Requests <- append(GetByteBuffer()[:0], payload...)
 					}
@@ -525,7 +525,7 @@ func benchmarkGridStreamTwoway(b *testing.B, n int) {
 					got := 0
 					sent := 0
 					go func() {
-						for i := 0; i < messages; i++ {
+						for range messages {
 							st.Requests <- append(GetByteBuffer()[:0], payload...)
 							if sent++; sent == messages {
 								close(st.Requests)

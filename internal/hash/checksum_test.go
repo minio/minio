@@ -20,6 +20,8 @@ package hash
 import (
 	"net/http/httptest"
 	"testing"
+
+	xhttp "github.com/minio/minio/internal/http"
 )
 
 // TestChecksumAddToHeader tests that adding and retrieving a checksum on a header works
@@ -28,36 +30,77 @@ func TestChecksumAddToHeader(t *testing.T) {
 		name     string
 		checksum ChecksumType
 		fullobj  bool
+		wantErr  bool
 	}{
-		{"CRC32-composite", ChecksumCRC32, false},
-		{"CRC32-full-object", ChecksumCRC32, true},
-		{"CRC32C-composite", ChecksumCRC32C, false},
-		{"CRC32C-full-object", ChecksumCRC32C, true},
-		{"CRC64NVME-full-object", ChecksumCRC64NVME, false}, // testing with false, because it always is full object.
-		{"ChecksumSHA1-composite", ChecksumSHA1, false},
-		{"ChecksumSHA256-composite", ChecksumSHA256, false},
+		{"CRC32-composite", ChecksumCRC32, false, false},
+		{"CRC32-full-object", ChecksumCRC32, true, false},
+		{"CRC32C-composite", ChecksumCRC32C, false, false},
+		{"CRC32C-full-object", ChecksumCRC32C, true, false},
+		{"CRC64NVME-full-object", ChecksumCRC64NVME, false, false}, // CRC64NVME is always full object
+		{"ChecksumSHA1-composite", ChecksumSHA1, false, false},
+		{"ChecksumSHA256-composite", ChecksumSHA256, false, false},
+		{"ChecksumSHA1-full-object", ChecksumSHA1, true, true},     // SHA1 does not support full object
+		{"ChecksumSHA256-full-object", ChecksumSHA256, true, true}, // SHA256 does not support full object
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Skip invalid cases where SHA1 or SHA256 is used with full object
+			if (tt.checksum.Is(ChecksumSHA1) || tt.checksum.Is(ChecksumSHA256)) && tt.fullobj {
+				// Validate that NewChecksumType correctly marks these as invalid
+				alg := tt.checksum.String()
+				typ := NewChecksumType(alg, xhttp.AmzChecksumTypeFullObject)
+				if !typ.Is(ChecksumInvalid) {
+					t.Fatalf("Expected ChecksumInvalid for %s with full object, got %s", tt.name, typ.StringFull())
+				}
+				return
+			}
 			myData := []byte("this-is-a-checksum-data-test")
 			chksm := NewChecksumFromData(tt.checksum, myData)
+			if chksm == nil {
+				t.Fatalf("NewChecksumFromData failed for %s", tt.name)
+			}
 			if tt.fullobj {
 				chksm.Type |= ChecksumFullObject
 			}
 
-			w := httptest.NewRecorder()
-			AddChecksumHeader(w, chksm.AsMap())
-			gotChksm, err := GetContentChecksum(w.Result().Header)
-			if err != nil {
-				t.Fatalf("GetContentChecksum failed: %v", err)
-			}
-
-			// In the CRC64NVM case, it is always full object, so add the flag for easier equality comparison
+			// CRC64NVME is always full object
 			if chksm.Type.Base().Is(ChecksumCRC64NVME) {
 				chksm.Type |= ChecksumFullObject
 			}
+
+			// Prepare the checksum map with appropriate headers
+			m := chksm.AsMap()
+			m[xhttp.AmzChecksumAlgo] = chksm.Type.String() // Set the algorithm explicitly
+			if chksm.Type.FullObjectRequested() {
+				m[xhttp.AmzChecksumType] = xhttp.AmzChecksumTypeFullObject
+			} else {
+				m[xhttp.AmzChecksumType] = xhttp.AmzChecksumTypeComposite
+			}
+
+			w := httptest.NewRecorder()
+			AddChecksumHeader(w, m)
+			gotChksm, err := GetContentChecksum(w.Result().Header)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Expected error for %s, got none", tt.name)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("GetContentChecksum failed for %s: %v", tt.name, err)
+			}
+
+			if gotChksm == nil {
+				t.Fatalf("Got nil checksum for %s", tt.name)
+			}
+			// Compare the full checksum structs
 			if !chksm.Equal(gotChksm) {
-				t.Fatalf("Checksum mismatch: expected %+v, got %+v", chksm, gotChksm)
+				t.Errorf("Checksum mismatch for %s: expected %+v, got %+v", tt.name, chksm, gotChksm)
+			}
+			// Verify the checksum type
+			expectedType := chksm.Type
+			if gotChksm.Type != expectedType {
+				t.Errorf("Type mismatch for %s: expected %s, got %s", tt.name, expectedType.StringFull(), gotChksm.Type.StringFull())
 			}
 		})
 	}

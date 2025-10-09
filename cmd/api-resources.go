@@ -31,7 +31,7 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 		var err error
 		if maxkeys, err = strconv.Atoi(values.Get("max-keys")); err != nil {
 			errCode = ErrInvalidMaxKeys
-			return
+			return prefix, marker, delimiter, maxkeys, encodingType, errCode
 		}
 	} else {
 		maxkeys = maxObjectList
@@ -41,7 +41,7 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 	marker = values.Get("marker")
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
-	return
+	return prefix, marker, delimiter, maxkeys, encodingType, errCode
 }
 
 func getListBucketObjectVersionsArgs(values url.Values) (prefix, marker, delimiter string, maxkeys int, encodingType, versionIDMarker string, errCode APIErrorCode) {
@@ -51,7 +51,7 @@ func getListBucketObjectVersionsArgs(values url.Values) (prefix, marker, delimit
 		var err error
 		if maxkeys, err = strconv.Atoi(values.Get("max-keys")); err != nil {
 			errCode = ErrInvalidMaxKeys
-			return
+			return prefix, marker, delimiter, maxkeys, encodingType, versionIDMarker, errCode
 		}
 	} else {
 		maxkeys = maxObjectList
@@ -62,7 +62,7 @@ func getListBucketObjectVersionsArgs(values url.Values) (prefix, marker, delimit
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
 	versionIDMarker = values.Get("version-id-marker")
-	return
+	return prefix, marker, delimiter, maxkeys, encodingType, versionIDMarker, errCode
 }
 
 // Parse bucket url queries for ListObjects V2.
@@ -73,7 +73,7 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 	if val, ok := values["continuation-token"]; ok {
 		if len(val[0]) == 0 {
 			errCode = ErrIncorrectContinuationToken
-			return
+			return prefix, token, startAfter, delimiter, fetchOwner, maxkeys, encodingType, errCode
 		}
 	}
 
@@ -81,7 +81,7 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 		var err error
 		if maxkeys, err = strconv.Atoi(values.Get("max-keys")); err != nil {
 			errCode = ErrInvalidMaxKeys
-			return
+			return prefix, token, startAfter, delimiter, fetchOwner, maxkeys, encodingType, errCode
 		}
 	} else {
 		maxkeys = maxObjectList
@@ -97,11 +97,11 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 		decodedToken, err := base64.StdEncoding.DecodeString(token)
 		if err != nil {
 			errCode = ErrIncorrectContinuationToken
-			return
+			return prefix, token, startAfter, delimiter, fetchOwner, maxkeys, encodingType, errCode
 		}
 		token = string(decodedToken)
 	}
-	return
+	return prefix, token, startAfter, delimiter, fetchOwner, maxkeys, encodingType, errCode
 }
 
 // Parse bucket url queries for ?uploads
@@ -112,7 +112,7 @@ func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadID
 		var err error
 		if maxUploads, err = strconv.Atoi(values.Get("max-uploads")); err != nil {
 			errCode = ErrInvalidMaxUploads
-			return
+			return prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode
 		}
 	} else {
 		maxUploads = maxUploadsList
@@ -123,7 +123,7 @@ func getBucketMultipartResources(values url.Values) (prefix, keyMarker, uploadID
 	uploadIDMarker = values.Get("upload-id-marker")
 	delimiter = values.Get("delimiter")
 	encodingType = values.Get("encoding-type")
-	return
+	return prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, encodingType, errCode
 }
 
 // Parse object url queries
@@ -134,7 +134,7 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 	if values.Get("max-parts") != "" {
 		if maxParts, err = strconv.Atoi(values.Get("max-parts")); err != nil {
 			errCode = ErrInvalidMaxParts
-			return
+			return uploadID, partNumberMarker, maxParts, encodingType, errCode
 		}
 	} else {
 		maxParts = maxPartsList
@@ -143,11 +143,11 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 	if values.Get("part-number-marker") != "" {
 		if partNumberMarker, err = strconv.Atoi(values.Get("part-number-marker")); err != nil {
 			errCode = ErrInvalidPartNumberMarker
-			return
+			return uploadID, partNumberMarker, maxParts, encodingType, errCode
 		}
 	}
 
 	uploadID = values.Get("uploadId")
 	encodingType = values.Get("encoding-type")
-	return
+	return uploadID, partNumberMarker, maxParts, encodingType, errCode
 }

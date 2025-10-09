@@ -175,7 +175,7 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 		fn := authenticateNode
 		b.ResetTimer()
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			fn(creds.AccessKey, creds.SecretKey)
 		}
 	})
@@ -183,7 +183,7 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 		fn := newCachedAuthToken()
 		b.ResetTimer()
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			fn()
 		}
 	})

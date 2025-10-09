@@ -174,7 +174,6 @@ func TestParseObjectLockConfig(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run("", func(t *testing.T) {
 			_, err := ParseObjectLockConfig(strings.NewReader(tt.value))
 			//nolint:gocritic
@@ -219,7 +218,6 @@ func TestParseObjectRetention(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run("", func(t *testing.T) {
 			_, err := ParseObjectRetention(strings.NewReader(tt.value))
 			//nolint:gocritic

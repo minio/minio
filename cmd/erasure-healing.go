@@ -116,7 +116,6 @@ func (er erasureObjects) listAndHeal(ctx context.Context, bucket, prefix string,
 func listAllBuckets(ctx context.Context, storageDisks []StorageAPI, healBuckets *xsync.MapOf[string, VolInfo], readQuorum int) error {
 	g := errgroup.WithNErrs(len(storageDisks))
 	for index := range storageDisks {
-		index := index
 		g.Go(func() error {
 			if storageDisks[index] == nil {
 				// we ignore disk not found errors
@@ -966,7 +965,7 @@ func danglingMetaErrsCount(cerrs []error) (notFoundCount int, nonActionableCount
 			nonActionableCount++
 		}
 	}
-	return
+	return notFoundCount, nonActionableCount
 }
 
 func danglingPartErrsCount(results []int) (notFoundCount int, nonActionableCount int) {
@@ -981,7 +980,7 @@ func danglingPartErrsCount(results []int) (notFoundCount int, nonActionableCount
 			nonActionableCount++
 		}
 	}
-	return
+	return notFoundCount, nonActionableCount
 }
 
 // Object is considered dangling/corrupted if and only

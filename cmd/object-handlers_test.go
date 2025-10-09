@@ -29,6 +29,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -228,9 +229,7 @@ func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucke
 		}
 		mapCopy = func(m map[string]string) map[string]string {
 			r := make(map[string]string, len(m))
-			for k, v := range m {
-				r[k] = v
-			}
+			maps.Copy(r, m)
 			return r
 		}
 	)
@@ -246,7 +245,7 @@ func testAPIHeadObjectHandlerWithEncryption(obj ObjectLayer, instanceType, bucke
 		for _, l := range oi.partLengths {
 			sum += l
 		}
-		return
+		return sum
 	}
 
 	// set of inputs for uploading the objects before tests for
@@ -662,9 +661,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		}
 		mapCopy = func(m map[string]string) map[string]string {
 			r := make(map[string]string, len(m))
-			for k, v := range m {
-				r[k] = v
-			}
+			maps.Copy(r, m)
 			return r
 		}
 	)
@@ -680,7 +677,7 @@ func testAPIGetObjectWithMPHandler(obj ObjectLayer, instanceType, bucketName str
 		for _, l := range oi.partLengths {
 			sum += l
 		}
-		return
+		return sum
 	}
 
 	// set of inputs for uploading the objects before tests for
@@ -860,9 +857,7 @@ func testAPIGetObjectWithPartNumberHandler(obj ObjectLayer, instanceType, bucket
 		}
 		mapCopy = func(m map[string]string) map[string]string {
 			r := make(map[string]string, len(m))
-			for k, v := range m {
-				r[k] = v
-			}
+			maps.Copy(r, m)
 			return r
 		}
 	)
@@ -2819,7 +2814,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 
 	objectName := "test-object-new-multipart-parallel"
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		// Initiate NewMultipart upload on the same object 10 times concurrrently.
 		go func() {
@@ -2883,7 +2878,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	// upload IDs collected.
 	var uploadIDs []string
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		// initiate new multipart uploadID.
 		res, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 		if err != nil {
@@ -3251,7 +3246,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// upload IDs collected.
 	var uploadIDs []string
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		// initiate new multipart uploadID.
 		res, err := obj.NewMultipartUpload(context.Background(), bucketName, objectName, opts)
 		if err != nil {

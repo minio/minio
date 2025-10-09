@@ -375,7 +375,7 @@ func siteNetperf(ctx context.Context, duration time.Duration) madmin.SiteNetPerf
 		}
 		info := info
 		wg.Add(connectionsPerPeer)
-		for i := 0; i < connectionsPerPeer; i++ {
+		for range connectionsPerPeer {
 			go func() {
 				defer wg.Done()
 				ctx, cancel := context.WithTimeout(ctx, duration+10*time.Second)
@@ -422,7 +422,7 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 	cli, err := globalSiteReplicationSys.getAdminClient(ctx, deploymentID)
 	if err != nil {
 		result.Error = err.Error()
-		return
+		return result
 	}
 	rp := cli.GetEndpointURL()
 	reqURL := &url.URL{
@@ -434,7 +434,7 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), reader)
 	if err != nil {
 		result.Error = err.Error()
-		return
+		return result
 	}
 	client := &http.Client{
 		Transport: globalRemoteTargetTransport,
@@ -442,7 +442,7 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 	resp, err := client.Do(req)
 	if err != nil {
 		result.Error = err.Error()
-		return
+		return result
 	}
 	defer xhttp.DrainBody(resp.Body)
 	err = gob.NewDecoder(resp.Body).Decode(&result)
@@ -451,5 +451,5 @@ func perfNetRequest(ctx context.Context, deploymentID, reqPath string, reader io
 	if err != nil {
 		result.Error = err.Error()
 	}
-	return
+	return result
 }

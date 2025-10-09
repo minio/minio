@@ -50,33 +50,33 @@ func getDefaultOpts(header http.Header, copySource bool, metadata map[string]str
 		if crypto.SSECopy.IsRequested(header) {
 			clientKey, err = crypto.SSECopy.ParseHTTP(header)
 			if err != nil {
-				return
+				return opts, err
 			}
 			if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
-				return
+				return opts, err
 			}
 			opts.ServerSideEncryption = encrypt.SSECopy(sse)
-			return
+			return opts, err
 		}
-		return
+		return opts, err
 	}
 
 	if crypto.SSEC.IsRequested(header) {
 		clientKey, err = crypto.SSEC.ParseHTTP(header)
 		if err != nil {
-			return
+			return opts, err
 		}
 		if sse, err = encrypt.NewSSEC(clientKey[:]); err != nil {
-			return
+			return opts, err
 		}
 		opts.ServerSideEncryption = sse
-		return
+		return opts, err
 	}
 	if crypto.S3.IsRequested(header) || (metadata != nil && crypto.S3.IsEncrypted(metadata)) {
 		opts.ServerSideEncryption = encrypt.NewSSE()
 	}
 
-	return
+	return opts, err
 }
 
 // get ObjectOptions for GET calls from encryption headers
@@ -173,7 +173,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 			apiErr = toAPIError(ctx, vErr)
 		}
 		valid = false
-		return
+		return opts, valid
 	}
 
 	opts.MaxParts, err = parseIntHeader(bucket, object, r.Header, xhttp.AmzMaxParts)
@@ -181,7 +181,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 		apiErr = toAPIError(ctx, err)
 		argumentName = strings.ToLower(xhttp.AmzMaxParts)
 		valid = false
-		return
+		return opts, valid
 	}
 
 	if opts.MaxParts == 0 {
@@ -193,7 +193,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 		apiErr = toAPIError(ctx, err)
 		argumentName = strings.ToLower(xhttp.AmzPartNumberMarker)
 		valid = false
-		return
+		return opts, valid
 	}
 
 	opts.ObjectAttributes = parseObjectAttributes(r.Header)
@@ -201,7 +201,7 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 		apiErr = errorCodes.ToAPIErr(ErrInvalidAttributeName)
 		argumentName = strings.ToLower(xhttp.AmzObjectAttributes)
 		valid = false
-		return
+		return opts, valid
 	}
 
 	for tag := range opts.ObjectAttributes {
@@ -216,30 +216,30 @@ func getAndValidateAttributesOpts(ctx context.Context, w http.ResponseWriter, r 
 			argumentName = strings.ToLower(xhttp.AmzObjectAttributes)
 			argumentValue = tag
 			valid = false
-			return
+			return opts, valid
 		}
 	}
 
-	return
+	return opts, valid
 }
 
 func parseObjectAttributes(h http.Header) (attributes map[string]struct{}) {
 	attributes = make(map[string]struct{})
 	for _, headerVal := range h.Values(xhttp.AmzObjectAttributes) {
-		for _, v := range strings.Split(strings.TrimSpace(headerVal), ",") {
+		for v := range strings.SplitSeq(strings.TrimSpace(headerVal), ",") {
 			if v != "" {
 				attributes[v] = struct{}{}
 			}
 		}
 	}
 
-	return
+	return attributes
 }
 
 func parseIntHeader(bucket, object string, h http.Header, headerName string) (value int, err error) {
 	stringInt := strings.TrimSpace(h.Get(headerName))
 	if stringInt == "" {
-		return
+		return value, err
 	}
 	value, err = strconv.Atoi(stringInt)
 	if err != nil {
@@ -249,7 +249,7 @@ func parseIntHeader(bucket, object string, h http.Header, headerName string) (va
 			Err:    fmt.Errorf("Unable to parse %s, value should be an integer", headerName),
 		}
 	}
-	return
+	return value, err
 }
 
 func parseBoolHeader(bucket, object string, h http.Header, headerName string) (bool, error) {
@@ -414,12 +414,13 @@ func putOptsFromHeaders(ctx context.Context, hdr http.Header, metadata map[strin
 		if err != nil {
 			return ObjectOptions{}, err
 		}
-		return ObjectOptions{
+		op := ObjectOptions{
 			ServerSideEncryption: sseKms,
 			UserDefined:          metadata,
 			MTime:                mtime,
 			PreserveETag:         etag,
-		}, nil
+		}
+		return op, nil
 	}
 	// default case of passing encryption headers and UserDefined metadata to backend
 	opts, err = getDefaultOpts(hdr, false, metadata)

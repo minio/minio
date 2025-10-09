@@ -35,7 +35,7 @@ import (
 
 type promLogger struct{}
 
-func (p promLogger) Println(v ...interface{}) {
+func (p promLogger) Println(v ...any) {
 	metricsLogIf(GlobalContext, fmt.Errorf("metrics handler error: %v", v))
 }
 

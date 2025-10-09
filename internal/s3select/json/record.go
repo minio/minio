@@ -76,7 +76,7 @@ func (r *Record) Clone(dst sql.Record) sql.Record {
 
 // Set - sets the value for a column name.
 func (r *Record) Set(name string, value *sql.Value) (sql.Record, error) {
-	var v interface{}
+	var v any
 	if b, ok := value.ToBool(); ok {
 		v = b
 	} else if f, ok := value.ToFloat(); ok {
@@ -126,7 +126,7 @@ func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 			columnValue = ""
 		case RawJSON:
 			columnValue = string([]byte(val))
-		case []interface{}:
+		case []any:
 			b, err := json.Marshal(val)
 			if err != nil {
 				return err
@@ -151,7 +151,7 @@ func (r *Record) WriteCSV(writer io.Writer, opts sql.WriteCSVOpts) error {
 }
 
 // Raw - returns the underlying representation.
-func (r *Record) Raw() (sql.SelectObjectFormat, interface{}) {
+func (r *Record) Raw() (sql.SelectObjectFormat, any) {
 	return r.SelectFormat, r.KVS
 }
 
@@ -161,7 +161,7 @@ func (r *Record) WriteJSON(writer io.Writer) error {
 }
 
 // Replace the underlying buffer of json data.
-func (r *Record) Replace(k interface{}) error {
+func (r *Record) Replace(k any) error {
 	v, ok := k.(jstream.KVS)
 	if !ok {
 		return fmt.Errorf("cannot replace internal data in json record with type %T", k)

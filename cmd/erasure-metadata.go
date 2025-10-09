@@ -408,7 +408,6 @@ func writeAllMetadataWithRevert(ctx context.Context, disks []StorageAPI, origbuc
 
 	// Start writing `xl.meta` to all disks in parallel.
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			if disks[index] == nil {
 				return errDiskNotFound
@@ -522,7 +521,7 @@ func listObjectParities(partsMetadata []FileInfo, errs []error) (parities []int)
 			parities[index] = metadata.Erasure.ParityBlocks
 		}
 	}
-	return
+	return parities
 }
 
 // Returns per object readQuorum and writeQuorum

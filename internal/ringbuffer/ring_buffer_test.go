@@ -429,7 +429,7 @@ func TestRingBuffer_Blocking(t *testing.T) {
 		read = io.MultiWriter(read, &readBuf)
 		wrote = io.MultiWriter(wrote, &wroteBuf)
 	}
-	debugln := func(args ...interface{}) {
+	debugln := func(args ...any) {
 		if debug {
 			fmt.Println(args...)
 		}
@@ -488,7 +488,7 @@ func TestRingBuffer_Blocking(t *testing.T) {
 	{
 		buf := make([]byte, 1024)
 		writeRng := rand.New(rand.NewSource(2))
-		for i := 0; i < 2500; i++ {
+		for range 2500 {
 			writeRng.Read(buf)
 			// Write
 			n, err := rb.Write(buf[:writeRng.Intn(len(buf))])
@@ -592,7 +592,7 @@ func TestRingBuffer_BlockingBig(t *testing.T) {
 		read = io.MultiWriter(read, &readBuf)
 		wrote = io.MultiWriter(wrote, &wroteBuf)
 	}
-	debugln := func(args ...interface{}) {
+	debugln := func(args ...any) {
 		if debug {
 			fmt.Println(args...)
 		}
@@ -651,7 +651,7 @@ func TestRingBuffer_BlockingBig(t *testing.T) {
 	{
 		writeRng := rand.New(rand.NewSource(2))
 		buf := make([]byte, 64<<10)
-		for i := 0; i < 500; i++ {
+		for range 500 {
 			writeRng.Read(buf)
 			// Write
 			n, err := rb.Write(buf[:writeRng.Intn(len(buf))])

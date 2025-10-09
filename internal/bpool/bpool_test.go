@@ -71,7 +71,7 @@ func TestBytePool(t *testing.T) {
 	}
 
 	// lets drain the buf channel first before we validate invalid buffers.
-	for i := uint64(0); i < size; i++ {
+	for range size {
 		bp.Get() // discard
 	}
 

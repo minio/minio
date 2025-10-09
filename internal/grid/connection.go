@@ -47,7 +47,7 @@ import (
 	"github.com/zeebo/xxh3"
 )
 
-func gridLogIf(ctx context.Context, err error, errKind ...interface{}) {
+func gridLogIf(ctx context.Context, err error, errKind ...any) {
 	logger.LogIf(ctx, "grid", err, errKind...)
 }
 
@@ -55,7 +55,7 @@ func gridLogIfNot(ctx context.Context, err error, ignored ...error) {
 	logger.LogIfNot(ctx, "grid", err, ignored...)
 }
 
-func gridLogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func gridLogOnceIf(ctx context.Context, err error, id string, errKind ...any) {
 	logger.LogOnceIf(ctx, "grid", err, id, errKind...)
 }
 
@@ -659,10 +659,7 @@ func (c *Connection) connect() {
 			}
 			sleep := defaultDialTimeout + time.Duration(rng.Int63n(int64(defaultDialTimeout)))
 			next := dialStarted.Add(sleep / 2)
-			sleep = time.Until(next).Round(time.Millisecond)
-			if sleep < 0 {
-				sleep = 0
-			}
+			sleep = max(time.Until(next).Round(time.Millisecond), 0)
 			gotState := c.State()
 			if gotState == StateShutdown {
 				return

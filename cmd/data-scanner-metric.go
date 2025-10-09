@@ -106,16 +106,14 @@ func (p *scannerMetrics) log(s scannerMetric, paths ...string) func(custom map[s
 
 // time n scanner actions.
 // Use for s < scannerMetricLastRealtime
-func (p *scannerMetrics) timeN(s scannerMetric) func(n int) func() {
+func (p *scannerMetrics) timeN(s scannerMetric) func(n int) {
 	startTime := time.Now()
-	return func(n int) func() {
-		return func() {
-			duration := time.Since(startTime)
+	return func(n int) {
+		duration := time.Since(startTime)
 
-			atomic.AddUint64(&p.operations[s], uint64(n))
-			if s < scannerMetricLastRealtime {
-				p.latency[s].add(duration)
-			}
+		atomic.AddUint64(&p.operations[s], uint64(n))
+		if s < scannerMetricLastRealtime {
+			p.latency[s].add(duration)
 		}
 	}
 }
@@ -198,7 +196,7 @@ func (p *scannerMetrics) currentPathUpdater(disk, initial string) (update func(p
 func (p *scannerMetrics) getCurrentPaths() []string {
 	var res []string
 	prefix := globalLocalNodeName + "/"
-	p.currentPaths.Range(func(key, value interface{}) bool {
+	p.currentPaths.Range(func(key, value any) bool {
 		// We are a bit paranoid, but better miss an entry than crash.
 		name, ok := key.(string)
 		if !ok {
@@ -221,7 +219,7 @@ func (p *scannerMetrics) getCurrentPaths() []string {
 // (since this is concurrent it may not be 100% reliable)
 func (p *scannerMetrics) activeDrives() int {
 	var i int
-	p.currentPaths.Range(func(k, v interface{}) bool {
+	p.currentPaths.Range(func(k, v any) bool {
 		i++
 		return true
 	})
@@ -299,7 +297,7 @@ func (p *scannerMetrics) report() madmin.ScannerMetrics {
 	m.CollectedAt = time.Now()
 	m.ActivePaths = p.getCurrentPaths()
 	m.LifeTimeOps = make(map[string]uint64, scannerMetricLast)
-	for i := scannerMetric(0); i < scannerMetricLast; i++ {
+	for i := range scannerMetricLast {
 		if n := atomic.LoadUint64(&p.operations[i]); n > 0 {
 			m.LifeTimeOps[i.String()] = n
 		}
@@ -309,7 +307,7 @@ func (p *scannerMetrics) report() madmin.ScannerMetrics {
 	}
 
 	m.LastMinute.Actions = make(map[string]madmin.TimedAction, scannerMetricLastRealtime)
-	for i := scannerMetric(0); i < scannerMetricLastRealtime; i++ {
+	for i := range scannerMetricLastRealtime {
 		lm := p.lastMinute(i)
 		if lm.N > 0 {
 			m.LastMinute.Actions[i.String()] = lm.asTimedAction()

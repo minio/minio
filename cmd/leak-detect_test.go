@@ -139,7 +139,7 @@ func pickRelevantGoroutines() (gs []string) {
 	// get runtime stack buffer.
 	buf := debug.Stack()
 	// runtime stack of go routines will be listed with 2 blank spaces between each of them, so split on "\n\n" .
-	for _, g := range strings.Split(string(buf), "\n\n") {
+	for g := range strings.SplitSeq(string(buf), "\n\n") {
 		// Again split on a new line, the first line of the second half contains the info about the go routine.
 		sl := strings.SplitN(g, "\n", 2)
 		if len(sl) != 2 {
@@ -159,5 +159,5 @@ func pickRelevantGoroutines() (gs []string) {
 		gs = append(gs, g)
 	}
 	sort.Strings(gs)
-	return
+	return gs
 }

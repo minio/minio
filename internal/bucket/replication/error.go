@@ -29,7 +29,7 @@ type Error struct {
 
 // Errorf - formats according to a format specifier and returns
 // the string as a value that satisfies error of type tagging.Error
-func Errorf(format string, a ...interface{}) error {
+func Errorf(format string, a ...any) error {
 	return Error{err: fmt.Errorf(format, a...)}
 }
 

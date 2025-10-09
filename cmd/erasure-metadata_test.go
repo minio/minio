@@ -189,7 +189,7 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	commonNumVersions := 2
 	numVersionsInQuorum := make([]int, 16)
 	numVersionsNoQuorum := make([]int, 16)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		if i < 4 {
 			continue
 		}
@@ -269,7 +269,6 @@ func TestFindFileInfoInQuorum(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run("", func(t *testing.T) {
 			fi, err := findFileInfoInQuorum(t.Context(), test.fis, test.modTime, "", test.expectedQuorum)
 			_, ok1 := err.(InsufficientReadQuorum)
@@ -316,7 +315,7 @@ func TestTransitionInfoEquals(t *testing.T) {
 	}
 
 	var i uint
-	for i = 0; i < 8; i++ {
+	for i = range uint(8) {
 		fi := FileInfo{
 			TransitionTier:      inputs[0].tier,
 			TransitionedObjName: inputs[0].remoteObjName,

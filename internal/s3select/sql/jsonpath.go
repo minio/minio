@@ -34,7 +34,7 @@ var (
 
 // jsonpathEval evaluates a JSON path and returns the value at the path.
 // If the value should be considered flat (from wildcards) any array returned should be considered individual values.
-func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool, err error) {
+func jsonpathEval(p []*JSONPathElement, v any) (r any, flat bool, err error) {
 	// fmt.Printf("JPATHexpr: %v jsonobj: %v\n\n", p, v)
 	if len(p) == 0 || v == nil {
 		return v, false, nil
@@ -71,7 +71,7 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 	case p[0].Index != nil:
 		idx := *p[0].Index
 
-		arr, ok := v.([]interface{})
+		arr, ok := v.([]any)
 		if !ok {
 			return nil, false, errIndexLookup
 		}
@@ -100,14 +100,14 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 		}
 
 	case p[0].ArrayWildcard:
-		arr, ok := v.([]interface{})
+		arr, ok := v.([]any)
 		if !ok {
 			return nil, false, errWildcardArrayLookup
 		}
 
 		// Lookup remainder of path in each array element and
 		// make result array.
-		var result []interface{}
+		var result []any
 		for _, a := range arr {
 			rval, flatten, err := jsonpathEval(p[1:], a)
 			if err != nil {
@@ -116,7 +116,7 @@ func jsonpathEval(p []*JSONPathElement, v interface{}) (r interface{}, flat bool
 
 			if flatten {
 				// Flatten if array.
-				if arr, ok := rval.([]interface{}); ok {
+				if arr, ok := rval.([]any); ok {
 					result = append(result, arr...)
 					continue
 				}

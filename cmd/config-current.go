@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 
@@ -78,12 +79,8 @@ func initHelp() {
 		config.BatchSubSys:          batch.DefaultKVS,
 		config.BrowserSubSys:        browser.DefaultKVS,
 	}
-	for k, v := range notify.DefaultNotificationKVS {
-		kvs[k] = v
-	}
-	for k, v := range lambda.DefaultLambdaKVS {
-		kvs[k] = v
-	}
+	maps.Copy(kvs, notify.DefaultNotificationKVS)
+	maps.Copy(kvs, lambda.DefaultLambdaKVS)
 	if globalIsErasure {
 		kvs[config.StorageClassSubSys] = storageclass.DefaultKVS
 		kvs[config.HealSubSys] = heal.DefaultKVS
@@ -355,7 +352,9 @@ func validateSubSysConfig(ctx context.Context, s config.Config, subSys string, o
 		}
 	case config.IdentityOpenIDSubSys:
 		if _, err := openid.LookupConfig(s,
-			NewHTTPTransport(), xhttp.DrainBody, globalSite.Region()); err != nil {
+			xhttp.WithUserAgent(NewHTTPTransport(), func() string {
+				return getUserAgent(getMinioMode())
+			}), xhttp.DrainBody, globalSite.Region()); err != nil {
 			return err
 		}
 	case config.IdentityLDAPSubSys:

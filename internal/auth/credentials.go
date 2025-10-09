@@ -111,16 +111,16 @@ const (
 
 // Credentials holds access and secret keys.
 type Credentials struct {
-	AccessKey    string                 `xml:"AccessKeyId" json:"accessKey,omitempty" yaml:"accessKey"`
-	SecretKey    string                 `xml:"SecretAccessKey" json:"secretKey,omitempty" yaml:"secretKey"`
-	SessionToken string                 `xml:"SessionToken" json:"sessionToken,omitempty" yaml:"sessionToken"`
-	Expiration   time.Time              `xml:"Expiration" json:"expiration,omitempty" yaml:"-"`
-	Status       string                 `xml:"-" json:"status,omitempty"`
-	ParentUser   string                 `xml:"-" json:"parentUser,omitempty"`
-	Groups       []string               `xml:"-" json:"groups,omitempty"`
-	Claims       map[string]interface{} `xml:"-" json:"claims,omitempty"`
-	Name         string                 `xml:"-" json:"name,omitempty"`
-	Description  string                 `xml:"-" json:"description,omitempty"`
+	AccessKey    string         `xml:"AccessKeyId" json:"accessKey,omitempty" yaml:"accessKey"`
+	SecretKey    string         `xml:"SecretAccessKey" json:"secretKey,omitempty" yaml:"secretKey"`
+	SessionToken string         `xml:"SessionToken" json:"sessionToken,omitempty" yaml:"sessionToken"`
+	Expiration   time.Time      `xml:"Expiration" json:"expiration" yaml:"-"`
+	Status       string         `xml:"-" json:"status,omitempty"`
+	ParentUser   string         `xml:"-" json:"parentUser,omitempty"`
+	Groups       []string       `xml:"-" json:"groups,omitempty"`
+	Claims       map[string]any `xml:"-" json:"claims,omitempty"`
+	Name         string         `xml:"-" json:"name,omitempty"`
+	Description  string         `xml:"-" json:"description,omitempty"`
 
 	// Deprecated: In favor of Description - when reading credentials from
 	// storage the value of this field is placed in the Description field above
@@ -196,7 +196,7 @@ var timeSentinel = time.Unix(0, 0).UTC()
 var ErrInvalidDuration = errors.New("invalid token expiry")
 
 // ExpToInt64 - convert input interface value to int64.
-func ExpToInt64(expI interface{}) (expAt int64, err error) {
+func ExpToInt64(expI any) (expAt int64, err error) {
 	switch exp := expI.(type) {
 	case string:
 		expAt, err = strconv.ParseInt(exp, 10, 64)
@@ -293,7 +293,7 @@ func GenerateSecretKey(length int, random io.Reader) (string, error) {
 }
 
 // GetNewCredentialsWithMetadata generates and returns new credential with expiry.
-func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string) (Credentials, error) {
+func GetNewCredentialsWithMetadata(m map[string]any, tokenSecret string) (Credentials, error) {
 	accessKey, secretKey, err := GenerateCredentials()
 	if err != nil {
 		return Credentials{}, err
@@ -303,7 +303,7 @@ func GetNewCredentialsWithMetadata(m map[string]interface{}, tokenSecret string)
 
 // CreateNewCredentialsWithMetadata - creates new credentials using the specified access & secret keys
 // and generate a session token if a secret token is provided.
-func CreateNewCredentialsWithMetadata(accessKey, secretKey string, m map[string]interface{}, tokenSecret string) (cred Credentials, err error) {
+func CreateNewCredentialsWithMetadata(accessKey, secretKey string, m map[string]any, tokenSecret string) (cred Credentials, err error) {
 	if len(accessKey) < accessKeyMinLen || len(accessKey) > accessKeyMaxLen {
 		return Credentials{}, ErrInvalidAccessKeyLength
 	}
@@ -336,7 +336,7 @@ func CreateNewCredentialsWithMetadata(accessKey, secretKey string, m map[string]
 }
 
 // JWTSignWithAccessKey - generates a session token.
-func JWTSignWithAccessKey(accessKey string, m map[string]interface{}, tokenSecret string) (string, error) {
+func JWTSignWithAccessKey(accessKey string, m map[string]any, tokenSecret string) (string, error) {
 	m["accessKey"] = accessKey
 	jwt := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims(m))
 	return jwt.SignedString([]byte(tokenSecret))
@@ -362,7 +362,7 @@ func ExtractClaims(token, secretKey string) (*jwt.MapClaims, error) {
 
 // GetNewCredentials generates and returns new credential.
 func GetNewCredentials() (cred Credentials, err error) {
-	return GetNewCredentialsWithMetadata(map[string]interface{}{}, "")
+	return GetNewCredentialsWithMetadata(map[string]any{}, "")
 }
 
 // CreateCredentials returns new credential with the given access key and secret key.

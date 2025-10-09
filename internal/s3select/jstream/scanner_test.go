@@ -85,17 +85,17 @@ func TestScannerFailure(t *testing.T) {
 
 func BenchmarkBufioScanner(b *testing.B) {
 	b.Run("small", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkBufioScanner(smallInput)
 		}
 	})
 	b.Run("medium", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkBufioScanner(mediumInput)
 		}
 	})
 	b.Run("large", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkBufioScanner(largeInput)
 		}
 	})
@@ -111,17 +111,17 @@ func benchmarkBufioScanner(b []byte) {
 
 func BenchmarkBufioReader(b *testing.B) {
 	b.Run("small", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkBufioReader(smallInput)
 		}
 	})
 	b.Run("medium", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkBufioReader(mediumInput)
 		}
 	})
 	b.Run("large", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkBufioReader(largeInput)
 		}
 	})
@@ -145,17 +145,17 @@ loop:
 
 func BenchmarkScanner(b *testing.B) {
 	b.Run("small", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkScanner(smallInput)
 		}
 	})
 	b.Run("medium", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkScanner(mediumInput)
 		}
 	})
 	b.Run("large", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			benchmarkScanner(largeInput)
 		}
 	})

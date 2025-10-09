@@ -98,12 +98,10 @@ type rebalanceInfo struct {
 
 // rebalanceMeta contains information pertaining to an ongoing rebalance operation.
 type rebalanceMeta struct {
-	cancel          context.CancelFunc `msg:"-"` // to be invoked on rebalance-stop
-	lastRefreshedAt time.Time          `msg:"-"`
-	StoppedAt       time.Time          `msg:"stopTs"` // Time when rebalance-stop was issued.
-	ID              string             `msg:"id"`     // ID of the ongoing rebalance operation
-	PercentFreeGoal float64            `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
-	PoolStats       []*rebalanceStats  `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
+	StoppedAt       time.Time         `msg:"stopTs"` // Time when rebalance-stop was issued.
+	ID              string            `msg:"id"`     // ID of the ongoing rebalance operation
+	PercentFreeGoal float64           `msg:"pf"`     // Computed from total free space and capacity at the start of rebalance
+	PoolStats       []*rebalanceStats `msg:"rss"`    // Per-pool rebalance stats keyed by pool index
 }
 
 var errRebalanceNotStarted = errors.New("rebalance not started")
@@ -313,8 +311,6 @@ func (r *rebalanceMeta) loadWithOpts(ctx context.Context, store objectIO, opts O
 		return err
 	}
 
-	r.lastRefreshedAt = time.Now()
-
 	return nil
 }
 
@@ -341,7 +337,8 @@ func (r *rebalanceMeta) save(ctx context.Context, store objectIO) error {
 	return r.saveWithOpts(ctx, store, ObjectOptions{})
 }
 
-func (z *erasureServerPools) IsRebalanceStarted() bool {
+func (z *erasureServerPools) IsRebalanceStarted(ctx context.Context) bool {
+	_ = z.loadRebalanceMeta(ctx)
 	z.rebalMu.RLock()
 	defer z.rebalMu.RUnlock()
 
@@ -394,12 +391,14 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		var (
 			quit     bool
 			traceMsg string
+			notify   bool // if status changed, notify nodes to reload rebalance metadata
 		)
 
 		for {
 			select {
 			case rebalErr := <-doneCh:
 				quit = true
+				notify = true
 				now := time.Now()
 				var status rebalStatus
 
@@ -421,12 +420,16 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 				z.rebalMu.Unlock()
 
 			case <-timer.C:
+				notify = false
 				traceMsg = fmt.Sprintf("saved at %s", time.Now())
 			}
 
 			stopFn := globalRebalanceMetrics.log(rebalanceMetricSaveMetadata, poolIdx, traceMsg)
 			err := z.saveRebalanceStats(GlobalContext, poolIdx, rebalSaveStats)
 			stopFn(0, err)
+			if err == nil && notify {
+				globalNotificationSys.LoadRebalanceMeta(GlobalContext, false)
+			}
 			rebalanceLogIf(GlobalContext, err)
 
 			if quit {
@@ -443,7 +446,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 		select {
 		case <-ctx.Done():
 			doneCh <- ctx.Err()
-			return
+			return err
 		default:
 		}
 
@@ -461,7 +464,7 @@ func (z *erasureServerPools) rebalanceBuckets(ctx context.Context, poolIdx int) 
 			}
 			rebalanceLogIf(GlobalContext, err)
 			doneCh <- err
-			return
+			return err
 		}
 		stopFn(0, nil)
 		z.bucketRebalanceDone(bucket, poolIdx)
@@ -580,8 +583,6 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 	}
 
 	for setIdx, set := range pool.sets {
-		set := set
-
 		filterLifecycle := func(bucket, object string, fi FileInfo) bool {
 			if lc == nil {
 				return false
@@ -594,7 +595,6 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 				globalExpiryState.enqueueByDays(objInfo, evt, lcEventSrc_Rebal)
 				return true
 			}
-
 			return false
 		}
 
@@ -689,7 +689,7 @@ func (z *erasureServerPools) rebalanceBucket(ctx context.Context, bucket string,
 					continue
 				}
 
-				for try := 0; try < 3; try++ {
+				for range 3 {
 					// GetObjectReader.Close is called by rebalanceObject
 					gr, err := set.GetObjectNInfo(ctx,
 						bucket,
@@ -803,12 +803,19 @@ func (z *erasureServerPools) saveRebalanceStats(ctx context.Context, poolIdx int
 	ctx = lkCtx.Context()
 	noLockOpts := ObjectOptions{NoLock: true}
 	r := &rebalanceMeta{}
-	if err := r.loadWithOpts(ctx, z.serverPools[0], noLockOpts); err != nil {
+	err = r.loadWithOpts(ctx, z.serverPools[0], noLockOpts)
+	if err != nil && !errors.Is(err, errConfigNotFound) {
 		return err
 	}
 
 	z.rebalMu.Lock()
 	defer z.rebalMu.Unlock()
+
+	// if not found, we store the memory metadata back
+	// when rebalance status changed, will notify all nodes update status to memory, we can treat the memory metadata is the latest status
+	if errors.Is(err, errConfigNotFound) {
+		r = z.rebalMeta
+	}
 
 	switch opts {
 	case rebalSaveStoppedAt:
@@ -933,7 +940,7 @@ func (z *erasureServerPools) StartRebalance() {
 		return
 	}
 	ctx, cancel := context.WithCancel(GlobalContext)
-	z.rebalMeta.cancel = cancel // to be used when rebalance-stop is called
+	z.rebalCancel = cancel // to be used when rebalance-stop is called
 	z.rebalMu.Unlock()
 
 	z.rebalMu.RLock()
@@ -976,10 +983,9 @@ func (z *erasureServerPools) StopRebalance() error {
 		return nil
 	}
 
-	if cancel := r.cancel; cancel != nil {
-		// cancel != nil only on pool leaders
-		r.cancel = nil
+	if cancel := z.rebalCancel; cancel != nil {
 		cancel()
+		z.rebalCancel = nil
 	}
 	return nil
 }

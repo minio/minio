@@ -74,7 +74,7 @@ func TestDecoderFlat(t *testing.T) {
   1, 2.5
 ]`
 		expected = []struct {
-			Value     interface{}
+			Value     any
 			ValueType ValueType
 		}{
 			{

@@ -55,7 +55,6 @@ func TestCreateServerEndpoints(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			srvCtxt := serverCtxt{}
 			err := mergeDisksLayoutFromArgs(testCase.args, &srvCtxt)
@@ -85,7 +84,6 @@ func TestGetDivisibleSize(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			gotGCD := getDivisibleSize(testCase.totalSizes)
 			if testCase.result != gotGCD {
@@ -172,7 +170,6 @@ func TestGetSetIndexesEnvOverride(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			argPatterns := make([]ellipses.ArgPattern, len(testCase.args))
 			for i, arg := range testCase.args {
@@ -294,7 +291,6 @@ func TestGetSetIndexes(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			argPatterns := make([]ellipses.ArgPattern, len(testCase.args))
 			for i, arg := range testCase.args {
@@ -637,7 +633,6 @@ func TestParseEndpointSet(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			gotEs, err := parseEndpointSet(0, testCase.arg)
 			if err != nil && testCase.success {

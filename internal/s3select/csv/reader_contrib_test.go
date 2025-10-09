@@ -84,7 +84,7 @@ func TestRead(t *testing.T) {
 }
 
 type tester interface {
-	Fatal(...interface{})
+	Fatal(...any)
 }
 
 func openTestFile(t tester, file string) []byte {
@@ -508,10 +508,10 @@ func BenchmarkReaderBasic(b *testing.B) {
 	}
 	defer r.Close()
 	b.ReportAllocs()
-	b.ResetTimer()
+
 	b.SetBytes(int64(len(f)))
 	var record sql.Record
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r, err = NewReader(io.NopCloser(bytes.NewBuffer(f)), &args)
 		if err != nil {
 			b.Fatalf("Reading init failed with %s", err)
@@ -537,7 +537,7 @@ func BenchmarkReaderHuge(b *testing.B) {
 		AllowQuotedRecordDelimiter: false,
 		unmarshaled:                true,
 	}
-	for n := 0; n < 11; n++ {
+	for n := range 11 {
 		f := openTestFile(b, "nyc-taxi-data-100k.csv")
 		want := 309
 		for i := 0; i < n; i++ {
@@ -549,7 +549,7 @@ func BenchmarkReaderHuge(b *testing.B) {
 			b.SetBytes(int64(len(f)))
 			b.ResetTimer()
 			var record sql.Record
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				r, err := NewReader(io.NopCloser(bytes.NewBuffer(f)), &args)
 				if err != nil {
 					b.Fatalf("Reading init failed with %s", err)
@@ -590,10 +590,10 @@ func BenchmarkReaderReplace(b *testing.B) {
 	}
 	defer r.Close()
 	b.ReportAllocs()
-	b.ResetTimer()
+
 	b.SetBytes(int64(len(f)))
 	var record sql.Record
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r, err = NewReader(io.NopCloser(bytes.NewBuffer(f)), &args)
 		if err != nil {
 			b.Fatalf("Reading init failed with %s", err)
@@ -627,10 +627,10 @@ func BenchmarkReaderReplaceTwo(b *testing.B) {
 	}
 	defer r.Close()
 	b.ReportAllocs()
-	b.ResetTimer()
+
 	b.SetBytes(int64(len(f)))
 	var record sql.Record
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r, err = NewReader(io.NopCloser(bytes.NewBuffer(f)), &args)
 		if err != nil {
 			b.Fatalf("Reading init failed with %s", err)

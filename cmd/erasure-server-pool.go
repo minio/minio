@@ -53,8 +53,9 @@ type erasureServerPools struct {
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
 
-	rebalMu   sync.RWMutex
-	rebalMeta *rebalanceMeta
+	rebalMu     sync.RWMutex
+	rebalMeta   *rebalanceMeta
+	rebalCancel context.CancelFunc
 
 	deploymentID     [16]byte
 	distributionAlgo string
@@ -420,7 +421,6 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	nSets := make([]int, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
-		index := index
 		// Skip suspended pools or pools participating in rebalance for any new
 		// I/O.
 		if z.IsSuspended(index) || z.IsPoolRebalancing(index) {
@@ -660,7 +660,6 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	for index := range z.serverPools {
-		index := index
 		g.Go(func() error {
 			return z.serverPools[index].Shutdown(ctx)
 		}, index)
@@ -703,7 +702,7 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 
 	b.StandardSCParity = scParity
 	b.RRSCParity = rrSCParity
-	return
+	return b
 }
 
 func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {
@@ -712,7 +711,6 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool)
 	storageInfos := make([]StorageInfo, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
-		index := index
 		g.Go(func() error {
 			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx, metrics)
 			return nil
@@ -1268,7 +1266,6 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 
 	eg := errgroup.WithNErrs(len(z.serverPools)).WithConcurrency(len(z.serverPools))
 	for i, pool := range z.serverPools {
-		i := i
 		pool := pool
 		eg.Go(func() error {
 			dObjectsByPool[i], dErrsByPool[i] = pool.DeleteObjects(ctx, bucket, objects, opts)
@@ -2244,7 +2241,6 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 
 	for poolIdx, erasureSet := range z.serverPools {
 		for setIdx, set := range erasureSet.sets {
-			set := set
 			listOut := make(chan metaCacheEntry, 1)
 			entries = append(entries, listOut)
 			disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)

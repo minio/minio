@@ -78,11 +78,9 @@ func initDataScanner(ctx context.Context, objAPI ObjectLayer) {
 		// Run the data scanner in a loop
 		for {
 			runDataScanner(ctx, objAPI)
-			duration := time.Duration(r.Float64() * float64(scannerCycle.Load()))
-			if duration < time.Second {
+			duration := max(time.Duration(r.Float64()*float64(scannerCycle.Load())),
 				// Make sure to sleep at least a second to avoid high CPU ticks.
-				duration = time.Second
-			}
+				time.Second)
 			time.Sleep(duration)
 		}
 	}()

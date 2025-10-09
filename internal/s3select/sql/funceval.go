@@ -91,7 +91,7 @@ func (e *FuncExpr) evalSQLFnNode(r Record, tableAlias string) (res *Value, err e
 	case sqlFnCast:
 		expr := e.Cast.Expr
 		res, err = expr.castTo(r, strings.ToUpper(e.Cast.CastType), tableAlias)
-		return
+		return res, err
 
 	case sqlFnSubstring:
 		return handleSQLSubstring(r, e.Substring, tableAlias)

@@ -34,6 +34,7 @@ import (
 	"github.com/minio/minio/internal/logger"
 	"github.com/minio/pkg/v3/env"
 	xnet "github.com/minio/pkg/v3/net"
+	"github.com/rabbitmq/amqp091-go"
 )
 
 const (
@@ -44,7 +45,7 @@ const (
 	logSubsys = "notify"
 )
 
-func logOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func logOnceIf(ctx context.Context, err error, id string, errKind ...any) {
 	logger.LogOnceIf(ctx, logSubsys, err, id, errKind...)
 }
 
@@ -411,7 +412,7 @@ func GetNotifyKafka(kafkaKVS map[string]config.KVS) (map[string]target.KafkaArgs
 		if len(kafkaBrokers) == 0 {
 			return nil, config.Errorf("kafka 'brokers' cannot be empty")
 		}
-		for _, s := range strings.Split(kafkaBrokers, config.ValueSeparator) {
+		for s := range strings.SplitSeq(kafkaBrokers, config.ValueSeparator) {
 			var host *xnet.Host
 			host, err = xnet.ParseHost(s)
 			if err != nil {
@@ -1705,7 +1706,7 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		if k != config.Default {
 			urlEnv = urlEnv + config.Default + k
 		}
-		url, err := xnet.ParseURL(env.Get(urlEnv, kv.Get(target.AmqpURL)))
+		url, err := amqp091.ParseURI(env.Get(urlEnv, kv.Get(target.AmqpURL)))
 		if err != nil {
 			return nil, err
 		}
@@ -1771,7 +1772,7 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		}
 		amqpArgs := target.AMQPArgs{
 			Enable:            enabled,
-			URL:               *url,
+			URL:               url,
 			Exchange:          env.Get(exchangeEnv, kv.Get(target.AmqpExchange)),
 			RoutingKey:        env.Get(routingKeyEnv, kv.Get(target.AmqpRoutingKey)),
 			ExchangeType:      env.Get(exchangeTypeEnv, kv.Get(target.AmqpExchangeType)),

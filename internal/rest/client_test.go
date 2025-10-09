@@ -28,7 +28,7 @@ func TestNetworkError_Unwrap(t *testing.T) {
 	tests := []struct {
 		name   string
 		err    error
-		target interface{}
+		target any
 		want   bool
 	}{
 		{

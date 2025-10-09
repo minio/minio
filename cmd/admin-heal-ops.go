@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"sort"
 	"sync"
@@ -520,9 +521,7 @@ func (h *healSequence) getScannedItemsMap() map[madmin.HealItemType]int64 {
 
 	// Make a copy before returning the value
 	retMap := make(map[madmin.HealItemType]int64, len(h.scannedItemsMap))
-	for k, v := range h.scannedItemsMap {
-		retMap[k] = v
-	}
+	maps.Copy(retMap, h.scannedItemsMap)
 
 	return retMap
 }
@@ -534,9 +533,7 @@ func (h *healSequence) getHealedItemsMap() map[madmin.HealItemType]int64 {
 
 	// Make a copy before returning the value
 	retMap := make(map[madmin.HealItemType]int64, len(h.healedItemsMap))
-	for k, v := range h.healedItemsMap {
-		retMap[k] = v
-	}
+	maps.Copy(retMap, h.healedItemsMap)
 
 	return retMap
 }
@@ -549,9 +546,7 @@ func (h *healSequence) getHealFailedItemsMap() map[madmin.HealItemType]int64 {
 
 	// Make a copy before returning the value
 	retMap := make(map[madmin.HealItemType]int64, len(h.healFailedItemsMap))
-	for k, v := range h.healFailedItemsMap {
-		retMap[k] = v
-	}
+	maps.Copy(retMap, h.healFailedItemsMap)
 
 	return retMap
 }

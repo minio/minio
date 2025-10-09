@@ -185,7 +185,7 @@ func (o *AuthZPlugin) IsAllowed(args policy.Args) (bool, error) {
 	}
 
 	// Access Management Plugin Input
-	body := make(map[string]interface{})
+	body := make(map[string]any)
 	body["input"] = args
 
 	inputBytes, err := json.Marshal(body)

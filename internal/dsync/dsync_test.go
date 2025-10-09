@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 
 	// Initialize locker clients for dsync.
 	var clnts []NetLocker
-	for i := 0; i < len(nodes); i++ {
+	for i := range nodes {
 		clnts = append(clnts, newClient(nodes[i].URL))
 	}
 
@@ -310,7 +310,7 @@ func TestUnlockShouldNotTimeout(t *testing.T) {
 
 // Borrowed from mutex_test.go
 func HammerMutex(m *DRWMutex, loops int, cdone chan bool) {
-	for i := 0; i < loops; i++ {
+	for range loops {
 		m.Lock(id, source)
 		m.Unlock(context.Background())
 	}
@@ -325,10 +325,10 @@ func TestMutex(t *testing.T) {
 	}
 	c := make(chan bool)
 	m := NewDRWMutex(ds, "test")
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go HammerMutex(m, loops, c)
 	}
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-c
 	}
 }
@@ -363,7 +363,7 @@ func benchmarkMutex(b *testing.B, slack, work bool) {
 			mu.Lock(id, source)
 			mu.Unlock(b.Context())
 			if work {
-				for i := 0; i < 100; i++ {
+				for range 100 {
 					foo *= 2
 					foo /= 2
 				}

@@ -46,7 +46,6 @@ func TestISO8601Format(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.expectedOutput, func(t *testing.T) {
 			gotOutput := ISO8601Format(testCase.date)
 			t.Log("Go", testCase.date.Format(iso8601TimeFormat))

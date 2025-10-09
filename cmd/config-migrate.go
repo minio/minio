@@ -38,12 +38,12 @@ import (
 )
 
 // Save config file to corresponding backend
-func Save(configFile string, data interface{}) error {
+func Save(configFile string, data any) error {
 	return quick.SaveConfig(data, configFile, globalEtcdClient)
 }
 
 // Load config from backend
-func Load(configFile string, data interface{}) (quick.Config, error) {
+func Load(configFile string, data any) (quick.Config, error) {
 	return quick.LoadConfig(configFile, globalEtcdClient, data)
 }
 

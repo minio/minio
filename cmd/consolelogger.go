@@ -101,7 +101,7 @@ func (sys *HTTPConsoleLoggerSys) Subscribe(subCh chan log.Info, doneCh <-chan st
 
 	lastN = make([]log.Info, last)
 	sys.RLock()
-	sys.logBuf.Do(func(p interface{}) {
+	sys.logBuf.Do(func(p any) {
 		if p != nil {
 			lg, ok := p.(log.Info)
 			if ok && lg.SendLog(node, logKind) {
@@ -155,7 +155,7 @@ func (sys *HTTPConsoleLoggerSys) Stats() types.TargetStats {
 // Content returns the console stdout log
 func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 	sys.RLock()
-	sys.logBuf.Do(func(p interface{}) {
+	sys.logBuf.Do(func(p any) {
 		if p != nil {
 			lg, ok := p.(log.Info)
 			if ok {
@@ -167,7 +167,7 @@ func (sys *HTTPConsoleLoggerSys) Content() (logs []log.Entry) {
 	})
 	sys.RUnlock()
 
-	return
+	return logs
 }
 
 // Cancel - cancels the target
@@ -181,7 +181,7 @@ func (sys *HTTPConsoleLoggerSys) Type() types.TargetType {
 
 // Send log message 'e' to console and publish to console
 // log pubsub system
-func (sys *HTTPConsoleLoggerSys) Send(ctx context.Context, entry interface{}) error {
+func (sys *HTTPConsoleLoggerSys) Send(ctx context.Context, entry any) error {
 	var lg log.Info
 	switch e := entry.(type) {
 	case log.Entry:

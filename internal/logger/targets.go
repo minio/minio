@@ -39,7 +39,7 @@ type Target interface {
 	Init(ctx context.Context) error
 	IsOnline(ctx context.Context) bool
 	Cancel()
-	Send(ctx context.Context, entry interface{}) error
+	Send(ctx context.Context, entry any) error
 	Type() types.TargetType
 }
 
@@ -170,7 +170,7 @@ func splitTargets(targets []Target, t types.TargetType) (group1 []Target, group2
 			group2 = append(group2, target)
 		}
 	}
-	return
+	return group1, group2
 }
 
 func cancelTargets(targets []Target) {

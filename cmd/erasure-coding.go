@@ -69,7 +69,7 @@ func NewErasure(ctx context.Context, dataBlocks, parityBlocks int, blockSize int
 		})
 		return enc
 	}
-	return
+	return e, err
 }
 
 // EncodeData encodes the given data and returns the erasure-coded data.
@@ -136,10 +136,7 @@ func (e *Erasure) ShardFileOffset(startOffset, length, totalLength int64) int64 
 	shardSize := e.ShardSize()
 	shardFileSize := e.ShardFileSize(totalLength)
 	endShard := (startOffset + length) / e.blockSize
-	tillOffset := endShard*shardSize + shardSize
-	if tillOffset > shardFileSize {
-		tillOffset = shardFileSize
-	}
+	tillOffset := min(endShard*shardSize+shardSize, shardFileSize)
 	return tillOffset
 }
 

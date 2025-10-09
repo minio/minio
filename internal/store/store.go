@@ -32,7 +32,7 @@ const (
 	retryInterval = 3 * time.Second
 )
 
-type logger = func(ctx context.Context, err error, id string, errKind ...interface{})
+type logger = func(ctx context.Context, err error, id string, errKind ...any)
 
 // ErrNotConnected - indicates that the target connection is not active.
 var ErrNotConnected = errors.New("not connected to target server/service")
@@ -86,7 +86,7 @@ func getItemCount(k string) (count int, err error) {
 	if len(v) == 2 {
 		return strconv.Atoi(v[0])
 	}
-	return
+	return count, err
 }
 
 func parseKey(k string) (key Key) {
@@ -102,7 +102,7 @@ func parseKey(k string) (key Key) {
 		key.Extension = "." + vals[1]
 		key.Name = strings.TrimSuffix(key.Name, key.Extension)
 	}
-	return
+	return key
 }
 
 // replayItems - Reads the items from the store and replays.

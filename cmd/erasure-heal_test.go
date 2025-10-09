@@ -102,7 +102,7 @@ func TestErasureHeal(t *testing.T) {
 		// setup stale disks for the test case
 		staleDisks := make([]StorageAPI, len(disks))
 		copy(staleDisks, disks)
-		for j := 0; j < len(staleDisks); j++ {
+		for j := range staleDisks {
 			if j < test.offDisks {
 				readers[j] = nil
 			} else {

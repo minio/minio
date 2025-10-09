@@ -33,14 +33,14 @@ var globalRemoteFTPClientTransport = NewRemoteTargetHTTPTransport(true)()
 type minioLogger struct{}
 
 // Print implement Logger
-func (log *minioLogger) Print(sessionID string, message interface{}) {
+func (log *minioLogger) Print(sessionID string, message any) {
 	if serverDebugLog {
 		fmt.Printf("%s %s\n", sessionID, message)
 	}
 }
 
 // Printf implement Logger
-func (log *minioLogger) Printf(sessionID string, format string, v ...interface{}) {
+func (log *minioLogger) Printf(sessionID string, format string, v ...any) {
 	if serverDebugLog {
 		if sessionID != "" {
 			fmt.Printf("%s %s\n", sessionID, fmt.Sprintf(format, v...))

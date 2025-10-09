@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -162,13 +163,13 @@ func (o listPathOptions) newMetacache() metacache {
 	}
 }
 
-func (o *listPathOptions) debugf(format string, data ...interface{}) {
+func (o *listPathOptions) debugf(format string, data ...any) {
 	if serverDebugLog {
 		console.Debugf(format+"\n", data...)
 	}
 }
 
-func (o *listPathOptions) debugln(data ...interface{}) {
+func (o *listPathOptions) debugln(data ...any) {
 	if serverDebugLog {
 		console.Debugln(data...)
 	}
@@ -652,7 +653,7 @@ func calcCommonWritesDeletes(infos []DiskInfo, readQuorum int) (commonWrite, com
 
 	commonWrite = filter(writes)
 	commonDelete = filter(deletes)
-	return
+	return commonWrite, commonDelete
 }
 
 func calcCommonCounter(infos []DiskInfo, readQuorum int) (commonCount uint64) {
@@ -906,9 +907,7 @@ func (er *erasureObjects) saveMetaCacheStream(ctx context.Context, mc *metaCache
 			fi := FileInfo{
 				Metadata: make(map[string]string, len(meta)),
 			}
-			for k, v := range meta {
-				fi.Metadata[k] = v
-			}
+			maps.Copy(fi.Metadata, meta)
 			err := er.updateObjectMetaWithOpts(ctx, minioMetaBucket, o.objectPath(0), fi, er.getDisks(), UpdateMetadataOpts{NoPersistence: true})
 			if err == nil {
 				break

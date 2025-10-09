@@ -100,7 +100,7 @@ func BenchmarkEncrypt(b *testing.B) {
 			context   = kms.Context{"key": "value"}
 		)
 		b.SetBytes(int64(size))
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ciphertext, err := Encrypt(KMS, plaintext, context)
 			if err != nil {
 				b.Fatal(err)

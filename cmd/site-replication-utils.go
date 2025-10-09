@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"context"
+	"maps"
 	"math/rand"
 	"sync"
 	"time"
@@ -45,9 +46,7 @@ func (s *SiteResyncStatus) clone() SiteResyncStatus {
 	}
 	o := *s
 	o.BucketStatuses = make(map[string]ResyncStatusType, len(s.BucketStatuses))
-	for b, st := range s.BucketStatuses {
-		o.BucketStatuses[b] = st
-	}
+	maps.Copy(o.BucketStatuses, s.BucketStatuses)
 	return o
 }
 
@@ -88,11 +87,9 @@ func (sm *siteResyncMetrics) init(ctx context.Context) {
 			<-ctx.Done()
 			return
 		}
-		duration := time.Duration(r.Float64() * float64(time.Second*10))
-		if duration < time.Second {
+		duration := max(time.Duration(r.Float64()*float64(time.Second*10)),
 			// Make sure to sleep at least a second to avoid high CPU ticks.
-			duration = time.Second
-		}
+			time.Second)
 		time.Sleep(duration)
 	}
 }

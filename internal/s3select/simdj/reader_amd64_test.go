@@ -31,7 +31,7 @@ import (
 )
 
 type tester interface {
-	Fatal(args ...interface{})
+	Fatal(args ...any)
 }
 
 func loadCompressed(t tester, file string) (js []byte) {

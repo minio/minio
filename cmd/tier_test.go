@@ -27,10 +27,10 @@ func TestTierMetrics(t *testing.T) {
 	globalTierMetrics.Observe(tier, 200*time.Millisecond)
 	expSuccess := 10
 	expFailure := 5
-	for i := 0; i < expSuccess; i++ {
+	for range expSuccess {
 		globalTierMetrics.logSuccess(tier)
 	}
-	for i := 0; i < expFailure; i++ {
+	for range expFailure {
 		globalTierMetrics.logFailure(tier)
 	}
 	metrics := globalTierMetrics.Report()

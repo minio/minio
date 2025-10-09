@@ -265,7 +265,7 @@ func (client *peerRESTClient) StartProfiling(ctx context.Context, profiler strin
 func (client *peerRESTClient) DownloadProfileData(ctx context.Context) (data map[string][]byte, err error) {
 	respBody, err := client.callWithContext(ctx, peerRESTMethodDownloadProfilingData, nil, nil, -1)
 	if err != nil {
-		return
+		return data, err
 	}
 	defer xhttp.DrainBody(respBody)
 	err = gob.NewDecoder(respBody).Decode(&data)

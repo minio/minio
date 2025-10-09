@@ -61,7 +61,7 @@ func (a adminAPIHandlers) StartDecommission(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if z.IsRebalanceStarted() {
+	if z.IsRebalanceStarted(ctx) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
 	}
@@ -277,7 +277,7 @@ func (a adminAPIHandlers) RebalanceStart(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if pools.IsRebalanceStarted() {
+	if pools.IsRebalanceStarted(ctx) {
 		writeErrorResponseJSON(ctx, w, errorCodes.ToAPIErr(ErrAdminRebalanceAlreadyStarted), r.URL)
 		return
 	}
@@ -380,7 +380,7 @@ func (a adminAPIHandlers) RebalanceStop(w http.ResponseWriter, r *http.Request) 
 func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w http.ResponseWriter, r *http.Request) (proxy bool) {
 	host := env.Get("_MINIO_DECOM_ENDPOINT_HOST", defaultEndPoint.Host)
 	if host == "" {
-		return
+		return proxy
 	}
 	for nodeIdx, proxyEp := range globalProxyEndpoints {
 		if proxyEp.Host == host && !proxyEp.IsLocal {
@@ -389,5 +389,5 @@ func proxyDecommissionRequest(ctx context.Context, defaultEndPoint Endpoint, w h
 			}
 		}
 	}
-	return
+	return proxy
 }

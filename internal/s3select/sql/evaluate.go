@@ -413,7 +413,7 @@ func (e *JSONPath) evalNode(r Record, tableAlias string) (*Value, error) {
 }
 
 // jsonToValue will convert the json value to an internal value.
-func jsonToValue(result interface{}) (*Value, error) {
+func jsonToValue(result any) (*Value, error) {
 	switch rval := result.(type) {
 	case string:
 		return FromString(rval), nil
@@ -434,7 +434,7 @@ func jsonToValue(result interface{}) (*Value, error) {
 			return nil, err
 		}
 		return FromBytes(bs), nil
-	case []interface{}:
+	case []any:
 		dst := make([]Value, len(rval))
 		for i := range rval {
 			v, err := jsonToValue(rval[i])

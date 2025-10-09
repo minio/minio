@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"math/rand"
 	"net/http"
 	"runtime"
@@ -110,9 +111,7 @@ func (e BatchJobKeyRotateEncryption) Validate() error {
 			}
 		}
 		e.kmsContext = kms.Context{}
-		for k, v := range ctx {
-			e.kmsContext[k] = v
-		}
+		maps.Copy(e.kmsContext, ctx)
 		ctx["MinIO batch API"] = "batchrotate" // Context for a test key operation
 		if _, err := GlobalKMS.GenerateKey(GlobalContext, &kms.GenerateKeyRequest{Name: e.Key, AssociatedData: ctx}); err != nil {
 			return err
@@ -225,9 +224,7 @@ func (r *BatchJobKeyRotateV1) KeyRotate(ctx context.Context, api ObjectLayer, ob
 	// Since we are rotating the keys, make sure to update the metadata.
 	oi.metadataOnly = true
 	oi.keyRotation = true
-	for k, v := range encMetadata {
-		oi.UserDefined[k] = v
-	}
+	maps.Copy(oi.UserDefined, encMetadata)
 	if _, err := api.CopyObject(ctx, r.Bucket, oi.Name, r.Bucket, oi.Name, oi, ObjectOptions{
 		VersionID: oi.VersionID,
 	}, ObjectOptions{

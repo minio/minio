@@ -26,7 +26,7 @@ func GetTotalCapacity(diskInfo []madmin.Disk) (capacity uint64) {
 	for _, disk := range diskInfo {
 		capacity += disk.TotalSpace
 	}
-	return
+	return capacity
 }
 
 // GetTotalUsableCapacity gets the total usable capacity in the cluster.
@@ -42,7 +42,7 @@ func GetTotalUsableCapacity(diskInfo []madmin.Disk, s StorageInfo) (capacity uin
 			capacity += disk.TotalSpace
 		}
 	}
-	return
+	return capacity
 }
 
 // GetTotalCapacityFree gets the total capacity free in the cluster.
@@ -50,7 +50,7 @@ func GetTotalCapacityFree(diskInfo []madmin.Disk) (capacity uint64) {
 	for _, d := range diskInfo {
 		capacity += d.AvailableSpace
 	}
-	return
+	return capacity
 }
 
 // GetTotalUsableCapacityFree gets the total usable capacity free in the cluster.
@@ -66,5 +66,5 @@ func GetTotalUsableCapacityFree(diskInfo []madmin.Disk, s StorageInfo) (capacity
 			capacity += disk.AvailableSpace
 		}
 	}
-	return
+	return capacity
 }

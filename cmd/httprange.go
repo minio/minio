@@ -54,10 +54,7 @@ func (h *HTTPRangeSpec) GetLength(resourceSize int64) (rangeLength int64, err er
 
 	case h.IsSuffixLength:
 		specifiedLen := -h.Start
-		rangeLength = specifiedLen
-		if specifiedLen > resourceSize {
-			rangeLength = resourceSize
-		}
+		rangeLength = min(specifiedLen, resourceSize)
 
 	case h.Start >= resourceSize:
 		return 0, InvalidRange{
@@ -98,10 +95,7 @@ func (h *HTTPRangeSpec) GetOffsetLength(resourceSize int64) (start, length int64
 
 	start = h.Start
 	if h.IsSuffixLength {
-		start = resourceSize + h.Start
-		if start < 0 {
-			start = 0
-		}
+		start = max(resourceSize+h.Start, 0)
 	}
 	return start, length, nil
 }

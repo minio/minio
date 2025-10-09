@@ -302,7 +302,7 @@ func nextSuffix() string {
 }
 
 // isSameType - compares two object types via reflect.TypeOf
-func isSameType(obj1, obj2 interface{}) bool {
+func isSameType(obj1, obj2 any) bool {
 	return reflect.TypeOf(obj1) == reflect.TypeOf(obj2)
 }
 
@@ -542,8 +542,8 @@ func truncateChunkByHalfSigv4(req *http.Request) (*http.Request, error) {
 		return nil, err
 	}
 
-	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
-		hexChunkSize, chunkSignature))
+	newChunkHdr := fmt.Appendf(nil, "%s"+s3ChunkSignatureStr+"%s\r\n",
+		hexChunkSize, chunkSignature)
 	newChunk, err := io.ReadAll(bufReader)
 	if err != nil {
 		return nil, err
@@ -564,8 +564,8 @@ func malformDataSigV4(req *http.Request, newByte byte) (*http.Request, error) {
 		return nil, err
 	}
 
-	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
-		hexChunkSize, chunkSignature))
+	newChunkHdr := fmt.Appendf(nil, "%s"+s3ChunkSignatureStr+"%s\r\n",
+		hexChunkSize, chunkSignature)
 	newChunk, err := io.ReadAll(bufReader)
 	if err != nil {
 		return nil, err
@@ -590,9 +590,9 @@ func malformChunkSizeSigV4(req *http.Request, badSize int64) (*http.Request, err
 	}
 
 	n := badSize
-	newHexChunkSize := []byte(fmt.Sprintf("%x", n))
-	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
-		newHexChunkSize, chunkSignature))
+	newHexChunkSize := fmt.Appendf(nil, "%x", n)
+	newChunkHdr := fmt.Appendf(nil, "%s"+s3ChunkSignatureStr+"%s\r\n",
+		newHexChunkSize, chunkSignature)
 	newChunk, err := io.ReadAll(bufReader)
 	if err != nil {
 		return nil, err
@@ -1493,7 +1493,7 @@ func getListenNotificationURL(endPoint, bucketName string, prefixes, suffixes, e
 // getRandomDisks - Creates a slice of N random disks, each of the form - minio-XXX
 func getRandomDisks(n int) ([]string, error) {
 	var erasureDisks []string
-	for i := 0; i < n; i++ {
+	for range n {
 		path, err := os.MkdirTemp(globalTestTmpDir, "minio-")
 		if err != nil {
 			// Remove directories created so far.
@@ -2119,7 +2119,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("Missing host parameter")
 	}
 
-	publicKey := func(priv interface{}) interface{} {
+	publicKey := func(priv any) any {
 		switch k := priv.(type) {
 		case *rsa.PrivateKey:
 			return &k.PublicKey
@@ -2130,7 +2130,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 		}
 	}
 
-	pemBlockForKey := func(priv interface{}) *pem.Block {
+	pemBlockForKey := func(priv any) *pem.Block {
 		switch k := priv.(type) {
 		case *rsa.PrivateKey:
 			return &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(k)}
@@ -2146,7 +2146,7 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 		}
 	}
 
-	var priv interface{}
+	var priv any
 	var err error
 	priv, err = rsa.GenerateKey(crand.Reader, rsaBits)
 	if err != nil {
@@ -2175,8 +2175,8 @@ func generateTLSCertKey(host string) ([]byte, []byte, error) {
 		BasicConstraintsValid: true,
 	}
 
-	hosts := strings.Split(host, ",")
-	for _, h := range hosts {
+	hosts := strings.SplitSeq(host, ",")
+	for h := range hosts {
 		if ip := net.ParseIP(h); ip != nil {
 			template.IPAddresses = append(template.IPAddresses, ip)
 		} else {

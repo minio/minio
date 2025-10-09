@@ -292,7 +292,7 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 		return contentEnc
 	}
 	var newEncs []string
-	for _, enc := range strings.Split(contentEnc, ",") {
+	for enc := range strings.SplitSeq(contentEnc, ",") {
 		if enc != streamingContentEncoding {
 			newEncs = append(newEncs, enc)
 		}
@@ -466,7 +466,7 @@ func getHostName(r *http.Request) (hostName string) {
 	} else {
 		hostName = r.Host
 	}
-	return
+	return hostName
 }
 
 // Proxy any request to an endpoint.
@@ -500,5 +500,5 @@ func proxyRequest(ctx context.Context, w http.ResponseWriter, r *http.Request, e
 
 	r.URL.Host = ep.Host
 	f.ServeHTTP(w, r)
-	return
+	return success
 }

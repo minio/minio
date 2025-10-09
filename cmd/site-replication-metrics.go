@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,9 +55,7 @@ func (rt *RTimedMetrics) toMetric() madmin.TimedErrStats {
 		return madmin.TimedErrStats{}
 	}
 	errCounts := make(map[string]int)
-	for k, v := range rt.ErrCounts {
-		errCounts[k] = v
-	}
+	maps.Copy(errCounts, rt.ErrCounts)
 	minuteTotals := rt.LastMinute.getTotal()
 	hourTotals := rt.LastHour.getTotal()
 	return madmin.TimedErrStats{
@@ -99,9 +98,7 @@ func (rt *RTimedMetrics) merge(o RTimedMetrics) (n RTimedMetrics) {
 	n.LastHour = n.LastHour.merge(rt.LastHour)
 	n.LastHour = n.LastHour.merge(o.LastHour)
 	n.ErrCounts = make(map[string]int)
-	for k, v := range rt.ErrCounts {
-		n.ErrCounts[k] = v
-	}
+	maps.Copy(n.ErrCounts, rt.ErrCounts)
 	for k, v := range o.ErrCounts {
 		n.ErrCounts[k] += v
 	}
@@ -264,7 +261,7 @@ type SRMetric struct {
 	ReplicatedCount int64 `json:"replicatedCount"`
 	// Failed captures replication errors in various time windows
 
-	Failed madmin.TimedErrStats `json:"failed,omitempty"`
+	Failed madmin.TimedErrStats `json:"failed"`
 
 	XferStats map[RMetricName]XferStats `json:"transferSummary"`
 }

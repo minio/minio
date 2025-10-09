@@ -227,7 +227,7 @@ func TestHTTPListenerAddr(t *testing.T) {
 
 	nonLoopBackIP := getNonLoopBackIP(t)
 	var casePorts []string
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		casePorts = append(casePorts, getNextPort())
 	}
 
@@ -278,7 +278,7 @@ func TestHTTPListenerAddrs(t *testing.T) {
 
 	nonLoopBackIP := getNonLoopBackIP(t)
 	var casePorts []string
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		casePorts = append(casePorts, getNextPort())
 	}
 

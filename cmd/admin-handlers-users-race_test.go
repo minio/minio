@@ -89,7 +89,7 @@ func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
 
 	// Create a policy policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -104,7 +104,7 @@ func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -113,7 +113,7 @@ func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
 	userCount := 50
 	accessKeys := make([]string, userCount)
 	secretKeys := make([]string, userCount)
-	for i := 0; i < userCount; i++ {
+	for i := range userCount {
 		accessKey, secretKey := mustGenerateCredentials(c)
 		err = s.adm.SetUser(ctx, accessKey, secretKey, madmin.AccountEnabled)
 		if err != nil {
@@ -133,7 +133,7 @@ func (s *TestSuiteIAM) TestDeleteUserRace(c *check) {
 	}
 
 	g := errgroup.Group{}
-	for i := 0; i < userCount; i++ {
+	for i := range userCount {
 		g.Go(func(i int) func() error {
 			return func() error {
 				uClient := s.getUserClient(c, accessKeys[i], secretKeys[i], "")

@@ -246,7 +246,7 @@ func NewMapClaims() *MapClaims {
 }
 
 // Set Adds new arbitrary claim keys and values.
-func (c *MapClaims) Set(key string, val interface{}) {
+func (c *MapClaims) Set(key string, val any) {
 	if c == nil {
 		return
 	}
@@ -266,12 +266,12 @@ func (c *MapClaims) Lookup(key string) (value string, ok bool) {
 	if c == nil {
 		return "", false
 	}
-	var vinterface interface{}
+	var vinterface any
 	vinterface, ok = c.MapClaims[key]
 	if ok {
 		value, ok = vinterface.(string)
 	}
-	return
+	return value, ok
 }
 
 // SetExpiry sets expiry in unix epoch secs
@@ -302,7 +302,7 @@ func (c *MapClaims) Valid() error {
 }
 
 // Map returns underlying low-level map claims.
-func (c *MapClaims) Map() map[string]interface{} {
+func (c *MapClaims) Map() map[string]any {
 	if c == nil {
 		return nil
 	}
