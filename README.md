@@ -12,7 +12,7 @@ Designed for speed and scalability, it powers AI/ML, analytics, and data-intensi
 - High Performance – Ideal for demanding storage workloads.
 
 This README provides instructions for building MinIO from source and deploying onto baremetal hardware.
-For more complete documentation, see [the MinIO documentation website](https://docs.min.io/community/minio-object-store/index.html)
+Use the [MinIO Documentation](https://github.com/minio/docs) project to build and host a local copy of the documentation.
 
 ## MinIO is Open Source Software
 
