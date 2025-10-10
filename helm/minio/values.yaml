@@ -144,6 +144,7 @@ trustedCertsSecret: ""
 persistence:
   enabled: true
   annotations: {}
+  labels: {}
 
   ## A manually managed Persistent Volume and Claim
   ## Requires persistence.enabled: true
@@ -181,6 +182,7 @@ service:
   loadBalancerIP: ~
   externalIPs: []
   annotations: {}
+  labels: {}
 
   ## service.loadBalancerSourceRanges Addresses that are allowed when service is LoadBalancer
   ## https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
@@ -228,6 +230,7 @@ consoleService:
   loadBalancerIP: ~
   externalIPs: []
   annotations: {}
+  labels: {}
   ## consoleService.loadBalancerSourceRanges Addresses that are allowed when service is LoadBalancer
   ## https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
   ##
@@ -503,6 +506,7 @@ customCommandJob:
 postJob:
   podAnnotations: {}
   annotations: {}
+  labels: {}
   securityContext:
     enabled: false
     runAsUser: 1000
@@ -594,6 +598,10 @@ serviceAccount:
   ## The name of the service account to use. If 'create' is 'true', a service account with that name
   ## will be created.
   name: "minio-sa"
+  ## Annotations to add to the created service account
+  annotations: {}
+  ## Labels to add to the created service account
+  labels: {}
 
 metrics:
   serviceMonitor:
