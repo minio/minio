@@ -23,7 +23,7 @@ and other connections will be blocked while the large payload is being sent.
 
 ## Handlers & Routes
 
-Handlers have a predefined Handler ID. 
+Handlers have a predefined Handler ID.
 In addition, there can be several *static* subroutes used to differentiate between different handlers of the same ID.
 A subroute on a client must match a subroute on the server. So routes cannot be used for dynamic routing, unlike HTTP.
 
@@ -33,14 +33,14 @@ Handlers should remain backwards compatible. If a breaking API change is require
 
 A **Manager** is used to manage all incoming and outgoing connections to a server.
 
-On startup all remote servers must be specified. 
-From that individual connections will be spawned to each remote server, 
+On startup all remote servers must be specified.
+From that individual connections will be spawned to each remote server,
 or incoming requests will be hooked up to the appropriate connection.
 
 To get a connection to a specific server, use `Manager.Connection(host)` to get a connection to the specified host.
 From this connection individual requests can be made.
 
-Each handler, with optional subroutes can be registered with the manager using 
+Each handler, with optional subroutes can be registered with the manager using
 `Manager.RegisterXHandler(handlerID, handler, subroutes...)`.
 
 A `Handler()` function provides an HTTP handler, which should be hooked up to the appropriate route on the server.
@@ -75,7 +75,7 @@ Sample call:
 ```go
     // Get a connection to the remote host
     conn := manager.Connection(host)
-	
+
     payload := []byte("request")
     response, err := conn.SingleRequest(ctx, grid.HandlerDiskInfo, payload)
 ```
@@ -85,7 +85,7 @@ If the error type is `*RemoteErr`, then the error was returned by the remote ser
 Context timeouts are propagated, and a default timeout of 1 minute is added if none is specified.
 
 There is no cancellation propagation for single payload requests.
-When the context is canceled, the request will return at once with an appropriate error. 
+When the context is canceled, the request will return at once with an appropriate error.
 However, the remote call will not see the cancellation - as can be seen from the 'missing' context on the handler.
 The result will be discarded.
 
@@ -102,14 +102,14 @@ In the examples we use a `MSS` type, which is a `map[string]string` that is `msg
         // Do something with payload
         return NewMSSWith(map[string]string{"result": "ok"}), nil
     }
-	
+
     // Create a typed handler.
     // Due to current generics limitations, a constructor of the empty type must be provided.
     instance := grid.NewSingleHandler[*grid.MSS, *grid.MSS](h, grid.NewMSS, grid.NewMSS)
-	
+
     // Register the handler on the manager
     instance.Register(manager, handler)
-	
+
     // The typed instance is also used for calls
     conn := manager.Connection("host")
     resp, err := instance.Call(ctx, conn, grid.NewMSSWith(map[string]string{"myfield": "myvalue"}))
@@ -118,7 +118,7 @@ In the examples we use a `MSS` type, which is a `map[string]string` that is `msg
     }
 ```
 
-The wrapper will handle all serialization and de-seralization of the request and response,
+The wrapper will handle all serialization and de-serialization of the request and response,
 and furthermore provides reuse of the structs used for the request and response.
 
 Note that Responses sent for serialization are automatically reused for similar requests.
@@ -143,7 +143,7 @@ Sample handler:
             case req, ok := <-in:
                 if !ok {
                     break
-                }           
+                }
                 // Do something with payload
                 out <- []byte("response")
 
@@ -167,7 +167,7 @@ Sample call:
 ```go
     // Get a connection to the remote host
     conn := manager.Connection(host).Subroute("asubroute")
-	
+
     payload := []byte("request")
     stream, err := conn.NewStream(ctx, grid.HandlerDiskInfo, payload)
 	if err != nil {
@@ -183,12 +183,12 @@ Sample call:
     })
 ```
 
-Context cancellation and timeouts are propagated to the handler. 
+Context cancellation and timeouts are propagated to the handler.
 The client does not wait for the remote handler to finish before returning.
 Returning any error will also cancel the stream remotely.
 
 CAREFUL: When utilizing two-way communication, it is important to ensure that the remote handler is not blocked on a send.
-If the remote handler is blocked on a send, and the client is trying to send without the remote receiving, 
+If the remote handler is blocked on a send, and the client is trying to send without the remote receiving,
 the operation would become deadlocked if the channels are full.
 
 ### Typed handlers
@@ -215,24 +215,24 @@ Typed handlers are handlers that have a specific type for the request and respon
             // out is closed by the caller and should never be closed by the handler.
             return nil
     }
-	
+
     // Create a typed handler.
     // Due to current generics limitations, a constructor of the empty type must be provided.
     instance := grid.NewStream[*Payload, *Req, *Resp](h, newPayload, newReq, newResp)
-	
+
     // Tweakable options
     instance.WithPayload = true // default true when newPayload != nil
     instance.OutCapacity = 1    // default
     instance.InCapacity = 1     // default true when newReq != nil
-	
+
     // Register the handler on the manager
     instance.Register(manager, handler, "asubroute")
-	
+
     // The typed instance is also used for calls
     conn := manager.Connection("host").Subroute("asubroute")
     stream, err := instance.Call(ctx, conn, &Payload{"request payload"})
     if err != nil { ... }
-	
+
     // Read results from the stream
     err = stream.Results(func(resp *Resp) error {
         fmt.Println("Got result", resp)
