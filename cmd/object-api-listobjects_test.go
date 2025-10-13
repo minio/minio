@@ -853,7 +853,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (20).
 		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
-		// Testing for trancated value (21-24).
+		// Testing for truncated value (21-24).
 		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
 		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
 		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
@@ -1167,7 +1167,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		}
 	}
 
-	// Formualting the result data set to be expected from ListObjects call inside the tests,
+	// Formulating the result data set to be expected from ListObjects call inside the tests,
 	// This will be used in testCases and used for asserting the correctness of ListObjects output in the tests.
 
 	resultCases := []ListObjectsInfo{
@@ -1591,7 +1591,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (18).
 		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
-		// Testing for trancated value (19-22).
+		// Testing for truncated value (19-22).
 		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
 		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
 		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},

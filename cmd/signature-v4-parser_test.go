@@ -236,6 +236,25 @@ func TestParseCredentialHeader(t *testing.T) {
 				"aws4_request"),
 			expectedErrCode: ErrNone,
 		},
+		// Test Case - 12.
+		// Test case with right inputs but trailing `/`. Expected to return a valid CredentialHeader.
+		// "aws4_request" is the valid request version.
+		{
+			inputCredentialStr: generateCredentialStr(
+				"Z7IXGOO6BZ0REAN1Q26I",
+				sampleTimeStr,
+				"us-west-1",
+				"s3",
+				"aws4_request/"),
+			expectedCredentials: generateCredentials(
+				t,
+				"Z7IXGOO6BZ0REAN1Q26I",
+				sampleTimeStr,
+				"us-west-1",
+				"s3",
+				"aws4_request"),
+			expectedErrCode: ErrNone,
+		},
 	}
 
 	for i, testCase := range testCases {
