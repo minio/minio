@@ -506,7 +506,7 @@ func (sys *IAMSys) printIAMRoles() {
 	if len(sys.rolesMap) == 0 {
 		return
 	}
-	var arns []string
+	arns := make([]string, 0, len(sys.rolesMap))
 	for arn := range sys.rolesMap {
 		arns = append(arns, arn.String())
 	}
