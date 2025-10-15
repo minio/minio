@@ -42,6 +42,8 @@ func runAllIAMSTSTests(suite *TestSuiteIAM, c *check) {
 	// The STS for root test needs to be the first one after setup.
 	suite.TestSTSForRoot(c)
 	suite.TestSTS(c)
+	suite.TestSTSPrivilegeEscalationBug2_2025_10_15(c, true)
+	suite.TestSTSPrivilegeEscalationBug2_2025_10_15(c, false)
 	suite.TestSTSWithDenyDeleteVersion(c)
 	suite.TestSTSWithTags(c)
 	suite.TestSTSServiceAccountsWithUsername(c)
@@ -274,6 +276,110 @@ func (s *TestSuiteIAM) TestSTSWithDenyDeleteVersion(c *check) {
 
 	versions = c.mustUploadReturnVersions(ctx, minioClient, bucket)
 	c.mustNotDelete(ctx, minioClient, bucket, versions[0])
+}
+
+func (s *TestSuiteIAM) TestSTSPrivilegeEscalationBug2_2025_10_15(c *check, forRoot bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	for i := range 3 {
+		err := s.client.MakeBucket(ctx, fmt.Sprintf("bucket%d", i+1), minio.MakeBucketOptions{})
+		if err != nil {
+			c.Fatalf("bucket create error: %v", err)
+		}
+		defer func(i int) {
+			_ = s.client.RemoveBucket(ctx, fmt.Sprintf("bucket%d", i+1))
+		}(i)
+	}
+
+	allow2BucketsPolicyBytes := []byte(`{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ListBucket1AndBucket2",
+            "Effect": "Allow",
+            "Action": ["s3:ListBucket"],
+            "Resource": ["arn:aws:s3:::bucket1", "arn:aws:s3:::bucket2"]
+        },
+        {
+            "Sid": "ReadWriteBucket1AndBucket2Objects",
+            "Effect": "Allow",
+            "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject"
+            ],
+            "Resource": ["arn:aws:s3:::bucket1/*", "arn:aws:s3:::bucket2/*"]
+        }
+    ]
+}`)
+
+	var value cr.Value
+	var err error
+	if forRoot {
+		assumeRole := cr.STSAssumeRole{
+			Client:      s.TestSuiteCommon.client,
+			STSEndpoint: s.endPoint,
+			Options: cr.STSAssumeRoleOptions{
+				AccessKey: globalActiveCred.AccessKey,
+				SecretKey: globalActiveCred.SecretKey,
+				Policy:    string(allow2BucketsPolicyBytes),
+			},
+		}
+		value, err = assumeRole.Retrieve()
+		if err != nil {
+			c.Fatalf("err calling assumeRole: %v", err)
+		}
+	} else {
+		// Create a regular user and attach consoleAdmin policy
+		err := s.adm.AddUser(ctx, "foobar", "foobar123")
+		if err != nil {
+			c.Fatalf("could not create user")
+		}
+
+		_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+			Policies: []string{"consoleAdmin"},
+			User:     "foobar",
+		})
+		if err != nil {
+			c.Fatalf("could not attach policy")
+		}
+
+		assumeRole := cr.STSAssumeRole{
+			Client:      s.TestSuiteCommon.client,
+			STSEndpoint: s.endPoint,
+			Options: cr.STSAssumeRoleOptions{
+				AccessKey: "foobar",
+				SecretKey: "foobar123",
+				Policy:    string(allow2BucketsPolicyBytes),
+			},
+		}
+		value, err = assumeRole.Retrieve()
+		if err != nil {
+			c.Fatalf("err calling assumeRole: %v", err)
+		}
+	}
+	restrictedClient := s.getUserClient(c, value.AccessKeyID, value.SecretAccessKey, value.SessionToken)
+
+	buckets, err := restrictedClient.ListBuckets(ctx)
+	if err != nil {
+		c.Fatalf("err fetching buckets %s", err)
+	}
+	if len(buckets) != 2 || buckets[0].Name != "bucket1" || buckets[1].Name != "bucket2" {
+		c.Fatalf("restricted STS account should only have access to bucket1 and bucket2")
+	}
+
+	// Try to escalate privileges
+	restrictedAdmClient := s.getAdminClient(c, value.AccessKeyID, value.SecretAccessKey, value.SessionToken)
+	_, err = restrictedAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		AccessKey: "newroot",
+		SecretKey: "newroot123",
+	})
+	if err == nil {
+		c.Fatalf("restricted STS account was able to create service account bypassing sub-policy!")
+	}
 }
 
 func (s *TestSuiteIAM) TestSTSWithTags(c *check) {
