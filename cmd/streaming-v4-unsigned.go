@@ -139,7 +139,7 @@ func (cr *s3UnsignedChunkedReader) Read(buf []byte) (n int, err error) {
 			return n, cr.err
 		}
 		if size > maxChunkSize {
-			cr.err = errChunkTooBig
+			cr.err = getChunkTooBigError()
 			return n, cr.err
 		}
 	}
