@@ -12,27 +12,39 @@ Designed for speed and scalability, it powers AI/ML, analytics, and data-intensi
 - High Performance – Ideal for demanding storage workloads.
 
 This README provides instructions for building MinIO from source and deploying onto baremetal hardware.
-For more complete documentation, see [the MinIO documentation website](https://docs.min.io/community/minio-object-store/index.html)
+Use the [MinIO Documentation](https://github.com/minio/docs) project to build and host a local copy of the documentation.
 
 ## MinIO is Open Source Software
 
-We designed MinIO as Open Source software for the Open Source software community.
-We encourage the community to remix, redesign, and reshare MinIO under the terms of the AGPLv3 license.
+We designed MinIO as Open Source software for the Open Source software community. We encourage the community to remix, redesign, and reshare MinIO under the terms of the AGPLv3 license.
 
-All usage of MinIO in your application stack requires validation against AGPLv3 obligations, which include but are not limited to the release of modified code to the community from which you have benefited.
-Any commercial/proprietary usage of the AGPLv3 software, including repackaging or reselling services/features, is done at your own risk.
+All usage of MinIO in your application stack requires validation against AGPLv3 obligations, which include but are not limited to the release of modified code to the community from which you have benefited. Any commercial/proprietary usage of the AGPLv3 software, including repackaging or reselling services/features, is done at your own risk.
 
 The AGPLv3 provides no obligation by any party to support, maintain, or warranty the original or any modified work.
 All support is provided on a best-effort basis through Github and our [Slack](https//slack.min.io) channel, and any member of the community is welcome to contribute and assist others in their usage of the software.
 
-MinIO [AIStor](https://www.min.io/product/aistor) includes enterprise-grade support and licensing for workloads which require commercial or proprietary usage and production-level SLA/SLO-backed support.
-For more information, [reach out for a quote](https://min.io/pricing).
+MinIO [AIStor](https://www.min.io/product/aistor) includes enterprise-grade support and licensing for workloads which require commercial or proprietary usage and production-level SLA/SLO-backed support. For more information, [reach out for a quote](https://min.io/pricing).
 
-## Legacy Releases
+## Source-Only Distribution
 
-MinIO has no planned or scheduled releases for this repository.
-While a new release may be cut at any time, there is no timeline for when a subsequent release may occur.
-All existing releases remain accessible through Github or at https://dl.min.io/server/minio/release/ .
+**Important:** The MinIO community edition is now distributed as source code only. We will no longer provide pre-compiled binary releases for the community version.
+
+### Installing Latest MinIO Community Edition
+
+To use MinIO community edition, you have two options:
+
+1. **Install from source** using `go install github.com/minio/minio@latest` (recommended)
+2. **Build a Docker image** from the provided Dockerfile
+
+See the sections below for detailed instructions on each method.
+
+### Legacy Binary Releases
+
+Historical pre-compiled binary releases remain available for reference but are no longer maintained:
+- GitHub Releases: https://github.com/minio/minio/releases
+- Direct downloads: https://dl.min.io/server/minio/release/
+
+**These legacy binaries will not receive updates.** We strongly recommend using source builds for access to the latest features, bug fixes, and security updates.
 
 ## Install from Source
 
@@ -70,6 +82,39 @@ For application developers, see <https://docs.min.io/community/minio-object-stor
 > [!NOTE]
 > Production environments using compiled-from-source MinIO binaries do so at their own risk.
 > The AGPLv3 license provides no warranties nor liabilites for any such usage.
+
+## Build Docker Image
+
+You can use the `docker build .` command to build a Docker image on your local host machine.
+You must first [build MinIO](#install-from-source) and ensure the `minio` binary exists in the project root.
+
+The following command builds the Docker image using the default `Dockerfile` in the root project directory with the repository and image tag `myminio:minio`
+
+```sh
+docker build -t myminio:minio .
+```
+
+Use `docker image ls` to confirm the image exists in your local repository.
+You can run the server using standard Docker invocation:
+
+```sh
+docker run -p 9000:9000 -p 9001:9001 myminio:minio server /tmp/minio --console-address :9001
+```
+
+Complete documentation for building Docker containers, managing custom images, or loading images into orchestration platforms is out of scope for this documentation.
+You can modify the `Dockerfile` and `dockerscripts/socker-entrypoint.sh` as-needed to reflect your specific image requirements.
+
+See the [MinIO Container](https://docs.min.io/community/minio-object-store/operations/deployments/baremetal-deploy-minio-as-a-container.html#deploy-minio-container) documentation for more guidance on running MinIO within a Container image.
+
+## Install using Helm Charts
+
+There are two paths for installing MinIO onto Kubernetes infrastructure:
+
+- Use the [MinIO Operator](https://github.com/minio/operator)
+- Use the community-maintained [Helm charts](https://github.com/minio/minio/tree/master/helm/minio)
+
+See the [MinIO Documentation](https://docs.min.io/community/minio-object-store/operations/deployments/kubernetes.html) for guidance on deploying using the Operator.
+The Community Helm chart has instructions in the folder-level README.
 
 ## Test MinIO Connectivity
 
