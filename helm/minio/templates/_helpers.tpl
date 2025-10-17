@@ -93,6 +93,27 @@ Return the appropriate apiVersion for console ingress.
 {{- end -}}
 
 {{/*
+Return the appropriate storageClassName.
+{{ include "minio.persistence.storageClass" ( dict "persistence" .Values.path.to.the.persistence "global" .Values.global) }}
+*/}}
+{{- define "minio.persistence.storageClass" -}}
+  {{- $storageClass := .persistence.storageClass -}}
+  {{- if .global -}}
+      {{- if .global.storageClass -}}
+          {{- $storageClass = .global.storageClass -}}
+      {{- end -}}
+  {{- end -}}
+
+  {{- if $storageClass -}}
+    {{- if (eq "-" $storageClass) -}}
+        {{- printf "storageClassName: \"\"" -}}
+    {{- else }}
+        {{- printf "storageClassName: %s" $storageClass -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
 Determine secret name.
 */}}
 {{- define "minio.secretName" -}}
