@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הרבי מלובביש - רוצים ללמוד</title>
+  <meta name="description" content="הרבי מלובביש - רוצים ללמוד אל הרבי מלובביש">
+  <meta name="keywords" content="הרבי מלובביש, לימוד, תורה, יהדות">
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+      min-height: 100vh;
+      direction: rtl;
+      overflow-x: hidden;
+    }
+    
+    /* רקע אנימציה */
+    .background-animation {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: 
+        radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255,255,255,0.05) 0%, transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(255,255,255,0.08) 0%, transparent 50%);
+      animation: floatBackground 15s ease-in-out infinite;
+      z-index: 1;
+      pointer-events: none;
+    }
+    
+    @keyframes floatBackground {
+      0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+        opacity: 0.8;
+      }
+      50% {
+        transform: translateY(-20px) rotate(1deg);
+        opacity: 1;
+      }
+    }
+    
+    .container {
+      position: relative;
+      z-index: 10;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .main-header {
+      text-align: center;
+      margin-bottom: 40px;
+      animation: fadeInDown 1s ease-out;
+    }
+    
+    .logo {
+      font-size: 4rem;
+      color: #fff;
+      margin-bottom: 20px;
+      text-shadow: 3px 3px 15px rgba(0,0,0,0.3);
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    
+    .subtitle {
+      font-size: 1.5rem;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 10px;
+      font-weight: 300;
+    }
+    
+    .tagline {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.8);
+      font-style: italic;
+      margin-bottom: 40px;
+    }
+    
+    .main-button {
+      background: linear-gradient(45deg, #e74c3c, #c0392b);
+      color: white;
+      border: none;
+      padding: 20px 40px;
+      font-size: 1.8rem;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(231,76,60,0.4);
+      transition: all 0.3s ease;
+      font-weight: bold;
+      letter-spacing: 1px;
+      text-decoration: none;
+      display: inline-block;
+      position: relative;
+      overflow: hidden;
+      animation: pulse 2s infinite;
+    }
+    
+    .main-button:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(231,76,60,0.6);
+      background: linear-gradient(45deg, #c0392b, #a93226);
+    }
+    
+    .main-button:active {
+      transform: translateY(-2px);
+    }
+    
+    .main-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.6s;
+    }
+    
+    .main-button:hover::before {
+      left: 100%;
+    }
+    
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 10px 30px rgba(231,76,60,0.4);
+      }
+      50% {
+        box-shadow: 0 15px 40px rgba(231,76,60,0.6);
+      }
+      100% {
+        box-shadow: 0 10px 30px rgba(231,76,60,0.4);
+      }
+    }
+    
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      max-width: 900px;
+      margin-top: 50px;
+      animation: fadeInUp 1s ease-out 0.5s both;
+    }
+    
+    .feature-card {
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 30px 20px;
+      text-align: center;
+      color: white;
+      transition: all 0.3s ease;
+    }
+    
+    .feature-card:hover {
+      transform: translateY(-10px);
+      background: rgba(255,255,255,0.15);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+    }
+    
+    .feature-icon {
+      font-size: 3rem;
+      margin-bottom: 15px;
+      display: block;
+    }
+    
+    .feature-title {
+      font-size: 1.3rem;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    
+    .feature-desc {
+      font-size: 1rem;
+      opacity: 0.9;
+      line-height: 1.5;
+    }
+    
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    .admin-link {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 25px;
+      text-decoration: none;
+      font-size: 0.9rem;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: all 0.3s ease;
+    }
+    
+    .admin-link:hover {
+      background: rgba(255,255,255,0.2);
+      transform: translateY(-2px);
+    }
+    
+    /* תמיכה בנייד */
+    @media (max-width: 768px) {
+      .logo {
+        font-size: 2.5rem;
+      }
+      
+      .subtitle {
+        font-size: 1.2rem;
+      }
+      
+      .tagline {
+        font-size: 1rem;
+      }
+      
+      .main-button {
+        padding: 15px 30px;
+        font-size: 1.4rem;
+      }
+      
+      .features {
+        grid-template-columns: 1fr;
+        margin-top: 30px;
+      }
+      
+      .feature-card {
+        padding: 20px 15px;
+      }
+      
+      .admin-link {
+        bottom: 10px;
+        left: 10px;
+        padding: 8px 15px;
+        font-size: 0.8rem;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .container {
+        padding: 15px;
+      }
+      
+      .logo {
+        font-size: 2rem;
+      }
+      
+      .main-button {
+        padding: 12px 25px;
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="background-animation"></div>
+  
+  <div class="container">
+    <header class="main-header">
+      <h1 class="logo">🕍 הרבי מלובביש</h1>
+      <p class="subtitle">רוצים ללמוד אל הרבי מלובביש</p>
+    </header>
+    
+    <button class="main-button" onclick="startLearning()">
+להתחיל    </button>
+  </div>
+  
+  <script>
+    // טעינת קונפיגורציית Firebase מהקובץ הקיים
+    if (typeof firebase === 'undefined') {
+      console.error('Firebase לא נטען');
+    }
+    
+    // אתחול Firebase (ייטען מקובץ firebase-config.js)
+    document.addEventListener('DOMContentLoaded', function() {
+      // בדיקה אם Firebase מוכן
+      if (typeof firebase !== 'undefined' && firebase.apps.length === 0) {
+        // טעינת הקונפיגורציה מהקובץ הקיים
+        fetch('firebase-config.js')
+          .then(response => response.text())
+          .then(data => {
+            // חילוץ האובייקט config מהקובץ
+            const configMatch = data.match(/const\s+firebaseConfig\s*=\s*({[\s\S]*?});/);
+            if (configMatch) {
+              const configStr = configMatch[1];
+              const config = eval('(' + configStr + ')');
+              firebase.initializeApp(config);
+              console.log('Firebase אותחל בהצלחה');
+            }
+          })
+          .catch(error => {
+            console.error('שגיאה בטעינת קונפיגורציית Firebase:', error);
+          });
+      }
+    });
+    
+    function startLearning() {
+      // אנימציה לכפתור
+      const button = document.querySelector('.main-button');
+      button.style.transform = 'scale(0.95)';
+      
+      setTimeout(() => {
+        button.style.transform = '';
+        // מעבר לעמוד הצגת המצגות
+        window.location.href = 'presentation-viewer.html';
+      }, 150);
+    }
+    
+    // אפקטי האנימציה בטעינת העמוד
+    window.addEventListener('load', function() {
+      // הוספת אפקט זוהר לכפתור הראשי
+      const button = document.querySelector('.main-button');
+      let glowInterval = setInterval(() => {
+        button.style.boxShadow = '0 15px 40px rgba(231,76,60,0.8), 0 0 20px rgba(255,255,255,0.5)';
+        setTimeout(() => {
+          button.style.boxShadow = '0 10px 30px rgba(231,76,60,0.4)';
+        }, 1000);
+      }, 3000);
+      
+      // עצירת האפקט לאחר מעבר עכבר
+      button.addEventListener('mouseenter', () => {
+        clearInterval(glowInterval);
+      });
+    });
+    
+    // אפקט חלקיקים נע ברקע (אופציונלי)
+    function createFloatingParticles() {
+      const container = document.querySelector('.container');
+      const particleCount = 15;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.style.cssText = `
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: rgba(255,255,255,0.3);
+          border-radius: 50%;
+          pointer-events: none;
+          animation: float ${Math.random() * 6 + 4}s ease-in-out infinite;
+          left: ${Math.random() * 100}%;
+          top: ${Math.random() * 100}%;
+          animation-delay: ${Math.random() * 5}s;
+        `;
+        container.appendChild(particle);
+      }
+    }
+    
+    // הוספת אנימציית חלקיקים
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes float {
+        0%, 100% {
+          transform: translateY(0px) translateX(0px);
+          opacity: 0.3;
+        }
+        50% {
+          transform: translateY(-20px) translateX(10px);
+          opacity: 0.8;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // יצירת החלקיקים
+    createFloatingParticles();
+  </script>
+</body>
+</html>
