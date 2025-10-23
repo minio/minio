@@ -9,11 +9,23 @@ Chroot allows user based namespace isolation on many standard Linux deployments.
 
 ## 2. Install MinIO in Chroot
 
+> **Note:** MinIO community edition is now distributed as source code only. Pre-compiled binaries are no longer provided for new releases.
+
+Build MinIO from source and install it in the chroot directory:
+
 ```sh
+# Build MinIO from source
+go install github.com/minio/minio@latest
+
+# Create the bin directory in your chroot
 mkdir -p /mnt/export/${USER}/bin
-wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /mnt/export/${USER}/bin/minio
+
+# Copy the built binary to the chroot directory
+cp $(go env GOPATH)/bin/minio /mnt/export/${USER}/bin/minio
 chmod +x /mnt/export/${USER}/bin/minio
 ```
+
+Alternatively, if you have an existing legacy binary, you can still use it, but note that it will not receive updates.
 
 Bind your `proc` mount to the target chroot directory
 

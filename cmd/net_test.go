@@ -82,7 +82,7 @@ func TestSortIPs(t *testing.T) {
 			ipList:       []string{"127.0.0.1"},
 			sortedIPList: []string{"127.0.0.1"},
 		},
-		// Non parsable ip is assumed to be hostame and gets preserved
+		// Non parsable ip is assumed to be hostname and gets preserved
 		// as the left most elements, regardless of IP based sorting.
 		{
 			ipList:       []string{"hostname", "127.0.0.1", "192.168.1.106"},

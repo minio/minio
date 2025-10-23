@@ -151,7 +151,7 @@ func init() {
 		cpuLoad1:          "CPU load average 1min",
 		cpuLoad5:          "CPU load average 5min",
 		cpuLoad15:         "CPU load average 15min",
-		cpuLoad1Perc:      "CPU load average 1min (perentage)",
+		cpuLoad1Perc:      "CPU load average 1min (percentage)",
 		cpuLoad5Perc:      "CPU load average 5min (percentage)",
 		cpuLoad15Perc:     "CPU load average 15min (percentage)",
 	}

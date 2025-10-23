@@ -1,14 +1,19 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Report a bug in MinIO (community edition is source-only)
 title: ''
 labels: community, triage
 assignees: ''
 
 ---
 
-## NOTE
-If this case is urgent, please subscribe to [Subnet](https://min.io/pricing) so that our 24/7 support team may help you faster.
+## IMPORTANT NOTES
+
+**Community Edition**: MinIO community edition is now source-only. Install via `go install github.com/minio/minio@latest`
+
+**Feature Requests**: We are no longer accepting feature requests for the community edition. For feature requests and enterprise support, please subscribe to [MinIO Enterprise Support](https://min.io/pricing).
+
+**Urgent Issues**: If this case is urgent or affects production, please subscribe to [SUBNET](https://min.io/pricing) for 24/7 enterprise support.
 
 <!--- Provide a general summary of the issue in the Title above -->
 

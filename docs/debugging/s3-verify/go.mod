@@ -2,7 +2,7 @@ module github.com/minio/minio/docs/debugging/s3-verify
 
 go 1.23.0
 
-toolchain go1.24.2
+toolchain go1.24.8
 
 require github.com/minio/minio-go/v7 v7.0.83
 
