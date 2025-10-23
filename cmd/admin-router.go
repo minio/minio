@@ -296,7 +296,7 @@ func registerAdminRouter(router *mux.Router, enableConfigOps bool) {
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam").HandlerFunc(adminMiddleware(adminAPI.ImportIAM, noGZFlag))
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/import-iam-v2").HandlerFunc(adminMiddleware(adminAPI.ImportIAMV2, noGZFlag))
 
-		// IDentity Provider configuration APIs
+		// Identity Provider configuration APIs
 		adminRouter.Methods(http.MethodPut).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(adminMiddleware(adminAPI.AddIdentityProviderCfg))
 		adminRouter.Methods(http.MethodPost).Path(adminVersion + "/idp-config/{type}/{name}").HandlerFunc(adminMiddleware(adminAPI.UpdateIdentityProviderCfg))
 		adminRouter.Methods(http.MethodGet).Path(adminVersion + "/idp-config/{type}").HandlerFunc(adminMiddleware(adminAPI.ListIdentityProviderCfg))

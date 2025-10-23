@@ -11,7 +11,7 @@ With Compose, you use a Compose file to configure MinIO services. Then, using a 
 
 ## 2. Run Distributed MinIO on Docker Compose
 
-To deploy Distributed MinIO on Docker Compose, please download [docker-compose.yaml](https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/docker-compose.yaml?raw=true) and [nginx.conf](https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/nginx.conf?raw=true) to your current working directory. Note that Docker Compose pulls the MinIO Docker image, so there is no need to explicitly download MinIO binary. Then run one of the below commands
+To deploy Distributed MinIO on Docker Compose, please download [docker-compose.yaml](https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/docker-compose.yaml?raw=true) and [nginx.conf](https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/nginx.conf?raw=true) to your current working directory. Note that Docker Compose pulls the MinIO Docker image, so there is no need to build MinIO from source when using Docker. For non-Docker deployments, MinIO community edition is now source-only and can be installed via `go install github.com/minio/minio@latest`. Then run one of the below commands
 
 ### GNU/Linux and macOS
 

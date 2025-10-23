@@ -75,7 +75,7 @@ func parseCredentialHeader(credElement string, region string, stype serviceType)
 	if creds[0] != "Credential" {
 		return ch, ErrMissingCredTag
 	}
-	credElements := strings.Split(strings.TrimSpace(creds[1]), SlashSeparator)
+	credElements := strings.Split(strings.TrimRight(strings.TrimSpace(creds[1]), SlashSeparator), SlashSeparator)
 	if len(credElements) < 5 {
 		return ch, ErrCredMalformed
 	}

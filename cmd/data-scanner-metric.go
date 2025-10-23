@@ -106,16 +106,14 @@ func (p *scannerMetrics) log(s scannerMetric, paths ...string) func(custom map[s
 
 // time n scanner actions.
 // Use for s < scannerMetricLastRealtime
-func (p *scannerMetrics) timeN(s scannerMetric) func(n int) func() {
+func (p *scannerMetrics) timeN(s scannerMetric) func(n int) {
 	startTime := time.Now()
-	return func(n int) func() {
-		return func() {
-			duration := time.Since(startTime)
+	return func(n int) {
+		duration := time.Since(startTime)
 
-			atomic.AddUint64(&p.operations[s], uint64(n))
-			if s < scannerMetricLastRealtime {
-				p.latency[s].add(duration)
-			}
+		atomic.AddUint64(&p.operations[s], uint64(n))
+		if s < scannerMetricLastRealtime {
+			p.latency[s].add(duration)
 		}
 	}
 }

@@ -267,7 +267,7 @@ func (l EndpointServerPools) ESCount() (count int) {
 	for _, p := range l {
 		count += p.SetCount
 	}
-	return
+	return count
 }
 
 // GetNodes returns a sorted list of nodes in this cluster
@@ -297,7 +297,7 @@ func (l EndpointServerPools) GetNodes() (nodes []Node) {
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].Host < nodes[j].Host
 	})
-	return
+	return nodes
 }
 
 // GetPoolIdx return pool index
@@ -588,7 +588,7 @@ func (endpoints Endpoints) GetAllStrings() (all []string) {
 	for _, e := range endpoints {
 		all = append(all, e.String())
 	}
-	return
+	return all
 }
 
 func hostResolveToLocalhost(endpoint Endpoint) bool {

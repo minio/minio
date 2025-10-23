@@ -81,13 +81,13 @@ func getESVersionSupportStatus(version string) (res ESSupportStatus, err error) 
 	parts := strings.Split(version, ".")
 	if len(parts) < 1 {
 		err = fmt.Errorf("bad ES version string: %s", version)
-		return
+		return res, err
 	}
 
 	majorVersion, err := strconv.Atoi(parts[0])
 	if err != nil {
 		err = fmt.Errorf("bad ES version string: %s", version)
-		return
+		return res, err
 	}
 
 	switch {
@@ -96,7 +96,7 @@ func getESVersionSupportStatus(version string) (res ESSupportStatus, err error) 
 	default:
 		res = ESSSupported
 	}
-	return
+	return res, err
 }
 
 // magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.

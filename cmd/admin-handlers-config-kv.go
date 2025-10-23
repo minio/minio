@@ -193,27 +193,27 @@ func (a adminAPIHandlers) SetConfigKVHandler(w http.ResponseWriter, r *http.Requ
 func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (result setConfigResult, err error) {
 	result.Cfg, err = readServerConfig(ctx, objectAPI, nil)
 	if err != nil {
-		return
+		return result, err
 	}
 
 	result.Dynamic, err = result.Cfg.ReadConfig(bytes.NewReader(kvBytes))
 	if err != nil {
-		return
+		return result, err
 	}
 
 	result.SubSys, _, _, err = config.GetSubSys(string(kvBytes))
 	if err != nil {
-		return
+		return result, err
 	}
 
 	tgts, err := config.ParseConfigTargetID(bytes.NewReader(kvBytes))
 	if err != nil {
-		return
+		return result, err
 	}
 	ctx = context.WithValue(ctx, config.ContextKeyForTargetFromConfig, tgts)
 	if verr := validateConfig(ctx, result.Cfg, result.SubSys); verr != nil {
 		err = badConfigErr{Err: verr}
-		return
+		return result, err
 	}
 
 	// Check if subnet proxy being set and if so set the same value to proxy of subnet
@@ -222,12 +222,12 @@ func setConfigKV(ctx context.Context, objectAPI ObjectLayer, kvBytes []byte) (re
 
 	// Update the actual server config on disk.
 	if err = saveServerConfig(ctx, objectAPI, result.Cfg); err != nil {
-		return
+		return result, err
 	}
 
 	// Write the config input KV to history.
 	err = saveServerConfigHistory(ctx, objectAPI, kvBytes)
-	return
+	return result, err
 }
 
 // GetConfigKVHandler - GET /minio/admin/v3/get-config-kv?key={key}
