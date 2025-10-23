@@ -102,7 +102,7 @@ docker run -p 9000:9000 -p 9001:9001 myminio:minio server /tmp/minio --console-a
 ```
 
 Complete documentation for building Docker containers, managing custom images, or loading images into orchestration platforms is out of scope for this documentation.
-You can modify the `Dockerfile` and `dockerscripts/socker-entrypoint.sh` as-needed to reflect your specific image requirements.
+You can modify the `Dockerfile` and `dockerscripts/docker-entrypoint.sh` as-needed to reflect your specific image requirements.
 
 See the [MinIO Container](https://docs.min.io/community/minio-object-store/operations/deployments/baremetal-deploy-minio-as-a-container.html#deploy-minio-container) documentation for more guidance on running MinIO within a Container image.
 
