@@ -131,11 +131,31 @@ func SetNotifyAMQP(s config.Config, amqpName string, cfg target.AMQPArgs) error 
 			Value: cfg.Exchange,
 		},
 		config.KV{
+			Key:   target.AmqpQueue,
+			Value: cfg.Queue,
+		},
+		config.KV{
+			Key:   target.AmqpTLSSkipVerify,
+			Value: config.FormatBool(cfg.TLS.SkipVerify),
+		},
+		config.KV{
+			Key:   target.AmqpClientTLSCert,
+			Value: cfg.TLS.ClientTLSCert,
+		},
+		config.KV{
+			Key:   target.AmqpClientTLSKey,
+			Value: cfg.TLS.ClientTLSKey,
+		},
+		config.KV{
 			Key:   target.AmqpRoutingKey,
 			Value: cfg.RoutingKey,
 		},
 		config.KV{
 			Key:   target.AmqpExchangeType,
+			Value: cfg.ExchangeType,
+		},
+		config.KV{
+			Key:   target.AmqpExclusive,
 			Value: cfg.ExchangeType,
 		},
 		config.KV{

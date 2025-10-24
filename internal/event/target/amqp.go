@@ -19,6 +19,8 @@ package target
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +43,7 @@ type AMQPArgs struct {
 	Enable            bool        `json:"enable"`
 	URL               amqp091.URI `json:"url"`
 	Exchange          string      `json:"exchange"`
+	Queue             string      `json:"queue"`
 	RoutingKey        string      `json:"routingKey"`
 	ExchangeType      string      `json:"exchangeType"`
 	DeliveryMode      uint8       `json:"deliveryMode"`
@@ -49,10 +52,17 @@ type AMQPArgs struct {
 	Durable           bool        `json:"durable"`
 	Internal          bool        `json:"internal"`
 	NoWait            bool        `json:"noWait"`
+	Exclusive         bool        `json:"exclusive"`
 	AutoDeleted       bool        `json:"autoDeleted"`
 	PublisherConfirms bool        `json:"publisherConfirms"`
 	QueueDir          string      `json:"queueDir"`
 	QueueLimit        uint64      `json:"queueLimit"`
+	TLS               struct {
+		RootCAs       *x509.CertPool `json:"-"`
+		SkipVerify    bool           `json:"skipVerify"`
+		ClientTLSCert string         `json:"clientTLSCert"`
+		ClientTLSKey  string         `json:"clientTLSKey"`
+	} `json:"tls"`
 }
 
 // AMQP input constants.
@@ -66,6 +76,7 @@ const (
 
 	AmqpURL               = "url"
 	AmqpExchange          = "exchange"
+	AmqpQueue             = "queue"
 	AmqpRoutingKey        = "routing_key"
 	AmqpExchangeType      = "exchange_type"
 	AmqpDeliveryMode      = "delivery_mode"
@@ -74,7 +85,11 @@ const (
 	AmqpDurable           = "durable"
 	AmqpInternal          = "internal"
 	AmqpNoWait            = "no_wait"
+	AmqpExclusive         = "exclusive"
 	AmqpAutoDeleted       = "auto_deleted"
+	AmqpTLSSkipVerify     = "tls_skip_verify"
+	AmqpClientTLSCert     = "client_tls_cert"
+	AmqpClientTLSKey      = "client_tls_key"
 	AmqpArguments         = "arguments"
 	AmqpPublisherConfirms = "publisher_confirms"
 
@@ -90,10 +105,15 @@ const (
 	EnvAMQPInternal          = "MINIO_NOTIFY_AMQP_INTERNAL"
 	EnvAMQPNoWait            = "MINIO_NOTIFY_AMQP_NO_WAIT"
 	EnvAMQPAutoDeleted       = "MINIO_NOTIFY_AMQP_AUTO_DELETED"
+	EnvAMQPExclusive         = "MINIO_NOTIFY_AMQP_EXCLUSIVE"
+	EnvAMQPTLSSkipVerify     = "MINIO_NOTIFY_AMQP_TLS_SKIP_VERIFY"
 	EnvAMQPArguments         = "MINIO_NOTIFY_AMQP_ARGUMENTS"
 	EnvAMQPPublisherConfirms = "MINIO_NOTIFY_AMQP_PUBLISHING_CONFIRMS"
 	EnvAMQPQueueDir          = "MINIO_NOTIFY_AMQP_QUEUE_DIR"
 	EnvAMQPQueueLimit        = "MINIO_NOTIFY_AMQP_QUEUE_LIMIT"
+	EnvAMQPQueue             = "MINIO_NOTIFY_AMQP_QUEUE"
+	EnvAMQPClientTLSCert     = "MINIO_NOTIFY_AMQP_CLIENT_TLS_CERT"
+	EnvAMQPClientTLSKey      = "MINIO_NOTIFY_AMQP_CLIENT_TLS_KEY"
 )
 
 // Validate AMQP arguments
@@ -109,7 +129,12 @@ func (a *AMQPArgs) Validate() error {
 			return errors.New("queueDir path should be absolute")
 		}
 	}
-
+	if a.Queue == "" && a.Exchange == "" {
+		return errors.New("at least one exchange or queue must be set")
+	}
+	if a.Queue == "" && (a.Exchange == "" || a.ExchangeType == "") {
+		return errors.New("exchange or exchange type should not be empty")
+	}
 	return nil
 }
 
@@ -248,10 +273,17 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp091.Channel, confi
 	// Add more information here as required, but be aware to not overload headers
 	headers["minio-bucket"] = eventData.S3.Bucket.Name
 	headers["minio-event"] = eventData.EventName.String()
-
-	if err = ch.ExchangeDeclare(target.args.Exchange, target.args.ExchangeType, target.args.Durable,
-		target.args.AutoDeleted, target.args.Internal, target.args.NoWait, nil); err != nil {
-		return err
+	if target.args.Exchange == "" && target.args.Queue != "" {
+		if _, err = ch.QueueDeclare(target.args.Queue, target.args.Durable,
+			target.args.AutoDeleted, target.args.Exclusive, target.args.NoWait, nil); err != nil {
+			return err
+		}
+		target.args.RoutingKey = target.args.Queue
+	} else {
+		if err = ch.ExchangeDeclare(target.args.Exchange, target.args.ExchangeType, target.args.Durable,
+			target.args.AutoDeleted, target.args.Internal, target.args.NoWait, nil); err != nil {
+			return err
+		}
 	}
 
 	if err = ch.Publish(target.args.Exchange, target.args.RoutingKey, target.args.Mandatory,
@@ -337,7 +369,25 @@ func (target *AMQPTarget) init() error {
 }
 
 func (target *AMQPTarget) initAMQP() error {
-	conn, err := amqp091.Dial(target.args.URL.String())
+	var conn *amqp091.Connection
+	var err error
+	if target.args.URL.Scheme == "amqps" {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+		if target.args.TLS.ClientTLSCert != "" && target.args.TLS.ClientTLSKey != "" {
+			cert, err := tls.LoadX509KeyPair(target.args.TLS.ClientTLSCert, target.args.TLS.ClientTLSKey)
+			if err != nil {
+				return err
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+		tlsConfig.InsecureSkipVerify = target.args.TLS.SkipVerify
+		tlsConfig.RootCAs = target.args.TLS.RootCAs
+		conn, err = amqp091.DialTLS(target.args.URL.String(), tlsConfig)
+	} else {
+		conn, err = amqp091.Dial(target.args.URL.String())
+	}
 	if err != nil {
 		if xnet.IsConnRefusedErr(err) || xnet.IsConnResetErr(err) {
 			target.loggerOnce(context.Background(), err, target.ID().String())

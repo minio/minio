@@ -106,6 +106,7 @@ func fetchSubSysTargets(ctx context.Context, cfg config.Config, subSys string, t
 			if !args.Enable {
 				continue
 			}
+			args.TLS.RootCAs = transport.TLSClientConfig.RootCAs
 			t, err := target.NewAMQPTarget(id, args, logOnceIf)
 			if err != nil {
 				return nil, err
@@ -1684,6 +1685,26 @@ var (
 			Key:   target.AmqpQueueDir,
 			Value: "",
 		},
+		config.KV{
+			Key:   target.AmqpQueue,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpClientTLSCert,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpClientTLSKey,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpExclusive,
+			Value: config.EnableOff,
+		},
+		config.KV{
+			Key:   target.AmqpTLSSkipVerify,
+			Value: config.EnableOff,
+		},
 	}
 )
 
@@ -1722,6 +1743,22 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		if k != config.Default {
 			exchangeEnv = exchangeEnv + config.Default + k
 		}
+		queueEnv := target.EnvAMQPQueue
+		if k != config.Default {
+			queueEnv = queueEnv + config.Default + k
+		}
+		tlsClientTLSCertEnv := target.EnvAMQPClientTLSCert
+		if k != config.Default {
+			tlsClientTLSCertEnv = tlsClientTLSCertEnv + config.Default + k
+		}
+		tlsClientTLSKeyEnv := target.EnvAMQPClientTLSKey
+		if k != config.Default {
+			tlsClientTLSKeyEnv = tlsClientTLSKeyEnv + config.Default + k
+		}
+		tlsSkipVerifyEnv := target.EnvAMQPTLSSkipVerify
+		if k != config.Default {
+			tlsSkipVerifyEnv = tlsSkipVerifyEnv + config.Default + k
+		}
 		routingKeyEnv := target.EnvAMQPRoutingKey
 		if k != config.Default {
 			routingKeyEnv = routingKeyEnv + config.Default + k
@@ -1750,6 +1787,10 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		if k != config.Default {
 			noWaitEnv = noWaitEnv + config.Default + k
 		}
+		exclusiveEnv := target.EnvAMQPExclusive
+		if k != config.Default {
+			exclusiveEnv = exclusiveEnv + config.Default + k
+		}
 		autoDeletedEnv := target.EnvAMQPAutoDeleted
 		if k != config.Default {
 			autoDeletedEnv = autoDeletedEnv + config.Default + k
@@ -1774,6 +1815,7 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 			Enable:            enabled,
 			URL:               url,
 			Exchange:          env.Get(exchangeEnv, kv.Get(target.AmqpExchange)),
+			Queue:             env.Get(queueEnv, kv.Get(target.AmqpQueue)),
 			RoutingKey:        env.Get(routingKeyEnv, kv.Get(target.AmqpRoutingKey)),
 			ExchangeType:      env.Get(exchangeTypeEnv, kv.Get(target.AmqpExchangeType)),
 			DeliveryMode:      uint8(deliveryMode),
@@ -1782,11 +1824,16 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 			Durable:           env.Get(durableEnv, kv.Get(target.AmqpDurable)) == config.EnableOn,
 			Internal:          env.Get(internalEnv, kv.Get(target.AmqpInternal)) == config.EnableOn,
 			NoWait:            env.Get(noWaitEnv, kv.Get(target.AmqpNoWait)) == config.EnableOn,
+			Exclusive:         env.Get(exclusiveEnv, kv.Get(target.AmqpExclusive)) == config.EnableOn,
 			AutoDeleted:       env.Get(autoDeletedEnv, kv.Get(target.AmqpAutoDeleted)) == config.EnableOn,
 			PublisherConfirms: env.Get(publisherConfirmsEnv, kv.Get(target.AmqpPublisherConfirms)) == config.EnableOn,
 			QueueDir:          env.Get(queueDirEnv, kv.Get(target.AmqpQueueDir)),
 			QueueLimit:        queueLimit,
 		}
+		amqpArgs.TLS.SkipVerify = env.Get(tlsSkipVerifyEnv, kv.Get(target.AmqpTLSSkipVerify)) == config.EnableOn
+		amqpArgs.TLS.ClientTLSCert = env.Get(tlsClientTLSCertEnv, kv.Get(target.AmqpClientTLSCert))
+		amqpArgs.TLS.ClientTLSKey = env.Get(tlsClientTLSKeyEnv, kv.Get(target.AmqpClientTLSKey))
+
 		if err = amqpArgs.Validate(); err != nil {
 			return nil, err
 		}
