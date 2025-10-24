@@ -218,6 +218,8 @@ func s3APIMiddleware(f http.HandlerFunc, flags ...s3HFlag) http.HandlerFunc {
 	handlerName := getHandlerName(f, "objectAPIHandlers")
 
 	var handler http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+		w = &trackingResponseWriter{ResponseWriter: w}
+
 		// Wrap the actual handler with the appropriate tracing middleware.
 		var tracedHandler http.HandlerFunc
 		if handlerFlags.has(traceHdrsS3HFlag) {
