@@ -278,6 +278,7 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp091.Channel, confi
 			target.args.AutoDeleted, target.args.Exclusive, target.args.NoWait, nil); err != nil {
 			return err
 		}
+		// If the routing key equals the queue name, the message will be directly pushed to the queue.
 		target.args.RoutingKey = target.args.Queue
 	} else {
 		if err = ch.ExchangeDeclare(target.args.Exchange, target.args.ExchangeType, target.args.Durable,
