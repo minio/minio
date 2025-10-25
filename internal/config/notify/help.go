@@ -110,7 +110,12 @@ var (
 			Description: "name of the AMQP queue",
 			Optional:    true,
 			Type:        "string",
-			Sensitive:   true,
+		},
+		config.HelpKV{
+			Key:         target.AmqpQueueType,
+			Description: "AMQP queue type",
+			Optional:    true,
+			Type:        "string",
 		},
 		config.HelpKV{
 			Key:         target.AmqpExclusive,

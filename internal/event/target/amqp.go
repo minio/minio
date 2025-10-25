@@ -46,6 +46,7 @@ type AMQPArgs struct {
 	Queue             string      `json:"queue"`
 	RoutingKey        string      `json:"routingKey"`
 	ExchangeType      string      `json:"exchangeType"`
+	QueueType         string      `json:"queueType"`
 	DeliveryMode      uint8       `json:"deliveryMode"`
 	Mandatory         bool        `json:"mandatory"`
 	Immediate         bool        `json:"immediate"`
@@ -79,6 +80,7 @@ const (
 	AmqpQueue             = "queue"
 	AmqpRoutingKey        = "routing_key"
 	AmqpExchangeType      = "exchange_type"
+	AmqpQueueType         = "queue_type"
 	AmqpDeliveryMode      = "delivery_mode"
 	AmqpMandatory         = "mandatory"
 	AmqpImmediate         = "immediate"
@@ -98,6 +100,7 @@ const (
 	EnvAMQPExchange          = "MINIO_NOTIFY_AMQP_EXCHANGE"
 	EnvAMQPRoutingKey        = "MINIO_NOTIFY_AMQP_ROUTING_KEY"
 	EnvAMQPExchangeType      = "MINIO_NOTIFY_AMQP_EXCHANGE_TYPE"
+	EnvAMQPQueueType         = "MINIO_NOTIFY_AMQP_QUEUE_TYPE"
 	EnvAMQPDeliveryMode      = "MINIO_NOTIFY_AMQP_DELIVERY_MODE"
 	EnvAMQPMandatory         = "MINIO_NOTIFY_AMQP_MANDATORY"
 	EnvAMQPImmediate         = "MINIO_NOTIFY_AMQP_IMMEDIATE"
@@ -274,8 +277,12 @@ func (target *AMQPTarget) send(eventData event.Event, ch *amqp091.Channel, confi
 	headers["minio-bucket"] = eventData.S3.Bucket.Name
 	headers["minio-event"] = eventData.EventName.String()
 	if target.args.Exchange == "" && target.args.Queue != "" {
+		args := make(amqp091.Table)
+		if target.args.QueueType != "" {
+			args["x-queue-type"] = target.args.QueueType
+		}
 		if _, err = ch.QueueDeclare(target.args.Queue, target.args.Durable,
-			target.args.AutoDeleted, target.args.Exclusive, target.args.NoWait, nil); err != nil {
+			target.args.AutoDeleted, target.args.Exclusive, target.args.NoWait, args); err != nil {
 			return err
 		}
 		// If the routing key equals the queue name, the message will be directly pushed to the queue.

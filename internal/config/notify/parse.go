@@ -1655,7 +1655,7 @@ var (
 		},
 		config.KV{
 			Key:   target.AmqpDurable,
-			Value: config.EnableOff,
+			Value: config.EnableOn,
 		},
 		config.KV{
 			Key:   target.AmqpNoWait,
@@ -1687,6 +1687,10 @@ var (
 		},
 		config.KV{
 			Key:   target.AmqpQueue,
+			Value: "",
+		},
+		config.KV{
+			Key:   target.AmqpQueueType,
 			Value: "",
 		},
 		config.KV{
@@ -1746,6 +1750,10 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 		queueEnv := target.EnvAMQPQueue
 		if k != config.Default {
 			queueEnv = queueEnv + config.Default + k
+		}
+		queueTypeEnv := target.AmqpQueueType
+		if k != config.Default {
+			queueTypeEnv = queueTypeEnv + config.Default + k
 		}
 		tlsClientTLSCertEnv := target.EnvAMQPClientTLSCert
 		if k != config.Default {
@@ -1816,6 +1824,7 @@ func GetNotifyAMQP(amqpKVS map[string]config.KVS) (map[string]target.AMQPArgs, e
 			URL:               url,
 			Exchange:          env.Get(exchangeEnv, kv.Get(target.AmqpExchange)),
 			Queue:             env.Get(queueEnv, kv.Get(target.AmqpQueue)),
+			QueueType:         env.Get(queueTypeEnv, kv.Get(target.AmqpQueueType)),
 			RoutingKey:        env.Get(routingKeyEnv, kv.Get(target.AmqpRoutingKey)),
 			ExchangeType:      env.Get(exchangeTypeEnv, kv.Get(target.AmqpExchangeType)),
 			DeliveryMode:      uint8(deliveryMode),
