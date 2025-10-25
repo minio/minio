@@ -135,6 +135,10 @@ func SetNotifyAMQP(s config.Config, amqpName string, cfg target.AMQPArgs) error 
 			Value: cfg.Queue,
 		},
 		config.KV{
+			Key:   target.AmqpQueueType,
+			Value: cfg.QueueType,
+		},
+		config.KV{
 			Key:   target.AmqpTLSSkipVerify,
 			Value: config.FormatBool(cfg.TLS.SkipVerify),
 		},
