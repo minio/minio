@@ -622,7 +622,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 	if dobj.VersionID != "" && rinfo.VersionPurgeStatus == replication.VersionPurgeComplete {
 		return rinfo
 	}
-	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+	if globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 		replLogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s", dobj.Bucket, tgt.ARN), "replication-target-offline-delete-"+tgt.ARN)
 		sendEvent(eventArgs{
 			BucketName: dobj.Bucket,
@@ -670,7 +670,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 			// destination has some quorum issues, perform removeObject() anyways
 			// to complete the operation.
 		default:
-			if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			if err != nil && minio.IsNetworkOrHostDown(err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 				globalBucketTargetSys.markOffline(tgt.EndpointURL())
 			}
 			// mark delete marker replication as failed if target cluster not ready to receive
@@ -699,7 +699,7 @@ func replicateDeleteToTarget(ctx context.Context, dobj DeletedObjectReplicationI
 			rinfo.VersionPurgeStatus = replication.VersionPurgeFailed
 		}
 		replLogIf(ctx, fmt.Errorf("unable to replicate delete marker to %s: %s/%s(%s): %w", tgt.EndpointURL(), tgt.Bucket, dobj.ObjectName, versionID, rmErr))
-		if rmErr != nil && minio.IsNetworkOrHostDown(rmErr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		if rmErr != nil && minio.IsNetworkOrHostDown(rmErr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
 	} else {
@@ -1211,7 +1211,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 		return rinfo
 	}
 
-	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+	if globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 		replLogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline"+tgt.ARN)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
@@ -1340,7 +1340,7 @@ func (ri ReplicateObjectInfo) replicateObject(ctx context.Context, objectAPI Obj
 			replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s): to (target: %s): %w",
 				bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
 		}
-		if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
 	}
@@ -1371,7 +1371,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 		secure:                tgt.EndpointURL().Scheme == "https",
 	}
 
-	if globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+	if globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 		replLogOnceIf(ctx, fmt.Errorf("remote target is offline for bucket:%s arn:%s retry:%d", bucket, tgt.ARN, ri.RetryCount), "replication-target-offline-heal"+tgt.ARN)
 		sendEvent(eventArgs{
 			EventName:  event.ObjectReplicationNotTracked,
@@ -1505,7 +1505,7 @@ func (ri ReplicateObjectInfo) replicateAll(ctx context.Context, objectAPI Object
 			goto applyAction
 		}
 		// if target returns error other than NoSuchKey, defer replication attempt
-		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		if minio.IsNetworkOrHostDown(cerr, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 			globalBucketTargetSys.markOffline(tgt.EndpointURL())
 		}
 
@@ -1626,7 +1626,7 @@ applyAction:
 				replLogIf(ctx, fmt.Errorf("unable to replicate for object %s/%s(%s) to target %s: %w",
 					bucket, objInfo.Name, objInfo.VersionID, tgt.EndpointURL(), rinfo.Err))
 			}
-			if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+			if minio.IsNetworkOrHostDown(rinfo.Err, true) && !globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 				globalBucketTargetSys.markOffline(tgt.EndpointURL())
 			}
 		}
@@ -2415,7 +2415,7 @@ func proxyHeadToRepTarget(ctx context.Context, bucket, object string, rs *HTTPRa
 	var perr error
 	for _, t := range proxyTargets.Targets {
 		tgt = globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
-		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 			continue
 		}
 		// if proxying explicitly disabled on remote target
@@ -2543,7 +2543,7 @@ func proxyTaggingToRepTarget(ctx context.Context, bucket, object string, tags *t
 	errs := make([]error, len(proxyTargets.Targets))
 	for idx, t := range proxyTargets.Targets {
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
-		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 			continue
 		}
 		// if proxying explicitly disabled on remote target
@@ -2612,7 +2612,7 @@ func proxyGetTaggingToRepTarget(ctx context.Context, bucket, object string, opts
 	tagSlc := make([]map[string]string, len(proxyTargets.Targets))
 	for idx, t := range proxyTargets.Targets {
 		tgt := globalBucketTargetSys.GetRemoteTargetClient(bucket, t.Arn)
-		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL()) {
+		if tgt == nil || globalBucketTargetSys.isOffline(tgt.EndpointURL(), tgt.InsecureTLS) {
 			continue
 		}
 		// if proxying explicitly disabled on remote target
@@ -3690,7 +3690,7 @@ func (p *ReplicationPool) processMRF() {
 			var offlineCnt int
 			tgts := globalBucketTargetSys.ListTargets(p.ctx, "", "")
 			for _, tgt := range tgts {
-				if globalBucketTargetSys.isOffline(tgt.URL()) {
+				if globalBucketTargetSys.isOffline(tgt.URL(), tgt.InsecureTLS) {
 					offlineCnt++
 				}
 			}
