@@ -386,7 +386,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "capacity_raw", "total"),
-			"Total capacity online in the cluster",
+			"Total capacity online in current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(GetTotalCapacity(server.Disks)),
@@ -396,7 +396,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "capacity_raw_free", "total"),
-			"Total free capacity online in the cluster",
+			"Total free capacity online in current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(GetTotalCapacityFree(server.Disks)),
@@ -408,7 +408,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "capacity_usable", "total"),
-			"Total usable capacity online in the cluster",
+			"Total usable capacity online in current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(GetTotalUsableCapacity(server.Disks, sinfo)),
@@ -418,7 +418,7 @@ func storageMetricsPrometheus(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(
 		prometheus.NewDesc(
 			prometheus.BuildFQName(minioNamespace, "capacity_usable_free", "total"),
-			"Total free usable capacity online in the cluster",
+			"Total free usable capacity online in current MinIO server instance",
 			nil, nil),
 		prometheus.GaugeValue,
 		float64(GetTotalUsableCapacityFree(server.Disks, sinfo)),
