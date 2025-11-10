@@ -584,8 +584,8 @@ func parsEnvEntry(envEntry string) (envKV, error) {
 		return envKV{}, fmt.Errorf("envEntry malformed; %s, expected to be of form 'KEY=value'", envEntry)
 	}
 
-	key := envTokens[0]
-	val := envTokens[1]
+	key := strings.TrimSpace(envTokens[0])
+	val := strings.TrimSpace(envTokens[1])
 
 	// Remove quotes from the value if found
 	if len(val) >= 2 {
