@@ -58,7 +58,7 @@ function main() {
 		--build-arg RELEASE="${release}" \
 		-t "registry.min.dev/community/minio:latest" \
 		-t "registry.min.dev/community/minio:${release}" \
-		--platform=linux/arm64,linux/amd64,linux/ppc64le \
+		--platform=linux/arm64,linux/amd64,linux/ppc64le,linux/loong64 \
 		-f Dockerfile .
 
 	docker buildx prune -f
