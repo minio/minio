@@ -16,7 +16,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 //go:build !race
-// +build !race
 
 // Tests in this file are not run under the `-race` flag as they are too slow
 // and cause context deadline errors.
