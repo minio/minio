@@ -1941,3 +1941,34 @@ func TestXLStorageReadMetadata(t *testing.T) {
 		t.Fatalf("Unexpected error from readMetadata - expect %v: got %v", errFileNameTooLong, err)
 	}
 }
+
+// TestXLStorage xlStorage.AppendFile() - benchmark performance of a zero length write.
+// This benchmark is mostly designed to bench the performance of all of the setup code
+// performed around the AppendFile and openFile methods.
+func BenchmarkXLStorageAppendFile(b *testing.B) {
+	// create xlStorage
+	xlStorage, path, err := newXLStorageTestSetup(b)
+	if err != nil {
+		b.Fatalf("Unable to create xlStorage test setup, %s", err)
+	}
+
+	// Setup environment.
+	if err = xlStorage.MakeVol(b.Context(), "success-vol"); err != nil {
+		b.Fatalf("Unable to create volume, %s", err)
+	}
+
+	// Create directory to make errIsNotRegular
+	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0o777); err != nil {
+		b.Fatalf("Unable to create directory, %s", err)
+	}
+	b.ResetTimer()
+
+	fileName := "path/to/my/object"
+	data := []byte{}
+	for i := 0; i < b.N; i++ {
+		err := xlStorage.AppendFile(b.Context(), "success-vol", fileName, data)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
