@@ -3,13 +3,14 @@
 
 import json
 import logging
+import os
 import urllib
 from uuid import uuid4
 
 import boto3
 import requests
 from botocore.client import Config
-from flask import Flask, request
+from flask import Flask, request, session
 
 boto3.set_stream_logger('boto3.resources', logging.DEBUG)
 
@@ -20,8 +21,8 @@ token_url = "http://localhost:8080/auth/realms/minio/protocol/openid-connect/tok
 callback_uri = "http://localhost:8000/oauth2/callback"
 
 # keycloak id and secret
-client_id = 'account'
-client_secret = 'daaa3008-80f0-40f7-80d7-e15167531ff0'
+client_id = os.environ.get('CLIENT_ID', 'account')
+client_secret = os.environ.get('CLIENT_SECRET', '')
 
 sts_client = boto3.client(
     'sts',
@@ -31,6 +32,7 @@ sts_client = boto3.client(
 )
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-key-only-for-testing')
 
 
 @app.route('/')
@@ -44,6 +46,7 @@ def make_authorization_url():
     # Save it for use later to prevent xsrf attacks
 
     state = str(uuid4())
+    session['oauth_state'] = state
     params = {"client_id": client_id,
               "response_type": "code",
               "state": state,
@@ -60,12 +63,23 @@ def callback():
     if error:
         return "Error: " + error
 
+    # Validate the state parameter to prevent CSRF attacks
+    state = request.args.get('state', '')
+    session_state = session.get('oauth_state', '')
+    
+    if not state or state != session_state:
+        return "Error: Invalid state parameter - CSRF attack detected", 403
+    
+    # Clear the state from session after validation
+    if 'oauth_state' in session:
+        del session['oauth_state']
+
     authorization_code = request.args.get('code')
 
     data = {'grant_type': 'authorization_code',
             'code': authorization_code, 'redirect_uri': callback_uri}
     id_token_response = requests.post(
-        token_url, data=data, verify=False,
+        token_url, data=data, verify=True,
         allow_redirects=False, auth=(client_id, client_secret))
 
     print('body: ' + id_token_response.text)
