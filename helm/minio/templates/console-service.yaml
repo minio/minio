@@ -8,8 +8,11 @@ metadata:
     chart: {{ template "minio.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-  {{- if .Values.consoleService.annotations }}
-  annotations: {{- toYaml .Values.consoleService.annotations | nindent 4 }}
+    {{- with .Values.consoleService.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.consoleService.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   type: {{ .Values.consoleService.type }}
