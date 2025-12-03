@@ -468,18 +468,18 @@ func auditDanglingObjectDeletion(ctx context.Context, bucket, object, versionID 
 }
 
 func joinErrs(errs []error) string {
-	var s string
-	for i := range s {
-		if s != "" {
-			s += ","
+	var b strings.Builder
+	for i, err := range errs {
+		if i > 0 {
+			b.WriteByte(',')
 		}
-		if errs[i] == nil {
-			s += "<nil>"
+		if err == nil {
+			b.WriteString("<nil>")
 		} else {
-			s += errs[i].Error()
+			b.WriteString(err.Error())
 		}
 	}
-	return s
+	return b.String()
 }
 
 func (er erasureObjects) deleteIfDangling(ctx context.Context, bucket, object string, metaArr []FileInfo, errs []error, dataErrsByPart map[int][]int, opts ObjectOptions) (FileInfo, error) {
