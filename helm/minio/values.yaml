@@ -147,6 +147,7 @@ persistence:
 
   ## A manually managed Persistent Volume and Claim
   ## Requires persistence.enabled: true
+  ## WARNING: In a distributed mode, this value will be ignored.
   ## If defined, PVC must be created manually before volume will be bound
   existingClaim: ""
 

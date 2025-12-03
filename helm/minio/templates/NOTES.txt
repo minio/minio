@@ -41,3 +41,22 @@ Note: Since NetworkPolicy is enabled, only pods with label
 {{ template "minio.fullname" . }}-client=true"
 will be able to connect to this minio cluster.
 {{- end }}
+
+{{- if and (eq .Values.mode "distributed") .Values.persistence.existingClaim }}
+
+WARNING: persistence.existingClaim is set but will be ignored in distributed mode.
+
+In distributed mode, MinIO automatically creates multiple PersistentVolumeClaims
+using StatefulSet's volumeClaimTemplates for erasure coding.
+Your specified PVC '{{ .Values.persistence.existingClaim }}' will not be used.
+
+To use your existing PVC:
+  - Switch to standalone mode: --set mode=standalone
+
+To use distributed mode with custom storage:
+  - Specify a StorageClass: --set persistence.storageClass=<your-storage-class>
+
+For more information:
+https://github.com/minio/minio/tree/master/helm/minio#distributed-vs-standalone
+
+{{- end }}
