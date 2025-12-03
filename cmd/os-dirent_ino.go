@@ -16,8 +16,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 //go:build (linux || darwin) && !appengine
-// +build linux darwin
-// +build !appengine
 
 package cmd
 

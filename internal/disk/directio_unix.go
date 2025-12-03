@@ -1,5 +1,4 @@
 //go:build !windows && !darwin && !openbsd && !plan9
-// +build !windows,!darwin,!openbsd,!plan9
 
 // Copyright (c) 2015-2023 MinIO, Inc.
 //

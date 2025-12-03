@@ -1,5 +1,4 @@
 //go:build plan9 || solaris
-// +build plan9 solaris
 
 // Copyright (c) 2015-2021 MinIO, Inc.
 //

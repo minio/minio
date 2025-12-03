@@ -1,5 +1,4 @@
 //go:build linux || darwin || dragonfly || freebsd || netbsd || openbsd
-// +build linux darwin dragonfly freebsd netbsd openbsd
 
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
