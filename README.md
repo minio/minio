@@ -1,3 +1,17 @@
+# Maintenance Mode
+
+**This project is currently under maintenance and is not accepting new changes.**
+
+- The codebase is in a maintenance-only state
+- No new features, enhancements, or pull requests will be accepted
+- Critical security fixes may be evaluated on a case-by-case basis
+- Existing issues and pull requests will not be actively reviewed
+- Community support continues on a best-effort basis through [Slack](https://slack.min.io)
+
+For enterprise support and actively maintained versions, please see [MinIO AIStor](https://www.min.io/product/aistor).
+
+---
+
 # MinIO Quickstart Guide
 
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
