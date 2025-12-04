@@ -1980,13 +1980,17 @@ func (s *xlStorage) openFile(filePath string, mode int, skipParent string) (f *o
 	if skipParent == "" {
 		skipParent = s.drivePath
 	}
-	// Create top level directories if they don't exist.
-	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(pathutil.Dir(filePath), 0o777, skipParent); err != nil {
-		return nil, osErrToFileErr(err)
-	}
 
 	w, err := OpenFile(filePath, mode, 0o666)
+	if err != nil && os.IsNotExist(err) {
+		// Write likely failed because the parent directory does not
+		// exist. Attempt to create top-level directories with mode
+		// 0777 and retry the write.
+		if e1 := mkdirAll(pathutil.Dir(filePath), 0o777, skipParent); e1 != nil {
+			return nil, osErrToFileErr(e1)
+		}
+		w, err = OpenFile(filePath, mode, 0o666)
+	}
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		switch {
