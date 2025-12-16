@@ -76,6 +76,7 @@ const (
 	EnvMinIOPrometheusExtraLabels = "MINIO_PROMETHEUS_EXTRA_LABELS"
 	EnvMinIOPrometheusAuthToken   = "MINIO_PROMETHEUS_AUTH_TOKEN"
 	EnvConsoleDebugLogLevel       = "MINIO_CONSOLE_DEBUG_LOGLEVEL"
+	EnvConsoleLicenseHide         = "MINIO_CONSOLE_LICENSE_HIDE"
 
 	EnvUpdate = "MINIO_UPDATE"
 

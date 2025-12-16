@@ -200,6 +200,11 @@ func minioConfigToConsoleFeatures() {
 		os.Setenv("CONSOLE_SECURE_REFERRER_POLICY", valueRefer)
 	}
 
+	// Hide license popup if requested
+	if value := env.Get(config.EnvConsoleLicenseHide, ""); value != "" {
+		os.Setenv("CONSOLE_LICENSE_HIDE", value)
+	}
+
 	globalSubnetConfig.ApplyEnv()
 }
 
