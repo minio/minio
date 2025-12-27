@@ -271,6 +271,11 @@ tolerations: []
 affinity: {}
 topologySpreadConstraints: []
 
+## OpenShift configuration
+## If set to "true", disables the creation of SecurityContextConstraints and omits specific
+## user/group IDs from the SecurityContext, allowing OpenShift to automatically assign them.
+openshift: false
+
 ## Add stateful containers to have security context, if enabled MinIO will run as this
 ## user and group NOTE: securityContext is only enabled if persistence.enabled=true
 securityContext:
