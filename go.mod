@@ -37,7 +37,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gobwas/ws v1.4.0
 	github.com/golang-jwt/jwt/v4 v4.5.2
-	github.com/gomodule/redigo v1.9.2
+	github.com/gomodule/redigo v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/inconshreveable/mousetrap v1.1.0
 	github.com/json-iterator/go v1.1.12
