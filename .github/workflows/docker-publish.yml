@@ -11,6 +11,8 @@ on:
   push:
     tags:
       - 'RELEASE\..+'
+    branches:
+      - master
 
 env:
   # Use docker.io for Docker Hub if empty
