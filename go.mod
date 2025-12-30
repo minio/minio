@@ -32,7 +32,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/felixge/fgprof v0.9.5
 	github.com/fraugster/parquet-go v0.12.0
-	github.com/go-ldap/ldap/v3 v3.4.11
+	github.com/go-ldap/ldap/v3 v3.4.12
 	github.com/go-openapi/loads v0.22.0
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/gobwas/ws v1.4.0
