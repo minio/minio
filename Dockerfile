@@ -7,13 +7,10 @@ ENV GOPATH=/go
 ENV CGO_ENABLED=0
 
 COPY . .
-ENV LDFLAGS=$(go run buildscripts/gen-ldflags.go)
-ENV GOOS=$(go env GOOS)
-ENV GOARCH=$(go env GOARCH)
 
 WORKDIR /build
 
-RUN @CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
+RUN LDFLAGS=$(go run buildscripts/gen-ldflags.go) CGO_ENABLED=0 GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
 FROM minio/minio:latest
 
