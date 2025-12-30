@@ -74,7 +74,7 @@ require (
 	github.com/ncw/directio v1.0.5
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/philhofer/fwd v1.2.0
-	github.com/pierrec/lz4/v4 v4.1.22
+	github.com/pierrec/lz4/v4 v4.1.23
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/sftp v1.13.9
 	github.com/pkg/xattr v0.4.10
