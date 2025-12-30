@@ -6,10 +6,9 @@ ARG RELEASE
 ENV GOPATH=/go
 ENV CGO_ENABLED=0
 
-COPY . .
-
 WORKDIR /build
 
+COPY . .
 RUN LDFLAGS=$(go run buildscripts/gen-ldflags.go) CGO_ENABLED=0 GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o minio 1>/dev/null
 
 FROM minio/minio:latest
