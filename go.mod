@@ -49,7 +49,7 @@ require (
 	github.com/klauspost/reedsolomon v1.12.6
 	github.com/lib/pq v1.10.9
 	github.com/lithammer/shortuuid/v4 v4.2.0
-	github.com/miekg/dns v1.1.65
+	github.com/miekg/dns v1.1.69
 	github.com/minio/cli v1.24.2
 	github.com/minio/console v1.7.6
 	github.com/minio/csvparser v1.0.0
