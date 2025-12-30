@@ -1,6 +1,10 @@
 ---
 name: Spelling
-on: [pull_request]
+on: 
+  pull_request:
+  push:
+    branches:
+      - master
 
 jobs:
   run:
