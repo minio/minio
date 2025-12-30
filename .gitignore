@@ -53,3 +53,4 @@ s3-check-md5
 s3-verify
 xattr
 xl-meta
+**.exe
