@@ -1,0 +1,108 @@
+name: CI Pipeline
+
+# === Triggers ===
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests, lint, and security checks (build/deploy only)'
+        required: false
+        default: false
+        type: boolean
+
+# === Global permissions ===
+permissions:
+  id-token: write
+  contents: write
+  actions: read
+
+# === Global environment variable ===
+env:
+  APP_NAME: minio
+
+# === Jobs ===
+jobs:
+  sast:
+    name: SAST
+    if: ${{ !inputs.skip_tests }}
+    permissions:
+      contents: read
+    uses: Cicada-Technologies-Inc/github-actions/.github/workflows/sast_golang.yaml@v2.0.0
+
+  security-check:
+    name: Security Check
+    if: ${{ !inputs.skip_tests }}
+    permissions:
+      contents: read
+    uses: Cicada-Technologies-Inc/github-actions/.github/workflows/security-check.yaml@v2.0.0
+    with:
+      go_version: '1.24'
+      use_justfile: true
+      fail_on_vulnerabilities: false
+      semgrep_rules: 'p/gosec'
+
+  lint:
+    name: Lint & Static Analysis
+    if: ${{ !inputs.skip_tests }}
+    permissions:
+      contents: read
+    uses: Cicada-Technologies-Inc/github-actions/.github/workflows/lint-check.yaml@v2.0.0
+    with:
+      go_version: '1.24'
+      use_justfile: true
+      enable_semgrep: true
+      semgrep_rules: 'p/gosec'
+      fail_on_lint_errors: true
+
+  tests:
+    name: Tests
+    if: ${{ !inputs.skip_tests }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      
+      - name: Install devbox
+        uses: jetpack-io/devbox-install-action@v0.13.0
+        with:
+          enable-cache: true
+      
+      - name: Get dependencies
+        run: devbox run -- just tidy
+      
+      - name: Build
+        run: devbox run -- just build
+      
+      - name: Run tests
+        run: devbox run -- just test
+
+  build-and-deploy-dev:
+    name: Build and Push to ECR (Dev)
+    needs: [sast, tests, lint, security-check]
+    if: |
+      always() && 
+      (inputs.skip_tests || (needs.sast.result == 'success' && needs.tests.result == 'success' && needs.lint.result == 'success' && needs.security-check.result == 'success')) &&
+      github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    uses: Cicada-Technologies-Inc/github-actions/.github/workflows/docker-orchestrator.yaml@main
+    with:
+      environments: '["dev"]'
+      deployment_strategy: 'sequential'
+      image_name: minio
+      dockerfile_path: "./Dockerfile.cicada"
+      aws_region: us-west-2
+      BUILD_X64: true
+      BUILD_ARM: true
+      debug_mode: false
+    secrets:
+      DEV_GHA_ROLE_ARN: ${{ secrets.DEV_GHA_ROLE_ARN }}
+      SOURCE_GHA_ROLE_ARN: ${{ secrets.DEV_GHA_ROLE_ARN }}

@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release-binaries:
+    name: Build Release Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      
+      - name: Install devbox
+        uses: jetpack-io/devbox-install-action@v0.13.0
+        with:
+          enable-cache: true
+      
+      - name: Get dependencies
+        run: devbox run -- just tidy
+      
+      - name: Build release binaries
+        run: devbox run -- just build-release-all
+      
+      - name: List built binaries
+        run: ls -lh ./out/
+      
+      - name: Upload binaries as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: ./out/minio-*
+          retention-days: 7
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: build-release-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+      
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: release-binaries
+          path: ./release-binaries
+      
+      - name: List downloaded binaries
+        run: ls -lh ./release-binaries/
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./release-binaries/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,13 @@
+{
+  "packages": [
+    "go@1.24",
+    "just@latest",
+    "golangci-lint@latest"
+  ],
+  "shell": {
+    "init_hook": [
+      "echo 'MinIO development environment loaded'",
+      "echo 'Run: just --list to see available commands'"
+    ]
+  }
+}

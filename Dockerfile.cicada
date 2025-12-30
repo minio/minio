@@ -1,0 +1,47 @@
+# Multi-stage Dockerfile for MinIO
+# Aligned with Cicada build patterns
+
+# === Builder Stage ===
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /workspace
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+# Copy source code
+COPY . .
+
+# Build the application with optimizations
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
+    -tags kqueue \
+    -trimpath \
+    -ldflags="$(go run buildscripts/gen-ldflags.go) -w -s" \
+    -o /app/minio
+
+# === Runtime Stage ===
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+
+# Copy the binary from builder
+COPY --from=builder /app/minio /minio
+
+# Use nonroot user
+USER nonroot:nonroot
+
+# Expose MinIO default port
+EXPOSE 9000
+
+# Expose MinIO console port
+EXPOSE 9001
+
+ENTRYPOINT ["/minio"]
+CMD ["server"]
