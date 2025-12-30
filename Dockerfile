@@ -6,12 +6,14 @@ ARG RELEASE
 ENV GOPATH=/go
 ENV CGO_ENABLED=0
 
+COPY . .
+ENV LDFLAGS=$(go run buildscripts/gen-ldflags.go)
+ENV GOOS=$(go env GOOS)
+ENV GOARCH=$(go env GOARCH)
+
 WORKDIR /build
 
-RUN apk update && apk add make
-
-COPY . .
-RUN make build
+RUN @CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o $(PWD)/minio 1>/dev/null
 
 FROM minio/minio:latest
 
