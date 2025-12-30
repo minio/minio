@@ -6,6 +6,8 @@ ARG RELEASE
 ENV GOPATH=/go
 ENV CGO_ENABLED=0
 
+RUN apk update && apk add git
+
 WORKDIR /build
 
 COPY . .
