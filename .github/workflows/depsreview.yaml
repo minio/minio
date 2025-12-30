@@ -1,9 +1,5 @@
 name: 'Dependency Review'
-on:
-  pull_request:
-  push:
-      branches:
-        - master
+on: [pull_request]
 
 permissions:
   contents: read
