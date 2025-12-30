@@ -10,6 +10,7 @@ WORKDIR /build
 
 RUN apk update && apk add make
 
+COPY . .
 RUN make build
 
 FROM minio/minio:latest
