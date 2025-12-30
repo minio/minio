@@ -27,7 +27,7 @@ require (
 	github.com/cosnicolaou/pbzip2 v1.0.5
 	github.com/dchest/siphash v1.2.3
 	github.com/dustin/go-humanize v1.0.1
-	github.com/eclipse/paho.mqtt.golang v1.5.0
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/elastic/go-elasticsearch/v7 v7.17.10
 	github.com/fatih/color v1.18.0
 	github.com/felixge/fgprof v0.9.5
