@@ -64,7 +64,7 @@ require (
 	github.com/minio/pkg/v3 v3.1.3
 	github.com/minio/selfupdate v0.6.0
 	github.com/minio/simdjson-go v0.4.5
-	github.com/minio/sio v0.4.1
+	github.com/minio/sio v0.4.3
 	github.com/minio/xxml v0.0.3
 	github.com/minio/zipindex v0.4.0
 	github.com/mitchellh/go-homedir v1.1.0
