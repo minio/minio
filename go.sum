@@ -362,6 +362,8 @@ github.com/klauspost/compress v1.18.2/go.mod h1:R0h/fSBs8DE4ENlcrlib3PsXS61voFxh
 github.com/klauspost/cpuid/v2 v2.0.1/go.mod h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
 github.com/klauspost/cpuid/v2 v2.3.0/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
+github.com/klauspost/crc32 v1.3.0 h1:sSmTt3gUt81RP655XGZPElI0PelVTZ6YwCRnPSupoFM=
+github.com/klauspost/crc32 v1.3.0/go.mod h1:D7kQaZhnkX/Y0tstFGf8VUzv2UofNGqCjnC3zdHB0Hw=
 github.com/klauspost/filepathx v1.1.1 h1:201zvAsL1PhZvmXTP+QLer3AavWrO3U1NILWpniHK4w=
 github.com/klauspost/filepathx v1.1.1/go.mod h1:XWxdp8rEw4gupPBrxrV5Q57dL/71xj0OgV1gKt2zTfU=
 github.com/klauspost/pgzip v1.2.6 h1:8RXeL5crjEUFnR2/Sn6GJNWtSQ3Dk8pq4CL3jvdDyjU=
@@ -436,8 +438,8 @@ github.com/minio/colorjson v1.0.8 h1:AS6gEQ1dTRYHmC4xuoodPDRILHP/9Wz5wYUGDQfPLpg
 github.com/minio/colorjson v1.0.8/go.mod h1:wrs39G/4kqNlGjwqHvPlAnXuc2tlPszo6JKdSBCLN8w=
 github.com/minio/console v1.7.6 h1:E0jq9nYMeW7z4iJtJ6vDt2hk4Jin0zcyAzRcTlaUO44=
 github.com/minio/console v1.7.6/go.mod h1:gM4B3/7sqP17owJaoThmeDkfaDEQNZ1mjGU5DSwRReo=
-github.com/minio/crc64nvme v1.0.2 h1:6uO1UxGAD+kwqWWp7mBFsi5gAse66C4NXO8cmcVculg=
-github.com/minio/crc64nvme v1.0.2/go.mod h1:eVfm2fAzLlxMdUGc0EEBGSMmPwmXD5XiNRpnu9J3bvg=
+github.com/minio/crc64nvme v1.1.0 h1:e/tAguZ+4cw32D+IO/8GSf5UVr9y+3eJcxZI2WOO/7Q=
+github.com/minio/crc64nvme v1.1.0/go.mod h1:eVfm2fAzLlxMdUGc0EEBGSMmPwmXD5XiNRpnu9J3bvg=
 github.com/minio/csvparser v1.0.0 h1:xJEHcYK8ZAjeW4hNV9Zu30u+/2o4UyPnYgyjWp8b7ZU=
 github.com/minio/csvparser v1.0.0/go.mod h1:lKXskSLzPgC5WQyzP7maKH7Sl1cqvANXo9YCto8zbtM=
 github.com/minio/dnscache v0.1.1 h1:AMYLqomzskpORiUA1ciN9k7bZT1oB3YZN4cEIi88W5o=
@@ -459,8 +461,8 @@ github.com/minio/mc v0.0.0-20250313080218-cf909e1063a9 h1:6RyInOHKL6jz8zxcAar/h6
 github.com/minio/mc v0.0.0-20250313080218-cf909e1063a9/go.mod h1:h5UQZ+5Qfq6XV81E4iZSgStPZ6Hy+gMuHMkLkjq4Gys=
 github.com/minio/md5-simd v1.1.2 h1:Gdi1DZK69+ZVMoNHRXJyNcxrMA4dSxoYHZSQbirFg34=
 github.com/minio/md5-simd v1.1.2/go.mod h1:MzdKDxYpY2BT9XQFocsiZf/NKVtR7nkE4RoEpN+20RM=
-github.com/minio/minio-go/v7 v7.0.95 h1:ywOUPg+PebTMTzn9VDsoFJy32ZuARN9zhB+K3IYEvYU=
-github.com/minio/minio-go/v7 v7.0.95/go.mod h1:wOOX3uxS334vImCNRVyIDdXX9OsXDm89ToynKgqUKlo=
+github.com/minio/minio-go/v7 v7.0.97 h1:lqhREPyfgHTB/ciX8k2r8k0D93WaFqxbJX36UZq5occ=
+github.com/minio/minio-go/v7 v7.0.97/go.mod h1:re5VXuo0pwEtoNLsNuSr0RrLfT/MBtohwdaSmPPSRSk=
 github.com/minio/mux v1.9.2 h1:dQchne49BUBgOlxIHjx5wVe1gl5VXF2sxd4YCXkikTw=
 github.com/minio/mux v1.9.2/go.mod h1:OuHAsZsux+e562bcO2P3Zv/P0LMo6fPQ310SmoyG7mQ=
 github.com/minio/pkg/v3 v3.1.3 h1:6iBVcTPq7z29suUROciYUBpvLxfzDV3/+Ls0RFDOta8=
