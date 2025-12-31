@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS build
+FROM golang:1.24 AS build
 
 ARG TARGETARCH
 ARG RELEASE
@@ -6,26 +6,24 @@ ARG RELEASE
 ENV GOPATH=/go
 ENV CGO_ENABLED=0
 
-RUN apk update && apk add git
+RUN apt update && apt install -y git
 
 WORKDIR /build
 
 COPY . .
-RUN LDFLAGS=$(go run buildscripts/gen-ldflags.go) CGO_ENABLED=0 GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -tags kqueue -trimpath --ldflags "$(LDFLAGS)" -o minio 1>/dev/null
+RUN CGO_ENABLED=0 GOOS=$(go env GOOS) GOARCH=$(go env GOARCH) go build -tags kqueue -trimpath --ldflags "$(go run buildscripts/gen-ldflags.go)" -o minio 1>/dev/null
 
-FROM minio/minio:latest
+FROM gcr.io/distroless/static-debian12
 
 ARG TARGETARCH
 ARG RELEASE
 
-RUN chmod -R 777 /usr/bin
-
-COPY --from=build /build/minio /usr/bin/minio
-
-COPY dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
+COPY --from=build --chown=1000:1000 /build/minio /usr/bin/minio
+COPY --from=build --chown=1000:1000 /build/dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
 
 VOLUME ["/data"]
 
+USER 1000:1000
 CMD ["minio"]
