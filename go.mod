@@ -76,7 +76,7 @@ require (
 	github.com/philhofer/fwd v1.2.0
 	github.com/pierrec/lz4/v4 v4.1.23
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/sftp v1.13.9
+	github.com/pkg/sftp v1.13.10
 	github.com/pkg/xattr v0.4.10
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
