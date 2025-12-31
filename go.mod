@@ -59,7 +59,7 @@ require (
 	github.com/minio/kms-go/kes v0.3.1
 	github.com/minio/kms-go/kms v0.5.1-0.20250225090116-4e64ce8d0f35
 	github.com/minio/madmin-go/v3 v3.0.109
-	github.com/minio/minio-go/v7 v7.0.91
+	github.com/minio/minio-go/v7 v7.0.95
 	github.com/minio/mux v1.9.2
 	github.com/minio/pkg/v3 v3.1.3
 	github.com/minio/selfupdate v0.6.0
@@ -96,7 +96,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.6.7
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.1
-	goftp.io/server/v2 v2.0.1
+	goftp.io/server/v2 v2.0.2
 	golang.org/x/crypto v0.46.0
 	golang.org/x/oauth2 v0.33.0
 	golang.org/x/sync v0.19.0
@@ -220,7 +220,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/minio/colorjson v1.0.8 // indirect
-	github.com/minio/crc64nvme v1.0.1 // indirect
+	github.com/minio/crc64nvme v1.0.2 // indirect
 	github.com/minio/filepath v1.0.0 // indirect
 	github.com/minio/mc v0.0.0-20250313080218-cf909e1063a9 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
