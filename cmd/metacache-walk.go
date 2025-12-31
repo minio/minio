@@ -137,8 +137,8 @@ func (s *xlStorage) WalkDir(ctx context.Context, opts WalkDirOptions, wr io.Writ
 				return err
 			}
 		} else {
-			st, sterr := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile))
-			if sterr == nil && st.Mode().IsRegular() {
+			st, stderr := Lstat(pathJoin(volumeDir, opts.BaseDir, xlStorageFormatFile))
+			if stderr == nil && st.Mode().IsRegular() {
 				return errFileNotFound
 			}
 		}
