@@ -19,9 +19,8 @@ ARG TARGETARCH
 ARG RELEASE
 
 COPY --from=build --chown=1000:1000 --chmod=+x /build/minio /usr/bin/minio
-COPY --chown=1000:1000 --chmod=+x dockerscripts/docker-entrypoint.sh /usr/bin/docker-entrypoint.sh
 
-ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/minio"]
 
 VOLUME ["/data"]
 
