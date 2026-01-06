@@ -2,13 +2,12 @@
 
 **This project is currently under maintenance and is not accepting new changes.**
 
-- The codebase is in a maintenance-only state
-- No new features, enhancements, or pull requests will be accepted
-- Critical security fixes may be evaluated on a case-by-case basis
-- Existing issues and pull requests will not be actively reviewed
-- Community support continues on a best-effort basis through [Slack](https://slack.min.io)
+**Alternate Options:**
 
-For enterprise support and actively maintained versions, please see [MinIO AIStor](https://www.min.io/product/aistor).
+- **AIStor Free**: Fully featured, standalone version of AIStor for community use. Download a free license key from [Free license download](https://min.io/download)
+- **AIStor Enterprise**:  Fully featured, Distributed version of AIStor for commercial enterprise use. [Subscription](https://www.min.io/pricing)
+
+Learn more about [subscription tiers](https://blog.min.io/introducing-new-subscription-tiers-for-minio-aistor-free-enterprise-lite-and-enterprise/)
 
 ---
 
