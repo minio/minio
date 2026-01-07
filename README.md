@@ -72,7 +72,7 @@ You can alternatively run `go build` and use the `GOOS` and `GOARCH` environment
 For example:
 
 ```
-env GOOS=linux GOARCh=arm64 go build
+env GOOS=linux GOARCH=amd64 go build
 ```
 
 Start MinIO by running `minio server PATH` where `PATH` is any empty folder on your local filesystem.
