@@ -2190,7 +2190,7 @@ func (c *SiteReplicationSys) syncToAllPeers(ctx context.Context, addOpts madmin.
 		}
 	}
 
-	// and finally followed by policy mappings for for STS users.
+	// and finally followed by policy mappings for STS users.
 	{
 		// Replicate policy mappings on local to all peers.
 		stsPolicyMap := xsync.NewMapOf[string, MappedPolicy]()
