@@ -31,7 +31,7 @@ import (
 var ansiRE = regexp.MustCompile("(\x1b[^m]*m)")
 
 // Print ANSI Control escape
-func ansiEscape(format string, args ...interface{}) {
+func ansiEscape(format string, args ...any) {
 	Esc := "\x1b"
 	fmt.Printf("%s%s", Esc, fmt.Sprintf(format, args...))
 }

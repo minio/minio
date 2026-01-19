@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"runtime"
@@ -115,7 +116,7 @@ func diskErrToDriveState(err error) (state string) {
 		state = fmt.Sprintf("%s (cause: %s)", madmin.DriveStateUnknown, err)
 	}
 
-	return
+	return state
 }
 
 func getOnlineOfflineDisksStats(disksInfo []madmin.Disk) (onlineDisks, offlineDisks madmin.BackendDisks) {
@@ -175,7 +176,6 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 
 	g := errgroup.WithNErrs(len(disks))
 	for index := range disks {
-		index := index
 		g.Go(func() error {
 			di := madmin.Disk{
 				Endpoint:  endpoints[index].String(),
@@ -219,9 +219,7 @@ func getDisksInfo(disks []StorageAPI, endpoints []Endpoint, metrics bool) (disks
 					di.Metrics.LastMinute[k] = v.asTimedAction()
 				}
 			}
-			for k, v := range info.Metrics.APICalls {
-				di.Metrics.APICalls[k] = v
-			}
+			maps.Copy(di.Metrics.APICalls, info.Metrics.APICalls)
 			if info.Total > 0 {
 				di.Utilization = float64(info.Used / info.Total * 100)
 			}
@@ -287,7 +285,6 @@ func (er erasureObjects) getOnlineDisksWithHealingAndInfo(inclHealing bool) (new
 	infos := make([]DiskInfo, len(disks))
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for _, i := range r.Perm(len(disks)) {
-		i := i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

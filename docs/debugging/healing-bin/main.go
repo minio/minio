@@ -56,7 +56,7 @@ FLAGS:
 			cli.ShowAppHelpAndExit(c, 1) // last argument is exit code
 		}
 
-		ht := make(map[string]map[string]interface{})
+		ht := make(map[string]map[string]any)
 		file := c.Args().Get(0)
 		if strings.HasSuffix(file, ".zip") {
 			var sz int64
@@ -91,7 +91,7 @@ FLAGS:
 					dec := json.NewDecoder(buf)
 					// Use number to preserve integers.
 					dec.UseNumber()
-					var htr map[string]interface{}
+					var htr map[string]any
 					if err = dec.Decode(&htr); err != nil {
 						return err
 					}
@@ -113,7 +113,7 @@ FLAGS:
 		if _, err = msgp.CopyToJSON(buf, bytes.NewReader(b)); err != nil {
 			return err
 		}
-		var htr map[string]interface{}
+		var htr map[string]any
 		dec := json.NewDecoder(buf)
 		// Use number to preserve integers.
 		dec.UseNumber()

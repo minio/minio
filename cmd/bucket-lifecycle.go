@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -959,9 +960,7 @@ func putRestoreOpts(bucket, object string, rreq *RestoreObjectRequest, objInfo O
 			UserDefined:      meta,
 		}
 	}
-	for k, v := range objInfo.UserDefined {
-		meta[k] = v
-	}
+	maps.Copy(meta, objInfo.UserDefined)
 	if len(objInfo.UserTags) != 0 {
 		meta[xhttp.AmzObjectTagging] = objInfo.UserTags
 	}

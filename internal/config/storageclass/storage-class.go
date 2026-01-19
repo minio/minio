@@ -147,7 +147,7 @@ func (sc *StorageClass) UnmarshalText(b []byte) error {
 // MarshalText - marshals storage class string.
 func (sc *StorageClass) MarshalText() ([]byte, error) {
 	if sc.Parity != 0 {
-		return []byte(fmt.Sprintf("%s:%d", schemePrefix, sc.Parity)), nil
+		return fmt.Appendf(nil, "%s:%d", schemePrefix, sc.Parity), nil
 	}
 	return []byte{}, nil
 }
@@ -430,6 +430,6 @@ func LookupConfig(kvs config.KVS, setDriveCount int) (cfg Config, err error) {
 	return cfg, nil
 }
 
-func configLogOnceIf(ctx context.Context, err error, id string, errKind ...interface{}) {
+func configLogOnceIf(ctx context.Context, err error, id string, errKind ...any) {
 	logger.LogOnceIf(ctx, "config", err, id, errKind...)
 }

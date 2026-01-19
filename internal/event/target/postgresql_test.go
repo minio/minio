@@ -19,6 +19,7 @@ package target
 
 import (
 	"database/sql"
+	"slices"
 	"testing"
 )
 
@@ -26,11 +27,8 @@ import (
 // is registered and fails otherwise.
 func TestPostgreSQLRegistration(t *testing.T) {
 	var found bool
-	for _, drv := range sql.Drivers() {
-		if drv == "postgres" {
-			found = true
-			break
-		}
+	if slices.Contains(sql.Drivers(), "postgres") {
+		found = true
 	}
 	if !found {
 		t.Fatal("postgres driver not registered")

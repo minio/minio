@@ -173,6 +173,8 @@ func (a adminAPIHandlers) ListAccessKeysOpenIDBulk(w http.ResponseWriter, r *htt
 			if _, ok := accessKey.Claims[iamPolicyClaimNameOpenID()]; !ok {
 				continue // skip if no roleArn and no policy claim
 			}
+			// claim-based provider is in the roleArnMap under dummy ARN
+			arn = dummyRoleARN
 		}
 		matchingCfgName, ok := roleArnMap[arn]
 		if !ok {

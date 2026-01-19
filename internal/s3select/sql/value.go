@@ -46,7 +46,7 @@ var (
 // the type may not be determined yet. In these cases, a byte-slice is
 // used.
 type Value struct {
-	value interface{}
+	value any
 }
 
 // Missing is used to indicate a non-existing value.
@@ -175,13 +175,13 @@ func (v Value) ToFloat() (val float64, ok bool) {
 // ToInt returns the value if int.
 func (v Value) ToInt() (val int64, ok bool) {
 	val, ok = v.value.(int64)
-	return
+	return val, ok
 }
 
 // ToString returns the value if string.
 func (v Value) ToString() (val string, ok bool) {
 	val, ok = v.value.(string)
-	return
+	return val, ok
 }
 
 // Equals returns whether the values strictly match.
@@ -220,25 +220,25 @@ func (v Value) SameTypeAs(b Value) (ok bool) {
 // conversion succeeded.
 func (v Value) ToBool() (val bool, ok bool) {
 	val, ok = v.value.(bool)
-	return
+	return val, ok
 }
 
 // ToTimestamp returns the timestamp value if present.
 func (v Value) ToTimestamp() (t time.Time, ok bool) {
 	t, ok = v.value.(time.Time)
-	return
+	return t, ok
 }
 
 // ToBytes returns the value if byte-slice.
 func (v Value) ToBytes() (val []byte, ok bool) {
 	val, ok = v.value.([]byte)
-	return
+	return val, ok
 }
 
 // ToArray returns the value if it is a slice of values.
 func (v Value) ToArray() (val []Value, ok bool) {
 	val, ok = v.value.([]Value)
-	return
+	return val, ok
 }
 
 // IsNull - checks if value is missing.
@@ -393,7 +393,7 @@ func (v *Value) InferBytesType() (err error) {
 	}
 	// Fallback to string
 	v.setString(asString)
-	return
+	return err
 }
 
 // When numeric types are compared, type promotions could happen. If

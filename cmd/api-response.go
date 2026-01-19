@@ -889,6 +889,12 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []DeletedObject, err
 }
 
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
+	// Don't write a response if one has already been written.
+	// Fixes https://github.com/minio/minio/issues/21633
+	if headersAlreadyWritten(w) {
+		return
+	}
+
 	if statusCode == 0 {
 		statusCode = 200
 	}
@@ -1014,4 +1020,46 @@ func writeCustomErrorResponseJSON(ctx context.Context, w http.ResponseWriter, er
 	}
 	encodedErrorResponse := encodeResponseJSON(errorResponse)
 	writeResponse(w, err.HTTPStatusCode, encodedErrorResponse, mimeJSON)
+}
+
+type unwrapper interface {
+	Unwrap() http.ResponseWriter
+}
+
+// headersAlreadyWritten returns true if the headers have already been written
+// to this response writer. It will unwrap the ResponseWriter if possible to try
+// and find a trackingResponseWriter.
+func headersAlreadyWritten(w http.ResponseWriter) bool {
+	for {
+		if trw, ok := w.(*trackingResponseWriter); ok {
+			return trw.headerWritten
+		} else if uw, ok := w.(unwrapper); ok {
+			w = uw.Unwrap()
+		} else {
+			return false
+		}
+	}
+}
+
+// trackingResponseWriter wraps a ResponseWriter and notes when WriterHeader has
+// been called. This allows high level request handlers to check if something
+// has already sent the header.
+type trackingResponseWriter struct {
+	http.ResponseWriter
+	headerWritten bool
+}
+
+func (w *trackingResponseWriter) WriteHeader(statusCode int) {
+	if !w.headerWritten {
+		w.headerWritten = true
+		w.ResponseWriter.WriteHeader(statusCode)
+	}
+}
+
+func (w *trackingResponseWriter) Write(b []byte) (int, error) {
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *trackingResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }

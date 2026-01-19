@@ -29,6 +29,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"path"
 	"strconv"
@@ -117,10 +118,7 @@ func DecryptETags(ctx context.Context, k *kms.KMS, objects []ObjectInfo) error {
 		names    = make([]string, 0, BatchSize)
 	)
 	for len(objects) > 0 {
-		N := BatchSize
-		if len(objects) < BatchSize {
-			N = len(objects)
-		}
+		N := min(len(objects), BatchSize)
 		batch := objects[:N]
 
 		// We have to decrypt only ETags of SSE-S3 single-part
@@ -317,9 +315,7 @@ func rotateKey(ctx context.Context, oldKey []byte, newKeyID string, newKey []byt
 		// of the client provided context and add the bucket
 		// key, if not present.
 		kmsCtx := kms.Context{}
-		for k, v := range cryptoCtx {
-			kmsCtx[k] = v
-		}
+		maps.Copy(kmsCtx, cryptoCtx)
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
@@ -389,9 +385,7 @@ func newEncryptMetadata(ctx context.Context, kind crypto.Type, keyID string, key
 		// of the client provided context and add the bucket
 		// key, if not present.
 		kmsCtx := kms.Context{}
-		for k, v := range cryptoCtx {
-			kmsCtx[k] = v
-		}
+		maps.Copy(kmsCtx, cryptoCtx)
 		if _, ok := kmsCtx[bucket]; !ok {
 			kmsCtx[bucket] = path.Join(bucket, object)
 		}
@@ -456,7 +450,7 @@ func setEncryptionMetadata(r *http.Request, bucket, object string, metadata map[
 		}
 	}
 	_, err = newEncryptMetadata(r.Context(), kind, keyID, key, bucket, object, metadata, kmsCtx)
-	return
+	return err
 }
 
 // EncryptRequest takes the client provided content and encrypts the data
@@ -861,7 +855,7 @@ func tryDecryptETag(key []byte, encryptedETag string, sses3 bool) string {
 func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, skipLen int64, seqNumber uint32, partStart int, err error) {
 	if _, ok := crypto.IsEncrypted(o.UserDefined); !ok {
 		err = errors.New("Object is not encrypted")
-		return
+		return encOff, encLength, skipLen, seqNumber, partStart, err
 	}
 
 	if rs == nil {
@@ -879,7 +873,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 			partSize, err = sio.DecryptedSize(uint64(part.Size))
 			if err != nil {
 				err = errObjectTampered
-				return
+				return encOff, encLength, skipLen, seqNumber, partStart, err
 			}
 			sizes[i] = int64(partSize)
 			decObjSize += int64(partSize)
@@ -889,7 +883,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 		partSize, err = sio.DecryptedSize(uint64(o.Size))
 		if err != nil {
 			err = errObjectTampered
-			return
+			return encOff, encLength, skipLen, seqNumber, partStart, err
 		}
 		sizes = []int64{int64(partSize)}
 		decObjSize = sizes[0]
@@ -898,7 +892,7 @@ func (o *ObjectInfo) GetDecryptedRange(rs *HTTPRangeSpec) (encOff, encLength, sk
 	var off, length int64
 	off, length, err = rs.GetOffsetLength(decObjSize)
 	if err != nil {
-		return
+		return encOff, encLength, skipLen, seqNumber, partStart, err
 	}
 
 	// At this point, we have:
@@ -1074,8 +1068,16 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 			return input, nil
 		}
 		var key []byte
-		if k, err := crypto.SSEC.ParseHTTP(h); err == nil {
-			key = k[:]
+		if crypto.SSECopy.IsRequested(h) {
+			sseCopyKey, err := crypto.SSECopy.ParseHTTP(h)
+			if err != nil {
+				return nil, err
+			}
+			key = sseCopyKey[:]
+		} else {
+			if k, err := crypto.SSEC.ParseHTTP(h); err == nil {
+				key = k[:]
+			}
 		}
 		key, err := decryptObjectMeta(key, o.Bucket, o.Name, o.UserDefined)
 		if err != nil {
@@ -1087,7 +1089,8 @@ func (o *ObjectInfo) metadataDecrypter(h http.Header) objectMetaDecryptFn {
 	}
 }
 
-// decryptPartsChecksums will attempt to decode checksums and return it/them if set.
+// decryptPartsChecksums will attempt to decrypt and decode part checksums, and save
+// only the decrypted part checksum values on ObjectInfo directly.
 // if part > 0, and we have the checksum for the part that will be returned.
 func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 	data := o.Checksum
@@ -1110,6 +1113,23 @@ func (o *ObjectInfo) decryptPartsChecksums(h http.Header) {
 			o.Parts[i].Checksums = cs[i]
 		}
 	}
+}
+
+// decryptChecksum will attempt to decrypt the ObjectInfo.Checksum, returns the decrypted value
+// An error is only returned if it was encrypted and the decryption failed.
+func (o *ObjectInfo) decryptChecksum(h http.Header) ([]byte, error) {
+	data := o.Checksum
+	if len(data) == 0 {
+		return data, nil
+	}
+	if _, encrypted := crypto.IsEncrypted(o.UserDefined); encrypted {
+		decrypted, err := o.metadataDecrypter(h)("object-checksum", data)
+		if err != nil {
+			return nil, err
+		}
+		data = decrypted
+	}
+	return data, nil
 }
 
 // metadataEncryptFn provides an encryption function for metadata.

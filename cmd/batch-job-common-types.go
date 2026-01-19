@@ -275,7 +275,7 @@ func (sf BatchJobSizeFilter) Validate() error {
 type BatchJobSize int64
 
 // UnmarshalYAML to parse humanized byte values
-func (s *BatchJobSize) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (s *BatchJobSize) UnmarshalYAML(unmarshal func(any) error) error {
 	var batchExpireSz string
 	err := unmarshal(&batchExpireSz)
 	if err != nil {

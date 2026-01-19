@@ -402,7 +402,7 @@ func (b byResourceUID) Less(i, j int) bool {
 func TestTopLockEntries(t *testing.T) {
 	locksHeld := make(map[string][]lockRequesterInfo)
 	var owners []string
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		owners = append(owners, fmt.Sprintf("node-%d", i))
 	}
 
@@ -410,7 +410,7 @@ func TestTopLockEntries(t *testing.T) {
 	// request UID, but 10 different resource names associated with it.
 	var lris []lockRequesterInfo
 	uuid := mustGetUUID()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		resource := fmt.Sprintf("bucket/delete-object-%d", i)
 		lri := lockRequesterInfo{
 			Name:   resource,
@@ -425,7 +425,7 @@ func TestTopLockEntries(t *testing.T) {
 	}
 
 	// Add a few concurrent read locks to the mix
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		resource := fmt.Sprintf("bucket/get-object-%d", i)
 		lri := lockRequesterInfo{
 			Name:   resource,

@@ -53,8 +53,9 @@ type erasureServerPools struct {
 	poolMetaMutex sync.RWMutex
 	poolMeta      poolMeta
 
-	rebalMu   sync.RWMutex
-	rebalMeta *rebalanceMeta
+	rebalMu     sync.RWMutex
+	rebalMeta   *rebalanceMeta
+	rebalCancel context.CancelFunc
 
 	deploymentID     [16]byte
 	distributionAlgo string
@@ -420,7 +421,6 @@ func (z *erasureServerPools) getServerPoolsAvailableSpace(ctx context.Context, b
 	nSets := make([]int, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
-		index := index
 		// Skip suspended pools or pools participating in rebalance for any new
 		// I/O.
 		if z.IsSuspended(index) || z.IsPoolRebalancing(index) {
@@ -635,15 +635,18 @@ func (z *erasureServerPools) getPoolIdxNoLock(ctx context.Context, bucket, objec
 // if none are found falls back to most available space pool, this function is
 // designed to be only used by PutObject, CopyObject (newObject creation) and NewMultipartUpload.
 func (z *erasureServerPools) getPoolIdx(ctx context.Context, bucket, object string, size int64) (idx int, err error) {
-	idx, err = z.getPoolIdxExistingWithOpts(ctx, bucket, object, ObjectOptions{
+	pinfo, _, err := z.getPoolInfoExistingWithOpts(ctx, bucket, object, ObjectOptions{
 		SkipDecommissioned: true,
 		SkipRebalancing:    true,
 	})
+
 	if err != nil && !isErrObjectNotFound(err) {
-		return idx, err
+		return -1, err
 	}
 
-	if isErrObjectNotFound(err) {
+	idx = pinfo.Index
+	if isErrObjectNotFound(err) || pinfo.Err == nil {
+		// will generate a temp object
 		idx = z.getAvailablePoolIdx(ctx, bucket, object, size)
 		if idx < 0 {
 			return -1, toObjectErr(errDiskFull)
@@ -657,7 +660,6 @@ func (z *erasureServerPools) Shutdown(ctx context.Context) error {
 	g := errgroup.WithNErrs(len(z.serverPools))
 
 	for index := range z.serverPools {
-		index := index
 		g.Go(func() error {
 			return z.serverPools[index].Shutdown(ctx)
 		}, index)
@@ -700,7 +702,7 @@ func (z *erasureServerPools) BackendInfo() (b madmin.BackendInfo) {
 
 	b.StandardSCParity = scParity
 	b.RRSCParity = rrSCParity
-	return
+	return b
 }
 
 func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool) StorageInfo {
@@ -709,7 +711,6 @@ func (z *erasureServerPools) LocalStorageInfo(ctx context.Context, metrics bool)
 	storageInfos := make([]StorageInfo, len(z.serverPools))
 	g := errgroup.WithNErrs(len(z.serverPools))
 	for index := range z.serverPools {
-		index := index
 		g.Go(func() error {
 			storageInfos[index] = z.serverPools[index].LocalStorageInfo(ctx, metrics)
 			return nil
@@ -1089,6 +1090,10 @@ func (z *erasureServerPools) PutObject(ctx context.Context, bucket string, objec
 
 	object = encodeDirObject(object)
 	if z.SinglePool() {
+		_, err := z.getPoolIdx(ctx, bucket, object, data.Size())
+		if err != nil {
+			return ObjectInfo{}, err
+		}
 		return z.serverPools[0].PutObject(ctx, bucket, object, data, opts)
 	}
 
@@ -1178,6 +1183,13 @@ func (z *erasureServerPools) DeleteObject(ctx context.Context, bucket string, ob
 		return z.deleteObjectFromAllPools(ctx, bucket, object, opts, noReadQuorumPools)
 	}
 
+	// All replication requests needs to go to pool with the object.
+	if opts.ReplicationRequest {
+		objInfo, err = z.serverPools[pinfo.Index].DeleteObject(ctx, bucket, object, opts)
+		objInfo.Name = decodeDirObject(object)
+		return objInfo, err
+	}
+
 	for _, pool := range z.serverPools {
 		objInfo, err := pool.DeleteObject(ctx, bucket, object, opts)
 		if err != nil && !isErrObjectNotFound(err) && !isErrVersionNotFound(err) {
@@ -1254,7 +1266,6 @@ func (z *erasureServerPools) DeleteObjects(ctx context.Context, bucket string, o
 
 	eg := errgroup.WithNErrs(len(z.serverPools)).WithConcurrency(len(z.serverPools))
 	for i, pool := range z.serverPools {
-		i := i
 		pool := pool
 		eg.Go(func() error {
 			dObjectsByPool[i], dErrsByPool[i] = pool.DeleteObjects(ctx, bucket, objects, opts)
@@ -1340,12 +1351,15 @@ func (z *erasureServerPools) CopyObject(ctx context.Context, srcBucket, srcObjec
 	}
 
 	putOpts := ObjectOptions{
-		ServerSideEncryption: dstOpts.ServerSideEncryption,
-		UserDefined:          srcInfo.UserDefined,
-		Versioned:            dstOpts.Versioned,
-		VersionID:            dstOpts.VersionID,
-		MTime:                dstOpts.MTime,
-		NoLock:               true,
+		ServerSideEncryption:       dstOpts.ServerSideEncryption,
+		UserDefined:                srcInfo.UserDefined,
+		Versioned:                  dstOpts.Versioned,
+		VersionID:                  dstOpts.VersionID,
+		MTime:                      dstOpts.MTime,
+		NoLock:                     true,
+		EncryptFn:                  dstOpts.EncryptFn,
+		WantChecksum:               dstOpts.WantChecksum,
+		WantServerSideChecksumType: dstOpts.WantServerSideChecksumType,
 	}
 
 	return z.serverPools[poolIdx].PutObject(ctx, dstBucket, dstObject, srcInfo.PutObjReader, putOpts)
@@ -1709,7 +1723,9 @@ func (z *erasureServerPools) ListMultipartUploads(ctx context.Context, bucket, p
 		}
 
 		z.mpCache.Range(func(_ string, mp MultipartInfo) bool {
-			poolResult.Uploads = append(poolResult.Uploads, mp)
+			if mp.Bucket == bucket {
+				poolResult.Uploads = append(poolResult.Uploads, mp)
+			}
 			return true
 		})
 		sort.Slice(poolResult.Uploads, func(i int, j int) bool {
@@ -1811,6 +1827,10 @@ func (z *erasureServerPools) PutObjectPart(ctx context.Context, bucket, object, 
 	}
 
 	if z.SinglePool() {
+		_, err := z.getPoolIdx(ctx, bucket, object, data.Size())
+		if err != nil {
+			return PartInfo{}, err
+		}
 		return z.serverPools[0].PutObjectPart(ctx, bucket, object, uploadID, partID, data, opts)
 	}
 
@@ -2221,7 +2241,6 @@ func (z *erasureServerPools) Walk(ctx context.Context, bucket, prefix string, re
 
 	for poolIdx, erasureSet := range z.serverPools {
 		for setIdx, set := range erasureSet.sets {
-			set := set
 			listOut := make(chan metaCacheEntry, 1)
 			entries = append(entries, listOut)
 			disks, infos, _ := set.getOnlineDisksWithHealingAndInfo(true)

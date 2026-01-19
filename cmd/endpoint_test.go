@@ -312,7 +312,6 @@ func TestCreateEndpoints(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		i := i
 		testCase := testCase
 		t.Run("", func(t *testing.T) {
 			var srvCtxt serverCtxt

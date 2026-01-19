@@ -251,7 +251,7 @@ func TestErasureDecodeRandomOffsetLength(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	// Verify erasure.Decode() for random offsets and lengths.
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		offset := r.Int63n(length)
 		readLen := r.Int63n(length - offset)
 
@@ -308,17 +308,16 @@ func benchmarkErasureDecode(data, parity, dataDown, parityDown int, size int64, 
 		b.Fatalf("failed to create erasure test file: %v", err)
 	}
 
-	for i := 0; i < dataDown; i++ {
+	for i := range dataDown {
 		writers[i] = nil
 	}
 	for i := data; i < data+parityDown; i++ {
 		writers[i] = nil
 	}
 
-	b.ResetTimer()
 	b.SetBytes(size)
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		bitrotReaders := make([]io.ReaderAt, len(disks))
 		for index, disk := range disks {
 			if writers[index] == nil {

@@ -162,7 +162,7 @@ func (l *localLocker) Unlock(_ context.Context, args dsync.LockArgs) (reply bool
 			reply = l.removeEntry(resource, args, &lri) || reply
 		}
 	}
-	return
+	return reply, err
 }
 
 // removeEntry based on the uid of the lock message, removes a single entry from the
@@ -329,7 +329,7 @@ func (l *localLocker) ForceUnlock(ctx context.Context, args dsync.LockArgs) (rep
 				lris, ok := l.lockMap[resource]
 				if !ok {
 					// Just to be safe, delete uuids.
-					for idx := 0; idx < maxDeleteList; idx++ {
+					for idx := range maxDeleteList {
 						mapID := formatUUID(uid, idx)
 						if _, ok := l.lockUID[mapID]; !ok {
 							break

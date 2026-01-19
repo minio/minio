@@ -95,7 +95,7 @@ func doesPolicySignatureV2Match(formValues http.Header) (auth.Credentials, APIEr
 // Escape encodedQuery string into unescaped list of query params, returns error
 // if any while unescaping the values.
 func unescapeQueries(encodedQuery string) (unescapedQueries []string, err error) {
-	for _, query := range strings.Split(encodedQuery, "&") {
+	for query := range strings.SplitSeq(encodedQuery, "&") {
 		var unescapedQuery string
 		unescapedQuery, err = url.QueryUnescape(query)
 		if err != nil {

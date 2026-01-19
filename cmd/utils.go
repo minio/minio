@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -36,7 +37,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -218,9 +219,7 @@ func path2BucketObject(s string) (bucket, prefix string) {
 // If input is nil an empty map is returned, not nil.
 func cloneMSS(v map[string]string) map[string]string {
 	r := make(map[string]string, len(v))
-	for k, v := range v {
-		r[k] = v
-	}
+	maps.Copy(r, v)
 	return r
 }
 
@@ -237,7 +236,7 @@ func nopCharsetConverter(label string, input io.Reader) (io.Reader, error) {
 }
 
 // xmlDecoder provide decoded value in xml.
-func xmlDecoder(body io.Reader, v interface{}, size int64) error {
+func xmlDecoder(body io.Reader, v any, size int64) error {
 	var lbody io.Reader
 	if size > 0 {
 		lbody = io.LimitReader(body, size)
@@ -690,7 +689,7 @@ func NewRemoteTargetHTTPTransport(insecure bool) func() *http.Transport {
 func ceilFrac(numerator, denominator int64) (ceil int64) {
 	if denominator == 0 {
 		// do nothing on invalid input
-		return
+		return ceil
 	}
 	// Make denominator positive
 	if denominator < 0 {
@@ -701,7 +700,7 @@ func ceilFrac(numerator, denominator int64) (ceil int64) {
 	if numerator > 0 && numerator%denominator != 0 {
 		ceil++
 	}
-	return
+	return ceil
 }
 
 // cleanMinioInternalMetadataKeys removes X-Amz-Meta- prefix from minio internal
@@ -844,10 +843,7 @@ func lcp(strs []string, pre bool) string {
 			return ""
 		}
 		// maximum possible length
-		maxl := xfixl
-		if strl < maxl {
-			maxl = strl
-		}
+		maxl := min(strl, xfixl)
 		// compare letters
 		if pre {
 			// prefix, iterate left to right
@@ -953,7 +949,7 @@ func auditLogInternal(ctx context.Context, opts AuditLogOptions) {
 	entry.API.Bucket = opts.Bucket
 	entry.API.Objects = []xaudit.ObjectVersion{{ObjectName: opts.Object, VersionID: opts.VersionID}}
 	entry.API.Status = opts.Status
-	entry.Tags = make(map[string]interface{}, len(opts.Tags))
+	entry.Tags = make(map[string]any, len(opts.Tags))
 	for k, v := range opts.Tags {
 		entry.Tags[k] = v
 	}
@@ -1188,8 +1184,6 @@ func mapKeysSorted[Map ~map[K]V, K ordered, V any](m Map) []K {
 	for k := range m {
 		res = append(res, k)
 	}
-	sort.Slice(res, func(i, j int) bool {
-		return res[i] < res[j]
-	})
+	slices.Sort(res)
 	return res
 }

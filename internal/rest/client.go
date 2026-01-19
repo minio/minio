@@ -210,13 +210,13 @@ type respBodyMonitor struct {
 func (r *respBodyMonitor) Read(p []byte) (n int, err error) {
 	n, err = r.ReadCloser.Read(p)
 	r.errorStatus(err)
-	return
+	return n, err
 }
 
 func (r *respBodyMonitor) Close() (err error) {
 	err = r.ReadCloser.Close()
 	r.errorStatus(err)
-	return
+	return err
 }
 
 func (r *respBodyMonitor) errorStatus(err error) {
@@ -458,10 +458,7 @@ func exponentialBackoffWait(r *rand.Rand, unit, maxSleep time.Duration) func(uin
 			attempt = 16
 		}
 		// sleep = random_between(unit, min(cap, base * 2 ** attempt))
-		sleep := unit * time.Duration(1<<attempt)
-		if sleep > maxSleep {
-			sleep = maxSleep
-		}
+		sleep := min(unit*time.Duration(1<<attempt), maxSleep)
 		sleep -= time.Duration(r.Float64() * float64(sleep-unit))
 		return sleep
 	}

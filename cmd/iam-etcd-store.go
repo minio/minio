@@ -98,7 +98,7 @@ func (ies *IAMEtcdStore) getUsersSysType() UsersSysType {
 	return ies.usersSysType
 }
 
-func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, itemPath string, opts ...options) error {
+func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item any, itemPath string, opts ...options) error {
 	data, err := json.Marshal(item)
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func (ies *IAMEtcdStore) saveIAMConfig(ctx context.Context, item interface{}, it
 	return saveKeyEtcd(ctx, ies.client, itemPath, data, opts...)
 }
 
-func getIAMConfig(item interface{}, data []byte, itemPath string) error {
+func getIAMConfig(item any, data []byte, itemPath string) error {
 	data, err := decryptData(data, itemPath)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func getIAMConfig(item interface{}, data []byte, itemPath string) error {
 	return json.Unmarshal(data, item)
 }
 
-func (ies *IAMEtcdStore) loadIAMConfig(ctx context.Context, item interface{}, path string) error {
+func (ies *IAMEtcdStore) loadIAMConfig(ctx context.Context, item any, path string) error {
 	data, err := readKeyEtcd(ctx, ies.client, path)
 	if err != nil {
 		return err

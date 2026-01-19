@@ -156,7 +156,6 @@ func testListObjectsVersionedFolders(obj ObjectLayer, instanceType string, t1 Te
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			var err error
 			var resultL ListObjectsInfo
@@ -854,7 +853,7 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (20).
 		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
-		// Testing for trancated value (21-24).
+		// Testing for truncated value (21-24).
 		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
 		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
 		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
@@ -944,7 +943,6 @@ func _testListObjects(obj ObjectLayer, instanceType string, t1 TestErrHandler, v
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			t.Log("ListObjects, bucket:", testCase.bucketName, "prefix:", testCase.prefix, "marker:", testCase.marker, "delimiter:", testCase.delimiter, "maxkeys:", testCase.maxKeys)
 			result, err := obj.ListObjects(t.Context(), testCase.bucketName,
@@ -1169,7 +1167,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		}
 	}
 
-	// Formualting the result data set to be expected from ListObjects call inside the tests,
+	// Formulating the result data set to be expected from ListObjects call inside the tests,
 	// This will be used in testCases and used for asserting the correctness of ListObjects output in the tests.
 
 	resultCases := []ListObjectsInfo{
@@ -1593,7 +1591,7 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (18).
 		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
-		// Testing for trancated value (19-22).
+		// Testing for truncated value (19-22).
 		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
 		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
 		{"test-bucket-list-object", "", "", "", 3, resultCases[3], nil, true},
@@ -1676,7 +1674,6 @@ func testListObjectVersions(obj ObjectLayer, instanceType string, t1 TestErrHand
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			result, err := obj.ListObjectVersions(t.Context(), testCase.bucketName,
 				testCase.prefix, testCase.marker, "", testCase.delimiter, int(testCase.maxKeys))
@@ -1827,7 +1824,6 @@ func testListObjectsContinuation(obj ObjectLayer, instanceType string, t1 TestEr
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("%s-Test%d", instanceType, i+1), func(t *testing.T) {
 			var foundObjects []ObjectInfo
 			var foundPrefixes []string
@@ -1914,7 +1910,7 @@ func BenchmarkListObjects(b *testing.B) {
 	}
 
 	// Insert objects to be listed and benchmarked later.
-	for i := 0; i < 20000; i++ {
+	for i := range 20000 {
 		key := "obj" + strconv.Itoa(i)
 		_, err = obj.PutObject(b.Context(), bucket, key, mustGetPutObjReader(b, bytes.NewBufferString(key), int64(len(key)), "", ""), ObjectOptions{})
 		if err != nil {
@@ -1922,10 +1918,8 @@ func BenchmarkListObjects(b *testing.B) {
 		}
 	}
 
-	b.ResetTimer()
-
 	// List the buckets over and over and over.
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err = obj.ListObjects(b.Context(), bucket, "", "obj9000", "", -1)
 		if err != nil {
 			b.Fatal(err)

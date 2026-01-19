@@ -29,14 +29,14 @@ type MetaValue struct {
 	Offset    int
 	Length    int
 	Depth     int
-	Value     interface{}
+	Value     any
 	ValueType ValueType
 }
 
 // KV contains a key and value pair parsed from a decoded object
 type KV struct {
-	Key   string      `json:"key"`
-	Value interface{} `json:"value"`
+	Key   string `json:"key"`
+	Value any    `json:"value"`
 }
 
 // KVS - represents key values in an JSON object
@@ -160,7 +160,7 @@ func (d *Decoder) decode() {
 	}
 }
 
-func (d *Decoder) emitAny() (interface{}, error) {
+func (d *Decoder) emitAny() (any, error) {
 	if d.pos >= atomic.LoadInt64(&d.end) {
 		return nil, d.mkError(ErrUnexpectedEOF)
 	}
@@ -189,7 +189,7 @@ func (d *Decoder) willEmit() bool {
 
 // any used to decode any valid JSON value, and returns an
 // interface{} that holds the actual data
-func (d *Decoder) any() (interface{}, ValueType, error) {
+func (d *Decoder) any() (any, ValueType, error) {
 	c := d.cur()
 
 	switch c {
@@ -239,7 +239,7 @@ func (d *Decoder) any() (interface{}, ValueType, error) {
 		i, err := d.array()
 		return i, Array, err
 	case '{':
-		var i interface{}
+		var i any
 		var err error
 		if d.objectAsKVS {
 			i, err = d.objectOrdered()
@@ -426,7 +426,7 @@ func (d *Decoder) number() (float64, error) {
 }
 
 // array accept valid JSON array value
-func (d *Decoder) array() ([]interface{}, error) {
+func (d *Decoder) array() ([]any, error) {
 	d.depth++
 	if d.maxDepth > 0 && d.depth > d.maxDepth {
 		return nil, ErrMaxDepth
@@ -434,9 +434,9 @@ func (d *Decoder) array() ([]interface{}, error) {
 
 	var (
 		c     byte
-		v     interface{}
+		v     any
 		err   error
-		array = make([]interface{}, 0)
+		array = make([]any, 0)
 	)
 
 	// look ahead for ] - if the array is empty.
@@ -470,7 +470,7 @@ out:
 }
 
 // object accept valid JSON array value
-func (d *Decoder) object() (map[string]interface{}, error) {
+func (d *Decoder) object() (map[string]any, error) {
 	d.depth++
 	if d.maxDepth > 0 && d.depth > d.maxDepth {
 		return nil, ErrMaxDepth
@@ -479,15 +479,15 @@ func (d *Decoder) object() (map[string]interface{}, error) {
 	var (
 		c   byte
 		k   string
-		v   interface{}
+		v   any
 		t   ValueType
 		err error
-		obj map[string]interface{}
+		obj map[string]any
 	)
 
 	// skip allocating map if it will not be emitted
 	if d.depth > d.emitDepth {
-		obj = make(map[string]interface{})
+		obj = make(map[string]any)
 	}
 
 	// if the object has no keys
@@ -567,7 +567,7 @@ func (d *Decoder) objectOrdered() (KVS, error) {
 	var (
 		c   byte
 		k   string
-		v   interface{}
+		v   any
 		t   ValueType
 		err error
 		obj KVS

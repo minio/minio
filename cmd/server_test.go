@@ -60,7 +60,7 @@ type check struct {
 }
 
 // Assert - checks if gotValue is same as expectedValue, if not fails the test.
-func (c *check) Assert(gotValue interface{}, expectedValue interface{}) {
+func (c *check) Assert(gotValue any, expectedValue any) {
 	c.Helper()
 	if !reflect.DeepEqual(gotValue, expectedValue) {
 		c.Fatalf("Test %s expected %v, got %v", c.testType, expectedValue, gotValue)
@@ -653,7 +653,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	delObjReq := DeleteObjectsRequest{
 		Quiet: false,
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// Obtain http request to upload object.
 		// object Name contains a prefix.
 		objName := fmt.Sprintf("%d/%s", i, objectName)
@@ -690,7 +690,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	c.Assert(err, nil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, nil)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// All the objects should be under deleted list (including non-existent object)
 		c.Assert(deleteResp.DeletedObjects[i], DeletedObject{
 			ObjectName: delObjReq.Objects[i].ObjectName,
@@ -714,7 +714,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *check) {
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, nil)
 	c.Assert(len(deleteResp.DeletedObjects), len(delObjReq.Objects))
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		c.Assert(deleteResp.DeletedObjects[i], DeletedObject{
 			ObjectName: delObjReq.Objects[i].ObjectName,
 			VersionID:  delObjReq.Objects[i].VersionID,
@@ -1054,7 +1054,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *check) {
 	// The purpose this block is not to check for correctness of functionality
 	// Run the test with -race flag to utilize this
 	var wg sync.WaitGroup
-	for i := 0; i < testConcurrencyLevel; i++ {
+	for range testConcurrencyLevel {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -2127,7 +2127,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *check) {
 	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
 	1234567890,1234567890,1234567890,1234567890,1234567890,123"`
 	// Create 10MiB content where each line contains 1024 characters.
-	for i := 0; i < 10*1024; i++ {
+	for i := range 10 * 1024 {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
 	}
 	putContent := buffer.String()
@@ -2189,7 +2189,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *check) {
 	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
 	1234567890,1234567890,1234567890,123`
 	// Create 11MiB content where each line contains 1024 characters.
-	for i := 0; i < 11*1024; i++ {
+	for i := range 11 * 1024 {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
 	}
 	putMD5 := getMD5Hash(buffer.Bytes())
@@ -2340,7 +2340,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *check) {
 	1234567890,1234567890,1234567890,123`
 	// Create 11MiB content where each line contains 1024
 	// characters.
-	for i := 0; i < 11*1024; i++ {
+	for i := range 11 * 1024 {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
 	}
 	putContent := buffer.String()
@@ -2406,7 +2406,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *check) {
 	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
 	1234567890,1234567890,1234567890,123`
 	// Create 10MiB content where each line contains 1024 characters.
-	for i := 0; i < 10*1024; i++ {
+	for i := range 10 * 1024 {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
 	}
 

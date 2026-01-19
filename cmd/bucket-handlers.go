@@ -154,7 +154,6 @@ func initFederatorBackend(buckets []string, objLayer ObjectLayer) {
 	g := errgroup.WithNErrs(len(bucketsToBeUpdatedSlice)).WithConcurrency(50)
 
 	for index := range bucketsToBeUpdatedSlice {
-		index := index
 		g.Go(func() error {
 			return globalDNSConfig.Put(bucketsToBeUpdatedSlice[index])
 		}, index)
@@ -593,7 +592,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			output[idx] = obj
 			idx++
 		}
-		return
+		return output
 	}
 
 	// Disable timeouts and cancellation
@@ -1387,10 +1386,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		// Set the correct hex md5sum for the fan-out stream.
 		fanOutOpts.MD5Hex = hex.EncodeToString(md5w.Sum(nil))
 
-		concurrentSize := 100
-		if runtime.GOMAXPROCS(0) < concurrentSize {
-			concurrentSize = runtime.GOMAXPROCS(0)
-		}
+		concurrentSize := min(runtime.GOMAXPROCS(0), 100)
 
 		fanOutResp := make([]minio.PutObjectFanOutResponse, 0, len(fanOutEntries))
 		eventArgsList := make([]eventArgs, 0, len(fanOutEntries))
@@ -1661,9 +1657,11 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
-		writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
-		return
+	if s3Error := checkRequestAuthType(ctx, r, policy.HeadBucketAction, bucket, ""); s3Error != ErrNone {
+		if s3Error := checkRequestAuthType(ctx, r, policy.ListBucketAction, bucket, ""); s3Error != ErrNone {
+			writeErrorResponseHeadersOnly(w, errorCodes.ToAPIErr(s3Error))
+			return
+		}
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo

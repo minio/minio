@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"net/url"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/cespare/xxhash/v2"
@@ -122,9 +122,7 @@ func possibleSetCountsWithSymmetry(setCounts []uint64, argPatterns []ellipses.Ar
 	// eyes that we prefer a sorted setCount slice for the
 	// subsequent function to figure out the right common
 	// divisor, it avoids loops.
-	sort.Slice(setCounts, func(i, j int) bool {
-		return setCounts[i] < setCounts[j]
-	})
+	slices.Sort(setCounts)
 
 	return setCounts
 }
@@ -445,7 +443,7 @@ func buildDisksLayoutFromConfFile(pools []poolArgs) (layout disksLayout, err err
 			layout:  setArgs,
 		})
 	}
-	return
+	return layout, err
 }
 
 // mergeDisksLayoutFromArgs supports with and without ellipses transparently.
@@ -477,7 +475,7 @@ func mergeDisksLayoutFromArgs(args []string, ctxt *serverCtxt) (err error) {
 			legacy: true,
 			pools:  []poolDisksLayout{{layout: setArgs, cmdline: strings.Join(args, " ")}},
 		}
-		return
+		return err
 	}
 
 	for _, arg := range args {
@@ -491,7 +489,7 @@ func mergeDisksLayoutFromArgs(args []string, ctxt *serverCtxt) (err error) {
 		}
 		ctxt.Layout.pools = append(ctxt.Layout.pools, poolDisksLayout{cmdline: arg, layout: setArgs})
 	}
-	return
+	return err
 }
 
 // CreateServerEndpoints - validates and creates new endpoints from input args, supports

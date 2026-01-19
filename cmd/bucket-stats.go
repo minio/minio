@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sync/atomic"
 	"time"
@@ -37,7 +38,7 @@ type ReplicationLatency struct {
 // Merge two replication latency into a new one
 func (rl ReplicationLatency) merge(other ReplicationLatency) (newReplLatency ReplicationLatency) {
 	newReplLatency.UploadHistogram = rl.UploadHistogram.Merge(other.UploadHistogram)
-	return
+	return newReplLatency
 }
 
 // Get upload latency of each object size range
@@ -48,7 +49,7 @@ func (rl ReplicationLatency) getUploadLatency() (ret map[string]uint64) {
 		// Convert nanoseconds to milliseconds
 		ret[sizeTagToString(k)] = uint64(v.avg() / time.Millisecond)
 	}
-	return
+	return ret
 }
 
 // Update replication upload latency with a new value
@@ -63,7 +64,7 @@ type ReplicationLastMinute struct {
 
 func (rl ReplicationLastMinute) merge(other ReplicationLastMinute) (nl ReplicationLastMinute) {
 	nl = ReplicationLastMinute{rl.LastMinute.merge(other.LastMinute)}
-	return
+	return nl
 }
 
 func (rl *ReplicationLastMinute) addsize(n int64) {
@@ -221,9 +222,7 @@ func (brs BucketReplicationStats) Clone() (c BucketReplicationStats) {
 		}
 		if s.Failed.ErrCounts == nil {
 			s.Failed.ErrCounts = make(map[string]int)
-			for k, v := range st.Failed.ErrCounts {
-				s.Failed.ErrCounts[k] = v
-			}
+			maps.Copy(s.Failed.ErrCounts, st.Failed.ErrCounts)
 		}
 		c.Stats[arn] = &s
 	}

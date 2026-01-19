@@ -38,7 +38,7 @@ type publicKeys struct {
 	*sync.RWMutex
 
 	// map of kid to public key
-	pkMap map[string]interface{}
+	pkMap map[string]any
 }
 
 func (pk *publicKeys) parseAndAdd(b io.Reader) error {
@@ -59,14 +59,14 @@ func (pk *publicKeys) parseAndAdd(b io.Reader) error {
 	return nil
 }
 
-func (pk *publicKeys) add(keyID string, key interface{}) {
+func (pk *publicKeys) add(keyID string, key any) {
 	pk.Lock()
 	defer pk.Unlock()
 
 	pk.pkMap[keyID] = key
 }
 
-func (pk *publicKeys) get(kid string) interface{} {
+func (pk *publicKeys) get(kid string) any {
 	pk.RLock()
 	defer pk.RUnlock()
 	return pk.pkMap[kid]
@@ -103,7 +103,7 @@ var (
 	ErrTokenExpired = errors.New("token expired")
 )
 
-func updateClaimsExpiry(dsecs string, claims map[string]interface{}) error {
+func updateClaimsExpiry(dsecs string, claims map[string]any) error {
 	expStr := claims["exp"]
 	if expStr == "" {
 		return ErrTokenExpired
@@ -133,7 +133,7 @@ const (
 )
 
 // Validate - validates the id_token.
-func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims map[string]interface{}) error {
+func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, dsecs string, claims map[string]any) error {
 	jp := new(jwtgo.Parser)
 	jp.ValidMethods = []string{
 		"RS256", "RS384", "RS512",
@@ -143,7 +143,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 		"ES3256", "ES3384", "ES3512",
 	}
 
-	keyFuncCallback := func(jwtToken *jwtgo.Token) (interface{}, error) {
+	keyFuncCallback := func(jwtToken *jwtgo.Token) (any, error) {
 		kid, ok := jwtToken.Header["kid"].(string)
 		if !ok {
 			return nil, fmt.Errorf("Invalid kid value %v", jwtToken.Header["kid"])
@@ -221,7 +221,7 @@ func (r *Config) Validate(ctx context.Context, arn arn.ARN, token, accessToken, 
 	return nil
 }
 
-func (r *Config) updateUserinfoClaims(ctx context.Context, arn arn.ARN, accessToken string, claims map[string]interface{}) error {
+func (r *Config) updateUserinfoClaims(ctx context.Context, arn arn.ARN, accessToken string, claims map[string]any) error {
 	pCfg, ok := r.arnProviderCfgsMap[arn]
 	// If claim user info is enabled, get claims from userInfo
 	// and overwrite them with the claims from JWT.

@@ -93,7 +93,7 @@ const (
 	maxSTSSessionPolicySize = 2048
 )
 
-type stsClaims map[string]interface{}
+type stsClaims map[string]any
 
 func (c stsClaims) populateSessionPolicy(form url.Values) error {
 	if len(form) == 0 {
@@ -416,13 +416,26 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	// defined parameter to disambiguate the intended IDP in this STS request.
 	roleArn := openid.DummyRoleARN
 	roleArnStr := r.Form.Get(stsRoleArn)
-	if roleArnStr != "" {
+	isRolePolicyProvider := roleArnStr != ""
+	if isRolePolicyProvider {
 		var err error
 		roleArn, _, err = globalIAMSys.GetRolePolicy(roleArnStr)
 		if err != nil {
-			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
-				fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
-			return
+			// If there is no claim-based provider configured, then an
+			// unrecognized roleArn is an error
+			if strings.TrimSpace(iamPolicyClaimNameOpenID()) == "" {
+				writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+					fmt.Errorf("Error processing %s parameter: %v", stsRoleArn, err))
+				return
+			}
+			// If there *is* a claim-based provider configured, then
+			// treat an unrecognized roleArn the same as no roleArn
+			// at all.  This is to support clients like the AWS SDKs
+			// or CLI that will not allow an AssumeRoleWithWebIdentity
+			// call without a RoleARN parameter - for these cases the
+			// user can supply a dummy ARN, which Minio will ignore.
+			roleArn = openid.DummyRoleARN
+			isRolePolicyProvider = false
 		}
 	}
 
@@ -451,7 +464,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 	}
 
 	var policyName string
-	if roleArnStr != "" && globalIAMSys.HasRolePolicy() {
+	if isRolePolicyProvider {
 		// If roleArn is used, we set it as a claim, and use the
 		// associated policy when credentials are used.
 		claims[roleArnClaim] = roleArn.String()
@@ -544,6 +557,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithSSO(w http.ResponseWriter, r *http.Requ
 			if err != nil {
 				writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, err)
 				return
+			}
+			if newGlobalAuthZPluginFn() == nil {
+				// if authZ is not set - we expect the policies to be present.
+				if globalIAMSys.CurrentPolicies(p) == "" {
+					writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+						fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", p))
+					return
+				}
 			}
 		}
 
@@ -788,7 +809,7 @@ func extractPolicyName(sanURI string) (string, error) {
 func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithCertificate")
 
-	claims := make(map[string]interface{})
+	claims := make(map[string]any)
 	defer logger.AuditLog(ctx, w, r, claims)
 
 	if !globalIAMSys.Initialized() {
@@ -1004,7 +1025,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *http.Request) {
 	ctx := newContext(r, w, "AssumeRoleWithCustomToken")
 
-	claims := make(map[string]interface{})
+	claims := make(map[string]any)
 
 	auditLogFilterKeys := []string{stsToken}
 	defer logger.AuditLog(ctx, w, r, claims, auditLogFilterKeys...)
@@ -1049,6 +1070,20 @@ func (sts *stsAPIHandlers) AssumeRoleWithCustomToken(w http.ResponseWriter, r *h
 		writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
 			fmt.Errorf("Error processing parameter %s: %v", stsRoleArn, err))
 		return
+	}
+
+	_, policyName, err := globalIAMSys.GetRolePolicy(roleArnStr)
+	if err != nil {
+		writeSTSErrorResponse(ctx, w, ErrSTSAccessDenied, err)
+		return
+	}
+
+	if newGlobalAuthZPluginFn() == nil { // if authZ is not set - we expect the policyname to be present.
+		if globalIAMSys.CurrentPolicies(policyName) == "" {
+			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue,
+				fmt.Errorf("None of the given policies (`%s`) are defined, credentials will not be generated", policyName))
+			return
+		}
 	}
 
 	res, err := authn.Authenticate(roleArn, token)

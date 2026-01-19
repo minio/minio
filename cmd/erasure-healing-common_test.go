@@ -175,7 +175,7 @@ func TestListOnlineDisks(t *testing.T) {
 	fourNanoSecs := time.Unix(4, 0).UTC()
 	modTimesThreeNone := make([]time.Time, 16)
 	modTimesThreeFour := make([]time.Time, 16)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		// Have 13 good xl.meta, 12 for default parity count = 4 (EC:4) and one
 		// to be tampered with.
 		if i > 12 {
@@ -244,7 +244,6 @@ func TestListOnlineDisks(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
 			_, err = obj.PutObject(ctx, bucket, object, mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
 			if err != nil {
@@ -350,7 +349,7 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	fourNanoSecs := time.Unix(4, 0).UTC()
 	modTimesThreeNone := make([]time.Time, 16)
 	modTimesThreeFour := make([]time.Time, 16)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		// Have 13 good xl.meta, 12 for default parity count = 4 (EC:4) and one
 		// to be tampered with.
 		if i > 12 {
@@ -419,7 +418,6 @@ func TestListOnlineDisksSmallObjects(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		test := test
 		t.Run(fmt.Sprintf("case-%d", i), func(t *testing.T) {
 			_, err := obj.PutObject(ctx, bucket, object,
 				mustGetPutObjReader(t, bytes.NewReader(data), int64(len(data)), "", ""), ObjectOptions{})
@@ -753,7 +751,7 @@ func TestCommonParities(t *testing.T) {
 	}
 	for idx, test := range tests {
 		var metaArr []FileInfo
-		for i := 0; i < 12; i++ {
+		for i := range 12 {
 			fi := test.fi1
 			if i%2 == 0 {
 				fi = test.fi2

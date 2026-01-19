@@ -74,7 +74,7 @@ func (m *MSS) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err, "Values")
-		return
+		return o, err
 	}
 	dst := *m
 	if dst == nil {
@@ -91,12 +91,12 @@ func (m *MSS) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		za0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Values")
-			return
+			return o, err
 		}
 		za0002, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, "Values", za0001)
-			return
+			return o, err
 		}
 		dst[za0001] = za0002
 	}
@@ -329,7 +329,7 @@ func (u URLValues) MarshalMsg(b []byte) (o []byte, err error) {
 			o = msgp.AppendString(o, zb0007[zb0008])
 		}
 	}
-	return
+	return o, err
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -338,7 +338,7 @@ func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return o, err
 	}
 	if *u == nil {
 		*u = urlValuesPool.Get()
@@ -356,13 +356,13 @@ func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
-			return
+			return o, err
 		}
 		var zb0005 uint32
 		zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err, zb0001)
-			return
+			return o, err
 		}
 		if cap(zb0002) >= int(zb0005) {
 			zb0002 = zb0002[:zb0005]
@@ -373,13 +373,13 @@ func (u *URLValues) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			zb0002[zb0003], bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, zb0001, zb0003)
-				return
+				return o, err
 			}
 		}
 		(*u)[zb0001] = zb0002
 	}
 	o = bts
-	return
+	return o, err
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -393,7 +393,7 @@ func (u URLValues) Msgsize() (s int) {
 		}
 	}
 
-	return
+	return s
 }
 
 // JSONPool is a pool for JSON objects that unmarshal into T.
@@ -411,7 +411,7 @@ func NewJSONPool[T any]() *JSONPool[T] {
 	}
 	return &JSONPool[T]{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				var t T
 				return &t
 			},
@@ -700,7 +700,7 @@ func (j *Array[T]) UnmarshalMsg(bytes []byte) ([]byte, error) {
 	} else {
 		j.val = j.val[:0]
 	}
-	for i := uint32(0); i < l; i++ {
+	for range l {
 		v := j.p.newE()
 		bytes, err = v.UnmarshalMsg(bytes)
 		if err != nil {

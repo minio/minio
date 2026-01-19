@@ -30,7 +30,7 @@ import (
 
 // ValidateFilterRuleValue - checks if given value is filter rule value or not.
 func ValidateFilterRuleValue(value string) error {
-	for _, segment := range strings.Split(value, "/") {
+	for segment := range strings.SplitSeq(value, "/") {
 		if segment == "." || segment == ".." {
 			return &ErrInvalidFilterValue{value}
 		}
@@ -139,7 +139,7 @@ func (ruleList FilterRuleList) Pattern() string {
 
 // S3Key - represents elements inside <S3Key>...</S3Key>
 type S3Key struct {
-	RuleList FilterRuleList `xml:"S3Key,omitempty" json:"S3Key,omitempty"`
+	RuleList FilterRuleList `xml:"S3Key,omitempty" json:"S3Key"`
 }
 
 // MarshalXML implements a custom marshaller to support `omitempty` feature.

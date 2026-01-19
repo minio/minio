@@ -1169,7 +1169,7 @@ func TestXLStorageReadFile(t *testing.T) {
 		}
 	}
 
-	for l := 0; l < 2; l++ {
+	for range 2 {
 		// Following block validates all ReadFile test cases.
 		for i, testCase := range testCases {
 			var n int64

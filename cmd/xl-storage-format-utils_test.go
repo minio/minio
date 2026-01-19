@@ -68,7 +68,7 @@ func Test_hashDeterministicString(t *testing.T) {
 			const n = 100
 			want := hashDeterministicString(tt.arg)
 			m := tt.arg
-			for i := 0; i < n; i++ {
+			for range n {
 				if got := hashDeterministicString(m); got != want {
 					t.Errorf("hashDeterministicString() = %v, want %v", got, want)
 				}
@@ -147,7 +147,7 @@ func TestGetFileInfoVersions(t *testing.T) {
 	xl := xlMetaV2{}
 	var versions []FileInfo
 	var allVersionIDs, freeVersionIDs []string
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		fi := basefi
 		fi.VersionID = mustGetUUID()
 		fi.DataDir = mustGetUUID()

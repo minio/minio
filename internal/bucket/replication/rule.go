@@ -139,7 +139,7 @@ type Rule struct {
 	Destination               Destination               `xml:"Destination" json:"Destination"`
 	SourceSelectionCriteria   SourceSelectionCriteria   `xml:"SourceSelectionCriteria" json:"SourceSelectionCriteria"`
 	Filter                    Filter                    `xml:"Filter" json:"Filter"`
-	ExistingObjectReplication ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"ExistingObjectReplication,omitempty"`
+	ExistingObjectReplication ExistingObjectReplication `xml:"ExistingObjectReplication,omitempty" json:"ExistingObjectReplication"`
 }
 
 var (

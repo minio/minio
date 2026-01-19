@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"time"
@@ -290,9 +291,7 @@ func (o *ObjectInfo) Clone() (cinfo ObjectInfo) {
 		VersionPurgeStatusInternal: o.VersionPurgeStatusInternal,
 	}
 	cinfo.UserDefined = make(map[string]string, len(o.UserDefined))
-	for k, v := range o.UserDefined {
-		cinfo.UserDefined[k] = v
-	}
+	maps.Copy(cinfo.UserDefined, o.UserDefined)
 	return cinfo
 }
 
@@ -654,6 +653,7 @@ type objectAttributesChecksum struct {
 	ChecksumSHA1      string `xml:",omitempty"`
 	ChecksumSHA256    string `xml:",omitempty"`
 	ChecksumCRC64NVME string `xml:",omitempty"`
+	ChecksumType      string `xml:",omitempty"`
 }
 
 type objectAttributesParts struct {

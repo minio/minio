@@ -633,7 +633,7 @@ func Test_metaCacheEntries_resolve(t *testing.T) {
 	for testID, tt := range tests {
 		rng := rand.New(rand.NewSource(0))
 		// Run for a number of times, shuffling the input to ensure that output is consistent.
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			t.Run(fmt.Sprintf("test-%d-%s-run-%d", testID, tt.name, i), func(t *testing.T) {
 				if i > 0 {
 					rng.Shuffle(len(tt.m), func(i, j int) {

@@ -55,7 +55,7 @@ func TestDiskCount(t *testing.T) {
 // of errors into a single maximal error with in the list.
 func TestReduceErrs(t *testing.T) {
 	canceledErrs := make([]error, 0, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		canceledErrs = append(canceledErrs, fmt.Errorf("error %d: %w", i, context.Canceled))
 	}
 	// List all of all test cases to validate various cases of reduce errors.
@@ -222,7 +222,7 @@ func Test_hashOrder(t *testing.T) {
 			var tmp [16]byte
 			rng.Read(tmp[:])
 			prefix := hex.EncodeToString(tmp[:])
-			for i := 0; i < 10000; i++ {
+			for range 10000 {
 				rng.Read(tmp[:])
 
 				y := hashOrder(fmt.Sprintf("%s/%x", prefix, hex.EncodeToString(tmp[:3])), x)

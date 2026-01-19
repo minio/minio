@@ -208,6 +208,8 @@ func TestIAMInternalIDPServerSuite(t *testing.T) {
 				suite.TestGroupAddRemove(c)
 				suite.TestServiceAccountOpsByAdmin(c)
 				suite.TestServiceAccountPrivilegeEscalationBug(c)
+				suite.TestServiceAccountPrivilegeEscalationBug2_2025_10_15(c, true)
+				suite.TestServiceAccountPrivilegeEscalationBug2_2025_10_15(c, false)
 				suite.TestServiceAccountOpsByUser(c)
 				suite.TestServiceAccountDurationSecondsCondition(c)
 				suite.TestAddServiceAccountPerms(c)
@@ -332,7 +334,7 @@ func (s *TestSuiteIAM) TestUserPolicyEscalationBug(c *check) {
 
 	// 2.2 create and associate policy to user
 	policy := "mypolicy-test-user-update"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -355,7 +357,7 @@ func (s *TestSuiteIAM) TestUserPolicyEscalationBug(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -562,7 +564,7 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
 
 	// 1. Create a policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -585,7 +587,7 @@ func (s *TestSuiteIAM) TestPolicyCreate(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -680,7 +682,7 @@ func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
 		c.Fatalf("bucket creat error: %v", err)
 	}
 
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -703,7 +705,7 @@ func (s *TestSuiteIAM) TestCannedPolicies(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 
 	// Check that default policies can be overwritten.
 	err = s.adm.AddCannedPolicy(ctx, "readwrite", policyBytes)
@@ -739,7 +741,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
 	}
 
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -762,7 +764,7 @@ func (s *TestSuiteIAM) TestGroupAddRemove(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -911,7 +913,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -934,7 +936,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByUser(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -995,7 +997,7 @@ func (s *TestSuiteIAM) TestServiceAccountDurationSecondsCondition(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1026,7 +1028,7 @@ func (s *TestSuiteIAM) TestServiceAccountDurationSecondsCondition(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1093,7 +1095,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
 
 	// Create policy, user and associate policy
 	policy := "mypolicy"
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1116,7 +1118,7 @@ func (s *TestSuiteIAM) TestServiceAccountOpsByAdmin(c *check) {
    ]
   }
  ]
-}`, bucket, bucket))
+}`, bucket, bucket)
 	err = s.adm.AddCannedPolicy(ctx, policy, policyBytes)
 	if err != nil {
 		c.Fatalf("policy add error: %v", err)
@@ -1249,6 +1251,108 @@ func (s *TestSuiteIAM) TestServiceAccountPrivilegeEscalationBug(c *check) {
 	}
 }
 
+func (s *TestSuiteIAM) TestServiceAccountPrivilegeEscalationBug2_2025_10_15(c *check, forRoot bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
+	defer cancel()
+
+	for i := range 3 {
+		err := s.client.MakeBucket(ctx, fmt.Sprintf("bucket%d", i+1), minio.MakeBucketOptions{})
+		if err != nil {
+			c.Fatalf("bucket create error: %v", err)
+		}
+		defer func(i int) {
+			_ = s.client.RemoveBucket(ctx, fmt.Sprintf("bucket%d", i+1))
+		}(i)
+	}
+
+	allow2BucketsPolicyBytes := []byte(`{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ListBucket1AndBucket2",
+            "Effect": "Allow",
+            "Action": ["s3:ListBucket"],
+            "Resource": ["arn:aws:s3:::bucket1", "arn:aws:s3:::bucket2"]
+        },
+        {
+            "Sid": "ReadWriteBucket1AndBucket2Objects",
+            "Effect": "Allow",
+            "Action": [
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:PutObject"
+            ],
+            "Resource": ["arn:aws:s3:::bucket1/*", "arn:aws:s3:::bucket2/*"]
+        }
+    ]
+}`)
+
+	if forRoot {
+		// Create a service account for the root user.
+		_, err := s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			Policy:    allow2BucketsPolicyBytes,
+			AccessKey: "restricted",
+			SecretKey: "restricted123",
+		})
+		if err != nil {
+			c.Fatalf("could not create service account")
+		}
+		defer func() {
+			_ = s.adm.DeleteServiceAccount(ctx, "restricted")
+		}()
+	} else {
+		// Create a regular user and attach consoleAdmin policy
+		err := s.adm.AddUser(ctx, "foobar", "foobar123")
+		if err != nil {
+			c.Fatalf("could not create user")
+		}
+
+		_, err = s.adm.AttachPolicy(ctx, madmin.PolicyAssociationReq{
+			Policies: []string{"consoleAdmin"},
+			User:     "foobar",
+		})
+		if err != nil {
+			c.Fatalf("could not attach policy")
+		}
+
+		// Create a service account for the regular user.
+		_, err = s.adm.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+			Policy:     allow2BucketsPolicyBytes,
+			TargetUser: "foobar",
+			AccessKey:  "restricted",
+			SecretKey:  "restricted123",
+		})
+		if err != nil {
+			c.Fatalf("could not create service account: %v", err)
+		}
+		defer func() {
+			_ = s.adm.DeleteServiceAccount(ctx, "restricted")
+			_ = s.adm.RemoveUser(ctx, "foobar")
+		}()
+	}
+	restrictedClient := s.getUserClient(c, "restricted", "restricted123", "")
+
+	buckets, err := restrictedClient.ListBuckets(ctx)
+	if err != nil {
+		c.Fatalf("err fetching buckets %s", err)
+	}
+	if len(buckets) != 2 || buckets[0].Name != "bucket1" || buckets[1].Name != "bucket2" {
+		c.Fatalf("restricted service account should only have access to bucket1 and bucket2")
+	}
+
+	// Try to escalate privileges
+	restrictedAdmClient := s.getAdminClient(c, "restricted", "restricted123", "")
+	_, err = restrictedAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
+		AccessKey: "newroot",
+		SecretKey: "newroot123",
+	})
+	if err == nil {
+		c.Fatalf("restricted service account was able to create service account bypassing sub-policy!")
+	}
+}
+
 func (s *TestSuiteIAM) SetUpAccMgmtPlugin(c *check) {
 	ctx, cancel := context.WithTimeout(context.Background(), testDefaultTimeout)
 	defer cancel()
@@ -1367,7 +1471,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
 		svcAK, svcSK := mustGenerateCredentials(c)
 
 		// This policy does not allow listing objects.
-		policyBytes := []byte(fmt.Sprintf(`{
+		policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1381,7 +1485,7 @@ func (s *TestSuiteIAM) TestAccMgmtPlugin(c *check) {
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 		cr, err := userAdmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 			Policy:     policyBytes,
 			TargetUser: accessKey,
@@ -1558,7 +1662,7 @@ func (c *check) mustDownload(ctx context.Context, client *minio.Client, bucket s
 func (c *check) mustUploadReturnVersions(ctx context.Context, client *minio.Client, bucket string) []string {
 	c.Helper()
 	versions := []string{}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ui, err := client.PutObject(ctx, bucket, "some-object", bytes.NewBuffer([]byte("stuff")), 5, minio.PutObjectOptions{})
 		if err != nil {
 			c.Fatalf("upload did not succeed got %#v", err)
@@ -1627,7 +1731,7 @@ func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuit
 	svcAK, svcSK := mustGenerateCredentials(c)
 
 	// This policy does not allow listing objects.
-	policyBytes := []byte(fmt.Sprintf(`{
+	policyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1641,7 +1745,7 @@ func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuit
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	cr, err := madmClient.AddServiceAccount(ctx, madmin.AddServiceAccountReq{
 		Policy:     policyBytes,
 		TargetUser: accessKey,
@@ -1655,7 +1759,7 @@ func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuit
 	c.mustNotListObjects(ctx, svcClient, bucket)
 
 	// This policy allows listing objects.
-	newPolicyBytes := []byte(fmt.Sprintf(`{
+	newPolicyBytes := fmt.Appendf(nil, `{
  "Version": "2012-10-17",
  "Statement": [
   {
@@ -1668,7 +1772,7 @@ func (c *check) assertSvcAccSessionPolicyUpdate(ctx context.Context, s *TestSuit
    ]
   }
  ]
-}`, bucket))
+}`, bucket)
 	err = madmClient.UpdateServiceAccount(ctx, svcAK, madmin.UpdateServiceAccountReq{
 		NewPolicy: newPolicyBytes,
 	})

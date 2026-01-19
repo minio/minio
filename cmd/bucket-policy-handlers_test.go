@@ -122,7 +122,7 @@ func testCreateBucket(obj ObjectLayer, instanceType, bucketName string, apiRoute
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			// Sync start.
@@ -187,7 +187,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Test case - 1.
 		{
 			bucketName:         bucketName,
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplate, bucketName, bucketName)),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
@@ -199,7 +199,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Expecting StatusBadRequest (400).
 		{
 			bucketName:         bucketName,
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplate, bucketName, bucketName)),
 
 			policyLen:          maxBucketPolicySize + 1,
 			accessKey:          credentials.AccessKey,
@@ -211,7 +211,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Expecting the HTTP response status to be StatusLengthRequired (411).
 		{
 			bucketName:         bucketName,
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplate, bucketName, bucketName)),
 
 			policyLen:          0,
 			accessKey:          credentials.AccessKey,
@@ -258,7 +258,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// checkBucketPolicyResources should fail.
 		{
 			bucketName:         bucketName1,
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplate, bucketName, bucketName)),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
@@ -271,7 +271,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// should result in 404 StatusNotFound
 		{
 			bucketName:         "non-existent-bucket",
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, "non-existent-bucket", "non-existent-bucket"))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplate, "non-existent-bucket", "non-existent-bucket")),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
@@ -284,7 +284,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// should result in 404 StatusNotFound
 		{
 			bucketName:         ".invalid-bucket",
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, ".invalid-bucket", ".invalid-bucket"))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplate, ".invalid-bucket", ".invalid-bucket")),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,
@@ -297,7 +297,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// should result in 400 StatusBadRequest.
 		{
 			bucketName:         bucketName,
-			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplateWithoutVersion, bucketName, bucketName))),
+			bucketPolicyReader: bytes.NewReader(fmt.Appendf(nil, bucketPolicyTemplateWithoutVersion, bucketName, bucketName)),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplateWithoutVersion, bucketName, bucketName)),
 			accessKey:          credentials.AccessKey,

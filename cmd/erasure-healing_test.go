@@ -296,7 +296,6 @@ func TestIsObjectDangling(t *testing.T) {
 		// Add new cases as seen
 	}
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			gotMeta, dangling := isObjectDangling(testCase.metaArr, testCase.errs, testCase.dataErrs)
 			if !gotMeta.Equals(testCase.expectedMeta) {

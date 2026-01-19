@@ -33,17 +33,17 @@ type rebalPoolProgress struct {
 }
 
 type rebalancePoolStatus struct {
-	ID       int               `json:"id"`                 // Pool index (zero-based)
-	Status   string            `json:"status"`             // Active if rebalance is running, empty otherwise
-	Used     float64           `json:"used"`               // Percentage used space
-	Progress rebalPoolProgress `json:"progress,omitempty"` // is empty when rebalance is not running
+	ID       int               `json:"id"`       // Pool index (zero-based)
+	Status   string            `json:"status"`   // Active if rebalance is running, empty otherwise
+	Used     float64           `json:"used"`     // Percentage used space
+	Progress rebalPoolProgress `json:"progress"` // is empty when rebalance is not running
 }
 
 // rebalanceAdminStatus holds rebalance status related information exported to mc, console, etc.
 type rebalanceAdminStatus struct {
 	ID        string                // identifies the ongoing rebalance operation by a uuid
 	Pools     []rebalancePoolStatus `json:"pools"` // contains all pools, including inactive
-	StoppedAt time.Time             `json:"stoppedAt,omitempty"`
+	StoppedAt time.Time             `json:"stoppedAt"`
 }
 
 func rebalanceStatus(ctx context.Context, z *erasureServerPools) (r rebalanceAdminStatus, err error) {

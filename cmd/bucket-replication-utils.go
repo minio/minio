@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -171,13 +172,13 @@ func (ri ReplicateObjectInfo) TargetReplicationStatus(arn string) (status replic
 	repStatMatches := replStatusRegex.FindAllStringSubmatch(ri.ReplicationStatusInternal, -1)
 	for _, repStatMatch := range repStatMatches {
 		if len(repStatMatch) != 3 {
-			return
+			return status
 		}
 		if repStatMatch[1] == arn {
 			return replication.StatusType(repStatMatch[2])
 		}
 	}
-	return
+	return status
 }
 
 // TargetReplicationStatus - returns replication status of a target
@@ -185,13 +186,13 @@ func (o ObjectInfo) TargetReplicationStatus(arn string) (status replication.Stat
 	repStatMatches := replStatusRegex.FindAllStringSubmatch(o.ReplicationStatusInternal, -1)
 	for _, repStatMatch := range repStatMatches {
 		if len(repStatMatch) != 3 {
-			return
+			return status
 		}
 		if repStatMatch[1] == arn {
 			return replication.StatusType(repStatMatch[2])
 		}
 	}
-	return
+	return status
 }
 
 type replicateTargetDecision struct {
@@ -309,9 +310,9 @@ func parseReplicateDecision(ctx context.Context, bucket, s string) (r ReplicateD
 		targetsMap: make(map[string]replicateTargetDecision),
 	}
 	if len(s) == 0 {
-		return
+		return r, err
 	}
-	for _, p := range strings.Split(s, ",") {
+	for p := range strings.SplitSeq(s, ",") {
 		if p == "" {
 			continue
 		}
@@ -326,7 +327,7 @@ func parseReplicateDecision(ctx context.Context, bucket, s string) (r ReplicateD
 		}
 		r.targetsMap[slc[0]] = replicateTargetDecision{Replicate: tgt[0] == "true", Synchronous: tgt[1] == "true", Arn: tgt[2], ID: tgt[3]}
 	}
-	return
+	return r, err
 }
 
 // ReplicationState represents internal replication state
@@ -373,7 +374,7 @@ func (rs *ReplicationState) CompositeReplicationStatus() (st replication.StatusT
 	case !rs.ReplicaStatus.Empty():
 		return rs.ReplicaStatus
 	default:
-		return
+		return st
 	}
 }
 
@@ -735,10 +736,8 @@ type BucketReplicationResyncStatus struct {
 
 func (rs *BucketReplicationResyncStatus) cloneTgtStats() (m map[string]TargetReplicationResyncStatus) {
 	m = make(map[string]TargetReplicationResyncStatus)
-	for arn, st := range rs.TargetsMap {
-		m[arn] = st
-	}
-	return
+	maps.Copy(m, rs.TargetsMap)
+	return m
 }
 
 func newBucketResyncStatus(bucket string) BucketReplicationResyncStatus {
@@ -775,7 +774,7 @@ func extractReplicateDiffOpts(q url.Values) (opts madmin.ReplDiffOpts) {
 	opts.Verbose = q.Get("verbose") == "true"
 	opts.ARN = q.Get("arn")
 	opts.Prefix = q.Get("prefix")
-	return
+	return opts
 }
 
 const (

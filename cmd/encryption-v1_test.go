@@ -384,7 +384,7 @@ func TestGetDecryptedRange(t *testing.T) {
 		// Simple useful utilities
 		repeat = func(k int64, n int) []int64 {
 			a := []int64{}
-			for i := 0; i < n; i++ {
+			for range n {
 				a = append(a, k)
 			}
 			return a
@@ -471,10 +471,7 @@ func TestGetDecryptedRange(t *testing.T) {
 					// round up the lbPartOffset
 					// to the end of the
 					// corresponding DARE package
-					lbPkgEndOffset := lbPartOffset - (lbPartOffset % pkgSz) + pkgSz
-					if lbPkgEndOffset > v {
-						lbPkgEndOffset = v
-					}
+					lbPkgEndOffset := min(lbPartOffset-(lbPartOffset%pkgSz)+pkgSz, v)
 					bytesToDrop := v - lbPkgEndOffset
 
 					// Last segment to update `l`
@@ -486,7 +483,7 @@ func TestGetDecryptedRange(t *testing.T) {
 			cumulativeSum += v
 			cumulativeEncSum += getEncSize(v)
 		}
-		return
+		return o, l, skip, sn, ps
 	}
 
 	for i, test := range testMPs {

@@ -41,7 +41,7 @@ func TestReadChunkLine(t *testing.T) {
 		// Test - 2
 		bytes.NewReader([]byte("1000;")),
 		// Test - 3
-		bytes.NewReader([]byte(fmt.Sprintf("%4097d", 1))),
+		bytes.NewReader(fmt.Appendf(nil, "%4097d", 1)),
 		// Test - 4
 		bytes.NewReader([]byte("1000;chunk-signature=111123333333333333334444211\r\n")),
 	}

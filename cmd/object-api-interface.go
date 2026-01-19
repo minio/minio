@@ -86,9 +86,12 @@ type ObjectOptions struct {
 
 	WantChecksum *hash.Checksum // x-amz-checksum-XXX checksum sent to PutObject/ CompleteMultipartUpload.
 
+	WantServerSideChecksumType hash.ChecksumType // if set, we compute a server-side checksum of this type
+
 	NoDecryption                        bool      // indicates if the stream must be decrypted.
 	PreserveETag                        string    // preserves this etag during a PUT call.
 	NoLock                              bool      // indicates to lower layers if the caller is expecting to hold locks.
+	HasIfMatch                          bool      // indicates if the request has If-Match header
 	ProxyRequest                        bool      // only set for GET/HEAD in active-active replication scenario
 	ProxyHeaderSet                      bool      // only set for GET/HEAD in active-active replication scenario
 	ReplicationRequest                  bool      // true only if replication request
@@ -222,11 +225,11 @@ func (o *ObjectOptions) SetDeleteReplicationState(dsc ReplicateDecision, vID str
 func (o *ObjectOptions) PutReplicationState() (r ReplicationState) {
 	rstatus, ok := o.UserDefined[ReservedMetadataPrefixLower+ReplicationStatus]
 	if !ok {
-		return
+		return r
 	}
 	r.ReplicationStatusInternal = rstatus
 	r.Targets = replicationStatusesMap(rstatus)
-	return
+	return r
 }
 
 // SetEvalMetadataFn sets the metadata evaluation function

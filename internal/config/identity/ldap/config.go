@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"net"
 	"sort"
 	"time"
 
@@ -190,10 +191,18 @@ func Lookup(s config.Config, rootCAs *x509.CertPool) (l Config, err error) {
 	if ldapServer == "" {
 		return l, nil
 	}
+
+	// Set ServerName in TLS config for proper certificate validation
+	host, _, err := net.SplitHostPort(ldapServer)
+	if err != nil {
+		host = ldapServer
+	}
+
 	l.LDAP = ldap.Config{
 		ServerAddr:    ldapServer,
 		SRVRecordName: getCfgVal(SRVRecordName),
 		TLS: &tls.Config{
+			ServerName:         host,
 			MinVersion:         tls.VersionTLS12,
 			NextProtos:         []string{"h2", "http/1.1"},
 			ClientSessionCache: tls.NewLRUClientSessionCache(100),

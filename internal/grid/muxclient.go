@@ -623,7 +623,7 @@ func (m *muxClient) addResponse(r Response) (ok bool) {
 	default:
 		if m.stateless {
 			// Drop message if not stateful.
-			return
+			return ok
 		}
 		err := errors.New("INTERNAL ERROR: Response was blocked")
 		gridLogIf(m.ctx, err)

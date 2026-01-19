@@ -389,7 +389,7 @@ func lookupAuditKafkaConfig(scfg config.Config, cfg Config) (Config, error) {
 		if len(kafkaBrokers) == 0 {
 			return cfg, config.Errorf("kafka 'brokers' cannot be empty")
 		}
-		for _, s := range strings.Split(kafkaBrokers, config.ValueSeparator) {
+		for s := range strings.SplitSeq(kafkaBrokers, config.ValueSeparator) {
 			var host *xnet.Host
 			host, err = xnet.ParseHost(s)
 			if err != nil {

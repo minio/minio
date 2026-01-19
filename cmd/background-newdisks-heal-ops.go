@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -269,12 +270,7 @@ func (h *healingTracker) delete(ctx context.Context) error {
 func (h *healingTracker) isHealed(bucket string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	for _, v := range h.HealedBuckets {
-		if v == bucket {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(h.HealedBuckets, bucket)
 }
 
 // resume will reset progress to the numbers at the start of the bucket.

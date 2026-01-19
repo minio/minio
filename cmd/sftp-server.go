@@ -238,7 +238,7 @@ func processLDAPAuthentication(key ssh.PublicKey, pass []byte, user string) (per
 		return nil, errSFTPUserHasNoPolicies
 	}
 
-	claims := make(map[string]interface{})
+	claims := make(map[string]any)
 	for attribKey, attribValue := range lookupResult.Attributes {
 		// we skip multi-value attributes here, as they cannot
 		// be stored in the critical options.
@@ -344,7 +344,7 @@ func validateClientKeyIsTrusted(c ssh.ConnMetadata, clientKey ssh.PublicKey) (er
 	}
 
 	_, err = checker.Authenticate(c, clientKey)
-	return
+	return err
 }
 
 type sftpLogger struct{}

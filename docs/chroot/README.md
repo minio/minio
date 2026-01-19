@@ -9,11 +9,23 @@ Chroot allows user based namespace isolation on many standard Linux deployments.
 
 ## 2. Install MinIO in Chroot
 
+> **Note:** MinIO community edition is now distributed as source code only. Pre-compiled binaries are no longer provided for new releases.
+
+Build MinIO from source and install it in the chroot directory:
+
 ```sh
+# Build MinIO from source
+go install github.com/minio/minio@latest
+
+# Create the bin directory in your chroot
 mkdir -p /mnt/export/${USER}/bin
-wget https://dl.min.io/server/minio/release/linux-amd64/minio -O /mnt/export/${USER}/bin/minio
+
+# Copy the built binary to the chroot directory
+cp $(go env GOPATH)/bin/minio /mnt/export/${USER}/bin/minio
 chmod +x /mnt/export/${USER}/bin/minio
 ```
+
+Alternatively, if you have an existing legacy binary, you can still use it, but note that it will not receive updates.
 
 Bind your `proc` mount to the target chroot directory
 
@@ -39,8 +51,8 @@ Instance is now accessible on the host at port 9000, proceed to access the Web b
 
 ## Explore Further
 
-- [MinIO Erasure Code Overview](https://min.io/docs/minio/linux/operations/concepts/erasure-coding.html)
-- [Use `mc` with MinIO Server](https://min.io/docs/minio/linux/reference/minio-mc.html)
-- [Use `aws-cli` with MinIO Server](https://min.io/docs/minio/linux/integrations/aws-cli-with-minio.html)
-- [Use `minio-go` SDK with MinIO Server](https://min.io/docs/minio/linux/developers/go/minio-go.html)
-- [The MinIO documentation website](https://min.io/docs/minio/linux/index.html)
+- [MinIO Erasure Code Overview](https://docs.min.io/community/minio-object-store/operations/concepts/erasure-coding.html)
+- [Use `mc` with MinIO Server](https://docs.min.io/community/minio-object-store/reference/minio-mc.html)
+- [Use `aws-cli` with MinIO Server](https://docs.min.io/community/minio-object-store/integrations/aws-cli-with-minio.html)
+- [Use `minio-go` SDK with MinIO Server](https://docs.min.io/community/minio-object-store/developers/go/minio-go.html)
+- [The MinIO documentation website](https://docs.min.io/community/minio-object-store/index.html)

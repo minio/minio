@@ -35,7 +35,7 @@ import (
 
 type promLogger struct{}
 
-func (p promLogger) Println(v ...interface{}) {
+func (p promLogger) Println(v ...any) {
 	metricsLogIf(GlobalContext, fmt.Errorf("metrics handler error: %v", v))
 }
 
@@ -228,7 +228,7 @@ func (h *metricsV3Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// it's the last part of the path. e.g. /bucket/api/<bucket-name>
 		bucketIdx := strings.LastIndex(pathComponents, "/")
 		buckets = append(buckets, pathComponents[bucketIdx+1:])
-		// remove bucket from pathComponents as it is dyanamic and
+		// remove bucket from pathComponents as it is dynamic and
 		// hence not included in the collector path.
 		pathComponents = pathComponents[:bucketIdx]
 	}

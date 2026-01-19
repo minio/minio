@@ -57,7 +57,7 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 	err = SQLParser.ParseString(s, &selectAST)
 	if err != nil {
 		err = errQueryParseFailure(err)
-		return
+		return stmt, err
 	}
 
 	// Check if select is "SELECT s.* from S3Object s"
@@ -80,7 +80,7 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 	stmt.limitValue, err = parseLimit(selectAST.Limit)
 	if err != nil {
 		err = errQueryAnalysisFailure(err)
-		return
+		return stmt, err
 	}
 
 	// Analyze where clause
@@ -88,19 +88,19 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 		whereQProp := selectAST.Where.analyze(&selectAST)
 		if whereQProp.err != nil {
 			err = errQueryAnalysisFailure(fmt.Errorf("Where clause error: %w", whereQProp.err))
-			return
+			return stmt, err
 		}
 
 		if whereQProp.isAggregation {
 			err = errQueryAnalysisFailure(errors.New("WHERE clause cannot have an aggregation"))
-			return
+			return stmt, err
 		}
 	}
 
 	// Validate table name
 	err = validateTableName(selectAST.From)
 	if err != nil {
-		return
+		return stmt, err
 	}
 
 	// Analyze main select expression
@@ -120,7 +120,7 @@ func ParseSelectStatement(s string) (stmt SelectStatement, err error) {
 			}
 		}
 	}
-	return
+	return stmt, err
 }
 
 func validateTableName(from *TableExpression) error {
@@ -174,7 +174,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) ([]*Record, erro
 		case jstream.KVS:
 			kvs = v
 
-		case []interface{}:
+		case []any:
 			recs := make([]*Record, len(v))
 			for i, val := range v {
 				tmpRec := input.Clone(nil)
@@ -207,7 +207,7 @@ func (e *SelectStatement) EvalFrom(format string, input Record) ([]*Record, erro
 				return nil, err
 			}
 
-		case []interface{}:
+		case []any:
 			recs := make([]*Record, len(v))
 			for i, val := range v {
 				tmpRec := input.Clone(nil)

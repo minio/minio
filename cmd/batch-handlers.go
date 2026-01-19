@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -574,9 +575,7 @@ func toObjectInfo(bucket, object string, objInfo minio.ObjectInfo) ObjectInfo {
 		oi.UserDefined[xhttp.AmzStorageClass] = objInfo.StorageClass
 	}
 
-	for k, v := range objInfo.UserMetadata {
-		oi.UserDefined[k] = v
-	}
+	maps.Copy(oi.UserDefined, objInfo.UserMetadata)
 
 	return oi
 }

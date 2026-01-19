@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/url"
 	"sync"
 	"time"
@@ -236,9 +237,7 @@ func (sys *BucketTargetSys) healthStats() map[string]epHealth {
 	sys.hMutex.RLock()
 	defer sys.hMutex.RUnlock()
 	m := make(map[string]epHealth, len(sys.hc))
-	for k, v := range sys.hc {
-		m[k] = v
-	}
+	maps.Copy(m, sys.hc)
 	return m
 }
 
@@ -286,7 +285,7 @@ func (sys *BucketTargetSys) ListTargets(ctx context.Context, bucket, arnType str
 			}
 		}
 	}
-	return
+	return targets
 }
 
 // ListBucketTargets - gets list of bucket targets for this bucket.
@@ -669,7 +668,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 // getRemoteARN gets existing ARN for an endpoint or generates a new one.
 func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTarget, deplID string) (arn string, exists bool) {
 	if target == nil {
-		return
+		return arn, exists
 	}
 	sys.RLock()
 	defer sys.RUnlock()
@@ -683,7 +682,7 @@ func (sys *BucketTargetSys) getRemoteARN(bucket string, target *madmin.BucketTar
 		}
 	}
 	if !target.Type.IsValid() {
-		return
+		return arn, exists
 	}
 	return generateARN(target, deplID), false
 }

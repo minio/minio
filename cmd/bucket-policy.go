@@ -19,6 +19,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -187,9 +188,7 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 	}
 
 	cloneURLValues := make(url.Values, len(r.Form))
-	for k, v := range r.Form {
-		cloneURLValues[k] = v
-	}
+	maps.Copy(cloneURLValues, r.Form)
 
 	for _, objLock := range []string{
 		xhttp.AmzObjectLockMode,
@@ -224,7 +223,7 @@ func getConditionValues(r *http.Request, lc string, cred auth.Credentials) map[s
 	// Add groups claim which could be a list. This will ensure that the claim
 	// `jwt:groups` works.
 	if grpsVal, ok := claims["groups"]; ok {
-		if grpsIs, ok := grpsVal.([]interface{}); ok {
+		if grpsIs, ok := grpsVal.([]any); ok {
 			grps := []string{}
 			for _, gI := range grpsIs {
 				if g, ok := gI.(string); ok {

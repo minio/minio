@@ -81,13 +81,13 @@ func getESVersionSupportStatus(version string) (res ESSupportStatus, err error) 
 	parts := strings.Split(version, ".")
 	if len(parts) < 1 {
 		err = fmt.Errorf("bad ES version string: %s", version)
-		return
+		return res, err
 	}
 
 	majorVersion, err := strconv.Atoi(parts[0])
 	if err != nil {
 		err = fmt.Errorf("bad ES version string: %s", version)
-		return
+		return res, err
 	}
 
 	switch {
@@ -96,7 +96,7 @@ func getESVersionSupportStatus(version string) (res ESSupportStatus, err error) 
 	default:
 		res = ESSSupported
 	}
-	return
+	return res, err
 }
 
 // magic HH-256 key as HH-256 hash of the first 100 decimals of π as utf-8 string with a zero key.
@@ -427,13 +427,13 @@ func (c *esClientV7) getServerSupportStatus(ctx context.Context) (ESSupportStatu
 
 	defer resp.Body.Close()
 
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	err = json.NewDecoder(resp.Body).Decode(&m)
 	if err != nil {
 		return ESSUnknown, "", fmt.Errorf("unable to get ES Server version - json parse error: %v", err)
 	}
 
-	if v, ok := m["version"].(map[string]interface{}); ok {
+	if v, ok := m["version"].(map[string]any); ok {
 		if ver, ok := v["number"].(string); ok {
 			status, err := getESVersionSupportStatus(ver)
 			return status, ver, err
@@ -454,16 +454,16 @@ func (c *esClientV7) createIndex(args ElasticsearchArgs) error {
 	}
 	defer res.Body.Close()
 
-	var v map[string]interface{}
+	var v map[string]any
 	found := false
 	if err := json.NewDecoder(res.Body).Decode(&v); err != nil {
 		return fmt.Errorf("Error parsing response body: %v", err)
 	}
 
-	indices, ok := v["indices"].([]interface{})
+	indices, ok := v["indices"].([]any)
 	if ok {
 		for _, index := range indices {
-			if name, ok := index.(map[string]interface{}); ok && name["name"] == args.Index {
+			if name, ok := index.(map[string]any); ok && name["name"] == args.Index {
 				found = true
 				break
 			}
@@ -529,7 +529,7 @@ func (c *esClientV7) removeEntry(ctx context.Context, index string, key string) 
 }
 
 func (c *esClientV7) updateEntry(ctx context.Context, index string, key string, eventData event.Event) error {
-	doc := map[string]interface{}{
+	doc := map[string]any{
 		"Records": []event.Event{eventData},
 	}
 	var buf bytes.Buffer
@@ -556,7 +556,7 @@ func (c *esClientV7) updateEntry(ctx context.Context, index string, key string, 
 }
 
 func (c *esClientV7) addEntry(ctx context.Context, index string, eventData event.Event) error {
-	doc := map[string]interface{}{
+	doc := map[string]any{
 		"Records": []event.Event{eventData},
 	}
 	var buf bytes.Buffer

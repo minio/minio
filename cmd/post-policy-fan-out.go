@@ -20,6 +20,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"maps"
 	"sync"
 
 	"github.com/minio/minio-go/v7"
@@ -78,9 +79,7 @@ func fanOutPutObject(ctx context.Context, bucket string, objectAPI ObjectLayer, 
 			}()
 
 			userDefined := make(map[string]string, len(req.UserMetadata))
-			for k, v := range req.UserMetadata {
-				userDefined[k] = v
-			}
+			maps.Copy(userDefined, req.UserMetadata)
 
 			tgs, err := tags.NewTags(req.UserTags, true)
 			if err != nil {

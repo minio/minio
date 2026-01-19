@@ -132,7 +132,7 @@ func (srv *Server) Init(listenCtx context.Context, listenErrCallback func(listen
 		return srv.Serve(l)
 	}
 
-	return
+	return serve, err
 }
 
 // Shutdown - shuts down HTTP server.

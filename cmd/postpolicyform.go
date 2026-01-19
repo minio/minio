@@ -51,6 +51,7 @@ var startsWithConds = map[string]bool{
 	"$x-amz-algorithm":         false,
 	"$x-amz-credential":        false,
 	"$x-amz-date":              false,
+	"$tagging":                 false,
 }
 
 // Add policy conditionals.
@@ -61,7 +62,7 @@ const (
 )
 
 // toString - Safely convert interface to string without causing panic.
-func toString(val interface{}) string {
+func toString(val any) string {
 	switch v := val.(type) {
 	case string:
 		return v
@@ -71,12 +72,12 @@ func toString(val interface{}) string {
 }
 
 // toLowerString - safely convert interface to lower string
-func toLowerString(val interface{}) string {
+func toLowerString(val any) string {
 	return strings.ToLower(toString(val))
 }
 
 // toInteger _ Safely convert interface to integer without causing panic.
-func toInteger(val interface{}) (int64, error) {
+func toInteger(val any) (int64, error) {
 	switch v := val.(type) {
 	case float64:
 		return int64(v), nil
@@ -93,7 +94,7 @@ func toInteger(val interface{}) (int64, error) {
 }
 
 // isString - Safely check if val is of type string without causing panic.
-func isString(val interface{}) bool {
+func isString(val any) bool {
 	_, ok := val.(string)
 	return ok
 }
@@ -161,8 +162,8 @@ func parsePostPolicyForm(r io.Reader) (PostPolicyForm, error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {
-		Expiration string        `json:"expiration"`
-		Conditions []interface{} `json:"conditions"`
+		Expiration string `json:"expiration"`
+		Conditions []any  `json:"conditions"`
 	}
 
 	d.DisallowUnknownFields()
@@ -181,7 +182,7 @@ func parsePostPolicyForm(r io.Reader) (PostPolicyForm, error) {
 	// Parse conditions.
 	for _, val := range rawPolicy.Conditions {
 		switch condt := val.(type) {
-		case map[string]interface{}: // Handle key:value map types.
+		case map[string]any: // Handle key:value map types.
 			for k, v := range condt {
 				if !isString(v) { // Pre-check value type.
 					// All values must be of type string.
@@ -197,7 +198,7 @@ func parsePostPolicyForm(r io.Reader) (PostPolicyForm, error) {
 					policyCondEqual, "$" + strings.ToLower(k), toString(v),
 				})
 			}
-		case []interface{}: // Handle array types.
+		case []any: // Handle array types.
 			if len(condt) != 3 { // Return error if we have insufficient elements.
 				return parsedPolicy, fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form", condt, reflect.TypeOf(condt).String())
 			}

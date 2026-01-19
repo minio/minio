@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net/http"
 	"path"
@@ -99,9 +100,7 @@ func (ats *allTierStats) clone() *allTierStats {
 	}
 	dst := *ats
 	dst.Tiers = make(map[string]tierStats, len(ats.Tiers))
-	for tier, st := range ats.Tiers {
-		dst.Tiers[tier] = st
-	}
+	maps.Copy(dst.Tiers, ats.Tiers)
 	return &dst
 }
 
@@ -347,9 +346,7 @@ func (e dataUsageEntry) clone() dataUsageEntry {
 	// We operate on a copy from the receiver.
 	if e.Children != nil {
 		ch := make(dataUsageHashMap, len(e.Children))
-		for k, v := range e.Children {
-			ch[k] = v
-		}
+		maps.Copy(ch, e.Children)
 		e.Children = ch
 	}
 
@@ -1224,11 +1221,11 @@ func (z *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
 	zb0002, err = dc.ReadArrayHeader()
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return err
 	}
 	if zb0002 == 0 {
 		*z = nil
-		return
+		return err
 	}
 	*z = make(dataUsageHashMap, zb0002)
 	for i := uint32(0); i < zb0002; i++ {
@@ -1237,12 +1234,12 @@ func (z *dataUsageHashMap) DecodeMsg(dc *msgp.Reader) (err error) {
 			zb0003, err = dc.ReadString()
 			if err != nil {
 				err = msgp.WrapError(err)
-				return
+				return err
 			}
 			(*z)[zb0003] = struct{}{}
 		}
 	}
-	return
+	return err
 }
 
 // EncodeMsg implements msgp.Encodable
@@ -1250,16 +1247,16 @@ func (z dataUsageHashMap) EncodeMsg(en *msgp.Writer) (err error) {
 	err = en.WriteArrayHeader(uint32(len(z)))
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return err
 	}
 	for zb0004 := range z {
 		err = en.WriteString(zb0004)
 		if err != nil {
 			err = msgp.WrapError(err, zb0004)
-			return
+			return err
 		}
 	}
-	return
+	return err
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1269,7 +1266,7 @@ func (z dataUsageHashMap) MarshalMsg(b []byte) (o []byte, err error) {
 	for zb0004 := range z {
 		o = msgp.AppendString(o, zb0004)
 	}
-	return
+	return o, err
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -1278,7 +1275,7 @@ func (z *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
 	if err != nil {
 		err = msgp.WrapError(err)
-		return
+		return o, err
 	}
 	if zb0002 == 0 {
 		*z = nil
@@ -1291,13 +1288,13 @@ func (z *dataUsageHashMap) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			zb0003, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
-				return
+				return o, err
 			}
 			(*z)[zb0003] = struct{}{}
 		}
 	}
 	o = bts
-	return
+	return o, err
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
@@ -1306,7 +1303,7 @@ func (z dataUsageHashMap) Msgsize() (s int) {
 	for zb0004 := range z {
 		s += msgp.StringPrefixSize + len(zb0004)
 	}
-	return
+	return s
 }
 
 //msgp:encode ignore currentScannerCycle

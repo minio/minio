@@ -74,5 +74,5 @@ func TLSCiphersBackwardCompatible() []uint16 {
 // TLSCurveIDs returns a list of supported elliptic curve IDs
 // in preference order.
 func TLSCurveIDs() []tls.CurveID {
-	return []tls.CurveID{tls.CurveP256, tls.X25519, tls.CurveP384, tls.CurveP521}
+	return []tls.CurveID{tls.X25519MLKEM768, tls.CurveP256, tls.X25519, tls.CurveP384, tls.CurveP521}
 }

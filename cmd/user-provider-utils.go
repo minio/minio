@@ -81,7 +81,7 @@ func guessUserProvider(credentials auth.Credentials) string {
 }
 
 // getProviderInfoFromClaims - returns the provider info from the claims.
-func populateProviderInfoFromClaims(claims map[string]interface{}, provider string, resp *madmin.InfoAccessKeyResp) {
+func populateProviderInfoFromClaims(claims map[string]any, provider string, resp *madmin.InfoAccessKeyResp) {
 	resp.UserProvider = provider
 	switch provider {
 	case madmin.LDAPProvider:
@@ -91,7 +91,7 @@ func populateProviderInfoFromClaims(claims map[string]interface{}, provider stri
 	}
 }
 
-func getOpenIDCfgNameFromClaims(claims map[string]interface{}) (string, bool) {
+func getOpenIDCfgNameFromClaims(claims map[string]any) (string, bool) {
 	roleArn := claims[roleArnClaim]
 
 	s := globalServerConfig.Clone()
@@ -107,7 +107,7 @@ func getOpenIDCfgNameFromClaims(claims map[string]interface{}) (string, bool) {
 	return "", false
 }
 
-func getOpenIDInfoFromClaims(claims map[string]interface{}) madmin.OpenIDSpecificAccessKeyInfo {
+func getOpenIDInfoFromClaims(claims map[string]any) madmin.OpenIDSpecificAccessKeyInfo {
 	info := madmin.OpenIDSpecificAccessKeyInfo{}
 
 	cfgName, ok := getOpenIDCfgNameFromClaims(claims)
@@ -130,7 +130,7 @@ func getOpenIDInfoFromClaims(claims map[string]interface{}) madmin.OpenIDSpecifi
 	return info
 }
 
-func getLDAPInfoFromClaims(claims map[string]interface{}) madmin.LDAPSpecificAccessKeyInfo {
+func getLDAPInfoFromClaims(claims map[string]any) madmin.LDAPSpecificAccessKeyInfo {
 	info := madmin.LDAPSpecificAccessKeyInfo{}
 
 	if name, ok := claims[ldapUser].(string); ok {

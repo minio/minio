@@ -954,7 +954,7 @@ func (a adminAPIHandlers) ForceUnlockHandler(w http.ResponseWriter, r *http.Requ
 
 	var args dsync.LockArgs
 	var lockers []dsync.NetLocker
-	for _, path := range strings.Split(vars["paths"], ",") {
+	for path := range strings.SplitSeq(vars["paths"], ",") {
 		if path == "" {
 			continue
 		}
@@ -1193,7 +1193,7 @@ type dummyFileInfo struct {
 	mode    os.FileMode
 	modTime time.Time
 	isDir   bool
-	sys     interface{}
+	sys     any
 }
 
 func (f dummyFileInfo) Name() string       { return f.name }
@@ -1201,7 +1201,7 @@ func (f dummyFileInfo) Size() int64        { return f.size }
 func (f dummyFileInfo) Mode() os.FileMode  { return f.mode }
 func (f dummyFileInfo) ModTime() time.Time { return f.modTime }
 func (f dummyFileInfo) IsDir() bool        { return f.isDir }
-func (f dummyFileInfo) Sys() interface{}   { return f.sys }
+func (f dummyFileInfo) Sys() any           { return f.sys }
 
 // DownloadProfilingHandler - POST /minio/admin/v3/profiling/download
 // ----------
@@ -1243,17 +1243,17 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 		if hip.objPrefix != "" {
 			// Bucket is required if object-prefix is given
 			err = ErrHealMissingBucket
-			return
+			return hip, err
 		}
 	} else if isReservedOrInvalidBucket(hip.bucket, false) {
 		err = ErrInvalidBucketName
-		return
+		return hip, err
 	}
 
 	// empty prefix is valid.
 	if !IsValidObjectPrefix(hip.objPrefix) {
 		err = ErrInvalidObjectName
-		return
+		return hip, err
 	}
 
 	if len(qParams[mgmtClientToken]) > 0 {
@@ -1275,7 +1275,7 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 	if (hip.forceStart && hip.forceStop) ||
 		(hip.clientToken != "" && (hip.forceStart || hip.forceStop)) {
 		err = ErrInvalidRequest
-		return
+		return hip, err
 	}
 
 	// ignore body if clientToken is provided
@@ -1284,12 +1284,12 @@ func extractHealInitParams(vars map[string]string, qParams url.Values, r io.Read
 		if jerr != nil {
 			adminLogIf(GlobalContext, jerr, logger.ErrorKind)
 			err = ErrRequestBodyParse
-			return
+			return hip, err
 		}
 	}
 
 	err = ErrNone
-	return
+	return hip, err
 }
 
 // HealHandler - POST /minio/admin/v3/heal/
@@ -2022,7 +2022,7 @@ func extractTraceOptions(r *http.Request) (opts madmin.ServiceTraceOpts, err err
 		opts.OS = true
 		// Older mc - cannot deal with more types...
 	}
-	return
+	return opts, err
 }
 
 // TraceHandler - POST /minio/admin/v3/trace
