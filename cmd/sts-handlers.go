@@ -801,6 +801,34 @@ func extractPolicyName(sanURI string) (string, error) {
 
 }
 
+func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
+
+	if len(sanURI) == 0 {
+		return nil, errors.New("No SAN URIs provided")
+	}
+
+	policyNames := make([]string, len(sanURI))
+
+	for index, uri := range sanURI {
+		parsedURL, err := url.Parse(uri.String())
+
+		if err != nil {
+			return nil, errors.Join(errors.New("Error parsing SAN URI "+uri.String()), err)
+		}
+
+		key := parsedURL.Host + strings.ReplaceAll(parsedURL.Path, "/", "+")
+
+		if len(key) > 128 {
+			return nil, errors.New("Policy URL " + key + " is more than 128 characters long.")
+		}
+
+		policyNames[index] = key
+	}
+
+	return policyNames, nil
+
+}
+
 // AssumeRoleWithCertificate implements user authentication with client certificates.
 // It verifies the client-provided X.509 certificate, maps the certificate to an S3 policy
 // and returns temp. S3 credentials to the client.
@@ -911,21 +939,9 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		}
 	}
 
-	var tlsSubKey string
+	var tlsSubKeyArray []string
 
-	if !globalIAMSys.STSTLSConfig.TLSSubjectUseSanURI {
-		// We map the X.509 subject common name to the policy. So, a client
-		// with the common name "foo" will be associated with the policy "foo".
-		// Other mapping functions - e.g. public-key hash based mapping - are
-		// possible but not implemented.
-		//
-		// Group mapping is not possible with standard X.509 certificates.
-		if certificate.Subject.CommonName == "" {
-			writeSTSErrorResponse(ctx, w, ErrSTSMissingParameter, errors.New("certificate subject CN cannot be empty"))
-			return
-		}
-		tlsSubKey = certificate.Subject.CommonName
-	} else {
+	if globalIAMSys.STSTLSConfig.TLSSubjectUseSanURI {
 		// We map the X.509 san uri to the policy. So, a client
 		// with the san uri "http://myapp" will be associated with the policy "http://myapp".
 		// Other mapping functions - e.g. public-key hash based mapping - are
@@ -937,18 +953,30 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 			return
 		}
 
-		// Pick first SAN URI
-		// Extract Policy Name From SAN URI
-		// Set Policy Name as Subject Key
-		policyName, err := extractPolicyName(certificate.URIs[0].String())
+		// Pick Array of SAN URIs
+		// Extract Policy Names From SAN URI
+		// Set Policy Name Array as Subject Key
+		policyNameArray, err := extractPolicyNameArray(certificate.URIs)
 
 		if err != nil {
 			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, errors.New("Unable to convert from SAN URI to Policy Name"))
 			return
 		}
 
-		tlsSubKey = policyName
+		tlsSubKeyArray = policyNameArray
+	} else {
+		tlsSubKeyArray = []string{certificate.Subject.CommonName}
+	}
 
+	// We map the X.509 subject common name to the policy. So, a client
+	// with the common name "foo" will be associated with the policy "foo".
+	// Other mapping functions - e.g. public-key hash based mapping - are
+	// possible but not implemented.
+	//
+	// Group mapping is not possible with standard X.509 certificates.
+	if certificate.Subject.CommonName == "" {
+		writeSTSErrorResponse(ctx, w, ErrSTSMissingParameter, errors.New("certificate subject CN cannot be empty"))
+		return
 	}
 
 	expiry, err := globalIAMSys.STSTLSConfig.GetExpiryDuration(r.Form.Get(stsDurationSeconds))
@@ -966,10 +994,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Associate any service accounts to the certificate CN
-	parentUser := "tls" + getKeySeparator() + tlsSubKey
+	parentUser := "tls" + getKeySeparator() + certificate.Subject.CommonName
 
 	claims[expClaim] = UTCNow().Add(expiry).Unix()
-	claims[subClaim] = tlsSubKey
+	claims[subClaim] = tlsSubKeyArray
 	claims[audClaim] = certificate.Subject.Organization
 	claims[issClaim] = certificate.Issuer.CommonName
 	claims[parentClaim] = parentUser
@@ -991,7 +1019,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	policyName := tlsSubKey
+	policyName := certificate.Subject.CommonName
 	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
