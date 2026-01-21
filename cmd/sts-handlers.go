@@ -807,7 +807,6 @@ func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
 		lowerCasePath := strings.ToLower(parsedURL.Path)
 
 		key := lowerCaseHost + strings.ReplaceAll(lowerCasePath, "/", "_")
-		logger.Info("%d of %d URIS, Found SAN URI %s", index+1, len(sanURI), key)
 
 		if len(key) > 128 {
 			return nil, errors.New("Policy URL " + key + " is more than 128 characters long.")
