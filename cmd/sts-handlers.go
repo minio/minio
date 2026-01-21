@@ -783,26 +783,10 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
-func extractPolicyName(sanURI string) (string, error) {
-
-	parsedURL, err := url.Parse(sanURI)
-
-	if err != nil {
-		return "", err
-	}
-
-	key := parsedURL.Host + strings.ReplaceAll(parsedURL.Path, "/", "+")
-
-	if len(key) > 128 {
-		return "", errors.New("Policy URL " + key + " is more than 128 characters long.")
-	}
-
-	return key, nil
-
-}
-
+// extractPolicyNameArray extracts policy names from SAN URIs
+// by concatenating host and path (with '/' replaced by '+').
+// It also validates that the resulting policy name does not exceed 128 characters.
 func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
-
 	if len(sanURI) == 0 {
 		return nil, errors.New("No SAN URIs provided")
 	}
@@ -816,7 +800,8 @@ func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
 			return nil, errors.Join(errors.New("Error parsing SAN URI "+uri.String()), err)
 		}
 
-		key := parsedURL.Host + strings.ReplaceAll(parsedURL.Path, "/", "+")
+		key := parsedURL.Host + strings.ReplaceAll(parsedURL.Path, "/", "_")
+		logger.Info("Found SAN URI %s", key)
 
 		if len(key) > 128 {
 			return nil, errors.New("Policy URL " + key + " is more than 128 characters long.")
@@ -826,7 +811,6 @@ func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
 	}
 
 	return policyNames, nil
-
 }
 
 // AssumeRoleWithCertificate implements user authentication with client certificates.
