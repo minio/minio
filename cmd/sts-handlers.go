@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -791,6 +792,8 @@ func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
 		return nil, errors.New("No SAN URIs provided")
 	}
 
+	var policyNameRegex = regexp.MustCompile(`^[a-z0-9]+[a-z0-9+=.@_-]*$`)
+
 	policyNames := make([]string, len(sanURI))
 
 	for index, uri := range sanURI {
@@ -800,11 +803,18 @@ func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
 			return nil, errors.Join(errors.New("Error parsing SAN URI "+uri.String()), err)
 		}
 
-		key := parsedURL.Host + strings.ReplaceAll(parsedURL.Path, "/", "_")
-		logger.Info("Found SAN URI %s", key)
+		lowerCaseHost := strings.ToLower(parsedURL.Host)
+		lowerCasePath := strings.ToLower(parsedURL.Path)
+
+		key := lowerCaseHost + strings.ReplaceAll(lowerCasePath, "/", "_")
+		logger.Info("%d of %d URIS, Found SAN URI %s", index+1, len(sanURI), key)
 
 		if len(key) > 128 {
 			return nil, errors.New("Policy URL " + key + " is more than 128 characters long.")
+		}
+
+		if !policyNameRegex.MatchString(key) {
+			return nil, errors.New("Policy name " + key + " is non compliant. It must match regex " + policyNameRegex.String())
 		}
 
 		policyNames[index] = key
@@ -978,7 +988,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Associate any service accounts to the certificate CN
-	parentUser := "tls" + getKeySeparator() + certificate.Subject.CommonName
+	parentUser := "tls" + getKeySeparator() + tlsSubKeyArray[0]
 
 	claims[expClaim] = UTCNow().Add(expiry).Unix()
 	claims[subClaim] = tlsSubKeyArray
@@ -1003,7 +1013,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	policyName := certificate.Subject.CommonName
+	policyName := strings.Join(tlsSubKeyArray, ",")
 	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
