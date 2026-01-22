@@ -235,7 +235,7 @@ consoleService:
   #   - 10.10.10.0/24
   loadBalancerSourceRanges: []
 
-  ## servconsoleServiceice.externalTrafficPolicy minio service external traffic policy
+  ## consoleService.externalTrafficPolicy minio service external traffic policy
   ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
   ##
   externalTrafficPolicy: Cluster
@@ -283,7 +283,7 @@ securityContext:
 containerSecurityContext:
   readOnlyRootFilesystem: false
 
-# Additational pod annotations
+# Additional pod annotations
 podAnnotations: {}
 
 # Additional pod labels
