@@ -75,8 +75,8 @@ jobs:
             openid: "http://127.0.0.1:5556/dex"
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
@@ -129,13 +129,13 @@ jobs:
     name: Test IAM import in new cluster with missing entities
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
       - name: Checkout minio-iam-testing
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: minio/minio-iam-testing
           path: minio-iam-testing
@@ -146,13 +146,13 @@ jobs:
     name: Test IAM import in new cluster with opendid configurations
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
       - name: Checkout minio-iam-testing
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: minio/minio-iam-testing
           path: minio-iam-testing
