@@ -51,6 +51,7 @@ var startsWithConds = map[string]bool{
 	"$x-amz-algorithm":         false,
 	"$x-amz-credential":        false,
 	"$x-amz-date":              false,
+	"$tagging":                 false,
 }
 
 // Add policy conditionals.
