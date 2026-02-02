@@ -452,6 +452,7 @@ const (
 	ErrIAMNotInitialized
 
 	apiErrCodeEnd // This is used only for the testing code
+	ErrServerShutdown
 )
 
 type errorCodeMap map[APIErrorCode]APIError
@@ -2144,6 +2145,11 @@ var errorCodes = errorCodeMap{
 		Description:    "Invalid UTF-8 character detected.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrServerShutdown: {
+		Code:           "ServiceUnavailable",
+		Description:    "Server is shutting down, please retry",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 }
 
 // toAPIErrorCode - Converts embedded errors. Convenience
@@ -2253,7 +2259,13 @@ func toAPIErrorCode(ctx context.Context, err error) (apiErr APIErrorCode) {
 	case errKMSDefaultKeyAlreadyConfigured:
 		apiErr = ErrKMSDefaultKeyAlreadyConfigured
 	case context.Canceled:
-		apiErr = ErrClientDisconnected
+		// Check if this is due to server shutdown (global context cancelled)
+		// vs client disconnecting
+		if GlobalContext.Err() != nil {
+			apiErr = ErrServerShutdown
+		} else {
+			apiErr = ErrClientDisconnected
+		}
 	case context.DeadlineExceeded:
 		apiErr = ErrRequestTimedout
 	case objectlock.ErrInvalidRetentionDate:
