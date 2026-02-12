@@ -1,13 +1,9 @@
-# Maintenance Mode
-
-**This project is currently under maintenance and is not accepting new changes.**
-
-**Alternate Options:**
-
-- **AIStor Free**: Fully featured, standalone version of AIStor for community use. Download a free license key from [Free license download](https://min.io/download)
-- **AIStor Enterprise**:  Fully featured, Distributed version of AIStor for commercial enterprise use. [Subscription](https://www.min.io/pricing)
-
-Learn more about [subscription tiers](https://blog.min.io/introducing-new-subscription-tiers-for-minio-aistor-free-enterprise-lite-and-enterprise/)
+> [!NOTE]
+> **THIS REPOSITORY IS NO LONGER MAINTAINED.**
+>
+> **Alternatives:**
+> - **[AIStor Free](https://min.io/download)** — Full-featured, standalone edition for community use (free license)
+> - **[AIStor Enterprise](https://min.io/pricing)** — Distributed edition with commercial support
 
 ---
 
@@ -34,7 +30,7 @@ We designed MinIO as Open Source software for the Open Source software community
 All usage of MinIO in your application stack requires validation against AGPLv3 obligations, which include but are not limited to the release of modified code to the community from which you have benefited. Any commercial/proprietary usage of the AGPLv3 software, including repackaging or reselling services/features, is done at your own risk.
 
 The AGPLv3 provides no obligation by any party to support, maintain, or warranty the original or any modified work.
-All support is provided on a best-effort basis through Github and our [Slack](https//slack.min.io) channel, and any member of the community is welcome to contribute and assist others in their usage of the software.
+All support is provided on a best-effort basis through Github and our [Slack](https://slack.min.io) channel, and any member of the community is welcome to contribute and assist others in their usage of the software.
 
 MinIO [AIStor](https://www.min.io/product/aistor) includes enterprise-grade support and licensing for workloads which require commercial or proprietary usage and production-level SLA/SLO-backed support. For more information, [reach out for a quote](https://min.io/pricing).
 
@@ -54,6 +50,7 @@ See the sections below for detailed instructions on each method.
 ### Legacy Binary Releases
 
 Historical pre-compiled binary releases remain available for reference but are no longer maintained:
+
 - GitHub Releases: https://github.com/minio/minio/releases
 - Direct downloads: https://dl.min.io/server/minio/release/
 
@@ -72,7 +69,7 @@ You can alternatively run `go build` and use the `GOOS` and `GOARCH` environment
 For example:
 
 ```
-env GOOS=linux GOARCh=arm64 go build
+env GOOS=linux GOARCH=arm64 go build
 ```
 
 Start MinIO by running `minio server PATH` where `PATH` is any empty folder on your local filesystem.
@@ -94,7 +91,7 @@ For application developers, see <https://docs.min.io/enterprise/aistor-object-st
 
 > [!NOTE]
 > Production environments using compiled-from-source MinIO binaries do so at their own risk.
-> The AGPLv3 license provides no warranties nor liabilites for any such usage.
+> The AGPLv3 license provides no warranties nor liabilities for any such usage.
 
 ## Build Docker Image
 
