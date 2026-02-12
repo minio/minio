@@ -2,6 +2,7 @@
 {{- $fullName := printf "%s-console" (include "minio.fullname" .) -}}
 {{- $servicePort := .Values.consoleService.port -}}
 {{- $ingressPath := .Values.consoleIngress.path -}}
+{{- $ingressPathType := .Values.consoleIngress.pathType -}}
 apiVersion: {{ template "minio.consoleIngress.apiVersion" . }}
 kind: Ingress
 metadata:
@@ -37,7 +38,7 @@ spec:
         paths:
           - path: {{ $ingressPath }}
             {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
-            pathType: Prefix
+            pathType: {{ $ingressPathType }}
             backend:
               service:
                 name: {{ $fullName }}

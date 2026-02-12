@@ -2,6 +2,7 @@
 {{- $fullName := include "minio.fullname" . -}}
 {{- $servicePort := .Values.service.port -}}
 {{- $ingressPath := .Values.ingress.path -}}
+{{- $ingressPathType := .Values.ingress.pathType -}}
 apiVersion: {{ template "minio.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
@@ -37,7 +38,7 @@ spec:
         paths:
           - path: {{ $ingressPath }}
             {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
-            pathType: Prefix
+            pathType: {{ $ingressPathType }}
             backend:
               service:
                 name: {{ $fullName }}
