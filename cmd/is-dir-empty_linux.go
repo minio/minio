@@ -1,5 +1,4 @@
 //go:build linux && !appengine
-// +build linux,!appengine
 
 // Copyright (c) 2015-2024 MinIO, Inc.
 //

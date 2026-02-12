@@ -1,5 +1,4 @@
 //go:build !netbsd && !solaris
-// +build !netbsd,!solaris
 
 // Copyright (c) 2015-2021 MinIO, Inc.
 //
