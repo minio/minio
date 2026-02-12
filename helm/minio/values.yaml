@@ -1,3 +1,11 @@
+## Global parameters
+## These will override the parameters, including dependencies, configured to use the global value
+##
+global:
+  ## Global StorageClass for Persistent Volume(s)
+  ##
+  storageClass: ""
+
 ## Provide a name in place of minio for `app:` labels
 ##
 nameOverride: ""
