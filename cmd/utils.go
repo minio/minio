@@ -288,13 +288,30 @@ const (
 	// using 'curl' and presigned URL.
 	globalMaxObjectSize = 5 * humanize.TiByte
 
-	// Minimum Part size for multipart upload is 5MiB
-	globalMinPartSize = 5 * humanize.MiByte
-
 	// Maximum Part ID for multipart upload is 10000
 	// (Acceptable values range from 1 to 10000 inclusive)
 	globalMaxPartID = 10000
 )
+
+// Minimum Part size for multipart upload, configurable via environment variable
+var globalMinPartSize int64
+
+// initMinPartSize initializes the minimum part size from environment variable
+// or uses default value of 5MiB
+//
+//nolint:unused
+func initMinPartSize() {
+	defaultMinPartSize := int64(5 * humanize.MiByte)
+	if envMinPartSize := env.Get("MINIO_MIN_PART_SIZE", ""); envMinPartSize != "" {
+		if size, err := humanize.ParseBytes(envMinPartSize); err == nil {
+			globalMinPartSize = int64(size)
+		} else {
+			globalMinPartSize = defaultMinPartSize
+		}
+	} else {
+		globalMinPartSize = defaultMinPartSize
+	}
+}
 
 // isMaxObjectSize - verify if max object size
 func isMaxObjectSize(size int64) bool {
