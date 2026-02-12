@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -783,6 +784,44 @@ func (sts *stsAPIHandlers) AssumeRoleWithLDAPIdentity(w http.ResponseWriter, r *
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
+// extractPolicyNameArray extracts policy names from SAN URIs
+// by concatenating host and path (with '/' replaced by '+').
+// It also validates that the resulting policy name does not exceed 128 characters.
+func extractPolicyNameArray(sanURI []*url.URL) ([]string, error) {
+	if len(sanURI) == 0 {
+		return nil, errors.New("No SAN URIs provided")
+	}
+
+	var policyNameRegex = regexp.MustCompile(`^[a-z0-9]+[a-z0-9+=.@_-]*$`)
+
+	policyNames := make([]string, len(sanURI))
+
+	for index, uri := range sanURI {
+		parsedURL, err := url.Parse(uri.String())
+
+		if err != nil {
+			return nil, errors.Join(errors.New("Error parsing SAN URI "+uri.String()), err)
+		}
+
+		lowerCaseHost := strings.ToLower(parsedURL.Host)
+		lowerCasePath := strings.ToLower(parsedURL.Path)
+
+		key := lowerCaseHost + strings.ReplaceAll(lowerCasePath, "/", "_")
+
+		if len(key) > 128 {
+			return nil, errors.New("Policy URL " + key + " is more than 128 characters long.")
+		}
+
+		if !policyNameRegex.MatchString(key) {
+			return nil, errors.New("Policy name " + key + " is non compliant. It must match regex " + policyNameRegex.String())
+		}
+
+		policyNames[index] = key
+	}
+
+	return policyNames, nil
+}
+
 // AssumeRoleWithCertificate implements user authentication with client certificates.
 // It verifies the client-provided X.509 certificate, maps the certificate to an S3 policy
 // and returns temp. S3 credentials to the client.
@@ -893,6 +932,35 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 		}
 	}
 
+	var tlsSubKeyArray []string
+
+	if globalIAMSys.STSTLSConfig.TLSSubjectUseSanURI {
+		// We map the X.509 san uri to the policy. So, a client
+		// with the san uri "http://myapp" will be associated with the policy "http://myapp".
+		// Other mapping functions - e.g. public-key hash based mapping - are
+		// possible but not implemented.
+		//
+		// Group mapping is not possible with standard X.509 certificates.
+		if len(certificate.URIs) == 0 {
+			writeSTSErrorResponse(ctx, w, ErrSTSMissingParameter, errors.New("SAN URI not present in the certificate"))
+			return
+		}
+
+		// Pick Array of SAN URIs
+		// Extract Policy Names From SAN URI
+		// Set Policy Name Array as Subject Key
+		policyNameArray, err := extractPolicyNameArray(certificate.URIs)
+
+		if err != nil {
+			writeSTSErrorResponse(ctx, w, ErrSTSInvalidParameterValue, errors.New("Unable to convert from SAN URI to Policy Name"))
+			return
+		}
+
+		tlsSubKeyArray = policyNameArray
+	} else {
+		tlsSubKeyArray = []string{certificate.Subject.CommonName}
+	}
+
 	// We map the X.509 subject common name to the policy. So, a client
 	// with the common name "foo" will be associated with the policy "foo".
 	// Other mapping functions - e.g. public-key hash based mapping - are
@@ -919,13 +987,14 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	// Associate any service accounts to the certificate CN
-	parentUser := "tls" + getKeySeparator() + certificate.Subject.CommonName
+	parentUser := "tls" + getKeySeparator() + tlsSubKeyArray[0]
 
 	claims[expClaim] = UTCNow().Add(expiry).Unix()
-	claims[subClaim] = certificate.Subject.CommonName
+	claims[subClaim] = tlsSubKeyArray
 	claims[audClaim] = certificate.Subject.Organization
 	claims[issClaim] = certificate.Issuer.CommonName
 	claims[parentClaim] = parentUser
+
 	tokenRevokeType := r.Form.Get(stsRevokeTokenType)
 	if tokenRevokeType != "" {
 		claims[tokenRevokeTypeClaim] = tokenRevokeType
@@ -943,7 +1012,7 @@ func (sts *stsAPIHandlers) AssumeRoleWithCertificate(w http.ResponseWriter, r *h
 	}
 
 	tmpCredentials.ParentUser = parentUser
-	policyName := certificate.Subject.CommonName
+	policyName := strings.Join(tlsSubKeyArray, ",")
 	updatedAt, err := globalIAMSys.SetTempUser(ctx, tmpCredentials.AccessKey, tmpCredentials, policyName)
 	if err != nil {
 		writeSTSErrorResponse(ctx, w, ErrSTSInternalError, err)
