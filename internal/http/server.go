@@ -37,6 +37,9 @@ var (
 
 	// GlobalDeploymentID - is sent in the header to all http targets
 	GlobalDeploymentID string
+
+	// GlobalSiteName - is sent in the header to all http targets
+	GlobalSiteName string
 )
 
 const (
@@ -235,4 +238,9 @@ func SetMinIOVersion(version string) {
 // SetDeploymentID -- Deployment Id from the main package is set here
 func SetDeploymentID(deploymentID string) {
 	GlobalDeploymentID = deploymentID
+}
+
+// SetSiteName -- user defined site from environment variable `MINIO_SITE_NAME` or from configuration `site.name`
+func SetSiteName(siteName string) {
+	GlobalSiteName = siteName
 }
