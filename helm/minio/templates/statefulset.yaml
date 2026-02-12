@@ -11,6 +11,7 @@
 {{ $accessMode := .Values.persistence.accessMode }}
 {{ $storageClass := .Values.persistence.storageClass }}
 {{ $psize := .Values.persistence.size }}
+{{ $isOpenshift := or .Values.openshift (and (.Capabilities.APIVersions.Has "security.openshift.io/v1") (ne .Values.openshift false)) }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -83,9 +84,15 @@ spec:
       {{- end }}
       {{- if and .Values.securityContext.enabled .Values.persistence.enabled }}
       securityContext:
-        {{- omit .Values.securityContext "enabled" | toYaml | nindent 8 }}
-      {{- end }}
-      {{- if .Values.serviceAccount.create }}
+        fsGroupChangePolicy: {{ .Values.securityContext.fsGroupChangePolicy }}
+        {{- if .Values.securityContext.runAsNonRoot }}
+        runAsNonRoot: {{ .Values.securityContext.runAsNonRoot }}
+        {{- end }}
+        {{- if not $isOpenshift }}
+        runAsUser: {{ .Values.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.securityContext.fsGroup }}
+        {{- end }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- end }}
       containers:

@@ -1,4 +1,4 @@
-{{- if and .Values.securityContext.enabled .Values.persistence.enabled (.Capabilities.APIVersions.Has "security.openshift.io/v1") }}
+{{- if and .Values.securityContext.enabled .Values.persistence.enabled (.Capabilities.APIVersions.Has "security.openshift.io/v1") (not .Values.openshift) }}
 apiVersion: security.openshift.io/v1
 kind: SecurityContextConstraints
 metadata:
