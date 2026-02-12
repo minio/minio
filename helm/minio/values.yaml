@@ -29,7 +29,8 @@ mcImage:
   pullPolicy: IfNotPresent
 
 ## minio mode, i.e. standalone or distributed
-mode: distributed ## other supported values are "standalone"
+## supported values are "standalone" and "distributed" (default: "standalone")
+mode: distributed
 
 ## Additional labels to include with deployment or statefulset
 additionalLabels: {}
@@ -105,7 +106,7 @@ rootPassword: ""
 ## others depend on enabled status of corresponding sections.
 existingSecret: ""
 
-## Directory on the MinIO pof
+## Directory on the MinIO pod
 certsPath: "/etc/minio/certs/"
 configPathmc: "/etc/minio/mc/"
 
@@ -235,7 +236,7 @@ consoleService:
   #   - 10.10.10.0/24
   loadBalancerSourceRanges: []
 
-  ## servconsoleServiceice.externalTrafficPolicy minio service external traffic policy
+  ## consoleService.externalTrafficPolicy minio service external traffic policy
   ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
   ##
   externalTrafficPolicy: Cluster
@@ -283,7 +284,7 @@ securityContext:
 containerSecurityContext:
   readOnlyRootFilesystem: false
 
-# Additational pod annotations
+# Additional pod annotations
 podAnnotations: {}
 
 # Additional pod labels
