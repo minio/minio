@@ -20,6 +20,7 @@ package cmd
 import (
 	"context"
 	"errors"
+	"net/http"
 	"maps"
 	"net/url"
 	"sync"
@@ -56,13 +57,14 @@ type arnErrs struct {
 // BucketTargetSys represents bucket targets subsystem
 type BucketTargetSys struct {
 	sync.RWMutex
-	arnRemotesMap map[string]arnTarget
-	targetsMap    map[string][]madmin.BucketTarget
-	hMutex        sync.RWMutex
-	hc            map[string]epHealth
-	hcClient      *madmin.AnonymousClient
-	aMutex        sync.RWMutex
-	arnErrsMap    map[string]arnErrs // map of ARN to error count of failures to get target
+	arnRemotesMap    map[string]arnTarget
+	targetsMap       map[string][]madmin.BucketTarget
+	hMutex           sync.RWMutex
+	hc               map[string]epHealth
+	hcClient         *madmin.AnonymousClient
+	insecureHcClient *madmin.AnonymousClient
+	aMutex           sync.RWMutex
+	arnErrsMap       map[string]arnErrs // map of ARN to error count of failures to get target
 }
 
 type latencyStat struct {
@@ -88,6 +90,7 @@ type epHealth struct {
 	Endpoint        string
 	Scheme          string
 	Online          bool
+	insecureTLS     bool
 	lastOnline      time.Time
 	lastHCAt        time.Time
 	offlineDuration time.Duration
@@ -96,13 +99,13 @@ type epHealth struct {
 
 // isOffline returns current liveness result of remote target. Add endpoint to
 // healthCheck map if missing and default to online status
-func (sys *BucketTargetSys) isOffline(ep *url.URL) bool {
+func (sys *BucketTargetSys) isOffline(ep *url.URL, InsecureTLS bool) bool {
 	sys.hMutex.RLock()
 	defer sys.hMutex.RUnlock()
 	if h, ok := sys.hc[ep.Host]; ok {
 		return !h.Online
 	}
-	go sys.initHC(ep)
+	go sys.initHC(ep, InsecureTLS)
 	return false
 }
 
@@ -116,25 +119,75 @@ func (sys *BucketTargetSys) markOffline(ep *url.URL) {
 	}
 }
 
-func (sys *BucketTargetSys) initHC(ep *url.URL) {
+func (sys *BucketTargetSys) initHC(ep *url.URL, insecureTLS bool) {
 	sys.hMutex.Lock()
 	sys.hc[ep.Host] = epHealth{
-		Endpoint: ep.Host,
-		Scheme:   ep.Scheme,
-		Online:   true,
+		Endpoint:    ep.Host,
+		Scheme:      ep.Scheme,
+		Online:      true,
+		insecureTLS: insecureTLS,
 	}
 	sys.hMutex.Unlock()
 }
 
 // newHCClient initializes an anonymous client for performing health check on the remote endpoints
-func newHCClient() *madmin.AnonymousClient {
+func newHCClient(insecure bool) *madmin.AnonymousClient {
 	clnt, e := madmin.NewAnonymousClientNoEndpoint()
 	if e != nil {
 		bugLogIf(GlobalContext, errors.New("Unable to initialize health check client"))
 		return nil
 	}
-	clnt.SetCustomTransport(globalRemoteTargetTransport)
+	if insecure {
+		clnt.SetCustomTransport(globalRemoteInsecureTransport)
+	} else {
+		clnt.SetCustomTransport(globalRemoteTargetTransport)
+	}
+
 	return clnt
+}
+
+func (sys *BucketTargetSys) checkClientAlive(ctx context.Context, eps []madmin.ServerProperties, hcClient *madmin.AnonymousClient, newEpHealthMap map[string]epHealth) {
+	if len(eps) <= 0 {
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	start := time.Now()
+	for result := range hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
+		var lastOnline time.Time
+		var offline time.Duration
+		//	var deploymentID string
+		sys.hMutex.RLock()
+		prev, ok := sys.hc[result.Endpoint.Host]
+		sys.hMutex.RUnlock()
+		if ok {
+			if prev.Online != result.Online || !result.Online {
+				if !prev.lastHCAt.IsZero() {
+					offline = time.Since(prev.lastHCAt) + prev.offlineDuration
+				} else {
+					offline = prev.offlineDuration
+				}
+			} else if result.Online {
+				offline = prev.offlineDuration
+			}
+		}
+		lastOnline = prev.lastOnline
+		if result.Online {
+			lastOnline = time.Now()
+		}
+		l := prev.latency
+		l.update(time.Since(start))
+		newEpHealthMap[result.Endpoint.Host] = epHealth{
+			Endpoint:        result.Endpoint.Host,
+			Scheme:          result.Endpoint.Scheme,
+			Online:          result.Online,
+			lastOnline:      lastOnline,
+			offlineDuration: offline,
+			lastHCAt:        time.Now(),
+			latency:         l,
+			insecureTLS:     prev.insecureTLS,
+		}
+	}
+	cancel()
 }
 
 // heartBeat performs liveness check on remote endpoints.
@@ -145,56 +198,25 @@ func (sys *BucketTargetSys) heartBeat(ctx context.Context) {
 		select {
 		case <-hcTimer.C:
 			sys.hMutex.RLock()
-			eps := make([]madmin.ServerProperties, 0, len(sys.hc))
+			sslEps := make([]madmin.ServerProperties, 0, len(sys.hc))
+			insecureEps := make([]madmin.ServerProperties, 0, len(sys.hc))
 			for _, ep := range sys.hc {
-				eps = append(eps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
+				if ep.insecureTLS {
+					insecureEps = append(insecureEps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
+				} else {
+					sslEps = append(sslEps, madmin.ServerProperties{Endpoint: ep.Endpoint, Scheme: ep.Scheme})
+				}
 			}
 			sys.hMutex.RUnlock()
+			newEpHealthMap := make(map[string]epHealth, len(sys.hc))
+			// Perform endpoint health checks with SSL.
+			sys.checkClientAlive(ctx, sslEps, sys.hcClient, newEpHealthMap)
+			// Perform endpoint health checks without SSL.
+			sys.checkClientAlive(ctx, insecureEps, sys.insecureHcClient, newEpHealthMap)
+			sys.hMutex.Lock()
+			sys.hc = newEpHealthMap
+			sys.hMutex.Unlock()
 
-			if len(eps) > 0 {
-				cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-				m := make(map[string]epHealth, len(eps))
-				start := time.Now()
-
-				for result := range sys.hcClient.Alive(cctx, madmin.AliveOpts{}, eps...) {
-					var lastOnline time.Time
-					var offline time.Duration
-					//	var deploymentID string
-					sys.hMutex.RLock()
-					prev, ok := sys.hc[result.Endpoint.Host]
-					sys.hMutex.RUnlock()
-					if ok {
-						if prev.Online != result.Online || !result.Online {
-							if !prev.lastHCAt.IsZero() {
-								offline = time.Since(prev.lastHCAt) + prev.offlineDuration
-							} else {
-								offline = prev.offlineDuration
-							}
-						} else if result.Online {
-							offline = prev.offlineDuration
-						}
-					}
-					lastOnline = prev.lastOnline
-					if result.Online {
-						lastOnline = time.Now()
-					}
-					l := prev.latency
-					l.update(time.Since(start))
-					m[result.Endpoint.Host] = epHealth{
-						Endpoint:        result.Endpoint.Host,
-						Scheme:          result.Endpoint.Scheme,
-						Online:          result.Online,
-						lastOnline:      lastOnline,
-						offlineDuration: offline,
-						lastHCAt:        time.Now(),
-						latency:         l,
-					}
-				}
-				cancel()
-				sys.hMutex.Lock()
-				sys.hc = m
-				sys.hMutex.Unlock()
-			}
 			hcTimer.Reset(defaultHealthCheckDuration)
 		case <-ctx.Done():
 			return
@@ -356,7 +378,14 @@ func (sys *BucketTargetSys) SetTarget(ctx context.Context, bucket string, tgt *m
 	if tgt.Secure {
 		scheme = "https"
 	}
-	result := <-sys.hcClient.Alive(hcCtx, madmin.AliveOpts{}, madmin.ServerProperties{
+
+	var hcClient *madmin.AnonymousClient
+	if tgt.InsecureTLS {
+		hcClient = sys.insecureHcClient
+	} else {
+		hcClient = sys.hcClient
+	}
+	result := <-hcClient.Alive(hcCtx, madmin.AliveOpts{}, madmin.ServerProperties{
 		Endpoint: tgt.Endpoint,
 		Scheme:   scheme,
 	})
@@ -551,11 +580,12 @@ func (sys *BucketTargetSys) GetRemoteBucketTargetByArn(ctx context.Context, buck
 // NewBucketTargetSys - creates new replication system.
 func NewBucketTargetSys(ctx context.Context) *BucketTargetSys {
 	sys := &BucketTargetSys{
-		arnRemotesMap: make(map[string]arnTarget),
-		targetsMap:    make(map[string][]madmin.BucketTarget),
-		arnErrsMap:    make(map[string]arnErrs),
-		hc:            make(map[string]epHealth),
-		hcClient:      newHCClient(),
+		arnRemotesMap:    make(map[string]arnTarget),
+		targetsMap:       make(map[string][]madmin.BucketTarget),
+		arnErrsMap:       make(map[string]arnErrs),
+		hc:               make(map[string]epHealth),
+		hcClient:         newHCClient(false),
+		insecureHcClient: newHCClient(true),
 	}
 	// reload healthCheck endpoints map periodically to remove stale endpoints from the map.
 	go func() {
@@ -635,11 +665,17 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 	config := tcfg.Credentials
 	creds := credentials.NewStaticV4(config.AccessKey, config.SecretKey, "")
 
+	var remoteTransport http.RoundTripper
+	if tcfg.InsecureTLS {
+		remoteTransport = globalRemoteInsecureTransport
+	} else {
+		remoteTransport = globalRemoteTargetTransport
+	}
 	api, err := minio.New(tcfg.Endpoint, &minio.Options{
 		Creds:     creds,
 		Secure:    tcfg.Secure,
 		Region:    tcfg.Region,
-		Transport: globalRemoteTargetTransport,
+		Transport: remoteTransport,
 	})
 	if err != nil {
 		return nil, err
@@ -661,6 +697,7 @@ func (sys *BucketTargetSys) getRemoteTargetClient(tcfg *madmin.BucketTarget) (*T
 		ResetID:             tcfg.ResetID,
 		Endpoint:            tcfg.Endpoint,
 		Secure:              tcfg.Secure,
+		InsecureTLS:         tcfg.InsecureTLS,
 	}
 	return tc, nil
 }
@@ -765,4 +802,5 @@ type TargetClient struct {
 	ResetID             string
 	Endpoint            string
 	Secure              bool
+	InsecureTLS         bool
 }

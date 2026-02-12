@@ -237,6 +237,8 @@ func (a adminAPIHandlers) SetRemoteTargetHandler(w http.ResponseWriter, r *http.
 				tgt.BandwidthLimit = target.BandwidthLimit
 			case madmin.HealthCheckDurationUpdateType:
 				tgt.HealthCheckDuration = target.HealthCheckDuration
+			case madmin.InsecureTLSUpdateType:
+				tgt.InsecureTLS = target.InsecureTLS
 			}
 		}
 		target = tgt
