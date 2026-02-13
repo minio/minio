@@ -4,6 +4,12 @@
 > **Alternatives:**
 > - **[AIStor Free](https://min.io/download)** — Full-featured, standalone edition for community use (free license)
 > - **[AIStor Enterprise](https://min.io/pricing)** — Distributed edition with commercial support
+> - **[Garage](https://github.com/deuxfleurs-org/garage)** — Lightweight, geo-distributed S3-compatible object storage for self-hosting
+> - **[RustFS](https://github.com/rustfs/rustfs)** — High-performance distributed object storage built in Rust with S3 compatibility
+> - **[SeaweedFS](https://github.com/seaweedfs/seaweedfs)** — Fast distributed storage for blobs, objects, and files at billion-file scale
+> - **[Ceph](https://github.com/ceph/ceph)** — Distributed platform providing unified object, block, and file storage
+> - **[Supabase Storage](https://github.com/supabase/storage)** — Scalable S3-compatible object storage with PostgreSQL metadata and multi-protocol support
+> - **[Zenko CloudServer](https://github.com/scality/cloudserver)** — Open-source Node.js S3 API server for multi-backend data storage
 
 ---
 
